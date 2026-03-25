@@ -750,83 +750,48 @@ class MorningBriefingService:
     # AI narrative generation
     # ------------------------------------------------------------------
 
-    # --- Tone-specific system prompts (keyed by level, then tone) ---
+    # --- Level-specific base system prompts (balanced / default tone) ---
 
-    _SYSTEM_PROMPTS = {
-        "individual": {
-            "concise": (
-                "You are a senior mortgage pipeline advisor. Given the loan officer's "
-                "current pipeline data, write exactly 3 prioritized actions as short "
-                "bullet points. Each bullet: loan/lead name, why urgent, one action. "
-                "No pleasantries. Second person. Under 100 words total."
-            ),
-            "balanced": (
-                "You are a senior mortgage pipeline advisor. Given the loan officer's "
-                "current pipeline data, write exactly 3 prioritized actions for today. "
-                "Each priority should name a specific loan/lead, explain WHY it's urgent, "
-                "and state the ONE action to take. Be direct — no pleasantries, no hedging. "
-                "Write in second person (\"You should...\"). Keep total response under 200 words."
-            ),
-            "detailed": (
-                "You are a senior mortgage pipeline advisor. Given the loan officer's "
-                "current pipeline data, write exactly 3 prioritized actions for today. "
-                "For each priority: name the specific loan/lead, explain the risk in full "
-                "context (SLA timeline, lock expiry, days silent), recommend the action, "
-                "and note what happens if they don't act. Write in second person. "
-                "Keep total response under 350 words."
-            ),
-        },
-        "manager": {
-            "concise": (
-                "You are a senior mortgage operations advisor. Given a manager's personal "
-                "pipeline and team data, write exactly 3 priorities as short bullet points. "
-                "Priority 1: most urgent team issue. 2-3: personal or team. Name people. "
-                "Second person. Under 120 words."
-            ),
-            "balanced": (
-                "You are a senior mortgage operations advisor. Given a manager's personal "
-                "pipeline and their team's performance data, write exactly 3 priorities. "
-                "Priority 1 should address the most urgent team issue (a subordinate with "
-                "at-risk loans or neglected leads). Priorities 2-3 can be personal pipeline "
-                "items or team items — pick whichever is most urgent. Name specific people "
-                "and loans. Write in second person. Keep total response under 250 words."
-            ),
-            "detailed": (
-                "You are a senior mortgage operations advisor. Given a manager's personal "
-                "pipeline and team data, write exactly 3 priorities with full context. "
-                "Priority 1: most urgent team issue with health indicators and trend. "
-                "Priorities 2-3: personal or team items with SLA context. Name specific "
-                "people, loans, and explain downstream consequences. Second person. "
-                "Keep total response under 400 words."
-            ),
-        },
-        "leadership": {
-            "concise": (
-                "You are a chief strategy advisor for a mortgage lending operation. Given "
-                "org pipeline data and branch performance, write exactly 3 strategic "
-                "priorities as short bullet points. Name branches and top risks. "
-                "Second person. Under 120 words."
-            ),
-            "balanced": (
-                "You are a chief strategy advisor for a mortgage lending operation. Given "
-                "the organization's pipeline data and branch performance, write exactly 3 "
-                "strategic priorities. Focus on trends, branch performance gaps, and "
-                "org-wide risks. Name specific branches and top-risk loans. Do not drill "
-                "into individual LO performance — that's for their managers. Write in "
-                "second person. Keep total response under 250 words."
-            ),
-            "detailed": (
-                "You are a chief strategy advisor for a mortgage lending operation. Given "
-                "org pipeline data and branch performance, write exactly 3 strategic "
-                "priorities with full analysis. Include week-over-week trends, branch "
-                "comparisons, and risk scenarios. Name branches and top-risk loans. "
-                "Do not drill into individual LO performance. Second person. "
-                "Keep total response under 400 words."
-            ),
-        },
+    INDIVIDUAL_SYSTEM_PROMPT = (
+        "You are a senior mortgage pipeline advisor. Given the loan officer's "
+        "current pipeline data, write exactly 3 prioritized actions for today. "
+        "Each priority should name a specific loan/lead, explain WHY it's urgent, "
+        "and state the ONE action to take. Be direct — no pleasantries, no hedging. "
+        "Write in second person (\"You should...\"). Keep total response under 200 words."
+    )
+
+    MANAGER_SYSTEM_PROMPT = (
+        "You are a senior mortgage operations advisor. Given a manager's personal "
+        "pipeline and their team's performance data, write exactly 3 priorities. "
+        "Priority 1 should address the most urgent team issue (a subordinate with "
+        "at-risk loans or neglected leads). Priorities 2-3 can be personal pipeline "
+        "items or team items — pick whichever is most urgent. Name specific people "
+        "and loans. Write in second person. Keep total response under 250 words."
+    )
+
+    LEADERSHIP_SYSTEM_PROMPT = (
+        "You are a chief strategy advisor for a mortgage lending operation. Given "
+        "the organization's pipeline data and branch performance, write exactly 3 "
+        "strategic priorities. Focus on trends, branch performance gaps, and "
+        "org-wide risks. Name specific branches and top-risk loans. Do not drill "
+        "into individual LO performance — that's for their managers. Write in "
+        "second person. Keep total response under 250 words."
+    )
+
+    # --- Tone modifier prompts (appended to level base prompts) ---
+
+    TONE_PROMPTS = {
+        "concise": (
+            "FORMAT OVERRIDE: Respond in exactly 3 bullet points. "
+            "Lead with numbers. No filler, no encouragement."
+        ),
+        "detailed": (
+            "FORMAT OVERRIDE: Write 2-3 short paragraphs covering "
+            "priorities, risks, and suggested next actions. Be specific with names and numbers."
+        ),
     }
 
-    def generate_narrative(self, ctx: BriefingContext, ai_tone: str = "balanced") -> Optional[str]:
+    def generate_narrative(self, ctx: BriefingContext, ai_tone: str = "balanced", prefs: Optional[BriefingPreferences] = None) -> Optional[str]:
         """Generate AI narrative using Anthropic Haiku."""
         try:
             import anthropic
@@ -837,10 +802,18 @@ class MorningBriefingService:
         if ai_tone not in ("concise", "balanced", "detailed"):
             ai_tone = "balanced"
 
-        level_prompts = self._SYSTEM_PROMPTS.get(ctx.level, self._SYSTEM_PROMPTS["individual"])
-        system_prompt = level_prompts.get(ai_tone, level_prompts["balanced"])
+        # Select base prompt by level
+        system_prompt = {
+            "individual": self.INDIVIDUAL_SYSTEM_PROMPT,
+            "manager": self.MANAGER_SYSTEM_PROMPT,
+            "leadership": self.LEADERSHIP_SYSTEM_PROMPT,
+        }.get(ctx.level, self.INDIVIDUAL_SYSTEM_PROMPT)
 
-        user_prompt = self._format_context_for_ai(ctx, ai_tone)
+        # Append tone modifier (preserves level-specific context guidance)
+        if ai_tone in self.TONE_PROMPTS:
+            system_prompt = system_prompt + "\n\n" + self.TONE_PROMPTS[ai_tone]
+
+        user_prompt = self._format_context_for_ai(ctx, prefs)
 
         try:
             import os
@@ -862,47 +835,51 @@ class MorningBriefingService:
             logger.error("AI narrative generation failed: %s", e)
             return None
 
-    def _format_context_for_ai(self, ctx: BriefingContext, ai_tone: str = "balanced") -> str:
+    def _format_context_for_ai(self, ctx: BriefingContext, prefs: Optional[BriefingPreferences] = None) -> str:
         """Format BriefingContext as structured text for the AI prompt.
 
-        Sections with empty data (toggled off via preferences) are omitted.
+        Sections with empty data or toggled off via preferences are omitted.
         """
+        if prefs is None:
+            prefs = BriefingPreferences()
+
         lines = [f"Briefing for {ctx.user_name} on {ctx.briefing_date.isoformat()}"]
         lines.append("")
 
         # Pipeline
-        p = ctx.pipeline
-        if p.get("active_count", 0) > 0 or p.get("total_volume", 0) > 0:
-            lines.append(f"PIPELINE: {p.get('active_count', 0)} active loans, "
-                          f"${p.get('total_volume', 0):,.0f} volume, "
-                          f"{p.get('closing_soon', 0)} closing this week")
-            if p.get("by_stage"):
-                for stage, cnt in p["by_stage"].items():
-                    lines.append(f"  {stage}: {cnt} loans")
+        if prefs.sections.get("pipeline", True):
+            p = ctx.pipeline
+            if p.get("active_count", 0) > 0 or p.get("total_volume", 0) > 0:
+                lines.append(f"PIPELINE: {p.get('active_count', 0)} active loans, "
+                              f"${p.get('total_volume', 0):,.0f} volume, "
+                              f"{p.get('closing_soon', 0)} closing this week")
+                if p.get("by_stage"):
+                    for stage, cnt in p["by_stage"].items():
+                        lines.append(f"  {stage}: {cnt} loans")
 
         # At-risk
-        if ctx.at_risk:
+        if prefs.sections.get("at_risk", True) and ctx.at_risk:
             lines.append("")
             lines.append("AT-RISK LOANS:")
             for loan in ctx.at_risk:
                 lines.append(f"  - {loan['borrower']} ({loan['loan_number']}): {loan['reason']}")
 
         # Stale leads
-        if ctx.stale_leads:
+        if prefs.sections.get("stale_leads", True) and ctx.stale_leads:
             lines.append("")
             lines.append("STALE LEADS:")
             for lead in ctx.stale_leads:
                 lines.append(f"  - {lead['name']} (score {lead['score']}): {lead['days_silent']:.0f} days silent")
 
         # Appointments
-        if ctx.appointments:
+        if prefs.sections.get("appointments", True) and ctx.appointments:
             lines.append("")
             lines.append("TODAY'S APPOINTMENTS:")
             for appt in ctx.appointments:
                 lines.append(f"  - {appt['time']} — {appt['attendee']}, {appt['type']}")
 
         # Conditions
-        if ctx.conditions:
+        if prefs.sections.get("conditions", True) and ctx.conditions:
             lines.append("")
             lines.append("PENDING CONDITIONS:")
             for cond in ctx.conditions:
@@ -910,12 +887,13 @@ class MorningBriefingService:
                 lines.append(f"  - {cond['title']} on {cond['loan_number']}{pd}")
 
         # Yesterday
-        y = ctx.yesterday
-        if any(y.get(k, 0) > 0 for k in ("funded", "new_loans", "conversions")):
-            lines.append("")
-            lines.append(f"YESTERDAY: {y.get('funded', 0)} funded, "
-                          f"{y.get('new_loans', 0)} new pipeline, "
-                          f"{y.get('conversions', 0)} lead conversions")
+        if prefs.sections.get("yesterday", True):
+            y = ctx.yesterday
+            if any(y.get(k, 0) > 0 for k in ("funded", "new_loans", "conversions")):
+                lines.append("")
+                lines.append(f"YESTERDAY: {y.get('funded', 0)} funded, "
+                              f"{y.get('new_loans', 0)} new pipeline, "
+                              f"{y.get('conversions', 0)} lead conversions")
 
         # Team data (manager)
         if ctx.level == "manager" and ctx.team:

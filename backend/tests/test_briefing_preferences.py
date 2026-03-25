@@ -73,3 +73,33 @@ class TestLoadPreferences:
         prefs = self._load({"unknown_key": "whatever", "sections": {"fake": True}})
         assert prefs.ai_tone == "balanced"
         assert "fake" not in prefs.sections
+
+
+class TestTonePrompts:
+    """Test that AI tone selection produces different system prompts."""
+
+    def _get_prompts(self):
+        from services.morning_briefing_service import MorningBriefingService
+        return {
+            "concise": MorningBriefingService.TONE_PROMPTS["concise"],
+            "balanced": MorningBriefingService.INDIVIDUAL_SYSTEM_PROMPT,
+            "detailed": MorningBriefingService.TONE_PROMPTS["detailed"],
+        }
+
+    def test_concise_prompt_exists(self):
+        prompts = self._get_prompts()
+        assert "bullet" in prompts["concise"].lower()
+
+    def test_detailed_prompt_exists(self):
+        prompts = self._get_prompts()
+        assert "paragraph" in prompts["detailed"].lower()
+
+    def test_balanced_is_default_individual(self):
+        prompts = self._get_prompts()
+        assert "3 prioritized actions" in prompts["balanced"]
+
+    def test_tone_prompts_are_modifiers(self):
+        """Tone prompts should be appended to level prompts, not replace them."""
+        prompts = self._get_prompts()
+        assert not prompts["concise"].startswith("You are")
+        assert not prompts["detailed"].startswith("You are")
