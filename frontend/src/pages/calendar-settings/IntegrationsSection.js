@@ -111,9 +111,39 @@ export default function IntegrationsSection({
       zoom: `${API_BASE_URL}/api/v1/zoom/connect`,
       google_meet: `${API_BASE_URL}/api/v1/google-meet/connect`,
     };
-    if (urls[service]) {
-      window.location.href = urls[service];
-    }
+    if (!urls[service]) return;
+
+    // Clear any stale OAuth result
+    localStorage.removeItem('oauth_result');
+
+    // Open OAuth in a popup so the settings page isn't navigated away
+    const popup = window.open(urls[service], 'oauth_popup', 'width=600,height=700,left=200,top=100');
+
+    // Poll localStorage for OAuth result (set by OAuthCallback.js)
+    const poll = setInterval(() => {
+      if (popup && popup.closed) {
+        clearInterval(poll);
+      }
+      const result = localStorage.getItem('oauth_result');
+      if (result) {
+        clearInterval(poll);
+        localStorage.removeItem('oauth_result');
+        try {
+          const parsed = JSON.parse(result);
+          if (parsed.type?.includes('SUCCESS')) {
+            setIntegrations(prev => ({
+              ...prev,
+              [service]: { ...prev[service], connected: true, last_synced: new Date().toISOString() },
+            }));
+            toast.success(`${service.charAt(0).toUpperCase() + service.slice(1)} connected successfully!`);
+          } else if (parsed.type?.includes('ERROR')) {
+            toast.error(parsed.error || `Failed to connect ${service}`);
+          }
+        } catch (e) {
+          // ignore parse errors
+        }
+      }
+    }, 500);
   };
 
   const handleUpdateIntegrationSetting = (service, field, value) => {

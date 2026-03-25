@@ -125,6 +125,97 @@ def get_sync_recommendations(connection_status: dict, email_count: int) -> list:
 # OAuth Endpoints
 # =============================================================================
 
+@router.get("/auth")
+async def microsoft_auth_redirect(
+    request: Request,
+    integration_type: str = "calendar",
+    token: Optional[str] = None,
+):
+    """Direct redirect to Microsoft OAuth login.
+
+    The frontend calls this via window.location.href or window.open().
+    Accepts JWT as ?token= query param (since this is a GET redirect,
+    not an API call with Authorization header).
+    """
+    from fastapi.responses import RedirectResponse
+
+    main = get_main_imports()
+    from db import get_db
+
+    db = next(get_db())
+    try:
+        # Authenticate from query param token
+        jwt_token = token or request.headers.get("Authorization", "").replace("Bearer ", "")
+        if not jwt_token:
+            raise HTTPException(status_code=401, detail="Authentication required. Pass ?token=<jwt>")
+
+        current_user = await main.get_current_user(
+            token=jwt_token,
+            request=request,
+            db=db,
+        )
+
+        org_id = getattr(current_user, 'organization_id', None)
+
+        # Get Microsoft app config (org-specific or env vars)
+        db_config = None
+        if org_id:
+            db_config = db.query(main.MicrosoftAppConfig).filter(
+                main.MicrosoftAppConfig.organization_id == org_id
+            ).first()
+        if not db_config:
+            db_config = db.query(main.MicrosoftAppConfig).first()
+
+        if db_config and db_config.client_id and is_valid_client_id(db_config.client_id):
+            client_id = db_config.client_id
+            tenant_id = db_config.tenant_id or "common"
+        else:
+            client_id = os.getenv("MICROSOFT_CLIENT_ID")
+            tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")
+
+        if not client_id:
+            raise HTTPException(
+                status_code=500,
+                detail="Microsoft OAuth not configured. Set MICROSOFT_CLIENT_ID or configure in Settings.",
+            )
+
+        # Build redirect URI from Referer or env
+        from urllib.parse import urlparse, quote
+
+        frontend_origin = None
+        referer = request.headers.get("referer", "")
+        if referer:
+            parsed = urlparse(referer)
+            frontend_origin = f"{parsed.scheme}://{parsed.netloc}"
+
+        if not frontend_origin:
+            frontend_origin = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
+
+        redirect_uri = f"{frontend_origin.rstrip('/')}/oauth/callback"
+
+        scopes = "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.ReadWrite offline_access"
+        auth_url = (
+            f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/authorize"
+            f"?client_id={client_id}"
+            f"&response_type=code"
+            f"&redirect_uri={quote(redirect_uri, safe='')}"
+            f"&scope={quote(scopes, safe='')}"
+            f"&response_mode=query"
+            f"&prompt=select_account"
+        )
+
+        logger.info(f"Redirecting user {current_user.id} to Microsoft OAuth (integration_type={integration_type})")
+        return RedirectResponse(url=auth_url, status_code=302)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in Microsoft auth redirect: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to initiate Microsoft OAuth")
+    finally:
+        db.close()
+
+
 @router.get("/auth-url")
 async def get_microsoft_auth_url(
     request: Request,

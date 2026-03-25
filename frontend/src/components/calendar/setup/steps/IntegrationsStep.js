@@ -11,8 +11,8 @@
  * Saves to: PUT /api/v1/scheduler/settings/integrations
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { calendarSettingsAPI } from '../../../../services/api';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { calendarSettingsAPI, API_BASE_URL } from '../../../../services/api';
 import { toast } from '../../../../utils/toast';
 import './IntegrationsStep.css';
 
@@ -501,12 +501,55 @@ const IntegrationsStep = ({ stepData = {}, onChange, allStepData }) => {
   // --------------------------------------------------------------------------
   // Calendar sync handlers
   // --------------------------------------------------------------------------
+  // Poll localStorage for OAuth result (set by OAuthCallback.js)
+  const oauthPollRef = useRef(null);
+
   const handleCalendarConnect = useCallback((key) => {
-    setCalendarStates(prev => ({
-      ...prev,
-      [key]: { ...prev[key], connected: true },
-    }));
-    toast.success(`${key === 'google_calendar' ? 'Google Calendar' : 'Microsoft Outlook'} connected`);
+    const token = localStorage.getItem('token');
+    const urls = {
+      google_calendar: `${API_BASE_URL}/api/v1/google-calendar/auth?token=${token}`,
+      microsoft_outlook: `${API_BASE_URL}/api/v1/microsoft/auth?integration_type=calendar&token=${token}`,
+    };
+    const url = urls[key];
+    if (!url) return;
+
+    // Clear any stale OAuth result
+    localStorage.removeItem('oauth_result');
+
+    // Open OAuth in a popup window
+    const popup = window.open(url, 'oauth_popup', 'width=600,height=700,left=200,top=100');
+
+    // Poll for completion (OAuthCallback.js stores result in localStorage)
+    if (oauthPollRef.current) clearInterval(oauthPollRef.current);
+    oauthPollRef.current = setInterval(() => {
+      // Check if popup closed
+      if (popup && popup.closed) {
+        clearInterval(oauthPollRef.current);
+        oauthPollRef.current = null;
+      }
+
+      // Check for OAuth result in localStorage
+      const result = localStorage.getItem('oauth_result');
+      if (result) {
+        clearInterval(oauthPollRef.current);
+        oauthPollRef.current = null;
+        localStorage.removeItem('oauth_result');
+        try {
+          const parsed = JSON.parse(result);
+          if (parsed.type === 'MICROSOFT_OAUTH_SUCCESS' || parsed.type === 'GOOGLE_OAUTH_SUCCESS') {
+            setCalendarStates(prev => ({
+              ...prev,
+              [key]: { ...prev[key], connected: true, lastSynced: new Date().toISOString() },
+            }));
+            toast.success(`${key === 'google_calendar' ? 'Google Calendar' : 'Microsoft Outlook'} connected!`);
+          } else if (parsed.type?.includes('ERROR')) {
+            toast.error(parsed.error || 'Connection failed. Please try again.');
+          }
+        } catch (e) {
+          // ignore parse errors
+        }
+      }
+    }, 500);
   }, []);
 
   const handleCalendarDisconnect = useCallback((key) => {
