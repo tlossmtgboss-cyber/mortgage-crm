@@ -1746,6 +1746,14 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ campaign template seed note: {e}")
 
+        # Add briefing_preferences JSONB column to users
+        try:
+            from migrations.add_briefing_preferences import run_migration as run_briefing_prefs
+            run_briefing_prefs(_engine)
+            logger.info("✅ briefing_preferences column ready")
+        except Exception as e:
+            logger.warning(f"⚠️ briefing_preferences migration note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
