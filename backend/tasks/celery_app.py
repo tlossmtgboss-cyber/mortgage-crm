@@ -73,6 +73,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.report_tasks",
             "tasks.reminder_tasks",
             "tasks.app_completion_tasks",
+            "tasks.morning_briefing_tasks",
         ],
     )
 
@@ -134,6 +135,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.app_completion_tasks.process_borrower_sms_response_task": {"queue": "default"},
             "tasks.app_completion_tasks.recalculate_stale_reviews_task": {"queue": "low_priority"},
             "tasks.app_completion_tasks.send_pending_reminders_task": {"queue": "default"},
+            "tasks.morning_briefing_tasks.*": {"queue": "ai_tasks"},
         },
     )
 
@@ -278,6 +280,18 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(hour="9,14", minute="0"),  # 9 AM and 2 PM daily
         "options": {"queue": "default"},
         "kwargs": {"reminder_delay_hours": 24},
+    },
+
+    # Morning Briefing
+    "morning-briefing-dispatch": {
+        "task": "tasks.morning_briefing_tasks.dispatch_briefings",
+        "schedule": crontab(minute="0,15,30,45"),
+        "options": {"queue": "ai_tasks"},
+    },
+    "morning-briefing-cleanup": {
+        "task": "tasks.morning_briefing_tasks.cleanup_old_briefings",
+        "schedule": crontab(hour="3", minute="0", day_of_week="sunday"),
+        "options": {"queue": "default"},
     },
 }
 
