@@ -1270,12 +1270,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
         )
         from smart_scheduler_routes import router as smart_scheduler_router, set_dependencies as set_scheduler_deps
 
-        # Ensure the simple scheduler tables exist (with organization_id column)
-        try:
-            from services.smart_scheduler_service import ensure_scheduler_tables
-            ensure_scheduler_tables()
-        except Exception as tbl_err:
-            logger.warning(f"Scheduler table setup: {tbl_err}")
+        # Scheduler tables are created by migrations — no runtime creation needed
 
         # Run tenant isolation migration (add organization_id, backfill, RLS policies)
         try:
@@ -2501,12 +2496,7 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
 
     # Calendar Settings routes (availability, appointment types, notifications, booking page, integrations, team)
     try:
-        # Ensure scheduler tables exist before loading routes that query them
-        try:
-            from services.smart_scheduler_service import ensure_scheduler_tables
-            ensure_scheduler_tables()
-        except Exception as tbl_err:
-            logger.warning(f"Could not ensure scheduler tables: {tbl_err}")
+        # Scheduler tables are created by migrations — no runtime creation needed
 
         from routes.calendar_settings_routes import router as calendar_settings_router, set_dependencies as set_cal_settings_deps
         set_cal_settings_deps(get_current_user)

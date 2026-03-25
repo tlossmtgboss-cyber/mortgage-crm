@@ -73,10 +73,8 @@ FEATURE_TIERS: Dict[str, FeatureTier] = {
     "microsite_builder": FeatureTier.PREMIUM,
     "video_meetings": FeatureTier.PREMIUM,
     "scheduler_surveys": FeatureTier.PREMIUM,
-    "scheduler_labels": FeatureTier.PREMIUM,
-    "scheduler_booking_meta": FeatureTier.PREMIUM,
-    "scheduler_sitemap": FeatureTier.PREMIUM,
     "scheduler_waitlist": FeatureTier.PREMIUM,
+    # Deleted modules (Mar 2026): scheduler_labels, scheduler_booking_meta, scheduler_sitemap
 
     # EXPERIMENTAL - frozen, no SLA, not exposed to production orgs
     # "avatar_studio": FeatureTier.EXPERIMENTAL,  # DEPRECATED: Experimental feature deregistered
