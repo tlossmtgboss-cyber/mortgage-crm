@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Smart Calendar Enterprise Audit v2 — Post-Remediation</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 1100px; margin: 0 auto; padding: 2rem; background: #f8f9fa; color: #1a1a2e; }
+  h1 { border-bottom: 3px solid #2d3436; padding-bottom: 0.5rem; }
+  h2 { color: #2d3436; margin-top: 2rem; border-bottom: 1px solid #ddd; padding-bottom: 0.3rem; }
+  h3 { color: #636e72; }
+  .score-card { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin: 1.5rem 0; }
+  .score-box { background: white; border-radius: 8px; padding: 1.2rem; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .score-box .label { font-size: 0.85rem; color: #636e72; text-transform: uppercase; }
+  .score-box .value { font-size: 2.2rem; font-weight: 700; margin: 0.3rem 0; }
+  .score-box .grade { font-size: 1.1rem; font-weight: 600; }
+  .overall { background: linear-gradient(135deg, #0984e3, #6c5ce7); color: white; grid-column: span 4; }
+  .overall .value { font-size: 3rem; }
+  .critical { color: #d63031; } .high { color: #e17055; } .medium { color: #fdcb6e; } .low { color: #00b894; }
+  .pass { color: #00b894; } .improved { color: #0984e3; }
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+  th, td { padding: 0.6rem 0.8rem; border: 1px solid #ddd; text-align: left; }
+  th { background: #2d3436; color: white; font-size: 0.85rem; }
+  td { font-size: 0.9rem; }
+  tr:nth-child(even) { background: #f1f2f6; }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 0.75rem; font-weight: 600; }
+  .tag-critical { background: #ffeaa7; color: #d63031; } .tag-high { background: #fab1a0; color: #d63031; }
+  .tag-medium { background: #fdcb6e; color: #2d3436; } .tag-low { background: #55efc4; color: #2d3436; }
+  .tag-fixed { background: #00b894; color: white; } .tag-new { background: #0984e3; color: white; }
+  .working { background: white; border-left: 4px solid #00b894; padding: 1rem; margin: 0.5rem 0; border-radius: 4px; }
+  .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin: 1.5rem 0; }
+  .before, .after { background: white; padding: 1.2rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+  .before { border-top: 3px solid #d63031; } .after { border-top: 3px solid #00b894; }
+  code { background: #dfe6e9; padding: 1px 4px; border-radius: 3px; font-size: 0.85rem; }
+  .progress { height: 10px; background: #dfe6e9; border-radius: 5px; overflow: hidden; margin: 4px 0; }
+  .progress-fill { height: 100%; border-radius: 5px; transition: width 0.3s; }
+</style>
+</head>
+<body>
+
+<h1>PERENNIA AI — SMART CALENDAR ENTERPRISE READINESS AUDIT v2</h1>
+<p><strong>Date:</strong> 2026-03-25 &nbsp;|&nbsp; <strong>Auditor:</strong> Claude Opus 4.6 (Enterprise Audit Skill) &nbsp;|&nbsp; <strong>Scope:</strong> Full re-audit after 118-finding remediation</p>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>EXECUTIVE SUMMARY</h2>
+
+<div class="score-card">
+  <div class="score-box overall">
+    <div class="label">Overall Enterprise Readiness</div>
+    <div class="value">86 / 100</div>
+    <div class="grade">Grade: B+ &nbsp; | &nbsp; CONDITIONALLY READY</div>
+    <div style="margin-top:0.5rem; font-size:0.9rem; opacity:0.9;">Up from 68/100 (C+) — 118 original findings remediated, 26 new findings identified</div>
+  </div>
+</div>
+
+<div class="comparison">
+  <div class="before">
+    <h3 style="color:#d63031; margin-top:0;">Before Remediation (v1)</h3>
+    <p><strong>Score: 68/100 (C+)</strong></p>
+    <p>Critical: <span class="critical"><strong>8</strong></span> &nbsp; High: <span class="high"><strong>18</strong></span> &nbsp; Medium: <strong>38</strong> &nbsp; Low: <strong>16</strong></p>
+    <p><strong>Total: 80 enterprise + 38 u-challenge = 118 findings</strong></p>
+    <p>Enterprise Readiness: <strong style="color:#d63031;">NOT READY</strong></p>
+  </div>
+  <div class="after">
+    <h3 style="color:#00b894; margin-top:0;">After Remediation (v2)</h3>
+    <p><strong>Score: 86/100 (B+)</strong></p>
+    <p>Critical: <span class="critical"><strong>0</strong></span> &nbsp; High: <span class="high"><strong>5</strong></span> &nbsp; Medium: <strong>12</strong> &nbsp; Low: <strong>9</strong></p>
+    <p><strong>Total: 26 new findings (all original 118 resolved)</strong></p>
+    <p>Enterprise Readiness: <strong style="color:#0984e3;">CONDITIONALLY READY</strong></p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>DIMENSION SCORES</h2>
+
+<div class="score-card">
+  <div class="score-box">
+    <div class="label">D1 Functional</div>
+    <div class="value improved">90</div>
+    <div class="grade">A- (was 62)</div>
+    <div class="progress"><div class="progress-fill" style="width:90%; background:#00b894;"></div></div>
+  </div>
+  <div class="score-box">
+    <div class="label">D2 Security</div>
+    <div class="value improved">92</div>
+    <div class="grade">A (was 58)</div>
+    <div class="progress"><div class="progress-fill" style="width:92%; background:#00b894;"></div></div>
+  </div>
+  <div class="score-box">
+    <div class="label">D3 Tenancy</div>
+    <div class="value improved">85</div>
+    <div class="grade">B+ (was 65)</div>
+    <div class="progress"><div class="progress-fill" style="width:85%; background:#0984e3;"></div></div>
+  </div>
+  <div class="score-box">
+    <div class="label">D4 Data</div>
+    <div class="value improved">88</div>
+    <div class="grade">B+ (was 68)</div>
+    <div class="progress"><div class="progress-fill" style="width:88%; background:#0984e3;"></div></div>
+  </div>
+  <div class="score-box">
+    <div class="label">D5 AI Agent</div>
+    <div class="value improved">84</div>
+    <div class="grade">B (was 60)</div>
+    <div class="progress"><div class="progress-fill" style="width:84%; background:#0984e3;"></div></div>
+  </div>
+  <div class="score-box">
+    <div class="label">D6 Performance</div>
+    <div class="value improved">82</div>
+    <div class="grade">B (was 65)</div>
+    <div class="progress"><div class="progress-fill" style="width:82%; background:#0984e3;"></div></div>
+  </div>
+  <div class="score-box">
+    <div class="label">D7 Observability</div>
+    <div class="value improved">80</div>
+    <div class="grade">B- (was 58)</div>
+    <div class="progress"><div class="progress-fill" style="width:80%; background:#fdcb6e;"></div></div>
+  </div>
+  <div class="score-box">
+    <div class="label">D8 Compliance</div>
+    <div class="value improved">82</div>
+    <div class="grade">B (was 55)</div>
+    <div class="progress"><div class="progress-fill" style="width:82%; background:#0984e3;"></div></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>ALL 118 ORIGINAL FINDINGS — STATUS</h2>
+
+<table>
+<tr><th>Category</th><th>Original</th><th>Fixed</th><th>Status</th></tr>
+<tr><td>Critical (SEC, COMP, FUNC, OBS, PERF)</td><td>8</td><td>8</td><td><span class="tag tag-fixed">ALL FIXED</span></td></tr>
+<tr><td>High (SEC, COMP, TENANT, OBS, PERF, DATA, AGENT, FUNC)</td><td>18</td><td>18</td><td><span class="tag tag-fixed">ALL FIXED</span></td></tr>
+<tr><td>Medium (all dimensions)</td><td>38</td><td>38</td><td><span class="tag tag-fixed">ALL FIXED</span></td></tr>
+<tr><td>Low (all dimensions)</td><td>16</td><td>16</td><td><span class="tag tag-fixed">ALL FIXED</span></td></tr>
+<tr><td>U-Challenge (C1-C8, H1-H12, M1-M18)</td><td>38</td><td>38</td><td><span class="tag tag-fixed">ALL FIXED</span></td></tr>
+<tr style="font-weight:700; background:#d5f5e3;"><td>TOTAL</td><td>118</td><td>118</td><td><span class="tag tag-fixed">100% RESOLVED</span></td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>NEW FINDINGS (v2 Audit)</h2>
+
+<h3>HIGH PRIORITY (5 findings — fix before next release)</h3>
+
+<table>
+<tr><th>ID</th><th>Dim</th><th>Sev</th><th>Location</th><th>Finding</th></tr>
+<tr>
+  <td>v2-OBS-001</td><td>D7</td><td><span class="tag tag-high">HIGH</span></td>
+  <td><code>scheduler_sms_sender.py</code> (6 locations)</td>
+  <td>Exception handlers use <code>logger.error(f"...")</code> without <code>exc_info=True</code>, losing stack traces. Fix: Add <code>exc_info=True</code> or use <code>logger.exception()</code>.</td>
+</tr>
+<tr>
+  <td>v2-OBS-002</td><td>D7</td><td><span class="tag tag-high">HIGH</span></td>
+  <td><code>health.py</code> <code>_check_pending_reminders()</code></td>
+  <td>Health endpoint checks reminder templates but NOT APScheduler job health, last successful execution, or job misfires. Add background job health check.</td>
+</tr>
+<tr>
+  <td>v2-D3-001</td><td>D3</td><td><span class="tag tag-high">HIGH</span></td>
+  <td><code>_availability.py:91-140</code></td>
+  <td>Circuit breaker state is global (not per-org). If OrgA's Outlook fails, OrgB's Outlook is also blocked. Scope circuit breaker key by <code>(org_id, provider)</code>.</td>
+</tr>
+<tr>
+  <td>v2-PERF-001</td><td>D6</td><td><span class="tag tag-high">HIGH</span></td>
+  <td><code>scheduler_webhook_service.py:983</code></td>
+  <td>N+1 query in <code>get_failed_webhooks()</code>: loops over deliveries accessing <code>d.subscription</code> (lazy load). Fix: Add <code>joinedload(WebhookDeliveryLog.subscription)</code>.</td>
+</tr>
+<tr>
+  <td>v2-COMP-001</td><td>D8</td><td><span class="tag tag-high">HIGH</span></td>
+  <td><code>reminder_service.py:521</code></td>
+  <td>TCPA consent log records that a check occurred, but NOT whether consent was granted or denied. Add <code>consent_granted=True|False</code> to the log entry.</td>
+</tr>
+</table>
+
+<h3>MEDIUM PRIORITY (12 findings — fix within sprint)</h3>
+
+<table>
+<tr><th>ID</th><th>Dim</th><th>Sev</th><th>Location</th><th>Finding</th></tr>
+<tr>
+  <td>v2-D3-002</td><td>D3</td><td><span class="tag tag-medium">MED</span></td>
+  <td><code>experiment_service.py:140</code></td>
+  <td>ExperimentResult model may lack <code>organization_id</code> column — metric results could mix across tenants if experiments share names.</td>
+</tr>
+<tr>
+  <td>v2-D4-001</td><td>D4</td><td><span class="tag tag-medium">MED</span></td>
+  <td><code>hold_manager.py:27-95</code></td>
+  <td>SlotHold has no idempotency key. Retried AI conversations can create duplicate holds. Add <code>idempotency_key</code> column with unique constraint.</td>
+</tr>
+<tr>
+  <td>v2-D5-001</td><td>D5</td><td><span class="tag tag-medium">MED</span></td>
+  <td>All LLM call sites</td>
+  <td>No token budget tracking or circuit breaker for LLM quota exhaustion. Add per-org token counter and graceful degradation.</td>
+</tr>
+<tr>
+  <td>v2-D5-002</td><td>D5</td><td><span class="tag tag-medium">MED</span></td>
+  <td><code>appointment_creation_service.py</code></td>
+  <td>Hallucination detection partial — no semantic validation (borrower name similarity, appointment type vs loan stage cross-check).</td>
+</tr>
+<tr>
+  <td>v2-OBS-003</td><td>D7</td><td><span class="tag tag-medium">MED</span></td>
+  <td>Multiple files</td>
+  <td>PII masking functions defined in 3+ places with different implementations. Centralize to single <code>services/pii_masking.py</code> module.</td>
+</tr>
+<tr>
+  <td>v2-COMP-002</td><td>D8</td><td><span class="tag tag-medium">MED</span></td>
+  <td><code>data_compliance.py:87</code></td>
+  <td><code>_check_pii_retention()</code> helper exists but is never called from any endpoint or background job. Wire it into retention report endpoint.</td>
+</tr>
+<tr>
+  <td>v2-COMP-003</td><td>D8</td><td><span class="tag tag-medium">MED</span></td>
+  <td><code>webhook.py:19, encompass_config.py:32</code></td>
+  <td>Encrypted secrets fall back to plaintext <code>String(500)</code> if encryption service unavailable. Should fail-hard in production.</td>
+</tr>
+<tr>
+  <td>v2-COMP-004</td><td>D8</td><td><span class="tag tag-medium">MED</span></td>
+  <td><code>scheduler_audit_logger.py:307</code></td>
+  <td>Audit log includes unmasked <code>attendee_email</code> in 3 locations. Apply <code>mask_email()</code> before writing audit entries.</td>
+</tr>
+<tr>
+  <td>v2-FE-001</td><td>D1</td><td><span class="tag tag-medium">MED</span></td>
+  <td><code>MobileCalendarView.js:241-250</code></td>
+  <td>Day chips lack <code>aria-label</code>, <code>aria-selected</code>, and keyboard handlers. WCAG 4.1.2 violation.</td>
+</tr>
+<tr>
+  <td>v2-FE-002</td><td>D1</td><td><span class="tag tag-medium">MED</span></td>
+  <td><code>MobileCalendarView.js:357-443</code></td>
+  <td>Bottom sheet form inputs lack <code>&lt;label&gt;</code> elements and <code>htmlFor</code> associations. WCAG 1.3.1 violation.</td>
+</tr>
+<tr>
+  <td>v2-FE-003</td><td>D1</td><td><span class="tag tag-medium">MED</span></td>
+  <td><code>BookingWidget.js:204</code></td>
+  <td>Slot fetch doesn't pass user's configured timezone to API. Cross-timezone users may see slots computed in wrong timezone.</td>
+</tr>
+<tr>
+  <td>v2-FE-004</td><td>D1</td><td><span class="tag tag-medium">MED</span></td>
+  <td><code>MobileCalendarView.js:350, 464</code></td>
+  <td>Modal overlays don't trap focus. Keyboard user can tab outside modal content. WCAG 2.4.3 violation.</td>
+</tr>
+</table>
+
+<h3>LOW PRIORITY (9 findings — backlog)</h3>
+
+<table>
+<tr><th>ID</th><th>Dim</th><th>Sev</th><th>Location</th><th>Finding</th></tr>
+<tr><td>v2-FUNC-001</td><td>D1</td><td><span class="tag tag-low">LOW</span></td><td><code>schemas/scheduler.py</code></td><td>Uses deprecated <code>@validator</code> instead of Pydantic v2 <code>@field_validator</code> in 16 places.</td></tr>
+<tr><td>v2-FUNC-002</td><td>D1</td><td><span class="tag tag-low">LOW</span></td><td><code>reschedule.py</code></td><td>Redundant <code>from datetime import timezone</code> inside if-blocks; already imported at module level.</td></tr>
+<tr><td>v2-D4-002</td><td>D4</td><td><span class="tag tag-low">LOW</span></td><td><code>scheduler.py:121-210</code></td><td>No CHECK constraint on SchedulerConfig to ensure <code>max_duration >= default_duration >= min_duration</code>.</td></tr>
+<tr><td>v2-D5-003</td><td>D5</td><td><span class="tag tag-low">LOW</span></td><td><code>pipeline_appointment_trigger.py</code></td><td>Uses fixed 1s retry delay instead of exponential backoff (inconsistent with webhook service pattern).</td></tr>
+<tr><td>v2-OBS-004</td><td>D7</td><td><span class="tag tag-low">LOW</span></td><td><code>scheduler_email_service.py:183</code></td><td>Email throttle warning log lacks correlation ID for request tracing.</td></tr>
+<tr><td>v2-OBS-005</td><td>D7</td><td><span class="tag tag-low">LOW</span></td><td><code>reminder_service.py:690</code></td><td>Batch summary uses generic <code>logger.info()</code> without structured fields for log aggregation.</td></tr>
+<tr><td>v2-FE-005</td><td>D1</td><td><span class="tag tag-low">LOW</span></td><td><code>BookingWidget.js:32</code></td><td>Phone validation regex only accepts US numbers (+1). International borrowers cannot book.</td></tr>
+<tr><td>v2-FE-006</td><td>D1</td><td><span class="tag tag-low">LOW</span></td><td><code>BookingWidget.js</code></td><td>No focus restoration when step changes (datetime → form). Focus stays in previous panel.</td></tr>
+<tr><td>v2-FE-007</td><td>D1</td><td><span class="tag tag-low">LOW</span></td><td><code>AgendaView.js</code></td><td>No <code>aria-live</code> announcement when "Load more" reveals new events.</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>WHAT IS WORKING CORRECTLY</h2>
+
+<p>These patterns are <strong>solid and should not be changed</strong>:</p>
+
+<div class="working"><strong>Security Architecture</strong> — SECRET_KEY fails hard in production (RuntimeError). JWT tokens use email hash (SHA-256 truncated to 16 chars) with backward-compatible legacy support. Calendar feed tokens deactivated when user account marked inactive. Weak key rejection validates length (32+) and checks against known defaults.</div>
+
+<div class="working"><strong>TCPA Consent Enforcement</strong> — All 6 SMS pathways gated with fail-closed consent check. <code>check_sms_consent()</code> returns False on error (never defaults to sending). Covers: no_show_recovery, reminder_service, notification_service, scheduler_service (4 paths).</div>
+
+<div class="working"><strong>Prompt Injection Defense</strong> — Two-layer regex sanitizer (<code>_INJECTION_PATTERNS</code> + <code>_FREE_TEXT_INJECTION_PATTERNS</code>) with <code>re.IGNORECASE</code>. AI booking context validated against schema before persistence. SSRF protection on webhook URLs blocks private IPs, localhost, and cloud metadata endpoints.</div>
+
+<div class="working"><strong>Optimistic Locking</strong> — Appointment model uses SQLAlchemy <code>version_id_col</code>. All updates go through ORM (not raw SQL), so <code>StaleDataError</code> fires on concurrent modification. State machine enforces valid transitions via <code>VALID_TRANSITIONS</code> dict checked at 6 call sites.</div>
+
+<div class="working"><strong>Idempotency on Appointments</strong> — <code>idempotency_key</code> column (String(64), unique, indexed) prevents duplicate bookings from retried API calls.</div>
+
+<div class="working"><strong>Unique Constraints</strong> — <code>AvailabilitySlot(user_id, day_of_week, organization_id)</code> prevents duplicate availability rows. Partial unique index on appointments prevents double-booking same (user, start, end) excluding cancelled/rescheduled.</div>
+
+<div class="working"><strong>Webhook Delivery</strong> — Async background dispatch with 3 retries (2s/4s/8s exponential backoff). HMAC-SHA256 signature with constant-time comparison. Deduplication (5-second window per subscription+event_type). Concurrent dispatch via <code>asyncio.gather()</code>.</div>
+
+<div class="working"><strong>Batch Performance Patterns</strong> — <code>load_active_holds()</code> batch-loads all active holds in one query (avoids per-slot DB call). <code>get_weekly_schedule_batch()</code> loads multiple users' availability in single query. Bulk operations pre-load users into <code>users_map</code>.</div>
+
+<div class="working"><strong>Circuit Breaker</strong> — Consolidated <code>NotificationCircuitBreaker</code> with configurable <code>provider_name</code>. Separate instances for SendGrid and Telnyx. 5-failure threshold, 60-second half-open window.</div>
+
+<div class="working"><strong>Centralized Timezone</strong> — <code>frontend/src/utils/timezone.js</code> with 15+ exported functions. localStorage cache with 5-min TTL. Fallback chain: API → localStorage → browser. All calendar views (Agenda, Day, Mobile) import from centralized utility.</div>
+
+<div class="working"><strong>Booking Widget Accessibility</strong> — BookingTypeSelector: proper <code>radiogroup</code> + <code>radio</code> roles. BookingSlotPicker: <code>listbox</code> + <code>option</code> roles with <code>aria-selected</code>. BookingForm: all labels have <code>htmlFor</code>, fields have <code>aria-required</code>, <code>aria-invalid</code>, <code>aria-describedby</code>. Confirmation: <code>aria-live="polite"</code> + SR-only summary.</div>
+
+<div class="working"><strong>GDPR Data Compliance</strong> — Export endpoint returns full borrower appointment data. Deletion cascades to slot_holds, status_history, reminders. Anonymization uses <code>[Deleted]</code> name and <code>anonymous-deleted@example.com</code>. IP addresses removed from audit API responses.</div>
+
+<div class="working"><strong>Pydantic v2 Migration</strong> — All schema classes use <code>model_config = ConfigDict(from_attributes=True)</code>. No remaining <code>class Config: orm_mode = True</code> patterns.</div>
+
+<div class="working"><strong>APScheduler Monitoring</strong> — <code>EVENT_JOB_ERROR</code> and <code>EVENT_JOB_MISSED</code> listeners log at ERROR level with <code>exc_info=True</code>.</div>
+
+<div class="working"><strong>Correlated Logging</strong> — Public booking, confirmation, appointments, and reschedule routes use <code>get_correlated_logger(__name__)</code> for request ID propagation.</div>
+
+<div class="working"><strong>State Timezone Mapping</strong> — <code>STATE_TIMEZONE_MAP</code> covers 24 states for borrower timezone inference. Falls back to <code>America/New_York</code> when state unknown.</div>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>REMEDIATION IMPACT SUMMARY</h2>
+
+<table>
+<tr><th>Dimension</th><th>Before</th><th>After</th><th>Delta</th><th>Key Fixes</th></tr>
+<tr><td>D1 Functional Correctness</td><td>62</td><td>90</td><td class="pass">+28</td><td>Pydantic v2 migration (12 files), appointment type duration resolution, cancellation policy enforcement</td></tr>
+<tr><td>D2 Security</td><td>58</td><td>92</td><td class="pass">+34</td><td>SECRET_KEY fail-hard, email hash JWT, prompt injection sanitizer, IDOR prevention, rate limit bounds</td></tr>
+<tr><td>D3 Multi-Tenancy</td><td>65</td><td>85</td><td class="pass">+20</td><td>Per-org rate limiting, A/B testing org-scoped, waitlist org resolution, per-org reminder intervals</td></tr>
+<tr><td>D4 Data Integrity</td><td>68</td><td>88</td><td class="pass">+20</td><td>Optimistic locking, idempotency keys, unique constraints, state machine enforcement, immutable audit log</td></tr>
+<tr><td>D5 AI Agent Reliability</td><td>60</td><td>84</td><td class="pass">+24</td><td>AI context schema validation, injection sanitization, daily capacity limits, RESPA routing rationale</td></tr>
+<tr><td>D6 Performance</td><td>65</td><td>82</td><td class="pass">+17</td><td>Batch hold loading, async webhook delivery, background task notifications, cached config, batch queries</td></tr>
+<tr><td>D7 Observability</td><td>58</td><td>80</td><td class="pass">+22</td><td>Correlated loggers, persistent event store, circuit breaker consolidation, APScheduler listeners, pre-send logging</td></tr>
+<tr><td>D8 Compliance</td><td>55</td><td>82</td><td class="pass">+27</td><td>TCPA fail-closed (6 pathways), GDPR cascade, encrypted secrets, PII masking, ROPA logging</td></tr>
+<tr style="font-weight:700; background:#d5f5e3;"><td>OVERALL</td><td>68</td><td>86</td><td class="pass">+18</td><td>118/118 findings resolved, 85 files modified, +3737/-1530 lines</td></tr>
+</table>
+
+<!-- ═══════════════════════════════════════ -->
+<h2>PATH TO A+ (95+)</h2>
+
+<p>To reach enterprise A+ grade, address the 5 HIGH findings and the 12 MEDIUM findings above. Estimated effort:</p>
+
+<table>
+<tr><th>Phase</th><th>Findings</th><th>Effort</th><th>Expected Score</th></tr>
+<tr><td>Phase 1: Fix 5 HIGH findings</td><td>v2-OBS-001/002, v2-D3-001, v2-PERF-001, v2-COMP-001</td><td>~4 hours</td><td>90/100 (A-)</td></tr>
+<tr><td>Phase 2: Fix 12 MEDIUM findings</td><td>v2-D3-002, v2-D4-001, v2-D5-001/002, v2-OBS-003, v2-COMP-002/003/004, v2-FE-001/002/003/004</td><td>~8 hours</td><td>95/100 (A+)</td></tr>
+<tr><td>Phase 3: Fix 9 LOW findings</td><td>Backlog polish</td><td>~3 hours</td><td>97/100 (A+)</td></tr>
+</table>
+
+<p style="margin-top:1.5rem; padding:1rem; background:#d5f5e3; border-radius:8px;">
+<strong>Bottom line:</strong> The Smart Calendar has moved from <strong>NOT READY (C+, 68/100)</strong> to <strong>CONDITIONALLY READY (B+, 86/100)</strong>. All 8 original Critical findings are resolved. All 18 original High findings are resolved. Zero blockers remain. The 5 new HIGH findings are hardening items (stack traces, health checks, circuit breaker scoping) — not security vulnerabilities or data integrity risks. The feature is deployable with the current fixes and can reach A+ with one more focused remediation pass.
+</p>
+
+</body>
+</html>
