@@ -14,6 +14,8 @@ import logging
 from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 
+from typing import Dict, Literal, Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel, Field
@@ -33,9 +35,30 @@ def _get_deps():
 
 # --- Schemas ---
 
-class BriefingPreferences(BaseModel):
+class BriefingSections(BaseModel):
+    pipeline: bool = True
+    at_risk: bool = True
+    stale_leads: bool = True
+    appointments: bool = True
+    conditions: bool = True
+    yesterday: bool = True
+
+
+class BriefingThresholds(BaseModel):
+    at_risk_days: int = Field(default=10, ge=1, le=30)
+    stale_lead_days: int = Field(default=7, ge=1, le=30)
+    stale_lead_high_score_days: int = Field(default=3, ge=1, le=14)
+    lock_expiring_days: int = Field(default=3, ge=1, le=14)
+    max_at_risk_items: int = Field(default=10, ge=1, le=20)
+    max_stale_lead_items: int = Field(default=10, ge=1, le=20)
+
+
+class BriefingPreferencesSchema(BaseModel):
     briefing_enabled: bool = True
     briefing_hour: int = Field(ge=0, le=23, default=7)
+    sections: BriefingSections = BriefingSections()
+    thresholds: BriefingThresholds = BriefingThresholds()
+    ai_tone: Literal["concise", "balanced", "detailed"] = "balanced"
 
 
 class BriefingResponse(BaseModel):
@@ -75,11 +98,11 @@ async def get_today_briefing(db: Session = Depends(get_db),
     """Get current user's briefing for today."""
     MorningBriefing, _ = _get_deps()
 
-    user_tz = getattr(current_user, "timezone", None) or "America/New_York"
+    user_tz = getattr(current_user, "timezone", None) or "America/Chicago"
     try:
         tz = ZoneInfo(user_tz)
     except Exception:
-        tz = ZoneInfo("America/New_York")
+        tz = ZoneInfo("America/Chicago")
 
     today = datetime.now(tz).date()
 
@@ -159,11 +182,11 @@ async def generate_now(
     MorningBriefing, _ = _get_deps()
     from services.morning_briefing_service import MorningBriefingService
 
-    user_tz = getattr(current_user, "timezone", None) or "America/New_York"
+    user_tz = getattr(current_user, "timezone", None) or "America/Chicago"
     try:
         tz = ZoneInfo(user_tz)
     except Exception:
-        tz = ZoneInfo("America/New_York")
+        tz = ZoneInfo("America/Chicago")
 
     today = datetime.now(tz).date()
     level = MorningBriefingService.determine_level(current_user)
@@ -216,27 +239,50 @@ async def get_preferences(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Get briefing preferences."""
+    """Get briefing preferences (merged with defaults)."""
+    from services.morning_briefing_service import MorningBriefingService
+    prefs = MorningBriefingService.load_preferences(current_user)
     return {
         "briefing_enabled": getattr(current_user, "briefing_enabled", True) if current_user.briefing_enabled is not None else True,
         "briefing_hour": getattr(current_user, "briefing_hour", 7) or 7,
         "timezone": getattr(current_user, "timezone", "America/New_York"),
+        "sections": prefs.sections,
+        "thresholds": prefs.thresholds,
+        "ai_tone": prefs.ai_tone,
     }
 
 
 @router.put("/preferences")
 async def update_preferences(
-    prefs: BriefingPreferences,
+    prefs: BriefingPreferencesSchema,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Update briefing preferences."""
+    """Update briefing preferences.
+
+    Split-write: briefing_enabled and briefing_hour go to dedicated User columns
+    (used by Celery dispatch for fast SQL filtering). sections, thresholds, and
+    ai_tone go to user.briefing_preferences JSONB.
+    """
+    # Dedicated columns (fast SQL filtering by Celery dispatch)
     current_user.briefing_enabled = prefs.briefing_enabled
     current_user.briefing_hour = prefs.briefing_hour
+
+    # JSONB column (customization preferences)
+    current_user.briefing_preferences = {
+        "sections": prefs.sections.model_dump(),
+        "thresholds": prefs.thresholds.model_dump(),
+        "ai_tone": prefs.ai_tone,
+    }
     db.commit()
 
+    from services.morning_briefing_service import MorningBriefingService
+    loaded = MorningBriefingService.load_preferences(current_user)
     return {
         "briefing_enabled": current_user.briefing_enabled,
         "briefing_hour": current_user.briefing_hour,
         "timezone": getattr(current_user, "timezone", "America/New_York"),
+        "sections": loaded.sections,
+        "thresholds": loaded.thresholds,
+        "ai_tone": loaded.ai_tone,
     }
