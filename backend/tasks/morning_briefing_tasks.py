@@ -1,0 +1,340 @@
+"""
+Morning Briefing Celery Tasks
+
+Dispatch: runs every 15 min, finds users due for briefings.
+Generate: builds one briefing per user (data + AI + email + send).
+Cleanup: deletes briefings older than 90 days.
+"""
+from __future__ import annotations
+
+import logging
+import os
+from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+from tasks.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
+
+
+def _get_db_session():
+    """Create a fresh DB session for background tasks."""
+    from db import SessionLocal
+    return SessionLocal()
+
+
+def _get_all_briefing_candidates(db):
+    """Get all active users with briefing_enabled = True."""
+    from sqlalchemy import text as sa_text
+    rows = db.execute(sa_text("""
+        SELECT id, timezone, briefing_hour, permission_role, organization_id
+        FROM users
+        WHERE is_active = TRUE
+          AND COALESCE(briefing_enabled, TRUE) = TRUE
+    """)).fetchall()
+    return rows
+
+
+@celery_app.task(name="tasks.morning_briefing_tasks.dispatch_briefings")
+def dispatch_briefings():
+    """
+    Runs every 15 minutes via Beat. Checks which users are due for a briefing
+    based on their timezone and briefing_hour.
+    """
+    from sqlalchemy import text as sa_text
+
+    db = _get_db_session()
+    try:
+        now_utc = datetime.now(timezone.utc)
+        candidates = _get_all_briefing_candidates(db)
+        db.close()
+        db = None
+
+        enqueued = 0
+        individual_idx = 0
+        manager_idx = 0
+
+        for row in candidates:
+            user_id, user_tz, briefing_hour, perm_role, org_id = (
+                row[0], row[1] or "America/New_York", row[2] or 7, row[3] or "sales", row[4],
+            )
+
+            try:
+                tz = ZoneInfo(user_tz)
+            except Exception:
+                tz = ZoneInfo("America/New_York")
+
+            local_now = now_utc.astimezone(tz)
+            local_hour = local_now.hour
+            local_date = local_now.date()
+
+            if local_hour != briefing_hour:
+                continue
+
+            # Check if briefing already exists for today
+            check_db = _get_db_session()
+            try:
+                exists = check_db.execute(sa_text("""
+                    SELECT 1 FROM morning_briefings
+                    WHERE user_id = :uid AND briefing_date = :bdate
+                    LIMIT 1
+                """), {"uid": user_id, "bdate": local_date}).fetchone()
+                check_db.close()
+
+                if exists:
+                    continue
+            except Exception:
+                check_db.close()
+                continue
+
+            # Determine level
+            is_leadership = perm_role in ("leadership", "admin", "site_admin", "platform_admin")
+            is_manager = perm_role in ("management", "branch_manager", "regional_manager")
+
+            if is_leadership:
+                level = "leadership"
+            elif is_manager:
+                # Check if they have direct reports
+                rpt_db = _get_db_session()
+                try:
+                    has_reports = rpt_db.execute(sa_text("""
+                        SELECT 1 FROM users
+                        WHERE manager_id = :uid AND is_active = TRUE
+                        LIMIT 1
+                    """), {"uid": user_id}).fetchone()
+                    rpt_db.close()
+                    level = "manager" if has_reports else "individual"
+                except Exception:
+                    rpt_db.close()
+                    level = "individual"
+            else:
+                level = "individual"
+
+            # Stagger: individuals first, managers/leadership delayed 5 min
+            if level == "individual":
+                delay = individual_idx * 2
+                individual_idx += 1
+            else:
+                delay = 300 + manager_idx * 2
+                manager_idx += 1
+
+            generate_user_briefing.apply_async(
+                args=[user_id, local_date.isoformat(), level],
+                countdown=delay,
+            )
+            enqueued += 1
+
+        logger.info("Briefing dispatch: enqueued %d users", enqueued)
+        return {"enqueued": enqueued}
+
+    except Exception as e:
+        logger.error("Briefing dispatch failed: %s", e)
+        return {"error": str(e)}
+    finally:
+        if db:
+            db.close()
+
+
+@celery_app.task(
+    name="tasks.morning_briefing_tasks.generate_user_briefing",
+    bind=True,
+    max_retries=2,
+    default_retry_delay=300,
+    queue="ai_tasks",
+)
+def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_level: str):
+    """Generate and deliver a single user's morning briefing."""
+    import time
+    from sqlalchemy import text as sa_text
+    from database.models.morning_briefing import MorningBriefing
+    from services.morning_briefing_service import MorningBriefingService
+    from templates.morning_briefing_email import render_briefing_email
+
+    start_time = time.time()
+    briefing_date = date.fromisoformat(briefing_date_str)
+
+    db = _get_db_session()
+    try:
+        # Load user with direct_reports
+        from database.models import User
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            logger.warning("Briefing: user %d not found", user_id)
+            return {"error": "user_not_found"}
+
+        # Check for existing briefing (race condition guard)
+        existing = db.query(MorningBriefing).filter(
+            MorningBriefing.user_id == user_id,
+            MorningBriefing.briefing_date == briefing_date,
+        ).first()
+        if existing:
+            logger.info("Briefing already exists for user %d on %s", user_id, briefing_date_str)
+            return {"status": "already_exists"}
+
+        # Create pending record
+        briefing = MorningBriefing(
+            organization_id=user.organization_id,
+            user_id=user_id,
+            briefing_date=briefing_date,
+            briefing_level=briefing_level,
+            status="generating",
+        )
+        db.add(briefing)
+        try:
+            db.flush()
+        except Exception as flush_exc:
+            db.rollback()
+            # UniqueConstraint violation means another worker already created it
+            from sqlalchemy.exc import IntegrityError
+            if isinstance(flush_exc, IntegrityError):
+                logger.info("Briefing already exists (concurrent) for user %d on %s", user_id, briefing_date_str)
+                return {"status": "already_exists"}
+            raise
+
+        # Gather data
+        service = MorningBriefingService()
+        ctx = service.build_context(db, user, briefing_date)
+
+        briefing.briefing_data = {
+            "pipeline": ctx.pipeline,
+            "at_risk": ctx.at_risk,
+            "stale_leads": ctx.stale_leads,
+            "appointments": ctx.appointments,
+            "conditions": ctx.conditions,
+            "yesterday": ctx.yesterday,
+        }
+        if ctx.team:
+            briefing.team_data = ctx.team
+
+        # Generate AI narrative
+        ai_start = time.time()
+        narrative = service.generate_narrative(ctx)
+        ai_duration = (time.time() - ai_start) * 1000
+        briefing.ai_narrative = narrative
+
+        # Render email HTML
+        user_name = user.full_name if hasattr(user, "full_name") else (
+            f"{user.first_name or ''} {user.last_name or ''}".strip() or "there"
+        )
+        html = render_briefing_email(
+            user_name=user_name,
+            briefing_date=briefing_date,
+            level=briefing_level,
+            ai_narrative=narrative,
+            pipeline=ctx.pipeline,
+            at_risk=ctx.at_risk,
+            stale_leads=ctx.stale_leads,
+            appointments=ctx.appointments,
+            conditions=ctx.conditions,
+            yesterday=ctx.yesterday,
+            team=ctx.team,
+        )
+        briefing.html_content = html
+
+        # Send email
+        email_sent = False
+        try:
+            _send_briefing_email(user.email, user_name, briefing_date, briefing_level, html, ctx.pipeline)
+            briefing.email_sent_at = datetime.now(timezone.utc)
+            email_sent = True
+        except Exception as e:
+            logger.error("Briefing email send failed for user %d: %s", user_id, e)
+
+        briefing.status = "delivered" if email_sent else "failed"
+        briefing.updated_at = datetime.now(timezone.utc)
+        db.commit()
+
+        total_duration = (time.time() - start_time) * 1000
+        logger.info(
+            "briefing.generate.complete user_id=%d level=%s ai_ms=%.0f total_ms=%.0f email=%s",
+            user_id, briefing_level, ai_duration, total_duration, email_sent,
+        )
+
+        return {"status": briefing.status, "briefing_id": briefing.id}
+
+    except Exception as e:
+        db.rollback()
+        logger.error("Briefing generation failed for user %d: %s", user_id, e)
+        try:
+            self.retry(exc=e)
+        except self.MaxRetriesExceededError:
+            # Mark as failed after all retries
+            fail_db = _get_db_session()
+            try:
+                fail_briefing = fail_db.query(MorningBriefing).filter(
+                    MorningBriefing.user_id == user_id,
+                    MorningBriefing.briefing_date == briefing_date,
+                ).first()
+                if fail_briefing:
+                    fail_briefing.status = "failed"
+                    fail_briefing.updated_at = datetime.now(timezone.utc)
+                    fail_db.commit()
+            except Exception as mark_err:
+                logger.error("Failed to mark briefing as failed for user %d: %s", user_id, mark_err)
+            finally:
+                fail_db.close()
+            return {"error": str(e)}
+    finally:
+        db.close()
+
+
+def _send_briefing_email(
+    to_email: str, user_name: str, briefing_date: date,
+    level: str, html: str, pipeline: dict,
+):
+    """Send briefing email via SendGrid / notification service."""
+    import sendgrid
+    from sendgrid.helpers.mail import Mail, Email, To, Content
+
+    api_key = os.getenv("SENDGRID_API_KEY")
+    if not api_key:
+        logger.warning("SENDGRID_API_KEY not set; skipping email send")
+        return
+
+    active = pipeline.get("active_count", 0)
+    volume = pipeline.get("total_volume", 0)
+    short_date = briefing_date.strftime("%b %d")
+
+    level_labels = {"individual": f"{active} active loans", "manager": "team briefing", "leadership": f"${volume / 1_000_000:.1f}M pipeline"}
+    subject = f"Your Morning Briefing — {short_date} — {level_labels.get(level, '')}"
+
+    from_email = os.getenv("BRIEFING_FROM_EMAIL", "briefing@perenniaai.com")
+    from_name = os.getenv("SENDGRID_FROM_NAME", "Perennia AI")
+
+    message = Mail(
+        from_email=Email(from_email, from_name),
+        to_emails=To(to_email),
+        subject=subject,
+        html_content=Content("text/html", html),
+    )
+
+    sg = sendgrid.SendGridAPIClient(api_key=api_key)
+    response = sg.send(message)
+
+    if response.status_code >= 400:
+        raise Exception(f"SendGrid returned {response.status_code}")
+
+    logger.info("Briefing email sent to %s (status %d)", to_email, response.status_code)
+
+
+@celery_app.task(name="tasks.morning_briefing_tasks.cleanup_old_briefings")
+def cleanup_old_briefings(retention_days: int = 90):
+    """Delete briefings older than retention_days."""
+    from sqlalchemy import text as sa_text
+
+    db = _get_db_session()
+    try:
+        cutoff = date.today() - timedelta(days=retention_days)
+        result = db.execute(sa_text("""
+            DELETE FROM morning_briefings WHERE briefing_date < :cutoff
+        """), {"cutoff": cutoff})
+        db.commit()
+        deleted = result.rowcount
+        logger.info("Briefing cleanup: deleted %d rows older than %s", deleted, cutoff)
+        return {"deleted": deleted}
+    except Exception as e:
+        db.rollback()
+        logger.error("Briefing cleanup failed: %s", e)
+        return {"error": str(e)}
+    finally:
+        db.close()

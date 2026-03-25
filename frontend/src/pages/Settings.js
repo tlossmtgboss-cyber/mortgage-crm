@@ -891,7 +891,7 @@ function Settings() {
 
   // Load profile when profile section is active
   useEffect(() => {
-    if (activeSection === 'profile-info' || activeSection === 'account-settings' || activeSection === 'security' || activeSection === 'work-hours') {
+    if (activeSection === 'profile-info' || activeSection === 'account-settings' || activeSection === 'security' || activeSection === 'work-hours' || activeSection === 'morning-briefing') {
       loadUserProfile();
     }
   }, [activeSection]);
@@ -2645,6 +2645,124 @@ const API_BASE_URL = isProduction
     }
   };
 
+  const MorningBriefingSettings = () => {
+    const [prefs, setPrefs] = useState({ briefing_enabled: true, briefing_hour: 7, timezone: '' });
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [generating, setGenerating] = useState(false);
+    const [message, setMessage] = useState(null);
+
+    useEffect(() => {
+      const fetchPrefs = async () => {
+        try {
+          const res = await fetch(`${API_BASE}/api/v1/briefing/preferences`, {
+            headers: getAuthHeaders(),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setPrefs(data);
+          }
+        } catch (err) { console.error('Failed to fetch briefing preferences', err); }
+        finally { setLoading(false); }
+      };
+      fetchPrefs();
+    }, []);
+
+    const savePrefs = async () => {
+      setSaving(true);
+      setMessage(null);
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/briefing/preferences`, {
+          method: 'PUT',
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            briefing_enabled: prefs.briefing_enabled,
+            briefing_hour: prefs.briefing_hour,
+          }),
+        });
+        if (res.ok) {
+          setMessage({ type: 'success', text: 'Briefing preferences saved' });
+        } else {
+          setMessage({ type: 'error', text: 'Failed to save preferences' });
+        }
+      } catch (err) { setMessage({ type: 'error', text: 'Failed to save preferences' }); }
+      finally { setSaving(false); }
+    };
+
+    const generateNow = async () => {
+      setGenerating(true);
+      setMessage(null);
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/briefing/generate-now?force=true`, {
+          method: 'POST',
+          headers: getAuthHeaders(),
+        });
+        if (res.ok) {
+          setMessage({ type: 'success', text: 'Briefing generation started — check your Dashboard in a minute' });
+        } else {
+          const data = await res.json().catch(() => ({}));
+          setMessage({ type: 'error', text: data?.detail || 'Failed to generate briefing' });
+        }
+      } catch (err) {
+        setMessage({ type: 'error', text: 'Failed to generate briefing' });
+      }
+      finally { setGenerating(false); }
+    };
+
+    if (loading) return <div className="settings-section"><h3>Morning Briefing</h3><p>Loading...</p></div>;
+
+    const hourOptions = [];
+    for (let h = 5; h <= 11; h++) {
+      const label = `${h}:00 AM`;
+      hourOptions.push(<option key={h} value={h}>{label}</option>);
+    }
+
+    return (
+      <div className="settings-section">
+        <h3>Morning Briefing</h3>
+        <p className="settings-description">Get a daily AI-powered briefing of your pipeline, priorities, and appointments delivered to your email and Dashboard.</p>
+
+        <div className="settings-row">
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={prefs.briefing_enabled}
+              onChange={(e) => setPrefs({ ...prefs, briefing_enabled: e.target.checked })}
+            />
+            <span>Enable daily briefing</span>
+          </label>
+        </div>
+
+        <div className="settings-row">
+          <label>Delivery time</label>
+          <select
+            value={prefs.briefing_hour}
+            onChange={(e) => setPrefs({ ...prefs, briefing_hour: parseInt(e.target.value) })}
+            disabled={!prefs.briefing_enabled}
+          >
+            {hourOptions}
+          </select>
+          {prefs.timezone && <span className="settings-hint">in your timezone: {prefs.timezone}</span>}
+        </div>
+
+        <div className="settings-row settings-actions">
+          <button onClick={savePrefs} disabled={saving} className="btn btn-primary">
+            {saving ? 'Saving...' : 'Save Preferences'}
+          </button>
+          <button onClick={generateNow} disabled={generating || !prefs.briefing_enabled} className="btn btn-secondary">
+            {generating ? 'Generating...' : 'Generate Now'}
+          </button>
+        </div>
+
+        {message && (
+          <div className={`settings-message ${message.type}`}>
+            {message.text}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="settings-page">
       <div className="settings-header">
@@ -2698,6 +2816,7 @@ const API_BASE_URL = isProduction
                       <button className={`sidebar-btn child ${activeSection === 'security' ? 'active' : ''}`} onClick={() => setActiveSection('security')}><span>Security</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'email-signature' ? 'active' : ''}`} onClick={() => setActiveSection('email-signature')}><span>Email Signature</span></button>
                       <button className={`sidebar-btn child ${activeSection === 'work-hours' ? 'active' : ''}`} onClick={() => setActiveSection('work-hours')}><span>Work Hours</span></button>
+                      <button className={`sidebar-btn child ${activeSection === 'morning-briefing' ? 'active' : ''}`} onClick={() => setActiveSection('morning-briefing')}><span>Morning Briefing</span></button>
                     </div>
                   )}
                 </div>
@@ -5127,6 +5246,10 @@ const API_BASE_URL = isProduction
             </div>
           )}
 
+
+          {activeSection === 'morning-briefing' && (
+            <MorningBriefingSettings />
+          )}
 
           {/* Organizational Settings Sections */}
           {activeSection === 'account-management' && (

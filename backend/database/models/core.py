@@ -115,6 +115,13 @@ class User(Base):
     branch_id = Column(Integer, ForeignKey("branches.id"))
     organization_id = Column(Integer, ForeignKey("organizations.id"))  # Multi-tenant: user's organization
     is_active = Column(Boolean, default=True)
+
+    # Organizational hierarchy
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+
+    # Briefing preferences
+    briefing_enabled = Column(Boolean, default=True)
+    briefing_hour = Column(Integer, default=7)  # 0-23 in user's timezone
     email_verified = Column(Boolean, default=False)
     onboarding_completed = Column(Boolean, default=False)
     user_metadata = Column(JSON)
@@ -165,6 +172,10 @@ class User(Base):
     organization = relationship("Organization", back_populates="users")
     leads = relationship("Lead", back_populates="owner")
     loans = relationship("Loan", back_populates="loan_officer")
+
+    # Manager hierarchy (self-referential)
+    manager = relationship("User", remote_side="User.id", foreign_keys="User.manager_id",
+                           backref="direct_reports")
 
 
 class ApiKey(Base):
