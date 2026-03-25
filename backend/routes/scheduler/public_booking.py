@@ -62,6 +62,7 @@ from routes.scheduler.constants import (
     BOOKING_RATE_LIMIT_PER_IP,
     DEMO_CREATE_RATE_LIMIT,
     PUBLIC_BOOKING_RATE_LIMIT,
+    DEFAULT_TIMEZONE,
 )
 from routes.scheduler.error_responses import (
     scheduler_error, validation_error, not_found_error,
@@ -382,7 +383,7 @@ async def get_public_booking_page(
                                 user_id=target_user.id,
                                 config_name=f"{first_name}'s Schedule",
                                 description=f"Availability settings for {user_name}",
-                                timezone="America/New_York",
+                                timezone=DEFAULT_TIMEZONE,
                                 default_duration_minutes=DEFAULT_APPOINTMENT_DURATION_MINUTES,
                                 min_notice_hours=DEFAULT_MIN_NOTICE_HOURS,
                                 max_advance_days=DEFAULT_MAX_ADVANCE_DAYS,

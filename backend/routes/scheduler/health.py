@@ -112,10 +112,28 @@ def _check_calendar_sync(db: Session, org_id: int) -> dict:
         # Calendars configured but never synced
         status = "warning"
 
+    # Count recent sync failures from CalendarEventMap
+    failed_syncs = 0
+    try:
+        from database.models.calendar_event_map import CalendarEventMap
+        failed_syncs = (
+            db.query(func.count(CalendarEventMap.id))
+            .filter(
+                CalendarEventMap.organization_id == org_id,
+                CalendarEventMap.sync_status == "failed",
+            )
+            .scalar()
+        ) or 0
+        if failed_syncs > 0:
+            status = "warning"
+    except Exception:
+        pass  # CalendarEventMap may not exist yet
+
     return {
         "status": status,
         "last_sync": last_sync,
         "synced_calendars": synced_calendars,
+        "failed_syncs": failed_syncs,
     }
 
 

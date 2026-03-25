@@ -34,7 +34,6 @@ import hashlib
 import hmac
 import logging
 import os
-import threading
 import time
 from collections import OrderedDict, defaultdict
 from datetime import datetime, timezone
@@ -114,12 +113,12 @@ class _WebhookRateLimiter:
         self._counters: dict[str, list[float]] = defaultdict(list)
         self._max = max_requests
         self._window = window_seconds
-        self._lock = threading.Lock()
+        self._lock = asyncio.Lock()
 
-    def check(self, key: str) -> bool:
+    async def check(self, key: str) -> bool:
         """Returns True if request is allowed, False if rate limited."""
         now = time.time()
-        with self._lock:
+        async with self._lock:
             # Clean old entries
             self._counters[key] = [t for t in self._counters[key] if now - t < self._window]
             if len(self._counters[key]) >= self._max:
@@ -302,7 +301,7 @@ async def google_calendar_webhook(request: Request, db: Session = Depends(get_db
     # Per-org rate limit: prevent a single misconfigured org from flooding
     # the webhook and exhausting the DB connection pool.
     limiter_key = f"google:{organization_id}" if organization_id else "google"
-    if not _webhook_limiter.check(limiter_key):
+    if not await _webhook_limiter.check(limiter_key):
         logger.warning("RATE_LIMITED: google webhook for org %s", organization_id)
         raise HTTPException(status_code=429, detail="Too many webhook notifications")
 
@@ -431,7 +430,7 @@ async def outlook_calendar_webhook(request: Request, db: Session = Depends(get_d
         # Per-org rate limit: prevent a single misconfigured org from flooding
         # the webhook and exhausting the DB connection pool.
         limiter_key = f"outlook:{verified_org_id}" if verified_org_id else "outlook"
-        if not _webhook_limiter.check(limiter_key):
+        if not await _webhook_limiter.check(limiter_key):
             logger.warning("RATE_LIMITED: outlook webhook for org %s", verified_org_id)
             raise HTTPException(status_code=429, detail="Too many webhook notifications")
 
@@ -806,6 +805,25 @@ async def _process_google_changes(
                     event.get("id"), e,
                 )
                 errors += 1
+                # Persist failure to CalendarEventMap for UI visibility
+                try:
+                    eid = event.get("id", "")
+                    existing = (
+                        db.query(CalendarEventMap)
+                        .filter(
+                            CalendarEventMap.provider == "google",
+                            CalendarEventMap.external_id == eid,
+                            CalendarEventMap.organization_id == organization_id,
+                        )
+                        .first()
+                    )
+                    if existing:
+                        existing.sync_status = "failed"
+                        existing.last_error = str(e)[:500]
+                        existing.updated_at = datetime.now(timezone.utc)
+                        db.flush()
+                except Exception:
+                    logger.debug("Could not persist sync failure status")
 
     except Exception as e:
         logger.exception("Google sync: unexpected error: %s", e)
@@ -933,6 +951,26 @@ async def _process_outlook_notification(
                     resource, resp.status_code,
                 )
                 errors += 1
+                # Persist failure for UI visibility
+                try:
+                    from database.models.calendar_event_map import CalendarEventMap
+                    eid = resource.split("/")[-1] if "/" in resource else resource
+                    existing = (
+                        db.query(CalendarEventMap)
+                        .filter(
+                            CalendarEventMap.provider == "outlook",
+                            CalendarEventMap.external_id == eid,
+                            CalendarEventMap.organization_id == organization_id,
+                        )
+                        .first()
+                    )
+                    if existing:
+                        existing.sync_status = "failed"
+                        existing.last_error = f"HTTP {resp.status_code} fetching event"
+                        existing.updated_at = datetime.now(timezone.utc)
+                        db.flush()
+                except Exception:
+                    logger.debug("Could not persist Outlook sync failure status")
 
     except Exception as e:
         logger.exception("Outlook sync: unexpected error: %s", e)

@@ -21,6 +21,7 @@ from routes.scheduler.constants import (
     DEFAULT_BUFFER_BEFORE_MINUTES,
     DEFAULT_BUFFER_AFTER_MINUTES,
     DEFAULT_MIN_NOTICE_HOURS,
+    DEFAULT_TIMEZONE,
 )
 from routes.scheduler._core import get_models
 
@@ -166,7 +167,7 @@ def _get_user_timezone(db, user_id: int, org_id: int = None) -> str:
         config = get_cached_scheduler_config(db, user_id, org_id)
         if config and getattr(config, 'timezone', None):
             return config.timezone
-    return 'America/Chicago'
+    return DEFAULT_TIMEZONE
 
 
 def _convert_utc_to_user_tz(

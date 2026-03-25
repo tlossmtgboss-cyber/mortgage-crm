@@ -9,7 +9,7 @@ import hashlib
 import logging
 import os
 import time
-import threading
+import asyncio
 
 try:
     import nh3
@@ -183,7 +183,7 @@ except Exception as _redis_err:
 # In multi-worker deployments without Redis, a token validated by worker A
 # can still be replayed against worker B. Use Redis for production.
 _used_turnstile_tokens: dict = {}  # {token_hash: expiry_timestamp}
-_turnstile_lock = threading.Lock()
+_turnstile_lock = asyncio.Lock()
 
 
 def _hash_token(token: str) -> str:
@@ -209,7 +209,7 @@ def _evict_lru_if_full() -> None:
             del _used_turnstile_tokens[k]
 
 
-def _check_turnstile_replay(token: str) -> bool:
+async def _check_turnstile_replay(token: str) -> bool:
     """
     Check if a Turnstile token has already been used. Returns False if replay detected.
     Uses Redis with SETNX + TTL when available; falls back to an in-memory TTL dict.
@@ -233,7 +233,7 @@ def _check_turnstile_replay(token: str) -> bool:
 
     # --- In-memory fallback path ---
     now = time.monotonic()
-    with _turnstile_lock:
+    async with _turnstile_lock:
         _evict_expired_tokens()
 
         if token_hash in _used_turnstile_tokens:
@@ -279,7 +279,7 @@ async def _verify_turnstile_token(token: str) -> bool:
         )
         result = response.json()
         if result.get("success"):
-            if not _check_turnstile_replay(token):
+            if not await _check_turnstile_replay(token):
                 logger.warning("Turnstile token replay detected — rejecting reused token")
                 return False
             return True

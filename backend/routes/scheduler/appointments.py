@@ -19,7 +19,6 @@ from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, ConfigDict, Field
 import html
 import logging
-import threading
 
 from smart_scheduler_models import (
     AppointmentStatus, MeetingType, MeetingMode,
@@ -1278,10 +1277,10 @@ async def update_appointment(
 @router.post("/appointments/{appointment_id}/cancel", response_model=AppointmentCancelResponse)
 async def cancel_appointment(
     appointment_id: int,
+    background_tasks: BackgroundTasks,
     cancel_data: Optional[CancelAppointmentRequest] = None,
     request: Request = None,
     db: Session = Depends(get_db),
-    background_tasks: BackgroundTasks = None
 ):
     """Cancel an appointment and send cancellation notifications"""
     user = await get_current_user(request, db)
@@ -1462,8 +1461,7 @@ async def cancel_appointment(
         except Exception as e:
             logger.error(f"Background cancellation email thread error: {e}")
 
-    email_thread = threading.Thread(target=_send_cancellation_emails, daemon=True)
-    email_thread.start()
+    background_tasks.add_task(_send_cancellation_emails)
 
     # Build optimistic emails_sent list for response (actual sending is async)
     if attendee_email:

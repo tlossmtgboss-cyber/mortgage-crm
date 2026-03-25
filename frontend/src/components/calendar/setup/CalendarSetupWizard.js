@@ -1,7 +1,7 @@
 /**
  * Perennia AI - Calendar Setup Wizard
  *
- * Guided 10-step setup wizard for Smart Calendar configuration.
+ * Guided 6-step setup wizard for Smart Calendar configuration.
  * Persists progress to localStorage so users can resume later.
  * Accepts step components as configuration — actual step content
  * will be built by other agents. Placeholder content is rendered
@@ -12,12 +12,14 @@
  *   2. Timezone & Hours
  *   3. Appointment Types
  *   4. Booking Page
- *   5. Notifications
- *   6. Integrations
- *   7. Cancellation Policy
- *   8. Team Setup
- *   9. Advanced Features
- *  10. Review & Activate
+ *   5. Integrations
+ *   6. Review & Activate
+ *
+ * Steps moved to Calendar Settings (configurable post-setup):
+ *   - Notifications
+ *   - Cancellation Policy
+ *   - Team Setup
+ *   - Advanced Features
  */
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -31,11 +33,7 @@ import WelcomeStepContent from './steps/WelcomeStep';
 import WorkingHoursStepContent from './steps/WorkingHoursStep';
 import AppointmentTypesStepContent from './steps/AppointmentTypesStep';
 import BookingPageStepContent from './steps/BookingPageStep';
-import NotificationsStepContent from './steps/NotificationsStep';
 import IntegrationsStepContent from './steps/IntegrationsStep';
-import CancellationPolicyStepContent from './steps/CancellationPolicyStep';
-import TeamSetupStepContent from './steps/TeamSetupStep';
-import AdvancedFeaturesStepContent from './steps/AdvancedFeaturesStep';
 import ReviewStepContent from './steps/ReviewStep';
 import '../../../styles/calendar-setup.css';
 
@@ -117,18 +115,8 @@ const SETUP_STEPS = [
     skippable: true,
   },
   {
-    id: 'notifications',
-    number: 5,
-    title: 'Notifications',
-    label: 'Notify',
-    description: 'Configure email and SMS reminders so your clients never miss an appointment.',
-    icon: 'fa-bell',
-    helpText: 'Set up automatic reminders at 24 hours, 2 hours, or 15 minutes before appointments. You can enable both email and SMS.',
-    skippable: true,
-  },
-  {
     id: 'integrations',
-    number: 6,
+    number: 5,
     title: 'Integrations',
     label: 'Integrate',
     description: 'Connect Google Calendar, Outlook, or other services to sync your appointments across platforms.',
@@ -137,38 +125,8 @@ const SETUP_STEPS = [
     skippable: true,
   },
   {
-    id: 'cancellation-policy',
-    number: 7,
-    title: 'Cancellation Policy',
-    label: 'Policy',
-    description: 'Set your cancellation and rescheduling policies, including minimum notice requirements.',
-    icon: 'fa-shield-alt',
-    helpText: 'Define how far in advance clients must cancel or reschedule. This helps protect your time.',
-    skippable: true,
-  },
-  {
-    id: 'team-setup',
-    number: 8,
-    title: 'Team Setup',
-    label: 'Team',
-    description: 'Configure team scheduling, assignment strategies, and capacity limits for your team members.',
-    icon: 'fa-users',
-    helpText: 'If you manage a team, set up round-robin or load-balanced appointment distribution.',
-    skippable: true,
-  },
-  {
-    id: 'advanced-features',
-    number: 9,
-    title: 'Advanced Features',
-    label: 'Advanced',
-    description: 'Enable power features like buffer times, booking windows, waitlists, and recurring availability.',
-    icon: 'fa-cogs',
-    helpText: 'These optional features give you more control over your scheduling workflow.',
-    skippable: true,
-  },
-  {
     id: 'review-activate',
-    number: 10,
+    number: 6,
     title: 'Review & Activate',
     label: 'Activate',
     description: 'Review your configuration and activate your Smart Calendar. You can always adjust settings later.',
@@ -200,11 +158,12 @@ function PlaceholderStep({ step }) {
   );
 }
 
-// All 10 step components are imported at the top of this file:
+// All 6 wizard step components are imported at the top of this file:
 //   WelcomeStepContent, WorkingHoursStepContent, AppointmentTypesStepContent,
-//   BookingPageStepContent, NotificationsStepContent, IntegrationsStepContent,
-//   CancellationPolicyStepContent, TeamSetupStepContent, AdvancedFeaturesStepContent,
-//   ReviewStepContent
+//   BookingPageStepContent, IntegrationsStepContent, ReviewStepContent
+//
+// Steps moved to Calendar Settings (still importable from ./steps/):
+//   NotificationsStep, CancellationPolicyStep, TeamSetupStep, AdvancedFeaturesStep
 
 // ============================================================================
 // Celebration overlay
@@ -512,7 +471,7 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
       });
     } catch { /* analytics should never break the app */ }
 
-    // Mark step 10 as completed
+    // Mark final step as completed
     setCompletedSteps(prev => {
       if (prev.includes(TOTAL_STEPS)) return prev;
       return [...prev, TOTAL_STEPS];
@@ -566,11 +525,7 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
   const onChangeTimezone = useCallback((data) => handleStepDataChange('timezone-hours', data), [handleStepDataChange]);
   const onChangeAppointmentTypes = useCallback((types) => handleStepDataChange('appointment-types', { types }), [handleStepDataChange]);
   const onChangeBookingPage = useCallback((data) => handleStepDataChange('booking-page', data), [handleStepDataChange]);
-  const onChangeNotifications = useCallback((data) => handleStepDataChange('notifications', data), [handleStepDataChange]);
   const onChangeIntegrations = useCallback((data) => handleStepDataChange('integrations', data), [handleStepDataChange]);
-  const onChangeCancellation = useCallback((data) => handleStepDataChange('cancellation-policy', data), [handleStepDataChange]);
-  const onChangeTeamSetup = useCallback((data) => handleStepDataChange('team-setup', data || {}), [handleStepDataChange]);
-  const onChangeAdvanced = useCallback((data) => handleStepDataChange('advanced-features', data || {}), [handleStepDataChange]);
   const noopDirty = useCallback(() => {}, []);
 
   // Stable empty-object references to avoid re-renders from new {} on each render
@@ -648,19 +603,8 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
       );
     }
 
-    // Step 5: Notifications (wizard props)
+    // Step 5: Integrations (wizard props)
     else if (currentStep === 5) {
-      content = (
-        <NotificationsStepContent
-          stepData={stepData['notifications'] || emptyObj}
-          onChange={onChangeNotifications}
-          allStepData={stepData}
-        />
-      );
-    }
-
-    // Step 6: Integrations (wizard props)
-    else if (currentStep === 6) {
       content = (
         <IntegrationsStepContent
           stepData={stepData['integrations'] || emptyObj}
@@ -670,37 +614,7 @@ export default function CalendarSetupWizard({ stepComponents = {} }) {
       );
     }
 
-    // Step 7: Cancellation Policy (legacy props: onComplete, initialData)
-    else if (currentStep === 7) {
-      content = (
-        <CancellationPolicyStepContent
-          onComplete={onChangeCancellation}
-          initialData={stepData['cancellation-policy'] || null}
-        />
-      );
-    }
-
-    // Step 8: Team Setup (legacy props: onComplete, onBack)
-    else if (currentStep === 8) {
-      content = (
-        <TeamSetupStepContent
-          onComplete={onChangeTeamSetup}
-          onBack={handleBack}
-        />
-      );
-    }
-
-    // Step 9: Advanced Features (legacy props: onComplete, onBack)
-    else if (currentStep === 9) {
-      content = (
-        <AdvancedFeaturesStepContent
-          onComplete={onChangeAdvanced}
-          onBack={handleBack}
-        />
-      );
-    }
-
-    // Step 10: Review & Activate
+    // Step 6: Review & Activate
     else if (currentStep === TOTAL_STEPS) {
       content = (
         <ReviewStepContent

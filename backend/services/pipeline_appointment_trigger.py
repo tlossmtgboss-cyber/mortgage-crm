@@ -29,8 +29,8 @@ from sqlalchemy.orm import Session
 
 from db import Base
 
-# Fallback timezone constant — matches SchedulerConfig default
-_FALLBACK_TIMEZONE = "America/Chicago"
+# Fallback timezone — import from canonical scheduler constants
+from routes.scheduler.constants import DEFAULT_TIMEZONE as _FALLBACK_TIMEZONE
 
 # Retry configuration for transient failures
 _MAX_RETRIES = 2

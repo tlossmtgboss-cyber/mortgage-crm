@@ -49,8 +49,9 @@ DEFAULT_HOLD_TTL_SECONDS = 300  # 5 minutes
 # Override via SCHEDULER_ORGANIZER_EMAIL environment variable.
 DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", "sarah@reply.perenniaai.com")
 
-# Timezone
-DEFAULT_TIMEZONE = "America/Chicago"
+# Timezone — override per deployment via SCHEDULER_DEFAULT_TIMEZONE env var.
+# Individual users override this via SchedulerConfig.timezone.
+DEFAULT_TIMEZONE = os.environ.get("SCHEDULER_DEFAULT_TIMEZONE", "America/Chicago")
 
 # CAN-SPAM compliance: physical address required in all commercial emails.
 # Override via CAN_SPAM_ADDRESS environment variable for white-label deployments.

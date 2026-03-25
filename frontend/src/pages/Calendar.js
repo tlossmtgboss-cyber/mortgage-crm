@@ -9,9 +9,11 @@ import CommandCenterHeader from '../components/calendar/CommandCenterHeader';
 import CalendarToolbar from '../components/calendar/CalendarToolbar';
 import OperationalSidebar from '../components/calendar/OperationalSidebar';
 import CalendarMainView from '../components/calendar/CalendarMainView';
+import MobileCalendarView from '../components/calendar/MobileCalendarView';
 import CalendarModals from '../components/calendar/CalendarModals';
 import SetupBanner from '../components/calendar/SetupBanner';
 import SchedulingAlerts from '../components/calendar/SchedulingAlerts';
+import { useIsMobile } from '../hooks/useMediaQuery';
 import './Calendar.css';
 
 // Feature flags
@@ -20,6 +22,7 @@ const hasKeyboardShortcuts = true;
 
 function Calendar() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   // ── Navigation state ──
   const nav = useCalendarNavigation();
@@ -222,40 +225,57 @@ function Calendar() {
         </div>
       )}
 
-      <div className="calendar-content">
-        {!nav.isDashboardView && (
-          <OperationalSidebar
-            sortedEvents={sortedEvents}
-            onAddClick={actions.openAddModal}
-            onEventClick={actions.handleEditAppointment}
-            onDeleteEvent={actions.handleDeleteEvent}
-            formatEventTime={events.formatEventTime}
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
-          />
-        )}
+      {isMobile ? (
+        <MobileCalendarView
+          currentDate={nav.currentDate}
+          allEvents={events.allEvents}
+          onDateChange={nav.setCurrentDate}
+          onEditAppointment={actions.handleEditAppointment}
+          onDeleteEvent={actions.handleDeleteEvent}
+          onAddEvent={actions.handleAddEvent}
+          onAddAppointment={actions.handleAddAppointment}
+          teamMembers={events.teamMembers}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          getFilteredEvents={events.getFilteredEvents}
+          loading={events.loading}
+        />
+      ) : (
+        <div className="calendar-content">
+          {!nav.isDashboardView && (
+            <OperationalSidebar
+              sortedEvents={sortedEvents}
+              onAddClick={actions.openAddModal}
+              onEventClick={actions.handleEditAppointment}
+              onDeleteEvent={actions.handleDeleteEvent}
+              formatEventTime={events.formatEventTime}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+            />
+          )}
 
-        <div className={nav.isDashboardView ? 'calendar-main calendar-main--full-width' : 'calendar-main'}>
-          <CalendarMainView
-            view={nav.view}
-            loading={events.loading}
-            currentDate={nav.currentDate}
-            viewHours={events.viewHours}
-            getEventsForDateObj={events.getEventsForDateObj}
-            getEventsForDateAndHour={events.getEventsForDateAndHour}
-            getEventsForDate={events.getEventsForDate}
-            onTimeSlotClick={handleTimeSlotClick}
-            onEventClick={actions.handleEditAppointment}
-            onDayHeaderClick={nav.handleDayHeaderClick}
-            weekDates={nav.weekDates}
-            currentMonthData={nav.currentMonthData}
-            nextMonthData={nav.nextMonthData}
-            onDayClick={handleDayClick}
-            onScrollUp={nav.handleScrollUp}
-            onScrollDown={nav.handleScrollDown}
-          />
+          <div className={nav.isDashboardView ? 'calendar-main calendar-main--full-width' : 'calendar-main'}>
+            <CalendarMainView
+              view={nav.view}
+              loading={events.loading}
+              currentDate={nav.currentDate}
+              viewHours={events.viewHours}
+              getEventsForDateObj={events.getEventsForDateObj}
+              getEventsForDateAndHour={events.getEventsForDateAndHour}
+              getEventsForDate={events.getEventsForDate}
+              onTimeSlotClick={handleTimeSlotClick}
+              onEventClick={actions.handleEditAppointment}
+              onDayHeaderClick={nav.handleDayHeaderClick}
+              weekDates={nav.weekDates}
+              currentMonthData={nav.currentMonthData}
+              nextMonthData={nav.nextMonthData}
+              onDayClick={handleDayClick}
+              onScrollUp={nav.handleScrollUp}
+              onScrollDown={nav.handleScrollDown}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       <CalendarModals
         showAddModal={actions.showAddModal}

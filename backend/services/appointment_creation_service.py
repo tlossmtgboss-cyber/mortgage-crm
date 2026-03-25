@@ -172,8 +172,9 @@ def _safe_enum_parse(enum_name: str, value: Optional[str], default: Optional[str
 def _get_user_timezone(db: Session, user_id: int, org_id: int) -> str:
     """Get user's configured timezone from SchedulerConfig.
 
-    Falls back to America/Chicago if no config is found.
+    Falls back to DEFAULT_TIMEZONE from scheduler constants if no config is found.
     """
+    from routes.scheduler.constants import DEFAULT_TIMEZONE
     SchedulerConfig = _get_scheduler_config_model()
     if SchedulerConfig and user_id:
         try:
@@ -189,7 +190,7 @@ def _get_user_timezone(db: Session, user_id: int, org_id: int) -> str:
                 return config.timezone
         except Exception as e:
             logger.debug(f"Could not fetch user timezone: {e}")
-    return "America/Chicago"
+    return DEFAULT_TIMEZONE
 
 
 def _mask_email(email: Optional[str]) -> str:

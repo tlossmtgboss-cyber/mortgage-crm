@@ -1,10 +1,15 @@
 /**
  * Perennia AI - Smart Calendar Setup Steps
  *
- * Barrel export for all 10 guided setup step components.
+ * Barrel export for all step components (used by both the
+ * 6-step setup wizard and the Calendar Settings page).
  * Also exports STEP_CONFIG, the metadata array consumed by
  * CalendarSetupWizard to drive step rendering, navigation,
  * and progress tracking.
+ *
+ * The wizard uses 6 steps. The remaining 4 step components
+ * (Notifications, CancellationPolicy, TeamSetup, AdvancedFeatures)
+ * are still exported here for use in Calendar Settings.
  */
 
 // ============================================================================
@@ -87,17 +92,6 @@ export const STEP_CONFIG = [
   },
   {
     number: 5,
-    id: 'notifications',
-    title: 'Notifications',
-    label: 'Notify',
-    description: 'Configure email and SMS reminders so clients never miss an appointment.',
-    icon: 'fa-bell',
-    required: false,
-    skippable: true,
-    component: 'NotificationsStep',
-  },
-  {
-    number: 6,
     id: 'integrations',
     title: 'Integrations',
     label: 'Integrate',
@@ -108,40 +102,7 @@ export const STEP_CONFIG = [
     component: 'IntegrationsStep',
   },
   {
-    number: 7,
-    id: 'cancellation-policy',
-    title: 'Cancellation Policy',
-    label: 'Policy',
-    description: 'Set your cancellation and rescheduling policies.',
-    icon: 'fa-shield-alt',
-    required: false,
-    skippable: true,
-    component: 'CancellationPolicyStep',
-  },
-  {
-    number: 8,
-    id: 'team-setup',
-    title: 'Team Setup',
-    label: 'Team',
-    description: 'Configure team scheduling, assignment strategies, and capacity limits.',
-    icon: 'fa-users',
-    required: false,
-    skippable: true,
-    component: 'TeamSetupStep',
-  },
-  {
-    number: 9,
-    id: 'advanced-features',
-    title: 'Advanced Features',
-    label: 'Advanced',
-    description: 'Enable power features like buffer times, waitlists, and recurring availability.',
-    icon: 'fa-cogs',
-    required: false,
-    skippable: true,
-    component: 'AdvancedFeaturesStep',
-  },
-  {
-    number: 10,
+    number: 6,
     id: 'review-activate',
     title: 'Review & Activate',
     label: 'Activate',
