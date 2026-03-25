@@ -251,16 +251,16 @@ async def _check_booking_ip_rate_limit(request: Request):
     client_ip = _get_client_ip(request)
     key = f"sched_booking:{client_ip}"
 
-    r = _get_rate_limit_redis()
+    r = await _get_rate_limit_redis()
     if r is None:
         if not await _check_memory_rate_limit(key, _BOOKING_MAX_PER_IP, _BOOKING_RATE_LIMIT_WINDOW):
             rate_limit_error("Too many bookings. Please try again later.")
         return
 
     try:
-        current = r.incr(key)
+        current = await r.incr(key)
         if current == 1:
-            r.expire(key, _BOOKING_RATE_LIMIT_WINDOW)
+            await r.expire(key, _BOOKING_RATE_LIMIT_WINDOW)
         if current > _BOOKING_MAX_PER_IP:
             rate_limit_error("Too many bookings. Please try again later.")
     except HTTPException:

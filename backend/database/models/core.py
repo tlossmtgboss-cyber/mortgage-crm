@@ -50,6 +50,9 @@ class Organization(Base):
     # Status
     is_active = Column(Boolean, default=True)
 
+    # Org-wide default timezone (individual users can override via User.timezone)
+    timezone = Column(String(50), default="America/Chicago")
+
     # Booking page branding
     booking_slug = Column(String, unique=True, index=True, nullable=True)  # URL-safe slug for public booking pages
     booking_logo_url = Column(Text, nullable=True)  # Org logo shown on booking page
@@ -147,7 +150,8 @@ class User(Base):
     nmls_id = Column(String, nullable=True)
 
     # Timezone for AI scheduling and display
-    timezone = Column(String, default="America/New_York")
+    # Default aligned with SCHEDULER_DEFAULT_TIMEZONE env var fallback (see routes/scheduler/constants.py)
+    timezone = Column(String, default="America/Chicago")
 
     # Activity tracking
     last_activity_at = Column(DateTime, nullable=True)

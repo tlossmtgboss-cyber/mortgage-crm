@@ -143,8 +143,8 @@ _rate_limit_redis = None
 _rate_limit_redis_checked = False
 
 
-def _get_rate_limit_redis():
-    """Get or create Redis connection for rate limiting. Returns None if unavailable."""
+async def _get_rate_limit_redis():
+    """Get or create async Redis connection for rate limiting. Returns None if unavailable."""
     global _rate_limit_redis, _rate_limit_redis_checked
 
     # Check for test monkey-patches on re-export modules (tests set sar._rate_limit_redis)
@@ -159,13 +159,13 @@ def _get_rate_limit_redis():
         return _rate_limit_redis
     _rate_limit_redis_checked = True
     try:
-        import redis as redis_lib
+        import redis.asyncio as aioredis
         redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-        _rate_limit_redis = redis_lib.Redis.from_url(
+        _rate_limit_redis = aioredis.from_url(
             redis_url, decode_responses=True, socket_connect_timeout=2
         )
-        _rate_limit_redis.ping()
-        logger.info("Scheduler rate limiter connected to Redis")
+        await _rate_limit_redis.ping()
+        logger.info("Scheduler rate limiter connected to Redis (async)")
     except Exception as e:
         logger.warning(f"Redis unavailable for scheduler rate limiting: {e}")
         _rate_limit_redis = None
@@ -286,7 +286,7 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
     else:
         key = f"sched_rl:{request.url.path}:{client_ip}"
 
-    r = _get_rate_limit_redis()
+    r = await _get_rate_limit_redis()
     if r is None:
         # Fallback: in-memory rate limiting (per-worker only -- degraded protection).
         # Each worker process has its own in-memory store, so the cluster-wide
@@ -332,13 +332,13 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
         # Use a Redis pipeline to make INCR + EXPIRE atomic.  Without this,
         # a crash between INCR and EXPIRE would leak a key with no TTL,
         # permanently consuming rate-limit state.
-        pipe = r.pipeline(transaction=True)
-        pipe.incr(key)
-        pipe.expire(key, _RATE_LIMIT_WINDOW)
-        results = pipe.execute()
+        async with r.pipeline(transaction=True) as pipe:
+            pipe.incr(key)
+            pipe.expire(key, _RATE_LIMIT_WINDOW)
+            results = await pipe.execute()
         current = results[0]  # result of INCR
         if current > max_requests:
-            ttl = r.ttl(key)
+            ttl = await r.ttl(key)
             # COMP-011: Log rate limit violation to audit trail
             logger.warning(
                 "RATE_LIMIT_EXCEEDED: ip=%s endpoint=%s org=%s backend=redis",
