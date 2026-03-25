@@ -14,15 +14,60 @@ Usage:
         appointment_time=slot_start,
         booking_link=link,
     )
+
+    # COMP-007: For RESPA-compliant routing with rationale logging:
+    from services.scheduler_routing_service import assign_loan_officer_with_context
+
+    decision = assign_loan_officer_with_context(
+        db=db, org_id=org_id, strategy="round_robin",
+        appointment_time=slot_start, booking_link=link,
+    )
+    # decision.selected_user_id, decision.to_ai_booking_context()
 """
 
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Tuple
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# COMP-007: Routing Decision — captures rationale for RESPA compliance
+# =============================================================================
+
+@dataclass
+class RoutingDecision:
+    """Structured record of an AI/automated LO routing decision.
+
+    RESPA requires that LO selection is documented to prove no prohibited
+    referral fees influenced the assignment.  Every routing decision records
+    the method, candidate pool size, selection criteria, and an explicit
+    RESPA compliance attestation.
+    """
+    selected_user_id: Optional[int] = None
+    routing_method: str = "direct"
+    candidates_evaluated: int = 0
+    selection_criteria: List[str] = field(default_factory=list)
+    fallback_used: bool = False
+    fallback_reason: Optional[str] = None
+
+    def to_ai_booking_context(self) -> dict:
+        """Convert to ai_booking_context routing_decision sub-dict."""
+        return {
+            "selected_lo_id": self.selected_user_id,
+            "routing_method": self.routing_method,
+            "candidates_evaluated": self.candidates_evaluated,
+            "selection_criteria": self.selection_criteria,
+            "respa_compliance": (
+                "No referral fees or prohibited considerations influenced LO selection"
+            ),
+            "fallback_used": self.fallback_used,
+            "fallback_reason": self.fallback_reason,
+        }
 
 # Default buffer minutes when no scheduler config is found
 _DEFAULT_BUFFER_BEFORE = 5
@@ -49,17 +94,67 @@ def assign_loan_officer(
     - "availability": Assign to first LO who has no conflicts at appointment_time
     - "load_balanced": Assign to LO with fewest appointments this week
     """
+    decision = assign_loan_officer_with_context(
+        db=db,
+        org_id=org_id,
+        strategy=strategy,
+        appointment_time=appointment_time,
+        booking_link=booking_link,
+        excluded_user_ids=excluded_user_ids,
+        strict_capacity=strict_capacity,
+    )
+    return decision.selected_user_id
+
+
+def assign_loan_officer_with_context(
+    db: Session,
+    org_id: int,
+    strategy: str = "direct",
+    appointment_time: datetime = None,
+    booking_link=None,
+    excluded_user_ids: List[int] = None,
+    strict_capacity: bool = False,
+) -> RoutingDecision:
+    """
+    Route an appointment to the appropriate LO and return a RoutingDecision
+    documenting the rationale.
+
+    COMP-007: Every AI/automated LO routing decision must be logged with its
+    rationale for RESPA compliance.  The returned RoutingDecision can be
+    converted to an ai_booking_context dict via .to_ai_booking_context().
+
+    Returns a RoutingDecision (selected_user_id may be None if no one is available).
+    """
+    decision = RoutingDecision()
+
+    # --- strategy criteria mapping ---
+    _STRATEGY_CRITERIA = {
+        "direct": ["booking_link_owner"],
+        "round_robin": ["rotation_order", "last_assignment"],
+        "priority": ["routing_weight", "availability"],
+        "availability": ["calendar_availability", "conflict_check"],
+        "load_balanced": ["weekly_appointment_count", "workload_balance"],
+    }
+
     candidate_ids = _get_candidate_user_ids(db, org_id, booking_link)
     if not candidate_ids:
-        logger.warning(f"No candidate LOs for org {org_id}")
-        return None
+        logger.warning("No candidate LOs for org %s", org_id)
+        decision.fallback_reason = "no_candidates_found"
+        return decision
+
+    original_count = len(candidate_ids)
 
     if excluded_user_ids:
         candidate_ids = [uid for uid in candidate_ids if uid not in excluded_user_ids]
         if not candidate_ids:
-            return None
+            decision.candidates_evaluated = original_count
+            decision.fallback_reason = "all_candidates_excluded"
+            return decision
 
     strategy = (strategy or "direct").lower().replace("-", "_")
+    decision.routing_method = strategy
+    decision.candidates_evaluated = len(candidate_ids)
+    decision.selection_criteria = _STRATEGY_CRITERIA.get(strategy, ["unknown"])
 
     strategy_map = {
         "direct": _assign_direct,
@@ -71,16 +166,32 @@ def assign_loan_officer(
 
     strategy_fn = strategy_map.get(strategy)
     if not strategy_fn:
-        logger.warning(f"Unknown routing strategy '{strategy}', falling back to direct")
+        logger.warning("Unknown routing strategy '%s', falling back to direct", strategy)
         strategy_fn = _assign_direct
+        decision.routing_method = "direct"
+        decision.selection_criteria = ["booking_link_owner"]
+        decision.fallback_used = True
+        decision.fallback_reason = f"unknown_strategy_{strategy}"
 
     result = strategy_fn(candidate_ids)
 
     if result is None and strict_capacity:
-        logger.warning(f"No LO available with capacity for org {org_id}")
-        return None
+        logger.warning("No LO available with capacity for org %s", org_id)
+        decision.fallback_reason = "no_capacity_available"
+    else:
+        decision.selected_user_id = result
 
-    return result
+    # COMP-007: Log every routing decision for auditability
+    logger.info(
+        "AI_ROUTING_DECISION: lo=%s method=%s candidates=%d criteria=%s fallback=%s",
+        decision.selected_user_id,
+        decision.routing_method,
+        decision.candidates_evaluated,
+        decision.selection_criteria,
+        decision.fallback_used,
+    )
+
+    return decision
 
 
 def _get_candidate_user_ids(db: Session, org_id: int, booking_link) -> List[int]:

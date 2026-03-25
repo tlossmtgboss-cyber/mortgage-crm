@@ -40,12 +40,16 @@ export default function BookingForm({
 
   return (
     <div>
-      <button onClick={onBack} style={styles.backLink}>
+      <button
+        onClick={onBack}
+        style={styles.backLink}
+        aria-label="Go back to date and time selection"
+      >
         &lsaquo; Back
       </button>
 
       {selectedDate && selectedTime && (
-        <div style={styles.summaryBadge}>
+        <div style={styles.summaryBadge} aria-live="polite">
           {selectedDate.toLocaleDateString(undefined, {
             weekday: 'short',
             month: 'short',
@@ -57,12 +61,16 @@ export default function BookingForm({
         </div>
       )}
 
-      <form onSubmit={onSubmit} style={styles.form}>
+      <form onSubmit={onSubmit} style={styles.form} aria-label="Booking contact information" noValidate>
         <div style={styles.formRow}>
           <div style={styles.formGroup}>
-            <label style={styles.formLabel}>First Name *</label>
+            <label htmlFor="bw-first-name" style={styles.formLabel}>
+              First Name <span aria-hidden="true">*</span>
+            </label>
             <input
+              id="bw-first-name"
               type="text"
+              autoComplete="given-name"
               value={form.first_name}
               onChange={(e) => handleChange('first_name', e.target.value)}
               placeholder="Jane"
@@ -71,15 +79,24 @@ export default function BookingForm({
                 ...(formErrors.first_name ? styles.inputError : {}),
               }}
               required
+              aria-required="true"
+              aria-invalid={!!formErrors.first_name}
+              aria-describedby={formErrors.first_name ? 'bw-first-name-error' : undefined}
             />
             {formErrors.first_name && (
-              <span style={styles.fieldError}>{formErrors.first_name}</span>
+              <span id="bw-first-name-error" style={styles.fieldError} role="alert">
+                {formErrors.first_name}
+              </span>
             )}
           </div>
           <div style={styles.formGroup}>
-            <label style={styles.formLabel}>Last Name *</label>
+            <label htmlFor="bw-last-name" style={styles.formLabel}>
+              Last Name <span aria-hidden="true">*</span>
+            </label>
             <input
+              id="bw-last-name"
               type="text"
+              autoComplete="family-name"
               value={form.last_name}
               onChange={(e) => handleChange('last_name', e.target.value)}
               placeholder="Doe"
@@ -88,17 +105,26 @@ export default function BookingForm({
                 ...(formErrors.last_name ? styles.inputError : {}),
               }}
               required
+              aria-required="true"
+              aria-invalid={!!formErrors.last_name}
+              aria-describedby={formErrors.last_name ? 'bw-last-name-error' : undefined}
             />
             {formErrors.last_name && (
-              <span style={styles.fieldError}>{formErrors.last_name}</span>
+              <span id="bw-last-name-error" style={styles.fieldError} role="alert">
+                {formErrors.last_name}
+              </span>
             )}
           </div>
         </div>
 
         <div style={styles.formGroup}>
-          <label style={styles.formLabel}>Email *</label>
+          <label htmlFor="bw-email" style={styles.formLabel}>
+            Email <span aria-hidden="true">*</span>
+          </label>
           <input
+            id="bw-email"
             type="email"
+            autoComplete="email"
             value={form.email}
             onChange={(e) => handleChange('email', e.target.value)}
             placeholder="jane@email.com"
@@ -107,16 +133,23 @@ export default function BookingForm({
               ...(formErrors.email ? styles.inputError : {}),
             }}
             required
+            aria-required="true"
+            aria-invalid={!!formErrors.email}
+            aria-describedby={formErrors.email ? 'bw-email-error' : undefined}
           />
           {formErrors.email && (
-            <span style={styles.fieldError}>{formErrors.email}</span>
+            <span id="bw-email-error" style={styles.fieldError} role="alert">
+              {formErrors.email}
+            </span>
           )}
         </div>
 
         <div style={styles.formGroup}>
-          <label style={styles.formLabel}>Phone</label>
+          <label htmlFor="bw-phone" style={styles.formLabel}>Phone</label>
           <input
+            id="bw-phone"
             type="tel"
+            autoComplete="tel"
             value={form.phone}
             onChange={(e) => handleChange('phone', e.target.value)}
             placeholder="(555) 555-5555"
@@ -124,15 +157,20 @@ export default function BookingForm({
               ...styles.input,
               ...(formErrors.phone ? styles.inputError : {}),
             }}
+            aria-invalid={!!formErrors.phone}
+            aria-describedby={formErrors.phone ? 'bw-phone-error' : undefined}
           />
           {formErrors.phone && (
-            <span style={styles.fieldError}>{formErrors.phone}</span>
+            <span id="bw-phone-error" style={styles.fieldError} role="alert">
+              {formErrors.phone}
+            </span>
           )}
         </div>
 
         <div style={styles.formGroup}>
-          <label style={styles.formLabel}>Notes</label>
+          <label htmlFor="bw-notes" style={styles.formLabel}>Notes</label>
           <textarea
+            id="bw-notes"
             value={form.notes}
             onChange={(e) => handleChange('notes', e.target.value)}
             placeholder="Anything we should know?"
@@ -145,6 +183,8 @@ export default function BookingForm({
         <button
           type="submit"
           disabled={submitting}
+          aria-busy={submitting}
+          aria-label={submitting ? 'Scheduling appointment, please wait' : 'Schedule appointment'}
           style={{
             ...styles.primaryBtn,
             backgroundColor: submitting ? '#ccc' : accentColor,

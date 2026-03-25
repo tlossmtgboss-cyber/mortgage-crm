@@ -6,15 +6,22 @@ Provides:
   - dispatch_webhook() to send events to matching subscriptions
   - register_webhook() to create new webhook subscriptions
   - HMAC-SHA256 signature generation for payload verification
-  - Retry logic with exponential backoff (3 attempts)
+  - Async background delivery with retry logic and exponential backoff (3 attempts)
   - Dead-letter queue for failed deliveries with admin notifications
   - retry_failed_webhook() for manual retry of dead-lettered deliveries
   - get_failed_webhooks() for admin review of failed deliveries
   - check_webhook_health() for subscription health monitoring
+
+Session management:
+  All public API functions accept a `db: Session` parameter from the caller
+  (typically the request-scoped session from FastAPI's Depends(get_db)).
+  Background delivery tasks that outlive the request use their own session
+  obtained from db.SessionLocal.
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -172,23 +179,110 @@ _MAX_ATTEMPTS = 3
 _BASE_BACKOFF_SECONDS = 2  # 2s, 4s, 8s
 _DELIVERY_TIMEOUT_SECONDS = 30
 
+# Headers that custom subscription headers must not override (SEC-006).
+# Compared case-insensitively to prevent bypass via mixed-case keys.
+_PROTECTED_HEADERS = frozenset({
+    "content-type", "user-agent", "host", "authorization",
+    "x-webhook-signature", "x-webhook-event", "x-webhook-delivery-id",
+})
+
+
+def _build_delivery_headers(
+    subscription: WebhookSubscription,
+    event_type: str,
+    delivery_id: int,
+    signature: str,
+) -> Dict[str, str]:
+    """Build HTTP headers for a webhook delivery.
+
+    Merges system headers with subscription custom headers (SEC-006),
+    then sets the HMAC signature last to prevent override (NC6).
+    """
+    headers = {
+        "Content-Type": "application/json",
+        "X-Webhook-Event": event_type,
+        "X-Webhook-Delivery-Id": str(delivery_id),
+        "User-Agent": "PerenniaAI-Webhooks/1.0",
+    }
+
+    # SEC-006: Merge custom headers but protect system headers from override.
+    # Use case-insensitive comparison to prevent bypass via mixed-case keys.
+    if subscription.headers and isinstance(subscription.headers, dict):
+        for key, value in subscription.headers.items():
+            if key.lower() not in _PROTECTED_HEADERS:
+                headers[key] = value
+
+    # NC6 fix: Set HMAC signature AFTER custom headers to prevent override
+    headers["X-Webhook-Signature"] = f"sha256={signature}"
+    return headers
+
 
 async def _deliver_to_subscription(
     db: Session,
     subscription: WebhookSubscription,
     payload: Dict[str, Any],
+    *,
+    _synchronous: bool = False,
 ) -> WebhookDeliveryLog:
-    """Attempt to deliver a webhook payload to a single subscription with retries.
+    """Create a delivery log and dispatch the HTTP delivery.
 
-    Creates a WebhookDeliveryLog row for tracking, then performs up to
-    _MAX_ATTEMPTS POST requests with exponential backoff on failure.
+    By default, the actual HTTP delivery (with retries and backoff) runs as a
+    background task so that the caller is not blocked by up to 14s of retry
+    backoff (PERF-003). The delivery log record is created synchronously in the
+    caller's DB session so it is visible within the same transaction.
+
+    When _synchronous=True (used by retry_failed_webhook), the delivery runs
+    inline and the caller's session is used throughout.
+
+    Args:
+        db: Request-scoped SQLAlchemy session from the caller.
+        subscription: The target webhook subscription.
+        payload: The event payload dict.
+        _synchronous: If True, perform delivery inline (blocking) instead of
+            dispatching to background. Used for manual retry.
+
+    Returns:
+        The WebhookDeliveryLog entry (status="pending" if dispatched to background,
+        or final status if _synchronous=True).
     """
     payload_bytes = json.dumps(payload, default=str, separators=(",", ":")).encode("utf-8")
     signature = compute_signature(payload_bytes, subscription.secret)
 
     event_type = payload.get("event_type", "unknown")
 
-    # Create delivery log entry
+    # FUNC-007: Deduplicate webhook deliveries.
+    # Check for an existing delivery log for this subscription + event type +
+    # entity (appointment_id) within a 5-second window to prevent duplicate
+    # webhook dispatches from rapid-fire event triggers (e.g., concurrent
+    # requests or retry storms).
+    _entity_id = (payload.get("data") or {}).get("appointment_id")
+    _dedup_window = datetime.now(timezone.utc) - timedelta(seconds=5)
+    _dedup_query = db.query(WebhookDeliveryLog).filter(
+        WebhookDeliveryLog.subscription_id == subscription.id,
+        WebhookDeliveryLog.event_type == event_type,
+        WebhookDeliveryLog.created_at > _dedup_window,
+    )
+    if _entity_id is not None:
+        # JSON containment check: payload->'data'->>'appointment_id' matches.
+        # For portability, filter in Python after the time-window DB query.
+        _recent = _dedup_query.all()
+        _existing = None
+        for _log in _recent:
+            _log_appt_id = (_log.payload or {}).get("data", {}).get("appointment_id")
+            if _log_appt_id == _entity_id:
+                _existing = _log
+                break
+    else:
+        _existing = _dedup_query.first()
+
+    if _existing:
+        logger.debug(
+            "Skipping duplicate webhook delivery: subscription=%s event=%s entity=%s",
+            subscription.id, event_type, _entity_id,
+        )
+        return _existing
+
+    # Create delivery log entry synchronously in the caller's session
     delivery = WebhookDeliveryLog(
         subscription_id=subscription.id,
         event_type=event_type,
@@ -200,25 +294,81 @@ async def _deliver_to_subscription(
     db.add(delivery)
     db.flush()  # get the id assigned
 
-    headers = {
-        "Content-Type": "application/json",
-        "X-Webhook-Event": event_type,
-        "X-Webhook-Delivery-Id": str(delivery.id),
-        "User-Agent": "PerenniaAI-Webhooks/1.0",
-    }
+    # Snapshot all data needed by the background task (subscription may be
+    # detached once the request session closes)
+    delivery_id = delivery.id
+    subscription_id = subscription.id
+    subscription_url = subscription.url
+    subscription_name = subscription.name
+    subscription_timeout = subscription.timeout_seconds or _DELIVERY_TIMEOUT_SECONDS
+    subscription_org_id = subscription.organization_id
 
-    # SEC-006: Merge custom headers but protect system headers from override
-    _PROTECTED_HEADERS = frozenset({"Content-Type", "X-Webhook-Event", "X-Webhook-Delivery-Id", "X-Webhook-Signature", "User-Agent"})
-    if subscription.headers and isinstance(subscription.headers, dict):
-        for key, value in subscription.headers.items():
-            if key not in _PROTECTED_HEADERS:
-                headers[key] = value
+    headers = _build_delivery_headers(subscription, event_type, delivery_id, signature)
 
-    # NC6 fix: Set HMAC signature AFTER custom headers to prevent override
-    headers["X-Webhook-Signature"] = f"sha256={signature}"
+    if _synchronous:
+        # Inline delivery for manual retry — uses caller's session directly
+        await _execute_delivery_attempts(
+            db=db,
+            delivery=delivery,
+            subscription=subscription,
+            payload_bytes=payload_bytes,
+            headers=headers,
+            event_type=event_type,
+            timeout=subscription_timeout,
+        )
+        return delivery
 
+    # PERF-003: Dispatch actual HTTP delivery in background so the caller
+    # returns immediately after the delivery log record is created.
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            asyncio.ensure_future(_deliver_webhook_background(
+                delivery_id=delivery_id,
+                subscription_id=subscription_id,
+                subscription_url=subscription_url,
+                subscription_name=subscription_name,
+                subscription_timeout=subscription_timeout,
+                subscription_org_id=subscription_org_id,
+                payload_bytes=payload_bytes,
+                headers=headers,
+                event_type=event_type,
+                payload=payload,
+            ))
+        else:
+            # Fallback for sync context — use threading
+            import threading
+            t = threading.Thread(
+                target=_deliver_webhook_sync_thread,
+                args=(
+                    delivery_id, subscription_id, subscription_url,
+                    subscription_name, subscription_timeout, subscription_org_id,
+                    payload_bytes, headers, event_type, payload,
+                ),
+                daemon=True,
+            )
+            t.start()
+    except Exception as e:
+        logger.error("Failed to dispatch webhook delivery id=%s: %s", delivery_id, e)
+
+    return delivery
+
+
+async def _execute_delivery_attempts(
+    db: Session,
+    delivery: WebhookDeliveryLog,
+    subscription: WebhookSubscription,
+    payload_bytes: bytes,
+    headers: Dict[str, str],
+    event_type: str,
+    timeout: int,
+) -> None:
+    """Execute up to _MAX_ATTEMPTS POST requests with exponential backoff.
+
+    Updates the delivery and subscription rows in the provided session.
+    The caller is responsible for committing.
+    """
     last_error = None
-    timeout = subscription.timeout_seconds or _DELIVERY_TIMEOUT_SECONDS
 
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         delivery.attempt_number = attempt
@@ -248,7 +398,7 @@ async def _deliver_to_subscription(
                     "Webhook delivered: subscription=%s event=%s attempt=%d status=%d ms=%d",
                     subscription.id, event_type, attempt, response.status_code, elapsed_ms,
                 )
-                return delivery
+                return
 
             # Non-2xx response -- retry
             last_error = f"HTTP {response.status_code}: {response.text[:200]}"
@@ -278,7 +428,6 @@ async def _deliver_to_subscription(
         # Exponential backoff before retry (skip on last attempt)
         if attempt < _MAX_ATTEMPTS:
             backoff = _BASE_BACKOFF_SECONDS * (2 ** (attempt - 1))
-            import asyncio
             await asyncio.sleep(backoff)
 
     # All attempts exhausted — enter dead-letter queue
@@ -310,7 +459,93 @@ async def _deliver_to_subscription(
         last_error=last_error,
     )
 
-    return delivery
+
+async def _deliver_webhook_background(
+    delivery_id: int,
+    subscription_id: int,
+    subscription_url: str,
+    subscription_name: str,
+    subscription_timeout: int,
+    subscription_org_id: int,
+    payload_bytes: bytes,
+    headers: Dict[str, str],
+    event_type: str,
+    payload: Dict[str, Any],
+) -> None:
+    """Background coroutine that performs the actual HTTP delivery with retries.
+
+    Uses its own DB session (from SessionLocal) since the request-scoped session
+    is closed by the time this runs. This is the one place in this module that
+    creates its own session -- all public API functions accept a caller-provided
+    session (H3 fix).
+    """
+    from db import SessionLocal
+
+    bg_db: Session = SessionLocal()
+    try:
+        delivery = bg_db.query(WebhookDeliveryLog).get(delivery_id)
+        subscription = bg_db.query(WebhookSubscription).get(subscription_id)
+
+        if not delivery or not subscription:
+            logger.error(
+                "Background delivery: delivery_id=%s or subscription_id=%s not found",
+                delivery_id, subscription_id,
+            )
+            return
+
+        await _execute_delivery_attempts(
+            db=bg_db,
+            delivery=delivery,
+            subscription=subscription,
+            payload_bytes=payload_bytes,
+            headers=headers,
+            event_type=event_type,
+            timeout=subscription_timeout,
+        )
+        bg_db.commit()
+    except Exception as e:
+        bg_db.rollback()
+        logger.exception(
+            "Background webhook delivery failed for delivery_id=%s: %s",
+            delivery_id, e,
+        )
+    finally:
+        bg_db.close()
+
+
+def _deliver_webhook_sync_thread(
+    delivery_id: int,
+    subscription_id: int,
+    subscription_url: str,
+    subscription_name: str,
+    subscription_timeout: int,
+    subscription_org_id: int,
+    payload_bytes: bytes,
+    headers: Dict[str, str],
+    event_type: str,
+    payload: Dict[str, Any],
+) -> None:
+    """Thread-based fallback for when there is no running async event loop.
+
+    Creates a new event loop in the thread and runs the async background
+    delivery function.
+    """
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(_deliver_webhook_background(
+            delivery_id=delivery_id,
+            subscription_id=subscription_id,
+            subscription_url=subscription_url,
+            subscription_name=subscription_name,
+            subscription_timeout=subscription_timeout,
+            subscription_org_id=subscription_org_id,
+            payload_bytes=payload_bytes,
+            headers=headers,
+            event_type=event_type,
+            payload=payload,
+        ))
+    finally:
+        loop.close()
 
 
 # ============================================================================
@@ -325,7 +560,11 @@ async def dispatch_webhook(
 ) -> List[WebhookDeliveryLog]:
     """Dispatch a webhook event to all active subscriptions for the given org.
 
-    Uses the caller's session for all DB operations (flush only, no commit).
+    Creates delivery log records synchronously in the caller's session, then
+    dispatches actual HTTP delivery to background tasks (PERF-003). Multiple
+    subscriptions are dispatched concurrently (PERF-010) so that N subscriptions
+    do not compound delivery latency.
+
     The caller is responsible for committing the transaction after dispatch.
     This ensures the webhook delivery records are visible within the same
     transaction as the appointment that triggered the event.
@@ -339,6 +578,8 @@ async def dispatch_webhook(
 
     Returns:
         List of WebhookDeliveryLog entries (one per matching subscription).
+        Delivery logs will be in "pending" status since actual HTTP delivery
+        happens asynchronously in the background.
     """
     event_str = event_type.value if isinstance(event_type, WebhookEvent) else event_type
 
@@ -365,17 +606,18 @@ async def dispatch_webhook(
 
     payload = _build_event_payload(event_type, appointment_data, organization_id)
 
-    # Deliver to all matching subscriptions sequentially using the caller's
-    # session.  This ensures the deliveries can see any uncommitted data
-    # from the request transaction (e.g. a just-created appointment).
-    # The caller is responsible for committing the session after dispatch.
-    deliveries: List[WebhookDeliveryLog] = []
-    for sub in matching:
+    # PERF-010: Dispatch to all matching subscriptions concurrently.
+    # Each call creates a delivery log synchronously in the caller's session,
+    # then fires off the actual HTTP delivery in the background (PERF-003).
+    async def _safe_deliver(sub: WebhookSubscription) -> Optional[WebhookDeliveryLog]:
         try:
-            delivery = await _deliver_to_subscription(db, sub, payload)
-            deliveries.append(delivery)
+            return await _deliver_to_subscription(db, sub, payload)
         except Exception as exc:
             logger.exception("Unexpected error dispatching to subscription=%s: %s", sub.id, exc)
+            return None
+
+    results = await asyncio.gather(*[_safe_deliver(sub) for sub in matching])
+    deliveries = [d for d in results if d is not None]
 
     return deliveries
 
@@ -418,13 +660,18 @@ async def register_webhook(
     # SSRF protection: reject URLs targeting private/internal networks
     _validate_webhook_url(url)
 
+    # SEC-006: Filter out protected headers at registration time too
+    safe_headers = {}
+    if headers and isinstance(headers, dict):
+        safe_headers = {k: v for k, v in headers.items() if k.lower() not in _PROTECTED_HEADERS}
+
     subscription = WebhookSubscription(
         organization_id=organization_id,
         name=name or f"Scheduler webhook ({url[:60]})",
         url=url,
         secret=secret,
         events=events,
-        headers=headers or {},
+        headers=safe_headers,
         retry_count=_MAX_ATTEMPTS,
         timeout_seconds=_DELIVERY_TIMEOUT_SECONDS,
         is_active=True,
@@ -662,8 +909,11 @@ async def retry_failed_webhook(
         delivery_id, subscription.id, delivery.event_type,
     )
 
-    # Re-deliver using the stored payload
-    result = await _deliver_to_subscription(db, subscription, delivery.payload)
+    # Re-deliver using the stored payload with _synchronous=True so
+    # the retry runs inline and the caller gets the final result.
+    result = await _deliver_to_subscription(
+        db, subscription, delivery.payload, _synchronous=True,
+    )
 
     # The _deliver_to_subscription creates a new delivery log, but we want
     # to keep the original entry updated. Copy final state back.

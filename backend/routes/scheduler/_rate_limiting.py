@@ -30,6 +30,23 @@ _PRIVATE_NETWORKS = (
 )
 
 
+def _mask_ip(ip_str: str) -> str:
+    """Mask an IP address for safe logging (last octet replaced)."""
+    if not ip_str or ip_str == "unknown":
+        return "unknown"
+    try:
+        parts = ip_str.split(".")
+        if len(parts) == 4:
+            return f"{parts[0]}.{parts[1]}.{parts[2]}.***"
+        # IPv6: mask last segment
+        if ":" in ip_str:
+            segments = ip_str.rsplit(":", 1)
+            return f"{segments[0]}:***"
+    except Exception:
+        pass
+    return "***"
+
+
 def _is_private_ip(ip_str: str) -> bool:
     """Check if an IP address is in a private/internal range (RFC 1918, loopback, ULA)."""
     try:
@@ -230,9 +247,9 @@ async def _check_memory_rate_limit(key: str, max_requests: int, window_seconds: 
         return True
 
 
-async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MAX_PUBLIC, custom_key: str = None):
+async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MAX_PUBLIC, custom_key: str = None, org_id=None):
     """
-    Redis-backed rate limiter keyed by client IP + path.
+    Redis-backed rate limiter keyed by client IP + path, optionally scoped per-org.
     Falls back to async in-memory rate limiting if Redis is unavailable.
 
     Args:
@@ -242,6 +259,10 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
                     this replaces the default ``sched_rl:{path}:{ip}`` key,
                     allowing callers to rate-limit by a different dimension
                     (e.g., per-email or per-action).
+        org_id: Optional organization ID. When provided, the rate-limit key
+                includes the org_id so that rate limits are tracked per-tenant.
+                This prevents one org's traffic from exhausting another org's
+                rate-limit budget (TENANT-010).
 
     SECURITY RATIONALE: Public booking endpoints (no auth required) are the primary
     consumers of this function. If rate limiting is completely bypassed, these
@@ -256,7 +277,14 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
     """
     client_ip = _get_client_ip(request)
 
-    key = custom_key or f"sched_rl:{request.url.path}:{client_ip}"
+    # TENANT-010: Include org_id in rate-limit key when available so each
+    # tenant's rate limits are tracked independently.
+    if custom_key:
+        key = custom_key
+    elif org_id is not None:
+        key = f"sched_rl:{org_id}:{request.url.path}:{client_ip}"
+    else:
+        key = f"sched_rl:{request.url.path}:{client_ip}"
 
     r = _get_rate_limit_redis()
     if r is None:
@@ -272,6 +300,11 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
         )
         try:
             if not await _check_memory_rate_limit(key, adjusted_max):
+                # COMP-011: Log rate limit violation to audit trail
+                logger.warning(
+                    "RATE_LIMIT_EXCEEDED: ip=%s endpoint=%s org=%s backend=memory",
+                    _mask_ip(client_ip), request.url.path, org_id,
+                )
                 raise HTTPException(
                     status_code=429,
                     detail="Too many requests. Please try again later.",
@@ -306,6 +339,11 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
         current = results[0]  # result of INCR
         if current > max_requests:
             ttl = r.ttl(key)
+            # COMP-011: Log rate limit violation to audit trail
+            logger.warning(
+                "RATE_LIMIT_EXCEEDED: ip=%s endpoint=%s org=%s backend=redis",
+                _mask_ip(client_ip), request.url.path, org_id,
+            )
             raise HTTPException(
                 status_code=429,
                 detail="Too many requests. Please try again later.",
@@ -320,6 +358,11 @@ async def _check_rate_limit(request: Request, max_requests: int = _RATE_LIMIT_MA
                        f"(adjusted limit {adjusted_max}): {e}")
         try:
             if not await _check_memory_rate_limit(key, adjusted_max):
+                # COMP-011: Log rate limit violation to audit trail
+                logger.warning(
+                    "RATE_LIMIT_EXCEEDED: ip=%s endpoint=%s org=%s backend=memory_fallback",
+                    _mask_ip(client_ip), request.url.path, org_id,
+                )
                 raise HTTPException(
                     status_code=429,
                     detail="Too many requests. Please try again later.",

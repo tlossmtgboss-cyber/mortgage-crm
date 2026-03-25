@@ -60,11 +60,11 @@ def _send_sms_with_retry(from_number: str, to_number: str, text: str,
     return False, None, last_error
 
 
-def _mask_phone(phone):
-    """OBS-004: Mask phone number for safe logging."""
-    if not phone or len(phone) < 7:
+def _mask_phone(phone: str) -> str:
+    """Mask phone number for logging - show only last 4 digits."""
+    if not phone or len(phone) < 4:
         return "***"
-    return phone[:2] + "***" + phone[-4:]
+    return f"+1***{phone[-4:]}"
 
 
 # --- Re-exports from shared compliance module (backward compatibility) ---
@@ -88,7 +88,7 @@ def send_appointment_confirmation_sms(
         # TCPA/DNC consent check (scoped by org)
         can_send, reason = check_sms_consent(attendee_phone, organization_id=organization_id)
         if not can_send:
-            logger.info(f"SMS consent check blocked confirmation to {_mask_phone(attendee_phone)}: {reason}")
+            logger.info("SMS consent check blocked confirmation to %s: %s", _mask_phone(attendee_phone), reason)
             return False
 
         from_number = os.getenv("TELNYX_PHONE_NUMBER")
@@ -105,7 +105,7 @@ def send_appointment_confirmation_sms(
 
         success, msg_id, error = _send_sms_with_retry(from_number, attendee_phone, message_body)
         if success:
-            logger.info(f"Appointment confirmation SMS sent to {_mask_phone(attendee_phone)}, ID: {msg_id}")
+            logger.info("Appointment confirmation SMS sent to %s, ID: %s", _mask_phone(attendee_phone), msg_id)
         return success
 
     except Exception as e:
@@ -126,7 +126,7 @@ def send_appointment_update_sms(
         # TCPA/DNC consent check (scoped by org)
         can_send, reason = check_sms_consent(attendee_phone, organization_id=organization_id)
         if not can_send:
-            logger.info(f"SMS consent check blocked update to {_mask_phone(attendee_phone)}: {reason}")
+            logger.info("SMS consent check blocked update to %s: %s", _mask_phone(attendee_phone), reason)
             return False
 
         from_number = os.getenv("TELNYX_PHONE_NUMBER")
@@ -140,7 +140,7 @@ def send_appointment_update_sms(
 
         success, msg_id, error = _send_sms_with_retry(from_number, attendee_phone, message_body)
         if success:
-            logger.info(f"Appointment update SMS sent to {_mask_phone(attendee_phone)}, ID: {msg_id}")
+            logger.info("Appointment update SMS sent to %s, ID: %s", _mask_phone(attendee_phone), msg_id)
         return success
 
     except Exception as e:
@@ -163,7 +163,7 @@ def send_appointment_reminder_sms(
         # TCPA/DNC consent check (scoped by org)
         can_send, reason = check_sms_consent(attendee_phone, organization_id=organization_id)
         if not can_send:
-            logger.info(f"SMS consent check blocked reminder to {_mask_phone(attendee_phone)}: {reason}")
+            logger.info("SMS consent check blocked reminder to %s: %s", _mask_phone(attendee_phone), reason)
             return {"success": False, "error": f"Consent blocked: {reason}"}
 
         from_number = os.getenv("TELNYX_PHONE_NUMBER")
@@ -187,7 +187,7 @@ def send_appointment_reminder_sms(
 
         success, msg_id, error = _send_sms_with_retry(from_number, attendee_phone, message_body)
         if success:
-            logger.info(f"Appointment reminder SMS sent to {_mask_phone(attendee_phone)}, ID: {msg_id}")
+            logger.info("Appointment reminder SMS sent to %s, ID: %s", _mask_phone(attendee_phone), msg_id)
             return {"success": True, "message_id": msg_id}
         return {"success": False, "error": error}
 

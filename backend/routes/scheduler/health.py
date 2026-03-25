@@ -27,6 +27,7 @@ from routes.scheduler._helpers import (
     get_current_user, get_models, get_enhanced_models, _get_org_id,
 )
 from routes.scheduler.constants import DEFAULT_MIN_NOTICE_HOURS
+from smart_scheduler_models import AppointmentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +174,7 @@ def _check_pending_reminders(db: Session, org_id: int) -> dict:
                 Appointment.organization_id == org_id,
                 Appointment.scheduled_start >= now,
                 Appointment.scheduled_start <= next_24h,
-                Appointment.status.notin_(["cancelled", "rescheduled", "CANCELLED", "RESCHEDULED"]),
+                Appointment.status.notin_([AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED]),
                 ~reminder_exists_subq,
             )
             .scalar()
@@ -244,7 +245,7 @@ def _check_upcoming_appointments(db: Session, org_id: int) -> dict:
         .filter(
             Appointment.organization_id == org_id,
             Appointment.scheduled_start >= now,
-            Appointment.status.notin_(["cancelled", "rescheduled", "CANCELLED", "RESCHEDULED"]),
+            Appointment.status.notin_([AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED]),
         )
         .scalar()
     ) or 0
@@ -255,7 +256,7 @@ def _check_upcoming_appointments(db: Session, org_id: int) -> dict:
             Appointment.organization_id == org_id,
             Appointment.scheduled_start >= now,
             Appointment.scheduled_start <= next_24h,
-            Appointment.status.notin_(["cancelled", "rescheduled", "CANCELLED", "RESCHEDULED"]),
+            Appointment.status.notin_([AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED]),
         )
         .scalar()
     ) or 0

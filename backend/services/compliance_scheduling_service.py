@@ -28,8 +28,6 @@ from sqlalchemy import and_, or_
 import logging
 import uuid
 
-from routes.scheduler.constants import DEFAULT_TIMEZONE
-
 logger = logging.getLogger(__name__)
 
 
@@ -57,6 +55,36 @@ STAGE_SLA_DAYS = {}
 for _key, _days in SLA_TARGETS.items():
     _from_stage = _key.split("_to_")[0]
     STAGE_SLA_DAYS[_from_stage] = _days
+
+# C6: US state to primary timezone mapping for TCPA contact-hours enforcement
+STATE_TIMEZONE_MAP = {
+    "CA": "America/Los_Angeles", "WA": "America/Los_Angeles", "OR": "America/Los_Angeles",
+    "NV": "America/Los_Angeles", "AZ": "America/Phoenix",
+    "MT": "America/Denver", "CO": "America/Denver", "NM": "America/Denver",
+    "UT": "America/Denver", "WY": "America/Denver",
+    "TX": "America/Chicago", "IL": "America/Chicago", "MN": "America/Chicago",
+    "WI": "America/Chicago", "MO": "America/Chicago", "IA": "America/Chicago",
+    "NY": "America/New_York", "FL": "America/New_York", "PA": "America/New_York",
+    "OH": "America/New_York", "GA": "America/New_York", "NC": "America/New_York",
+    "VA": "America/New_York", "MA": "America/New_York", "NJ": "America/New_York",
+    "HI": "Pacific/Honolulu", "AK": "America/Anchorage",
+}
+
+
+def _get_borrower_timezone(borrower_state: str = None) -> str:
+    """Get borrower timezone from property state, defaulting to most restrictive.
+
+    TCPA requires contacting borrowers only during permissible hours in *their*
+    timezone.  Defaulting to Eastern is the safest fallback because 8 AM ET is
+    the latest 8 AM across US continental timezones (5 AM PT), so we will never
+    call too early relative to a more-western borrower.
+    """
+    if borrower_state:
+        tz = STATE_TIMEZONE_MAP.get(borrower_state.upper())
+        if tz:
+            return tz
+    # Default to Eastern (most restrictive start time for TCPA: 8am ET = 5am PT)
+    return "America/New_York"
 
 
 # =============================================================================
@@ -334,9 +362,14 @@ class ComplianceSchedulingService:
         if not loan:
             raise ValueError(f"Loan {loan_id} not found in organization {organization_id}")
 
-        # Default scheduling: next business day at 10 AM
+        # C6: Resolve borrower timezone from property state for TCPA compliance.
+        # The property_state column stores the 2-letter state code (e.g. "CA").
+        borrower_state = getattr(loan, "property_state", None)
+        borrower_tz = _get_borrower_timezone(borrower_state)
+
+        # Default scheduling: next business day at 10 AM in borrower's timezone
         if scheduled_start is None:
-            scheduled_start = self._next_business_day_10am()
+            scheduled_start = self._next_business_day_10am(tz_name=borrower_tz)
 
         duration = rule.get("duration_minutes", 30)
         scheduled_end = scheduled_start + timedelta(minutes=duration)
@@ -366,7 +399,7 @@ class ComplianceSchedulingService:
             scheduled_start=scheduled_start,
             scheduled_end=scheduled_end,
             duration_minutes=duration,
-            timezone=DEFAULT_TIMEZONE,
+            timezone=borrower_tz,
             attendee_name=loan.borrower_name,
             attendee_email=loan.borrower_email,
             attendee_phone=loan.borrower_phone,

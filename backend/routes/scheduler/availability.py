@@ -340,6 +340,11 @@ async def get_available_slots(
     """
     Get available time slots for booking.
     Delegates to the unified _generate_available_slots engine.
+
+    FUNC-006: When appointment_type_id is provided in the request, the slot
+    duration is resolved from the appointment type's default_duration_minutes
+    instead of relying solely on the request's duration_minutes field (which
+    defaults to the global 30-minute fallback).
     """
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
@@ -362,12 +367,26 @@ async def get_available_slots(
                         detail="One or more user IDs not found in your organization"
                     )
 
+        # FUNC-006: Resolve duration from appointment type when provided
+        effective_duration = slot_request.duration_minutes
+        if slot_request.appointment_type_id:
+            _models = get_models()
+            AppointmentType = _models.get('AppointmentType') if _models else None
+            if AppointmentType:
+                appt_type = db.query(AppointmentType).filter(
+                    AppointmentType.id == slot_request.appointment_type_id,
+                    AppointmentType.is_active == True,
+                    AppointmentType.organization_id == org_id,
+                ).first()
+                if appt_type and getattr(appt_type, 'default_duration_minutes', None):
+                    effective_duration = appt_type.default_duration_minutes
+
         available_slots = _generate_available_slots(
             db=db,
             user_ids=user_ids,
             start_date=slot_request.start_date,
             end_date=slot_request.end_date,
-            duration_minutes=slot_request.duration_minutes,
+            duration_minutes=effective_duration,
             org_id=org_id,
             max_per_day=8,  # Default max per day for authenticated endpoint
             check_cross_source=True,
@@ -381,7 +400,7 @@ async def get_available_slots(
             "request": {
                 "start_date": slot_request.start_date.isoformat(),
                 "end_date": slot_request.end_date.isoformat(),
-                "duration_minutes": slot_request.duration_minutes,
+                "duration_minutes": effective_duration,
                 "user_ids": user_ids
             }
         }

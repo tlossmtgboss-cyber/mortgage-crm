@@ -43,6 +43,7 @@ from routes.scheduler._rate_limiting import (  # noqa: F401
     _check_memory_rate_limit,
     _is_private_ip,
     _is_trusted_proxy,
+    _mask_ip,
     _RATE_LIMIT_WINDOW,
     _RATE_LIMIT_MAX_PUBLIC,
     _RATE_LIMIT_MAX_AUTHENTICATED,

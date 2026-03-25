@@ -18,6 +18,7 @@ import BookingTypeSelector from './booking/BookingTypeSelector';
 import BookingSlotPicker from './booking/BookingSlotPicker';
 import BookingForm from './booking/BookingForm';
 import BookingWidgetConfirmation from './booking/BookingWidgetConfirmation';
+import { getUserTimezone } from './calendarUtils';
 
 const DEFAULT_COLOR = '#1a73e8';
 
@@ -315,12 +316,14 @@ export default function BookingWidget({
 
   function formatTime(timeStr) {
     const d = new Date(timeStr);
-    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    const tz = getUserTimezone();
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: tz });
   }
 
   function formatFullDate(date) {
-    return date.toLocaleDateString(undefined, {
-      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+    const tz = getUserTimezone();
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric', timeZone: tz,
     });
   }
 
@@ -360,21 +363,43 @@ export default function BookingWidget({
 
   // ---- Render ----
   return (
-    <div ref={containerRef} style={styles.container}>
+    <div ref={containerRef} style={styles.container} role="region" aria-label="Appointment booking">
       <style>{`
         @keyframes widget-shimmer {
           0% { background-position: 200% 0; }
           100% { background-position: -200% 0; }
         }
+        .bw-sr-only {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip: rect(0, 0, 0, 0);
+          white-space: nowrap;
+          border-width: 0;
+        }
       `}</style>
 
+      {/* Screen reader announcements for booking status */}
+      <div aria-live="polite" className="bw-sr-only" role="status">
+        {step === 'confirmation' && 'Your appointment has been confirmed.'}
+        {error && `Error: ${error}`}
+        {loading && 'Loading booking options, please wait.'}
+      </div>
+
       {/* Loading */}
-      {loading && <WidgetSkeleton color={accentColor} />}
+      {loading && (
+        <div aria-busy="true">
+          <WidgetSkeleton color={accentColor} />
+        </div>
+      )}
 
       {/* Error state (no config) */}
       {!loading && error && !config && (
-        <div style={styles.errorContainer}>
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2">
+        <div style={styles.errorContainer} role="alert">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" aria-hidden="true">
             <circle cx="12" cy="12" r="10" />
             <line x1="12" y1="8" x2="12" y2="12" />
             <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -398,7 +423,7 @@ export default function BookingWidget({
             {config.lo && (
               <div style={styles.loInfo}>
                 {config.lo.headshot_url && (
-                  <img src={config.lo.headshot_url} alt={config.lo.name} style={styles.loPhoto} />
+                  <img src={config.lo.headshot_url} alt={`Photo of ${config.lo.name}`} style={styles.loPhoto} />
                 )}
                 <div>
                   <div style={styles.loName}>{config.lo.name}</div>
@@ -407,12 +432,12 @@ export default function BookingWidget({
                 </div>
               </div>
             )}
-            <h3 style={styles.title}>Schedule a Meeting</h3>
+            <h3 style={styles.title} id="bw-widget-title">Schedule a Meeting</h3>
           </div>
 
           {/* Inline error banner */}
           {error && (
-            <div style={styles.errorBanner}>{error}</div>
+            <div style={styles.errorBanner} role="alert">{error}</div>
           )}
 
           {/* Step: Date/Time selection */}
@@ -442,6 +467,11 @@ export default function BookingWidget({
               <button
                 onClick={() => setStep('form')}
                 disabled={!selectedDate || !selectedTime}
+                aria-label={
+                  !selectedDate || !selectedTime
+                    ? 'Continue (select a date and time first)'
+                    : 'Continue to contact information'
+                }
                 style={{
                   ...styles.primaryBtn,
                   backgroundColor: accentColor,

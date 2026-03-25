@@ -16,6 +16,7 @@ Usage:
     ).first()
 """
 
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -26,6 +27,20 @@ from sqlalchemy.orm import relationship
 
 from db import Base
 
+logger = logging.getLogger(__name__)
+
+try:
+    from services.encryption import EncryptedString
+    _HAS_ENCRYPTION = True
+except ImportError:
+    _HAS_ENCRYPTION = False
+    logger.error(
+        "COMP-004: services.encryption.EncryptedString is unavailable. "
+        "Encompass OAuth secrets will be stored as PLAINTEXT. "
+        "Install the 'cryptography' package and set ENCRYPTION_KEY or SECRET_KEY "
+        "to enable at-rest encryption."
+    )
+
 
 class EncompassConfig(Base):
     """Per-organization Encompass API configuration.
@@ -34,10 +49,9 @@ class EncompassConfig(Base):
     for the Encompass LOS integration. Each organization can have at most
     one active configuration (enforced by the unique constraint on organization_id).
 
-    Security note: client_id and client_secret should be encrypted at rest
-    in production. The current implementation stores them as plain strings;
-    a production deployment should use application-level encryption (e.g.,
-    Fernet or AWS KMS) before persisting.
+    Security: client_secret and webhook_secret are encrypted at rest using
+    Fernet symmetric encryption (EncryptedString TypeDecorator). Legacy
+    plaintext values are returned as-is on read for backward compatibility.
 
     Health tracking:
         last_failed_at and consecutive_auth_failures track authentication
@@ -64,10 +78,19 @@ class EncompassConfig(Base):
 
     # Encompass connection details
     instance_id = Column(String, nullable=False)       # Encompass instance ID (e.g., "BE11200822")
-    client_id = Column(String, nullable=False)         # OAuth client ID (encrypted in production)
-    client_secret = Column(String, nullable=False)     # OAuth client secret (encrypted in production)
+    client_id = Column(String, nullable=False)         # OAuth client ID (not a secret, but identifies the app)
+    # COMP-004: OAuth client secret encrypted at rest via Fernet (EncryptedString TypeDecorator).
+    # Sized to 500 chars to accommodate ciphertext. Legacy plaintext returned as-is on read.
+    client_secret = Column(
+        EncryptedString(500) if _HAS_ENCRYPTION else String(500),
+        nullable=False,
+    )
     api_user = Column(String, nullable=True)           # Service account username (optional)
-    webhook_secret = Column(String, nullable=True)     # HMAC secret for webhook signature verification
+    # COMP-004: Webhook HMAC secret encrypted at rest via Fernet (EncryptedString TypeDecorator).
+    webhook_secret = Column(
+        EncryptedString(500) if _HAS_ENCRYPTION else String(500),
+        nullable=True,
+    )
 
     # Sync behavior
     auto_pull_on_webhook = Column(Boolean, default=True)        # Auto-pull loan data when webhook received

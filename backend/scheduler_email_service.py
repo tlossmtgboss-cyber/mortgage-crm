@@ -333,14 +333,19 @@ async def send_with_sms_fallback(
 # ============================================================================
 
 def generate_reschedule_url(appointment_id: int, attendee_email: str, slug: str = None) -> str:
-    """Generate a time-limited reschedule URL (valid 72 hours)."""
+    """Generate a time-limited reschedule URL (valid 72 hours).
+
+    SEC-010: Uses email_hash instead of plaintext email in the JWT payload.
+    """
+    import hashlib
     import jwt
     secret = os.getenv("SECRET_KEY")
     if not secret:
         raise RuntimeError("SECRET_KEY environment variable is required for reschedule URL generation")
+    email_hash = hashlib.sha256(attendee_email.lower().strip().encode()).hexdigest()[:16] if attendee_email else ""
     payload = {
         "appt_id": appointment_id,
-        "email": attendee_email,
+        "email_hash": email_hash,
         "action": "reschedule",
         "exp": datetime.now(timezone.utc) + timedelta(hours=72),
     }
@@ -1139,6 +1144,7 @@ def send_ai_booking_confirmation_email(
     duration_minutes: int = 30,
     ai_context: str = None,
     reschedule_url: str = None,
+    organization_id: int = None,
 ):
     """Send confirmation email for an AI-booked appointment.
 
@@ -1147,6 +1153,11 @@ def send_ai_booking_confirmation_email(
     optionally includes AI context (e.g., why this time was chosen).
     """
     try:
+        # DATA-011: Rate limit AI booking confirmation emails per-org
+        if not _check_email_rate_limit(attendee_email, org_id=organization_id):
+            logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping AI booking confirmation email")
+            return {"success": False, "error": "Rate limit exceeded"}
+
         logger.info(
             f"Sending AI booking confirmation to {attendee_email} "
             f"for '{appointment_title}' on {appointment_date}"
@@ -1312,6 +1323,7 @@ def send_pre_appointment_prep_email(
     scheduled_start: datetime = None,
     prep_items: list = None,
     meeting_type_key: str = None,
+    organization_id: int = None,
 ):
     """Send a pre-appointment preparation reminder email.
 
@@ -1319,6 +1331,11 @@ def send_pre_appointment_prep_email(
     should gather/review before the meeting (e.g., documents, questions).
     """
     try:
+        # DATA-011: Rate limit prep emails per-org
+        if not _check_email_rate_limit(attendee_email, org_id=organization_id):
+            logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping prep email")
+            return {"success": False, "error": "Rate limit exceeded"}
+
         logger.info(
             f"Sending pre-appointment prep email to {attendee_email} "
             f"for '{appointment_title}' on {appointment_date}"
@@ -1472,6 +1489,7 @@ def send_no_show_recovery_email(
     team_member_name: str = None,
     reschedule_url: str = None,
     meeting_type_key: str = None,
+    organization_id: int = None,
 ):
     """Send a no-show recovery email to encourage the borrower to rebook.
 
@@ -1479,6 +1497,11 @@ def send_no_show_recovery_email(
     non-judgmental, offering an easy way to reschedule.
     """
     try:
+        # DATA-011: Rate limit no-show recovery emails per-org
+        if not _check_email_rate_limit(attendee_email, org_id=organization_id):
+            logger.warning(f"Email rate limit exceeded for {_mask_email(attendee_email)}, skipping no-show recovery email")
+            return {"success": False, "error": "Rate limit exceeded"}
+
         logger.info(
             f"Sending no-show recovery email to {attendee_email} "
             f"for missed appointment '{appointment_title}' on {appointment_date}"
@@ -1736,8 +1759,19 @@ def schedule_email_task(coro) -> None:
     else:
         # No running loop -- run synchronously in a new loop (fallback).
         # This path is only hit in non-async contexts like CLI scripts.
+        # DATA-015: Use get_event_loop() + run_until_complete() when possible,
+        # falling back to asyncio.run() only when no loop exists at all.
         try:
-            asyncio.run(coro)
+            try:
+                fallback_loop = asyncio.get_event_loop()
+                if fallback_loop.is_running():
+                    # Shouldn't reach here (caught above), but guard anyway
+                    asyncio.ensure_future(coro, loop=fallback_loop)
+                else:
+                    fallback_loop.run_until_complete(coro)
+            except RuntimeError:
+                # No event loop at all -- create one
+                asyncio.run(coro)
         except Exception as e:
             logger.error(f"Fire-and-forget email task failed (sync fallback): {e}")
 

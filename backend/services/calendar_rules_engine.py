@@ -186,7 +186,7 @@ class SchedulingRules(BaseModel):
 async def get_rules_for_lo(
     lo_id: Optional[int],
     db: Session,
-    org_id: Optional[int] = None,
+    org_id: int = None,
 ) -> SchedulingRules:
     """
     Load scheduling rules for a specific loan officer.
@@ -197,15 +197,23 @@ async def get_rules_for_lo(
     3. Fall back to hardcoded defaults
 
     Also checks scheduler_resources for capacity overrides.
+
+    Args:
+        lo_id: Loan officer user ID (None for org-level defaults).
+        db: SQLAlchemy session.
+        org_id: Organization ID for tenant scoping. Required for correct
+            tenant isolation. When None, falls back to defaults with a
+            warning (backward compatibility).
     """
     config_row = None
 
-    # DATA-013: Warn when org_id is missing — rules will fall back to defaults
-    # without tenant scoping, which may return overly permissive scheduling rules.
+    # DATA-013: org_id should always be provided for correct tenant scoping.
+    # Log an error (not just warning) so missing org_id is surfaced in monitoring.
     if org_id is None:
-        logger.warning(
+        logger.error(
             "get_rules_for_lo called without org_id for lo_id=%s — "
-            "rules will fall back to defaults without org-level scoping",
+            "rules will fall back to defaults without org-level scoping. "
+            "Callers MUST provide org_id for correct tenant isolation.",
             lo_id,
         )
 
@@ -640,7 +648,7 @@ async def get_business_hours(
     lo_id: Optional[int],
     day_of_week: int,
     db: Session,
-    org_id: Optional[int] = None,
+    org_id: int = None,
 ) -> Tuple[time, time]:
     """
     Get business hours for a specific day of the week.
@@ -649,7 +657,7 @@ async def get_business_hours(
         lo_id: Loan officer user ID (or None for org defaults)
         day_of_week: Python weekday integer (0=Monday ... 6=Sunday)
         db: Database session
-        org_id: Organization ID
+        org_id: Organization ID (required for tenant scoping)
 
     Returns:
         (start_time, end_time) tuple. Returns (time(0,0), time(0,0)) if not a working day.
@@ -675,13 +683,16 @@ async def get_blocked_dates(
     start_date: date,
     end_date: date,
     db: Session,
-    org_id: Optional[int] = None,
+    org_id: int = None,
 ) -> List[date]:
     """
     Get all dates that are fully blocked for an LO within a date range.
 
     Checks the scheduler_blocked_times table for PTO, holidays, and custom blocks.
     Returns dates where all-day blocks exist.
+
+    Args:
+        org_id: Organization ID (required for tenant scoping).
     """
     blocked_dates: List[date] = []
 

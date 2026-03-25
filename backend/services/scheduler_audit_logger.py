@@ -107,8 +107,9 @@ def _ensure_audit_handler() -> None:
         file_handler.setFormatter(StructuredFormatter())
         logger.addHandler(file_handler)
     except OSError:
-        logging.getLogger(__name__).warning(
-            f"Could not create scheduler audit log at {audit_log_path}"
+        logging.getLogger(__name__).error(
+            f"Could not create scheduler audit log at {audit_log_path}",
+            exc_info=True,
         )
 
 
@@ -873,7 +874,7 @@ def get_appointment_audit_trail(
     try:
         from database.models.scheduler import SchedulerAuditLog
     except ImportError:
-        logger.warning("SchedulerAuditLog model not available for audit trail query")
+        logger.error("SchedulerAuditLog model not available for audit trail query", exc_info=True)
         return []
 
     logs = (

@@ -12,7 +12,7 @@ All endpoints require authentication and are scoped to the user's organization.
 
 from datetime import date as date_type
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 from typing import Dict, List, Optional, Any
 import logging
@@ -59,8 +59,7 @@ class SLADashboardResponse(BaseModel):
     recent_breach_count: int = Field(0, description="SLA breaches in the last 7 days")
     targets: Dict[str, Any] = Field(default_factory=dict, description="Current SLA target values")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SLABreachItem(BaseModel):
@@ -85,8 +84,7 @@ class SLABreachesResponse(BaseModel):
     warning_count: int = Field(0, description="Number of warning breaches")
     breaches: List[SLABreachItem] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TimeToFirstAppointment(BaseModel):
@@ -130,8 +128,7 @@ class LOSLAMetricsResponse(BaseModel):
     no_show_rate: NoShowRate = Field(default_factory=NoShowRate)
     reschedule_response: RescheduleResponse = Field(default_factory=RescheduleResponse)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SLATargetsUpdate(BaseModel):

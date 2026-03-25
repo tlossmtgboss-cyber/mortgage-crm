@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSwipeGesture } from '../../hooks/useMediaQuery';
+import { normalizeUTCDate, getUserTimezone, getTimezoneAbbreviation } from './calendarUtils';
+import { formatInUserTimezone } from '../../utils/timezone';
 import './MobileCalendarView.css';
 
 const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -15,10 +17,11 @@ const isSameDay = (d1, d2) =>
   d1.getDate() === d2.getDate();
 
 const formatEventTime = (startTime, endTime) => {
-  const start = new Date(startTime);
-  const end = new Date(endTime);
-  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const start = new Date(normalizeUTCDate(startTime));
+  const end = new Date(normalizeUTCDate(endTime));
+  const tz = getUserTimezone();
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
+  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
   const duration = Math.round((end - start) / (1000 * 60));
   return { startStr, endStr, duration };
 };
@@ -184,7 +187,7 @@ export default function MobileCalendarView({
       duration_minutes: parseInt(quickForm.duration),
       attendee_name: quickForm.attendee_name || undefined,
       attendee_email: quickForm.attendee_email || undefined,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timezone: getUserTimezone(),
     });
     setShowBottomSheet(false);
   };
@@ -498,6 +501,7 @@ export default function MobileCalendarView({
                     {formatEventTime(selectedEvent.start_time, selectedEvent.end_time).endStr}
                     {' '}
                     ({formatEventTime(selectedEvent.start_time, selectedEvent.end_time).duration}m)
+                    {' '}{getTimezoneAbbreviation()}
                   </div>
                 </div>
               </div>
@@ -512,10 +516,9 @@ export default function MobileCalendarView({
                 <div>
                   <div className="mobile-detail-label">Date</div>
                   <div className="mobile-detail-value">
-                    {dayNames[new Date(selectedEvent.start_time).getDay()]},{' '}
-                    {monthNames[new Date(selectedEvent.start_time).getMonth()]}{' '}
-                    {new Date(selectedEvent.start_time).getDate()},{' '}
-                    {new Date(selectedEvent.start_time).getFullYear()}
+                    {formatInUserTimezone(selectedEvent.start_time, {
+                      weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
+                    })}
                   </div>
                 </div>
               </div>

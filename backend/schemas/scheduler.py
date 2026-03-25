@@ -39,7 +39,7 @@ from datetime import datetime, date
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
 
 
 # =============================================================================
@@ -488,15 +488,14 @@ class SlotRecommendation(BaseModel):
 
 class AIBookingContext(BaseModel):
     """Validated schema for AI booking decision context."""
+    model_config = ConfigDict(extra="allow")  # Allow forward-compatible extra fields
+
     decision_source: Optional[str] = None
     confidence_score: Optional[float] = None
     decision_reason: Optional[str] = None
     matched_rules: Optional[List[str]] = None
     alternative_slots_considered: Optional[int] = None
     pipeline_trigger: Optional[str] = None
-
-    class Config:
-        extra = "allow"  # Allow forward-compatible extra fields
 
 
 # #############################################################################
@@ -510,22 +509,20 @@ class AIBookingContext(BaseModel):
 
 class ErrorDetail(BaseModel):
     """Standard error response body."""
-    detail: str = Field(..., description="Human-readable error message")
+    model_config = ConfigDict(json_schema_extra={
+        "example": {"detail": "Resource not found"}
+    })
 
-    class Config:
-        json_schema_extra = {
-            "example": {"detail": "Resource not found"}
-        }
+    detail: str = Field(..., description="Human-readable error message")
 
 
 class MessageResponse(BaseModel):
     """Simple success message response."""
-    message: str = Field(..., description="Human-readable success message")
+    model_config = ConfigDict(json_schema_extra={
+        "example": {"message": "Operation completed successfully"}
+    })
 
-    class Config:
-        json_schema_extra = {
-            "example": {"message": "Operation completed successfully"}
-        }
+    message: str = Field(..., description="Human-readable success message")
 
 
 class MessageWithIdResponse(BaseModel):
@@ -541,20 +538,19 @@ class MessageWithIdResponse(BaseModel):
 
 class PaginationMeta(BaseModel):
     """Pagination metadata for list endpoints."""
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "total": 42,
+            "page": 1,
+            "per_page": 20,
+            "total_pages": 3,
+        }
+    })
+
     total: int = Field(..., description="Total number of records matching the filter")
     page: int = Field(..., description="Current page number (1-based)")
     per_page: int = Field(..., description="Records per page")
     total_pages: int = Field(..., description="Total number of pages")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "total": 42,
-                "page": 1,
-                "per_page": 20,
-                "total_pages": 3,
-            }
-        }
 
 
 class SuccessEnvelope(BaseModel):
@@ -591,6 +587,30 @@ class SchedulerConfigDefaults(BaseModel):
 
 class SchedulerConfigData(BaseModel):
     """Full scheduler configuration record."""
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": 1,
+            "config_name": "Default Schedule",
+            "description": "Primary scheduling configuration",
+            "timezone": "America/Chicago",
+            "default_duration_minutes": 30,
+            "buffer_before_minutes": 5,
+            "buffer_after_minutes": 5,
+            "min_notice_hours": 2,
+            "max_advance_days": 60,
+            "max_meetings_per_day": 8,
+            "working_hours": {
+                "monday": {"start": "09:00", "end": "17:00", "enabled": True},
+                "friday": {"start": "09:00", "end": "17:00", "enabled": True},
+            },
+            "routing_strategy": "round_robin",
+            "ai_scheduling_enabled": True,
+            "is_active": True,
+            "created_at": "2026-03-01T10:00:00Z",
+            "updated_at": "2026-03-10T15:30:00Z",
+        }
+    })
+
     id: int = Field(..., description="Configuration ID")
     config_name: str = Field(..., description="Configuration display name")
     description: Optional[str] = Field(None, description="Configuration description")
@@ -609,31 +629,6 @@ class SchedulerConfigData(BaseModel):
     is_active: bool = Field(..., description="Whether this configuration is active")
     created_at: Optional[str] = Field(None, description="Creation timestamp (ISO 8601)")
     updated_at: Optional[str] = Field(None, description="Last update timestamp (ISO 8601)")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": 1,
-                "config_name": "Default Schedule",
-                "description": "Primary scheduling configuration",
-                "timezone": "America/Chicago",
-                "default_duration_minutes": 30,
-                "buffer_before_minutes": 5,
-                "buffer_after_minutes": 5,
-                "min_notice_hours": 2,
-                "max_advance_days": 60,
-                "max_meetings_per_day": 8,
-                "working_hours": {
-                    "monday": {"start": "09:00", "end": "17:00", "enabled": True},
-                    "friday": {"start": "09:00", "end": "17:00", "enabled": True},
-                },
-                "routing_strategy": "round_robin",
-                "ai_scheduling_enabled": True,
-                "is_active": True,
-                "created_at": "2026-03-01T10:00:00Z",
-                "updated_at": "2026-03-10T15:30:00Z",
-            }
-        }
 
 
 class SchedulerConfigResponse(BaseModel):
@@ -661,6 +656,27 @@ class IntakeQuestionSchema(BaseModel):
 
 class AppointmentTypeSchema(BaseModel):
     """Appointment type definition."""
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": 1,
+            "type_key": "discovery_call",
+            "type_name": "Discovery Call",
+            "description": "Initial consultation to discuss mortgage options",
+            "meeting_type": "discovery_call",
+            "default_duration_minutes": 30,
+            "allowed_durations": [15, 30, 45, 60],
+            "allowed_modes": ["video", "phone"],
+            "requires_loan_id": False,
+            "requires_lead_id": False,
+            "intake_questions": [],
+            "color": "#3b82f6",
+            "icon": "calendar",
+            "is_public": True,
+            "public_slug": "1-discovery_call",
+            "is_active": True,
+        }
+    })
+
     id: int = Field(..., description="Appointment type ID")
     type_key: str = Field(..., description="Unique machine-readable key", example="discovery_call")
     type_name: str = Field(..., description="Human-readable name", example="Discovery Call")
@@ -685,28 +701,6 @@ class AppointmentTypeSchema(BaseModel):
     is_public: bool = Field(True, description="Whether visible on public booking pages")
     public_slug: Optional[str] = Field(None, description="Public URL slug")
     is_active: bool = Field(True, description="Whether this type is active")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": 1,
-                "type_key": "discovery_call",
-                "type_name": "Discovery Call",
-                "description": "Initial consultation to discuss mortgage options",
-                "meeting_type": "discovery_call",
-                "default_duration_minutes": 30,
-                "allowed_durations": [15, 30, 45, 60],
-                "allowed_modes": ["video", "phone"],
-                "requires_loan_id": False,
-                "requires_lead_id": False,
-                "intake_questions": [],
-                "color": "#3b82f6",
-                "icon": "calendar",
-                "is_public": True,
-                "public_slug": "1-discovery_call",
-                "is_active": True,
-            }
-        }
 
 
 class AppointmentTypeListResponse(BaseModel):
@@ -733,6 +727,29 @@ class AppointmentTypeDetail(BaseModel):
 
 class AppointmentResponse(BaseModel):
     """Full appointment record."""
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": 42,
+            "title": "Mortgage Consultation",
+            "description": "Initial consultation to discuss refinancing options",
+            "status": "booked",
+            "meeting_type": "consultation",
+            "meeting_mode": "video",
+            "scheduled_start": "2026-03-15T10:00:00-05:00",
+            "scheduled_end": "2026-03-15T10:30:00-05:00",
+            "duration_minutes": 30,
+            "timezone": "America/Chicago",
+            "attendee_name": "John Doe",
+            "attendee_email": "john.doe@example.com",
+            "assigned_user_id": 5,
+            "assigned_user_name": "Sarah Johnson",
+            "lead_id": 123,
+            "booked_by_ai": False,
+            "version": 1,
+            "created_at": "2026-03-10T08:30:00Z",
+        }
+    })
+
     id: int = Field(..., description="Unique appointment ID")
     title: str = Field(..., description="Appointment title/subject")
     description: Optional[str] = Field(None, description="Detailed description or notes")
@@ -763,30 +780,6 @@ class AppointmentResponse(BaseModel):
     created_at: Optional[str] = Field(None, description="Creation timestamp (ISO 8601)")
     updated_at: Optional[str] = Field(None, description="Last update timestamp (ISO 8601)")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": 42,
-                "title": "Mortgage Consultation",
-                "description": "Initial consultation to discuss refinancing options",
-                "status": "booked",
-                "meeting_type": "consultation",
-                "meeting_mode": "video",
-                "scheduled_start": "2026-03-15T10:00:00-05:00",
-                "scheduled_end": "2026-03-15T10:30:00-05:00",
-                "duration_minutes": 30,
-                "timezone": "America/Chicago",
-                "attendee_name": "John Doe",
-                "attendee_email": "john.doe@example.com",
-                "assigned_user_id": 5,
-                "assigned_user_name": "Sarah Johnson",
-                "lead_id": 123,
-                "booked_by_ai": False,
-                "version": 1,
-                "created_at": "2026-03-10T08:30:00Z",
-            }
-        }
-
 
 class AppointmentListResponse(BaseModel):
     """Response for GET /appointments."""
@@ -800,19 +793,18 @@ class AppointmentListResponse(BaseModel):
 
 class AppointmentCreateResponse(BaseModel):
     """Response for POST /appointments."""
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "message": "Appointment created and confirmation sent",
+            "appointment_id": 42,
+            "video_link": "https://meet.example.com/abc123",
+        }
+    })
+
     message: str = Field(..., description="Success message")
     appointment_id: int = Field(..., description="Created appointment ID")
     video_link: Optional[str] = Field(None, description="Auto-generated video conference link")
     licensing_warning: Optional[str] = Field(None, description="LO licensing advisory warning")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "message": "Appointment created and confirmation sent",
-                "appointment_id": 42,
-                "video_link": "https://meet.example.com/abc123",
-            }
-        }
 
 
 class AppointmentCancelResponse(BaseModel):
@@ -889,6 +881,21 @@ class AvailableSlotsListResponse(BaseModel):
 
 class AIRecommendedSlot(BaseModel):
     """An AI-recommended time slot with scoring."""
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "slot_start": "2026-03-15T10:00:00-05:00",
+            "slot_end": "2026-03-15T10:30:00-05:00",
+            "user_id": 5,
+            "user_name": "Sarah Johnson",
+            "score": 0.92,
+            "reasons": [
+                "High show rate for Tuesday morning slots",
+                "LO has expertise in refinancing",
+                "Lead source matches LO's conversion strengths",
+            ],
+        }
+    })
+
     slot_start: str = Field(..., description="Recommended start time (ISO 8601)")
     slot_end: str = Field(..., description="Recommended end time (ISO 8601)")
     user_id: int = Field(..., description="Recommended loan officer ID")
@@ -898,22 +905,6 @@ class AIRecommendedSlot(BaseModel):
     )
     reasons: List[str] = Field(..., description="Explanation of why this slot is recommended")
 
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "slot_start": "2026-03-15T10:00:00-05:00",
-                "slot_end": "2026-03-15T10:30:00-05:00",
-                "user_id": 5,
-                "user_name": "Sarah Johnson",
-                "score": 0.92,
-                "reasons": [
-                    "High show rate for Tuesday morning slots",
-                    "LO has expertise in refinancing",
-                    "Lead source matches LO's conversion strengths",
-                ],
-            }
-        }
-
 
 # =============================================================================
 # 6. BOOKING LINKS
@@ -921,6 +912,22 @@ class AIRecommendedSlot(BaseModel):
 
 class BookingLinkSchema(BaseModel):
     """A booking link record."""
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": 1,
+            "slug": "sarah-johnson",
+            "link_name": "Schedule with Sarah",
+            "description": "Book a mortgage consultation",
+            "url": "/book/sarah-johnson",
+            "is_public": True,
+            "user_id": 5,
+            "owner_name": "Sarah Johnson",
+            "view_count": 150,
+            "booking_count": 23,
+            "created_at": "2026-02-15T10:00:00Z",
+        }
+    })
+
     id: int = Field(..., description="Booking link ID")
     slug: str = Field(..., description="URL-friendly identifier", example="sarah-johnson")
     link_name: str = Field(..., description="Display name for the link")
@@ -933,23 +940,6 @@ class BookingLinkSchema(BaseModel):
     booking_count: Optional[int] = Field(None, description="Number of completed bookings")
     last_booked_at: Optional[str] = Field(None, description="Last booking timestamp (ISO 8601)")
     created_at: Optional[str] = Field(None, description="Creation timestamp (ISO 8601)")
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": 1,
-                "slug": "sarah-johnson",
-                "link_name": "Schedule with Sarah",
-                "description": "Book a mortgage consultation",
-                "url": "/book/sarah-johnson",
-                "is_public": True,
-                "user_id": 5,
-                "owner_name": "Sarah Johnson",
-                "view_count": 150,
-                "booking_count": 23,
-                "created_at": "2026-02-15T10:00:00Z",
-            }
-        }
 
 
 class BookingLinkListResponse(BaseModel):
@@ -972,6 +962,21 @@ class BookingLinkCreateResponse(BaseModel):
 
 class BlockedTimeDetailSchema(BaseModel):
     """Detailed blocked time record."""
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "id": 10,
+            "title": "Lunch Break",
+            "description": "Daily lunch",
+            "block_type": "lunch",
+            "start_datetime": "2026-03-15T12:00:00-05:00",
+            "end_datetime": "2026-03-15T13:00:00-05:00",
+            "all_day": False,
+            "is_recurring": True,
+            "recurrence_pattern": {"frequency": "daily"},
+            "applies_to_all_users": False,
+        }
+    })
+
     id: int = Field(..., description="Blocked time ID")
     title: str = Field(..., description="Block title")
     description: Optional[str] = Field(None, description="Block description")
@@ -984,22 +989,6 @@ class BlockedTimeDetailSchema(BaseModel):
     applies_to_all_users: bool = Field(
         False, description="Whether this block applies org-wide (admin only)"
     )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "id": 10,
-                "title": "Lunch Break",
-                "description": "Daily lunch",
-                "block_type": "lunch",
-                "start_datetime": "2026-03-15T12:00:00-05:00",
-                "end_datetime": "2026-03-15T13:00:00-05:00",
-                "all_day": False,
-                "is_recurring": True,
-                "recurrence_pattern": {"frequency": "daily"},
-                "applies_to_all_users": False,
-            }
-        }
 
 
 class BlockedTimeListResponse(BaseModel):
@@ -1175,6 +1164,15 @@ class FollowupTimingResult(BaseModel):
 
 class EmailServiceStatusResponse(BaseModel):
     """Email service health check response."""
+    model_config = ConfigDict(json_schema_extra={
+        "example": {
+            "sendgrid_configured": True,
+            "from_email": "sarah@reply.perenniaai.com",
+            "status": "ready",
+            "message": "Email service is ready to send",
+        }
+    })
+
     sendgrid_configured: bool = Field(
         ..., description="Whether SendGrid API key is present"
     )
@@ -1187,16 +1185,6 @@ class EmailServiceStatusResponse(BaseModel):
     message: str = Field(
         ..., description="Human-readable status message"
     )
-
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "sendgrid_configured": True,
-                "from_email": "sarah@reply.perenniaai.com",
-                "status": "ready",
-                "message": "Email service is ready to send",
-            }
-        }
 
 
 class TestEmailResponse(BaseModel):

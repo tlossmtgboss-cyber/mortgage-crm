@@ -37,24 +37,53 @@ router = APIRouter()
 _SENDGRID_WEBHOOK_KEY = os.getenv("SENDGRID_WEBHOOK_VERIFICATION_KEY")
 
 
-def _resolve_org_id_for_email(email: str, db: Session) -> Optional[int]:
-    """Resolve organization_id from the most recent appointment matching this attendee email.
+def _resolve_org_id_from_appointment(appointment_id: int, db: Session) -> Optional[int]:
+    """Resolve organization_id directly from an appointment ID.
 
-    Used when processing public-facing events (SendGrid webhooks, unsubscribe)
-    where we have no authenticated user context. Returns None if no match found.
+    Used as a fallback when email-based org resolution fails but we have
+    an appointment_id from the event's custom args.
     """
-    if not email:
+    if not appointment_id:
         return None
     try:
         from database.models.scheduler import Appointment
         row = db.query(Appointment.organization_id).filter(
-            Appointment.attendee_email == email.lower().strip()
-        ).order_by(Appointment.created_at.desc()).first()
+            Appointment.id == appointment_id
+        ).first()
         if row:
             return row.organization_id
     except Exception as e:
-        logger.warning("Could not resolve org_id for email event: %s", e)
+        logger.warning("Could not resolve org_id from appointment_id %s: %s", appointment_id, e)
     return None
+
+
+def _resolve_org_id_for_email(email: str, db: Session, appointment_id: Optional[int] = None) -> Optional[int]:
+    """Resolve organization_id from the most recent appointment matching this attendee email.
+
+    Used when processing public-facing events (SendGrid webhooks, unsubscribe)
+    where we have no authenticated user context. Falls back to direct appointment
+    lookup if email-based resolution fails and appointment_id is available.
+    Returns None if no match found.
+    """
+    organization_id = None
+
+    # Primary: resolve by attendee email
+    if email:
+        try:
+            from database.models.scheduler import Appointment
+            row = db.query(Appointment.organization_id).filter(
+                Appointment.attendee_email == email.lower().strip()
+            ).order_by(Appointment.created_at.desc()).first()
+            if row:
+                organization_id = row.organization_id
+        except Exception as e:
+            logger.warning("Could not resolve org_id for email event: %s", e)
+
+    # Fallback: resolve from appointment_id if email lookup failed
+    if not organization_id and appointment_id:
+        organization_id = _resolve_org_id_from_appointment(appointment_id, db)
+
+    return organization_id
 
 
 # ============================================================================
@@ -299,10 +328,22 @@ async def sendgrid_event_webhook(request: Request, db: Session = Depends(get_db)
 
         if event_type in suppression_events and email:
             reason = event.get("reason", "") or event.get("response", "") or event_type
-            org_id = _resolve_org_id_for_email(email, db)
+
+            # Extract appointment_id from SendGrid custom args (unique_args)
+            # so we can resolve org_id even if email-based lookup fails
+            appointment_id = None
+            unique_args = event.get("unique_args", {})
+            if isinstance(unique_args, dict):
+                raw_appt_id = unique_args.get("appointment_id")
+                if raw_appt_id is not None:
+                    try:
+                        appointment_id = int(raw_appt_id)
+                    except (ValueError, TypeError):
+                        pass
+
+            org_id = _resolve_org_id_for_email(email, db, appointment_id=appointment_id)
             if org_id is None:
-                logger.warning("Could not resolve org_id for SendGrid %s event (email: %s)",
-                               event_type, email[:3] + "***")
+                logger.warning("EMAIL_EVENT_NO_ORG: event %s has no organization_id", event_type)
             add_email_suppression(
                 email=email,
                 reason=reason[:500],
@@ -338,8 +379,7 @@ async def unsubscribe_post(token: str, request: Request, db: Session = Depends(g
 
     org_id = _resolve_org_id_for_email(email, db)
     if org_id is None:
-        logger.warning("Could not resolve org_id for List-Unsubscribe event (email: %s)",
-                        email[:3] + "***")
+        logger.warning("EMAIL_EVENT_NO_ORG: event %s has no organization_id", "unsubscribe")
     add_email_suppression(
         email=email,
         reason="User unsubscribed via List-Unsubscribe",
@@ -367,8 +407,7 @@ async def unsubscribe_page(token: str, request: Request, db: Session = Depends(g
 
     org_id = _resolve_org_id_for_email(email, db)
     if org_id is None:
-        logger.warning("Could not resolve org_id for browser unsubscribe event (email: %s)",
-                        email[:3] + "***")
+        logger.warning("EMAIL_EVENT_NO_ORG: event %s has no organization_id", "unsubscribe")
     add_email_suppression(
         email=email,
         reason="User unsubscribed via browser link",

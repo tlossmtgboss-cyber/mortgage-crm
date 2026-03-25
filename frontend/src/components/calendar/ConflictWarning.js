@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 
 /**
  * ConflictWarning - Shows when creating/editing an appointment that overlaps existing ones.
@@ -53,8 +54,9 @@ const ConflictWarning = React.memo(function ConflictWarning({
   const formatTime = (isoString) => {
     if (!isoString) return '';
     try {
-      const dt = new Date(isoString);
-      return dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      const tz = getUserTimezone();
+      const dt = new Date(normalizeUTCDate(isoString));
+      return dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
     } catch {
       return isoString;
     }
@@ -63,8 +65,9 @@ const ConflictWarning = React.memo(function ConflictWarning({
   const formatDate = (isoString) => {
     if (!isoString) return '';
     try {
-      const dt = new Date(isoString);
-      return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+      const tz = getUserTimezone();
+      const dt = new Date(normalizeUTCDate(isoString));
+      return dt.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz });
     } catch {
       return isoString;
     }

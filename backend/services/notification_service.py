@@ -21,11 +21,11 @@ logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# CIRCUIT BREAKER — protects SendGrid calls from cascading failures
+# CIRCUIT BREAKER — protects external API calls from cascading failures
 # ============================================================================
 
-class SendGridCircuitBreaker:
-    """Thread-safe circuit breaker for SendGrid API calls.
+class NotificationCircuitBreaker:
+    """Thread-safe circuit breaker for external notification API calls.
 
     States:
         CLOSED   — normal operation, requests pass through
@@ -43,7 +43,8 @@ class SendGridCircuitBreaker:
     OPEN = "open"
     HALF_OPEN = "half_open"
 
-    def __init__(self, failure_threshold: int = 5, recovery_timeout: int = 60):
+    def __init__(self, provider_name: str = "SendGrid", failure_threshold: int = 5, recovery_timeout: int = 60):
+        self._provider_name = provider_name
         self._state = self.CLOSED
         self._failure_count = 0
         self._failure_threshold = failure_threshold
@@ -57,7 +58,7 @@ class SendGridCircuitBreaker:
             if self._state == self.OPEN:
                 if _time.time() - self._last_failure_time >= self._recovery_timeout:
                     self._state = self.HALF_OPEN
-                    logger.info("SendGrid circuit breaker: OPEN -> HALF_OPEN (recovery probe)")
+                    logger.info("%s circuit breaker: OPEN -> HALF_OPEN (recovery probe)", self._provider_name)
             return self._state
 
     def allow_request(self) -> bool:
@@ -68,7 +69,7 @@ class SendGridCircuitBreaker:
         with self._lock:
             self._failure_count = 0
             if self._state == self.HALF_OPEN:
-                logger.info("SendGrid circuit breaker: HALF_OPEN -> CLOSED (probe succeeded)")
+                logger.info("%s circuit breaker: HALF_OPEN -> CLOSED (probe succeeded)", self._provider_name)
             self._state = self.CLOSED
 
     def record_failure(self):
@@ -78,16 +79,25 @@ class SendGridCircuitBreaker:
             if self._failure_count >= self._failure_threshold:
                 if self._state != self.OPEN:
                     logger.warning(
-                        f"SendGrid circuit breaker: {self._state} -> OPEN "
-                        f"({self._failure_count} consecutive failures)"
+                        "%s circuit breaker: %s -> OPEN (%d consecutive failures)",
+                        self._provider_name, self._state, self._failure_count,
                     )
                 self._state = self.OPEN
 
 
-# Module-level singleton
-_sendgrid_circuit_breaker = SendGridCircuitBreaker(
+# Backward-compatible alias for any external code referencing the old name
+SendGridCircuitBreaker = NotificationCircuitBreaker
+
+# Module-level singletons — one per external provider (OBS-009)
+_sendgrid_circuit_breaker = NotificationCircuitBreaker(
+    provider_name="SendGrid",
     failure_threshold=int(os.getenv("SENDGRID_CB_THRESHOLD", "5")),
     recovery_timeout=int(os.getenv("SENDGRID_CB_TIMEOUT", "60")),
+)
+_telnyx_circuit_breaker = NotificationCircuitBreaker(
+    provider_name="Telnyx",
+    failure_threshold=int(os.getenv("TELNYX_CB_THRESHOLD", "5")),
+    recovery_timeout=int(os.getenv("TELNYX_CB_TIMEOUT", "60")),
 )
 
 # SendGrid configuration
@@ -102,6 +112,7 @@ SENDGRID_FROM_NAME = os.getenv("SENDGRID_FROM_NAME", "Sarah from Perennia AI")
 # Telnyx configuration
 TELNYX_API_KEY = (os.getenv("TELNYX_API_KEY") or "").strip()
 TELNYX_FROM_NUMBER = os.getenv("TELNYX_PHONE_NUMBER") or os.getenv("TELNYX_FROM_NUMBER")
+
 
 # Application URLs
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -849,9 +860,9 @@ class NotificationService:
     @staticmethod
     def _mask_phone(phone):
         """OBS-004: Mask phone number for safe logging."""
-        if not phone or len(phone) < 7:
+        if not phone or len(phone) < 4:
             return "***"
-        return phone[:2] + "***" + phone[-4:]
+        return f"***{phone[-4:]}"
 
     @staticmethod
     def _mask_email(email):
@@ -865,6 +876,8 @@ class NotificationService:
         self,
         to_phone: str,
         message: str,
+        skip_consent_check: bool = False,
+        organization_id: Optional[int] = None,
         **kwargs,
     ) -> Dict[str, Any]:
         """
@@ -874,19 +887,21 @@ class NotificationService:
             to_phone: Recipient phone number (E.164 format preferred)
             message: SMS message content (max 1600 chars)
             skip_consent_check: If True, bypass TCPA consent gate (default False)
+            organization_id: Org ID for scoped TCPA/DNC consent lookup
 
         Returns:
             Dict with 'success' boolean and 'message_sid' or 'error'
         """
-        # COMP-003: TCPA consent gate
-        skip_consent = kwargs.pop('skip_consent_check', False)
-        if not skip_consent:
+        # COMP-003: TCPA consent gate — centralized check so all callers
+        # (send_application_confirmation_sms, send_document_request_sms,
+        # send_reminder_sms, send_appointment_reminder_sms, etc.) are covered.
+        if not skip_consent_check:
             try:
                 from services.scheduler_sms_sender import check_sms_consent
-                can_send, reason = check_sms_consent(to_phone)
+                can_send, reason = check_sms_consent(to_phone, organization_id=organization_id)
                 if not can_send:
                     logger.info("SMS to %s blocked by TCPA consent: %s", self._mask_phone(to_phone), reason)
-                    return {"success": False, "error": f"TCPA consent blocked: {reason}"}
+                    return {"success": False, "error": f"TCPA blocked: {reason}"}
             except ImportError:
                 logger.error("TCPA consent module import failed — blocking SMS for TCPA safety")
                 return {"success": False, "error": "TCPA consent check unavailable — SMS blocked"}
@@ -904,6 +919,11 @@ class NotificationService:
                 logger.info("[DRY RUN] Would send SMS to %s: %s...", self._mask_phone(to_phone), message[:50])
                 return {"success": True, "dry_run": True}
 
+            # OBS-009: Circuit breaker — short-circuit if Telnyx is known-down
+            if not _telnyx_circuit_breaker.allow_request():
+                logger.warning("Telnyx circuit breaker OPEN — SMS to %s deferred", self._mask_phone(to_phone))
+                return {"success": False, "error": "SMS service temporarily unavailable"}
+
             import telnyx
             telnyx_from = os.getenv("TELNYX_PHONE_NUMBER") or TELNYX_FROM_NUMBER
             sms = telnyx.Message.create(
@@ -914,6 +934,7 @@ class NotificationService:
 
             msg_id = getattr(sms, 'id', None) or getattr(getattr(sms, 'data', None), 'id', None) or 'unknown'
             logger.info("SMS sent to %s: %s", self._mask_phone(to_phone), msg_id)
+            _telnyx_circuit_breaker.record_success()
 
             return {
                 "success": True,
@@ -922,6 +943,7 @@ class NotificationService:
             }
 
         except Exception as e:
+            _telnyx_circuit_breaker.record_failure()
             logger.error("Failed to send SMS to %s: %s", self._mask_phone(to_phone), str(e))
             return {"success": False, "error": "Internal server error"}
 
@@ -1476,7 +1498,7 @@ View application: {dashboard_link}"""
             finally:
                 db.close()
         except SQLAlchemyError as e:
-            logger.warning(f"Error checking opt-out status for {phone}: {e}")
+            logger.warning("Error checking opt-out status for %s: %s", self._mask_phone(phone), e)
             # Fail open - allow sending if we can't check
             return False
 

@@ -250,37 +250,27 @@ def book_appointment(
                     if contact.get("email"):
                         attendees.append(contact["email"])
 
-                    # Create event (run async function)
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # Already in async context
+                    # DATA-015: Create event (run async function safely in any context)
+                    _graph_coro = create_event_via_graph(
+                        user_id=int(user_id),
+                        subject=title,
+                        start=appt_datetime,
+                        end=appt_end,
+                        db=db,
+                        attendees=attendees if attendees else None,
+                        add_teams_link=add_teams_link,
+                        body=notes,
+                    )
+                    try:
+                        loop = asyncio.get_running_loop()
+                        # Already in async context — run in a separate thread
                         import concurrent.futures
                         with concurrent.futures.ThreadPoolExecutor() as executor:
-                            future = executor.submit(
-                                asyncio.run,
-                                create_event_via_graph(
-                                    user_id=int(user_id),
-                                    subject=title,
-                                    start=appt_datetime,
-                                    end=appt_end,
-                                    db=db,
-                                    attendees=attendees if attendees else None,
-                                    add_teams_link=add_teams_link,
-                                    body=notes,
-                                )
-                            )
+                            future = executor.submit(asyncio.run, _graph_coro)
                             graph_result = future.result()
-                    else:
-                        graph_result = asyncio.run(create_event_via_graph(
-                            user_id=int(user_id),
-                            subject=title,
-                            start=appt_datetime,
-                            end=appt_end,
-                            db=db,
-                            attendees=attendees if attendees else None,
-                            add_teams_link=add_teams_link,
-                            body=notes,
-                        ))
+                    except RuntimeError:
+                        # No running loop — safe to use asyncio.run()
+                        graph_result = asyncio.run(_graph_coro)
 
                     if graph_result.success:
                         outlook_event_id = graph_result.event_id

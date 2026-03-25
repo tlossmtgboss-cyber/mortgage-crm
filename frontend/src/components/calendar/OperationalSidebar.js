@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { schedulerAPI, tasksAPI, leadsAPI, loansAPI } from '../../services/api';
+import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 import './OperationalSidebar.css';
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
@@ -12,12 +13,13 @@ function daysBetween(dateStr) {
 
 function formatTime(iso) {
   if (!iso) return '';
-  return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const tz = getUserTimezone();
+  return new Date(normalizeUTCDate(iso)).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
 }
 
 function isPast(iso) {
   if (!iso) return false;
-  return new Date(iso) < new Date();
+  return new Date(normalizeUTCDate(iso)) < new Date();
 }
 
 // SLA targets — mirrors backend

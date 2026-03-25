@@ -4,6 +4,7 @@
  * Provides the feedback loop missing from the scheduling intelligence system.
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { calendarAnalyticsAPI } from '../../services/api';
 
 function AppointmentOutcomeDashboard() {
   const [data, setData] = useState(null);
@@ -14,8 +15,8 @@ function AppointmentOutcomeDashboard() {
     setLoading(true);
     try {
       const [outcomes, typeEffectiveness] = await Promise.all([
-        fetch(`/api/v1/scheduler/analytics/appointment-outcomes?days=${period}`).then(r => r.ok ? r.json() : null),
-        fetch(`/api/v1/scheduler/analytics/appointment-type-effectiveness?days=${period}`).then(r => r.ok ? r.json() : null),
+        calendarAnalyticsAPI.getAppointmentOutcomes({ days: period }).catch(() => null),
+        calendarAnalyticsAPI.getAppointmentTypeEffectiveness({ days: period }).catch(() => null),
       ]);
       setData({ outcomes, typeEffectiveness });
     } catch (err) {

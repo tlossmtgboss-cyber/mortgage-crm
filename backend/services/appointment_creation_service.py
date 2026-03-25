@@ -40,6 +40,24 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
+def _sanitize_and_validate_ai_context(context: Optional[Dict]) -> Optional[Dict]:
+    """Validate ai_booking_context at the persistence layer.
+
+    AGENT-002: Delegates to the schema validator in public_booking if available,
+    otherwise applies a lightweight inline check.  Returns None if input is None.
+    """
+    if context is None:
+        return None
+    try:
+        from routes.scheduler.public_booking import _sanitize_ai_context
+        return _sanitize_ai_context(context)
+    except ImportError:
+        # Fallback: if the import fails (e.g. in tests), pass through with a
+        # warning — the schema validation is best-effort at this layer.
+        logger.warning("Could not import _sanitize_ai_context; passing ai_booking_context through unsanitized")
+        return context
+
+
 # =============================================================================
 # RESULT TYPE
 # =============================================================================
@@ -260,6 +278,115 @@ def _check_duplicate(
             f"for {_mask_email(attendee_email)}"
         )
         return f"A booking for this email already exists at this time (appointment #{duplicate.id})."
+
+    return None
+
+
+def _check_daily_capacity(
+    db: Session,
+    organization_id: int,
+    assigned_user_id: int,
+    appointment_date: datetime,
+    appointment_type_id: Optional[int] = None,
+) -> Optional[str]:
+    """Check if the user has exceeded their daily appointment capacity.
+
+    Enforces two levels of capacity limits:
+      1. Per-type limit: SchedulerAppointmentType.max_per_day (if configured)
+      2. Overall user limit: SchedulerConfig.max_meetings_per_day (default 12)
+
+    Returns an error message if capacity is exceeded, None otherwise.
+    """
+    from sqlalchemy import and_, func
+    from datetime import time as _time
+
+    Appointment = _get_appointment_model()
+    if not Appointment:
+        return None  # Cannot check without the model
+
+    try:
+        from smart_scheduler_models import AppointmentStatus
+        excluded_statuses = [
+            AppointmentStatus.CANCELLED.value,
+            AppointmentStatus.NO_SHOW.value,
+            AppointmentStatus.RESCHEDULED.value,
+        ]
+    except ImportError:
+        excluded_statuses = ["cancelled", "no_show", "rescheduled"]
+
+    appt_date = appointment_date.date() if hasattr(appointment_date, 'date') else appointment_date
+    day_start = datetime.combine(appt_date, _time.min)
+    day_end = day_start + timedelta(days=1)
+    # Preserve timezone if present on the input
+    if hasattr(appointment_date, 'tzinfo') and appointment_date.tzinfo is not None:
+        day_start = day_start.replace(tzinfo=appointment_date.tzinfo)
+        day_end = day_end.replace(tzinfo=appointment_date.tzinfo)
+
+    base_filters = [
+        Appointment.assigned_user_id == assigned_user_id,
+        Appointment.organization_id == organization_id,
+        Appointment.status.notin_(excluded_statuses),
+        Appointment.scheduled_start >= day_start,
+        Appointment.scheduled_start < day_end,
+    ]
+
+    # --- Check 1: Per-type daily limit ---
+    if appointment_type_id:
+        try:
+            from services.appointment._models import get_model
+            AppointmentType = get_model("SchedulerAppointmentType")
+            if AppointmentType:
+                appt_type = db.query(AppointmentType).filter(
+                    AppointmentType.id == appointment_type_id,
+                    AppointmentType.organization_id == organization_id,
+                ).first()
+                type_max = getattr(appt_type, 'max_per_day', None) if appt_type else None
+                if type_max is not None:
+                    type_count = (
+                        db.query(func.count(Appointment.id))
+                        .filter(and_(
+                            *base_filters,
+                            Appointment.appointment_type_id == appointment_type_id,
+                        ))
+                        .scalar()
+                    ) or 0
+                    if type_count >= type_max:
+                        return (
+                            f"Daily capacity reached for this appointment type "
+                            f"({type_count}/{type_max}). Please choose another day."
+                        )
+        except Exception as e:
+            logger.debug(f"Per-type capacity check skipped: {e}")
+
+    # --- Check 2: Overall user daily limit from SchedulerConfig ---
+    overall_max = 12  # Sensible default: prevents unbounded booking
+    SchedulerConfig = _get_scheduler_config_model()
+    if SchedulerConfig:
+        try:
+            config = (
+                db.query(SchedulerConfig)
+                .filter(
+                    SchedulerConfig.user_id == assigned_user_id,
+                    SchedulerConfig.organization_id == organization_id,
+                )
+                .first()
+            )
+            if config and getattr(config, 'max_meetings_per_day', None):
+                overall_max = config.max_meetings_per_day
+        except Exception as e:
+            logger.debug(f"Could not fetch SchedulerConfig for capacity check: {e}")
+
+    total_count = (
+        db.query(func.count(Appointment.id))
+        .filter(and_(*base_filters))
+        .scalar()
+    ) or 0
+
+    if total_count >= overall_max:
+        return (
+            f"Daily appointment capacity reached ({total_count}/{overall_max}). "
+            f"Please choose another day."
+        )
 
     return None
 
@@ -583,6 +710,7 @@ async def create_appointment(
     # ---- control flags ----
     check_conflicts: bool = True,
     check_cross_source: bool = True,
+    check_capacity: bool = True,
     generate_meeting_link: bool = True,
     send_confirmation: bool = True,
     create_lead_if_missing: bool = False,
@@ -598,14 +726,15 @@ async def create_appointment(
       2. Check for internal conflicts (SELECT FOR UPDATE).
       3. Check for duplicate bookings (same email + LO + time window).
       4. Optionally check cross-source calendar conflicts.
-      5. Create the Appointment ORM instance and flush (get ID).
-      6. Optionally generate a virtual meeting link.
-      7. Optionally create or link a Lead record.
-      8. Log a CRM Activity for the appointment.
-      9. Create a follow-up Task.
-     10. Write an audit log entry.
-     11. Commit the transaction (unless auto_commit=False).
-     12. Return the result with the persisted appointment.
+      5. Check daily capacity limits (per-type and overall user limit).
+      6. Create the Appointment ORM instance and flush (get ID).
+      7. Optionally generate a virtual meeting link.
+      8. Optionally create or link a Lead record.
+      9. Log a CRM Activity for the appointment.
+     10. Create a follow-up Task.
+     11. Write an audit log entry.
+     12. Commit the transaction (unless auto_commit=False).
+     13. Return the result with the persisted appointment.
 
     The caller is responsible for:
       - Sending confirmation emails / SMS (path-specific templates and fallbacks)
@@ -644,6 +773,8 @@ async def create_appointment(
         external_source: External origin label (e.g. "booking_link", "pipeline_stage_change").
         check_conflicts: If True, run SELECT FOR UPDATE conflict check + duplicate check.
         check_cross_source: If True, also check legacy, CalendarEvent, CRM sources.
+        check_capacity: If True, enforce daily capacity limits (per-type max_per_day
+            and overall SchedulerConfig.max_meetings_per_day, default 12).
         generate_meeting_link: If True, auto-generate meeting link for video appointments.
         send_confirmation: Reserved for future use (callers currently handle this).
         create_lead_if_missing: If True, create/link a Lead record for the attendee.
@@ -698,14 +829,25 @@ async def create_appointment(
             return AppointmentCreationResult(success=False, error=cross_error)
 
     # -------------------------------------------------------------------------
-    # 4. Parse enums
+    # 4. Daily capacity check (per-type and overall user limit)
+    # -------------------------------------------------------------------------
+    if check_capacity:
+        capacity_error = _check_daily_capacity(
+            db, organization_id, assigned_user_id,
+            scheduled_start, appointment_type_id,
+        )
+        if capacity_error:
+            return AppointmentCreationResult(success=False, error=capacity_error)
+
+    # -------------------------------------------------------------------------
+    # 5. Parse enums
     # -------------------------------------------------------------------------
     parsed_meeting_type = _safe_enum_parse("MeetingType", meeting_type, "custom")
     parsed_meeting_mode = _safe_enum_parse("MeetingMode", meeting_mode, "video")
     parsed_status = _safe_enum_parse("AppointmentStatus", "booked", "booked")
 
     # -------------------------------------------------------------------------
-    # 5. Create Appointment model instance
+    # 6. Create Appointment model instance
     # -------------------------------------------------------------------------
     Appointment = _get_appointment_model()
     if not Appointment:
@@ -738,7 +880,7 @@ async def create_appointment(
         status=parsed_status,
         status_changed_at=datetime.now(timezone_module_utc()),
         booked_by_ai=booked_by_ai,
-        ai_booking_context=ai_booking_context,
+        ai_booking_context=_sanitize_and_validate_ai_context(ai_booking_context),
         internal_notes=internal_notes,
         external_source=external_source,
     )
@@ -775,7 +917,7 @@ async def create_appointment(
     )
 
     # -------------------------------------------------------------------------
-    # 6. Auto-generate meeting link for video appointments
+    # 7. Auto-generate meeting link for video appointments
     # -------------------------------------------------------------------------
     video_link = None
     if generate_meeting_link and parsed_meeting_mode:
@@ -794,7 +936,7 @@ async def create_appointment(
                 warnings.append("Could not auto-generate meeting link")
 
     # -------------------------------------------------------------------------
-    # 7. CRM: Create or link Lead
+    # 8. CRM: Create or link Lead
     # -------------------------------------------------------------------------
     linked_lead_id = lead_id
     if create_lead_if_missing and not appointment.lead_id and attendee_email:
@@ -807,7 +949,7 @@ async def create_appointment(
             appointment.lead_id = linked_lead_id
 
     # -------------------------------------------------------------------------
-    # 8. CRM: Log activity
+    # 9. CRM: Log activity
     # -------------------------------------------------------------------------
     _log_appointment_activity(
         db, organization_id,
@@ -821,7 +963,7 @@ async def create_appointment(
     )
 
     # -------------------------------------------------------------------------
-    # 9. CRM: Create follow-up task
+    # 10. CRM: Create follow-up task
     # -------------------------------------------------------------------------
     if scheduled_end:
         _create_followup_task(
@@ -838,12 +980,12 @@ async def create_appointment(
         )
 
     # -------------------------------------------------------------------------
-    # 10. Schedule reminders for the appointment
+    # 11. Schedule reminders for the appointment
     # -------------------------------------------------------------------------
     _schedule_reminders(db, appointment, organization_id)
 
     # -------------------------------------------------------------------------
-    # 11. Commit the transaction (unless caller manages its own)
+    # 12. Commit the transaction (unless caller manages its own)
     # -------------------------------------------------------------------------
     if auto_commit:
         db.commit()

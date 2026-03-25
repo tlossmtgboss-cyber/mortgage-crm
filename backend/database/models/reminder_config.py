@@ -119,6 +119,7 @@ class ReminderLog(Base):
         Index("ix_reminder_logs_appointment", "appointment_id"),
         Index("ix_reminder_logs_template", "template_id"),
         Index("ix_reminder_logs_sent_at", "sent_at"),
+        Index("ix_reminder_logs_created_at", "created_at"),
         {"extend_existing": True},
     )
 
@@ -138,9 +139,12 @@ class ReminderLog(Base):
     # Channel used for this specific send
     channel = Column(String(10), nullable=False)  # "email" or "sms"
 
-    # Delivery
-    sent_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    status = Column(String(20), nullable=False, default="sent")  # sent, failed, skipped
+    # Record creation (set once when the log row is first written)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    # Delivery (sent_at is set only when status transitions to "sent")
+    sent_at = Column(DateTime, nullable=True)
+    status = Column(String(20), nullable=False, default="pending")  # pending, sent, failed, skipped
     error_message = Column(Text, nullable=True)
 
     # External provider reference (SendGrid message ID, Telnyx SMS ID)

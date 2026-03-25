@@ -85,6 +85,7 @@ async def update_appointment(
     write_audit_log,
     emit_event,
     serialize_appointment,
+    background_tasks=None,
 ) -> AppointmentResult:
     """
     Update an appointment. Handles status transitions, rescheduling detection,
@@ -218,10 +219,13 @@ async def update_appointment(
     )
     db.commit()
 
-    # Send update notifications
+    # PERF-007: Send update notifications in background when possible
     send_notification = data.get("send_notification", True)
     if send_notification and is_reschedule and appointment.attendee_email:
-        await _send_update_notification(appointment)
+        if background_tasks is not None:
+            background_tasks.add_task(_send_update_notification, appointment)
+        else:
+            await _send_update_notification(appointment)
 
     # Emit appropriate event
     event = AppointmentEvent.RESCHEDULED if is_reschedule else AppointmentEvent.UPDATED
@@ -253,6 +257,7 @@ async def cancel_appointment(
     *,
     write_audit_log,
     emit_event,
+    background_tasks=None,
 ) -> AppointmentResult:
     """
     Cancel an appointment, notify attendees, and log the cancellation.
@@ -309,9 +314,12 @@ async def cancel_appointment(
 
     db.commit()
 
-    # Send cancellation notifications
+    # PERF-007: Send cancellation notifications in background when possible
     if send_notification and appointment.attendee_email:
-        await _send_cancellation_notification(appointment)
+        if background_tasks is not None:
+            background_tasks.add_task(_send_cancellation_notification, appointment)
+        else:
+            await _send_cancellation_notification(appointment)
 
     emit_event(AppointmentEvent.CANCELLED, {
         "appointment_id": appointment_id,

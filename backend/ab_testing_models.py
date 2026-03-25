@@ -36,6 +36,7 @@ class Experiment(Base):
     __tablename__ = "ab_experiments"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)  # "Lead Qualification Prompt Test"
     description = Column(Text)  # Detailed explanation
     # Use native_enum=False to store as VARCHAR (matches migration schema)

@@ -1,5 +1,6 @@
 import React, { useMemo, useCallback, useRef, useEffect, useState } from 'react';
 import { EventBoundary } from './EventErrorFallback';
+import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 
 /**
  * DAY_VIEW_HOURS - Time slots from 6 AM to 9 PM (inclusive).
@@ -137,12 +138,13 @@ const DayView = React.memo(function DayView({
     });
   }, [currentDate, timedEvents, getEventsForDateAndHour]);
 
-  // Format event time range
+  // Format event time range -- timezone-aware
   const formatEventTime = useCallback((startTime, endTime) => {
-    const start = new Date(startTime);
-    const end = new Date(endTime);
-    const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-    const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    const start = new Date(normalizeUTCDate(startTime));
+    const end = new Date(normalizeUTCDate(endTime));
+    const tz = getUserTimezone();
+    const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
+    const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
     const durationMs = end - start;
     const durationMins = Math.round(durationMs / 60000);
     let durationStr;

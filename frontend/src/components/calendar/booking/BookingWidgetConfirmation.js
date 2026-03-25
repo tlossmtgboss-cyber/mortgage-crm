@@ -27,8 +27,8 @@ export default function BookingWidgetConfirmation({
   if (!confirmedBooking) return null;
 
   return (
-    <div style={styles.confirmContainer}>
-      <div style={{ ...styles.checkCircle, borderColor: accentColor }}>
+    <div style={styles.confirmContainer} role="status" aria-live="polite">
+      <div style={{ ...styles.checkCircle, borderColor: accentColor }} aria-hidden="true">
         <svg
           width="32"
           height="32"
@@ -36,6 +36,7 @@ export default function BookingWidgetConfirmation({
           fill="none"
           stroke={accentColor}
           strokeWidth="3"
+          aria-hidden="true"
         >
           <path d="M5 13l4 4L19 7" />
         </svg>
@@ -43,7 +44,25 @@ export default function BookingWidgetConfirmation({
       <h3 style={styles.confirmTitle}>Appointment Confirmed</h3>
       <p style={styles.confirmSubtitle}>A confirmation email has been sent.</p>
 
-      <div style={styles.confirmDetails}>
+      {/* Screen reader summary (visually hidden) */}
+      <div style={{
+        position: 'absolute',
+        width: '1px',
+        height: '1px',
+        padding: 0,
+        margin: '-1px',
+        overflow: 'hidden',
+        clip: 'rect(0, 0, 0, 0)',
+        whiteSpace: 'nowrap',
+        borderWidth: 0,
+      }}>
+        Your appointment has been confirmed
+        {confirmedBooking.date && ` for ${formatFullDate(confirmedBooking.date)}`}
+        {confirmedBooking.time && ` at ${formatTime(confirmedBooking.time)}`}.
+        A confirmation email has been sent.
+      </div>
+
+      <div style={styles.confirmDetails} aria-label="Appointment details">
         <div style={styles.confirmRow}>
           <span style={styles.confirmLabel}>Date</span>
           <span style={styles.confirmValue}>
@@ -68,6 +87,7 @@ export default function BookingWidgetConfirmation({
 
       <button
         onClick={onScheduleAnother}
+        aria-label="Schedule another appointment"
         style={{
           ...styles.secondaryBtn,
           borderColor: accentColor,

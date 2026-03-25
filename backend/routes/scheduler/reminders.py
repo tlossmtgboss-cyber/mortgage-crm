@@ -16,11 +16,15 @@ from sqlalchemy import desc
 from datetime import datetime, timezone
 from typing import Optional
 import logging
+import re
 
 from routes.scheduler._helpers import get_current_user, get_models, _get_org_id, _audit_log
 from db import get_db
 
 logger = logging.getLogger(__name__)
+
+# SEC-007: Email format validation for test endpoints
+_EMAIL_REGEX = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
 
 router = APIRouter()
 
@@ -400,6 +404,11 @@ async def send_test_reminder(
     # Send via configured channels
     override_email = body.get("email") or getattr(user, "email", None)
     override_phone = body.get("phone")
+
+    # SEC-007: Validate email format before sending
+    if override_email:
+        if not _EMAIL_REGEX.match(override_email) or len(override_email) > 254:
+            raise HTTPException(status_code=422, detail="Invalid email format")
 
     if template.channel in ("email", "both") and override_email:
         email_result = ReminderService._send_email(override_email, rendered_subject, rendered_body)

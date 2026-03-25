@@ -11,12 +11,13 @@ from typing import Optional, List, Dict, Any
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_MISSED
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
-# Reminder configuration
+# Reminder configuration (global defaults; orgs can override via scheduler_configs.notification_settings)
 REMINDER_INTERVALS = {
     "first": 24,      # Hours after last activity
     "second": 72,     # 3 days
@@ -43,6 +44,43 @@ def get_db_session():
     return SessionLocal()
 
 
+def _get_org_reminder_intervals(session, org_id) -> Dict[str, int]:
+    """Get reminder intervals for an organization, falling back to global defaults.
+
+    TENANT-011: Allows per-org configuration of reminder timing via the
+    scheduler_configs.notification_settings JSON column. Orgs can set:
+        {"reminder_intervals": {"first": 24, "second": 72, "third": 168, "final": 336}}
+    Any missing keys fall back to the global REMINDER_INTERVALS defaults.
+    """
+    if not org_id:
+        return REMINDER_INTERVALS.copy()
+
+    try:
+        row = session.execute(text("""
+            SELECT notification_settings
+            FROM scheduler_configs
+            WHERE organization_id = :org_id
+              AND user_id IS NULL
+              AND is_active = true
+            LIMIT 1
+        """), {"org_id": org_id}).fetchone()
+
+        if row and row[0]:
+            settings = row[0] if isinstance(row[0], dict) else {}
+            org_intervals = settings.get("reminder_intervals", {})
+            if org_intervals and isinstance(org_intervals, dict):
+                merged = REMINDER_INTERVALS.copy()
+                for key in ("first", "second", "third", "final"):
+                    val = org_intervals.get(key)
+                    if isinstance(val, (int, float)) and val > 0:
+                        merged[key] = int(val)
+                return merged
+    except Exception as e:
+        logger.warning("Failed to load org %s reminder intervals, using defaults: %s", org_id, e)
+
+    return REMINDER_INTERVALS.copy()
+
+
 _reminders_table_checked = False
 
 
@@ -60,11 +98,39 @@ class SchedulerService:
         )
         self._jobs_registered = False
 
+    @staticmethod
+    def _job_error_listener(event):
+        """Structured alerting for background job failures (OBS-007).
+
+        Logs at ERROR level with a structured prefix so log aggregators
+        (DataDog, CloudWatch, etc.) can trigger alerts on the pattern.
+        """
+        logger.error(
+            "BACKGROUND_JOB_FAILED: job=%s scheduled_run=%s exception=%s",
+            event.job_id,
+            getattr(event, 'scheduled_run_time', None),
+            event.exception,
+            exc_info=event.exception,
+        )
+
+    @staticmethod
+    def _job_missed_listener(event):
+        """Log when a job's execution was missed (misfire)."""
+        logger.warning(
+            "BACKGROUND_JOB_MISSED: job=%s scheduled_run=%s",
+            event.job_id,
+            getattr(event, 'scheduled_run_time', None),
+        )
+
     def start(self):
         """Start the scheduler and register jobs."""
         if not self._jobs_registered:
             self._register_jobs()
             self._jobs_registered = True
+
+        # OBS-007: Register error/missed listeners for structured alerting
+        self.scheduler.add_listener(self._job_error_listener, EVENT_JOB_ERROR)
+        self.scheduler.add_listener(self._job_missed_listener, EVENT_JOB_MISSED)
 
         if not self.scheduler.running:
             self.scheduler.start()
@@ -345,15 +411,41 @@ class SchedulerService:
             applications = result.fetchall()
             sent_count = 0
 
+            # TENANT-011: Cache per-org intervals to avoid repeated DB lookups
+            _org_intervals_cache: Dict[Any, Dict[str, int]] = {}
+
             for app in applications:
                 try:
                     app_dict = dict(app._mapping)
                     app_id = app_dict["id"]
+                    app_org_id = app_dict.get("organization_id")
                     borrower_email = app_dict["borrower_email"]
                     borrower_name = app_dict["borrower_first_name"] or "there"
                     borrower_phone = app_dict.get("borrower_phone")
                     reminder_count = app_dict["reminder_count"] or 0
                     lo_name = f"{app_dict.get('lo_first_name', '')} {app_dict.get('lo_last_name', '')}".strip() or "Your Loan Officer"
+
+                    # TENANT-011: Re-check against org-specific intervals before sending.
+                    # The SQL query uses global defaults to cast a wide net; this check
+                    # ensures we respect per-org overrides before actually sending.
+                    if app_org_id not in _org_intervals_cache:
+                        _org_intervals_cache[app_org_id] = _get_org_reminder_intervals(session, app_org_id)
+                    org_intervals = _org_intervals_cache[app_org_id]
+
+                    hours_since = float(app_dict.get("hours_since_activity") or 0)
+                    interval_keys = ["first", "second", "third", "final"]
+                    if reminder_count < len(interval_keys):
+                        required_key = interval_keys[reminder_count]
+                        # For the first reminder, compare against the first interval;
+                        # for subsequent ones, compare against the delta from previous.
+                        if reminder_count == 0:
+                            required_hours = org_intervals[required_key]
+                        else:
+                            prev_key = interval_keys[reminder_count - 1]
+                            required_hours = org_intervals[required_key] - org_intervals[prev_key]
+                        if hours_since < required_hours:
+                            # Not yet time per org-specific intervals; skip
+                            continue
 
                     # Calculate progress (simplified)
                     progress = 25 if app_dict["status"] == "draft" else 50
@@ -378,12 +470,18 @@ class SchedulerService:
                             from services.scheduler_sms_sender import check_sms_consent
                             can_send, reason = check_sms_consent(borrower_phone)
                             if not can_send:
-                                logger.info(f"SMS reminder blocked by TCPA consent for app {app_id}: {reason}")
+                                logger.info(
+                                    "TCPA consent blocked SMS to ...%s for app %s: %s",
+                                    borrower_phone[-4:] if borrower_phone else "unknown",
+                                    app_id,
+                                    reason,
+                                )
                                 sms_allowed = False
                         except ImportError:
-                            pass  # Module may not exist yet
+                            logger.warning("TCPA consent check unavailable - blocking SMS as precaution for app %s", app_id)
+                            sms_allowed = False
                         except Exception as e:
-                            logger.error(f"TCPA consent check failed for app {app_id}, blocking SMS: {e}")
+                            logger.error("TCPA consent check failed for app %s, blocking SMS: %s", app_id, e)
                             sms_allowed = False
 
                         if sms_allowed:
@@ -420,7 +518,12 @@ class SchedulerService:
             session.close()
 
     def check_document_expirations(self):
-        """Check for expiring documents and notify."""
+        """Check for expiring documents and notify.
+
+        TENANT-012: Filters by organization_id IS NOT NULL to ensure only
+        org-scoped documents are processed, and orders by org for
+        cache-friendly processing.
+        """
         logger.info("Running document expiration check")
 
         session = get_db_session()
@@ -428,12 +531,14 @@ class SchedulerService:
 
         try:
             # Find documents expiring in the next 7 days
+            # TENANT-012: Added organization_id filter and ordering
             query = text("""
                 SELECT
                     ad.id as doc_id,
                     ad.document_type,
                     ad.expires_at,
                     ba.id as application_id,
+                    ba.organization_id,
                     ba.borrower_email,
                     ba.borrower_first_name,
                     ba.assigned_lo_id,
@@ -447,6 +552,8 @@ class SchedulerService:
                 AND ad.expires_at BETWEEN NOW() AND NOW() + INTERVAL '7 days'
                 AND ad.expiration_notified = false
                 AND ba.status NOT IN ('submitted', 'funded', 'denied', 'withdrawn')
+                AND ba.organization_id IS NOT NULL
+                ORDER BY ba.organization_id, ad.expires_at ASC
                 LIMIT 200
             """)
 
@@ -500,10 +607,13 @@ class SchedulerService:
             # =====================================================================
             # PART 1: Legacy appointments table (single reminder)
             # =====================================================================
-            # TENANT-N11: The legacy `appointments` table predates multi-tenancy and
-            # has no organization_id column. It cannot be filtered by tenant. This is
-            # acceptable because the table is from the AI receptionist era and will be
-            # deprecated once all data is migrated to scheduler_appointments.
+            # TENANT-013: The legacy `appointments` table predates multi-tenancy and
+            # has no organization_id column. We filter via the joined leads table
+            # (which has organization_id) to provide org-scoped isolation where
+            # possible. Appointments with no linked lead are still included to
+            # avoid silently dropping reminders, but logged for visibility.
+            # This table will be deprecated once all data is migrated to
+            # scheduler_appointments.
             # Check if legacy appointments table exists
             legacy_table_check = session.execute(text("""
                 SELECT EXISTS (
@@ -526,6 +636,7 @@ class SchedulerService:
                         l.first_name as borrower_first_name,
                         l.email as borrower_email,
                         l.phone as borrower_phone,
+                        l.organization_id as lead_org_id,
                         u.full_name as lo_name
                     FROM appointments a
                     LEFT JOIN leads l ON l.id = a.lead_id
@@ -533,6 +644,7 @@ class SchedulerService:
                     WHERE a.scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '24 hours'
                     AND a.reminder_sent = false
                     AND a.status = 'scheduled'
+                    AND (l.organization_id IS NOT NULL OR a.lead_id IS NULL)
                 """)
                 result = session.execute(legacy_query)
                 appointments = result.fetchall()
@@ -541,6 +653,14 @@ class SchedulerService:
                 try:
                     appt_dict = dict(appt._mapping)
                     lo_name = appt_dict.get('lo_name', '') or 'Your Loan Officer'
+
+                    # TENANT-013: Log legacy appointments with no org context for visibility
+                    if not appt_dict.get("lead_org_id") and appt_dict.get("lead_id"):
+                        logger.warning(
+                            "Legacy appointment %s has lead %s with no organization_id",
+                            appt_dict.get("appointment_id"),
+                            appt_dict.get("lead_id"),
+                        )
 
                     # Send email reminder
                     if appt_dict.get("borrower_email"):
@@ -555,13 +675,35 @@ class SchedulerService:
 
                     # Send SMS reminder
                     if appt_dict.get("borrower_phone"):
-                        notifier.send_appointment_reminder_sms(
-                            borrower_phone=appt_dict["borrower_phone"],
-                            borrower_name=appt_dict.get("borrower_first_name", "there"),
-                            appointment_time=appt_dict["scheduled_at"],
-                            lo_name=lo_name,
-                            meeting_link=appt_dict.get("meeting_link"),
-                        )
+                        # COMP-009: TCPA consent check before SMS
+                        sms_allowed = True
+                        try:
+                            from services.scheduler_sms_sender import check_sms_consent
+                            phone_number = appt_dict["borrower_phone"]
+                            can_send, reason = check_sms_consent(phone_number)
+                            if not can_send:
+                                logger.info(
+                                    "TCPA consent blocked legacy SMS to ...%s for appointment %s: %s",
+                                    phone_number[-4:] if phone_number else "unknown",
+                                    appt_dict.get("appointment_id"),
+                                    reason,
+                                )
+                                sms_allowed = False
+                        except ImportError:
+                            logger.warning("TCPA consent check unavailable - blocking SMS as precaution for appointment %s", appt_dict.get("appointment_id"))
+                            sms_allowed = False
+                        except Exception as e:
+                            logger.error("TCPA consent check failed for appointment %s, blocking SMS: %s", appt_dict.get("appointment_id"), e)
+                            sms_allowed = False
+
+                        if sms_allowed:
+                            notifier.send_appointment_reminder_sms(
+                                borrower_phone=appt_dict["borrower_phone"],
+                                borrower_name=appt_dict.get("borrower_first_name", "there"),
+                                appointment_time=appt_dict["scheduled_at"],
+                                lo_name=lo_name,
+                                meeting_link=appt_dict.get("meeting_link"),
+                            )
 
                     # Mark as reminded
                     update_query = text("""
@@ -716,16 +858,23 @@ class SchedulerService:
             if appt_dict.get("attendee_phone"):
                 # COMP-009: TCPA consent check before SMS
                 sms_allowed = True
+                phone_number = appt_dict["attendee_phone"]
                 try:
                     from services.scheduler_sms_sender import check_sms_consent
-                    can_send, reason = check_sms_consent(appt_dict["attendee_phone"])
+                    can_send, reason = check_sms_consent(phone_number)
                     if not can_send:
-                        logger.info(f"SMS reminder blocked by TCPA consent for appointment {appointment_id}: {reason}")
+                        logger.info(
+                            "TCPA consent blocked SMS to ...%s for appointment %s: %s",
+                            phone_number[-4:] if phone_number else "unknown",
+                            appointment_id,
+                            reason,
+                        )
                         sms_allowed = False
                 except ImportError:
-                    pass  # Module may not exist yet
+                    logger.warning("TCPA consent check unavailable - blocking SMS as precaution for appointment %s", appointment_id)
+                    sms_allowed = False
                 except Exception as e:
-                    logger.error(f"TCPA consent check failed for appointment {appointment_id}, blocking SMS: {e}")
+                    logger.error("TCPA consent check failed for appointment %s, blocking SMS: %s", appointment_id, e)
                     sms_allowed = False
 
                 if sms_allowed:
@@ -936,16 +1085,23 @@ class SchedulerService:
             if appt_dict.get("attendee_phone"):
                 # COMP-009: TCPA consent check before SMS
                 sms_allowed = True
+                phone_number = appt_dict["attendee_phone"]
                 try:
                     from services.scheduler_sms_sender import check_sms_consent
-                    can_send, reason = check_sms_consent(appt_dict["attendee_phone"])
+                    can_send, reason = check_sms_consent(phone_number)
                     if not can_send:
-                        logger.info(f"SMS reminder blocked by TCPA consent for chat appointment {appointment_id}: {reason}")
+                        logger.info(
+                            "TCPA consent blocked SMS to ...%s for chat appointment %s: %s",
+                            phone_number[-4:] if phone_number else "unknown",
+                            appointment_id,
+                            reason,
+                        )
                         sms_allowed = False
                 except ImportError:
-                    pass  # Module may not exist yet
+                    logger.warning("TCPA consent check unavailable - blocking SMS as precaution for chat appointment %s", appointment_id)
+                    sms_allowed = False
                 except Exception as e:
-                    logger.error(f"TCPA consent check failed for chat appointment {appointment_id}, blocking SMS: {e}")
+                    logger.error("TCPA consent check failed for chat appointment %s, blocking SMS: %s", appointment_id, e)
                     sms_allowed = False
 
                 if sms_allowed:

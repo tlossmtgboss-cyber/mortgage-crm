@@ -145,6 +145,56 @@ def slot_conflicts_with_holds(
     return conflict is not None
 
 
+def load_active_holds(
+    db: Session,
+    organization_id: int,
+    lo_id: int,
+    range_start: datetime,
+    range_end: datetime,
+) -> list:
+    """
+    Batch-load all active, non-expired holds for a user within a date range.
+
+    PERF-012: Replaces per-slot calls to slot_conflicts_with_holds() with a
+    single query. The caller can then check conflicts in memory using
+    slot_conflicts_with_loaded_holds().
+
+    Returns a list of (start_time, end_time) tuples.
+    """
+    DbSlotHold = get_model("SlotHold")
+    if not DbSlotHold:
+        return []
+
+    now = datetime.now(timezone.utc)
+    holds = db.query(DbSlotHold).filter(
+        DbSlotHold.lo_id == lo_id,
+        DbSlotHold.organization_id == organization_id,
+        DbSlotHold.status == "active",
+        DbSlotHold.expires_at > now,
+        DbSlotHold.start_time < range_end,
+        DbSlotHold.end_time > range_start,
+    ).all()
+
+    return [(h.start_time, h.end_time) for h in holds]
+
+
+def slot_conflicts_with_loaded_holds(
+    holds: list,
+    slot_start: datetime,
+    slot_end: datetime,
+) -> bool:
+    """
+    Check if a proposed slot conflicts with any pre-loaded holds (in-memory).
+
+    PERF-012: O(N) in-memory check instead of a DB query per slot.
+    `holds` is a list of (start_time, end_time) tuples from load_active_holds().
+    """
+    for hold_start, hold_end in holds:
+        if slot_start < hold_end and slot_end > hold_start:
+            return True
+    return False
+
+
 def release_holds_for_slot(
     db: Session,
     organization_id: int,

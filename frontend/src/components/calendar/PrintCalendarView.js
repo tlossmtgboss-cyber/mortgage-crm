@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { normalizeUTCDate, getUserTimezone, getTimezoneAbbreviation } from './calendarUtils';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const DAY_ABBR = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -9,11 +10,13 @@ const MONTH_NAMES = [
 
 /**
  * formatPrintTime - Format a date/time for print display (e.g., "9:30 AM").
+ * Timezone-aware: uses user's configured timezone.
  */
 const formatPrintTime = (dateStr) => {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const d = new Date(normalizeUTCDate(dateStr));
+  const tz = getUserTimezone();
+  return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
 };
 
 /**
@@ -134,10 +137,12 @@ const PrintCalendarView = React.memo(function PrintCalendarView({
     return weeks;
   }, [currentDate, view]);
 
+  const tz = getUserTimezone();
   const printTimestamp = new Date().toLocaleString('en-US', {
     month: 'short', day: 'numeric', year: 'numeric',
     hour: 'numeric', minute: '2-digit', hour12: true,
-  });
+    timeZone: tz,
+  }) + ` ${getTimezoneAbbreviation()}`;
 
   // ---- Render an event row in the weekly table ----
   const renderEventRow = (event) => {

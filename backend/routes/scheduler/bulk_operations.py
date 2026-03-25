@@ -351,14 +351,26 @@ async def bulk_create_appointments(
     )
 
     # Post-commit: send confirmation emails (best-effort, non-blocking)
-    if payload.send_notifications:
+    if payload.send_notifications and created_appointments:
+        # PERF-006: Batch-load all assigned users to avoid N+1 queries
+        User = _models.get('User')
+        assigned_user_ids = list({
+            entry['appointment'].assigned_user_id
+            for entry in created_appointments
+            if entry['appointment'].assigned_user_id
+        })
+        users_map = {}
+        if assigned_user_ids and User:
+            users = db.query(User).filter(User.id.in_(assigned_user_ids)).all()
+            users_map = {u.id: u for u in users}
+
         for entry in created_appointments:
             try:
                 appt = entry['appointment']
                 item = entry['item']
                 db.refresh(appt)  # Ensure we have committed state
                 if item.attendee_email:
-                    _send_create_notification(db, _models, appt, item, org_id)
+                    _send_create_notification(db, _models, appt, item, org_id, users_map=users_map)
             except Exception as e:
                 logger.warning(f"Bulk create notification failed for appointment {entry.get('appointment', {})}: {e}")
 
@@ -508,11 +520,22 @@ async def bulk_cancel_appointments(
     )
 
     # Post-commit: send cancellation notifications (best-effort)
-    if payload.send_notifications:
+    if payload.send_notifications and cancelled_details:
         User = _models['User']
+        # PERF-006: Batch-load all assigned users to avoid N+1 queries
+        cancel_user_ids = list({
+            info['assigned_user_id']
+            for info in cancelled_details
+            if info['assigned_user_id']
+        })
+        users_map = {}
+        if cancel_user_ids:
+            users = db.query(User).filter(User.id.in_(cancel_user_ids)).all()
+            users_map = {u.id: u for u in users}
+
         for info in cancelled_details:
             try:
-                _send_cancel_notification(db, User, info, payload.reason, org_id, user)
+                _send_cancel_notification(db, User, info, payload.reason, org_id, user, users_map=users_map)
             except Exception as e:
                 logger.warning(
                     f"Bulk cancel notification failed for appointment {info['appointment_id']}: {e}"
@@ -667,11 +690,22 @@ async def bulk_reschedule_appointments(
     )
 
     # Post-commit: send update notifications (best-effort)
-    if payload.send_notifications:
+    if payload.send_notifications and rescheduled_details:
         User = _models['User']
+        # PERF-006: Batch-load all assigned users to avoid N+1 queries
+        reschedule_user_ids = list({
+            info['assigned_user_id']
+            for info in rescheduled_details
+            if info['assigned_user_id']
+        })
+        users_map = {}
+        if reschedule_user_ids:
+            users = db.query(User).filter(User.id.in_(reschedule_user_ids)).all()
+            users_map = {u.id: u for u in users}
+
         for info in rescheduled_details:
             try:
-                _send_reschedule_notification(db, User, info, org_id)
+                _send_reschedule_notification(db, User, info, org_id, users_map=users_map)
             except Exception as e:
                 logger.warning(
                     f"Bulk reschedule notification failed for appointment {info['appointment_id']}: {e}"
@@ -854,7 +888,7 @@ async def bulk_assign_appointments(
 # NOTIFICATION HELPERS (best-effort, post-commit)
 # ============================================================================
 
-def _send_create_notification(db, _models, appointment, item, org_id):
+def _send_create_notification(db, _models, appointment, item, org_id, users_map=None):
     """Send confirmation email for a newly created appointment (best-effort)."""
     local_start = _convert_utc_to_user_tz(
         appointment.scheduled_start, appointment.assigned_user_id, db, org_id=org_id
@@ -872,12 +906,15 @@ def _send_create_notification(db, _models, appointment, item, org_id):
         raw_mode = appointment.meeting_mode.value if hasattr(appointment.meeting_mode, 'value') else str(appointment.meeting_mode)
         meeting_mode_str = mode_display.get(raw_mode.lower(), "Phone Call")
 
-    # Get team member info
+    # Get team member info — use pre-loaded map if available, fall back to DB query
     team_member_name = None
     team_member_email = None
-    User = _models.get('User')
-    if appointment.assigned_user_id and User:
-        assigned_user_obj = db.query(User).filter(User.id == appointment.assigned_user_id).first()
+    if appointment.assigned_user_id:
+        assigned_user_obj = (users_map or {}).get(appointment.assigned_user_id)
+        if assigned_user_obj is None:
+            User = _models.get('User')
+            if User:
+                assigned_user_obj = db.query(User).filter(User.id == appointment.assigned_user_id).first()
         if assigned_user_obj:
             team_member_name = assigned_user_obj.first_name
             if assigned_user_obj.last_name:
@@ -904,7 +941,7 @@ def _send_create_notification(db, _models, appointment, item, org_id):
     )
 
 
-def _send_cancel_notification(db, UserModel, info, reason, org_id, user):
+def _send_cancel_notification(db, UserModel, info, reason, org_id, user, users_map=None):
     """Send cancellation emails for a cancelled appointment (best-effort)."""
     if info['scheduled_start']:
         local_start = _convert_utc_to_user_tz(
@@ -916,11 +953,13 @@ def _send_cancel_notification(db, UserModel, info, reason, org_id, user):
         appointment_date = 'TBD'
         appointment_time = 'TBD'
 
-    # Get team member info
+    # Get team member info — use pre-loaded map if available, fall back to DB query
     team_member_name = None
     team_member_email = None
     if info['assigned_user_id']:
-        team_member = db.query(UserModel).filter(UserModel.id == info['assigned_user_id']).first()
+        team_member = (users_map or {}).get(info['assigned_user_id'])
+        if team_member is None:
+            team_member = db.query(UserModel).filter(UserModel.id == info['assigned_user_id']).first()
         if team_member:
             team_member_name = getattr(team_member, 'full_name', None) or team_member.email
             team_member_email = team_member.email
@@ -951,7 +990,7 @@ def _send_cancel_notification(db, UserModel, info, reason, org_id, user):
         )
 
 
-def _send_reschedule_notification(db, UserModel, info, org_id):
+def _send_reschedule_notification(db, UserModel, info, org_id, users_map=None):
     """Send update emails for a rescheduled appointment (best-effort)."""
     # Format new date/time
     new_local = _convert_utc_to_user_tz(
@@ -982,11 +1021,13 @@ def _send_reschedule_notification(db, UserModel, info, org_id):
         raw_mode = info['meeting_mode'].value if hasattr(info['meeting_mode'], 'value') else str(info['meeting_mode'])
         meeting_mode = mode_display.get(raw_mode.lower(), "Phone Call")
 
-    # Get team member info
+    # Get team member info — use pre-loaded map if available, fall back to DB query
     team_member_name = None
     team_member_email = None
     if info['assigned_user_id']:
-        team_member = db.query(UserModel).filter(UserModel.id == info['assigned_user_id']).first()
+        team_member = (users_map or {}).get(info['assigned_user_id'])
+        if team_member is None:
+            team_member = db.query(UserModel).filter(UserModel.id == info['assigned_user_id']).first()
         if team_member:
             team_member_name = getattr(team_member, 'full_name', None) or team_member.email
             team_member_email = team_member.email
@@ -1362,14 +1403,26 @@ async def batch_book_appointments(
     )
 
     # Post-commit: send confirmation emails (best-effort, non-blocking)
-    if payload.send_notifications:
+    if payload.send_notifications and created_appointments:
+        # PERF-006: Batch-load all assigned users to avoid N+1 queries
+        User = _models.get('User')
+        batch_user_ids = list({
+            entry['appointment'].assigned_user_id
+            for entry in created_appointments
+            if entry['appointment'].assigned_user_id
+        })
+        users_map = {}
+        if batch_user_ids and User:
+            users = db.query(User).filter(User.id.in_(batch_user_ids)).all()
+            users_map = {u.id: u for u in users}
+
         for entry in created_appointments:
             try:
                 appt = entry['appointment']
                 item = entry['item']
                 db.refresh(appt)
                 if item.attendee_email:
-                    _send_create_notification(db, _models, appt, item, org_id)
+                    _send_create_notification(db, _models, appt, item, org_id, users_map=users_map)
             except Exception as e:
                 logger.warning(
                     f"Batch booking notification failed for appointment "

@@ -44,6 +44,23 @@ DEDUP_WINDOW_HOURS = 1
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 
+def _mask_email(email: str) -> str:
+    """Mask email for safe logging: j***@example.com."""
+    if not email or "@" not in email:
+        return "***"
+    local, domain = email.split("@", 1)
+    if len(local) <= 1:
+        return f"***@{domain}"
+    return f"{local[0]}***@{domain}"
+
+
+def _mask_phone(phone: str) -> str:
+    """Mask phone for safe logging: ***1234."""
+    if not phone or len(phone) < 4:
+        return "***"
+    return f"***{phone[-4:]}"
+
+
 class ReminderService:
     """
     Stateless service that operates on a caller-provided DB session.
@@ -323,10 +340,11 @@ class ReminderService:
     ) -> bool:
         """
         Return True if a reminder with the same (appointment, template, channel)
-        was already successfully sent within the dedup window.
+        was already sent or is currently being sent within the dedup window.
 
-        This prevents duplicate sends when the cron job overlaps or restarts
-        before the previous batch commits.
+        Checks for "sent" and "pending" statuses so that a record written
+        before the send attempt (OBS-008) also blocks concurrent duplicates
+        (M8 idempotency).
         """
         _, ReminderLog = self._get_reminder_models()
         cutoff = datetime.now(timezone.utc) - timedelta(hours=DEDUP_WINDOW_HOURS)
@@ -336,8 +354,8 @@ class ReminderService:
                 ReminderLog.appointment_id == appointment_id,
                 ReminderLog.template_id == template_id,
                 ReminderLog.channel == channel,
-                ReminderLog.status == "sent",
-                ReminderLog.sent_at >= cutoff,
+                ReminderLog.status.in_(["sent", "pending"]),
+                ReminderLog.created_at >= cutoff,
             )
             .first()
         )
@@ -347,9 +365,11 @@ class ReminderService:
         """
         TCPA compliance: verify the recipient has active SMS consent.
 
-        Returns True if consent is found or if the TCPAConsent table is
-        not available (graceful degradation for orgs that haven't set up
-        TCPA tracking yet).
+        Returns True only when an active consent record is found.
+        Returns False (fail-closed) when:
+          - phone is empty
+          - no consent record matches
+          - the TCPAConsent table is unavailable or any error occurs
         """
         if not phone:
             return False
@@ -475,15 +495,35 @@ class ReminderService:
         recipient_email = appointment.attendee_email
         recipient_phone = appointment.attendee_phone
 
+        # OBS-008: Write the log record as "pending" BEFORE attempting to send.
+        # This ensures every send attempt is recorded even if the send or
+        # the subsequent commit fails, preventing silent retry spam.
         log = ReminderLog(
             appointment_id=appointment.id,
             template_id=template.id,
             channel=channel,
+            status="pending",
             recipient_email=recipient_email if channel == "email" else None,
             recipient_phone=recipient_phone if channel == "sms" else None,
         )
+        self.db.add(log)
+        self.db.flush()  # persist with "pending" status; assigns log.id
 
         try:
+            # COMP-014: Record consent verification timestamp before sending
+            # AI-initiated communications (automated reminders are AI-pipeline-initiated)
+            consent_checked_at = datetime.now(timezone.utc).isoformat()
+            recipient_masked = (
+                _mask_email(recipient_email) if channel == "email"
+                else _mask_phone(recipient_phone) if channel == "sms"
+                else "unknown"
+            )
+            logger.info(
+                "AI_COMM_CONSENT: type=%s recipient=%s consent_checked=%s appointment_id=%s template_id=%s",
+                channel, recipient_masked, consent_checked_at,
+                appointment.id, template.id,
+            )
+
             if channel == "email":
                 result = self._send_email(recipient_email, rendered_subject, rendered_body)
             elif channel == "sms":
@@ -491,7 +531,6 @@ class ReminderService:
                 if not self._check_sms_consent(recipient_phone, appointment.organization_id):
                     log.status = "skipped"
                     log.error_message = "No TCPA SMS consent on file"
-                    self.db.add(log)
                     self.db.flush()
                     return {"success": False, "channel": channel, "error": "No SMS consent", "log_id": log.id}
 
@@ -501,6 +540,7 @@ class ReminderService:
 
             if result.get("success"):
                 log.status = "sent"
+                log.sent_at = datetime.now(timezone.utc)
                 log.external_id = result.get("message_id") or result.get("message_sid")
             else:
                 log.status = "failed"
@@ -512,8 +552,7 @@ class ReminderService:
             log.error_message = str(e)[:500]
             result = {"success": False, "error": str(e)}
 
-        self.db.add(log)
-        self.db.flush()
+        self.db.flush()  # update from "pending" to final status
 
         return {
             "success": log.status == "sent",

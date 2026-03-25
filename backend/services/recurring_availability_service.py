@@ -91,6 +91,52 @@ class RecurringAvailabilityService:
             for r in rows
         ]
 
+    def get_weekly_schedule_batch(
+        self, user_ids: List[int], org_id: int
+    ) -> Dict[int, List[dict]]:
+        """
+        Batch-load weekly recurring schedules for multiple users in a single query.
+
+        Returns a dict mapping user_id -> list of schedule dicts (same format as
+        get_weekly_schedule). Users with no active recurring availability rows
+        will not appear in the returned dict.
+
+        PERF-009: Replaces N calls to get_weekly_schedule() with 1 query.
+        """
+        RecurringAvailability, _, _ = self._get_models()
+
+        rows = (
+            self.db.query(RecurringAvailability)
+            .filter(
+                RecurringAvailability.user_id.in_(user_ids),
+                RecurringAvailability.organization_id == org_id,
+                RecurringAvailability.is_active == True,
+            )
+            .order_by(
+                RecurringAvailability.user_id,
+                RecurringAvailability.day_of_week,
+                RecurringAvailability.start_time,
+            )
+            .all()
+        )
+
+        result: Dict[int, List[dict]] = {}
+        for r in rows:
+            if r.user_id not in result:
+                result[r.user_id] = []
+            result[r.user_id].append({
+                "id": r.id,
+                "day_of_week": r.day_of_week,
+                "start_time": r.start_time.strftime("%H:%M") if r.start_time else None,
+                "end_time": r.end_time.strftime("%H:%M") if r.end_time else None,
+                "is_active": r.is_active,
+                "effective_from": r.effective_from.isoformat() if r.effective_from else None,
+                "effective_until": r.effective_until.isoformat() if r.effective_until else None,
+                "timezone": r.timezone,
+            })
+
+        return result
+
     def set_weekly_schedule(
         self,
         user_id: int,

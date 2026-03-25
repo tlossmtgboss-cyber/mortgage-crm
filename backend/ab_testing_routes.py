@@ -1,8 +1,11 @@
 """
 A/B Testing API Routes
 Endpoints for creating, managing, and analyzing experiments
+
+SEC-004 FIX: All queries now filter by organization_id from the authenticated
+user to prevent cross-tenant enumeration and data injection.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
@@ -10,13 +13,36 @@ from datetime import datetime
 import logging
 
 from database import get_db
-from routes.auth_deps import require_auth
-from ab_testing_models import ExperimentType, ExperimentStatus
+from routes.auth_deps import require_auth, current_user_flexible_dep
+from ab_testing_models import Experiment, ExperimentType, ExperimentStatus
 from ab_testing.experiment_service import ExperimentService
 from ab_testing.statistical_analysis import StatisticalAnalyzer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/experiments", tags=["A/B Testing"], dependencies=[Depends(require_auth)])
+
+
+# ============================================================================
+# HELPERS
+# ============================================================================
+
+def _get_org_id(current_user) -> int:
+    """Extract organization_id from current user, raising 403 if missing."""
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="No organization context available")
+    return org_id
+
+
+def _get_experiment_for_org(db: Session, experiment_id: int, org_id: int) -> Experiment:
+    """Fetch an experiment scoped to the caller's org, raising 404 if not found."""
+    experiment = db.query(Experiment).filter(
+        Experiment.id == experiment_id,
+        Experiment.organization_id == org_id,
+    ).first()
+    if not experiment:
+        raise HTTPException(status_code=404, detail="Experiment not found")
+    return experiment
 
 
 # ============================================================================
@@ -70,7 +96,8 @@ class GetVariantRequest(BaseModel):
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_experiment(
     experiment_data: ExperimentCreate,
-    db: Session = Depends(get_db)
+    current_user=Depends(current_user_flexible_dep),
+    db: Session = Depends(get_db),
 ):
     """
     Create a new A/B test experiment
@@ -103,8 +130,10 @@ async def create_experiment(
     }
     ```
     """
+    org_id = _get_org_id(current_user)
+
     try:
-        service = ExperimentService(db)
+        service = ExperimentService(db, organization_id=org_id)
 
         # Convert experiment_type string to enum
         try:
@@ -118,7 +147,7 @@ async def create_experiment(
         # Convert variants to dict format
         variants = [v.dict() for v in experiment_data.variants]
 
-        logger.info(f"Creating experiment: name={experiment_data.name}, type={exp_type}, variants={len(variants)}")
+        logger.info(f"Creating experiment: name={experiment_data.name}, type={exp_type}, variants={len(variants)}, org_id={org_id}")
 
         experiment = service.create_experiment(
             name=experiment_data.name,
@@ -153,11 +182,17 @@ async def create_experiment(
 @router.post("/{experiment_id}/start")
 async def start_experiment(
     experiment_id: int,
-    db: Session = Depends(get_db)
+    current_user=Depends(current_user_flexible_dep),
+    db: Session = Depends(get_db),
 ):
     """Start an experiment (begin collecting data)"""
+    org_id = _get_org_id(current_user)
+
     try:
-        service = ExperimentService(db)
+        # Verify experiment belongs to caller's org before mutating
+        _get_experiment_for_org(db, experiment_id, org_id)
+
+        service = ExperimentService(db, organization_id=org_id)
         success = service.start_experiment(experiment_id)
 
         if not success:
@@ -176,11 +211,17 @@ async def start_experiment(
 async def stop_experiment(
     experiment_id: int,
     declare_winner: bool = False,
-    db: Session = Depends(get_db)
+    current_user=Depends(current_user_flexible_dep),
+    db: Session = Depends(get_db),
 ):
     """Stop an experiment and optionally declare a winner"""
+    org_id = _get_org_id(current_user)
+
     try:
-        service = ExperimentService(db)
+        # Verify experiment belongs to caller's org before mutating
+        _get_experiment_for_org(db, experiment_id, org_id)
+
+        service = ExperimentService(db, organization_id=org_id)
         success = service.stop_experiment(experiment_id, declare_winner=declare_winner)
 
         if not success:
@@ -198,7 +239,8 @@ async def stop_experiment(
 @router.post("/get-variant")
 async def get_variant(
     request: GetVariantRequest,
-    db: Session = Depends(get_db)
+    current_user=Depends(current_user_flexible_dep),
+    db: Session = Depends(get_db),
 ):
     """
     Get variant assignment for a user/session
@@ -206,8 +248,10 @@ async def get_variant(
     Use this endpoint to determine which variant a user should see.
     The assignment is consistent (same user always gets same variant).
     """
+    org_id = _get_org_id(current_user)
+
     try:
-        service = ExperimentService(db)
+        service = ExperimentService(db, organization_id=org_id)
         variant = service.get_variant_for_user(
             experiment_name=request.experiment_name,
             user_id=request.user_id,
@@ -234,7 +278,8 @@ async def get_variant(
 @router.post("/record-result")
 async def record_result(
     request: RecordResultRequest,
-    db: Session = Depends(get_db)
+    current_user=Depends(current_user_flexible_dep),
+    db: Session = Depends(get_db),
 ):
     """
     Record an experiment result/outcome
@@ -242,8 +287,10 @@ async def record_result(
     Call this when you measure the primary or secondary metric.
     Example: After AI responds, record resolution_rate, satisfaction_score, etc.
     """
+    org_id = _get_org_id(current_user)
+
     try:
-        service = ExperimentService(db)
+        service = ExperimentService(db, organization_id=org_id)
         success = service.record_result(
             experiment_name=request.experiment_name,
             metric_name=request.metric_name,
@@ -268,15 +315,21 @@ async def record_result(
 @router.get("/{experiment_id}/analyze")
 async def analyze_experiment(
     experiment_id: int,
-    db: Session = Depends(get_db)
+    current_user=Depends(current_user_flexible_dep),
+    db: Session = Depends(get_db),
 ):
     """
     Perform statistical analysis on experiment results
 
     Returns p-value, significance, and winner recommendation
     """
+    org_id = _get_org_id(current_user)
+
     try:
-        analyzer = StatisticalAnalyzer(db)
+        # Verify experiment belongs to caller's org before analyzing
+        _get_experiment_for_org(db, experiment_id, org_id)
+
+        analyzer = StatisticalAnalyzer(db, organization_id=org_id)
         insight = analyzer.analyze_experiment(experiment_id)
 
         if not insight:
@@ -306,13 +359,19 @@ async def analyze_experiment(
 @router.get("/{experiment_id}/summary")
 async def get_experiment_summary(
     experiment_id: int,
-    db: Session = Depends(get_db)
+    current_user=Depends(current_user_flexible_dep),
+    db: Session = Depends(get_db),
 ):
     """
     Get human-readable summary of experiment results
     """
+    org_id = _get_org_id(current_user)
+
     try:
-        analyzer = StatisticalAnalyzer(db)
+        # Verify experiment belongs to caller's org before returning data
+        _get_experiment_for_org(db, experiment_id, org_id)
+
+        analyzer = StatisticalAnalyzer(db, organization_id=org_id)
         summary = analyzer.get_experiment_summary(experiment_id)
 
         if not summary:
@@ -331,13 +390,16 @@ async def get_experiment_summary(
 async def list_experiments(
     status_filter: Optional[str] = None,
     experiment_type: Optional[str] = None,
-    db: Session = Depends(get_db)
+    current_user=Depends(current_user_flexible_dep),
+    db: Session = Depends(get_db),
 ):
-    """List all experiments with optional filtering"""
-    try:
-        from ab_testing_models import Experiment
+    """List all experiments with optional filtering (scoped to caller's org)"""
+    org_id = _get_org_id(current_user)
 
-        query = db.query(Experiment)
+    try:
+        query = db.query(Experiment).filter(
+            Experiment.organization_id == org_id,
+        )
 
         if status_filter:
             try:
@@ -381,16 +443,16 @@ async def list_experiments(
 @router.get("/{experiment_id}")
 async def get_experiment(
     experiment_id: int,
-    db: Session = Depends(get_db)
+    current_user=Depends(current_user_flexible_dep),
+    db: Session = Depends(get_db),
 ):
     """Get detailed information about an experiment"""
+    org_id = _get_org_id(current_user)
+
     try:
-        from ab_testing_models import Experiment, ExperimentVariant
+        from ab_testing_models import ExperimentVariant
 
-        experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
-
-        if not experiment:
-            raise HTTPException(status_code=404, detail="Experiment not found")
+        experiment = _get_experiment_for_org(db, experiment_id, org_id)
 
         variants = db.query(ExperimentVariant).filter(
             ExperimentVariant.experiment_id == experiment_id
@@ -434,16 +496,14 @@ async def get_experiment(
 @router.delete("/{experiment_id}")
 async def delete_experiment(
     experiment_id: int,
-    db: Session = Depends(get_db)
+    current_user=Depends(current_user_flexible_dep),
+    db: Session = Depends(get_db),
 ):
     """Delete an experiment (only if DRAFT or ARCHIVED)"""
+    org_id = _get_org_id(current_user)
+
     try:
-        from ab_testing_models import Experiment
-
-        experiment = db.query(Experiment).filter(Experiment.id == experiment_id).first()
-
-        if not experiment:
-            raise HTTPException(status_code=404, detail="Experiment not found")
+        experiment = _get_experiment_for_org(db, experiment_id, org_id)
 
         if experiment.status not in [ExperimentStatus.DRAFT, ExperimentStatus.ARCHIVED]:
             raise HTTPException(

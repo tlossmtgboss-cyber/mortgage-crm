@@ -886,32 +886,32 @@ class PipelineAppointmentTrigger:
             from services.speed_to_lead_tracker import record_trigger_timing
             # Fire-and-forget using asyncio — don't await in the sync caller
             import asyncio
+            # DATA-015: Safely dispatch async coroutine regardless of event loop state.
+            # asyncio.run() fails if called from a thread that already has a loop.
+            _coro = record_trigger_timing(
+                db=self.db,
+                loan_id=loan_id,
+                trigger_event="stage_change",
+                trigger_time=trigger_time,
+                delivery_time=delivery_time,
+                delivery_method=delivery_method,
+                organization_id=self.organization_id,
+                loan_officer_id=loan_officer_id,
+                trigger_stage=trigger_stage,
+            )
             try:
                 loop = asyncio.get_running_loop()
-                loop.create_task(record_trigger_timing(
-                    db=self.db,
-                    loan_id=loan_id,
-                    trigger_event="stage_change",
-                    trigger_time=trigger_time,
-                    delivery_time=delivery_time,
-                    delivery_method=delivery_method,
-                    organization_id=self.organization_id,
-                    loan_officer_id=loan_officer_id,
-                    trigger_stage=trigger_stage,
-                ))
+                loop.create_task(_coro)
             except RuntimeError:
-                # No running event loop — call synchronously in a blocking manner
-                asyncio.run(record_trigger_timing(
-                    db=self.db,
-                    loan_id=loan_id,
-                    trigger_event="stage_change",
-                    trigger_time=trigger_time,
-                    delivery_time=delivery_time,
-                    delivery_method=delivery_method,
-                    organization_id=self.organization_id,
-                    loan_officer_id=loan_officer_id,
-                    trigger_stage=trigger_stage,
-                ))
+                # No running event loop
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        asyncio.ensure_future(_coro, loop=loop)
+                    else:
+                        loop.run_until_complete(_coro)
+                except RuntimeError:
+                    asyncio.run(_coro)
         except Exception as e:
             # Never let speed-to-lead tracking break the trigger flow
             logger.warning(f"Speed-to-lead recording failed (non-fatal) for loan {loan_id}: {e}")

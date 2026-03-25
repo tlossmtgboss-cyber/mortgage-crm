@@ -48,12 +48,19 @@ from db import get_db
 from middleware.feature_gate import require_feature_tier
 from services.waitlist_service import WaitlistService
 
-SECRET_KEY = os.getenv("SECRET_KEY", "")
-if not SECRET_KEY:
-    import warnings
-    warnings.warn("SECRET_KEY not set in waitlist module")
+import hashlib
+
+_SECRET_KEY = os.getenv("SECRET_KEY")
+if not _SECRET_KEY and os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production":
+    raise RuntimeError("SECRET_KEY must be set in production")
+_SECRET_KEY = _SECRET_KEY or "dev-only-insecure-key"
 
 logger = logging.getLogger(__name__)
+
+
+def _hash_email(email: str) -> str:
+    """One-way hash of an email for JWT tokens (SEC-010)."""
+    return hashlib.sha256(email.lower().strip().encode()).hexdigest()[:16]
 
 router = APIRouter()
 
@@ -115,35 +122,37 @@ def _sanitize(value: Optional[str]) -> Optional[str]:
 def _generate_waitlist_token(entry_id: int, email: str) -> str:
     """Generate a JWT token scoped to a specific waitlist entry.
 
-    The token encodes the entry_id and email so that public endpoints can
-    authenticate callers without exposing sequential entry IDs.
+    The token encodes the entry_id and an email hash so that public endpoints
+    can authenticate callers without exposing sequential entry IDs.
+    SEC-010: Uses email_hash instead of plaintext email to avoid PII exposure.
     Tokens expire after 7 days (waitlist offers are typically shorter-lived).
     """
     if not jwt:
         raise RuntimeError("PyJWT is required for waitlist token generation")
-    if not SECRET_KEY:
+    if not _SECRET_KEY:
         raise RuntimeError("SECRET_KEY required for waitlist token generation")
     payload = {
         "wl_entry_id": entry_id,
-        "email": email,
+        "email_hash": _hash_email(email),
         "purpose": "waitlist",
         "exp": datetime.now(timezone.utc) + timedelta(days=7),
     }
-    return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+    return jwt.encode(payload, _SECRET_KEY, algorithm="HS256")
 
 
 def _verify_waitlist_token(token: str) -> dict:
     """Verify a waitlist token and return the decoded payload.
 
-    Returns dict with 'wl_entry_id' and 'email' on success.
+    Returns dict with 'entry_id' and 'email_hash' on success.
+    SEC-010: Supports both new (email_hash) and legacy (email) token formats.
     Raises HTTPException on failure.
     """
     if not jwt:
         internal_error("Server configuration error")
-    if not SECRET_KEY:
+    if not _SECRET_KEY:
         internal_error("Server configuration error")
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        payload = jwt.decode(token, _SECRET_KEY, algorithms=["HS256"])
     except jwt.ExpiredSignatureError:
         unauthorized_error("Waitlist link has expired")
     except jwt.InvalidTokenError:
@@ -153,11 +162,17 @@ def _verify_waitlist_token(token: str) -> dict:
         unauthorized_error("Invalid waitlist link")
 
     entry_id = payload.get("wl_entry_id")
-    email = payload.get("email")
-    if not entry_id or not email:
+    # SEC-010: Support both new (email_hash) and legacy (email) formats
+    email_hash = payload.get("email_hash")
+    legacy_email = payload.get("email")
+    if not entry_id or (not email_hash and not legacy_email):
         unauthorized_error("Invalid waitlist link")
 
-    return {"entry_id": entry_id, "email": email}
+    # Normalize: convert legacy plaintext email to hash for consistent downstream use
+    if not email_hash and legacy_email:
+        email_hash = _hash_email(legacy_email)
+
+    return {"entry_id": entry_id, "email_hash": email_hash}
 
 
 def _resolve_org_from_appointment_type(appointment_type_id: int, db: Session) -> int:
@@ -472,10 +487,11 @@ async def public_accept_offer(
     # Verify the signed token
     payload = _verify_waitlist_token(token)
     entry_id = payload["entry_id"]
-    token_email = payload["email"]
+    token_email_hash = payload["email_hash"]
 
-    # Double-check: body email must match the token's email
-    if (body.email or "").strip().lower() != (token_email or "").strip().lower():
+    # Double-check: body email hash must match the token's email hash (SEC-010)
+    body_email_hash = _hash_email(body.email) if body.email else ""
+    if not token_email_hash or body_email_hash != token_email_hash:
         raise HTTPException(status_code=403, detail="Email does not match waitlist entry")
 
     # Resolve org_id from the waitlist entry for tenant isolation
@@ -520,10 +536,19 @@ async def public_check_position(
     payload = _verify_waitlist_token(token)
     entry_id = payload["entry_id"]
 
+    # Resolve org_id from the waitlist entry for tenant isolation
+    models = get_models()
+    WaitlistEntry = models.get("WaitlistEntry")
+    resolved_org_id = None
+    if WaitlistEntry:
+        entry_row = db.query(WaitlistEntry).filter(WaitlistEntry.id == entry_id).first()
+        if entry_row:
+            resolved_org_id = getattr(entry_row, "organization_id", None)
+
     service = _get_waitlist_service(db)
 
     try:
-        result = service.get_position(entry_id)
+        result = service.get_position(entry_id, org_id=resolved_org_id)
         # Return limited info for public access
         return {
             "position": result["position"],

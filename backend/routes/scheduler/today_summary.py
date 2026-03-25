@@ -11,7 +11,7 @@ within a single DB session for thread safety.
 
 from datetime import datetime, time, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, cast, String
 from typing import List, Optional
@@ -21,6 +21,7 @@ from db import get_db
 from routes.scheduler._helpers import (
     get_current_user, get_models, _get_org_id,
 )
+from smart_scheduler_models import AppointmentStatus
 
 logger = logging.getLogger(__name__)
 
@@ -146,8 +147,7 @@ class TodaySummaryResponse(BaseModel):
     sla_alerts: SLAAlertsSection = Field(default_factory=SLAAlertsSection)
     generated_at: str = Field(..., description="ISO 8601 timestamp of when this summary was generated")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # =============================================================================
@@ -173,7 +173,7 @@ def _fetch_today_appointments(db: Session, models: dict, user_id: int, org_id: i
             ),
             Appointment.scheduled_start >= today_start,
             Appointment.scheduled_start <= today_end,
-            Appointment.status.notin_(["cancelled", "rescheduled", "CANCELLED", "RESCHEDULED"]),
+            Appointment.status.notin_([AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED]),
         )
         .order_by(Appointment.scheduled_start.asc())
         .all()

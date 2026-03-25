@@ -223,6 +223,7 @@ class AvailabilitySlot(Base):
     __table_args__ = (
         Index('ix_availability_date_user', 'specific_date', 'user_id'),
         Index('ix_availability_slots_org_id', 'organization_id'),
+        UniqueConstraint('user_id', 'day_of_week', 'organization_id', name='uq_availability_user_day_org'),
         UniqueConstraint('user_id', 'day_of_week', 'start_time', 'end_time', 'organization_id', name='uq_availability_recurring_slot'),
         UniqueConstraint('organization_id', 'user_id', 'specific_date', name='uq_avail_slot_org_user_date'),
         {'extend_existing': True}
@@ -383,6 +384,9 @@ class Appointment(Base):
     lead_id = Column(Integer, ForeignKey("leads.id", ondelete="SET NULL"), nullable=True)
     loan_id = Column(Integer, ForeignKey("loans.id", ondelete="SET NULL"), nullable=True)
     contact_id = Column(Integer, nullable=True)  # Reference to contact (no FK)
+
+    # Idempotency key (prevents duplicate bookings from retries)
+    idempotency_key = Column(String(64), nullable=True, unique=True, index=True)
 
     # External reference (for linking to other systems)
     external_id = Column(String(100), nullable=True)
@@ -745,6 +749,15 @@ class AppointmentStatusHistory(Base):
 
 
 class SchedulerAuditLog(Base):
+    """
+    Immutable audit log for scheduler operations.
+
+    IMPORTANT: This table should be protected by a DB trigger that prevents
+    UPDATE and DELETE operations. Audit records must never be modified or
+    removed to ensure a tamper-proof compliance trail.
+    """
+    __immutable__ = True  # Protected by DB trigger - do not UPDATE or DELETE
+
     __tablename__ = 'scheduler_audit_log'
     __table_args__ = (
         Index('idx_scheduler_audit_org_ts', 'organization_id', 'created_at'),

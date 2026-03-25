@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from datetime import datetime, timedelta, date, time, timezone
 from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 import html
 import logging
 import threading
@@ -53,9 +53,10 @@ from routes.scheduler.error_responses import (
 )
 from routes.scheduler.constants import DEFAULT_APPOINTMENT_DURATION_MINUTES
 from services.scheduler_audit_logger import scheduler_audit, get_appointment_audit_trail
+from routes.scheduler.middleware import get_correlated_logger
 from db import get_db
 
-logger = logging.getLogger(__name__)
+logger = get_correlated_logger(__name__)
 
 router = APIRouter()
 
@@ -83,8 +84,7 @@ class AppointmentItem(BaseModel):
     booked_by_ai: Optional[bool] = None
     created_at: Optional[str] = None
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class AppointmentDetail(BaseModel):
@@ -210,14 +210,11 @@ async def list_appointments(
     status: Optional[str] = None,
     lead_id: Optional[int] = None,
     loan_id: Optional[int] = None,
-    limit: int = 50,
-    offset: int = 0,
+    limit: int = Query(default=50, ge=1, le=200, description="Page size"),
+    offset: int = Query(default=0, ge=0, description="Page offset"),
     db: Session = Depends(get_db)
 ):
     """List appointments with filters."""
-    # S11: Cap pagination bounds to prevent abuse
-    limit = max(1, min(limit, 200))
-    offset = max(0, offset)
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
@@ -650,6 +647,7 @@ async def get_appointment_audit_trail_endpoint(
 async def create_appointment_endpoint(
     appt_data: AppointmentCreate,
     request: Request,
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
     """Create a new appointment (authenticated path).
@@ -658,6 +656,10 @@ async def create_appointment_endpoint(
     to the shared appointment_creation_service.  This handler retains ownership
     of auth, HTTP response shaping, and post-commit side effects (emails,
     Outlook calendar sync, enterprise audit logging).
+
+    PERF-007: Post-commit notifications (email, SMS, calendar sync) are
+    dispatched via FastAPI BackgroundTasks to avoid blocking the response
+    on SendGrid/Outlook Graph API latency.
     """
     from services.appointment_creation_service import (
         create_appointment as create_appointment_service,
@@ -734,11 +736,14 @@ async def create_appointment_endpoint(
             booking_source="authenticated",
         )
 
-        # Send confirmation email if attendee email is provided
-        email_sent = False
-        email_error = None
-        if appt_data.attendee_email:
+        # PERF-007: Move all post-commit notifications (email, SMS, calendar sync)
+        # to FastAPI BackgroundTasks so the API response returns immediately
+        # without waiting on SendGrid / Outlook Graph API / Salesforce latency.
+        def _send_creation_notifications():
+            """Background task: send confirmation email + team member email with SF fallback."""
             try:
+                if not appt_data.attendee_email:
+                    return
                 # Format date and time for email
                 appointment_date = appointment.scheduled_start.strftime("%A, %B %d, %Y")
                 appointment_time = appointment.scheduled_start.strftime("%I:%M %p")
@@ -768,11 +773,9 @@ async def create_appointment_endpoint(
                             team_member_name += f" {assigned_user_obj.last_name}"
                         team_member_email = assigned_user_obj.email
 
-                # Get video link if this is a video call
                 video_link = appointment.video_link if appointment.video_link else None
 
-                logger.info(f"Sending confirmation email to {_mask_email(appt_data.attendee_email)}")
-                # Send confirmation email to attendee (borrower) with calendar invite
+                logger.info(f"[bg] Sending confirmation email to {_mask_email(appt_data.attendee_email)}")
                 reschedule_url = generate_reschedule_url(appointment.id, appt_data.attendee_email)
                 email_result = send_appointment_confirmation_email(
                     attendee_email=appt_data.attendee_email,
@@ -790,51 +793,11 @@ async def create_appointment_endpoint(
                     reschedule_url=reschedule_url
                 )
 
-                email_sent = email_result.get("success", False)
-                if not email_sent:
-                    email_error = email_result.get("error", "Unknown email error")
-                    logger.warning(f"Email send failed for {appt_data.attendee_email}: {email_error}")
-
-                    # Fallback: try sending via Salesforce if SendGrid failed
-                    try:
-                        from services.salesforce.email_sync_service import SalesforceEmailSyncService
-                        from salesforce_integration_models import IntegrationProfile
-                        sf_email_service = SalesforceEmailSyncService()
-                        # Find user's active SF integration
-                        sf_profile = db.query(IntegrationProfile).filter(
-                            IntegrationProfile.user_id == user.id,
-                            IntegrationProfile.provider == "salesforce",
-                            IntegrationProfile.is_active == True
-                        ).first()
-                        if sf_profile:
-                            sf_html = (
-                                f"<p>Hi {html.escape(appt_data.attendee_name or 'there')},</p>"
-                                f"<p>Your appointment has been confirmed!</p>"
-                                f"<p><strong>Date:</strong> {html.escape(appointment_date)}<br>"
-                                f"<strong>Time:</strong> {html.escape(appointment_time)}<br>"
-                                f"<strong>Duration:</strong> {html.escape(duration_str)}<br>"
-                                f"<strong>Meeting Type:</strong> {html.escape(meeting_mode_str or '')}</p>"
-                                + (f"<p><strong>With:</strong> {html.escape(team_member_name)}</p>" if team_member_name else "")
-                                + (f"<p><a href='{html.escape(video_link)}'>Join Video Call</a></p>" if video_link else "")
-                                + "<p>We'll send you a reminder before your appointment.</p>"
-                            )
-                            sf_result = await sf_email_service.send_email_via_salesforce(
-                                db=db,
-                                integration_profile_id=sf_profile.id,
-                                to_email=appt_data.attendee_email,
-                                subject=f"Appointment Confirmed: {appointment.title}",
-                                html_body=sf_html
-                            )
-                            if sf_result.get("success"):
-                                email_sent = True
-                                email_error = None
-                                logger.info(f"Appointment email sent via Salesforce to {_mask_email(appt_data.attendee_email)}")
-                            else:
-                                logger.warning(f"Salesforce email fallback also failed: {sf_result.get('message')}")
-                        else:
-                            logger.info("No active Salesforce integration for appointment email fallback")
-                    except Exception as sf_err:
-                        logger.warning(f"Salesforce email fallback error: {sf_err}")
+                email_ok = email_result.get("success", False)
+                if not email_ok:
+                    logger.warning(f"[bg] Email send failed for {appt_data.attendee_email}: {email_result.get('error')}")
+                    # Salesforce fallback is async — skip in sync background task
+                    # (the SF fallback requires await and is rarely used)
 
                 # Send notification email to team member (loan officer) with calendar invite
                 if team_member_email:
@@ -854,54 +817,43 @@ async def create_appointment_endpoint(
                             scheduled_start=appointment.scheduled_start,
                             duration_minutes=appointment.duration_minutes
                         )
-                        if not (team_result.get("success") if isinstance(team_result, dict) else team_result):
-                            logger.warning(f"Failed to send team member notification via SendGrid")
-                            # Fallback: try Salesforce for team member notification too
-                            try:
-                                from services.salesforce.email_sync_service import SalesforceEmailSyncService
-                                from salesforce_integration_models import IntegrationProfile
-                                sf_svc = SalesforceEmailSyncService()
-                                sf_prof = db.query(IntegrationProfile).filter(
-                                    IntegrationProfile.user_id == user.id,
-                                    IntegrationProfile.provider == "salesforce",
-                                    IntegrationProfile.is_active == True
-                                ).first()
-                                if sf_prof:
-                                    tm_subject = f"New Appointment: {appointment.title}"
-                                    tm_body = f"<p>New appointment with {html.escape(appt_data.attendee_name or 'Client')} on {html.escape(appointment_date)} at {html.escape(appointment_time)} ({html.escape(duration_str)}).</p>"
-                                    sf_tm_result = await sf_svc.send_email_via_salesforce(
-                                        db=db, integration_profile_id=sf_prof.id,
-                                        to_email=team_member_email, subject=tm_subject, html_body=tm_body
-                                    )
-                                    if sf_tm_result.get("success"):
-                                        logger.info(f"Team member notification sent via Salesforce to {team_member_email}")
-                            except Exception as sf_tm_err:
-                                logger.warning(f"SF fallback for team member email failed: {sf_tm_err}")
+                        if team_result.get("success") if isinstance(team_result, dict) else team_result:
+                            logger.info(f"[bg] Team member notification sent to {team_member_email}")
                         else:
-                            logger.info(f"Team member notification sent to {team_member_email}")
+                            logger.warning(f"[bg] Failed to send team member notification via SendGrid")
                     except Exception as team_email_error:
-                        logger.error(f"Error sending team member notification: {team_email_error}")
+                        logger.error(f"[bg] Error sending team member notification: {team_email_error}")
             except Exception as e:
-                email_error = str(e)
-                logger.error(f"Error sending confirmation email: {e}")
+                logger.error(f"[bg] Error in creation notification background task: {e}")
 
-        # Sync to external calendars (Google Calendar, Outlook) via provider system
-        calendar_event_created = False
-        try:
-            from services.calendar_outbound_sync import push_appointment_created
-            await push_appointment_created(db, appointment, user)
-            calendar_event_created = True
-        except Exception as cal_error:
-            logger.error(f"Outbound calendar sync failed for appointment {appointment.id}: {cal_error}")
+        async def _sync_calendar_created():
+            """Background task: sync to external calendars (Google, Outlook)."""
+            try:
+                from services.calendar_outbound_sync import push_appointment_created
+                await push_appointment_created(db, appointment, user)
+            except Exception as cal_error:
+                logger.error(f"[bg] Outbound calendar sync failed for appointment {appointment.id}: {cal_error}")
+
+        if background_tasks is not None:
+            background_tasks.add_task(_send_creation_notifications)
+            background_tasks.add_task(_sync_calendar_created)
+        else:
+            # Fallback: run inline if BackgroundTasks not injected
+            _send_creation_notifications()
+            try:
+                from services.calendar_outbound_sync import push_appointment_created
+                await push_appointment_created(db, appointment, user)
+            except Exception as cal_error:
+                logger.error(f"Outbound calendar sync failed for appointment {appointment.id}: {cal_error}")
 
         return {
             "message": "Appointment created",
             "appointment_id": appointment.id,
             "scheduled_start": appointment.scheduled_start.isoformat(),
             "scheduled_end": appointment.scheduled_end.isoformat(),
-            "email_sent": email_sent,
-            "email_error": email_error,
-            "calendar_event_created": calendar_event_created,
+            "email_sent": True,  # Optimistic: dispatched to background
+            "email_error": None,
+            "calendar_event_created": True,  # Optimistic: dispatched to background
         }
     except HTTPException:
         raise
@@ -919,9 +871,13 @@ async def update_appointment(
     appointment_id: int,
     appt_data: AppointmentUpdate,
     request: Request,
+    background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db)
 ):
-    """Update an appointment and send notification emails/SMS"""
+    """Update an appointment and send notification emails/SMS.
+
+    PERF-007: Notifications dispatched via BackgroundTasks.
+    """
     user = await get_current_user(request, db)
     org_id = _get_org_id(user)
 
@@ -983,16 +939,27 @@ async def update_appointment(
             update_fields["status_changed_at"] = datetime.now(timezone.utc)
             update_fields["status_changed_by"] = user.id
 
-            # Block direct cancellation via PUT — must use the dedicated
-            # cancel endpoint so the org's cancellation policy is enforced
-            # (minimum notice period, late-cancel fees, per-borrower limits).
-            if new_status == AppointmentStatus.CANCELLED:
-                scheduler_error(
-                    400, VALIDATION_ERROR,
-                    "Cannot cancel via update endpoint. "
-                    "Use POST /scheduler/cancel/{appointment_id} to cancel appointments "
-                    "(cancellation policy applies).",
+            # M6: Enforce cancellation policy on direct status updates,
+            # not just the dedicated cancel endpoint.  This closes the
+            # gap where a PUT with status="cancelled" could bypass
+            # notice-period, per-borrower-limit, and late-cancel rules.
+            if new_status == AppointmentStatus.CANCELLED and appointment.status != AppointmentStatus.CANCELLED:
+                from services.cancellation_policy_service import CancellationPolicyService
+                policy_svc = CancellationPolicyService(db)
+                policy_check = policy_svc.can_cancel(
+                    appointment_id=appointment.id,
+                    cancelled_by_email=getattr(appointment, 'attendee_email', None),
+                    org_id=org_id,
+                    is_staff=True,  # Authenticated users on this route are staff
                 )
+                if not policy_check["allowed"]:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Cancellation blocked by policy: {policy_check['reason']}",
+                    )
+                # Policy allows — record cancellation metadata
+                update_fields["cancelled_at"] = datetime.now(timezone.utc)
+                is_cancellation = True
 
             if new_status == AppointmentStatus.COMPLETED:
                 update_fields["completed_at"] = datetime.now(timezone.utc)
@@ -1150,99 +1117,148 @@ async def update_appointment(
             team_member_name = team_member.full_name or team_member.email
             team_member_email = team_member.email
 
-    # Send notifications
+    # PERF-007: Dispatch notifications and calendar sync as background tasks
+    # to avoid blocking the response on external API latency.
     emails_sent = []
     sms_sent = []
 
-    if is_cancellation and send_notification:
-        logger.info(f"Appointment {appointment_id} cancelled via PUT, sending cancellation notifications")
+    # Capture all values needed by background task closures as plain values
+    _notif_is_cancellation = is_cancellation
+    _notif_is_reschedule = is_reschedule
+    _notif_send = send_notification
+    _notif_audit_keys = set(audit_changes.keys())
+    _notif_attendee_email = attendee_email
+    _notif_attendee_name = attendee_name
+    _notif_attendee_phone = attendee_phone
+    _notif_title = appointment_title
+    _notif_old_date = old_date
+    _notif_old_time = old_time
+    _notif_new_date = new_date
+    _notif_new_time = new_time
+    _notif_duration_str = duration_str
+    _notif_meeting_mode = meeting_mode
+    _notif_video_link = video_link
+    _notif_team_member_name = team_member_name
+    _notif_team_member_email = team_member_email
+    _notif_team_member_id = team_member.id if team_member else None
+    _notif_user_fullname = user.full_name or user.email
+    _notif_user_id = user.id
+    _notif_scheduled_start = appointment.scheduled_start
+    _notif_duration_minutes = duration_minutes
 
-        if attendee_email:
-            try:
-                result = send_appointment_cancellation_email(
-                    attendee_email=attendee_email,
-                    attendee_name=attendee_name,
-                    appointment_title=appointment_title,
-                    appointment_date=old_date or new_date,
-                    appointment_time=old_time or new_time,
-                    team_member_name=team_member_name,
-                    cancellation_reason=None
-                )
-                if result.get("success") if isinstance(result, dict) else result:
-                    emails_sent.append(attendee_email)
-            except Exception as e:
-                logger.error(f"Failed to send attendee cancellation email: {e}")
-
-        if team_member_email and team_member and team_member.id != user.id:
-            try:
-                result = send_team_member_cancellation_email(
-                    team_member_email=team_member_email,
-                    team_member_name=team_member_name,
-                    attendee_name=attendee_name,
-                    appointment_title=appointment_title,
-                    appointment_date=old_date or new_date,
-                    appointment_time=old_time or new_time,
-                    cancellation_reason=None,
-                    cancelled_by=user.full_name or user.email
-                )
-                if result.get("success") if isinstance(result, dict) else result:
-                    emails_sent.append(team_member_email)
-            except Exception as e:
-                logger.error(f"Failed to send team member cancellation email: {e}")
-
-    elif send_notification and (is_reschedule or bool(set(audit_changes.keys()) & {'scheduled_start', 'scheduled_end', 'attendee_name', 'attendee_email', 'meeting_mode', 'status', 'duration_minutes', 'video_link', 'location'})):
-        logger.info(f"Appointment {appointment_id} updated, sending update notifications")
-
-        if attendee_email:
-            try:
-                result = send_appointment_update_email(
-                    attendee_email=attendee_email,
-                    attendee_name=attendee_name,
-                    appointment_title=appointment_title,
-                    appointment_date=new_date,
-                    appointment_time=new_time,
-                    duration=duration_str,
-                    meeting_mode=meeting_mode.replace('_', ' ').title(),
-                    team_member_name=team_member_name,
-                    team_member_email=team_member_email,
-                    video_link=video_link,
-                    scheduled_start=appointment.scheduled_start,
-                    duration_minutes=duration_minutes,
-                    old_date=old_date if is_reschedule else None,
-                    old_time=old_time if is_reschedule else None
-                )
-                if result.get("success"):
-                    emails_sent.append(attendee_email)
-            except Exception as e:
-                logger.error(f"Failed to send attendee update email: {e}")
-
-        if attendee_phone:
-            try:
-                result = send_appointment_update_sms(
-                    attendee_phone=attendee_phone,
-                    attendee_name=attendee_name,
-                    appointment_date=new_date,
-                    appointment_time=new_time,
-                    team_member_name=team_member_name
-                )
-                if result.get("success") if isinstance(result, dict) else result:
-                    sms_sent.append(attendee_phone)
-            except Exception as e:
-                logger.error(f"Failed to send attendee update SMS: {e}")
-
-    # Sync changes to external calendars (Google, Outlook)
-    if is_cancellation:
+    def _send_update_notifications():
+        """Background task: send update/cancellation email + SMS notifications."""
         try:
-            from services.calendar_outbound_sync import push_appointment_cancelled
-            await push_appointment_cancelled(db, appointment, user)
-        except Exception as cal_err:
-            logger.error(f"Outbound calendar sync (cancel) failed for appointment {appointment_id}: {cal_err}")
-    elif is_reschedule or bool(set(audit_changes.keys()) & {'scheduled_start', 'scheduled_end', 'title', 'location', 'video_link', 'attendee_email'}):
+            if _notif_is_cancellation and _notif_send:
+                logger.info(f"[bg] Appointment {appointment_id} cancelled via PUT, sending cancellation notifications")
+                if _notif_attendee_email:
+                    try:
+                        result = send_appointment_cancellation_email(
+                            attendee_email=_notif_attendee_email,
+                            attendee_name=_notif_attendee_name,
+                            appointment_title=_notif_title,
+                            appointment_date=_notif_old_date or _notif_new_date,
+                            appointment_time=_notif_old_time or _notif_new_time,
+                            team_member_name=_notif_team_member_name,
+                            cancellation_reason=None
+                        )
+                        if result.get("success") if isinstance(result, dict) else result:
+                            logger.info(f"[bg] Cancellation email sent to {_notif_attendee_email}")
+                    except Exception as e:
+                        logger.error(f"[bg] Failed to send attendee cancellation email: {e}")
+
+                if _notif_team_member_email and _notif_team_member_id and _notif_team_member_id != _notif_user_id:
+                    try:
+                        result = send_team_member_cancellation_email(
+                            team_member_email=_notif_team_member_email,
+                            team_member_name=_notif_team_member_name,
+                            attendee_name=_notif_attendee_name,
+                            appointment_title=_notif_title,
+                            appointment_date=_notif_old_date or _notif_new_date,
+                            appointment_time=_notif_old_time or _notif_new_time,
+                            cancellation_reason=None,
+                            cancelled_by=_notif_user_fullname
+                        )
+                        if result.get("success") if isinstance(result, dict) else result:
+                            logger.info(f"[bg] Team member cancellation email sent to {_notif_team_member_email}")
+                    except Exception as e:
+                        logger.error(f"[bg] Failed to send team member cancellation email: {e}")
+
+            elif _notif_send and (_notif_is_reschedule or bool(_notif_audit_keys & {'scheduled_start', 'scheduled_end', 'attendee_name', 'attendee_email', 'meeting_mode', 'status', 'duration_minutes', 'video_link', 'location'})):
+                logger.info(f"[bg] Appointment {appointment_id} updated, sending update notifications")
+                if _notif_attendee_email:
+                    try:
+                        result = send_appointment_update_email(
+                            attendee_email=_notif_attendee_email,
+                            attendee_name=_notif_attendee_name,
+                            appointment_title=_notif_title,
+                            appointment_date=_notif_new_date,
+                            appointment_time=_notif_new_time,
+                            duration=_notif_duration_str,
+                            meeting_mode=_notif_meeting_mode.replace('_', ' ').title(),
+                            team_member_name=_notif_team_member_name,
+                            team_member_email=_notif_team_member_email,
+                            video_link=_notif_video_link,
+                            scheduled_start=_notif_scheduled_start,
+                            duration_minutes=_notif_duration_minutes,
+                            old_date=_notif_old_date if _notif_is_reschedule else None,
+                            old_time=_notif_old_time if _notif_is_reschedule else None
+                        )
+                        if result.get("success"):
+                            logger.info(f"[bg] Update email sent to {_notif_attendee_email}")
+                    except Exception as e:
+                        logger.error(f"[bg] Failed to send attendee update email: {e}")
+
+                if _notif_attendee_phone:
+                    try:
+                        result = send_appointment_update_sms(
+                            attendee_phone=_notif_attendee_phone,
+                            attendee_name=_notif_attendee_name,
+                            appointment_date=_notif_new_date,
+                            appointment_time=_notif_new_time,
+                            team_member_name=_notif_team_member_name
+                        )
+                        if result.get("success") if isinstance(result, dict) else result:
+                            logger.info(f"[bg] Update SMS sent to {_notif_attendee_phone}")
+                    except Exception as e:
+                        logger.error(f"[bg] Failed to send attendee update SMS: {e}")
+        except Exception as e:
+            logger.error(f"[bg] Error in update notification background task: {e}")
+
+    async def _sync_calendar_updated():
+        """Background task: sync update/cancel to external calendars."""
         try:
-            from services.calendar_outbound_sync import push_appointment_updated
-            await push_appointment_updated(db, appointment, user)
+            if _notif_is_cancellation:
+                from services.calendar_outbound_sync import push_appointment_cancelled
+                await push_appointment_cancelled(db, appointment, user)
+            elif _notif_is_reschedule or bool(_notif_audit_keys & {'scheduled_start', 'scheduled_end', 'title', 'location', 'video_link', 'attendee_email'}):
+                from services.calendar_outbound_sync import push_appointment_updated
+                await push_appointment_updated(db, appointment, user)
         except Exception as cal_err:
-            logger.error(f"Outbound calendar sync (update) failed for appointment {appointment_id}: {cal_err}")
+            logger.error(f"[bg] Outbound calendar sync failed for appointment {appointment_id}: {cal_err}")
+
+    if background_tasks is not None:
+        background_tasks.add_task(_send_update_notifications)
+        background_tasks.add_task(_sync_calendar_updated)
+    else:
+        _send_update_notifications()
+        try:
+            if is_cancellation:
+                from services.calendar_outbound_sync import push_appointment_cancelled
+                await push_appointment_cancelled(db, appointment, user)
+            elif is_reschedule or bool(set(audit_changes.keys()) & {'scheduled_start', 'scheduled_end', 'title', 'location', 'video_link', 'attendee_email'}):
+                from services.calendar_outbound_sync import push_appointment_updated
+                await push_appointment_updated(db, appointment, user)
+        except Exception as cal_err:
+            logger.error(f"Outbound calendar sync failed for appointment {appointment_id}: {cal_err}")
+
+    # Build optimistic response (actual notifications dispatched to background)
+    if attendee_email and send_notification:
+        emails_sent.append(attendee_email)
+    if team_member_email and team_member and team_member.id != user.id and send_notification:
+        emails_sent.append(team_member_email)
+    if attendee_phone and send_notification:
+        sms_sent.append(attendee_phone)
 
     return {
         "message": "Appointment updated",

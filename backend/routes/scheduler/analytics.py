@@ -13,7 +13,7 @@ All endpoints require authentication and are scoped to the user's organization.
 import math
 from datetime import date as date_type, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import logging
@@ -58,8 +58,7 @@ class AnalyticsOverview(BaseModel):
     busiest_hour: Optional[int] = Field(None, description="Hour (0-23) with most appointments")
     busiest_hour_label: Optional[str] = Field(None, description="Formatted hour label (e.g. '10:00')")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TrendDatasets(BaseModel):
@@ -111,8 +110,7 @@ class AnalyticsTrends(BaseModel):
     peak_hours: Optional[PeakHoursData] = Field(None, description="Peak hours heatmap data")
     cancellation: Optional[CancellationData] = Field(None, description="Cancellation breakdown")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TypeBreakdownEntry(BaseModel):
@@ -143,8 +141,7 @@ class AnalyticsByType(BaseModel):
     types: List[TypeBreakdownEntry] = Field(default_factory=list, description="Type breakdown rows")
     pagination: PaginationMeta = Field(..., description="Pagination metadata")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class LOBreakdownEntry(BaseModel):
@@ -167,8 +164,7 @@ class AnalyticsByLO(BaseModel):
     loan_officers: List[LOBreakdownEntry] = Field(default_factory=list, description="LO breakdown rows")
     pagination: PaginationMeta = Field(..., description="Pagination metadata")
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # =============================================================================

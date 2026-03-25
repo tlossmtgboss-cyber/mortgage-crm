@@ -12,7 +12,7 @@ All endpoints require authentication and are scoped to the user's organization.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -63,8 +63,7 @@ class AppointmentOutcomesResponse(BaseModel):
     manually_scheduled: BookingChannelMetrics = Field(default_factory=BookingChannelMetrics)
     comparison: OutcomeComparison = Field(default_factory=OutcomeComparison)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TypeEffectivenessEntry(BaseModel):
@@ -88,8 +87,7 @@ class TypeEffectivenessResponse(BaseModel):
     period_days: int = Field(90)
     types: List[TypeEffectivenessEntry] = Field(default_factory=list)
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # =============================================================================

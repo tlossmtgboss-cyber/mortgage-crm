@@ -57,6 +57,7 @@ async def create_appointment(
     *,
     write_audit_log,
     emit_event,
+    background_tasks=None,
 ) -> AppointmentResult:
     """
     Create a new appointment with full double-booking prevention.
@@ -251,21 +252,36 @@ async def create_appointment(
         end_time=scheduled_end,
     )
 
-    # --- Post-commit notifications (best-effort) ---
+    # --- Post-commit notifications (best-effort, background when possible) ---
+    # PERF-007: Move notification dispatch to background to avoid blocking
+    # the API response on SendGrid/Outlook Graph API latency.
     email_sent = False
     outlook_event_id = None
 
-    if attendee_email:
-        email_sent = await _send_confirmation_email(
-            db, appointment, assigned_user_id,
-        )
-        if not email_sent:
-            warnings.append("Confirmation email could not be sent")
+    if background_tasks is not None:
+        # FastAPI BackgroundTasks available -- dispatch after response
+        if attendee_email:
+            background_tasks.add_task(
+                _send_confirmation_email, db, appointment, assigned_user_id,
+            )
+        if assigned_user_id:
+            background_tasks.add_task(
+                _create_outlook_event,
+                db, appointment, attendee_email, attendee_name, attendee_phone,
+            )
+    else:
+        # Fallback: inline await (e.g. called from AppointmentService directly)
+        if attendee_email:
+            email_sent = await _send_confirmation_email(
+                db, appointment, assigned_user_id,
+            )
+            if not email_sent:
+                warnings.append("Confirmation email could not be sent")
 
-    if assigned_user_id:
-        outlook_event_id = await _create_outlook_event(
-            db, appointment, attendee_email, attendee_name, attendee_phone,
-        )
+        if assigned_user_id:
+            outlook_event_id = await _create_outlook_event(
+                db, appointment, attendee_email, attendee_name, attendee_phone,
+            )
 
     # Emit event
     emit_event(AppointmentEvent.CREATED, {

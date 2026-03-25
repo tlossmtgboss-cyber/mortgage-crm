@@ -298,13 +298,21 @@ async def public_reschedule_confirm(
     org_id = payload.get("org_id")
 
     # Verify borrower ownership: token email must match appointment attendee
+    # SEC-010: Support both email_hash (new) and plaintext email (legacy) tokens
+    import hashlib
+    token_email_hash = payload.get("email_hash")
     token_email = payload.get("email", "").lower().strip()
-    if token_email:
+    if token_email_hash or token_email:
         try:
             appt_check = svc._get_appointment(appointment_id, org_id)
             appt_email = (appt_check.attendee_email or "").lower().strip()
-            if appt_email and appt_email != token_email:
-                forbidden_error("Token does not match appointment")
+            if appt_email:
+                if token_email_hash:
+                    appt_hash = hashlib.sha256(appt_email.encode()).hexdigest()[:16]
+                    if appt_hash != token_email_hash:
+                        forbidden_error("Token does not match appointment")
+                elif token_email and appt_email != token_email:
+                    forbidden_error("Token does not match appointment")
         except ValueError:
             not_found_error("Appointment not found")
 

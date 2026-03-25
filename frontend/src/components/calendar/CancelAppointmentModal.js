@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import useFocusTrap from '../../hooks/useFocusTrap';
+import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
@@ -117,9 +118,11 @@ export default function CancelAppointmentModal({ appointment, onClose, onCancell
   const formatStart = (isoStr) => {
     if (!isoStr) return '';
     try {
-      return new Date(isoStr).toLocaleString(undefined, {
+      const tz = getUserTimezone();
+      return new Date(normalizeUTCDate(isoStr)).toLocaleString('en-US', {
         weekday: 'short', month: 'short', day: 'numeric',
         hour: 'numeric', minute: '2-digit',
+        timeZone: tz, timeZoneName: 'short',
       });
     } catch {
       return isoStr;

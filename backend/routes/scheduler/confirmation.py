@@ -35,17 +35,54 @@ from routes.scheduler._helpers import (
     _check_appointment_conflict, _convert_utc_to_user_tz, _audit_log,
 )
 from routes.scheduler.constants import DEFAULT_TIMEZONE
+from routes.scheduler.middleware import get_correlated_logger
 from db import get_db
 
-logger = logging.getLogger(__name__)
+logger = get_correlated_logger(__name__)
 
 router = APIRouter()
 
-SECRET_KEY = os.getenv("SECRET_KEY", "")
-if not SECRET_KEY:
-    import warnings
-    warnings.warn("SECRET_KEY not set in confirmation module")
+_SECRET_KEY = os.getenv("SECRET_KEY")
+if not _SECRET_KEY and os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production":
+    raise RuntimeError("SECRET_KEY must be set in production")
+_SECRET_KEY = _SECRET_KEY or "dev-only-insecure-key"
+SECRET_KEY = _SECRET_KEY
 FRONTEND_URL = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
+
+
+def _hash_email(email: str) -> str:
+    """One-way hash of an email address for use in JWT tokens.
+
+    SEC-010: Avoids exposing plaintext email in base64-encoded JWT payloads
+    while still allowing verification by hashing the comparison email.
+    """
+    return hashlib.sha256(email.lower().strip().encode()).hexdigest()[:16]
+
+
+def _verify_token_email(payload: dict, expected_email: str) -> bool:
+    """Verify a JWT payload's email claim against an expected email.
+
+    SEC-010: Supports both new (email_hash) and legacy (email) token formats
+    for backward compatibility with tokens issued before the migration.
+    Returns True if verification passes or if no email claim is present.
+    """
+    if not expected_email:
+        return True
+    expected_clean = expected_email.strip().lower()
+
+    # New format: email_hash
+    token_hash = payload.get("email_hash")
+    if token_hash:
+        return token_hash == _hash_email(expected_clean)
+
+    # Legacy format: plaintext email (tokens issued before SEC-010 migration)
+    token_email = (payload.get("email") or "").strip().lower()
+    if token_email:
+        return token_email == expected_clean
+
+    # No email claim in token — allow (appt_id check is the primary guard)
+    return True
+
 
 # Maximum length for ICS description field to prevent abuse
 _ICS_DESCRIPTION_MAX_LENGTH = 2000
@@ -242,12 +279,16 @@ DEFAULT_CHECKLIST = {
 # ============================================================================
 
 def _generate_confirmation_token(appointment_id: int, attendee_email: str) -> str:
-    """Generate a JWT token for accessing a specific appointment's confirmation page."""
+    """Generate a JWT token for accessing a specific appointment's confirmation page.
+
+    SEC-010: Uses email_hash instead of plaintext email to avoid exposing PII
+    in the base64-encoded JWT payload.
+    """
     if not SECRET_KEY:
         raise RuntimeError("SECRET_KEY required for token generation")
     payload = {
         "appt_id": appointment_id,
-        "email": attendee_email,
+        "email_hash": _hash_email(attendee_email),
         "purpose": "confirmation",
         "exp": datetime.now(timezone.utc) + timedelta(hours=48),
     }
@@ -338,10 +379,8 @@ async def get_confirmation_details(
     # Verify token AND implicitly revoke if appointment is cancelled/no-show
     payload = _verify_confirmation_token(token, appointment_id, appointment_status=appt_status)
 
-    # SEC-001: Verify token email matches appointment attendee
-    token_email = (payload.get("email") or "").strip().lower()
-    appt_email = (appointment.attendee_email or "").strip().lower()
-    if token_email and appt_email and token_email != appt_email:
+    # SEC-001 + SEC-010: Verify token email claim matches appointment attendee
+    if not _verify_token_email(payload, appointment.attendee_email):
         raise HTTPException(status_code=403, detail="Token does not match this appointment")
 
     # Get LO details -- mask PII for public response (no raw email/phone/NMLS)
@@ -435,11 +474,11 @@ async def get_confirmation_details(
     reschedule_url = None
     cancel_url = None
     try:
-        attendee_email = payload.get("email", appointment.attendee_email or "")
+        attendee_email = appointment.attendee_email or ""
         cancel_token = jwt.encode(
             {
                 "appt_id": appointment_id,
-                "email": attendee_email,
+                "email_hash": _hash_email(attendee_email) if attendee_email else "",
                 "action": "cancel",
                 "exp": datetime.now(timezone.utc) + timedelta(hours=72),
             },
@@ -536,10 +575,8 @@ async def download_ics_file(
     # Verify token AND reject if appointment is cancelled/no-show
     payload = _verify_confirmation_token(token, appointment_id, appointment_status=appt_status)
 
-    # SEC-001: Verify token email matches appointment attendee
-    token_email = (payload.get("email") or "").strip().lower()
-    appt_email = (appointment.attendee_email or "").strip().lower()
-    if token_email and appt_email and token_email != appt_email:
+    # SEC-001 + SEC-010: Verify token email claim matches appointment attendee
+    if not _verify_token_email(payload, appointment.attendee_email):
         raise HTTPException(status_code=403, detail="Token does not match this appointment")
 
     # Get LO info for organizer fields
@@ -622,10 +659,8 @@ async def public_cancel_appointment(
     # Verify token (also rejects cancelled/no-show appointments)
     payload = _verify_confirmation_token(token, appointment_id, appointment_status=appt_status)
 
-    # SEC-001: Verify token email matches appointment attendee
-    token_email = (payload.get("email") or "").strip().lower()
-    appt_email = (appointment.attendee_email or "").strip().lower()
-    if token_email and appt_email and token_email != appt_email:
+    # SEC-001 + SEC-010: Verify token email claim matches appointment attendee
+    if not _verify_token_email(payload, appointment.attendee_email):
         raise HTTPException(status_code=403, detail="Token does not match this appointment")
 
     # Check the appointment is still in a cancellable state
@@ -661,7 +696,7 @@ async def public_cancel_appointment(
             appointment_date = local_start.strftime('%B %d, %Y')
             appointment_time = local_start.strftime('%I:%M %p %Z')
         except Exception as e:
-            logger.warning("Timezone conversion failed for cancellation email (appointment %s): %s", appointment.id, e)
+            logger.error("Timezone conversion failed for cancellation email (appointment %s): %s", appointment.id, e, exc_info=True)
             appointment_date = appointment.scheduled_start.strftime('%B %d, %Y')
             appointment_time = appointment.scheduled_start.strftime('%I:%M %p UTC')
     elif appointment.scheduled_start:
@@ -803,10 +838,8 @@ async def public_reschedule_appointment(
     # Verify token (also rejects cancelled/no-show appointments)
     payload = _verify_confirmation_token(token, appointment_id, appointment_status=appt_status)
 
-    # SEC-001: Verify token email matches appointment attendee
-    token_email = (payload.get("email") or "").strip().lower()
-    appt_email = (appointment.attendee_email or "").strip().lower()
-    if token_email and appt_email and token_email != appt_email:
+    # SEC-001 + SEC-010: Verify token email claim matches appointment attendee
+    if not _verify_token_email(payload, appointment.attendee_email):
         raise HTTPException(status_code=403, detail="Token does not match this appointment")
 
     # Check the appointment is still in a reschedulable state
@@ -947,7 +980,7 @@ async def public_reschedule_appointment(
                     new_date_str = local_new_start.strftime('%B %d, %Y')
                     new_time_str = local_new_start.strftime('%I:%M %p %Z')
                 except Exception as e:
-                    logger.warning("Timezone conversion failed for reschedule email (appointment %s): %s", appointment_id, e)
+                    logger.error("Timezone conversion failed for reschedule email (appointment %s): %s", appointment_id, e, exc_info=True)
                     new_date_str = new_start.strftime('%B %d, %Y')
                     new_time_str = new_start.strftime('%I:%M %p UTC')
             else:

@@ -287,10 +287,15 @@ class RescheduleService:
 
         expires_at = datetime.now(timezone.utc) + timedelta(hours=RESCHEDULE_TOKEN_TTL_HOURS)
 
+        # SEC-010: Use email_hash instead of plaintext email in JWT payload
+        import hashlib
+        email_hash = ""
+        if appt.attendee_email:
+            email_hash = hashlib.sha256(appt.attendee_email.lower().strip().encode()).hexdigest()[:16]
         payload = {
             "appt_id": appointment_id,
             "org_id": appt.organization_id,
-            "email": appt.attendee_email,
+            "email_hash": email_hash,
             "action": "reschedule",
             "exp": expires_at,
         }

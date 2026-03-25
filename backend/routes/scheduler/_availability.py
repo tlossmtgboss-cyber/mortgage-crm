@@ -11,6 +11,7 @@ from typing import List, Optional
 from collections import defaultdict
 import pytz
 import logging
+import time as time_mod
 
 from smart_scheduler_models import (
     AppointmentStatus, DayOfWeek, SlotPriority, DEFAULT_WORKING_HOURS,
@@ -24,6 +25,60 @@ from routes.scheduler.constants import (
 from routes.scheduler._core import get_models
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# PERF-008: TTL CACHE FOR SCHEDULER CONFIG LOOKUPS
+# ============================================================================
+# SchedulerConfig rarely changes (LO updates settings once then forgets).
+# Caching for 5 minutes avoids a DB query per slot-request / timezone lookup.
+
+_CONFIG_TTL = 300  # 5 minutes
+
+# Cache structure: {f"{org_id}:{user_id}": {"config": <SchedulerConfig|None>, "ts": float}}
+_scheduler_config_cache: dict = {}
+
+
+def get_cached_scheduler_config(db: Session, user_id: int, org_id: int):
+    """
+    Get SchedulerConfig with a simple TTL cache.
+
+    Returns the cached SchedulerConfig ORM object (or None) if the cache
+    entry is fresh. Otherwise queries the DB, caches the result, and returns it.
+
+    PERF-008: Eliminates redundant DB queries when multiple endpoints
+    (timezone lookup, slot generation, public booking) need the same config
+    within a short window.
+    """
+    cache_key = f"{org_id}:{user_id}"
+    cached = _scheduler_config_cache.get(cache_key)
+    if cached and time_mod.time() - cached["ts"] < _CONFIG_TTL:
+        return cached["config"]
+
+    _models = get_models()
+    SchedulerConfig = _models.get('SchedulerConfig') if _models else None
+    config = None
+    if SchedulerConfig and user_id:
+        config = db.query(SchedulerConfig).filter(
+            SchedulerConfig.user_id == user_id,
+            SchedulerConfig.organization_id == org_id,
+        ).first()
+
+    _scheduler_config_cache[cache_key] = {"config": config, "ts": time_mod.time()}
+    return config
+
+
+def invalidate_scheduler_config_cache(user_id: int = None, org_id: int = None):
+    """Invalidate cached SchedulerConfig entries.
+
+    Called when settings are updated to ensure fresh data on next read.
+    If both user_id and org_id are provided, only that specific entry is cleared.
+    If neither is provided, the entire cache is cleared.
+    """
+    if user_id is not None and org_id is not None:
+        _scheduler_config_cache.pop(f"{org_id}:{user_id}", None)
+    else:
+        _scheduler_config_cache.clear()
 
 
 # ============================================================================
@@ -90,13 +145,13 @@ def _cb_should_skip(provider: str) -> bool:
 
 def _get_user_timezone(db, user_id: int, org_id: int = None) -> str:
     """Get user's configured timezone from SchedulerConfig, defaulting to America/Chicago.
-    Scoped by org_id to prevent cross-tenant config exposure."""
-    _models = get_models()
-    SchedulerConfig = _models.get('SchedulerConfig') if _models else None
-    if SchedulerConfig and user_id:
-        tz_query = db.query(SchedulerConfig).filter(SchedulerConfig.user_id == user_id)
-        tz_query = tz_query.filter(SchedulerConfig.organization_id == org_id)
-        config = tz_query.first()
+    Scoped by org_id to prevent cross-tenant config exposure.
+
+    PERF-008: Uses TTL-cached SchedulerConfig lookup to avoid a DB query
+    on every call (timezone is checked per-slot in some code paths).
+    """
+    if user_id and org_id is not None:
+        config = get_cached_scheduler_config(db, user_id, org_id)
         if config and getattr(config, 'timezone', None):
             return config.timezone
     return 'America/Chicago'
@@ -181,7 +236,7 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
         # Legacy source — import failures are expected if table doesn't exist;
         # only fail closed on actual query errors (not ImportError)
         if isinstance(e, ImportError):
-            logger.debug(f"Legacy ScheduledAppointment cross-source check skipped (not installed): {e}")
+            logger.warning(f"Legacy ScheduledAppointment cross-source check skipped (not installed): {e}")
         else:
             logger.error(f"Legacy ScheduledAppointment cross-source check FAILED for user {target_user_id} — failing closed: {e}")
             degraded_sources.append("legacy_appointment")
@@ -208,7 +263,7 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
             _cb_record_success("calendar_event")
         except Exception as ex:
             if isinstance(ex, ImportError):
-                logger.debug(f"CalendarEvent cross-source check skipped (not installed): {ex}")
+                logger.warning(f"CalendarEvent cross-source check skipped (not installed): {ex}")
             else:
                 logger.error(f"CalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
                 _cb_record_failure("calendar_event")
@@ -236,7 +291,7 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
             _cb_record_success("crm_calendar_event")
         except Exception as ex:
             if isinstance(ex, ImportError):
-                logger.debug(f"CRMCalendarEvent cross-source check skipped (not installed): {ex}")
+                logger.warning(f"CRMCalendarEvent cross-source check skipped (not installed): {ex}")
             else:
                 logger.error(f"CRMCalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
                 _cb_record_failure("crm_calendar_event")
@@ -319,7 +374,7 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
                 )
     except Exception as e:
         if isinstance(e, ImportError):
-            logger.debug(f"Legacy ScheduledAppointment batch cross-source check skipped (not installed): {e}")
+            logger.warning(f"Legacy ScheduledAppointment batch cross-source check skipped (not installed): {e}")
         else:
             logger.error(f"Legacy ScheduledAppointment batch cross-source check FAILED — failing closed for all users: {e}")
             _fail_closed_all_users("legacy_appointment")
@@ -346,7 +401,7 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
             _cb_record_success("calendar_event")
         except Exception as ex:
             if isinstance(ex, ImportError):
-                logger.debug(f"CalendarEvent batch cross-source check skipped (not installed): {ex}")
+                logger.warning(f"CalendarEvent batch cross-source check skipped (not installed): {ex}")
             else:
                 logger.error(f"CalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
                 _cb_record_failure("calendar_event")
@@ -374,7 +429,7 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
             _cb_record_success("crm_calendar_event")
         except Exception as ex:
             if isinstance(ex, ImportError):
-                logger.debug(f"CRMCalendarEvent batch cross-source check skipped (not installed): {ex}")
+                logger.warning(f"CRMCalendarEvent batch cross-source check skipped (not installed): {ex}")
             else:
                 logger.error(f"CRMCalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
                 _cb_record_failure("crm_calendar_event")
@@ -447,6 +502,16 @@ def _generate_available_slots(
     by this slot generator, but the settings UI may still display/edit the JSON blob
     without the user realizing it has no effect on slot generation.
     """
+    # Lightweight cleanup: expire any stale active SlotHold records so they
+    # don't phantom-block slots.  This is a single UPDATE on an indexed column
+    # and adds negligible latency.  See H9 in challenge audit.
+    try:
+        from routes.scheduler.maintenance import auto_cleanup_expired_holds
+        auto_cleanup_expired_holds(db)
+    except Exception:
+        # Never let cleanup failure block availability queries
+        logger.debug("SlotHold auto-cleanup skipped (non-critical)", exc_info=True)
+
     _models = get_models()
     SchedulerConfig = _models.get('SchedulerConfig') if _models else None
     BlockedTime = _models.get('BlockedTime') if _models else None
@@ -542,13 +607,14 @@ def _generate_available_slots(
         degraded_sources = []
 
     # Batch 5: Check recurring availability for all users (one query via service)
+    # PERF-009: Single batched query replaces N per-user queries
     _ra_service = None
     _users_with_recurring = set()
     try:
         from services.recurring_availability_service import RecurringAvailabilityService
         _ra_service = RecurringAvailabilityService(db)
-        for uid in user_ids:
-            _ra_check = _ra_service.get_weekly_schedule(uid, org_id)
+        _recurring_by_user = _ra_service.get_weekly_schedule_batch(user_ids, org_id)
+        for uid, _ra_check in _recurring_by_user.items():
             if _ra_check:
                 _users_with_recurring.add(uid)
                 # C4 fix: Log when both availability sources have data
@@ -560,11 +626,11 @@ def _generate_available_slots(
                         if isinstance(v, dict)
                     ) if isinstance(json_wh, dict) else False
                     if has_json_data:
-                        logger.info(
-                            f"User {uid}: Both RecurringAvailability rows and "
-                            f"SchedulerConfig.working_hours JSON contain data. "
-                            f"Using RecurringAvailability as the availability source "
-                            f"(JSON working_hours is ignored for slot generation)."
+                        logger.warning(
+                            "DUAL_AVAILABILITY_SOURCE: user %s has both RecurringAvailability "
+                            "rows (%d) and SchedulerConfig.working_hours JSON. Using "
+                            "RecurringAvailability as primary source.",
+                            uid, len(_ra_check)
                         )
     except Exception as e:
         logger.debug(f"RecurringAvailability not available, using JSON working_hours: {e}")

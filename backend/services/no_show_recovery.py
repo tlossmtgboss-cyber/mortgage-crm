@@ -51,20 +51,14 @@ MAX_RECOVERY_WINDOW_HOURS = 96
 # Batch size for queries to avoid excessive memory usage
 RECOVERY_BATCH_SIZE = 200
 
-_SECRET_KEY: Optional[str] = None
-
-# SEC-002: Warn if SECRET_KEY is not set
-_SECRET_KEY = os.getenv("SECRET_KEY", "")
-if not _SECRET_KEY:
-    import warnings
-    warnings.warn("SECRET_KEY not set — using empty key (unsafe for production)")
+_SECRET_KEY = os.getenv("SECRET_KEY")
+if not _SECRET_KEY and os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production":
+    raise RuntimeError("SECRET_KEY must be set in production")
+_SECRET_KEY = _SECRET_KEY or "dev-only-insecure-key"
 
 
 def _get_secret_key() -> str:
-    """Lazily load SECRET_KEY from environment."""
-    global _SECRET_KEY
-    if not _SECRET_KEY:
-        _SECRET_KEY = os.getenv("SECRET_KEY", "")
+    """Return the SECRET_KEY (loaded at module init)."""
     return _SECRET_KEY
 
 
@@ -350,9 +344,18 @@ class NoShowRecoveryService:
         _models = self._get_models()
         Appointment = _models["Appointment"]
 
-        filters = [Appointment.id == appointment_id]
-        if organization_id is not None:
-            filters.append(Appointment.organization_id == organization_id)
+        # TENANT-007: Always require organization_id for tenant isolation
+        if organization_id is None:
+            logger.error(
+                "execute_step called without organization_id for appointment %s",
+                appointment_id,
+            )
+            return {"sent": False, "reason": "missing_organization_id"}
+
+        filters = [
+            Appointment.id == appointment_id,
+            Appointment.organization_id == organization_id,
+        ]
 
         appointment = db.query(Appointment).filter(
             and_(*filters)
@@ -933,11 +936,15 @@ class NoShowRecoveryService:
             return {"success": False, "error": "no_phone_number"}
 
         # COMP-002: TCPA consent check before sending recovery SMS
+        org_id = appointment.organization_id
         try:
             from services.scheduler_sms_sender import check_sms_consent
-            can_send, reason = check_sms_consent(phone)
+            can_send, reason = check_sms_consent(phone, organization_id=org_id)
             if not can_send:
-                logger.info("No-show recovery SMS blocked by TCPA consent: %s", reason)
+                logger.info(
+                    "TCPA consent blocked recovery SMS to %s: %s",
+                    phone[-4:], reason,
+                )
                 return {"success": False, "error": f"TCPA consent blocked: {reason}"}
         except ImportError:
             logger.error("TCPA consent module not available, blocking SMS (fail-closed)")

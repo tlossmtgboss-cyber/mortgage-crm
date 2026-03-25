@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -22,15 +23,17 @@ const STATUS_LABELS = {
 
 function formatDate(isoString) {
   if (!isoString) return '--';
-  return new Date(isoString).toLocaleDateString('en-US', {
-    month: 'short', day: 'numeric', year: 'numeric',
+  const tz = getUserTimezone();
+  return new Date(normalizeUTCDate(isoString)).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric', timeZone: tz,
   });
 }
 
 function formatDateTime(isoString) {
   if (!isoString) return '--';
-  return new Date(isoString).toLocaleString('en-US', {
-    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
+  const tz = getUserTimezone();
+  return new Date(normalizeUTCDate(isoString)).toLocaleString('en-US', {
+    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: tz,
   });
 }
 

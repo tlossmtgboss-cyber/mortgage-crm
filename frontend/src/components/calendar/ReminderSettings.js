@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
@@ -387,7 +388,7 @@ function SendHistoryTable({ logs, loading }) {
           {logs.map(log => (
             <tr key={log.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
               <td style={{ padding: '8px 12px', color: '#6b7280' }}>
-                {log.sent_at ? new Date(log.sent_at).toLocaleString() : '-'}
+                {log.sent_at ? new Date(normalizeUTCDate(log.sent_at)).toLocaleString('en-US', { timeZone: getUserTimezone() }) : '-'}
               </td>
               <td style={{ padding: '8px 12px', textTransform: 'uppercase', fontWeight: 500, color: '#374151' }}>
                 {log.channel}

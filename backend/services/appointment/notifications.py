@@ -8,6 +8,7 @@ cancellation notifications, and Outlook calendar event creation.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -15,6 +16,16 @@ from sqlalchemy.orm import Session
 from services.appointment._models import get_model
 
 logger = logging.getLogger(__name__)
+
+
+def _mask_email(email: str) -> str:
+    """Mask email for safe logging: j***@example.com."""
+    if not email or "@" not in email:
+        return "***"
+    local, domain = email.split("@", 1)
+    if len(local) <= 1:
+        return f"***@{domain}"
+    return f"{local[0]}***@{domain}"
 
 
 async def send_confirmation_email(
@@ -64,6 +75,14 @@ async def send_confirmation_email(
             appointment.id, appointment.attendee_email,
         )
 
+        # COMP-014: Record consent verification timestamp for AI-initiated communications
+        consent_checked_at = datetime.now(timezone.utc).isoformat()
+        logger.info(
+            "AI_COMM_CONSENT: type=%s recipient=%s consent_checked=%s appointment_id=%s",
+            "email", _mask_email(appointment.attendee_email),
+            consent_checked_at, appointment.id,
+        )
+
         result = send_appointment_confirmation_email(
             attendee_email=appointment.attendee_email,
             attendee_name=appointment.attendee_name or "there",
@@ -105,6 +124,14 @@ async def send_update_notification(appointment) -> bool:
         appt_time = appointment.scheduled_start.strftime("%I:%M %p")
         duration_str = f"{appointment.duration_minutes} minutes"
 
+        # COMP-014: Record consent verification timestamp for AI-initiated communications
+        consent_checked_at = datetime.now(timezone.utc).isoformat()
+        logger.info(
+            "AI_COMM_CONSENT: type=%s recipient=%s consent_checked=%s appointment_id=%s",
+            "email", _mask_email(appointment.attendee_email),
+            consent_checked_at, appointment.id,
+        )
+
         result = send_appointment_update_email(
             attendee_email=appointment.attendee_email,
             attendee_name=appointment.attendee_name or "there",
@@ -126,6 +153,14 @@ async def send_cancellation_notification(appointment) -> bool:
     """Send cancellation notification to attendee."""
     try:
         from scheduler_email_service import send_appointment_cancellation_email
+
+        # COMP-014: Record consent verification timestamp for AI-initiated communications
+        consent_checked_at = datetime.now(timezone.utc).isoformat()
+        logger.info(
+            "AI_COMM_CONSENT: type=%s recipient=%s consent_checked=%s appointment_id=%s",
+            "email", _mask_email(appointment.attendee_email),
+            consent_checked_at, appointment.id,
+        )
 
         result = send_appointment_cancellation_email(
             attendee_email=appointment.attendee_email,

@@ -1,4 +1,5 @@
 import React from 'react';
+import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 
 /**
  * TeamMemberColumn - Renders parts of a single LO's column in the team day view.
@@ -106,14 +107,16 @@ function AppointmentBlock({
       <div className="tc-appointment-title">{appt.title}</div>
       {appt.scheduled_start && (
         <div className="tc-appointment-time">
-          {new Date(appt.scheduled_start).toLocaleTimeString([], {
+          {new Date(normalizeUTCDate(appt.scheduled_start)).toLocaleTimeString('en-US', {
             hour: 'numeric',
             minute: '2-digit',
+            timeZone: getUserTimezone(),
           })}
           {appt.scheduled_end &&
-            ` - ${new Date(appt.scheduled_end).toLocaleTimeString([], {
+            ` - ${new Date(normalizeUTCDate(appt.scheduled_end)).toLocaleTimeString('en-US', {
               hour: 'numeric',
               minute: '2-digit',
+              timeZone: getUserTimezone(),
             })}`}
         </div>
       )}

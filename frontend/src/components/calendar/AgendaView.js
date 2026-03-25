@@ -1,6 +1,11 @@
 import React, { useMemo, useCallback, useState, useRef, useEffect } from 'react';
 import { EventBoundary } from './EventErrorFallback';
 import StatusBadge from './StatusBadge';
+import {
+  normalizeUTCDate,
+  getUserTimezone,
+  getTimezoneAbbreviation,
+} from './calendarUtils';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTH_NAMES = [
@@ -33,12 +38,14 @@ const formatRelativeDate = (date) => {
 
 /**
  * formatEventTime - Format start/end times and compute duration.
+ * Timezone-aware: formats in the user's configured timezone.
  */
 const formatEventTime = (startTime, endTime) => {
-  const start = new Date(startTime);
-  const end = new Date(endTime);
-  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const start = new Date(normalizeUTCDate(startTime));
+  const end = new Date(normalizeUTCDate(endTime));
+  const tz = getUserTimezone();
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
+  const endStr = end.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
   const durationMs = end - start;
   const durationMins = Math.round(durationMs / 60000);
 
@@ -179,7 +186,7 @@ const AgendaView = React.memo(function AgendaView({
         <h3 className="cv-agenda-view__title">Upcoming Appointments</h3>
         {totalEvents > 0 && (
           <span className="cv-agenda-view__count">
-            {totalEvents} event{totalEvents !== 1 ? 's' : ''}
+            {totalEvents} event{totalEvents !== 1 ? 's' : ''} ({getTimezoneAbbreviation()})
           </span>
         )}
       </div>

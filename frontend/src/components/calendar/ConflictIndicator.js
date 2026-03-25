@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
+import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 
 /**
  * ConflictIndicator - Visual indicator for calendar grid cells/events that have conflicts.
@@ -57,8 +58,9 @@ const ConflictIndicator = React.memo(function ConflictIndicator({
   const formatTime = (isoString) => {
     if (!isoString) return '';
     try {
-      const dt = new Date(isoString);
-      return dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      const tz = getUserTimezone();
+      const dt = new Date(normalizeUTCDate(isoString));
+      return dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
     } catch {
       return '';
     }

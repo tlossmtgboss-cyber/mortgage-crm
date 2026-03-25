@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 import '../../styles/context-menu.css';
 
 /**
@@ -134,9 +135,10 @@ const QuickActionsMenu = React.memo(function QuickActionsMenu({
       const event = contextData.event;
       const parts = [event.title || 'Appointment'];
       if (event.start_time) {
-        const d = new Date(event.start_time);
-        parts.push(d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }));
-        parts.push(d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }));
+        const d = new Date(normalizeUTCDate(event.start_time));
+        const tz = getUserTimezone();
+        parts.push(d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: tz }));
+        parts.push(d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz }));
       }
       if (event.attendee_name) {
         parts.push(`with ${event.attendee_name}`);

@@ -3,626 +3,679 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Smart Calendar /u-challenge Report v5 — 2026-03-23</title>
+<title>Smart Calendar — Critical Challenge Report</title>
 <style>
-  :root { --bg: #0f172a; --surface: #1e293b; --surface2: #334155; --accent: #6366f1; --accent2: #818cf8;
-    --green: #22c55e; --yellow: #eab308; --red: #ef4444; --orange: #f97316; --text: #f1f5f9; --muted: #94a3b8; --border: #475569; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Inter', -apple-system, sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; padding: 24px; }
-  .container { max-width: 1100px; margin: 0 auto; }
-  h1 { font-size: 28px; margin-bottom: 8px; }
-  h2 { font-size: 22px; margin: 32px 0 16px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-  h3 { font-size: 17px; margin: 20px 0 10px; color: var(--accent2); }
-  .subtitle { color: var(--muted); margin-bottom: 24px; font-size: 14px; }
-  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
-  .badge-critical { background: #7f1d1d; color: #fca5a5; }
-  .badge-high { background: #7c2d12; color: #fdba74; }
-  .badge-medium { background: #713f12; color: #fde68a; }
-  .badge-low { background: #14532d; color: #86efac; }
-  .badge-fixed { background: #1e3a5f; color: #93c5fd; }
-  .badge-strength { background: #312e81; color: #c7d2fe; }
-  .badge-arch { background: #1e3a5f; color: #67e8f9; }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; margin-bottom: 14px; }
-  .card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
-  .card-title { font-weight: 600; font-size: 15px; }
-  .card-body { color: var(--muted); font-size: 13px; }
-  .card-body code { background: var(--surface2); padding: 2px 6px; border-radius: 4px; font-size: 12px; color: var(--accent2); }
-  .card-body .file-ref { color: #67e8f9; font-size: 12px; font-family: monospace; }
-  .score-container { display: flex; gap: 20px; flex-wrap: wrap; margin: 20px 0; }
-  .score-box { flex: 1; min-width: 140px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
-  .score-value { font-size: 32px; font-weight: 800; }
-  .score-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .progress-bar { height: 8px; background: var(--surface2); border-radius: 4px; margin: 6px 0; overflow: hidden; }
-  .progress-fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
-  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
-  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
-  .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 16px 0; }
-  .stat-card { background: var(--surface); border-radius: 8px; padding: 14px 16px; }
-  .stat-value { font-size: 24px; font-weight: 700; }
-  .stat-label { font-size: 12px; color: var(--muted); }
-  .version-banner { background: linear-gradient(135deg, #312e81, #1e1b4b); border: 1px solid #4338ca; border-radius: 10px; padding: 16px 20px; margin-bottom: 24px; }
-  .exec-summary { background: var(--surface); border-left: 4px solid var(--accent); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 16px 0; font-size: 14px; }
-  .section-count { font-size: 13px; color: var(--muted); font-weight: 400; }
-  .fix-prompt { background: #1a1a2e; border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; margin-top: 8px; font-family: monospace; font-size: 12px; color: #c7d2fe; white-space: pre-wrap; }
-  .devil-q { border-left: 3px solid var(--orange); padding-left: 14px; margin: 10px 0; font-style: italic; color: var(--muted); }
-  .arch-callout { background: #1a1a2e; border: 1px solid #4338ca; border-radius: 8px; padding: 14px 18px; margin: 12px 0; }
-  .arch-callout h4 { color: var(--accent2); font-size: 14px; margin-bottom: 6px; }
-  .metric-row { display: flex; gap: 12px; flex-wrap: wrap; margin: 8px 0; }
-  .metric-pill { background: var(--surface2); border-radius: 20px; padding: 4px 12px; font-size: 12px; }
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a25;
+    --border: #2a2a3a;
+    --text: #e0e0e8;
+    --text-dim: #8888a0;
+    --accent: #6366f1;
+    --accent-glow: rgba(99,102,241,0.15);
+    --red: #ef4444;
+    --red-bg: rgba(239,68,68,0.08);
+    --orange: #f97316;
+    --orange-bg: rgba(249,115,22,0.08);
+    --yellow: #eab308;
+    --yellow-bg: rgba(234,179,8,0.08);
+    --green: #22c55e;
+    --green-bg: rgba(34,197,94,0.08);
+    --blue: #3b82f6;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  h1 { font-size: 1.8rem; color: var(--accent); margin-bottom: 0.5rem; }
+  h2 { font-size: 1.3rem; color: var(--text); margin: 2rem 0 1rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+  h3 { font-size: 1.1rem; color: var(--text-dim); margin: 1.5rem 0 0.75rem; }
+  .subtitle { color: var(--text-dim); font-size: 0.9rem; margin-bottom: 2rem; }
+  .grade-box {
+    display: inline-flex; align-items: center; gap: 1rem;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1.5rem 2rem; margin: 1rem 0 2rem;
+  }
+  .grade-letter {
+    font-size: 3rem; font-weight: 900;
+    background: linear-gradient(135deg, var(--orange), var(--yellow));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .grade-detail { font-size: 0.85rem; color: var(--text-dim); }
+  .grade-detail strong { color: var(--text); font-size: 1.4rem; display: block; }
+
+  .score-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1rem; margin: 1rem 0;
+  }
+  .score-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem;
+  }
+  .score-card .label { color: var(--text-dim); font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  .score-card .value { font-size: 1.6rem; font-weight: 700; margin: 0.25rem 0; }
+  .score-bar { height: 4px; background: var(--surface2); border-radius: 2px; margin-top: 0.5rem; overflow: hidden; }
+  .score-bar .fill { height: 100%; border-radius: 2px; transition: width 0.5s ease; }
+
+  .finding {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1.25rem; margin: 0.75rem 0;
+    border-left: 3px solid var(--border);
+  }
+  .finding.critical { border-left-color: var(--red); background: var(--red-bg); }
+  .finding.high { border-left-color: var(--orange); background: var(--orange-bg); }
+  .finding.medium { border-left-color: var(--yellow); background: var(--yellow-bg); }
+  .finding .tag {
+    display: inline-block; font-size: 0.7rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 0.15rem 0.5rem; border-radius: 4px; margin-right: 0.5rem;
+  }
+  .finding .tag.critical { background: var(--red); color: #fff; }
+  .finding .tag.high { background: var(--orange); color: #fff; }
+  .finding .tag.medium { background: var(--yellow); color: #000; }
+  .finding .title { font-weight: 700; margin: 0.5rem 0 0.25rem; }
+  .finding .detail { color: var(--text-dim); font-size: 0.85rem; }
+  .finding code { background: var(--surface2); padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.8rem; }
+
+  .strength {
+    background: var(--green-bg); border: 1px solid rgba(34,197,94,0.2);
+    border-radius: 8px; padding: 1rem; margin: 0.5rem 0;
+    border-left: 3px solid var(--green);
+  }
+  .strength .label { color: var(--green); font-weight: 700; font-size: 0.85rem; }
+
+  .question {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem; margin: 0.5rem 0;
+  }
+  .question .cat { color: var(--accent); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+  .question .q { margin-top: 0.25rem; font-style: italic; color: var(--text); }
+
+  .phase-header {
+    background: var(--accent-glow); border: 1px solid rgba(99,102,241,0.3);
+    border-radius: 8px; padding: 1rem; margin: 1rem 0 0.5rem;
+  }
+  .phase-header .name { color: var(--accent); font-weight: 700; }
+  .phase-header .timeline { color: var(--text-dim); font-size: 0.85rem; }
+
+  .rec-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; padding: 0.75rem 1rem; margin: 0.4rem 0;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .rec-item .effort { color: var(--text-dim); font-size: 0.8rem; white-space: nowrap; margin-left: 1rem; }
+
+  .verdict {
+    background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(249,115,22,0.1));
+    border: 1px solid var(--border); border-radius: 12px;
+    padding: 2rem; margin: 2rem 0; text-align: center;
+  }
+  .verdict h3 { color: var(--text); font-size: 1.2rem; margin-bottom: 0.75rem; }
+  .verdict p { color: var(--text-dim); max-width: 700px; margin: 0 auto; font-size: 0.9rem; }
+
+  table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+  th { text-align: left; color: var(--text-dim); font-weight: 600; padding: 0.5rem; border-bottom: 1px solid var(--border); }
+  td { padding: 0.5rem; border-bottom: 1px solid var(--surface2); }
+
+  .footer { color: var(--text-dim); font-size: 0.75rem; text-align: center; margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 </style>
 </head>
 <body>
-<div class="container">
 
-<!-- HEADER -->
-<div class="version-banner">
-  <h1>Smart Calendar &mdash; /u-challenge Report v5</h1>
-  <div class="subtitle">Deep-Dive Devil's Advocate Analysis &mdash; 61 files, 177 endpoints, 37 sub-routers | Generated 2026-03-23 | Perennia AI</div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap;">
-    <span class="badge badge-fixed">v1-v4: 71 Issues FIXED</span>
-    <span class="badge badge-critical">7 Critical (New)</span>
-    <span class="badge badge-high">17 High</span>
-    <span class="badge badge-medium">24 Medium</span>
-    <span class="badge badge-low">11 Low</span>
-    <span class="badge badge-strength">12 Strengths</span>
-  </div>
-</div>
+<h1>Smart Calendar — Critical Challenge Report</h1>
+<p class="subtitle">Perennia AI Scheduler Subsystem &middot; Generated 2026-03-23 &middot; 171 routes &middot; 32 modules &middot; ~18,000 LOC backend + ~4,500 LOC frontend</p>
 
-<!-- SCOPE -->
-<div class="arch-callout">
-  <h4>Analysis Scope &mdash; v5 Fresh Deep Dive</h4>
-  <div class="metric-row">
-    <span class="metric-pill">67 backend services</span>
-    <span class="metric-pill">37 route files</span>
-    <span class="metric-pill">11 DB models / 274 columns</span>
-    <span class="metric-pill">77 Pydantic schemas</span>
-    <span class="metric-pill">19 frontend files</span>
-    <span class="metric-pill">177 endpoints</span>
-    <span class="metric-pill">59 test files</span>
-    <span class="metric-pill">3 API versions</span>
-    <span class="metric-pill">~28,000 lines analyzed</span>
-  </div>
-  <p style="margin-top:8px;font-size:12px;color:var(--muted);">v5 performed a fresh analysis with 4 parallel agents covering: (1) route modules &amp; auth, (2) services &amp; business logic, (3) database models &amp; schemas, (4) security &amp; infrastructure. All findings verified against source code with exact file:line references.</p>
-</div>
-
+<!-- ============================================================ -->
 <!-- EXECUTIVE SUMMARY -->
-<div class="exec-summary">
-  <strong>Verdict:</strong> After v4's 71-fix enterprise hardening pass, the Smart Calendar's <em>structural</em> quality is strong &mdash; validated state machines, parameterized SQL, HMAC-signed webhooks, TCPA fail-closed SMS, and PII-aware logging. However, this v5 deep dive uncovered <strong>7 critical runtime bugs</strong> that survived the hardening: email suppression stored in-memory (wiped every deploy), webhook auto-retry referencing a non-existent attribute (silently broken), forgeable unsubscribe tokens (plain base64 with no HMAC), no SendGrid webhook signature verification, email rate-limit bypass via missing org_id, asyncio.gather sharing a single DB session across coroutines, and reschedule tokens reusable for 72 hours with no ownership check. These aren't theoretical &mdash; they're bugs you can trigger right now in production. <strong>Score: 7.4/10</strong> &mdash; structurally solid, but the runtime bugs in email, webhooks, and token security need immediate fixes before enterprise deployment.
-</div>
+<!-- ============================================================ -->
 
-<!-- SCORES -->
-<div class="score-container">
-  <div class="score-box">
-    <div class="score-value" style="color:var(--yellow)">7.4</div>
-    <div class="score-label">Overall Score</div>
-    <div class="progress-bar"><div class="progress-fill" style="width:74%;background:var(--yellow)"></div></div>
-  </div>
-  <div class="score-box">
-    <div class="score-value" style="color:var(--orange)">6.5</div>
-    <div class="score-label">Security</div>
-    <div class="progress-bar"><div class="progress-fill" style="width:65%;background:var(--orange)"></div></div>
-  </div>
-  <div class="score-box">
-    <div class="score-value" style="color:var(--yellow)">7.0</div>
-    <div class="score-label">Architecture</div>
-    <div class="progress-bar"><div class="progress-fill" style="width:70%;background:var(--yellow)"></div></div>
-  </div>
-  <div class="score-box">
-    <div class="score-value" style="color:var(--yellow)">7.5</div>
-    <div class="score-label">Data Integrity</div>
-    <div class="progress-bar"><div class="progress-fill" style="width:75%;background:var(--yellow)"></div></div>
-  </div>
-  <div class="score-box">
-    <div class="score-value" style="color:var(--green)">8.5</div>
-    <div class="score-label">Compliance</div>
-    <div class="progress-bar"><div class="progress-fill" style="width:85%;background:var(--green)"></div></div>
+<h2>Executive Summary</h2>
+
+<div class="grade-box">
+  <span class="grade-letter">C+</span>
+  <div class="grade-detail">
+    <strong>68 / 100</strong>
+    Conditional Pass — Production-capable with significant hardening needed
   </div>
 </div>
 
-<!-- FIX HISTORY -->
-<h2>Fix History <span class="section-count">(71 issues resolved in v1-v4, 59 new in v5)</span></h2>
+<p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:1rem;">
+The Smart Calendar is an ambitious, feature-rich scheduling system with 171 routes across 32 modules — far more comprehensive than most embedded scheduling solutions. Its architecture (decomposed routers, service layers, defense-in-depth booking protection) is sound at the macro level. However, the rapid feature expansion has outpaced security hardening, testing, and operational resilience. <strong>8 critical findings</strong> require immediate attention before this system can be trusted with production mortgage scheduling at enterprise scale. The dual availability source ambiguity and Turnstile replay vulnerability are the most dangerous — they can silently cause double-bookings and bot abuse respectively.
+</p>
 
-<table>
-  <tr><th>Round</th><th>Fixes</th><th>Categories</th><th>Status</th></tr>
-  <tr><td>v1</td><td>5 Critical</td><td>Slot duration, SMS fail-open, lunch breaks, blocking lock, public booking tenant leak</td><td><span class="badge badge-fixed">FIXED</span></td></tr>
-  <tr><td>v2</td><td>8 Critical</td><td>Slot dedup, reschedule race, status filter, unsigned tokens, IDOR, HMAC override, N+1, flush order</td><td><span class="badge badge-fixed">FIXED</span></td></tr>
-  <tr><td>v3</td><td>6 Critical</td><td>Service duplication, cascade FKs, XSS, postMessage, in-memory holds, cross-tenant no-show</td><td><span class="badge badge-fixed">IDENTIFIED</span></td></tr>
-  <tr><td>v4 Enterprise</td><td>58 fixes</td><td>Multi-tenant (16), security (8), data integrity (7), observability (9), performance (6), compliance (5), functional (7)</td><td><span class="badge badge-fixed">APPLIED</span></td></tr>
-  <tr><td style="font-weight:700;color:var(--accent2)">v5 Deep Dive</td><td style="font-weight:700">59 findings</td><td>7 critical, 17 high, 24 medium, 11 low &mdash; fresh analysis across all layers</td><td><span class="badge badge-critical">NEW</span></td></tr>
-</table>
+<!-- ============================================================ -->
+<!-- DIMENSION SCORES -->
+<!-- ============================================================ -->
 
-<!-- ============================================================== -->
+<h2>Dimension Scores</h2>
+
+<div class="score-grid">
+
+  <div class="score-card">
+    <div class="label">Architecture</div>
+    <div class="value" style="color:var(--green)">8.0</div>
+    <div class="score-bar"><div class="fill" style="width:80%; background:var(--green)"></div></div>
+  </div>
+
+  <div class="score-card">
+    <div class="label">Security</div>
+    <div class="value" style="color:var(--red)">5.5</div>
+    <div class="score-bar"><div class="fill" style="width:55%; background:var(--red)"></div></div>
+  </div>
+
+  <div class="score-card">
+    <div class="label">Data Model</div>
+    <div class="value" style="color:var(--orange)">6.5</div>
+    <div class="score-bar"><div class="fill" style="width:65%; background:var(--orange)"></div></div>
+  </div>
+
+  <div class="score-card">
+    <div class="label">Test Coverage</div>
+    <div class="value" style="color:var(--red)">4.5</div>
+    <div class="score-bar"><div class="fill" style="width:45%; background:var(--red)"></div></div>
+  </div>
+
+  <div class="score-card">
+    <div class="label">Services</div>
+    <div class="value" style="color:var(--orange)">6.5</div>
+    <div class="score-bar"><div class="fill" style="width:65%; background:var(--orange)"></div></div>
+  </div>
+
+  <div class="score-card">
+    <div class="label">Frontend</div>
+    <div class="value" style="color:var(--orange)">6.0</div>
+    <div class="score-bar"><div class="fill" style="width:60%; background:var(--orange)"></div></div>
+  </div>
+
+  <div class="score-card">
+    <div class="label">Resilience</div>
+    <div class="value" style="color:var(--orange)">6.0</div>
+    <div class="score-bar"><div class="fill" style="width:60%; background:var(--orange)"></div></div>
+  </div>
+
+  <div class="score-card">
+    <div class="label">Feature Completeness</div>
+    <div class="value" style="color:var(--green)">8.5</div>
+    <div class="score-bar"><div class="fill" style="width:85%; background:var(--green)"></div></div>
+  </div>
+
+</div>
+
+<!-- ============================================================ -->
 <!-- CRITICAL FINDINGS -->
-<!-- ============================================================== -->
-<h2>Critical Findings <span class="section-count">(7 issues &mdash; fix immediately)</span></h2>
+<!-- ============================================================ -->
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">C1: Email Suppression List Stored In-Memory &mdash; Wiped Every Deploy</span>
-    <span class="badge badge-critical">CRITICAL</span>
-  </div>
-  <div class="card-body">
-    <p>The email bounce/complaint suppression list is a Python <code>dict</code> protected by a <code>threading.Lock</code>. Every Railway deployment restarts the process, wiping all suppressions. Previously bounced emails get re-sent, damaging sender reputation and risking ESP account suspension.</p>
-    <p class="file-ref">backend/routes/scheduler/email_events.py:48-49</p>
-    <p><strong>Impact:</strong> SendGrid domain reputation degradation. Bounce rate spikes after deploys. Potential ESP account suspension.</p>
-    <div class="fix-prompt">Move to database table (EmailSuppression model) or Redis SET with no TTL. The comment on line 40-43 literally says "production would use a DB table" &mdash; this was never done.</div>
+<h2>Critical Findings (8)</h2>
+
+<div class="finding critical">
+  <span class="tag critical">C1</span>
+  <div class="title">Turnstile CAPTCHA Replay Bypass in Multi-Worker Deployments</div>
+  <div class="detail">
+    <code>_input_validation.py</code> — The Turnstile anti-replay cache is a per-process Python <code>set()</code> with no TTL or cross-worker coordination. In any deployment with &gt;1 worker (Gunicorn, Uvicorn workers, horizontal scaling), a valid Turnstile token can be replayed to a different worker. This completely defeats bot protection on public booking endpoints, allowing automated slot squatting and waitlist spam.
+    <br><br>
+    <strong>Impact:</strong> Bots can book all available slots, preventing real borrowers from scheduling. Public waitlist can be flooded with fake entries.<br>
+    <strong>Fix:</strong> Replace in-memory set with Redis SETNX (TTL=300s). If Redis unavailable, use DB-backed nonce table with periodic cleanup. Minimum viable: add a TTL eviction to the in-memory cache and document the single-worker limitation.
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">C2: Forgeable Unsubscribe Tokens &mdash; Plain Base64, No HMAC</span>
-    <span class="badge badge-critical">CRITICAL</span>
-  </div>
-  <div class="card-body">
-    <p>Unsubscribe tokens are <code>base64.urlsafe_b64encode(email)</code> with no signature. Any attacker can construct a valid unsubscribe token for any email address, suppressing legitimate recipients without their knowledge.</p>
-    <p class="file-ref">backend/routes/scheduler/email_events.py:148-153</p>
-    <p><strong>Attack:</strong> <code>base64.urlsafe_b64encode("ceo@client.com".encode())</code> &rarr; POST to <code>/email-events/unsubscribe/{token}</code> &rarr; CEO stops receiving all appointment emails.</p>
-    <div class="fix-prompt">Sign tokens with HMAC-SHA256 using SECRET_KEY. Token format: base64(email) + "." + hmac_hex. Verify signature before processing.</div>
+<div class="finding critical">
+  <span class="tag critical">C2</span>
+  <div class="title">Advisory Lock Error Silently Swallowed</div>
+  <div class="detail">
+    <code>_conflicts.py</code> — The PostgreSQL advisory lock acquisition (<code>pg_try_advisory_xact_lock</code>) catches all exceptions with a bare <code>except Exception</code> and silently continues without the lock. If the lock fails (connection issue, parameter error), the double-booking prevention layer is completely bypassed — the code proceeds as if the lock was acquired. The SELECT FOR UPDATE + unique index provide backup, but advisory locks exist precisely because those layers have edge cases.
+    <br><br>
+    <strong>Impact:</strong> Under contention (two users booking the same slot simultaneously), the advisory lock layer — the first line of defense — silently fails, increasing double-booking risk.<br>
+    <strong>Fix:</strong> Log the exception at WARNING level. If the lock cannot be acquired (not just fails to try), raise a 409 Conflict immediately rather than proceeding unprotected.
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">C3: No SendGrid Webhook Signature Verification</span>
-    <span class="badge badge-critical">CRITICAL</span>
-  </div>
-  <div class="card-body">
-    <p>The SendGrid webhook endpoint (<code>/email-events/sendgrid</code>) reads <code>SENDGRID_WEBHOOK_VERIFICATION_KEY</code> from env but never uses it. Any HTTP client can POST fake bounce events to suppress arbitrary email addresses.</p>
-    <p class="file-ref">backend/routes/scheduler/email_events.py:36,86-127</p>
-    <p><strong>Attack:</strong> POST a JSON array with <code>[{"event":"bounce","email":"target@company.com"}]</code> to the public endpoint. No auth required.</p>
-    <div class="fix-prompt">Implement SendGrid's Event Webhook signature verification: verify the X-Twilio-Email-Event-Webhook-Signature header using the verification key with ECDSA. Reject requests that fail verification.</div>
+<div class="finding critical">
+  <span class="tag critical">C3</span>
+  <div class="title">Calendar Feed Token Never Expires</div>
+  <div class="detail">
+    <code>calendar_feed.py</code> — The iCal feed subscription token is generated without an <code>exp</code> claim in the JWT payload. Once issued, it is valid forever. Unlike other scheduler tokens (confirmation=48h, cancel=72h, waitlist=7d), the calendar feed token has no expiry. If a user leaves the organization or their account is deactivated, the feed token remains valid and continues exposing their calendar data.
+    <br><br>
+    <strong>Impact:</strong> Former employees retain perpetual read access to organization calendar data. No mechanism to revoke access short of rotating the global SECRET_KEY.<br>
+    <strong>Fix:</strong> Add <code>exp</code> claim (30-90 day rolling window). Implement token refresh on feed access. Add per-user token revocation (store issued_at in DB, reject tokens issued before revocation timestamp).
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">C4: Email Rate-Limit Bypass &mdash; org_id Never Passed</span>
-    <span class="badge badge-critical">CRITICAL</span>
-  </div>
-  <div class="card-body">
-    <p>Public booking endpoints call <code>_send_booking_confirmation_email()</code> without passing <code>org_id</code>, so the email rate limiter uses a global bucket instead of per-org. A single org's burst can exhaust the global rate limit, blocking emails for all tenants.</p>
-    <p class="file-ref">backend/routes/scheduler/public_booking.py &mdash; all email-sending call sites</p>
-    <p><strong>Impact:</strong> Multi-tenant email denial-of-service. One org's booking spike blocks confirmation emails for all other orgs.</p>
-    <div class="fix-prompt">Pass org_id to all email service calls from public_booking.py. Rate limit key should be f"email_rate:{org_id}" not global.</div>
+<div class="finding critical">
+  <span class="tag critical">C4</span>
+  <div class="title">Dual Availability Source Ambiguity</div>
+  <div class="detail">
+    <code>_availability.py:344-366</code> — Two completely independent availability sources coexist: <code>SchedulerConfig.working_hours</code> (JSON blob) and the <code>RecurringAvailability</code> table. If RecurringAvailability rows exist, the JSON blob is <strong>silently ignored</strong>. But the settings UI writes to the JSON blob, and the availability management UI writes to RecurringAvailability. A user who sets availability in Settings, then later adds a single exception via the Availability UI, will unknowingly switch their entire availability source — potentially showing completely different hours than they configured.
+    <br><br>
+    <strong>Impact:</strong> LOs can unknowingly have wrong availability published on their booking pages, leading to missed appointments or overbooking.<br>
+    <strong>Fix:</strong> Merge both sources with explicit precedence rules and display a warning in the UI when both sources have data. Long-term: deprecate the JSON blob in favor of RecurringAvailability only.
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">C5: Webhook Auto-Retry Uses Wrong Attribute &mdash; Silently Broken</span>
-    <span class="badge badge-critical">CRITICAL</span>
-  </div>
-  <div class="card-body">
-    <p>The webhook retry logic in <code>scheduler_service.py</code> references <code>webhook.endpoint_url</code> but the <code>SchedulerWebhookConfig</code> model defines the column as <code>url</code>. Every retry raises <code>AttributeError</code>, caught by a bare <code>except</code>, and silently fails. Webhook retries have never worked.</p>
-    <p class="file-ref">backend/services/scheduler_service.py &mdash; webhook retry method</p>
-    <p><strong>Impact:</strong> Failed webhooks are never retried. Dead-letter queue grows silently. Integration partners miss appointment events.</p>
-    <div class="fix-prompt">Change webhook.endpoint_url to webhook.url throughout the retry method. Add a test that actually triggers a retry.</div>
+<div class="finding critical">
+  <span class="tag critical">C5</span>
+  <div class="title">No Rate Limiting on Calendar Sync Webhook Endpoints</div>
+  <div class="detail">
+    <code>calendar_sync_inbound.py</code> — The Google Calendar push notification receiver (<code>/calendar/sync/google/webhook</code>) and Outlook Graph change notification receiver (<code>/calendar/sync/outlook/webhook</code>) have no rate limiting. While they validate signatures, a misconfigured or malicious webhook source could send thousands of notifications per second, each triggering database queries and potentially full calendar re-syncs.
+    <br><br>
+    <strong>Impact:</strong> Database connection exhaustion. Railway's 20-connection pool limit means ~20 concurrent sync webhooks could saturate the pool and bring down the entire application.<br>
+    <strong>Fix:</strong> Add rate limiting (100 req/min per provider per org). Queue incoming webhooks for batch processing. Add circuit breaker that stops processing if error rate exceeds threshold.
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">C6: asyncio.gather Shares Single DB Session Across Coroutines</span>
-    <span class="badge badge-critical">CRITICAL</span>
-  </div>
-  <div class="card-body">
-    <p><code>scheduler_webhook_service.py</code> uses <code>asyncio.gather()</code> to fire multiple webhook deliveries concurrently, but all coroutines share the same SQLAlchemy <code>Session</code> object. SQLAlchemy sessions are not thread-safe or coroutine-safe &mdash; concurrent commits/rollbacks corrupt transaction state.</p>
-    <p class="file-ref">backend/services/scheduler_webhook_service.py</p>
-    <p><strong>Impact:</strong> Random <code>InvalidRequestError</code>, partial commits, and data corruption under concurrent webhook delivery.</p>
-    <div class="fix-prompt">Each coroutine in asyncio.gather must get its own session via get_db(). Or use a session-per-request pattern with async session factory.</div>
+<div class="finding critical">
+  <span class="tag critical">C6</span>
+  <div class="title">Compliance Scheduling Service Hardcoded Timezone</div>
+  <div class="detail">
+    <code>compliance_scheduling_service.py</code> — The TCPA contact-hours enforcement uses a hardcoded timezone assumption rather than the borrower's actual timezone. For a mortgage CRM that operates across all US time zones, this means TCPA contact-hour violations are possible for any borrower not in the hardcoded timezone. TCPA violations carry $500-$1,500 per call in statutory damages.
+    <br><br>
+    <strong>Impact:</strong> Potential TCPA violations with statutory damages of $500-$1,500 per non-compliant contact. Class action exposure for systematic timezone errors.<br>
+    <strong>Fix:</strong> Resolve borrower timezone from their property state or explicit timezone field. Fall back to the most restrictive interpretation (latest start, earliest end) when timezone is unknown.
   </div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">C7: Reschedule Token Reusable for 72 Hours, No Ownership Check</span>
-    <span class="badge badge-critical">CRITICAL</span>
-  </div>
-  <div class="card-body">
-    <p>Borrower reschedule tokens are valid for 72 hours and can be used unlimited times. There's no check that the token was issued for the person using it. Tokens contain appointment_id but no borrower identifier &mdash; anyone with the link can reschedule anyone's appointment.</p>
-    <p class="file-ref">backend/routes/scheduler/reschedule.py</p>
-    <p><strong>Impact:</strong> Appointment manipulation. Forward a reschedule link &rarr; recipient can move someone else's appointment.</p>
-    <div class="fix-prompt">1. Single-use: mark token as used after first reschedule. 2. Bind to borrower: include borrower_email in token payload and verify on use. 3. Reduce TTL to 24 hours.</div>
+<div class="finding critical">
+  <span class="tag critical">C7</span>
+  <div class="title">Frontend Timezone Handling Inconsistencies</div>
+  <div class="detail">
+    <code>Calendar.js</code>, <code>BorrowerAppointmentView.js</code>, <code>EmbeddableBookingWidget.js</code> — Multiple frontend components handle timezone conversion independently with inconsistent approaches. Some use <code>Intl.DateTimeFormat</code>, some use manual UTC offset math, and some don't handle timezones at all. The booking widget displays times in the browser's local timezone but sends UTC to the API without clearly indicating the conversion — borrowers in different timezones than their LO can book appointments at unintended times.
+    <br><br>
+    <strong>Impact:</strong> Borrowers book appointments at wrong times. LOs see appointment times that don't match what the borrower expected.<br>
+    <strong>Fix:</strong> Centralize timezone handling in a shared utility. Always display times with explicit timezone labels. Store and transmit timezone alongside all datetime values.
   </div>
 </div>
 
-<!-- ============================================================== -->
+<div class="finding critical">
+  <span class="tag critical">C8</span>
+  <div class="title">Missing Composite Indexes on High-Frequency Queries</div>
+  <div class="detail">
+    <code>scheduler.py</code> — While the Appointment model has 11 indexes (including the conflict-check and double-booking indexes), several high-frequency query patterns lack composite indexes: (1) <code>WaitlistEntry</code> queries by <code>(organization_id, status, appointment_type_id)</code> do sequential scans; (2) <code>SchedulerAuditLog</code> queries by <code>(organization_id, entity_type, created_at)</code> lack a covering index; (3) <code>CalendarEventMap</code> lookups by <code>(provider, external_id, organization_id)</code> rely on individual column indexes rather than a composite.
+    <br><br>
+    <strong>Impact:</strong> Query latency degrades as data grows. At enterprise scale (10K+ appointments, 50K+ audit logs), these sequential scans will cause visible slowdowns and connection pool contention.<br>
+    <strong>Fix:</strong> Add 3 composite indexes: <code>ix_waitlist_org_status_type</code>, <code>ix_audit_org_entity_created</code>, <code>ix_calendar_map_provider_ext_org</code>.
+  </div>
+</div>
+
+<!-- ============================================================ -->
 <!-- HIGH FINDINGS -->
-<!-- ============================================================== -->
-<h2>High Findings <span class="section-count">(17 issues &mdash; address this sprint)</span></h2>
+<!-- ============================================================ -->
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H1: X-Forwarded-For Rightmost IP Is Proxy, Not Client</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>Rate limiting extracts client IP from <code>X-Forwarded-For</code> using the rightmost entry, which is the last proxy (e.g., Cloudflare or Railway's load balancer). Real client IP is leftmost. All rate limiting is per-proxy, not per-client.</p>
-    <p class="file-ref">backend/routes/scheduler/_rate_limiting.py</p>
-    <div class="fix-prompt">Use leftmost X-Forwarded-For entry, or better: use CF-Connecting-IP header which Railway/Cloudflare sets to the true client IP.</div>
-  </div>
+<h2>High Findings (12)</h2>
+
+<div class="finding high">
+  <span class="tag high">H1</span>
+  <div class="title">Missing <code>is_active</code> Check in Auth Helper</div>
+  <div class="detail"><code>_auth.py</code> — <code>get_current_user</code> validates the JWT and loads the user but does not check <code>user.is_active</code>. Deactivated users retain full scheduler access until their JWT expires.</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H2: Advisory Lock Failure Silently Continues Booking</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>When <code>pg_try_advisory_xact_lock()</code> fails after 3 retries (0.9s), booking proceeds with only a <code>logger.warning()</code>. Two concurrent bookings for the same slot can both succeed.</p>
-    <p class="file-ref">backend/routes/scheduler/_conflicts.py</p>
-    <div class="fix-prompt">Raise HTTPException(409, "Slot temporarily locked, please retry") when lock acquisition fails after retries.</div>
-  </div>
+<div class="finding high">
+  <span class="tag high">H2</span>
+  <div class="title">Three Independent Appointment Creation Paths</div>
+  <div class="detail"><code>appointment_creation_service.py</code>, <code>appointment/service.py</code>, <code>pipeline_appointment_trigger.py</code> — Each has its own validation, conflict checking, and notification logic. Bug fixes applied to one path may not reach the others. The creation service lacks explicit transaction atomicity (no <code>db.begin()</code> or savepoint).</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H3: Cross-Source Availability Fails Open</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>The 4-source calendar reconciliation (scheduler + legacy + manual + Salesforce) catches all exceptions during cross-source conflict checking and returns an empty conflict set. If any source query fails, those conflicts are invisible &mdash; the slot appears available.</p>
-    <p class="file-ref">backend/routes/scheduler/_availability.py</p>
-    <div class="fix-prompt">On cross-source failure: either fail closed (mark slot unavailable) or return a "degraded" flag so the UI can warn the user.</div>
-  </div>
+<div class="finding high">
+  <span class="tag high">H3</span>
+  <div class="title">Webhook Service Session Management</div>
+  <div class="detail"><code>scheduler_webhook_service.py</code> — Creates its own DB sessions instead of using the request-scoped session from FastAPI's <code>Depends(get_db)</code>. If the webhook fires within a request handler, there are now two independent sessions — the webhook's session can commit data the request session doesn't see, or vice versa.</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H4: Bulk Operations Race Condition &mdash; Intra-Batch Blindness</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>Bulk create/reschedule processes items sequentially within a batch, but conflict detection for item N doesn't see items 1 through N-1 that were created earlier in the same batch (not yet committed). Double-booking within a single bulk request is possible.</p>
-    <p class="file-ref">backend/routes/scheduler/bulk_operations.py</p>
-    <div class="fix-prompt">db.flush() after each item creation to make it visible to subsequent conflict checks within the same transaction. Or collect all times first and validate the batch internally before any writes.</div>
-  </div>
+<div class="finding high">
+  <span class="tag high">H4</span>
+  <div class="title">Email Events Route Missing Org Scoping</div>
+  <div class="detail"><code>email_events.py</code> — The email event tracking endpoint writes records with <code>organization_id=NULL</code> when the event comes from a public booking confirmation email. These orphaned records are invisible to org-scoped queries, creating a data integrity gap in email delivery tracking.</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H5: Demo Booking Leaks Tenant Configuration</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>The demo booking flow at <code>/public/book-demo/confirm</code> returns the full org's scheduler configuration (working hours, appointment types, notification settings) to unauthenticated users when rendering the demo form.</p>
-    <p class="file-ref">backend/routes/scheduler/public_booking.py</p>
-    <div class="fix-prompt">Return only the minimum fields needed for the demo booking form: available time slots and appointment type names. Strip all internal configuration.</div>
-  </div>
+<div class="finding high">
+  <span class="tag high">H5</span>
+  <div class="title">NMLS Validation Bypass in CRM Integration</div>
+  <div class="detail"><code>_crm_integration.py</code> — When creating a CRM lead from a public booking, the NMLS license verification for the assigned LO is skipped if the lookup fails. This means an unlicensed LO can receive leads through the scheduler without any warning.</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H6: Cancel Endpoint Missing Status Validation</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>The cancel endpoint allows cancelling appointments that are already in terminal states (COMPLETED, NO_SHOW, CANCELLED). Cancelling a COMPLETED appointment re-triggers notification chains and corrupts audit trail.</p>
-    <p class="file-ref">backend/routes/scheduler/appointments.py</p>
-    <div class="fix-prompt">Check current status before allowing cancel. Only BOOKED, CONFIRMED, and REMINDED should be cancellable.</div>
-  </div>
+<div class="finding high">
+  <span class="tag high">H6</span>
+  <div class="title">Confirmation Router Missing Cancel/Reschedule from Token</div>
+  <div class="detail"><code>confirmation.py</code> — The confirmation token grants access to view appointment details but there are no <code>POST /public/confirm/{token}/cancel</code> or <code>/reschedule</code> endpoints. Borrowers who receive a confirmation email cannot cancel or reschedule from that link — they must use a separate reschedule link (if one was sent) or contact their LO directly.</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H7: Audit Log Write Failures Silently Swallowed</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>Multiple audit logging call sites wrap <code>_audit_log()</code> in bare <code>try/except</code> blocks. If the audit table is full, has schema drift, or the transaction is in a bad state, the audit write fails silently and the operation proceeds without any audit record.</p>
-    <p class="file-ref">backend/routes/scheduler/_audit.py, backend/routes/scheduler/_helpers.py</p>
-    <div class="fix-prompt">At minimum: logger.error() with exc_info=True on audit failures. For compliance-critical operations (cancel, reschedule, data deletion), audit failure should abort the operation.</div>
-  </div>
+<div class="finding high">
+  <span class="tag high">H7</span>
+  <div class="title">N+1 Query in Recurring Availability Check</div>
+  <div class="detail"><code>_availability.py:462-475</code> — For each date in the requested range, a separate query checks for date-specific exceptions in <code>RecurringAvailability</code>. A 30-day availability request generates 30 individual queries. At scale this causes noticeable latency on the public booking page.</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H8: No-Show Recovery db.rollback() Wipes Prior Flushes</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>The no-show recovery service calls <code>db.rollback()</code> in error handlers after prior <code>db.flush()</code> calls within the same transaction. This wipes not just the failed operation but all pending changes from earlier recovery steps in the same batch.</p>
-    <p class="file-ref">backend/services/no_show_recovery.py</p>
-    <div class="fix-prompt">Use SAVEPOINT (db.begin_nested()) before each recovery step. On failure, rollback to savepoint, not the entire transaction.</div>
-  </div>
+<div class="finding high">
+  <span class="tag high">H8</span>
+  <div class="title">No Circuit Breaker on External Calendar API Calls</div>
+  <div class="detail"><code>_availability.py:69-176</code> — External calendar conflict checks (Google, Outlook) have a fail-closed pattern (timeout = entire range conflicted), but no circuit breaker. If Google Calendar API is down, every slot query for every user hits the timeout, degrading the entire system. After N consecutive failures, should skip external checks temporarily.</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H9: Webhook HMAC Verification Uses Wrong Comparison</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>Webhook signature verification computes HMAC-SHA256 but the comparison of received vs expected signature doesn't consistently use <code>hmac.compare_digest()</code>. Some code paths use <code>==</code>, which is vulnerable to timing attacks.</p>
-    <p class="file-ref">backend/services/scheduler_webhook_service.py</p>
-    <div class="fix-prompt">Replace all == comparisons on HMAC values with hmac.compare_digest() for constant-time comparison.</div>
-  </div>
+<div class="finding high">
+  <span class="tag high">H9</span>
+  <div class="title">Slot Hold Expiration Relies on Periodic Cleanup</div>
+  <div class="detail"><code>maintenance.py</code> — Expired <code>SlotHold</code> records are cleaned up by a manual admin endpoint (<code>/maintenance/cleanup-holds</code>), not by automatic background processing. If nobody hits this endpoint, expired holds accumulate and phantom-block slots from being booked.</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H10: No SSRF Protection on Webhook URL Registration</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>Users can register any URL as a webhook endpoint, including internal network addresses (<code>http://169.254.169.254/</code>, <code>http://localhost:5432/</code>). The webhook delivery service will POST to these URLs from the server's network context.</p>
-    <p class="file-ref">backend/services/scheduler_webhook_service.py, backend/routes/scheduler/webhooks.py</p>
-    <div class="fix-prompt">Validate webhook URLs against a blocklist: no RFC 1918/RFC 4193 addresses, no localhost, no link-local, no metadata endpoints. Require HTTPS.</div>
-  </div>
+<div class="finding high">
+  <span class="tag high">H10</span>
+  <div class="title">Inconsistent Error Response Formats Across Public Endpoints</div>
+  <div class="detail">Public endpoints use a mix of <code>raise HTTPException</code> directly and the standardized <code>error_responses.py</code> helpers. Some return <code>{&quot;detail&quot;: &quot;...&quot;}</code>, others return <code>{&quot;error&quot;: &quot;...&quot;, &quot;code&quot;: &quot;...&quot;}</code>. Frontend must handle both formats, and the inconsistency makes it harder to display meaningful error messages to borrowers.</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H11: No-Show Recovery Tracking via Regex on Free-Text</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>The no-show recovery system tracks which recovery step was last executed by parsing free-text notes fields with regex. If the note format changes or contains unexpected characters, step tracking breaks and recovery restarts from step 1.</p>
-    <p class="file-ref">backend/services/no_show_recovery.py</p>
-    <div class="fix-prompt">Add a recovery_step integer column to the appointment or a dedicated recovery_tracking table. Never rely on regex parsing of human-readable text for state management.</div>
-  </div>
+<div class="finding high">
+  <span class="tag high">H11</span>
+  <div class="title">Survey Response Endpoint Lacks Duplicate Submission Guard</div>
+  <div class="detail"><code>surveys.py</code> — The public survey response endpoint accepts multiple submissions from the same token/email combination. A borrower (or bot) can submit dozens of survey responses, skewing satisfaction metrics.</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H12: Compliance Service N+1 Queries</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p><code>compliance_scheduling_service.py</code> loads appointments in a list query, then makes individual queries for each appointment's borrower consent status, LO notification preferences, and DNC checks. For a batch of 50 appointments, this generates 150+ queries.</p>
-    <p class="file-ref">backend/services/compliance_scheduling_service.py</p>
-    <div class="fix-prompt">Batch-load consent status, LO prefs, and DNC status in 3 queries using WHERE id IN (:ids), then join in Python.</div>
-  </div>
+<div class="finding high">
+  <span class="tag high">H12</span>
+  <div class="title">Frontend State Management — No Optimistic Updates</div>
+  <div class="detail"><code>Calendar.js</code> — All booking actions wait for the API round-trip before updating the UI. On slow connections, users see no feedback for 1-3 seconds after clicking "Book", leading to double-clicks and duplicate booking attempts. The frontend should optimistically update the calendar view and roll back on failure.</div>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H13: No DST Handling in Recurring Availability</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p><code>recurring_availability_service.py</code> computes availability using naive datetime arithmetic without DST transition handling. On spring-forward/fall-back days, slot times shift by 1 hour or generate invalid/duplicate slots.</p>
-    <p class="file-ref">backend/services/recurring_availability_service.py</p>
-    <div class="fix-prompt">Convert all time arithmetic to timezone-aware datetimes using pytz or zoneinfo. Compute slots in the LO's local timezone, then convert to UTC for storage.</div>
-  </div>
-</div>
-
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H14: nh3 Fallback to html.escape Is Not Equivalent</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>Input validation falls back from <code>nh3.clean()</code> to <code>html.escape()</code> on ImportError. nh3 strips dangerous HTML entirely; html.escape converts <code>&lt;script&gt;</code> to <code>&amp;lt;script&amp;gt;</code> which is then rendered as visible text in emails, not sanitized.</p>
-    <p class="file-ref">backend/routes/scheduler/_input_validation.py</p>
-    <div class="fix-prompt">If nh3 is not available, raise an ImportError at startup rather than silently falling back to a weaker sanitizer. nh3 is a hard dependency for security.</div>
-  </div>
-</div>
-
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H15: Email Templates Vulnerable to XSS</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p><code>notification_service.py</code> constructs HTML emails using f-strings with user-provided data (borrower name, appointment notes) without HTML escaping. A borrower name like <code>&lt;img src=x onerror=fetch('...')&gt;</code> executes in the recipient's email client.</p>
-    <p class="file-ref">backend/services/notification_service.py</p>
-    <div class="fix-prompt">HTML-escape all user-provided values before inserting into email templates. Use html.escape() or a proper template engine with auto-escaping (Jinja2).</div>
-  </div>
-</div>
-
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H16: Google Token Refresh Doesn't Update expires_at</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>When the Google Calendar OAuth token is refreshed in <code>virtual_meeting_service.py</code>, the new access token is saved but <code>expires_at</code> is not updated. The next check sees the old (expired) timestamp and triggers another refresh &mdash; creating a refresh loop on every request.</p>
-    <p class="file-ref">backend/services/virtual_meeting_service.py</p>
-    <div class="fix-prompt">After token refresh, update both access_token AND expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in).</div>
-  </div>
-</div>
-
-<div class="card">
-  <div class="card-header">
-    <span class="card-title">H17: AvailabilitySlot Unique Constraint Allows Duplicate Date Overrides</span>
-    <span class="badge badge-high">HIGH</span>
-  </div>
-  <div class="card-body">
-    <p>The <code>AvailabilitySlot</code> model's unique constraint doesn't cover date-specific overrides adequately. Two overrides for the same date, same org, same user can coexist &mdash; queries pick one arbitrarily.</p>
-    <p class="file-ref">backend/database/models/scheduler.py</p>
-    <div class="fix-prompt">Add UniqueConstraint('organization_id', 'user_id', 'override_date') or enforce via application-level upsert.</div>
-  </div>
-</div>
-
-<!-- ============================================================== -->
+<!-- ============================================================ -->
 <!-- MEDIUM FINDINGS -->
-<!-- ============================================================== -->
-<h2>Medium Findings <span class="section-count">(24 issues)</span></h2>
+<!-- ============================================================ -->
 
-<table>
-  <tr><th>#</th><th>Issue</th><th>Location</th><th>Impact</th></tr>
-  <tr><td>M1</td><td>Redis INCR/EXPIRE race in rate limiter &mdash; key without TTL on Redis crash between commands</td><td>_rate_limiting.py</td><td>Rate limit keys leak, never expire</td></tr>
-  <tr><td>M2</td><td>Advisory lock key collision &mdash; int32 hash wraps every ~11.5 days for time-based keys</td><td>_conflicts.py</td><td>Unrelated slots share same lock</td></tr>
-  <tr><td>M3</td><td>Blocking <code>time.sleep()</code> in async advisory lock retry loop</td><td>_conflicts.py</td><td>Blocks entire event loop for 300ms per retry</td></tr>
-  <tr><td>M4</td><td>Per-worker rate limits (non-Redis fallback) &mdash; N workers = Nx the intended limit</td><td>_rate_limiting.py</td><td>Rate limiting ineffective in multi-worker deploy</td></tr>
-  <tr><td>M5</td><td>Turnstile CAPTCHA token replay not prevented &mdash; same token accepted multiple times</td><td>_input_validation.py</td><td>Bot can replay a single solved CAPTCHA</td></tr>
-  <tr><td>M6</td><td>PII masking in audit doesn't handle lists/arrays of phone numbers</td><td>_audit.py</td><td>PII leaks in audit log for bulk operations</td></tr>
-  <tr><td>M7</td><td>Email suppression has no tenant isolation &mdash; org_id not checked on lookup</td><td>email_events.py:52-57</td><td>One org's bounce suppresses email for all orgs</td></tr>
-  <tr><td>M8</td><td>Bulk error messages leak internal details (table names, column names)</td><td>bulk_operations.py</td><td>Information disclosure to API consumers</td></tr>
-  <tr><td>M9</td><td>No deduplication in bulk create &mdash; same borrower+time in one batch creates duplicates</td><td>bulk_operations.py</td><td>Duplicate appointments from CSV imports</td></tr>
-  <tr><td>M10</td><td>Naive datetime comparison in reschedule &mdash; timezone-aware vs naive mismatch</td><td>reschedule.py</td><td>TypeError or wrong comparison result</td></tr>
-  <tr><td>M11</td><td>Compliance service uses <code>date.today()</code> not <code>datetime.now(timezone.utc).date()</code></td><td>compliance_scheduling_service.py</td><td>Wrong date near midnight UTC for US timezones</td></tr>
-  <tr><td>M12</td><td>Hardcoded timezone offset <code>timedelta(hours=-5)</code> instead of proper tz lookup</td><td>compliance_scheduling_service.py</td><td>Wrong contact hours during DST (EST vs EDT)</td></tr>
-  <tr><td>M13</td><td>No deduplication in compliance check runs &mdash; same appointment checked N times per batch</td><td>compliance_scheduling_service.py</td><td>Wasted computation, duplicate alerts</td></tr>
-  <tr><td>M14</td><td>TCPA consent check fails open on ImportError of BorrowerProfile</td><td>notification_service.py</td><td>SMS sent without consent if model import fails</td></tr>
-  <tr><td>M15</td><td>Token expiry uses deprecated <code>datetime.utcnow()</code></td><td>virtual_meeting_service.py</td><td>Deprecation warning, potential offset issues in Python 3.12+</td></tr>
-  <tr><td>M16</td><td>Recurring availability import error swallowed &mdash; module loads but rules silently skipped</td><td>recurring_availability_service.py</td><td>Availability rules not applied, no error visible</td></tr>
-  <tr><td>M17</td><td>Overlapping recurring availability blocks not detected</td><td>recurring_availability_service.py</td><td>Conflicting rules produce inconsistent slot generation</td></tr>
-  <tr><td>M18</td><td>SchedulerConfig backref name conflicts between related models</td><td>database/models/scheduler.py</td><td>SQLAlchemy warning or wrong relationship resolution</td></tr>
-  <tr><td>M19</td><td>Stale denormalized counters on BookingLink (view_count, booking_count, current_bookings)</td><td>database/models/scheduler.py</td><td>Counter drift under concurrent traffic, wrong max_bookings enforcement</td></tr>
-  <tr><td>M20</td><td><code>asyncio.run()</code> called inside already-running event loop in webhook service</td><td>scheduler_service.py</td><td>RuntimeError in async context, webhook delivery crashes</td></tr>
-  <tr><td>M21</td><td>Weak SECRET_KEY allows forged no-show recovery tokens</td><td>no_show_recovery.py</td><td>If SECRET_KEY is weak/default, recovery links are forgeable</td></tr>
-  <tr><td>M22</td><td>Admin auth inconsistency &mdash; some admin endpoints check role, others check org permission</td><td>appointments.py</td><td>Inconsistent authorization, potential privilege escalation</td></tr>
-  <tr><td>M23</td><td>Email sending fallback blocks request thread on SMTP timeout</td><td>appointments.py</td><td>30s SMTP timeout blocks entire API response</td></tr>
-  <tr><td>M24</td><td>Appointment list endpoint has no admin bypass &mdash; admins can't see all org appointments</td><td>appointments.py</td><td>Admin reporting requires direct DB access</td></tr>
-</table>
+<h2>Medium Findings (18)</h2>
 
-<!-- ============================================================== -->
-<!-- LOW FINDINGS -->
-<!-- ============================================================== -->
-<h2>Low Findings <span class="section-count">(11 issues)</span></h2>
-
-<table>
-  <tr><th>#</th><th>Issue</th><th>Location</th><th>Impact</th></tr>
-  <tr><td>L1</td><td>Silent slot range truncation on public endpoint (500 slot cap)</td><td>public_booking.py</td><td>Client may miss available slots beyond cap</td></tr>
-  <tr><td>L2</td><td>Phone validation accepts any E.164 &mdash; no NANP area code check</td><td>_helpers.py</td><td>Invalid US numbers stored</td></tr>
-  <tr><td>L3</td><td>Missing ARIA labels on BorrowerAppointmentView action buttons</td><td>BorrowerAppointmentView.js</td><td>WCAG non-compliance</td></tr>
-  <tr><td>L4</td><td>No keyboard focus management on CalendarSettings tab switch</td><td>CalendarSettings.js</td><td>Keyboard users lose context</td></tr>
-  <tr><td>L5</td><td>EmbeddableBookingWidget fixed 480px max-width, not responsive</td><td>EmbeddableBookingWidget.js</td><td>Poor mobile UX in embeds</td></tr>
-  <tr><td>L6</td><td>Hardcoded "Sarah from Perennia AI" sender name in emails</td><td>email_service.py:50</td><td>Wrong name for multi-tenant orgs</td></tr>
-  <tr><td>L7</td><td>Missing soft delete (deleted_at) on Appointment model</td><td>scheduler.py models</td><td>No recovery for deleted appointments</td></tr>
-  <tr><td>L8</td><td>Booking link slug doesn't validate against reserved words</td><td>schemas/scheduler.py</td><td>URL routing conflicts possible</td></tr>
-  <tr><td>L9</td><td>No timezone validation against pytz.all_timezones</td><td>schemas/scheduler.py</td><td>Invalid timezones break calculations</td></tr>
-  <tr><td>L10</td><td>In-memory email rate limiter evicts at 5000 keys &mdash; bypass under load</td><td>scheduler_email_service.py</td><td>Rate limit bypass at scale</td></tr>
-  <tr><td>L11</td><td>77 Pydantic schemas for 11 DB tables &mdash; schema explosion</td><td>schemas/scheduler.py</td><td>Maintenance burden, field drift</td></tr>
-</table>
-
-<!-- ============================================================== -->
-<!-- DEVIL'S ADVOCATE QUESTIONS -->
-<!-- ============================================================== -->
-<h2>Devil's Advocate Questions <span class="section-count">(15 tough questions)</span></h2>
-
-<h3>Security &amp; Trust</h3>
-
-<div class="devil-q">"Your email suppression list is a Python dict. Every time you deploy &mdash; which on Railway is every git push &mdash; that dict is wiped. How many bounced emails have been re-sent since you went to production? What does your SendGrid bounce rate look like over the last 30 days?"</div>
-
-<div class="devil-q">"Anyone can forge an unsubscribe token with base64('target@email.com'). A disgruntled borrower could suppress their LO's entire email list by scripting POST requests to your public unsubscribe endpoint. What's the blast radius?"</div>
-
-<div class="devil-q">"Your SendGrid webhook endpoint accepts any POST with a JSON array. It has a verification key in the environment but never checks it. What stops a competitor from POSTing fake bounce events for your clients' email addresses?"</div>
-
-<div class="devil-q">"Webhook auto-retry has been broken since it was written &mdash; referencing webhook.endpoint_url instead of webhook.url. How many webhook delivery failures have your integration partners reported? Or have they just stopped relying on your webhooks?"</div>
-
-<h3>Architecture &amp; Scale</h3>
-
-<div class="devil-q">"Three separate services compute availability, two services create appointments, three services send reminders. When a bug is found in one, how do you ensure the fix is applied to all copies? Do you even know which path a given request takes?"</div>
-
-<div class="devil-q">"Your advisory lock keys use a 32-bit hash that wraps every ~11.5 days. Two appointments 11.5 days apart can get the same lock key. If the lock fails, booking proceeds anyway with just a warning. How many double-bookings have occurred that nobody noticed?"</div>
-
-<div class="devil-q">"asyncio.gather fires multiple webhook deliveries sharing one SQLAlchemy session. SQLAlchemy sessions aren't coroutine-safe. Under concurrent webhooks, you're getting random transaction corruption. How many webhook deliveries have silently corrupted data?"</div>
-
-<h3>Operations &amp; Compliance</h3>
-
-<div class="devil-q">"Reschedule tokens are reusable for 72 hours with no ownership check. If a borrower forwards their reschedule email to a friend, that friend can move the appointment to any available time. Is that acceptable for a mortgage consultation where PII is discussed?"</div>
-
-<div class="devil-q">"Your no-show recovery system tracks which step it's on by parsing free-text notes with regex. If someone edits an appointment note and changes the format, recovery restarts from step 1 &mdash; sending the 'gentle nudge' SMS again to someone who's already been through the full recovery sequence."</div>
-
-<div class="devil-q">"The compliance service uses date.today() and hardcoded timedelta(hours=-5) for contact hours. During daylight saving time, EST becomes EDT (UTC-4). Your TCPA contact hours window is off by an hour for half the year. What's the fine per violation?"</div>
-
-<div class="devil-q">"Cross-source availability fails open &mdash; if the Salesforce calendar query times out, those conflicts disappear and the slot shows as available. An LO could get double-booked because Salesforce was slow for 2 seconds."</div>
-
-<h3>Business Impact</h3>
-
-<div class="devil-q">"You have 177 endpoints across 37 sub-routers for a calendar system. Your frontend has 4 dashboard components (1,073 lines) that aren't routed to any page. How much of this codebase is actually serving users versus existing as unused surface area?"</div>
-
-<div class="devil-q">"Notification emails are constructed with f-strings and no HTML escaping. A borrower whose name is &lt;script&gt;alert('XSS')&lt;/script&gt; will inject JavaScript into every email sent about their appointment. For a mortgage CRM handling financial data, what's the breach notification cost?"</div>
-
-<div class="devil-q">"One org's email burst can exhaust the global rate limit because org_id isn't passed to the email rate limiter. During a busy Monday morning with 50 booking confirmations from Org A, does Org B's borrower get their confirmation email? Or does it silently fail?"</div>
-
-<!-- ============================================================== -->
-<!-- STRENGTHS -->
-<!-- ============================================================== -->
-<h2>What You're Doing Right <span class="section-count">(12 strengths)</span></h2>
-
-<div class="card">
-  <div class="card-header"><span class="card-title">Genuine Strengths Identified Across All Layers</span><span class="badge badge-strength">STRONG</span></div>
-  <div class="card-body">
-    <ol style="margin:8px 0 0 16px;font-size:13px;">
-      <li><strong>Non-blocking advisory locks with retry</strong> &mdash; <code>pg_try_advisory_xact_lock</code> with 3 attempts and 50ms backoff is a solid concurrency primitive (issue is in the failure handling, not the pattern).</li>
-      <li><strong>TCPA-compliant SMS with fail-closed design</strong> &mdash; DNC checks, consent checks, and contact hours all block on error. The intent and primary path are correct.</li>
-      <li><strong>Comprehensive appointment lifecycle</strong> &mdash; Full status machine (BOOKED&rarr;CONFIRMED&rarr;REMINDED&rarr;CHECKED_IN&rarr;COMPLETED) with audit trail and CRM activity logging.</li>
-      <li><strong>Graduated no-show recovery</strong> &mdash; 4-step sequence (gentle SMS &rarr; email &rarr; reschedule offer &rarr; final outreach) with opt-out detection and chronic tracking.</li>
-      <li><strong>Batch-optimized slot generation</strong> &mdash; Prefetches configs, blocked times, existing appointments, and cross-source conflicts in 4 batch queries. No N+1 in the hot path.</li>
-      <li><strong>Turnstile bot protection on public booking</strong> &mdash; Cloudflare Turnstile with proper error handling on the public booking flow.</li>
-      <li><strong>Parameterized SQL throughout</strong> &mdash; Zero string interpolation in SQL queries. All user input through <code>:param</code> binding.</li>
-      <li><strong>Multi-tenant isolation on primary paths</strong> &mdash; org_id required on all main CRUD operations after v4 hardening.</li>
-      <li><strong>HMAC-signed webhook channel tokens</strong> &mdash; Webhook tokens signed with SECRET_KEY, verified with constant-time comparison on the primary path.</li>
-      <li><strong>PII-aware logging (v4)</strong> &mdash; Phone and email masking in log output, audit trail PII toggle.</li>
-      <li><strong>Pipeline appointment trigger integration</strong> &mdash; Calendar events automatically create CRM activities, follow-up tasks, and trigger pipeline stage transitions. Genuine workflow orchestration.</li>
-      <li><strong>Prompt injection sanitization</strong> &mdash; Public-facing inputs go through <code>_sanitize_ai_context()</code> with 15+ regex patterns covering instruction injection, role hijacking, and encoding attacks.</li>
-    </ol>
-  </div>
+<div class="finding medium">
+  <span class="tag medium">M1</span>
+  <div class="title">No Structured Logging in Scheduler Subsystem</div>
+  <div class="detail">All 32 modules use Python's basic <code>logger.info/warning/error</code> with unstructured string messages. No correlation IDs, no structured JSON fields. Debugging a failed booking across availability check → conflict detection → appointment creation → notification → webhook requires grep-fu across unstructured logs.</div>
 </div>
 
-<!-- ============================================================== -->
+<div class="finding medium">
+  <span class="tag medium">M2</span>
+  <div class="title">Test Coverage at ~15% Endpoint Coverage</div>
+  <div class="detail">45 test files with 750+ test cases exist, but they cover only ~15% of the 171 scheduler endpoints. Zero integration tests for the critical public booking flow. No load/stress tests. The test files are well-structured but the gap means regressions can ship undetected.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M3</span>
+  <div class="title">Appointment Type Configuration Sprawl</div>
+  <div class="detail"><code>AppointmentType</code> model has 40+ columns covering duration, buffer, location, notifications, branding, CRM integration, and feature flags. This is a "god object" that would benefit from decomposition into separate concerns (scheduling rules, branding, integration config).</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M4</span>
+  <div class="title">Public Booking Page Bundle Size</div>
+  <div class="detail">The embeddable booking widget imports the full React app context including calendar components, analytics dashboards, and admin utilities via shared imports. The public booking page, which should be lightweight for SEO and borrower experience, likely ships 500KB+ of unused JavaScript.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M5</span>
+  <div class="title">No Health Check for External Calendar Sync Status</div>
+  <div class="detail">The <code>/health</code> endpoint checks DB connectivity but not Google/Outlook Calendar API reachability. An admin has no way to know if calendar sync is silently failing without checking individual user sync timestamps.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M6</span>
+  <div class="title">Cancellation Policy Enforcement Gap</div>
+  <div class="detail"><code>cancellation_policy.py</code> enforces policies on the dedicated cancel endpoint, but direct status changes via the appointment CRUD endpoint (<code>PATCH /appointments/{id}</code>) can bypass cancellation policy checks by setting <code>status=&quot;cancelled&quot;</code> directly.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M7</span>
+  <div class="title">SEO Sitemap Generates All Booking Links Without Pagination</div>
+  <div class="detail"><code>sitemap.py</code> queries all active booking links and generates a single XML sitemap. At enterprise scale (1000+ booking links), this generates an oversized sitemap that search engines may truncate or reject.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M8</span>
+  <div class="title">Reminder Service Lacks Idempotency</div>
+  <div class="detail"><code>reminder_service.py</code> — If the reminder cron job runs twice (restart, overlap), duplicate reminders are sent. No sent-status tracking prevents re-sending the same reminder.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M9</span>
+  <div class="title">No Appointment Capacity Limits Per Type</div>
+  <div class="detail">There's no per-day or per-week capacity limit on appointment types. An LO with 8 hours of availability could theoretically have 16 back-to-back 30-minute appointments booked, with no breathing room beyond configured buffer times.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M10</span>
+  <div class="title">Widget Configuration Not Cached</div>
+  <div class="detail"><code>widget_config.py</code> — Every public booking widget page load queries the full appointment type configuration, org branding, and available slots. No caching layer means repeated page views by the same borrower (or a Google bot) all hit the database.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M11</span>
+  <div class="title">Audit Log Table Will Grow Unbounded</div>
+  <div class="detail"><code>SchedulerAuditLog</code> has no partition strategy or retention policy. Every booking, cancellation, reschedule, and settings change generates an audit record. At enterprise scale, this table will grow to millions of rows with degrading query performance and no automated archival.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M12</span>
+  <div class="title">No Appointment Deduplication Window</div>
+  <div class="detail">The unique index prevents exact-duplicate bookings (same user, same time, same type), but there's no "cooling off" period. A borrower can book a consultation for 10am, cancel it, and immediately rebook for 10:15am, then cancel again — cycling through all available slots.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M13</span>
+  <div class="title">Frontend Calendar Component Monolith</div>
+  <div class="detail"><code>Calendar.js</code> is a single component handling day/week/month views, appointment CRUD, drag-and-drop, notifications, and analytics integration. At ~800+ lines, it's becoming difficult to maintain and test individual concerns.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M14</span>
+  <div class="title">No Webhook Delivery Dashboard</div>
+  <div class="detail"><code>WebhookHealthDashboard.js</code> exists but only shows basic delivery stats. No per-endpoint success/failure rates, no payload inspection, no manual retry from the UI. Debugging webhook failures requires direct database queries.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M15</span>
+  <div class="title">Booking Link Analytics Lack Attribution</div>
+  <div class="detail"><code>booking_links.py</code> tracks views and bookings per link, but doesn't capture UTM parameters, referrer, or source attribution. Marketing teams can't measure which channels drive the most bookings.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M16</span>
+  <div class="title">No Batch Booking API</div>
+  <div class="detail">The bulk operations module handles batch status changes but not batch booking creation. Enterprise onboarding (importing 50 pre-scheduled appointments from a legacy system) requires 50 individual API calls.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M17</span>
+  <div class="title">CSS Architecture Fragmentation</div>
+  <div class="detail">Calendar styles are split across <code>Calendar.css</code>, <code>BorrowerAppointmentView.css</code>, <code>calendar-settings.css</code>, and inline styles in multiple components. No CSS modules or CSS-in-JS consistency. Style conflicts are inevitable as components evolve independently.</div>
+</div>
+
+<div class="finding medium">
+  <span class="tag medium">M18</span>
+  <div class="title">Incomplete Accessibility on Public Booking Pages</div>
+  <div class="detail">The embeddable booking widget lacks ARIA labels on time slot buttons, keyboard navigation for date/time selection, and screen reader announcements for booking confirmation. Public-facing mortgage scheduling must meet WCAG 2.1 AA for ADA compliance.</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- STRENGTHS -->
+<!-- ============================================================ -->
+
+<h2>What You're Doing Right (7)</h2>
+
+<div class="strength">
+  <div class="label">S1 — Defense-in-Depth Double-Booking Prevention</div>
+  <div>Three independent layers: advisory locks, SELECT FOR UPDATE NOWAIT, and a partial unique index. This is textbook correct and better than what most scheduling systems implement. The unique index alone would prevent double-bookings at the database level even if all application logic failed.</div>
+</div>
+
+<div class="strength">
+  <div class="label">S2 — Comprehensive Feature Surface</div>
+  <div>171 routes across 32 modules covering waitlists, surveys, labels, reschedule flows, cancellation policies, booking link analytics, calendar feeds, calendar sync, SEO sitemaps, and compliance. This is a genuinely full-featured scheduling platform, not a bolt-on calendar widget.</div>
+</div>
+
+<div class="strength">
+  <div class="label">S3 — Clean Router Decomposition</div>
+  <div>32 focused router modules with a central <code>__init__.py</code> assembly point, shared helpers factored into <code>_auth.py</code>, <code>_availability.py</code>, <code>_conflicts.py</code>, <code>_rate_limiting.py</code>, and <code>_input_validation.py</code>. This is maintainable architecture that scales to a large team.</div>
+</div>
+
+<div class="strength">
+  <div class="label">S4 — Cross-Source Conflict Fail-Closed</div>
+  <div>When external calendar sources (Google, Outlook) time out, the affected time range is marked as conflicted rather than available. This is the correct default — it's better to show fewer available slots than to double-book against an external calendar.</div>
+</div>
+
+<div class="strength">
+  <div class="label">S5 — Batch-Loaded Slot Generation</div>
+  <div>The availability engine runs 5 batch queries upfront (appointments, blocked times, slot holds, recurring exceptions, external events) rather than querying per-slot. This avoids the N+1 pattern that plagues most availability calculators.</div>
+</div>
+
+<div class="strength">
+  <div class="label">S6 — Token-Protected Public Endpoints</div>
+  <div>Public endpoints (waitlist, reschedule, confirmation, surveys) use purpose-scoped JWT tokens rather than exposing sequential IDs. This prevents IDOR attacks on unauthenticated flows — a common vulnerability in booking systems.</div>
+</div>
+
+<div class="strength">
+  <div class="label">S7 — Standardized Error Response Helpers</div>
+  <div><code>error_responses.py</code> provides consistent error formatting across the subsystem. While adoption isn't 100% yet (see H10), the infrastructure is there and most authenticated endpoints use it correctly.</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- DEVIL'S ADVOCATE QUESTIONS -->
+<!-- ============================================================ -->
+
+<h2>Devil's Advocate Questions (15)</h2>
+
+<div class="question">
+  <div class="cat">Architecture</div>
+  <div class="q">"You have 171 routes in 32 modules for a scheduler. At what point does feature breadth become a maintenance liability? Could you ship 80% of the value with 40% of the routes?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Architecture</div>
+  <div class="q">"Three independent appointment creation paths with their own validation logic — is this defense-in-depth or an invitation for logic drift? What happens when you need to add a new validation rule and forget one path?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Architecture</div>
+  <div class="q">"The dual availability source (JSON blob vs. RecurringAvailability table) has been a known issue. Why hasn't one source been deprecated? Every day this ambiguity exists, it can silently affect real LO schedules."</div>
+</div>
+
+<div class="question">
+  <div class="cat">Security</div>
+  <div class="q">"The Turnstile replay cache is a per-process Python set with no TTL. You're deploying on Railway which can spin up multiple workers. Are your public booking endpoints actually protected against bots right now, in production?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Security</div>
+  <div class="q">"Calendar feed tokens never expire. If an LO leaves the company, their token still works forever. How many former employees currently have valid feed tokens exposing your clients' appointment data?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Security</div>
+  <div class="q">"The webhook receiver endpoints have no rate limiting. What happens when Google Calendar has a push notification storm and sends 1,000 notifications in 10 seconds to your 20-connection database pool?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Data Integrity</div>
+  <div class="q">"Your audit log table grows unbounded with no retention policy. At your current growth rate, when does this table hit 10M rows? 100M? What's the query performance at that scale, and who's responsible for archival?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Data Integrity</div>
+  <div class="q">"SlotHold cleanup depends on someone manually hitting an admin endpoint. What percentage of expired holds are actually cleaned up? Could phantom-blocked slots be silently reducing your LOs' bookable availability right now?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Compliance</div>
+  <div class="q">"The compliance scheduling service uses a hardcoded timezone for TCPA contact-hour enforcement. TCPA statutory damages are $500-$1,500 per violation. How many borrowers are in a different timezone than your hardcoded default?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Compliance</div>
+  <div class="q">"Your public booking pages lack WCAG 2.1 AA accessibility. Mortgage services are covered by ADA. Has anyone audited the booking widget with a screen reader?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Testing</div>
+  <div class="q">"750+ test cases covering 15% of endpoints. The critical public booking flow — the one that handles real borrower money and personal data — has zero integration tests. What's the actual regression risk on your most important user-facing flow?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Testing</div>
+  <div class="q">"You have defense-in-depth double-booking prevention (advisory lock + SELECT FOR UPDATE + unique index). Have you ever tested all three layers under concurrent load to verify they actually work together? Or is this theoretical correctness?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">UX</div>
+  <div class="q">"The booking confirmation flow sends an email but doesn't provide cancel/reschedule actions from the confirmation link. Borrowers must find a separate reschedule link or call their LO. How many borrowers give up and just no-show instead?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Operations</div>
+  <div class="q">"You have 32 scheduler modules, but no structured logging with correlation IDs. When a borrower reports 'my booking didn't work', how long does it take to trace the failure across availability → conflict check → creation → notification → webhook?"</div>
+</div>
+
+<div class="question">
+  <div class="cat">Strategy</div>
+  <div class="q">"This scheduler has surveys, labels, A/B testing hooks, waitlists, calendar feeds, SEO sitemaps, and appointment outcome analytics. Your users are mortgage LOs who need to book calls with borrowers. Which of these features have actual user adoption, and which are building for hypothetical future demand?"</div>
+</div>
+
+<!-- ============================================================ -->
 <!-- PRIORITIZED RECOMMENDATIONS -->
-<!-- ============================================================== -->
+<!-- ============================================================ -->
+
 <h2>Prioritized Recommendations</h2>
 
-<h3>Critical (Fix Now) <span class="section-count">&mdash; 7 items, ~6-8 hours total</span></h3>
-<div class="card">
-  <div class="card-body">
-    <ol style="margin:0 0 0 16px;font-size:13px;">
-      <li><strong>Move email suppression to database</strong> &mdash; Create EmailSuppression model, migrate in-memory dict to DB table. Prevents data loss on deploy. (~2 hours)</li>
-      <li><strong>HMAC-sign unsubscribe tokens</strong> &mdash; Add SECRET_KEY-based HMAC to token generation/verification. Prevents forged unsubscribes. (~1 hour)</li>
-      <li><strong>Implement SendGrid webhook signature verification</strong> &mdash; Use the SENDGRID_WEBHOOK_VERIFICATION_KEY that's already in env. (~1 hour)</li>
-      <li><strong>Pass org_id to email rate limiter</strong> &mdash; Update all call sites in public_booking.py. Per-tenant rate limiting. (~30 min)</li>
-      <li><strong>Fix webhook.endpoint_url &rarr; webhook.url</strong> &mdash; One-line fix that unbreaks all webhook retries. Add regression test. (~15 min)</li>
-      <li><strong>Give each asyncio.gather coroutine its own DB session</strong> &mdash; Session-per-coroutine in webhook delivery. (~1 hour)</li>
-      <li><strong>Make reschedule tokens single-use with borrower binding</strong> &mdash; Add used_at column, include borrower_email in token payload. (~1 hour)</li>
-    </ol>
-  </div>
+<div class="phase-header">
+  <div class="name">Phase 1 — Critical Security & Data Integrity (1-2 weeks)</div>
+  <div class="timeline">These items can cause data loss, compliance violations, or security breaches if left unaddressed.</div>
 </div>
 
-<h3>Important (This Sprint) <span class="section-count">&mdash; 10 items</span></h3>
-<div class="card">
-  <div class="card-body">
-    <ol style="margin:0 0 0 16px;font-size:13px;">
-      <li><strong>Fix X-Forwarded-For IP extraction</strong> &mdash; Use CF-Connecting-IP or leftmost XFF entry. (~30 min)</li>
-      <li><strong>Advisory lock failure should reject</strong> &mdash; Raise 409 instead of warning and continuing. (~15 min)</li>
-      <li><strong>Cross-source availability: fail closed</strong> &mdash; Return "degraded" or block slot on source failure. (~1 hour)</li>
-      <li><strong>Flush after each bulk item</strong> &mdash; Prevent intra-batch blindness in conflict detection. (~30 min)</li>
-      <li><strong>HTML-escape email template variables</strong> &mdash; Use html.escape() on all user-provided values in notification_service.py. (~1 hour)</li>
-      <li><strong>Cancel endpoint status validation</strong> &mdash; Only allow cancel on BOOKED/CONFIRMED/REMINDED. (~15 min)</li>
-      <li><strong>Use SAVEPOINTs in no-show recovery</strong> &mdash; begin_nested() before each step, rollback to savepoint on failure. (~1 hour)</li>
-      <li><strong>Batch-load consent/DNC in compliance service</strong> &mdash; Eliminate N+1 queries. (~2 hours)</li>
-      <li><strong>Fix Google token refresh expires_at</strong> &mdash; Update expires_at after refresh. (~15 min)</li>
-      <li><strong>SSRF protection on webhook URLs</strong> &mdash; Block internal/private network addresses. (~1 hour)</li>
-    </ol>
-  </div>
+<div class="rec-item"><span>Replace Turnstile in-memory cache with Redis SETNX + TTL</span><span class="effort">4h</span></div>
+<div class="rec-item"><span>Add rate limiting to calendar sync webhook endpoints</span><span class="effort">2h</span></div>
+<div class="rec-item"><span>Add <code>exp</code> claim to calendar feed tokens + revocation mechanism</span><span class="effort">4h</span></div>
+<div class="rec-item"><span>Fix compliance scheduling timezone to use borrower timezone</span><span class="effort">3h</span></div>
+<div class="rec-item"><span>Log advisory lock failures at WARNING level instead of swallowing</span><span class="effort">30m</span></div>
+<div class="rec-item"><span>Add <code>is_active</code> check in scheduler auth helper</span><span class="effort">30m</span></div>
+<div class="rec-item"><span>Add 3 composite indexes (waitlist, audit log, calendar event map)</span><span class="effort">1h</span></div>
+
+<div class="phase-header">
+  <div class="name">Phase 2 — Reliability & Correctness (2-4 weeks)</div>
+  <div class="timeline">These items reduce operational risk and improve system reliability under load.</div>
 </div>
 
-<h3>Consider (Future Sprints) <span class="section-count">&mdash; 8 items</span></h3>
-<div class="card">
-  <div class="card-body">
-    <ol style="margin:0 0 0 16px;font-size:13px;">
-      <li><strong>Consolidate duplicated services</strong> &mdash; Merge 2x creation, 3x reminder, 2x ICS to one each. (~1-2 days)</li>
-      <li><strong>Consolidate availability computation</strong> &mdash; One canonical source (RecurringAvailability table). (~1 day)</li>
-      <li><strong>Add DST handling to recurring availability</strong> &mdash; Use timezone-aware datetimes. (~4 hours)</li>
-      <li><strong>Replace free-text recovery tracking with DB column</strong> &mdash; Integer step column. (~2 hours)</li>
-      <li><strong>Audit and prune unused endpoints</strong> &mdash; Start with A/B testing, surveys, sitemaps. (~4 hours)</li>
-      <li><strong>Route or delete 4 dead frontend dashboards</strong> &mdash; 1,073 lines of unreachable code. (~1 hour)</li>
-      <li><strong>Replace asyncio.run() in webhook service</strong> &mdash; Use await directly in async context. (~30 min)</li>
-      <li><strong>Add AvailabilitySlot unique constraint for date overrides</strong> &mdash; Prevent duplicate overrides. (~30 min)</li>
-    </ol>
-  </div>
+<div class="rec-item"><span>Resolve dual availability source — deprecate JSON blob, migrate to RecurringAvailability only</span><span class="effort">8h</span></div>
+<div class="rec-item"><span>Consolidate 3 appointment creation paths into single service with shared validation</span><span class="effort">12h</span></div>
+<div class="rec-item"><span>Fix email events org_id=NULL for public booking events</span><span class="effort">2h</span></div>
+<div class="rec-item"><span>Add circuit breaker to external calendar API calls</span><span class="effort">4h</span></div>
+<div class="rec-item"><span>Automate SlotHold expiration (background task, not manual endpoint)</span><span class="effort">3h</span></div>
+<div class="rec-item"><span>Fix N+1 query in recurring availability exception check</span><span class="effort">2h</span></div>
+<div class="rec-item"><span>Centralize frontend timezone handling in shared utility</span><span class="effort">6h</span></div>
+<div class="rec-item"><span>Add idempotency guard to reminder service</span><span class="effort">2h</span></div>
+
+<div class="phase-header">
+  <div class="name">Phase 3 — Testing & Operational Excellence (4-8 weeks)</div>
+  <div class="timeline">These items build long-term confidence and maintainability.</div>
 </div>
 
-<!-- ============================================================== -->
-<!-- BOTTOM LINE -->
-<!-- ============================================================== -->
-<h2>Bottom Line</h2>
+<div class="rec-item"><span>Write integration tests for public booking flow (end-to-end)</span><span class="effort">8h</span></div>
+<div class="rec-item"><span>Add concurrent booking load test (verify all 3 prevention layers under contention)</span><span class="effort">4h</span></div>
+<div class="rec-item"><span>Implement structured logging with correlation IDs across all 32 modules</span><span class="effort">8h</span></div>
+<div class="rec-item"><span>Add audit log retention policy and partitioning strategy</span><span class="effort">4h</span></div>
+<div class="rec-item"><span>WCAG 2.1 AA audit and remediation on public booking pages</span><span class="effort">12h</span></div>
+<div class="rec-item"><span>Add cancel/reschedule actions to confirmation token flow</span><span class="effort">6h</span></div>
+<div class="rec-item"><span>Standardize all public endpoint error responses to use error_responses.py</span><span class="effort">4h</span></div>
 
-<div class="exec-summary" style="border-left-color:var(--orange);">
-  <strong>Score: 7.4/10</strong> &mdash; The Smart Calendar's structural foundations are genuinely strong: validated state machines, parameterized SQL, multi-tenant isolation on primary paths, TCPA-compliant SMS, and PII-aware logging. The v4 enterprise hardening pass fixed real issues. But this v5 deep dive found <strong>7 critical runtime bugs</strong> that are active in production right now: email suppression that vanishes on deploy, webhook retries that have never worked, forgeable unsubscribe tokens, an unverified webhook endpoint, email rate limiting that doesn't actually isolate tenants, shared DB sessions in async code, and reusable reschedule tokens. These aren't architectural debt or theoretical concerns &mdash; they're bugs with specific file:line references that can be triggered today. The good news: all 7 critical fixes are straightforward (6-8 hours total). Fix those, address the 17 high findings over the next sprint, and this system moves from 7.4 to 8.5+. The architecture concerns (duplicate services, endpoint sprawl, dead dashboards) are real but they're maintenance risks, not runtime failures. Fix the runtime bugs first.
+<!-- ============================================================ -->
+<!-- VERDICT -->
+<!-- ============================================================ -->
+
+<div class="verdict">
+  <h3>Bottom Line</h3>
+  <p>
+    The Smart Calendar is an impressively ambitious system that does more than most embedded scheduling solutions. The architecture is sound, the feature surface is comprehensive, and the defense-in-depth booking protection is genuinely well-designed. But the rapid expansion has created security gaps (Turnstile bypass, eternal tokens, unprotected webhooks), data integrity risks (dual availability sources, phantom slot holds), and compliance exposure (hardcoded timezones for TCPA). Phase 1 fixes are estimated at ~15 hours of engineering work — a modest investment to close the critical gaps. This system is 15 hours of targeted hardening away from being genuinely enterprise-ready.
+  </p>
 </div>
 
-<div style="text-align:center;margin-top:32px;color:var(--muted);font-size:12px;">
-  Generated by /u-challenge v5 | Claude Code | 2026-03-23 | 61+ files analyzed across 4 parallel agents
+<div class="footer">
+  Smart Calendar Challenge Report &middot; Perennia AI &middot; 2026-03-23 &middot; Generated by Claude Code /u-challenge
 </div>
 
-</div>
 </body>
 </html>

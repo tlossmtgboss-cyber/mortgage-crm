@@ -250,8 +250,29 @@ class TestC3_LOLicensingCheck:
         )
         assert result is None
 
-    def test_returns_warning_when_no_nmls(self):
-        """_check_lo_licensing returns a warning string when LO lacks NMLS number."""
+    def test_raises_when_no_nmls_enforce_on(self):
+        """_check_lo_licensing raises NMLSBlockingError when LO lacks NMLS in regulated state."""
+        from routes.scheduler._helpers import _check_lo_licensing
+        from routes.scheduler._crm_integration import NMLSBlockingError
+
+        mock_user = MagicMock()
+        mock_user.nmls_number = None
+        mock_user.first_name = "John"
+        mock_user.last_name = "Doe"
+
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = mock_user
+        mock_db.query.return_value = mock_query
+
+        with pytest.raises(NMLSBlockingError):
+            _check_lo_licensing(
+                db=mock_db, assigned_user_id=1, attendee_state="TX", org_id=1
+            )
+
+    def test_returns_warning_when_no_nmls_enforce_off(self):
+        """_check_lo_licensing returns warning when LO lacks NMLS and enforce=False."""
         from routes.scheduler._helpers import _check_lo_licensing
 
         mock_user = MagicMock()
@@ -266,7 +287,8 @@ class TestC3_LOLicensingCheck:
         mock_db.query.return_value = mock_query
 
         result = _check_lo_licensing(
-            db=mock_db, assigned_user_id=1, attendee_state="TX", org_id=1
+            db=mock_db, assigned_user_id=1, attendee_state="TX", org_id=1,
+            enforce=False,
         )
         assert result is not None
         assert "Warning" in result
@@ -281,8 +303,24 @@ class TestC3_LOLicensingCheck:
         )
         assert result is None
 
-    def test_never_raises_exception(self):
-        """_check_lo_licensing is advisory only -- it never raises an HTTPException."""
+    def test_raises_when_user_not_found_enforce_on(self):
+        """_check_lo_licensing raises NMLSBlockingError when user not found and enforce=True."""
+        from routes.scheduler._helpers import _check_lo_licensing
+        from routes.scheduler._crm_integration import NMLSBlockingError
+
+        mock_db = MagicMock()
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = None  # User not found
+        mock_db.query.return_value = mock_query
+
+        with pytest.raises(NMLSBlockingError):
+            _check_lo_licensing(
+                db=mock_db, assigned_user_id=999, attendee_state="CA", org_id=1
+            )
+
+    def test_returns_warning_when_user_not_found_enforce_off(self):
+        """_check_lo_licensing returns warning when user not found and enforce=False."""
         from routes.scheduler._helpers import _check_lo_licensing
 
         mock_db = MagicMock()
@@ -291,11 +329,12 @@ class TestC3_LOLicensingCheck:
         mock_query.first.return_value = None  # User not found
         mock_db.query.return_value = mock_query
 
-        # Should return a warning string, NOT raise
         result = _check_lo_licensing(
-            db=mock_db, assigned_user_id=999, attendee_state="CA", org_id=1
+            db=mock_db, assigned_user_id=999, attendee_state="CA", org_id=1,
+            enforce=False,
         )
-        assert isinstance(result, str) or result is None
+        assert isinstance(result, str)
+        assert "Warning" in result
 
 
 # ---------------------------------------------------------------------------

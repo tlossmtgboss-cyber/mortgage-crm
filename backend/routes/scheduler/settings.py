@@ -788,6 +788,17 @@ async def update_settings_section(
     )
     db.commit()
 
+    # PERF-008: Invalidate cached SchedulerConfig after settings change
+    try:
+        from routes.scheduler._availability import invalidate_scheduler_config_cache
+        invalidate_scheduler_config_cache(user_id=user_id, org_id=org_id)
+        # Also invalidate team member configs if team section was updated
+        if section == "team" and payload.members:
+            for member in payload.members:
+                invalidate_scheduler_config_cache(user_id=member.user_id, org_id=org_id)
+    except Exception:
+        pass  # Cache invalidation failure is non-critical
+
     # Return the updated section
     section_serializers = {
         "availability": _serialize_config_availability,

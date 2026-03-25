@@ -12,6 +12,7 @@ background task schedulers without going through the HTTP layer:
   - ``expire_stale_active_holds(db)``  -- mark active holds past their TTL as expired
   - ``cleanup_expired_slot_holds(db)`` -- delete old expired/released hold records
   - ``run_hold_maintenance(db)``       -- run both steps in sequence (used by scheduler_service)
+  - ``auto_cleanup_expired_holds(db)`` -- lightweight cleanup safe to call inline from slot queries
 """
 
 import logging
@@ -175,6 +176,60 @@ def run_hold_maintenance(
     return {"expired_count": expired_count, "deleted_count": deleted_count}
 
 
+def auto_cleanup_expired_holds(db: Session) -> int:
+    """Lightweight cleanup of expired slot holds, safe to call inline.
+
+    Designed to be called at the start of slot availability queries so that
+    phantom-blocked slots are freed even if the periodic background task has
+    not run recently.  Transitions active holds whose ``expires_at`` has
+    passed to ``expired`` status in a single UPDATE statement.
+
+    Unlike ``expire_stale_active_holds``, this does NOT flush -- the caller
+    (typically ``_generate_available_slots``) controls the session lifecycle.
+    The UPDATE is cheap (indexed on status + expires_at) and adds negligible
+    latency to availability queries.
+
+    Can also be registered as a startup hook to clear stale holds from any
+    downtime period::
+
+        @app.on_event("startup")
+        def cleanup_holds_on_startup():
+            from db import get_db
+            db = next(get_db())
+            try:
+                auto_cleanup_expired_holds(db)
+                db.commit()
+            finally:
+                db.close()
+
+    Args:
+        db: Active SQLAlchemy session.
+
+    Returns:
+        Number of holds transitioned to 'expired'.
+    """
+    from database.models.scheduler import SlotHold
+
+    now = datetime.now(timezone.utc)
+
+    count = (
+        db.query(SlotHold)
+        .filter(
+            SlotHold.status == "active",
+            SlotHold.expires_at <= now,
+        )
+        .update(
+            {SlotHold.status: "expired"},
+            synchronize_session="fetch",
+        )
+    )
+
+    if count > 0:
+        logger.info("AUTO_CLEANUP: expired %d slot holds", count)
+
+    return count
+
+
 # =============================================================================
 # HTTP ENDPOINT
 # =============================================================================
@@ -213,9 +268,13 @@ async def cleanup_holds_endpoint(
         raise HTTPException(status_code=500, detail="Cleanup failed")
 
     _audit_log(
-        db, org_id, getattr(current_user, "id", None),
-        "slot_hold_cleanup", "slot_hold",
+        db,
+        org_id=org_id,
+        user_id=getattr(current_user, "id", None),
+        action="slot_hold_cleanup",
+        entity_type="slot_hold",
         changes=result,
+        request=request,
     )
     db.commit()
 
@@ -284,9 +343,13 @@ async def archive_audit_logs_endpoint(
         raise HTTPException(status_code=500, detail="Audit log archival failed")
 
     _audit_log(
-        db, org_id, getattr(current_user, "id", None),
-        "audit_log_archival", "scheduler_audit_log",
+        db,
+        org_id=org_id,
+        user_id=getattr(current_user, "id", None),
+        action="audit_log_archival",
+        entity_type="scheduler_audit_log",
         changes=result,
+        request=request,
     )
     db.commit()
 

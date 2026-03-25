@@ -5,6 +5,7 @@ Database models for webhook subscriptions, delivery logs, and event tracking.
 Enterprise API Gateway & Developer Experience (Domain 11).
 """
 
+import logging
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON, Index
@@ -13,11 +14,19 @@ from sqlalchemy.orm import relationship
 
 from db import Base
 
+logger = logging.getLogger(__name__)
+
 try:
     from services.encryption import EncryptedString
     _HAS_ENCRYPTION = True
 except ImportError:
     _HAS_ENCRYPTION = False
+    logger.error(
+        "COMP-004: services.encryption.EncryptedString is unavailable. "
+        "Webhook signing secrets will be stored as PLAINTEXT. "
+        "Install the 'cryptography' package and set ENCRYPTION_KEY or SECRET_KEY "
+        "to enable at-rest encryption."
+    )
 
 
 class WebhookSubscription(Base):
@@ -35,6 +44,8 @@ class WebhookSubscription(Base):
     url = Column(Text, nullable=False)
     # COMP-004: Webhook secrets encrypted at rest using Fernet (EncryptedString TypeDecorator).
     # Transparently encrypts on write, decrypts on read. Column sized to 500 for ciphertext.
+    # Legacy plaintext values are returned as-is on read (backward compatible).
+    # Falls back to String(500) ONLY if encryption service is unavailable (logged as error above).
     secret = Column(EncryptedString(500) if _HAS_ENCRYPTION else String(500), nullable=False)
 
     # Event subscriptions (e.g., ["lead.created", "loan.funded"])

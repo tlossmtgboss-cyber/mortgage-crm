@@ -170,9 +170,11 @@ def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: 
     Returns a warning string for non-regulated states or when
     ``enforce=False``. Returns None if OK.
 
-    When the lookup itself fails (DB error, import error), returns a
-    warning string describing the failure rather than silently returning
-    None, so callers can flag the lead for compliance review.
+    When the lookup itself fails (DB error, import error) and
+    ``enforce=True``, raises ``NMLSBlockingError`` to block lead
+    assignment rather than silently allowing an unverified LO to
+    receive leads. When ``enforce=False``, returns a warning string
+    so callers can flag the lead for compliance review.
 
     Scoped by org_id to prevent cross-tenant user enumeration.
     """
@@ -195,7 +197,18 @@ def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: 
         lo_query = lo_query.filter(User.organization_id == org_id)
         assigned = lo_query.first()
         if not assigned:
-            return f"Warning: Could not verify LO licensing - user {assigned_user_id} not found"
+            msg = f"Could not verify LO licensing - user {assigned_user_id} not found"
+            if enforce:
+                logger.error(
+                    f"NMLS_VERIFICATION_FAILED: LO user_id={assigned_user_id} not found in "
+                    f"org_id={org_id}, state={attendee_state}{appt_ctx} - "
+                    f"blocking lead assignment"
+                )
+                raise NMLSBlockingError(
+                    f"Booking blocked: {msg}. "
+                    f"LO must exist and have NMLS on file for lead assignment."
+                )
+            return f"Warning: {msg}"
 
         nmls = getattr(assigned, 'nmls_number', None)
         state_upper = attendee_state.strip().upper()[:2]
@@ -206,7 +219,7 @@ def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: 
                    f"Cannot verify licensing for state {state_upper}.")
 
             if enforce and state_upper in NMLS_REGULATED_STATES:
-                logger.warning(f"NMLS_BLOCK: {msg}")
+                logger.error(f"NMLS_VERIFICATION_FAILED: {msg}{appt_ctx}")
                 raise NMLSBlockingError(
                     f"Booking blocked: {msg} "
                     f"An NMLS number is required to book appointments in {state_upper}."
@@ -218,10 +231,17 @@ def _check_lo_licensing(db, assigned_user_id: int, attendee_state: str, org_id: 
     except NMLSBlockingError:
         raise
     except Exception as e:
-        logger.warning(
-            f"NMLS_VERIFY_FAILED: LO licensing lookup error for "
-            f"user_id={assigned_user_id}, org_id={org_id}, "
-            f"state={attendee_state}{appt_ctx}: {e}"
+        logger.error(
+            f"NMLS_VERIFICATION_ERROR: could not verify LO user_id={assigned_user_id}, "
+            f"org_id={org_id}, state={attendee_state}{appt_ctx}: {e}"
         )
+        if enforce:
+            # Verification failed and enforcement is on — block the assignment
+            # rather than silently allowing an unverified LO to receive leads
+            raise NMLSBlockingError(
+                f"Booking blocked: NMLS verification could not be completed for "
+                f"LO user_id={assigned_user_id} in state {attendee_state}. "
+                f"Manual review required."
+            )
         return (f"Warning: NMLS verification pending - lookup failed for "
                 f"LO user_id={assigned_user_id} in state {attendee_state}")

@@ -23,21 +23,37 @@ export default function BookingTypeSelector({
 
   return (
     <div style={styles.section}>
-      <label style={styles.label}>Appointment Type</label>
-      <div style={styles.typePills}>
-        {appointmentTypes.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => onSelect(t)}
-            style={{
-              ...styles.typePill,
-              ...(selectedType?.id === t.id ? styles.typePillActive : {}),
-            }}
-          >
-            {t.type_name}
-            <span style={styles.typeDuration}>{t.default_duration_minutes}m</span>
-          </button>
-        ))}
+      <label style={styles.label} id="bw-type-label">Appointment Type</label>
+      <div
+        style={styles.typePills}
+        role="radiogroup"
+        aria-labelledby="bw-type-label"
+      >
+        {appointmentTypes.map((t) => {
+          const isSelected = selectedType?.id === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => onSelect(t)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelect(t);
+                }
+              }}
+              role="radio"
+              aria-checked={isSelected}
+              aria-label={`${t.type_name}, ${t.default_duration_minutes} minutes`}
+              style={{
+                ...styles.typePill,
+                ...(isSelected ? styles.typePillActive : {}),
+              }}
+            >
+              {t.type_name}
+              <span style={styles.typeDuration} aria-hidden="true">{t.default_duration_minutes}m</span>
+            </button>
+          );
+        })}
       </div>
     </div>
   );

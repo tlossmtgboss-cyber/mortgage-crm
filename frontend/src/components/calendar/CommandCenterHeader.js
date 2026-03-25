@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { schedulerAPI, tasksAPI, leadsAPI, loansAPI } from '../../services/api';
+import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 import './CommandCenterHeader.css';
 
 // SLA targets in days — mirrors backend SLA_TARGETS
@@ -114,8 +115,9 @@ const CommandCenterHeader = React.memo(function CommandCenterHeader({ onStatsFet
         const nextAppt = upcoming[0];
         let nextLabel = null;
         if (nextAppt) {
-          const t = new Date(nextAppt.start_time || nextAppt.starts_at);
-          nextLabel = t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+          const t = new Date(normalizeUTCDate(nextAppt.start_time || nextAppt.starts_at));
+          const tz = getUserTimezone();
+          nextLabel = t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
         }
         setStats(prev => ({ ...prev, appointments: { today: appts.length, next: nextLabel, loading: false } }));
       } catch {

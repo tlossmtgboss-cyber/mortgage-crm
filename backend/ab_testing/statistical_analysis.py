@@ -1,6 +1,9 @@
 """
 Statistical Analysis for A/B Testing
 Calculates significance, confidence intervals, and winner recommendations
+
+SEC-004 FIX: All experiment lookups are now scoped by organization_id
+to prevent cross-tenant data access.
 """
 import logging
 import math
@@ -22,8 +25,18 @@ logger = logging.getLogger(__name__)
 class StatisticalAnalyzer:
     """Analyzes A/B test results and determines statistical significance"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, organization_id: Optional[int] = None):
         self.db = db
+        self.organization_id = organization_id
+
+    def _get_experiment(self, experiment_id: int) -> Optional[Experiment]:
+        """Fetch experiment scoped to org."""
+        query = self.db.query(Experiment).filter(
+            Experiment.id == experiment_id
+        )
+        if self.organization_id is not None:
+            query = query.filter(Experiment.organization_id == self.organization_id)
+        return query.first()
 
     def analyze_experiment(self, experiment_id: int) -> Optional[ExperimentInsight]:
         """
@@ -36,9 +49,7 @@ class StatisticalAnalyzer:
             ExperimentInsight with analysis results
         """
         try:
-            experiment = self.db.query(Experiment).filter(
-                Experiment.id == experiment_id
-            ).first()
+            experiment = self._get_experiment(experiment_id)
 
             if not experiment:
                 logger.error(f"Experiment {experiment_id} not found")
@@ -294,9 +305,7 @@ class StatisticalAnalyzer:
             Summary dict with all key metrics
         """
         try:
-            experiment = self.db.query(Experiment).filter(
-                Experiment.id == experiment_id
-            ).first()
+            experiment = self._get_experiment(experiment_id)
 
             if not experiment:
                 return None

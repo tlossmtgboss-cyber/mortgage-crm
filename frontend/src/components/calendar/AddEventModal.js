@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getUserTimezone } from './calendarUtils';
 
 /**
  * AddEventModal -- Modal form for creating new calendar events or scheduled appointments.
@@ -78,7 +79,7 @@ function AddEventModal({ selectedDate, selectedTime, onClose, onAdd, onAddAppoin
         attendee_email: formData.attendee_email || undefined,
         attendee_phone: formData.attendee_phone || undefined,
         assigned_user_id: formData.team_member_id ? parseInt(formData.team_member_id) : undefined,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timezone: getUserTimezone(),
       });
     } else {
       onAdd({

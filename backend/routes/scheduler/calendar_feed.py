@@ -14,12 +14,19 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 import logging
+import os
 import secrets
 
 from routes.scheduler._helpers import get_current_user, _get_org_id, _audit_log
 from db import get_db
 
 logger = logging.getLogger(__name__)
+
+# SEC-002: Fail-hard SECRET_KEY — never allow empty/missing key in production
+_SECRET_KEY = os.getenv("SECRET_KEY")
+if not _SECRET_KEY and os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production":
+    raise RuntimeError("SECRET_KEY must be set in production")
+_SECRET_KEY = _SECRET_KEY or "dev-only-insecure-key"
 
 router = APIRouter()
 
@@ -83,6 +90,19 @@ async def get_ics_feed(
             status_code=401,
             detail="Calendar feed link has expired. Please regenerate your feed URL in calendar settings.",
         )
+
+    # C3: Verify the token owner is still an active user (former employees must not retain access)
+    from database.models.core import User
+    user = db.query(User).filter(User.id == feed_token.user_id).first()
+    if not user or not getattr(user, "is_active", True):
+        # Deactivate the token so it doesn't pass validation on future requests
+        try:
+            feed_token.is_active = False
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to deactivate feed token for inactive user: {e}")
+            db.rollback()
+        raise HTTPException(status_code=401, detail="User account inactive")
 
     # Update access tracking (non-blocking — don't fail the request on tracking errors)
     try:

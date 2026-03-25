@@ -1,6 +1,9 @@
 """
 Experiment Service
 Handles A/B test variant assignment and experiment management
+
+SEC-004 FIX: All experiment lookups are now scoped by organization_id
+to prevent cross-tenant data access.
 """
 import hashlib
 import logging
@@ -22,8 +25,15 @@ logger = logging.getLogger(__name__)
 class ExperimentService:
     """Service for managing A/B testing experiments"""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, organization_id: Optional[int] = None):
         self.db = db
+        self.organization_id = organization_id
+
+    def _org_filter(self, query):
+        """Apply organization_id filter when set."""
+        if self.organization_id is not None:
+            return query.filter(Experiment.organization_id == self.organization_id)
+        return query
 
     def get_variant_for_user(
         self,
@@ -46,11 +56,13 @@ class ExperimentService:
             Variant config dict or None
         """
         try:
-            # Get experiment
-            experiment = self.db.query(Experiment).filter(
+            # Get experiment scoped to org
+            query = self.db.query(Experiment).filter(
                 Experiment.name == experiment_name,
                 Experiment.status == ExperimentStatus.RUNNING
-            ).first()
+            )
+            query = self._org_filter(query)
+            experiment = query.first()
 
             if not experiment:
                 logger.debug(f"Experiment '{experiment_name}' not found or not running")
@@ -103,11 +115,13 @@ class ExperimentService:
             True if recorded successfully
         """
         try:
-            # Get experiment
-            experiment = self.db.query(Experiment).filter(
+            # Get experiment scoped to org
+            query = self.db.query(Experiment).filter(
                 Experiment.name == experiment_name,
                 Experiment.status == ExperimentStatus.RUNNING
-            ).first()
+            )
+            query = self._org_filter(query)
+            experiment = query.first()
 
             if not experiment:
                 logger.warning(f"Cannot record result - experiment '{experiment_name}' not found")
@@ -183,7 +197,7 @@ class ExperimentService:
                 logger.error(f"Traffic allocation must sum to 100%, got {total_allocation}")
                 return None
 
-            # Create experiment
+            # Create experiment with organization_id
             experiment = Experiment(
                 name=name,
                 description=description,
@@ -193,7 +207,8 @@ class ExperimentService:
                 secondary_metrics=secondary_metrics or [],
                 target_percentage=target_percentage,
                 min_sample_size=min_sample_size,
-                confidence_level=confidence_level
+                confidence_level=confidence_level,
+                organization_id=self.organization_id,
             )
 
             self.db.add(experiment)
@@ -212,7 +227,7 @@ class ExperimentService:
                 self.db.add(variant)
 
             self.db.commit()
-            logger.info(f"Created experiment '{name}' with {len(variants)} variants")
+            logger.info(f"Created experiment '{name}' with {len(variants)} variants (org_id={self.organization_id})")
             return experiment
 
         except Exception as e:
@@ -226,9 +241,11 @@ class ExperimentService:
     def start_experiment(self, experiment_id: int) -> bool:
         """Start an experiment"""
         try:
-            experiment = self.db.query(Experiment).filter(
+            query = self.db.query(Experiment).filter(
                 Experiment.id == experiment_id
-            ).first()
+            )
+            query = self._org_filter(query)
+            experiment = query.first()
 
             if not experiment:
                 logger.error(f"Experiment {experiment_id} not found")
@@ -253,9 +270,11 @@ class ExperimentService:
     def stop_experiment(self, experiment_id: int, declare_winner: bool = False) -> bool:
         """Stop an experiment and optionally declare a winner"""
         try:
-            experiment = self.db.query(Experiment).filter(
+            query = self.db.query(Experiment).filter(
                 Experiment.id == experiment_id
-            ).first()
+            )
+            query = self._org_filter(query)
+            experiment = query.first()
 
             if not experiment:
                 return False
@@ -266,7 +285,7 @@ class ExperimentService:
             if declare_winner:
                 # Get latest insight to find recommended winner
                 from .statistical_analysis import StatisticalAnalyzer
-                analyzer = StatisticalAnalyzer(self.db)
+                analyzer = StatisticalAnalyzer(self.db, organization_id=self.organization_id)
                 insight = analyzer.analyze_experiment(experiment_id)
 
                 if insight and insight.recommended_winner_id:

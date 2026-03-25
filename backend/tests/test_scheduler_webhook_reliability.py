@@ -207,6 +207,7 @@ class TestWebhookRetryLogic:
             ):
                 result = await _deliver_to_subscription(
                     fake_db, sample_subscription, sample_payload,
+                    _synchronous=True,
                 )
 
             # Verify 3 POST attempts were made
@@ -249,6 +250,7 @@ class TestWebhookRetryLogic:
             ):
                 await _deliver_to_subscription(
                     fake_db, sample_subscription, sample_payload,
+                    _synchronous=True,
                 )
 
             # asyncio.sleep called twice: after attempt 1 and after attempt 2
@@ -289,6 +291,7 @@ class TestWebhookRetryLogic:
             ):
                 result = await _deliver_to_subscription(
                     fake_db, sample_subscription, sample_payload,
+                    _synchronous=True,
                 )
 
             assert result.status == "failed"
@@ -325,6 +328,7 @@ class TestWebhookRetryLogic:
 
             result = await _deliver_to_subscription(
                 fake_db, sample_subscription, sample_payload,
+                _synchronous=True,
             )
 
             # Only 1 POST call, no sleep
@@ -370,6 +374,7 @@ class TestWebhookRetryLogic:
 
             result = await _deliver_to_subscription(
                 fake_db, sample_subscription, sample_payload,
+                _synchronous=True,
             )
 
             assert result.status == "success"
@@ -413,6 +418,7 @@ class TestDeadLetterHandling:
 
             result = await _deliver_to_subscription(
                 fake_db, sample_subscription, sample_payload,
+                _synchronous=True,
             )
 
             assert result.status == "failed"
@@ -514,6 +520,7 @@ class TestDeadLetterHandling:
 
             await _deliver_to_subscription(
                 fake_db, sample_subscription, sample_payload,
+                _synchronous=True,
             )
 
             # _create_dead_letter_notification called with correct args

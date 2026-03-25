@@ -4,6 +4,7 @@ import {
   formatTime,
   getMeetingModeIcon,
   getMeetingModeColor,
+  getUserTimezone,
 } from './calendarUtils';
 
 const UpcomingAppointmentRow = React.memo(function UpcomingAppointmentRow({ appt, onAppointmentClick }) {
@@ -24,7 +25,7 @@ const UpcomingAppointmentRow = React.memo(function UpcomingAppointmentRow({ appt
     >
       <div className="appointment-date-time">
         <span className="appointment-date">
-          {new Date(normalizeUTCDate(appt.scheduled_start)).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+          {new Date(normalizeUTCDate(appt.scheduled_start)).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: getUserTimezone() })}
         </span>
         <span className="appointment-time">
           {formatTime(appt.scheduled_start)}

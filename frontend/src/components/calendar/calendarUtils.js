@@ -1,15 +1,21 @@
 // Shared utilities for calendar components
+//
+// Timezone-aware formatting delegates to the centralized timezone utility
+// at src/utils/timezone.js. Components that only need calendarUtils do not
+// need a separate import of timezone.js.
 
-// Helper to normalize UTC date strings from backend
-// Backend returns UTC times without Z suffix, so we need to add it
-export const normalizeUTCDate = (dateString) => {
-  if (!dateString) return dateString;
-  // If no timezone indicator, assume UTC and add Z
-  if (!dateString.endsWith('Z') && !dateString.includes('+') && !dateString.includes('-', 10)) {
-    return dateString + 'Z';
-  }
-  return dateString;
-};
+import {
+  normalizeUTCDate as _normalizeUTCDate,
+  formatTimeInUserTimezone,
+  formatTimeWithZone as _formatTimeWithZone,
+  formatInUserTimezone,
+  formatTimeRange as _formatTimeRange,
+  getUserTimezone,
+  getTimezoneAbbreviation,
+} from '../../utils/timezone';
+
+// Re-export normalizeUTCDate so existing callers keep working.
+export const normalizeUTCDate = _normalizeUTCDate;
 
 // Helper to format date as YYYY-MM-DD for API
 export const formatDateForAPI = (date) => {
@@ -19,14 +25,28 @@ export const formatDateForAPI = (date) => {
   return `${year}-${month}-${day}`;
 };
 
+/**
+ * Format a UTC datetime string as a local time in the user's configured timezone.
+ * Returns e.g. "2:30 PM".
+ */
 export const formatTime = (dateString) => {
-  const date = new Date(normalizeUTCDate(dateString));
-  return date.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
+  return formatTimeInUserTimezone(dateString);
 };
+
+/**
+ * Format a UTC datetime string with an explicit timezone abbreviation.
+ * Returns e.g. "2:30 PM CDT".
+ */
+export const formatTimeWithZone = _formatTimeWithZone;
+
+/**
+ * Format a start/end time range with a single timezone abbreviation.
+ * Returns e.g. "10:00 AM - 10:30 AM EST".
+ */
+export const formatTimeRange = _formatTimeRange;
+
+// Re-export for convenience
+export { getUserTimezone, getTimezoneAbbreviation, formatInUserTimezone };
 
 export const formatDuration = (start, end) => {
   const startDate = new Date(normalizeUTCDate(start));
@@ -94,19 +114,23 @@ export const DURATION_OPTIONS = [
 
 // Format event start/end into a display string and duration in minutes.
 // Used by Calendar.js and other views that show event time ranges.
+// Timezone-aware: formats times in the user's configured timezone.
 export const formatEventTime = (startTime, endTime) => {
   const start = new Date(normalizeUTCDate(startTime));
   const end = new Date(normalizeUTCDate(endTime));
-  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+  const tz = getUserTimezone();
+  const startStr = start.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: tz });
   const duration = Math.round((end - start) / (1000 * 60));
   return { startStr, duration };
 };
 
 // Format an ISO date string for search result display (e.g. "Mar 14, 2026")
+// Timezone-aware: formats in the user's configured timezone.
 export const formatSearchDate = (isoStr) => {
   if (!isoStr) return '';
   const d = new Date(normalizeUTCDate(isoStr));
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const tz = getUserTimezone();
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: tz });
 };
 
 // Format a date as a human-readable relative time string.
@@ -125,7 +149,7 @@ export const formatRelativeTime = (isoString) => {
   if (diffHrs < 24) return `${diffHrs} hour${diffHrs !== 1 ? 's' : ''} ago`;
   const diffDays = Math.floor(diffHrs / 24);
   if (diffDays < 7) return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: getUserTimezone() });
 };
 
 export const MEETING_TYPE_OPTIONS = [

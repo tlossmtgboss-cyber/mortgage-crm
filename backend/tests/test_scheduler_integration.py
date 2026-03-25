@@ -102,10 +102,10 @@ class TestC2_DuplicateBookingFunctional:
 
 
 class TestC3_LOLicensingFunctional:
-    """C3: Test LO licensing check is advisory."""
+    """C3: Test LO licensing check blocks unlicensed LOs (H5 fix)."""
 
-    def test_returns_warning_when_no_nmls(self):
-        """Should return warning when LO has no NMLS."""
+    def test_raises_when_no_nmls_regulated_state(self):
+        """Should raise NMLSBlockingError when LO has no NMLS in regulated state."""
         mock_db = MagicMock()
         class MockUser:
             id = 1
@@ -118,10 +118,31 @@ class TestC3_LOLicensingFunctional:
         mock_db.query.return_value = mock_query
 
         from routes.scheduler._helpers import _check_lo_licensing
-        # Patch User model at import target so filter(User.id == ...) works
+        from routes.scheduler._crm_integration import NMLSBlockingError
         mock_user_class = MagicMock()
         with patch("database.models.core.User", mock_user_class):
-            result = _check_lo_licensing(mock_db, assigned_user_id=1, attendee_state="CA")
+            with pytest.raises(NMLSBlockingError):
+                _check_lo_licensing(mock_db, assigned_user_id=1, attendee_state="CA")
+
+    def test_returns_warning_when_no_nmls_enforce_off(self):
+        """Should return warning when LO has no NMLS and enforce=False."""
+        mock_db = MagicMock()
+        class MockUser:
+            id = 1
+            nmls_number = None
+            first_name = "John"
+            last_name = "Doe"
+
+        mock_query = MagicMock()
+        mock_query.filter.return_value.first.return_value = MockUser()
+        mock_db.query.return_value = mock_query
+
+        from routes.scheduler._helpers import _check_lo_licensing
+        mock_user_class = MagicMock()
+        with patch("database.models.core.User", mock_user_class):
+            result = _check_lo_licensing(
+                mock_db, assigned_user_id=1, attendee_state="CA", enforce=False
+            )
 
         assert result is not None
         assert isinstance(result, str)

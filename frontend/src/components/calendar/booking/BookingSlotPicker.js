@@ -45,12 +45,21 @@ export default function BookingSlotPicker({
   styles,
   accentColor,
 }) {
+  // Format a date for use in aria-labels
+  function formatDateLong(date) {
+    return date.toLocaleDateString(undefined, {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+    });
+  }
+
   return (
     <>
       {/* Date picker */}
       <div style={styles.section}>
-        <label style={styles.label}>Select a Date</label>
-        <div style={styles.weekNav}>
+        <label style={styles.label} id="bw-date-label">Select a Date</label>
+        <div style={styles.weekNav} role="group" aria-labelledby="bw-date-label">
           <button
             onClick={onPrevWeek}
             disabled={isPast(weekDates[0])}
@@ -59,16 +68,26 @@ export default function BookingSlotPicker({
           >
             &lsaquo;
           </button>
-          <div style={styles.weekDates}>
+          <div style={styles.weekDates} role="listbox" aria-labelledby="bw-date-label">
             {weekDates.map((date, idx) => {
               const disabled = isPast(date);
               const selected =
                 selectedDate && date.toDateString() === selectedDate.toDateString();
+              const dateLabel = formatDateLong(date);
               return (
                 <button
                   key={idx}
                   onClick={() => !disabled && onSelectDate(date)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      if (!disabled) onSelectDate(date);
+                    }
+                  }}
                   disabled={disabled}
+                  role="option"
+                  aria-selected={selected}
+                  aria-label={`${dateLabel}${isToday(date) ? ', today' : ''}${selected ? ', selected' : ''}`}
                   style={{
                     ...styles.dateCard,
                     ...(selected
@@ -81,14 +100,10 @@ export default function BookingSlotPicker({
                     ...(disabled ? styles.dateCardDisabled : {}),
                     ...(isToday(date) && !selected ? styles.dateCardToday : {}),
                   }}
-                  aria-label={date.toLocaleDateString(undefined, {
-                    weekday: 'long',
-                    month: 'long',
-                    day: 'numeric',
-                  })}
                 >
-                  <span style={styles.dayName}>{formatDayShort(date)}</span>
+                  <span style={styles.dayName} aria-hidden="true">{formatDayShort(date)}</span>
                   <span
+                    aria-hidden="true"
                     style={{
                       ...styles.dayNumber,
                       ...(selected ? { color: '#fff' } : {}),
@@ -108,17 +123,34 @@ export default function BookingSlotPicker({
 
       {/* Time slot grid */}
       <div style={styles.section}>
-        <label style={styles.label}>Select a Time</label>
+        <label style={styles.label} id="bw-time-label">Select a Time</label>
         {availableSlots.length === 0 ? (
-          <p style={styles.noSlots}>No available times for this date.</p>
+          <p style={styles.noSlots} role="status">No available times for this date.</p>
         ) : (
-          <div style={styles.timeGrid}>
+          <div
+            style={styles.timeGrid}
+            role="listbox"
+            aria-labelledby="bw-time-label"
+          >
             {availableSlots.map((slot, idx) => {
               const selected = selectedTime === slot.start_time;
+              const selectedDateStr = selectedDate
+                ? selectedDate.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })
+                : '';
               return (
                 <button
                   key={idx}
                   onClick={() => onSelectTime(slot.start_time)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelectTime(slot.start_time);
+                    }
+                  }}
+                  role="option"
+                  aria-selected={selected}
+                  aria-label={`Book appointment at ${slot.display} on ${selectedDateStr}${selected ? ', selected' : ''}`}
+                  tabIndex={0}
                   style={{
                     ...styles.timeSlot,
                     ...(selected

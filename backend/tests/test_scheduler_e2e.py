@@ -1391,8 +1391,8 @@ class TestComplianceE2E:
             start_time=datetime(2026, 3, 15, 10, 0), org_id=1,
         )
 
-    def test_lo_licensing_advisory_only(self, mock_db, mock_models):
-        """LO licensing check is advisory - returns string, does NOT raise."""
+    def test_lo_licensing_no_state_skips(self, mock_db, mock_models):
+        """LO licensing check returns None when no state provided."""
         _setup_scheduler_deps(mock_models)
 
         from scheduler_appointment_routes import _check_lo_licensing
@@ -1404,8 +1404,26 @@ class TestComplianceE2E:
         result = _check_lo_licensing(mock_db, assigned_user_id=10, attendee_state=None)
         assert result is None
 
-    def test_lo_licensing_warns_no_nmls(self, mock_db, mock_models):
-        """Warning returned when LO has no NMLS number."""
+    def test_lo_licensing_blocks_no_nmls(self, mock_db, mock_models):
+        """NMLSBlockingError raised when LO has no NMLS in regulated state (H5 fix)."""
+        _setup_scheduler_deps(mock_models)
+
+        from scheduler_appointment_routes import _check_lo_licensing
+        from routes.scheduler._crm_integration import NMLSBlockingError
+
+        mock_user = MagicMock()
+        mock_user.id = 10
+        mock_user.nmls_number = None
+        mock_user.first_name = "Alice"
+        mock_user.last_name = "Smith"
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_user
+
+        with patch("scheduler_appointment_routes.User", MagicMock(), create=True):
+            with pytest.raises(NMLSBlockingError):
+                _check_lo_licensing(mock_db, assigned_user_id=10, attendee_state="CA")
+
+    def test_lo_licensing_warns_no_nmls_enforce_off(self, mock_db, mock_models):
+        """Warning returned when LO has no NMLS and enforce=False."""
         _setup_scheduler_deps(mock_models)
 
         from scheduler_appointment_routes import _check_lo_licensing
@@ -1418,7 +1436,9 @@ class TestComplianceE2E:
         mock_db.query.return_value.filter.return_value.first.return_value = mock_user
 
         with patch("scheduler_appointment_routes.User", MagicMock(), create=True):
-            result = _check_lo_licensing(mock_db, assigned_user_id=10, attendee_state="CA")
+            result = _check_lo_licensing(
+                mock_db, assigned_user_id=10, attendee_state="CA", enforce=False
+            )
 
         assert result is not None
         assert isinstance(result, str)

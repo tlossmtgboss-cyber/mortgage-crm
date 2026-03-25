@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, date, timedelta, timezone
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 import logging
 
 from routes.scheduler._helpers import (
@@ -59,8 +59,7 @@ class ConflictDetail(BaseModel):
     scheduled_end: Optional[str] = Field(None, description="End time of conflicting appointment (ISO 8601)")
     reason: Optional[str] = Field(None, description="Human-readable conflict reason")
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class AlternativeSlot(BaseModel):
@@ -69,8 +68,7 @@ class AlternativeSlot(BaseModel):
     end: str = Field(..., description="Suggested end time (ISO 8601)")
     score: Optional[float] = Field(None, description="Preference score for this alternative")
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class SoftResolution(BaseModel):
@@ -79,8 +77,7 @@ class SoftResolution(BaseModel):
     action: Optional[str] = Field(None, description="Resolution action taken")
     message: Optional[str] = Field(None, description="Resolution description")
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class ConflictCheckResponse(BaseModel):
@@ -102,8 +99,7 @@ class ConflictPair(BaseModel):
     overlap_end: Optional[str] = None
     severity: Optional[str] = None
 
-    class Config:
-        extra = "allow"
+    model_config = ConfigDict(extra="allow")
 
 
 class ConflictListResponse(BaseModel):

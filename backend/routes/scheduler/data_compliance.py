@@ -84,6 +84,33 @@ def _require_admin(user):
         )
 
 
+def _check_pii_retention(db: Session, organization_id: int, retention_days: int = 365) -> int:
+    """Find appointments with PII beyond retention period.
+
+    Returns the count of completed/cancelled/no-show appointments older than
+    *retention_days* that still contain non-anonymized PII (attendee_email
+    is not the anonymization sentinel).
+
+    This helper supports COMP-006: automated PII data retention monitoring.
+    """
+    models = get_models()
+    Appointment = models["Appointment"]
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+    stale = (
+        db.query(func.count(Appointment.id))
+        .filter(
+            Appointment.organization_id == organization_id,
+            Appointment.created_at < cutoff,
+            Appointment.status.in_(["completed", "cancelled", "no_show"]),
+            Appointment.attendee_email.isnot(None),
+            Appointment.attendee_email != _ANON_EMAIL,
+        )
+        .scalar()
+    ) or 0
+    return stale
+
+
 # ============================================================================
 # DATA EXPORT
 # ============================================================================
@@ -220,11 +247,12 @@ async def export_borrower_data(
     except Exception as e:
         logger.warning(f"Could not export surveys for {_mask_email(email)}: {e}")
 
-    # ---- Slot holds ----
+    # ---- Slot holds (COMP-010: include PII fields for GDPR export) ----
     exported_slot_holds = []
     try:
         slot_holds = db.execute(text("""
-            SELECT id, start_time, end_time, status, created_at
+            SELECT id, start_time, end_time, status, created_at,
+                   held_for_name, held_for_phone, held_for_email
             FROM slot_holds WHERE held_for_email = :email AND organization_id = :org_id
         """), {"email": email, "org_id": org_id}).fetchall()
         exported_slot_holds = [dict(row._mapping) for row in slot_holds]
@@ -305,6 +333,9 @@ async def delete_borrower_data(
 
     counts = {
         "appointments_anonymized": 0,
+        "slot_holds_anonymized": 0,
+        "status_history_anonymized": 0,
+        "reminders_anonymized": 0,
         "survey_responses_deleted": 0,
         "reminder_logs_deleted": 0,
         "audit_entries_redacted": 0,
@@ -336,27 +367,42 @@ async def delete_borrower_data(
         # These are operational/statistical, not PII
         counts["appointments_anonymized"] += 1
 
-    # ---- 1b. Cascade anonymize related tables ----
-    # Slot holds
+    # ---- 1b. Cascade anonymize related tables (COMP-008) ----
+    # Slot holds: held_for_name, held_for_phone, held_for_email
     try:
-        db.execute(text("""
-            UPDATE slot_holds SET held_for_name = '[REDACTED]', held_for_phone = NULL,
-            held_for_email = 'redacted@redacted.invalid'
+        result = db.execute(text("""
+            UPDATE slot_holds SET held_for_name = :redacted, held_for_phone = NULL,
+            held_for_email = :anon_email
             WHERE held_for_email = :email AND organization_id = :org_id
-        """), {"email": email, "org_id": org_id})
+        """), {"redacted": _REDACTED, "anon_email": _ANON_EMAIL, "email": email, "org_id": org_id})
+        counts["slot_holds_anonymized"] = result.rowcount
     except Exception as e:
         logger.warning("Could not anonymize slot_holds for %s: %s", _mask_email(email), e)
 
-    # Appointment status history
-    try:
-        db.execute(text("""
-            UPDATE appointment_status_history SET changed_by_name = '[REDACTED]'
-            WHERE appointment_id IN (
-                SELECT id FROM scheduler_appointments WHERE attendee_email = :anon_email AND organization_id = :org_id
-            )
-        """), {"anon_email": _ANON_EMAIL, "org_id": org_id})
-    except Exception as e:
-        logger.warning("Could not anonymize appointment_status_history for %s: %s", _mask_email(email), e)
+    # Appointment status history: changed_by_name
+    if appointment_ids:
+        try:
+            result = db.execute(text("""
+                UPDATE appointment_status_history SET changed_by_name = :redacted
+                WHERE appointment_id = ANY(:ids)
+            """), {"redacted": _REDACTED, "ids": appointment_ids})
+            counts["status_history_anonymized"] = result.rowcount
+        except Exception as e:
+            logger.warning("Could not anonymize appointment_status_history for %s: %s", _mask_email(email), e)
+
+    # Scheduler reminders: anonymize recipient PII fields
+    if appointment_ids:
+        try:
+            result = db.execute(text("""
+                UPDATE scheduler_reminders
+                SET recipient_email = :anon_email,
+                    recipient_phone = NULL,
+                    recipient_name = :redacted
+                WHERE appointment_id = ANY(:ids)
+            """), {"anon_email": _ANON_EMAIL, "redacted": _REDACTED, "ids": appointment_ids})
+            counts["reminders_anonymized"] = result.rowcount
+        except Exception as e:
+            logger.warning("Could not anonymize scheduler_reminders for %s: %s", _mask_email(email), e)
 
     # ---- 2. Delete survey responses ----
     try:
@@ -439,7 +485,10 @@ async def delete_borrower_data(
 
     logger.info(
         f"Data deletion completed for {_mask_email(email)} in org {org_id}: "
-        f"{counts['appointments_anonymized']} anonymized, "
+        f"{counts['appointments_anonymized']} appointments anonymized, "
+        f"{counts['slot_holds_anonymized']} slot holds anonymized, "
+        f"{counts['status_history_anonymized']} status history entries anonymized, "
+        f"{counts['reminders_anonymized']} reminders anonymized, "
         f"{counts['survey_responses_deleted']} surveys deleted, "
         f"{counts['reminder_logs_deleted']} reminder logs deleted, "
         f"{counts['audit_entries_redacted']} audit entries redacted"
@@ -453,8 +502,11 @@ async def delete_borrower_data(
         "records_affected": counts,
         "message": (
             f"Anonymized {counts['appointments_anonymized']} appointments, "
+            f"{counts['slot_holds_anonymized']} slot holds, "
+            f"{counts['status_history_anonymized']} status history entries, "
+            f"{counts['reminders_anonymized']} reminders; "
             f"deleted {counts['survey_responses_deleted']} survey responses and "
-            f"{counts['reminder_logs_deleted']} reminder logs, "
+            f"{counts['reminder_logs_deleted']} reminder logs; "
             f"redacted {counts['audit_entries_redacted']} audit entries."
         ),
     }
@@ -578,6 +630,9 @@ async def get_data_retention_report(
     except Exception as e:
         logger.warning(f"Could not count stale reminder logs: {e}")
 
+    # ---- Terminal appointments with PII beyond retention (COMP-006) ----
+    stale_terminal_with_pii = _check_pii_retention(db, org_id, retention_days)
+
     report = {
         "organization_id": org_id,
         "retention_period_days": retention_days,
@@ -587,6 +642,7 @@ async def get_data_retention_report(
             "total": total_appointments,
             "older_than_retention": stale_appointments,
             "older_with_pii": stale_with_pii,
+            "terminal_with_pii_past_retention": stale_terminal_with_pii,
         },
         "survey_responses": {
             "older_than_retention": stale_surveys,
@@ -602,6 +658,11 @@ async def get_data_retention_report(
     }
 
     # Build actionable recommendations
+    if stale_terminal_with_pii > 0:
+        report["recommendations"].append(
+            f"{stale_terminal_with_pii} completed/cancelled/no-show appointment(s) older than "
+            f"{retention_days} days still retain PII. These should be anonymized per retention policy."
+        )
     if stale_with_pii > 0:
         report["recommendations"].append(
             f"{stale_with_pii} appointment(s) older than {retention_days} days still contain PII. "
@@ -699,7 +760,7 @@ async def export_audit_log(
                 "user_id": e.user_id,
                 "changes": e.changes,
                 "booking_source": getattr(e, "booking_source", None),
-                "ip_address": getattr(e, "ip_address", None),
+                # SEC-005: IP addresses removed from API response to prevent data leakage
                 "created_at": e.created_at.isoformat() if e.created_at else None,
             }
             for e in entries

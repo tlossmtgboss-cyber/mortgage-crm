@@ -71,6 +71,8 @@ from services.appointment.hold_manager import (
     hold_slot as _hold_slot,
     release_hold as _release_hold,
     slot_conflicts_with_holds as _slot_conflicts_with_holds,
+    load_active_holds as _load_active_holds,
+    slot_conflicts_with_loaded_holds as _slot_conflicts_with_loaded_holds,
 )
 
 logger = logging.getLogger(__name__)
@@ -154,13 +156,22 @@ class AppointmentService:
             exclude_appointment_id=exclude_appointment_id,
         )
 
-        # Post-filter: exclude slots that conflict with active soft holds
+        # PERF-012: Batch-load all active holds for the date range once,
+        # then check conflicts in memory instead of querying DB per slot.
+        # For a typical 30-day range with 15-min slots, this replaces ~200+
+        # DB queries with a single query.
+        range_start = datetime.combine(start_date, time.min)
+        range_end = datetime.combine(end_date, time.max)
+        active_holds = _load_active_holds(
+            self.db, self.organization_id, lo_id, range_start, range_end,
+        )
+
         filtered = []
         for slot in slots:
             slot_start = datetime.fromisoformat(slot["start"])
             slot_end = datetime.fromisoformat(slot["end"])
-            if not _slot_conflicts_with_holds(
-                self.db, self.organization_id, lo_id, slot_start, slot_end,
+            if not _slot_conflicts_with_loaded_holds(
+                active_holds, slot_start, slot_end,
             ):
                 # Add duration_minutes for interface compatibility
                 slot["duration_minutes"] = duration_minutes
@@ -626,8 +637,8 @@ class AppointmentService:
         """
         Emit an event for downstream consumers.
 
-        Stores events in-memory on the service instance AND persists to DB
-        for durability.
+        Stores events in-memory on the service instance AND persists to the
+        AppointmentStatusHistory table for durability.
         Future: publish to Redis pub/sub, webhook queue, or event bus.
         """
         event_record = {
@@ -639,25 +650,25 @@ class AppointmentService:
         self._emitted_events.append(event_record)
         logger.info(f"Event emitted: {event.value} | {data}")
 
-        # OBS-003: Persist event to DB for durability
-        try:
-            from sqlalchemy import text as _text
-            import json as _json
-            self.db.execute(
-                _text(
-                    "INSERT INTO scheduler_events (organization_id, event_type, event_data, created_at) "
-                    "VALUES (:org_id, :event_type, :event_data, :created_at)"
-                ),
-                {
-                    "org_id": self.organization_id,
-                    "event_type": event.value,
-                    "event_data": _json.dumps(data, default=str),
-                    "created_at": datetime.now(timezone.utc),
-                },
-            )
-        except Exception as e:
-            # Don't crash if the events table doesn't exist or the write fails
-            logger.warning("Failed to persist event to DB (non-fatal): %s", e)
+        # OBS-003: Persist event to AppointmentStatusHistory for durability
+        appointment_id = data.get("appointment_id")
+        if appointment_id and self.db:
+            try:
+                from database.models.scheduler import AppointmentStatusHistory
+                history = AppointmentStatusHistory(
+                    appointment_id=appointment_id,
+                    previous_status=data.get("old_status"),
+                    new_status=data.get("new_status", event.value),
+                    changed_by_user_id=data.get("user_id"),
+                    change_source=data.get("source", "system"),
+                    notes=data.get("reason"),
+                    extra_data=data,
+                    organization_id=self.organization_id,
+                )
+                self.db.add(history)
+                self.db.flush()
+            except Exception as e:
+                logger.error("Failed to persist event %s: %s", event.value, e, exc_info=True)
 
     @property
     def events(self) -> List[Dict[str, Any]]:

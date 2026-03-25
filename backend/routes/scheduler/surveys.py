@@ -164,15 +164,36 @@ async def submit_survey_response(
         raise HTTPException(status_code=400, detail=_sanitize_public_error(400, "Invalid survey token"))
 
     # Duplicate submission guard: reject if this survey was already completed.
-    # This is checked again inside submit_response() under a row lock, but
-    # doing it here avoids unnecessary processing for obvious duplicates.
+    # Checks both by token (primary) and by appointment_id + borrower_email
+    # (defense-in-depth against metric skewing by bots or repeat submissions).
+    # The service's submit_response() also checks under a FOR UPDATE row lock
+    # to handle race conditions.
     service = AppointmentSurveyService(db)
     existing = service.get_survey_by_token(token)
     if existing and existing.get("completed"):
-        return {
-            "success": True,
-            "message": "Survey response already recorded. Thank you for your feedback!",
-        }
+        raise HTTPException(
+            status_code=409,
+            detail="Survey already submitted for this appointment",
+        )
+
+    # Cross-check: ensure no completed survey exists for this appointment + email
+    # even if the token differs (prevents metric skewing via multiple tokens).
+    from database.models.appointment_survey import AppointmentSurvey
+    survey_record = db.query(AppointmentSurvey).filter(
+        AppointmentSurvey.token == token,
+    ).first()
+    if survey_record:
+        duplicate = db.query(AppointmentSurvey).filter(
+            AppointmentSurvey.appointment_id == survey_record.appointment_id,
+            AppointmentSurvey.borrower_email == survey_record.borrower_email,
+            AppointmentSurvey.completed_at.isnot(None),
+            AppointmentSurvey.id != survey_record.id,
+        ).first()
+        if duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail="Survey already submitted for this appointment",
+            )
 
     result = service.submit_response(
         token=token,

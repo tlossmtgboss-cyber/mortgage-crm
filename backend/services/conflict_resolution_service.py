@@ -109,11 +109,8 @@ def detect_conflicts(
 
     filters = [
         Appointment.assigned_user_id == user_id,
-        Appointment.status.notin_([
-            AppointmentStatus.CANCELLED.value,
-            'cancelled',
-            'no_show',
-        ]),
+        # SEC-008: Use enum members consistently (AppointmentStatus is a str enum)
+        Appointment.status.notin_([AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW]),
         Appointment.scheduled_start < search_end,
         Appointment.scheduled_end > search_start,
     ]
@@ -348,11 +345,8 @@ def list_user_conflicts(
 
     filters = [
         Appointment.assigned_user_id == user_id,
-        Appointment.status.notin_([
-            AppointmentStatus.CANCELLED.value,
-            'cancelled',
-            'no_show',
-        ]),
+        # SEC-008: Use enum members consistently (AppointmentStatus is a str enum)
+        Appointment.status.notin_([AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW]),
         Appointment.scheduled_start >= start_dt,
         Appointment.scheduled_start <= end_dt,
     ]

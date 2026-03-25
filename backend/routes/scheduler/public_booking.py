@@ -95,11 +95,13 @@ from routes.scheduler._helpers import (
     _generate_available_slots,
     _audit_log,
 )
+from routes.scheduler._crm_integration import NMLSBlockingError
+from routes.scheduler.middleware import get_correlated_logger
 from db import get_db
 
 import re as _re
 
-logger = logging.getLogger(__name__)
+logger = get_correlated_logger(__name__)
 
 # AGENT-001: Prompt injection sanitizer for AI booking context
 _INJECTION_PATTERNS = _re.compile(
@@ -109,11 +111,80 @@ _INJECTION_PATTERNS = _re.compile(
     _re.IGNORECASE
 )
 
+# AGENT-001: Additional patterns for free-text fields flowing into AI context
+_FREE_TEXT_INJECTION_PATTERNS = _re.compile(
+    r'(ignore|forget|disregard)\s+(all\s+)?(previous|above|prior)\s+(instructions?|prompts?|rules?)'
+    r'|you\s+are\s+(now|a)\s+'
+    r'|system\s*:\s*',
+    _re.IGNORECASE
+)
+
+# AGENT-002: Schema for ai_booking_context JSON column
+AI_BOOKING_CONTEXT_SCHEMA = {
+    "required_keys": {"source", "booking_time"},
+    "optional_keys": {"intake_responses", "notes", "routing_reason", "confidence_score",
+                      "vapi_call_id", "booked_at", "rule_id", "urgency", "regulation",
+                      "loan_stage", "converted_from_hold", "hold_source", "conversation_id",
+                      "routing_decision"},  # COMP-007: LO routing rationale for RESPA compliance
+}
+
+
+def _sanitize_for_ai_context(text: str) -> str:
+    """Strip potential prompt injection from user input before AI context.
+
+    AGENT-001: Applied to attendee_name, attendee_notes, and free-text
+    intake_responses before they are stored in ai_booking_context.
+    """
+    if not text:
+        return text
+    # Remove common prompt injection patterns
+    text = _FREE_TEXT_INJECTION_PATTERNS.sub('[FILTERED]', text)
+    # Truncate to reasonable length
+    return text[:500]
+
+
+def _validate_ai_booking_context(context: dict) -> dict:
+    """Validate and sanitize ai_booking_context dict shape.
+
+    AGENT-002: Ensures required keys are present (adds defaults if missing),
+    strips unknown keys, and applies prompt injection sanitization to all
+    string values.
+    """
+    if not context or not isinstance(context, dict):
+        return {"source": "unknown", "booking_time": datetime.now(timezone.utc).isoformat()}
+
+    allowed_keys = AI_BOOKING_CONTEXT_SCHEMA["required_keys"] | AI_BOOKING_CONTEXT_SCHEMA["optional_keys"]
+
+    # Strip unknown keys
+    stripped = {k: v for k, v in context.items() if k in allowed_keys}
+
+    # Log if keys were stripped
+    removed_keys = set(context.keys()) - allowed_keys
+    if removed_keys:
+        logger.warning("Stripped unknown keys from ai_booking_context: %s", removed_keys)
+
+    # Ensure required keys are present
+    if "source" not in stripped:
+        stripped["source"] = "unknown"
+    if "booking_time" not in stripped:
+        stripped["booking_time"] = datetime.now(timezone.utc).isoformat()
+
+    return stripped
+
 
 def _sanitize_ai_context(context):
-    """Sanitize AI booking context to prevent prompt injection."""
+    """Sanitize AI booking context to prevent prompt injection and validate schema.
+
+    Combines AGENT-001 (prompt injection sanitization) and AGENT-002 (schema
+    validation) into a single pass.
+    """
     if not context or not isinstance(context, dict):
         return context
+
+    # AGENT-002: Validate schema first
+    context = _validate_ai_booking_context(context)
+
+    # AGENT-001: Sanitize string values
     sanitized = {}
     for key, value in context.items():
         if isinstance(value, str):
@@ -124,7 +195,19 @@ def _sanitize_ai_context(context):
             else:
                 sanitized[key] = value
         elif isinstance(value, dict):
-            sanitized[key] = _sanitize_ai_context(value)
+            # Recursively sanitize nested dicts (but don't schema-validate sub-dicts)
+            sub = {}
+            for sk, sv in value.items():
+                if isinstance(sv, str):
+                    sv = sv[:2000]
+                    if _INJECTION_PATTERNS.search(sv):
+                        logger.warning("Potential prompt injection in ai_booking_context nested field '%s.%s'", key, sk)
+                        sub[sk] = "[REDACTED: suspicious content]"
+                    else:
+                        sub[sk] = sv
+                else:
+                    sub[sk] = sv
+            sanitized[key] = sub
         else:
             sanitized[key] = value
     return sanitized
@@ -493,6 +576,11 @@ async def get_public_available_slots(
     - Date range: ?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD (preferred)
 
     Date range is capped at SLOT_GENERATION_MAX_DAYS days to prevent abuse.
+
+    FUNC-006: When appointment_type_id is provided, the slot duration is resolved
+    from the appointment type's default_duration_minutes rather than relying on the
+    caller-supplied query parameter (which defaults to the global 30-minute default).
+    This ensures slot generation uses the same step size as the appointment type.
     """
     try:
         if request:
@@ -530,12 +618,27 @@ async def get_public_available_slots(
         user_ids = link.assigned_users if link.assigned_users else [link.user_id]
         link_org_id = getattr(link, 'organization_id', None)
 
+        # FUNC-006: Resolve duration from appointment type when provided.
+        # The appointment_type_id is a required query parameter, so look up its
+        # configured default_duration_minutes instead of using the caller-supplied
+        # default (which is the global 30-minute fallback).
+        effective_duration = duration_minutes
+        if appointment_type_id:
+            AppointmentType = get_models().get('AppointmentType')
+            if AppointmentType:
+                appt_type = db.query(AppointmentType).filter(
+                    AppointmentType.id == appointment_type_id,
+                    AppointmentType.is_active == True,
+                ).first()
+                if appt_type and getattr(appt_type, 'default_duration_minutes', None):
+                    effective_duration = appt_type.default_duration_minutes
+
         available_slots = _generate_available_slots(
             db=db,
             user_ids=user_ids,
             start_date=query_start,
             end_date=query_end,
-            duration_minutes=duration_minutes,
+            duration_minutes=effective_duration,
             org_id=link_org_id,
             check_cross_source=True,
         )
@@ -606,7 +709,20 @@ async def confirm_public_booking(
         attendee_phone = _validate_phone(booking_data.attendee_phone)
         attendee_phone = _sanitize_text(attendee_phone)
         notes_text = _sanitize_text(booking_data.notes)
-        intake_responses = {"notes": notes_text} if notes_text else {}
+
+        # AGENT-001: Sanitize free-text fields for prompt injection before they
+        # flow into AI context (intake_responses, attendee_name used in title)
+        safe_attendee_name = _sanitize_for_ai_context(attendee_name)
+        safe_notes_text = _sanitize_for_ai_context(notes_text)
+        intake_responses = {"notes": safe_notes_text} if safe_notes_text else {}
+
+        # If the booking request includes intake_responses, sanitize each value
+        if hasattr(booking_data, 'intake_responses') and booking_data.intake_responses:
+            for ir_key, ir_val in booking_data.intake_responses.items():
+                if isinstance(ir_val, str):
+                    intake_responses[ir_key] = _sanitize_for_ai_context(_sanitize_text(ir_val))
+                else:
+                    intake_responses[ir_key] = ir_val
         BookingLink = get_models()['BookingLink']
         AppointmentType = get_models()['AppointmentType']
         Appointment = get_models()['Appointment']
@@ -747,6 +863,9 @@ async def confirm_public_booking(
                 conflict_error("No more appointments available this week")
 
         # RT1: Determine assigned user via routing strategy
+        # COMP-007: Build routing_decision context for RESPA compliance
+        _routing_decision_context = None
+
         if booking_data.team_member_id:
             # NC5 fix: Validate team_member_id belongs to the booking link's org
             from database.models import User as _UserModel
@@ -757,23 +876,75 @@ async def confirm_public_booking(
             if not _team_member:
                 validation_error("Invalid team member selection")
             assigned_user_id = booking_data.team_member_id
+            # COMP-007: Log explicit team member selection (not AI-routed)
+            _routing_decision_context = {
+                "selected_lo_id": assigned_user_id,
+                "routing_method": "explicit_selection",
+                "candidates_evaluated": 1,
+                "selection_criteria": ["attendee_selected_team_member"],
+                "respa_compliance": (
+                    "No referral fees or prohibited considerations influenced LO selection"
+                ),
+                "fallback_used": False,
+                "fallback_reason": None,
+            }
+            logger.info(
+                "AI_ROUTING_DECISION: lo=%s method=explicit_selection candidates=1 criteria=%s",
+                assigned_user_id, ["attendee_selected_team_member"],
+            )
         else:
             try:
-                from services.scheduler_routing_service import assign_loan_officer
+                from services.scheduler_routing_service import assign_loan_officer_with_context
                 strategy_str = link.routing_strategy.value if hasattr(link.routing_strategy, 'value') else str(link.routing_strategy or "direct")
-                assigned_user_id = assign_loan_officer(
+                _routing_result = assign_loan_officer_with_context(
                     db=db,
                     org_id=link_org_id,
                     strategy=strategy_str,
                     appointment_time=slot_start,
                     booking_link=link,
                 )
+                assigned_user_id = _routing_result.selected_user_id
+                _routing_decision_context = _routing_result.to_ai_booking_context()
                 if not assigned_user_id:
                     assigned_user_id = link.user_id  # Final fallback
-                logger.info(f"Routing strategy '{strategy_str}' assigned user {assigned_user_id}")
+                    _routing_decision_context["fallback_used"] = True
+                    _routing_decision_context["fallback_reason"] = "no_candidate_selected_using_link_owner"
+                    _routing_decision_context["selected_lo_id"] = assigned_user_id
+                    logger.info(
+                        "AI_ROUTING_DECISION: lo=%s method=%s candidates=%d criteria=%s fallback=True",
+                        assigned_user_id, strategy_str,
+                        _routing_result.candidates_evaluated,
+                        _routing_result.selection_criteria,
+                    )
+                else:
+                    logger.info(
+                        "Routing strategy '%s' assigned user %s", strategy_str, assigned_user_id,
+                    )
             except Exception as routing_err:
                 logger.warning(f"Routing service failed, using link owner: {routing_err}")
                 assigned_user_id = link.user_id
+                _routing_decision_context = {
+                    "selected_lo_id": assigned_user_id,
+                    "routing_method": "fallback_link_owner",
+                    "candidates_evaluated": 0,
+                    "selection_criteria": ["routing_service_error_fallback"],
+                    "respa_compliance": (
+                        "No referral fees or prohibited considerations influenced LO selection"
+                    ),
+                    "fallback_used": True,
+                    "fallback_reason": f"routing_service_error: {str(routing_err)[:200]}",
+                }
+                logger.info(
+                    "AI_ROUTING_DECISION: lo=%s method=fallback_link_owner candidates=0 criteria=%s fallback=True",
+                    assigned_user_id, ["routing_service_error_fallback"],
+                )
+
+        # COMP-007: Build ai_booking_context with routing rationale
+        _ai_booking_ctx = {
+            "source": "public_booking",
+            "booking_time": datetime.now(timezone.utc).isoformat(),
+            "routing_decision": _routing_decision_context,
+        }
 
         # Determine meeting mode from request or default to VIDEO
         meeting_mode_str_raw = "video"
@@ -798,12 +969,12 @@ async def confirm_public_booking(
             assigned_user_id=assigned_user_id,
             created_by_user_id=None,  # Public booking -- no authenticated user
             source="public_booking",
-            title=f"{appt_type.type_name} with {attendee_name}",
+            title=f"{appt_type.type_name} with {safe_attendee_name}",
             scheduled_start=slot_start,
             scheduled_end=slot_end,
             duration_minutes=duration_minutes,
             timezone=lo_timezone,
-            attendee_name=attendee_name,
+            attendee_name=safe_attendee_name,
             attendee_email=attendee_email,
             attendee_phone=attendee_phone,
             appointment_type_id=appointment_type_id,
@@ -812,6 +983,7 @@ async def confirm_public_booking(
             meeting_mode=meeting_mode_str_raw,
             intake_responses=intake_responses,
             external_source="booking_link",
+            ai_booking_context=_ai_booking_ctx,
             check_conflicts=True,
             check_cross_source=True,
             generate_meeting_link=True,
@@ -923,17 +1095,43 @@ async def confirm_public_booking(
 
         logger.info(f"Public booking confirmed: {appointment.id} via link {slug}")
 
-        # C3: Soft licensing check (advisory only)
+        # C3 / H5: NMLS licensing check — blocks LO assignment on failure
         attendee_state = None
         if intake_responses:
             attendee_state = intake_responses.get("state") or intake_responses.get("property_state")
-        licensing_warning = _check_lo_licensing(
-            db, assigned_user_id, attendee_state,
-            org_id=link_org_id, appointment_id=appointment.id,
-        )
-        if licensing_warning:
+        licensing_warning = None
+        nmls_blocked = False
+        try:
+            licensing_warning = _check_lo_licensing(
+                db, assigned_user_id, attendee_state,
+                org_id=link_org_id, appointment_id=appointment.id,
+            )
+        except NMLSBlockingError as nmls_err:
+            # NMLS verification failed or LO has no NMLS — unassign from lead
+            nmls_blocked = True
+            logger.error(
+                f"NMLS_BLOCK: Appointment {appointment.id} — LO assignment blocked: {nmls_err}"
+            )
+            licensing_warning = str(nmls_err)
+            if result.lead_id:
+                try:
+                    from database.models.lead_loan import Lead
+                    lead = db.query(Lead).filter(Lead.id == result.lead_id).first()
+                    if lead:
+                        lead.owner_id = None  # Unassign LO — leave for manual review
+                        timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+                        note = (
+                            f"[{timestamp}] NMLS BLOCKED: LO assignment removed — "
+                            f"{nmls_err}. Lead requires manual assignment to a licensed LO."
+                        )
+                        prev = lead.notes or ""
+                        lead.notes = f"{prev}\n{note}".strip()
+                except Exception as e:
+                    logger.error(f"Failed to unassign LO from lead {result.lead_id}: {e}")
+
+        if licensing_warning and not nmls_blocked:
+            # Advisory warning (non-blocking) — flag the lead for compliance review
             logger.warning(f"Appointment {appointment.id}: {licensing_warning}")
-            # Flag the linked lead so compliance reviewers can see NMLS was not verified
             if result.lead_id:
                 try:
                     from database.models.lead_loan import Lead
@@ -1323,8 +1521,35 @@ async def confirm_website_demo_booking(
         safe_phone = _sanitize_text(safe_phone)
         safe_notes = _sanitize_text(request.notes)
 
+        # AGENT-001: Sanitize free-text fields for prompt injection before they
+        # flow into AI context (internal_notes, attendee_name used in title)
+        safe_name = _sanitize_for_ai_context(safe_name)
+        safe_notes = _sanitize_for_ai_context(safe_notes)
+
         # Determine meeting mode string for the shared service
         demo_meeting_mode = "video" if request.meeting_mode == "video" else "phone"
+
+        # COMP-007: Build ai_booking_context with routing rationale for demo path
+        _demo_routing_ctx = {
+            "selected_lo_id": assigned_user_id,
+            "routing_method": "calendar_assignment",
+            "candidates_evaluated": 1,
+            "selection_criteria": ["calendar_assignment_purpose_website_demo"],
+            "respa_compliance": (
+                "No referral fees or prohibited considerations influenced LO selection"
+            ),
+            "fallback_used": False,
+            "fallback_reason": None,
+        }
+        _demo_ai_booking_ctx = {
+            "source": "website_demo",
+            "booking_time": datetime.now(timezone.utc).isoformat(),
+            "routing_decision": _demo_routing_ctx,
+        }
+        logger.info(
+            "AI_ROUTING_DECISION: lo=%s method=calendar_assignment candidates=1 criteria=%s",
+            assigned_user_id, ["calendar_assignment_purpose_website_demo"],
+        )
 
         # ==================================================================
         # DELEGATE TO SHARED APPOINTMENT CREATION SERVICE
@@ -1353,6 +1578,7 @@ async def confirm_website_demo_booking(
             meeting_mode=demo_meeting_mode,
             internal_notes=safe_notes,
             external_source="website_demo",
+            ai_booking_context=_demo_ai_booking_ctx,
             check_conflicts=True,
             check_cross_source=True,
             generate_meeting_link=(demo_meeting_mode == "video"),
@@ -1375,8 +1601,10 @@ async def confirm_website_demo_booking(
             "demo_booking": True,
             "external_source": "website_demo",
         }
+        # COMP-013: Pass http_request so audit entries capture IP and user-agent
         scheduler_audit.log_appointment_created(
             new_appointment, user={"id": None},
+            request=http_request,
             booking_source="public_booking",
             booking_path_details=demo_details,
         )
@@ -1385,6 +1613,7 @@ async def confirm_website_demo_booking(
             organization_id=new_appointment.organization_id,
             booking_source="public_booking",
             details=demo_details,
+            request=http_request,
         )
 
         # Format confirmation details

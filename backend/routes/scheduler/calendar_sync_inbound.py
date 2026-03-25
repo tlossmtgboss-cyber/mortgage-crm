@@ -34,8 +34,9 @@ import hashlib
 import hmac
 import logging
 import os
+import threading
 import time
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -97,6 +98,41 @@ async def _check_webhook_dedup(notification_key: str) -> bool:
 
         _dedup_cache[notification_key] = now
         return False
+
+
+# ============================================================================
+# PER-ORG WEBHOOK RATE LIMITING
+# ============================================================================
+# The global _check_rate_limit (from _rate_limiting.py) protects against total
+# volume per provider.  This additional limiter prevents a single misconfigured
+# org from exhausting the 20-connection DB pool by keying on provider+org_id.
+
+class _WebhookRateLimiter:
+    """Simple in-memory rate limiter for webhook endpoints."""
+
+    def __init__(self, max_requests: int = 100, window_seconds: int = 60):
+        self._counters: dict[str, list[float]] = defaultdict(list)
+        self._max = max_requests
+        self._window = window_seconds
+        self._lock = threading.Lock()
+
+    def check(self, key: str) -> bool:
+        """Returns True if request is allowed, False if rate limited."""
+        now = time.time()
+        with self._lock:
+            # Clean old entries
+            self._counters[key] = [t for t in self._counters[key] if now - t < self._window]
+            if len(self._counters[key]) >= self._max:
+                return False
+            self._counters[key].append(now)
+            return True
+
+
+_webhook_limiter = _WebhookRateLimiter(
+    max_requests=_WEBHOOK_RATE_LIMIT_PER_PROVIDER,
+    window_seconds=60,
+)
+
 
 router = APIRouter(tags=["Calendar Sync Inbound"])
 
@@ -263,6 +299,13 @@ async def google_calendar_webhook(request: Request, db: Session = Depends(get_db
         logger.warning("Google Calendar webhook: rejected — invalid channel token")
         raise HTTPException(status_code=403, detail="Invalid channel token")
 
+    # Per-org rate limit: prevent a single misconfigured org from flooding
+    # the webhook and exhausting the DB connection pool.
+    limiter_key = f"google:{organization_id}" if organization_id else "google"
+    if not _webhook_limiter.check(limiter_key):
+        logger.warning("RATE_LIMITED: google webhook for org %s", organization_id)
+        raise HTTPException(status_code=429, detail="Too many webhook notifications")
+
     logger.info(
         "Google Calendar webhook received: channel=%s state=%s org=%s user=%s msg=%s",
         channel_id, resource_state, organization_id, user_id, message_number,
@@ -384,6 +427,13 @@ async def outlook_calendar_webhook(request: Request, db: Session = Depends(get_d
             )
             total_errors += 1
             continue
+
+        # Per-org rate limit: prevent a single misconfigured org from flooding
+        # the webhook and exhausting the DB connection pool.
+        limiter_key = f"outlook:{verified_org_id}" if verified_org_id else "outlook"
+        if not _webhook_limiter.check(limiter_key):
+            logger.warning("RATE_LIMITED: outlook webhook for org %s", verified_org_id)
+            raise HTTPException(status_code=429, detail="Too many webhook notifications")
 
         logger.info(
             "Outlook webhook notification: subscription=%s change=%s resource=%s",
