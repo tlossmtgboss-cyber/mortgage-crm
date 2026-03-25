@@ -144,6 +144,8 @@ const MortgagePlannerQuestionnaire = lazyRetry(() => import('./pages/MortgagePla
 const KnowledgeBase = lazyRetry(() => import('./pages/KnowledgeBase'));
 const Support = lazyRetry(() => import('./pages/Support'));
 const AriaVoiceApp = lazyRetry(() => import('./pages/AriaVoiceApp'));
+const AriaCalendarPage = lazyRetry(() => import('./pages/aria/AriaCalendarPage'));
+const AriaMortgageCalculator = lazyRetry(() => import('./pages/aria/AriaMortgageCalculator'));
 const PowerDialer = lazyRetry(() => import('./pages/PowerDialer'));
 const UserCreationWizard = lazyRetry(() => import('./pages/UserCreationWizard'));
 const UserBulkUpload = lazyRetry(() => import('./pages/UserBulkUpload'));
@@ -542,7 +544,9 @@ function App() {
           <Route path="/verify-account" element={<AccountVerification />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/aria" element={<LazyPage><AriaVoiceApp /></LazyPage>} />
+          <Route path="/aria" element={<PrivateRoute><LazyPage><AriaVoiceApp /></LazyPage></PrivateRoute>} />
+          <Route path="/aria/calendar" element={<PrivateRoute><LazyPage><AriaCalendarPage /></LazyPage></PrivateRoute>} />
+          <Route path="/aria/calculator" element={<PrivateRoute><LazyPage><AriaMortgageCalculator /></LazyPage></PrivateRoute>} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/signup" element={<AdminOnboarding />} />

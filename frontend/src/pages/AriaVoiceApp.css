@@ -10,7 +10,7 @@
   justify-content: center;
   padding: 20px;
   padding-top: env(safe-area-inset-top, 20px);
-  padding-bottom: env(safe-area-inset-bottom, 20px);
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 20px));
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color: #fff;
   overflow: auto;

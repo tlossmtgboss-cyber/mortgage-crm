@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { useSwipeGesture } from '../../hooks/useMediaQuery';
+import useSwipeGesture from '../../hooks/useSwipeGesture';
 import { normalizeUTCDate, getUserTimezone, getTimezoneAbbreviation } from './calendarUtils';
 import { formatInUserTimezone } from '../../utils/timezone';
 import './MobileCalendarView.css';

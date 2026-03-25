@@ -5,6 +5,7 @@ import { authAPI, aiAPI } from '../services/api';
 import { useDashboard, useTasks, useLeads } from '../hooks/useQueries';
 import { setAuth } from '../utils/auth';
 import { haptics } from '../services/nativeServices';
+import MobileBottomNav from '../components/mobile/MobileBottomNav';
 import './AriaVoiceApp.css';
 
 const AriaVoiceApp = () => {
@@ -147,7 +148,7 @@ const AriaVoiceApp = () => {
         return;
       }
 
-      const wsUrl = `${WS_BASE_URL}/api/v1/voice/ws/browser-voice?token=${token}`;
+      const wsUrl = `${WS_BASE_URL}/api/v1/voice/ws/browser-voice`;
       console.log('[Aria] Connecting to:', wsUrl);
 
       const ws = new WebSocket(wsUrl);
@@ -155,6 +156,8 @@ const AriaVoiceApp = () => {
 
       ws.onopen = () => {
         console.log('[Aria] WebSocket connected');
+        // Send auth token as first message instead of in URL query parameter
+        ws.send(JSON.stringify({ type: 'auth', token }));
         // Send initial config with CRM context
         ws.send(JSON.stringify({
           type: 'config',
@@ -589,6 +592,9 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
           <p>Powered by Perennia AI</p>
         </div>
       </div>
+
+      {/* Mobile bottom navigation */}
+      {isAuthenticated && <MobileBottomNav />}
     </div>
   );
 };

@@ -5,10 +5,8 @@ const config: CapacitorConfig = {
   appName: 'Perennia AI',
   webDir: 'build',
   server: {
-    url: 'http://192.168.1.240:3000',
-    cleartext: true,
-    // Allow the app to make requests to the production backend
-    allowNavigation: ['perenniaai.com', 'app.perenniaai.com', 'www.perenniaai.com', 'localhost', '127.0.0.1', '192.168.1.240'],
+    ...(process.env.CAPACITOR_SERVER_URL ? { url: process.env.CAPACITOR_SERVER_URL, cleartext: true } : {}),
+    allowNavigation: ['perenniaai.com', 'app.perenniaai.com', 'api.perenniaai.com', 'www.perenniaai.com', 'localhost', '127.0.0.1'],
   },
   ios: {
     contentInset: 'automatic',

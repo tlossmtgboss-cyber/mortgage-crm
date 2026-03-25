@@ -1,0 +1,336 @@
+/* Aria Calendar Page — Mobile-first appointment list */
+
+.aria-calendar-page {
+  min-height: 100vh;
+  min-height: -webkit-fill-available;
+  background: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: #1f2937;
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Header */
+.aria-cal-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #fff;
+  padding: env(safe-area-inset-top, 12px) 16px 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.aria-cal-header__title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.aria-cal-header__month-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.aria-cal-header__month {
+  font-size: 24px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.aria-cal-header__chevron {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.aria-cal-header__list-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: #f9fafb;
+  border-radius: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.aria-cal-header__list-btn:active {
+  background: #e5e7eb;
+}
+
+/* Month picker */
+.aria-cal-month-picker {
+  margin-top: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.aria-cal-month-picker__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.aria-cal-month-picker__nav button {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 16px;
+}
+
+.aria-cal-month-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.aria-cal-month-picker__item {
+  padding: 8px 4px;
+  border: none;
+  background: #f9fafb;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.aria-cal-month-picker__item:active {
+  background: #e5e7eb;
+}
+
+.aria-cal-month-picker__item--active {
+  background: #1a73e8;
+  color: #fff;
+}
+
+/* Content */
+.aria-cal-content {
+  padding: 0 16px 24px;
+}
+
+/* Day group */
+.aria-cal-day-group {
+  margin-top: 20px;
+}
+
+.aria-cal-day-header {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+}
+
+.aria-cal-day-header--today {
+  color: #1a73e8;
+}
+
+/* Appointment card */
+.aria-cal-card {
+  display: flex;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: box-shadow 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.aria-cal-card:active {
+  background: #f9fafb;
+}
+
+.aria-cal-card--expanded {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.aria-cal-card__border {
+  width: 4px;
+  flex-shrink: 0;
+  border-radius: 4px 0 0 4px;
+}
+
+.aria-cal-card__body {
+  flex: 1;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.aria-cal-card__attendee {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111827;
+  line-height: 1.3;
+}
+
+.aria-cal-card__title {
+  font-size: 14px;
+  color: #6b7280;
+  margin-top: 2px;
+}
+
+.aria-cal-card__time {
+  font-size: 13px;
+  color: #9ca3af;
+  margin-top: 4px;
+}
+
+/* Expanded details */
+.aria-cal-card__details {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f3f4f6;
+}
+
+.aria-cal-card__detail-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 14px;
+}
+
+.aria-cal-card__detail-label {
+  font-weight: 600;
+  color: #6b7280;
+  min-width: 90px;
+  flex-shrink: 0;
+}
+
+.aria-cal-card__detail-notes p {
+  margin: 4px 0 0;
+  color: #374151;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.aria-cal-card__status {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.aria-cal-card__status--confirmed {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.aria-cal-card__status--pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.aria-cal-card__status--cancelled {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.aria-cal-card__actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+.aria-cal-card__action-btn {
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  color: #374151;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.aria-cal-card__action-btn:active {
+  background: #f3f4f6;
+}
+
+/* Loading / Error / Empty states */
+.aria-cal-loading,
+.aria-cal-error,
+.aria-cal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  color: #9ca3af;
+  font-size: 15px;
+}
+
+.aria-cal-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: aria-cal-spin 0.7s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes aria-cal-spin {
+  to { transform: rotate(360deg); }
+}
+
+.aria-cal-error button {
+  margin-top: 12px;
+  padding: 8px 20px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* Pull-to-refresh indicator */
+.aria-cal-refresh {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0;
+}
+
+/* Accessibility: reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .aria-cal-card {
+    transition: none;
+  }
+  .aria-cal-spinner {
+    animation: none;
+  }
+}
+
+/* Focus visible outlines */
+.aria-cal-header__month-btn:focus-visible,
+.aria-cal-header__list-btn:focus-visible,
+.aria-cal-month-picker__item:focus-visible,
+.aria-cal-card__action-btn:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
+}
