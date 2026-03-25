@@ -91,34 +91,45 @@ def invalidate_scheduler_config_cache(user_id: int = None, org_id: int = None):
 CIRCUIT_BREAKER_THRESHOLD = 5
 CIRCUIT_BREAKER_TIMEOUT_SECONDS = 60
 
-# Module-level state: provider -> {"failure_count": int, "open_until": datetime|None}
+# Module-level state: (org_id, provider) -> {"failure_count": int, "open_until": datetime|None}
+# D3-001: Keyed by (org_id, provider) so OrgA's failures don't block OrgB.
+# When org_id is None, falls back to provider-only key for backward compatibility.
 _circuit_breaker_state: dict = {}
 
 
-def _cb_record_success(provider: str):
-    """Record a successful call — resets the circuit breaker for this provider."""
-    state = _circuit_breaker_state.get(provider)
+def _cb_state_key(provider: str, org_id: int = None):
+    """Build the circuit breaker state dictionary key."""
+    if org_id is not None:
+        return (org_id, provider)
+    return provider
+
+
+def _cb_record_success(provider: str, org_id: int = None):
+    """Record a successful call — resets the circuit breaker for this provider/org."""
+    key = _cb_state_key(provider, org_id)
+    state = _circuit_breaker_state.get(key)
     if state and (state["failure_count"] > 0 or state["open_until"] is not None):
-        logger.info(f"Circuit breaker CLOSED for {provider} after successful call")
-    _circuit_breaker_state[provider] = {"failure_count": 0, "open_until": None}
+        logger.info(f"Circuit breaker CLOSED for {provider} (org={org_id}) after successful call")
+    _circuit_breaker_state[key] = {"failure_count": 0, "open_until": None}
 
 
-def _cb_record_failure(provider: str):
+def _cb_record_failure(provider: str, org_id: int = None):
     """Record a failed call — may open the circuit breaker."""
-    if provider not in _circuit_breaker_state:
-        _circuit_breaker_state[provider] = {"failure_count": 0, "open_until": None}
-    state = _circuit_breaker_state[provider]
+    key = _cb_state_key(provider, org_id)
+    if key not in _circuit_breaker_state:
+        _circuit_breaker_state[key] = {"failure_count": 0, "open_until": None}
+    state = _circuit_breaker_state[key]
     state["failure_count"] += 1
     if state["failure_count"] >= CIRCUIT_BREAKER_THRESHOLD:
         open_until = datetime.now(timezone.utc) + timedelta(seconds=CIRCUIT_BREAKER_TIMEOUT_SECONDS)
         state["open_until"] = open_until
         logger.warning(
-            f"Circuit breaker OPEN for {provider} after {state['failure_count']} consecutive failures. "
+            f"Circuit breaker OPEN for {provider} (org={org_id}) after {state['failure_count']} consecutive failures. "
             f"Skipping checks until {open_until.isoformat()}"
         )
 
 
-def _cb_should_skip(provider: str) -> bool:
+def _cb_should_skip(provider: str, org_id: int = None) -> bool:
     """Check if the circuit breaker is open and the call should be skipped.
 
     Returns True if the provider should be skipped (circuit open and timeout
@@ -126,13 +137,14 @@ def _cb_should_skip(provider: str) -> bool:
     through (returns False) and resets the failure count so the next failure
     will re-open the circuit quickly.
     """
-    state = _circuit_breaker_state.get(provider)
+    key = _cb_state_key(provider, org_id)
+    state = _circuit_breaker_state.get(key)
     if not state or state["open_until"] is None:
         return False
     now = datetime.now(timezone.utc)
     if now >= state["open_until"]:
         # Timeout expired — allow a probe request through
-        logger.info(f"Circuit breaker for {provider} timeout expired, allowing probe request")
+        logger.info(f"Circuit breaker for {provider} (org={org_id}) timeout expired, allowing probe request")
         state["failure_count"] = CIRCUIT_BREAKER_THRESHOLD - 1  # one more failure re-opens
         state["open_until"] = None
         return False
@@ -243,7 +255,7 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
             conflicts.append((start_dt, end_dt))
 
     # Source 2: CalendarEvent (manual calendar entries)
-    if _cb_should_skip("calendar_event"):
+    if _cb_should_skip("calendar_event", org_id=org_id):
         logger.debug(f"CalendarEvent check skipped for user {target_user_id} — circuit breaker open")
         degraded_sources.append("calendar_event")
     else:
@@ -260,18 +272,18 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
             for e in cal_events:
                 if e.start_time and e.end_time:
                     conflicts.append((e.start_time, e.end_time))
-            _cb_record_success("calendar_event")
+            _cb_record_success("calendar_event", org_id=org_id)
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CalendarEvent cross-source check skipped (not installed): {ex}")
             else:
                 logger.error(f"CalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
-                _cb_record_failure("calendar_event")
+                _cb_record_failure("calendar_event", org_id=org_id)
                 degraded_sources.append("calendar_event")
                 conflicts.append((start_dt, end_dt))
 
     # Source 3: CRMCalendarEvent (Salesforce-synced events)
-    if _cb_should_skip("crm_calendar_event"):
+    if _cb_should_skip("crm_calendar_event", org_id=org_id):
         logger.debug(f"CRMCalendarEvent check skipped for user {target_user_id} — circuit breaker open")
         degraded_sources.append("crm_calendar_event")
     else:
@@ -288,13 +300,13 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
             for e in crm_events:
                 if e.start_at and e.end_at:
                     conflicts.append((e.start_at, e.end_at))
-            _cb_record_success("crm_calendar_event")
+            _cb_record_success("crm_calendar_event", org_id=org_id)
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CRMCalendarEvent cross-source check skipped (not installed): {ex}")
             else:
                 logger.error(f"CRMCalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
-                _cb_record_failure("crm_calendar_event")
+                _cb_record_failure("crm_calendar_event", org_id=org_id)
                 degraded_sources.append("crm_calendar_event")
                 conflicts.append((start_dt, end_dt))
 
@@ -380,7 +392,7 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
             _fail_closed_all_users("legacy_appointment")
 
     # Source 2: CalendarEvent (manual calendar entries)
-    if _cb_should_skip("calendar_event"):
+    if _cb_should_skip("calendar_event", org_id=org_id):
         logger.debug("CalendarEvent batch check skipped — circuit breaker open")
         degraded_sources.append("calendar_event")
     else:
@@ -398,17 +410,17 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
                     conflicts_by_user[e.user_id].append(
                         (e.start_time, e.end_time)
                     )
-            _cb_record_success("calendar_event")
+            _cb_record_success("calendar_event", org_id=org_id)
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CalendarEvent batch cross-source check skipped (not installed): {ex}")
             else:
                 logger.error(f"CalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
-                _cb_record_failure("calendar_event")
+                _cb_record_failure("calendar_event", org_id=org_id)
                 _fail_closed_all_users("calendar_event")
 
     # Source 3: CRMCalendarEvent (Salesforce-synced events)
-    if _cb_should_skip("crm_calendar_event"):
+    if _cb_should_skip("crm_calendar_event", org_id=org_id):
         logger.debug("CRMCalendarEvent batch check skipped — circuit breaker open")
         degraded_sources.append("crm_calendar_event")
     else:
@@ -426,13 +438,13 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
                     conflicts_by_user[e.owner_user_id].append(
                         (e.start_at, e.end_at)
                     )
-            _cb_record_success("crm_calendar_event")
+            _cb_record_success("crm_calendar_event", org_id=org_id)
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CRMCalendarEvent batch cross-source check skipped (not installed): {ex}")
             else:
                 logger.error(f"CRMCalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
-                _cb_record_failure("crm_calendar_event")
+                _cb_record_failure("crm_calendar_event", org_id=org_id)
                 _fail_closed_all_users("crm_calendar_event")
 
     return conflicts_by_user, degraded_sources

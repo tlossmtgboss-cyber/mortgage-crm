@@ -99,6 +99,9 @@ const AgendaView = React.memo(function AgendaView({
 }) {
   const [visibleDays, setVisibleDays] = useState(INITIAL_DAYS);
   const [expandedId, setExpandedId] = useState(null);
+  const [srAnnouncement, setSrAnnouncement] = useState('');
+  const prevTotalRef = useRef(null);
+  const loadMoreClickedRef = useRef(false);
   const listRef = useRef(null);
 
   // Reset visible days when currentDate changes significantly
@@ -106,6 +109,31 @@ const AgendaView = React.memo(function AgendaView({
     setVisibleDays(INITIAL_DAYS);
     setExpandedId(null);
   }, [currentDate.getMonth(), currentDate.getFullYear()]);
+
+  // Announce newly loaded events to screen readers
+  const totalEvents = useMemo(
+    () => events.filter(e => {
+      if (!e.start_time) return false;
+      const d = new Date(e.start_time);
+      const start = new Date(currentDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(end.getDate() + visibleDays);
+      return d >= start && d < end;
+    }).length,
+    [events, currentDate, visibleDays]
+  );
+
+  useEffect(() => {
+    if (loadMoreClickedRef.current && prevTotalRef.current !== null) {
+      const newCount = totalEvents - prevTotalRef.current;
+      if (newCount > 0) {
+        setSrAnnouncement(`Loaded ${newCount} more event${newCount !== 1 ? 's' : ''}. ${totalEvents} event${totalEvents !== 1 ? 's' : ''} total.`);
+      }
+      loadMoreClickedRef.current = false;
+    }
+    prevTotalRef.current = totalEvents;
+  }, [totalEvents]);
 
   // Sort events chronologically and group by date
   const { groupedEvents, hasMore } = useMemo(() => {
@@ -155,6 +183,7 @@ const AgendaView = React.memo(function AgendaView({
   }, [events, currentDate, visibleDays]);
 
   const handleLoadMore = useCallback(() => {
+    loadMoreClickedRef.current = true;
     setVisibleDays(prev => prev + LOAD_MORE_DAYS);
   }, []);
 
@@ -177,10 +206,17 @@ const AgendaView = React.memo(function AgendaView({
     }
   }, [onEventClick]);
 
-  const totalEvents = groupedEvents.reduce((sum, g) => sum + g.events.length, 0);
-
   return (
     <div className="cv-agenda-view" role="region" aria-label="Agenda view">
+      {/* Screen reader announcement for load-more */}
+      <div
+        aria-live="polite"
+        role="status"
+        style={{position:'absolute',width:1,height:1,padding:0,margin:-1,overflow:'hidden',clip:'rect(0,0,0,0)',whiteSpace:'nowrap',borderWidth:0}}
+      >
+        {srAnnouncement}
+      </div>
+
       {/* Summary header */}
       <div className="cv-agenda-view__header">
         <h3 className="cv-agenda-view__title">Upcoming Appointments</h3>

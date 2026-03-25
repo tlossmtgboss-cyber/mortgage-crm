@@ -48,6 +48,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from logging_config import StructuredFormatter, get_request_id
+from services.appointment._models import mask_email
 
 logger = logging.getLogger("perennia.scheduler.audit")
 
@@ -305,7 +306,7 @@ class SchedulerAuditLogger:
             assigned_user_id=_safe_attr(appointment, "assigned_user_id"),
             created_by=_get_user_name(user),
             attendee_name=_safe_attr(appointment, "attendee_name"),
-            attendee_email=_safe_attr(appointment, "attendee_email"),
+            attendee_email=mask_email(_safe_attr(appointment, "attendee_email")),
             booking_link_id=_safe_attr(appointment, "booking_link_id"),
             booked_by_ai=_safe_attr(appointment, "booked_by_ai"),
         )
@@ -360,7 +361,7 @@ class SchedulerAuditLogger:
             user_agent=req_info["user_agent"],
             updated_by=_get_user_name(user),
             attendee_name=_safe_attr(appointment, "attendee_name"),
-            attendee_email=_safe_attr(appointment, "attendee_email"),
+            attendee_email=mask_email(_safe_attr(appointment, "attendee_email")),
             changed_fields=changed_fields,
             changes=changes or {},
         )
@@ -419,7 +420,7 @@ class SchedulerAuditLogger:
             cancelled_by=_get_user_name(user),
             cancellation_reason=reason,
             attendee_name=_safe_attr(appointment, "attendee_name"),
-            attendee_email=_safe_attr(appointment, "attendee_email"),
+            attendee_email=mask_email(_safe_attr(appointment, "attendee_email")),
             within_policy=within_policy,
             is_late_cancellation=is_late_cancellation,
             cancellation_fee_applied=cancellation_fee_applied,
@@ -486,7 +487,7 @@ class SchedulerAuditLogger:
             initiated_by=initiated_by,
             rescheduled_by=_get_user_name(user) if user else initiated_by,
             attendee_name=_safe_attr(appointment, "attendee_name"),
-            attendee_email=_safe_attr(appointment, "attendee_email"),
+            attendee_email=mask_email(_safe_attr(appointment, "attendee_email")),
         )
 
         logger.info(
@@ -617,7 +618,7 @@ class SchedulerAuditLogger:
             user_agent=req_info["user_agent"],
             scheduled_start=_format_dt(_safe_attr(appointment, "scheduled_start")),
             attendee_name=_safe_attr(appointment, "attendee_name"),
-            attendee_email=_safe_attr(appointment, "attendee_email"),
+            attendee_email=mask_email(_safe_attr(appointment, "attendee_email")),
             detected_by=detected_by,
             marked_by=_get_user_name(user) if user else detected_by,
         )
@@ -659,7 +660,7 @@ class SchedulerAuditLogger:
             user_agent=req_info["user_agent"],
             generated_by=_get_user_name(user),
             attendee_name=_safe_attr(appointment, "attendee_name"),
-            attendee_email=_safe_attr(appointment, "attendee_email"),
+            attendee_email=mask_email(_safe_attr(appointment, "attendee_email")),
         )
 
         logger.info(
@@ -706,7 +707,7 @@ class SchedulerAuditLogger:
             reschedule_count=reschedule_count,
             scheduled_start=_format_dt(_safe_attr(appointment, "scheduled_start")),
             attendee_name=_safe_attr(appointment, "attendee_name"),
-            attendee_email=_safe_attr(appointment, "attendee_email"),
+            attendee_email=mask_email(_safe_attr(appointment, "attendee_email")),
         )
 
         logger.info(
@@ -761,7 +762,7 @@ class SchedulerAuditLogger:
             new_scheduled_end=_format_dt(new_end),
             reschedule_count=_safe_attr(appointment, "reschedule_count"),
             attendee_name=_safe_attr(appointment, "attendee_name"),
-            attendee_email=_safe_attr(appointment, "attendee_email"),
+            attendee_email=mask_email(_safe_attr(appointment, "attendee_email")),
             confirmed_by="borrower",
         )
 

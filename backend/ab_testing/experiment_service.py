@@ -140,6 +140,7 @@ class ExperimentService:
             result = ExperimentResult(
                 experiment_id=experiment.id,
                 variant_id=assignment.variant_id,
+                organization_id=experiment.organization_id,
                 user_id=user_id,
                 session_id=session_id,
                 metric_name=metric_name,

@@ -33,7 +33,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 
 import httpx
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from database.models.webhook import WebhookSubscription, WebhookDeliveryLog
 
@@ -961,6 +961,7 @@ async def get_failed_webhooks(
     query = (
         db.query(WebhookDeliveryLog)
         .join(WebhookSubscription, WebhookDeliveryLog.subscription_id == WebhookSubscription.id)
+        .options(joinedload(WebhookDeliveryLog.subscription))
         .filter(
             WebhookDeliveryLog.status == "failed",
             WebhookSubscription.organization_id == organization_id,

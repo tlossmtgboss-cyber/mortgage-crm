@@ -17,6 +17,7 @@ Usage:
 """
 
 import logging
+import os
 import uuid
 from datetime import datetime, timezone
 
@@ -34,12 +35,9 @@ try:
     _HAS_ENCRYPTION = True
 except ImportError:
     _HAS_ENCRYPTION = False
-    logger.error(
-        "COMP-004: services.encryption.EncryptedString is unavailable. "
-        "Encompass OAuth secrets will be stored as PLAINTEXT. "
-        "Install the 'cryptography' package and set ENCRYPTION_KEY or SECRET_KEY "
-        "to enable at-rest encryption."
-    )
+    if os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production":
+        raise RuntimeError("Encryption service required in production for secret storage")
+    logger.warning("EncryptedString unavailable; secrets stored as plaintext in dev mode")
 
 
 class EncompassConfig(Base):

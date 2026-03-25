@@ -34,7 +34,8 @@ _FALLBACK_TIMEZONE = "America/Chicago"
 
 # Retry configuration for transient failures
 _MAX_RETRIES = 2
-_RETRY_DELAY_SECONDS = 1
+_BASE_BACKOFF_SECONDS = 1
+_MAX_BACKOFF_SECONDS = 8
 _TRANSIENT_ERRORS = (ConnectionError, TimeoutError, OSError)
 
 logger = logging.getLogger(__name__)
@@ -593,11 +594,12 @@ class PipelineAppointmentTrigger:
             except _TRANSIENT_ERRORS as e:
                 last_error = e
                 if attempt < _MAX_RETRIES:
+                    backoff = min(_BASE_BACKOFF_SECONDS * (2 ** attempt), _MAX_BACKOFF_SECONDS)
                     logger.warning(
                         f"Transient error on auto-book attempt {attempt + 1}/{_MAX_RETRIES + 1} "
-                        f"for loan {loan_id}: {e}. Retrying in {_RETRY_DELAY_SECONDS}s..."
+                        f"for loan {loan_id}: {e}. Retrying in {backoff}s..."
                     )
-                    await asyncio.sleep(_RETRY_DELAY_SECONDS)
+                    await asyncio.sleep(backoff)
                     continue
                 # Exhausted retries — fall through to fallback below
                 logger.exception(

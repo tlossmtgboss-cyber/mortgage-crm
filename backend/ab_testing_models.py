@@ -144,6 +144,7 @@ class ExperimentResult(Base):
     id = Column(Integer, primary_key=True, index=True)
     experiment_id = Column(Integer, ForeignKey("ab_experiments.id"), nullable=False, index=True)
     variant_id = Column(Integer, ForeignKey("ab_variants.id"), nullable=False, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
 
     # Who/what generated this result
     # Note: FK constraint exists in database, but we don't define it here

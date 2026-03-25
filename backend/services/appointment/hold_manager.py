@@ -32,6 +32,7 @@ def hold_slot(
     duration_minutes: int = DEFAULT_DURATION_MINUTES,
     ttl_seconds: int = DEFAULT_HOLD_TTL_SECONDS,
     source: str = "ai_conversation",
+    idempotency_key: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Create a soft hold on a time slot during an AI conversation.
@@ -47,6 +48,10 @@ def hold_slot(
         duration_minutes: Slot duration.
         ttl_seconds: Time-to-live in seconds (default 5 minutes).
         source: Description of the hold requester.
+        idempotency_key: Optional key to prevent duplicate holds from
+            retried AI conversations. If provided and an active,
+            non-expired hold with the same key exists, the existing
+            hold is returned instead of creating a new one.
 
     Returns:
         Dict with hold_id and expiry info.
@@ -59,11 +64,34 @@ def hold_slot(
     end_time = start_time + timedelta(minutes=duration_minutes)
     now = datetime.now(timezone.utc)
 
+    DbSlotHold = get_model("SlotHold")
+
+    # Idempotency: return existing active hold if key matches
+    if idempotency_key and DbSlotHold:
+        existing = db.query(DbSlotHold).filter(
+            DbSlotHold.idempotency_key == idempotency_key,
+            DbSlotHold.status == "active",
+            DbSlotHold.expires_at > now,
+        ).first()
+        if existing:
+            logger.info(
+                f"Idempotent hold hit: returning existing hold {existing.id} "
+                f"for key={idempotency_key}"
+            )
+            return {
+                "hold_id": existing.id,
+                "lo_id": existing.lo_id,
+                "start_time": existing.start_time.isoformat(),
+                "end_time": existing.end_time.isoformat(),
+                "expires_at": existing.expires_at.isoformat(),
+                "ttl_seconds": ttl_seconds,
+                "idempotent": True,
+            }
+
     hold_id = str(uuid_lib.uuid4())
     expires_at = now + timedelta(seconds=ttl_seconds)
 
     # Persist hold to the database (multi-worker safe)
-    DbSlotHold = get_model("SlotHold")
     if DbSlotHold:
         db_hold = DbSlotHold(
             organization_id=organization_id,
@@ -73,6 +101,7 @@ def hold_slot(
             expires_at=expires_at,
             held_by=source,
             status="active",
+            idempotency_key=idempotency_key,
         )
         db.add(db_hold)
         db.flush()
@@ -83,6 +112,7 @@ def hold_slot(
     logger.info(
         f"Slot hold created: {hold_id} for LO {lo_id} "
         f"at {start_time.isoformat()}, TTL={ttl_seconds}s"
+        f"{f', key={idempotency_key}' if idempotency_key else ''}"
     )
 
     return {

@@ -33,6 +33,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from services.notification_service import notification_service
+from services.pii_masking import mask_email as _mask_email
 from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL
 
 
@@ -72,7 +73,11 @@ from services.scheduler_email_templates import (
     HEADER_COLOR_PURPLE,
 )
 
-logger = logging.getLogger(__name__)
+try:
+    from routes.scheduler.middleware import get_correlated_logger
+    logger = get_correlated_logger(__name__)
+except ImportError:
+    logger = logging.getLogger(__name__)
 
 
 # --- Backward-compatible aliases for underscore-prefixed names ---
@@ -107,14 +112,6 @@ def _default_prep_items(meeting_type_key=None):
 # ============================================================================
 # Per-recipient email throttle
 # ============================================================================
-
-def _mask_email(email: Optional[str]) -> str:
-    """Mask email for logging: j***@example.com"""
-    if not email or '@' not in email:
-        return '***'
-    local, domain = email.split('@', 1)
-    return f"{local[0]}***@{domain}" if local else f"***@{domain}"
-
 
 # In-memory throttle state: {email -> list of timestamps}
 _email_throttle_store: OrderedDict = OrderedDict()

@@ -29,6 +29,7 @@ from sqlalchemy import and_, func, text
 from sqlalchemy.orm import Session
 
 from routes.scheduler.constants import DEFAULT_TIMEZONE
+from services.pii_masking import mask_email as _mask_email, mask_phone as _mask_phone
 
 logger = logging.getLogger(__name__)
 
@@ -42,23 +43,6 @@ DEDUP_WINDOW_HOURS = 1
 
 # Frontend base URL for building cancel / reschedule links
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
-
-
-def _mask_email(email: str) -> str:
-    """Mask email for safe logging: j***@example.com."""
-    if not email or "@" not in email:
-        return "***"
-    local, domain = email.split("@", 1)
-    if len(local) <= 1:
-        return f"***@{domain}"
-    return f"{local[0]}***@{domain}"
-
-
-def _mask_phone(phone: str) -> str:
-    """Mask phone for safe logging: ***1234."""
-    if not phone or len(phone) < 4:
-        return "***"
-    return f"***{phone[-4:]}"
 
 
 class ReminderService:
@@ -518,17 +502,24 @@ class ReminderService:
                 else _mask_phone(recipient_phone) if channel == "sms"
                 else "unknown"
             )
-            logger.info(
-                "AI_COMM_CONSENT: type=%s recipient=%s consent_checked=%s appointment_id=%s template_id=%s",
-                channel, recipient_masked, consent_checked_at,
-                appointment.id, template.id,
-            )
 
             if channel == "email":
+                # Email does not require TCPA SMS consent; log accordingly
+                logger.info(
+                    "AI_COMM_CONSENT: type=%s recipient=%s consent_checked=%s consent_granted=%s appointment_id=%s template_id=%s",
+                    channel, recipient_masked, consent_checked_at,
+                    True, appointment.id, template.id,
+                )
                 result = self._send_email(recipient_email, rendered_subject, rendered_body)
             elif channel == "sms":
                 # TCPA check
-                if not self._check_sms_consent(recipient_phone, appointment.organization_id):
+                consent_granted = self._check_sms_consent(recipient_phone, appointment.organization_id)
+                logger.info(
+                    "AI_COMM_CONSENT: type=%s recipient=%s consent_checked=%s consent_granted=%s appointment_id=%s template_id=%s",
+                    channel, recipient_masked, consent_checked_at,
+                    consent_granted, appointment.id, template.id,
+                )
+                if not consent_granted:
                     log.status = "skipped"
                     log.error_message = "No TCPA SMS consent on file"
                     self.db.flush()
@@ -687,5 +678,11 @@ class ReminderService:
             "failed": failed,
             "skipped": skipped,
         }
-        logger.info(f"Reminder batch complete: {summary}")
+        logger.info(
+            "REMINDER_BATCH_COMPLETE: processed=%d sent=%d failed=%d skipped=%d",
+            summary.get("processed", 0),
+            summary.get("sent", 0),
+            summary.get("failed", 0),
+            summary.get("skipped", 0),
+        )
         return summary

@@ -111,7 +111,7 @@ async def send_confirmation_email(
             )
         return success
     except Exception as e:
-        logger.error(f"Error sending confirmation email: {e}")
+        logger.error(f"Error sending confirmation email: {e}", exc_info=True)
         return False
 
 
@@ -145,7 +145,7 @@ async def send_update_notification(appointment) -> bool:
 
         return result.get("success", False) if isinstance(result, dict) else bool(result)
     except Exception as e:
-        logger.error(f"Error sending update notification: {e}")
+        logger.error(f"Error sending update notification: {e}", exc_info=True)
         return False
 
 
@@ -173,7 +173,7 @@ async def send_cancellation_notification(appointment) -> bool:
 
         return result.get("success", False) if isinstance(result, dict) else bool(result)
     except Exception as e:
-        logger.error(f"Error sending cancellation notification: {e}")
+        logger.error(f"Error sending cancellation notification: {e}", exc_info=True)
         return False
 
 

@@ -80,6 +80,30 @@ export default function MobileCalendarView({
   const [showBottomSheet, setShowBottomSheet] = useState(false);
   const [slideDirection, setSlideDirection] = useState(null); // 'left' | 'right' | null
   const agendaRef = useRef(null);
+  const bottomSheetRef = useRef(null);
+  const slideOverRef = useRef(null);
+
+  // Focus trap handler for modal dialogs
+  const createFocusTrapHandler = (ref, closeFunc) => (e) => {
+    if (e.key === 'Escape') { closeFunc(); return; }
+    if (e.key !== 'Tab') return;
+    const focusable = ref.current?.querySelectorAll(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable || focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
+  const handleBottomSheetKeyDown = createFocusTrapHandler(bottomSheetRef, () => setShowBottomSheet(false));
+  const handleSlideOverKeyDown = createFocusTrapHandler(slideOverRef, () => setShowDetailSlideOver(false));
 
   // Quick-add form state (minimal fields for bottom sheet)
   const [quickForm, setQuickForm] = useState({
@@ -230,18 +254,29 @@ export default function MobileCalendarView({
         </div>
 
         {/* Horizontal day strip - quick week overview */}
-        <div className="mobile-day-strip">
+        <div className="mobile-day-strip" role="listbox" aria-label="Select day">
           {Array.from({ length: 7 }, (_, i) => {
             const d = new Date(currentDate);
             d.setDate(d.getDate() - 3 + i);
             const dayIsToday = isSameDay(d, new Date());
             const dayIsSelected = isSameDay(d, currentDate);
             const dayHasEvents = allEvents.some((ev) => isSameDay(new Date(ev.start_time), d));
+            const fullDateLabel = `${dayNames[d.getDay()]}, ${monthNames[d.getMonth()]} ${d.getDate()}`;
             return (
               <button
                 key={i}
+                role="option"
+                aria-selected={dayIsSelected}
+                aria-label={fullDateLabel}
+                tabIndex={0}
                 className={`mobile-day-chip ${dayIsSelected ? 'selected' : ''} ${dayIsToday ? 'today' : ''}`}
                 onClick={() => onDateChange(new Date(d))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onDateChange(new Date(d));
+                  }
+                }}
               >
                 <span className="mobile-day-chip-name">{dayAbbreviations[d.getDay()]}</span>
                 <span className="mobile-day-chip-num">{d.getDate()}</span>
@@ -347,7 +382,15 @@ export default function MobileCalendarView({
 
       {/* ===== BOTTOM SHEET - Quick Add ===== */}
       {showBottomSheet && (
-        <div className="mobile-bottom-sheet-overlay" onClick={() => setShowBottomSheet(false)}>
+        <div
+          className="mobile-bottom-sheet-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Quick add appointment"
+          ref={bottomSheetRef}
+          onKeyDown={handleBottomSheetKeyDown}
+          onClick={() => setShowBottomSheet(false)}
+        >
           <div
             className="mobile-bottom-sheet"
             onClick={(e) => e.stopPropagation()}
@@ -356,12 +399,15 @@ export default function MobileCalendarView({
             <h3>Quick Add Appointment</h3>
             <form onSubmit={handleQuickSubmit}>
               <div className="mobile-form-group">
+                <label htmlFor="quick-add-title" style={{position:'absolute',width:1,height:1,padding:0,margin:-1,overflow:'hidden',clip:'rect(0,0,0,0)',whiteSpace:'nowrap',borderWidth:0}}>Appointment title</label>
                 <input
+                  id="quick-add-title"
                   type="text"
                   placeholder="Appointment title *"
                   value={quickForm.title}
                   onChange={(e) => setQuickForm({ ...quickForm, title: e.target.value })}
                   required
+                  aria-required="true"
                   autoFocus
                   className="mobile-input"
                 />
@@ -369,22 +415,26 @@ export default function MobileCalendarView({
 
               <div className="mobile-form-row">
                 <div className="mobile-form-group mobile-form-half">
-                  <label>Date</label>
+                  <label htmlFor="quick-add-date">Date</label>
                   <input
+                    id="quick-add-date"
                     type="date"
                     value={quickForm.date}
                     onChange={(e) => setQuickForm({ ...quickForm, date: e.target.value })}
                     required
+                    aria-required="true"
                     className="mobile-input"
                   />
                 </div>
                 <div className="mobile-form-group mobile-form-half">
-                  <label>Time</label>
+                  <label htmlFor="quick-add-time">Time</label>
                   <input
+                    id="quick-add-time"
                     type="time"
                     value={quickForm.time}
                     onChange={(e) => setQuickForm({ ...quickForm, time: e.target.value })}
                     required
+                    aria-required="true"
                     className="mobile-input"
                   />
                 </div>
@@ -392,8 +442,9 @@ export default function MobileCalendarView({
 
               <div className="mobile-form-row">
                 <div className="mobile-form-group mobile-form-half">
-                  <label>Duration</label>
+                  <label htmlFor="quick-add-duration">Duration</label>
                   <select
+                    id="quick-add-duration"
                     value={quickForm.duration}
                     onChange={(e) => setQuickForm({ ...quickForm, duration: e.target.value })}
                     className="mobile-input"
@@ -406,14 +457,15 @@ export default function MobileCalendarView({
                   </select>
                 </div>
                 <div className="mobile-form-group mobile-form-half">
-                  <label>Type</label>
-                  <div className="mobile-mode-selector">
+                  <label id="quick-add-type-label">Type</label>
+                  <div className="mobile-mode-selector" role="group" aria-labelledby="quick-add-type-label">
                     {['PHONE', 'VIDEO', 'IN_PERSON'].map((mode) => (
                       <button
                         key={mode}
                         type="button"
                         className={`mobile-mode-btn ${quickForm.meeting_mode === mode ? 'active' : ''}`}
                         onClick={() => setQuickForm({ ...quickForm, meeting_mode: mode })}
+                        aria-pressed={quickForm.meeting_mode === mode}
                       >
                         {mode === 'PHONE' ? 'Ph' : mode === 'VIDEO' ? 'Vid' : 'Loc'}
                       </button>
@@ -423,7 +475,9 @@ export default function MobileCalendarView({
               </div>
 
               <div className="mobile-form-group">
+                <label htmlFor="quick-add-attendee-name" style={{position:'absolute',width:1,height:1,padding:0,margin:-1,overflow:'hidden',clip:'rect(0,0,0,0)',whiteSpace:'nowrap',borderWidth:0}}>Attendee name</label>
                 <input
+                  id="quick-add-attendee-name"
                   type="text"
                   placeholder="Attendee name"
                   value={quickForm.attendee_name}
@@ -433,7 +487,9 @@ export default function MobileCalendarView({
               </div>
 
               <div className="mobile-form-group">
+                <label htmlFor="quick-add-attendee-email" style={{position:'absolute',width:1,height:1,padding:0,margin:-1,overflow:'hidden',clip:'rect(0,0,0,0)',whiteSpace:'nowrap',borderWidth:0}}>Attendee email</label>
                 <input
+                  id="quick-add-attendee-email"
                   type="email"
                   placeholder="Attendee email"
                   value={quickForm.attendee_email}
@@ -461,7 +517,15 @@ export default function MobileCalendarView({
 
       {/* ===== FULL-SCREEN SLIDE-OVER - Event Detail ===== */}
       {showDetailSlideOver && selectedEvent && (
-        <div className="mobile-slide-over-overlay" onClick={() => setShowDetailSlideOver(false)}>
+        <div
+          className="mobile-slide-over-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Appointment details"
+          ref={slideOverRef}
+          onKeyDown={handleSlideOverKeyDown}
+          onClick={() => setShowDetailSlideOver(false)}
+        >
           <div
             className="mobile-slide-over"
             onClick={(e) => e.stopPropagation()}

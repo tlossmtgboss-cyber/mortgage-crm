@@ -6,6 +6,7 @@ Enterprise API Gateway & Developer Experience (Domain 11).
 """
 
 import logging
+import os
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Text, ForeignKey, JSON, Index
@@ -21,12 +22,9 @@ try:
     _HAS_ENCRYPTION = True
 except ImportError:
     _HAS_ENCRYPTION = False
-    logger.error(
-        "COMP-004: services.encryption.EncryptedString is unavailable. "
-        "Webhook signing secrets will be stored as PLAINTEXT. "
-        "Install the 'cryptography' package and set ENCRYPTION_KEY or SECRET_KEY "
-        "to enable at-rest encryption."
-    )
+    if os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production":
+        raise RuntimeError("Encryption service required in production for secret storage")
+    logger.warning("EncryptedString unavailable; secrets stored as plaintext in dev mode")
 
 
 class WebhookSubscription(Base):

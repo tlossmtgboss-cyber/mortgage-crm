@@ -325,11 +325,9 @@ async def public_reschedule_confirm(
 
     # Normalize to UTC naive (consistent with DB storage)
     if new_start.tzinfo is not None:
-        from datetime import timezone as _tz
-        new_start = new_start.astimezone(_tz.utc).replace(tzinfo=None)
+        new_start = new_start.astimezone(timezone.utc).replace(tzinfo=None)
     if new_end.tzinfo is not None:
-        from datetime import timezone as _tz
-        new_end = new_end.astimezone(_tz.utc).replace(tzinfo=None)
+        new_end = new_end.astimezone(timezone.utc).replace(tzinfo=None)
 
     # Basic validation (compare naive UTC to naive UTC)
     if new_end <= new_start:

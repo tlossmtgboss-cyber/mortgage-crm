@@ -39,7 +39,7 @@ from datetime import datetime, date
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 # =============================================================================
@@ -81,9 +81,10 @@ class IntakeQuestion(BaseModel):
     options: Optional[List[str]] = None  # Required when type is 'select'
     required: bool = False
 
-    @validator('options')
-    def options_required_for_select(cls, v, values):
-        if values.get('type') == 'select' and not v:
+    @field_validator('options')
+    @classmethod
+    def options_required_for_select(cls, v, info):
+        if info.data.get('type') == 'select' and not v:
             raise ValueError("options must be provided when question type is 'select'")
         return v
 
@@ -112,7 +113,10 @@ class SchedulerConfigCreate(BaseModel):
     routing_strategy: Optional[str] = "relationship"
     ai_scheduling_enabled: bool = True
 
-    _validate_tz = validator('timezone', allow_reuse=True)(_validate_timezone_string)
+    @field_validator('timezone')
+    @classmethod
+    def _validate_tz(cls, v):
+        return _validate_timezone_string(v)
 
 
 class SchedulerConfigUpdate(BaseModel):
@@ -132,7 +136,10 @@ class SchedulerConfigUpdate(BaseModel):
     smart_reminders_enabled: Optional[bool] = None
     is_active: Optional[bool] = None
 
-    _validate_tz = validator('timezone', allow_reuse=True, pre=True)(_validate_timezone_string)
+    @field_validator('timezone', mode='before')
+    @classmethod
+    def _validate_tz(cls, v):
+        return _validate_timezone_string(v)
 
 
 # =============================================================================
@@ -184,33 +191,38 @@ class AppointmentTypeCreate(BaseModel):
     is_public: bool = True
     public_slug: Optional[str] = None
 
-    @validator('default_duration_minutes')
+    @field_validator('default_duration_minutes')
+    @classmethod
     def validate_duration(cls, v):
         if v < 15 or v > 480:
             raise ValueError('Duration must be between 15 and 480 minutes')
         return v
 
-    @validator('buffer_before', 'buffer_after')
+    @field_validator('buffer_before', 'buffer_after')
+    @classmethod
     def validate_buffer(cls, v):
         if v < 0 or v > 60:
             raise ValueError('Buffer must be between 0 and 60 minutes')
         return v
 
-    @validator('color')
+    @field_validator('color')
+    @classmethod
     def validate_color(cls, v):
         import re
         if v and not re.match(r'^#[0-9a-fA-F]{6}$', v):
             raise ValueError('Color must be a valid hex color (e.g., #3b82f6)')
         return v
 
-    @validator('default_mode')
+    @field_validator('default_mode')
+    @classmethod
     def validate_default_mode(cls, v):
         valid_modes = {'video', 'phone', 'in_person', 'screen_share'}
         if v is not None and v not in valid_modes:
             raise ValueError(f'Meeting mode must be one of: {", ".join(valid_modes)}')
         return v
 
-    @validator('intake_questions', each_item=False)
+    @field_validator('intake_questions')
+    @classmethod
     def serialize_intake_questions(cls, v):
         """Convert IntakeQuestion models to dicts for JSON column compatibility."""
         return [q.model_dump(exclude_none=True) if isinstance(q, IntakeQuestion) else q for q in v]
@@ -234,21 +246,24 @@ class AppointmentTypeUpdate(BaseModel):
     is_public: Optional[bool] = None
     display_order: Optional[int] = None
 
-    @validator('color')
+    @field_validator('color')
+    @classmethod
     def validate_color(cls, v):
         import re
         if v is not None and not re.match(r'^#[0-9a-fA-F]{6}$', v):
             raise ValueError('Color must be a valid hex color (e.g., #3b82f6)')
         return v
 
-    @validator('default_mode')
+    @field_validator('default_mode')
+    @classmethod
     def validate_default_mode(cls, v):
         valid_modes = {'video', 'phone', 'in_person', 'screen_share'}
         if v is not None and v not in valid_modes:
             raise ValueError(f'Meeting mode must be one of: {", ".join(valid_modes)}')
         return v
 
-    @validator('intake_questions', pre=False)
+    @field_validator('intake_questions')
+    @classmethod
     def serialize_intake_questions(cls, v):
         """Convert IntakeQuestion models to dicts for JSON column compatibility."""
         if v is None:
@@ -317,7 +332,10 @@ class AppointmentCreate(BaseModel):
     booked_by_ai: bool = False
     ai_booking_context: Optional[Dict] = None
 
-    _validate_tz = validator('timezone', allow_reuse=True)(_validate_timezone_string)
+    @field_validator('timezone')
+    @classmethod
+    def _validate_tz(cls, v):
+        return _validate_timezone_string(v)
 
 
 class AppointmentUpdate(BaseModel):
@@ -359,9 +377,10 @@ class BlockedTimeCreate(BaseModel):
     recurrence_pattern: Optional[Dict] = None
     applies_to_all_users: bool = False
 
-    @validator('end_datetime')
-    def end_after_start(cls, v, values):
-        if 'start_datetime' in values and v <= values['start_datetime']:
+    @field_validator('end_datetime')
+    @classmethod
+    def end_after_start(cls, v, info):
+        if 'start_datetime' in info.data and v <= info.data['start_datetime']:
             raise ValueError('end_datetime must be after start_datetime')
         return v
 
@@ -383,13 +402,15 @@ class BookingLinkCreate(BaseModel):
     assigned_users: List[int] = []
     expires_at: Optional[datetime] = Field(None, description="When the booking link expires (ISO 8601). Defaults to 90 days from creation if not specified.")
 
-    @validator('slug', pre=True)
+    @field_validator('slug', mode='before')
+    @classmethod
     def lowercase_slug(cls, v):
         if isinstance(v, str):
             v = v.lower()
         return v
 
-    @validator('slug')
+    @field_validator('slug')
+    @classmethod
     def validate_slug_not_reserved(cls, v):
         if v and v.strip() in _RESERVED_SLUGS:
             raise ValueError(f"Slug '{v}' is reserved and cannot be used")
@@ -409,11 +430,15 @@ class AvailableSlotsRequest(BaseModel):
     timezone: str = "America/Chicago"
     user_ids: Optional[List[int]] = None  # Filter to specific users
 
-    _validate_tz = validator('timezone', allow_reuse=True)(_validate_timezone_string)
+    @field_validator('timezone')
+    @classmethod
+    def _validate_tz(cls, v):
+        return _validate_timezone_string(v)
 
-    @validator('end_date')
-    def end_date_after_start(cls, v, values):
-        if 'start_date' in values and v < values['start_date']:
+    @field_validator('end_date')
+    @classmethod
+    def end_date_after_start(cls, v, info):
+        if 'start_date' in info.data and v < info.data['start_date']:
             raise ValueError('end_date must be on or after start_date')
         return v
 
@@ -426,9 +451,10 @@ class PublicAvailableSlotsRequest(BaseModel):
     appointment_type: str = Field("platform-demo", max_length=100)
     organization_id: Optional[int] = Field(None, description="Organization ID for multi-tenant isolation")
 
-    @validator('end_date')
-    def end_date_after_start(cls, v, values):
-        if 'start_date' in values and v < values['start_date']:
+    @field_validator('end_date')
+    @classmethod
+    def end_date_after_start(cls, v, info):
+        if 'start_date' in info.data and v < info.data['start_date']:
             raise ValueError('end_date must be on or after start_date')
         return v
 

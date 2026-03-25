@@ -127,6 +127,8 @@ class SchedulerConfig(Base):
     __table_args__ = (
         Index('ix_scheduler_configs_org_id', 'organization_id'),
         UniqueConstraint('organization_id', 'user_id', name='uq_scheduler_config_org_user'),
+        CheckConstraint('max_duration_minutes >= default_duration_minutes', name='ck_config_max_gte_default'),
+        CheckConstraint('default_duration_minutes >= min_duration_minutes', name='ck_config_default_gte_min'),
         {'extend_existing': True}
     )
 
@@ -808,4 +810,5 @@ class SlotHold(Base):
     converted_to_appointment_id = Column(Integer, ForeignKey("scheduler_appointments.id", ondelete="SET NULL"), nullable=True)
     converted_at = Column(DateTime, nullable=True)
     released_at = Column(DateTime, nullable=True)
+    idempotency_key = Column(String(64), nullable=True, unique=True, index=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)

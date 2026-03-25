@@ -404,11 +404,25 @@ def _check_calendar_providers(db: Session, org_id: int) -> dict:
 
 
 def _check_scheduler_jobs() -> dict:
-    """Check APScheduler background job status."""
-    from services.scheduler_service import scheduler_service
+    """Check APScheduler background job status.
 
-    if not scheduler_service.scheduler.running:
-        return {"status": "warning", "running": False, "job_count": 0}
+    Imports scheduler_service lazily and handles import errors gracefully
+    so this check never takes down the health endpoint.
+    """
+    try:
+        from services.scheduler_service import scheduler_service
+    except Exception as e:
+        logger.debug(f"Could not import scheduler_service: {e}")
+        return {"status": "unknown", "scheduler_running": False, "note": "scheduler_service unavailable"}
+
+    try:
+        running = scheduler_service.scheduler.running
+    except Exception as e:
+        logger.debug(f"Could not read scheduler running state: {e}")
+        return {"status": "unknown", "scheduler_running": False, "note": str(e)}
+
+    if not running:
+        return {"status": "warning", "scheduler_running": False, "job_count": 0}
 
     jobs = scheduler_service.get_job_status()
     overdue = 0
@@ -419,7 +433,7 @@ def _check_scheduler_jobs() -> dict:
 
     return {
         "status": "ok" if overdue == 0 else "warning",
-        "running": True,
+        "scheduler_running": True,
         "job_count": len(jobs),
         "overdue_jobs": overdue,
     }
@@ -554,12 +568,14 @@ async def scheduler_health(
         logger.debug(f"Health check: calendar_providers skipped: {e}")
         checks["calendar_providers"] = {"status": "ok", "providers": [], "note": "Check unavailable"}
 
-    # --- scheduler_jobs ---
+    # --- scheduler_jobs (APScheduler background job health) ---
     try:
         checks["scheduler_jobs"] = _check_scheduler_jobs()
+        if checks["scheduler_jobs"]["status"] == "warning":
+            any_degraded = True
     except Exception as e:
         logger.debug(f"Health check: scheduler_jobs skipped: {e}")
-        checks["scheduler_jobs"] = {"status": "ok", "note": "Scheduler not running"}
+        checks["scheduler_jobs"] = {"status": "unknown", "scheduler_running": False, "note": "Check failed"}
 
     # --- overall status ---
     if critical_failed:

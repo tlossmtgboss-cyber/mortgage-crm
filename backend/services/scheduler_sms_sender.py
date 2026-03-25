@@ -55,16 +55,12 @@ def _send_sms_with_retry(from_number: str, to_number: str, text: str,
                 )
                 _time.sleep(delay)
             else:
-                logger.error(f"SMS send failed after {max_retries} attempts: {e}")
+                logger.error(f"SMS send failed after {max_retries} attempts: {e}", exc_info=True)
 
     return False, None, last_error
 
 
-def _mask_phone(phone: str) -> str:
-    """Mask phone number for logging - show only last 4 digits."""
-    if not phone or len(phone) < 4:
-        return "***"
-    return f"+1***{phone[-4:]}"
+from services.pii_masking import mask_phone as _mask_phone  # noqa: E402
 
 
 # --- Re-exports from shared compliance module (backward compatibility) ---
@@ -109,7 +105,7 @@ def send_appointment_confirmation_sms(
         return success
 
     except Exception as e:
-        logger.error(f"Failed to send appointment confirmation SMS: {e}")
+        logger.error(f"Failed to send appointment confirmation SMS: {e}", exc_info=True)
         return False
 
 
@@ -144,7 +140,7 @@ def send_appointment_update_sms(
         return success
 
     except Exception as e:
-        logger.error(f"Failed to send appointment update SMS: {e}")
+        logger.error(f"Failed to send appointment update SMS: {e}", exc_info=True)
         return False
 
 
@@ -192,5 +188,5 @@ def send_appointment_reminder_sms(
         return {"success": False, "error": error}
 
     except Exception as e:
-        logger.error(f"Failed to send appointment reminder SMS: {e}")
+        logger.error(f"Failed to send appointment reminder SMS: {e}", exc_info=True)
         return {"success": False, "error": str(e)}

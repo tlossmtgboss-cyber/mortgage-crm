@@ -45,17 +45,41 @@ def _sanitize_and_validate_ai_context(context: Optional[Dict]) -> Optional[Dict]
 
     AGENT-002: Delegates to the schema validator in public_booking if available,
     otherwise applies a lightweight inline check.  Returns None if input is None.
+
+    D5-002: Also applies semantic validation to detect hallucinated/unreasonable
+    values in AI-generated data (duration, confidence, string lengths).
     """
     if context is None:
         return None
     try:
         from routes.scheduler.public_booking import _sanitize_ai_context
-        return _sanitize_ai_context(context)
+        context = _sanitize_ai_context(context)
     except ImportError:
         # Fallback: if the import fails (e.g. in tests), pass through with a
         # warning — the schema validation is best-effort at this layer.
         logger.warning("Could not import _sanitize_ai_context; passing ai_booking_context through unsanitized")
-        return context
+
+    # --- D5-002: Semantic validation of AI-generated values ---
+
+    # Clamp duration_minutes to reasonable range (5–480)
+    duration = context.get("duration_minutes")
+    if duration is not None and (duration < 5 or duration > 480):
+        logger.warning("AI context has unreasonable duration_minutes=%s, clamping", duration)
+        context["duration_minutes"] = max(5, min(480, duration))
+
+    # Validate confidence_score is between 0 and 1
+    score = context.get("confidence_score")
+    if score is not None and (score < 0 or score > 1):
+        logger.warning("AI context has invalid confidence_score=%s, removing", score)
+        context.pop("confidence_score", None)
+
+    # Truncate excessively long string values (>500 chars)
+    for key, val in list(context.items()):
+        if isinstance(val, str) and len(val) > 500:
+            logger.warning("AI context key '%s' exceeds 500 chars, truncating", key)
+            context[key] = val[:500]
+
+    return context
 
 
 # =============================================================================

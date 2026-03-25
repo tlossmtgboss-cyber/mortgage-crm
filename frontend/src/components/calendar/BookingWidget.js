@@ -28,8 +28,8 @@ const API_BASE_DEFAULT =
     ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
     : 'https://api.perenniaai.com';
 
-// US phone regex
-const PHONE_REGEX = /^(\+1\s?)?(\(\d{3}\)|\d{3})[\s\-.]?\d{3}[\s\-.]?\d{4}$/;
+// Accept US format (+1...) and basic international format (+XX...)
+const PHONE_REGEX = /^(\+\d{1,3}\s?)?(\(?\d{1,4}\)?[\s\-.]?){1,4}\d{1,4}$/;
 
 // ============================================================================
 // Loading skeleton shown while widget initializes
@@ -79,6 +79,7 @@ export default function BookingWidget({
 }) {
   const apiBase = apiBaseProp || API_BASE_DEFAULT;
   const containerRef = useRef(null);
+  const stepContainerRef = useRef(null);
 
   // ---- State ----
   const [loading, setLoading] = useState(true);
@@ -132,6 +133,16 @@ export default function BookingWidget({
     observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, [embedded, postToParent]);
+
+  // ---- Focus restoration when step changes ----
+  useEffect(() => {
+    if (stepContainerRef.current) {
+      const focusTarget = stepContainerRef.current.querySelector('h2, h3, input, button');
+      if (focusTarget) {
+        focusTarget.focus();
+      }
+    }
+  }, [step]);
 
   // ---- Fetch widget configuration ----
   useEffect(() => {
@@ -200,8 +211,9 @@ export default function BookingWidget({
     try {
       const dateStr = selectedDate.toISOString().split('T')[0];
       const slug = config.booking_slug;
+      const tz = getUserTimezone();
       const response = await fetch(
-        `${apiBase}/api/v1/scheduler/public/book/${slug}/slots?date=${dateStr}&appointment_type_id=${selectedType.id}&duration_minutes=${selectedType.default_duration_minutes || 30}`
+        `${apiBase}/api/v1/scheduler/public/book/${slug}/slots?date=${dateStr}&appointment_type_id=${selectedType.id}&duration_minutes=${selectedType.default_duration_minutes || 30}&timezone=${encodeURIComponent(tz)}`
       );
       if (response.ok) {
         const data = await response.json();
@@ -239,7 +251,7 @@ export default function BookingWidget({
     if (!form.first_name.trim()) errors.first_name = 'Required';
     if (!form.last_name.trim()) errors.last_name = 'Required';
     if (!form.email.trim()) errors.email = 'Required';
-    if (form.phone && !PHONE_REGEX.test(form.phone.trim())) errors.phone = 'Invalid phone';
+    if (form.phone && !PHONE_REGEX.test(form.phone.trim())) errors.phone = 'Enter a valid phone number';
     if (!selectedTime) errors.time = 'Please select a time';
 
     if (Object.keys(errors).length > 0) {
@@ -440,6 +452,8 @@ export default function BookingWidget({
             <div style={styles.errorBanner} role="alert">{error}</div>
           )}
 
+          {/* Step content — ref used for focus restoration on step change */}
+          <div ref={stepContainerRef}>
           {/* Step: Date/Time selection */}
           {step === 'datetime' && (
             <div>
@@ -518,6 +532,7 @@ export default function BookingWidget({
               accentColor={accentColor}
             />
           )}
+          </div>
 
           {/* Footer */}
           <div style={styles.footer}>

@@ -27,12 +27,68 @@ Usage:
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Tuple
+from datetime import date, datetime, timedelta, timezone
+from typing import Dict, Optional, List, Tuple
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# LLM TOKEN BUDGET TRACKING (v2-D5-001)
+# =============================================================================
+# Best-effort in-memory counter keyed by (org_id, date_str).
+# Resets naturally when the date changes. Not distributed — each process
+# tracks its own usage.  Sufficient for single-process deployments and a
+# useful safety net even behind multiple workers.
+
+_token_usage: Dict[str, int] = {}
+
+
+def _budget_key(org_id: int) -> str:
+    """Return the budget dict key for an org on today's date."""
+    return f"{org_id}:{date.today().isoformat()}"
+
+
+def _check_token_budget(
+    org_id: int,
+    estimated_tokens: int = 1000,
+    daily_limit: int = 100_000,
+) -> bool:
+    """Check whether the org is within its daily LLM token budget.
+
+    Returns True if the estimated usage fits within the daily_limit,
+    False if it would exceed it.  Logs a warning at 80% utilisation.
+    """
+    key = _budget_key(org_id)
+    current = _token_usage.get(key, 0)
+
+    if current + estimated_tokens > daily_limit:
+        logger.error(
+            "LLM token budget EXCEEDED for org %s: %d + %d > %d daily limit",
+            org_id, current, estimated_tokens, daily_limit,
+        )
+        return False
+
+    threshold_80 = int(daily_limit * 0.8)
+    if current < threshold_80 <= current + estimated_tokens:
+        logger.warning(
+            "LLM token budget at 80%% for org %s: %d / %d",
+            org_id, current + estimated_tokens, daily_limit,
+        )
+
+    return True
+
+
+def _record_token_usage(org_id: int, tokens_used: int) -> None:
+    """Record actual token usage after an LLM call completes."""
+    key = _budget_key(org_id)
+    _token_usage[key] = _token_usage.get(key, 0) + tokens_used
+    logger.debug(
+        "LLM token usage for org %s: +%d (total today: %d)",
+        org_id, tokens_used, _token_usage[key],
+    )
 
 
 # =============================================================================
@@ -134,6 +190,7 @@ def assign_loan_officer_with_context(
         "priority": ["routing_weight", "availability"],
         "availability": ["calendar_availability", "conflict_check"],
         "load_balanced": ["weekly_appointment_count", "workload_balance"],
+        "ai_enhanced": ["llm_scoring", "availability", "workload_balance"],
     }
 
     candidate_ids = _get_candidate_user_ids(db, org_id, booking_link)
@@ -152,6 +209,19 @@ def assign_loan_officer_with_context(
             return decision
 
     strategy = (strategy or "direct").lower().replace("-", "_")
+
+    # v2-D5-001: Token budget gate — if an LLM-backed strategy is requested
+    # but the org has exceeded its daily token budget, fall back to load_balanced.
+    _LLM_STRATEGIES = {"ai_enhanced"}
+    if strategy in _LLM_STRATEGIES and not _check_token_budget(org_id):
+        logger.error(
+            "LLM token budget exceeded for org %s, falling back from '%s' to 'load_balanced'",
+            org_id, strategy,
+        )
+        strategy = "load_balanced"
+        decision.fallback_used = True
+        decision.fallback_reason = "llm_token_budget_exceeded"
+
     decision.routing_method = strategy
     decision.candidates_evaluated = len(candidate_ids)
     decision.selection_criteria = _STRATEGY_CRITERIA.get(strategy, ["unknown"])
@@ -162,6 +232,8 @@ def assign_loan_officer_with_context(
         "priority": lambda ids: _assign_priority(db, org_id, ids, appointment_time),
         "availability": lambda ids: _assign_availability(db, org_id, ids, appointment_time),
         "load_balanced": lambda ids: _assign_load_balanced(db, org_id, ids),
+        # ai_enhanced falls back to load_balanced until LLM integration is wired in
+        "ai_enhanced": lambda ids: _assign_load_balanced(db, org_id, ids),
     }
 
     strategy_fn = strategy_map.get(strategy)
