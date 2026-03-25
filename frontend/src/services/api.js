@@ -187,10 +187,10 @@ api.interceptors.response.use(
 // Authentication
 export const authAPI = {
   login: async (email, password) => {
-    const formData = new FormData();
-    formData.append('username', email);
-    formData.append('password', password);
-    const response = await axios.post(`${API_BASE_URL}/token`, formData);
+    const response = await axios.post(`${API_BASE_URL}/api/v1/auth/login`, {
+      username: email,
+      password: password,
+    });
     return response.data;
   },
   register: async (data) => {
