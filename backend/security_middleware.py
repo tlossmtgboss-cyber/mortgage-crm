@@ -382,6 +382,7 @@ RATE_LIMIT_TIERS = {
 ENDPOINT_RATE_LIMITS = {
     # Auth endpoints - strict limits to prevent brute force (anonymous: 100/min base)
     "/token": {"multiplier": 0.3, "burst_allowed": 10},              # 30/min, 10 per 10s (accounts for CORS preflight + retries)
+    "/api/v1/auth/login": {"multiplier": 0.3, "burst_allowed": 10},  # Same limits as /token
     "/api/v1/auth/forgot-password": {"multiplier": 0.03, "burst_allowed": 2},  # 3/min
     "/api/v1/auth/reset-password": {"multiplier": 0.05, "burst_allowed": 3},
     "/api/v1/auth/register": {"multiplier": 0.05, "burst_allowed": 2},
@@ -1076,7 +1077,7 @@ class SecurityLoggingMiddleware(BaseHTTPMiddleware):
         client_ip = request.headers.get("X-Forwarded-For", request.client.host)
 
         # Log authentication attempts
-        if request.url.path in ["/token", "/register", "/api/v1/users/login"]:
+        if request.url.path in ["/token", "/api/v1/auth/login", "/register", "/api/v1/users/login"]:
             logger.info(f"Auth attempt from {client_ip}: {request.method} {request.url.path}")
 
         # Log sensitive operations

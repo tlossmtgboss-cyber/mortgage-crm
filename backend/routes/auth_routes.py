@@ -306,12 +306,38 @@ class PushRegisterRequest(BaseModel):
     platform: str = "ios"
 
 
+class LoginRequest(BaseModel):
+    """JSON-based login request (avoids CDN WAF blocking form-encoded credentials)."""
+    username: str  # email address
+    password: str
+
+
 # =============================================================================
 # AUTH ROUTES
 # =============================================================================
 
+
+@router.post("/api/v1/auth/login")
+async def login_json(http_request: Request, login_data: LoginRequest, db: Session = Depends(get_db)):
+    """JSON-based login endpoint — preferred over /token to avoid CDN WAF blocking."""
+
+    # Create a simple namespace so the existing login logic can use .username / .password
+    class _FormCompat:
+        def __init__(self, username: str, password: str):
+            self.username = username
+            self.password = password
+
+    form_data = _FormCompat(login_data.username, login_data.password)
+    return await _login_impl(http_request, form_data, db)
+
+
 @router.post("/token")
 async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    """Form-encoded login endpoint (legacy — may be blocked by CDN WAF)."""
+    return await _login_impl(http_request, form_data, db)
+
+
+async def _login_impl(http_request: Request, form_data, db: Session):
     # Rate limit login attempts
     client_ip = _get_real_client_ip(http_request)
     if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_LOGIN):
