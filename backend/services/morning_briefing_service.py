@@ -432,10 +432,17 @@ class MorningBriefingService:
     # Manager data gathering (Level 2)
     # ------------------------------------------------------------------
 
-    def gather_manager_data(self, db: Session, user_id: int, org_id: int, briefing_date: date) -> Dict:
+    def gather_manager_data(
+        self, db: Session, user_id: int, org_id: int, briefing_date: date,
+        prefs: Optional[BriefingPreferences] = None,
+    ) -> Dict:
         """Gather subordinate roll-up data for manager briefing."""
+        if prefs is None:
+            prefs = BriefingPreferences()
         today = briefing_date
-        three_days = today + timedelta(days=3)
+        lock_cutoff = today + timedelta(days=prefs.thresholds["lock_expiring_days"])
+        at_risk_days = prefs.thresholds["at_risk_days"]
+        lead_days = prefs.thresholds["stale_lead_days"]
 
         try:
             # Get direct reports
@@ -483,11 +490,11 @@ class MorningBriefingService:
                 WHERE loan_officer_id IN ({id_list}) AND organization_id = :oid
                   AND (stage IS NULL OR UPPER(stage) NOT IN ({terminal}))
                   AND (
-                    lock_expiration_date <= :three_days
-                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - stage_changed_at)) / 86400 > 10
+                    lock_expiration_date <= :lock_cutoff
+                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - stage_changed_at)) / 86400 > :at_risk_days
                   )
                 GROUP BY loan_officer_id
-            """), {"oid": org_id, "three_days": three_days}).fetchall()
+            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             risk_map = {r[0]: {"count": r[1], "sla_breach": bool(r[2])} for r in at_risk_counts}
 
@@ -497,9 +504,9 @@ class MorningBriefingService:
                 FROM leads
                 WHERE owner_id IN ({id_list}) AND organization_id = :oid
                   AND last_contact IS NOT NULL
-                  AND last_contact < CURRENT_DATE - INTERVAL '7 days'
+                  AND last_contact < CURRENT_DATE - make_interval(days => :lead_days)
                 GROUP BY owner_id
-            """), {"oid": org_id}).fetchall()
+            """), {"oid": org_id, "lead_days": lead_days}).fetchall()
 
             stale_map = {r[0]: r[1] for r in stale_counts}
 
@@ -534,29 +541,29 @@ class MorningBriefingService:
                 WHERE l.loan_officer_id IN ({id_list}) AND l.organization_id = :oid
                   AND (l.stage IS NULL OR UPPER(l.stage) NOT IN ({terminal}))
                   AND (
-                    l.lock_expiration_date <= :three_days
-                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > 10
+                    l.lock_expiration_date <= :lock_cutoff
+                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > :at_risk_days
                   )
                 ORDER BY
-                    CASE WHEN l.lock_expiration_date <= :three_days THEN 0 ELSE 1 END,
+                    CASE WHEN l.lock_expiration_date <= :lock_cutoff THEN 0 ELSE 1 END,
                     days DESC
                 LIMIT 5
-            """), {"oid": org_id, "three_days": three_days}).fetchall()
+            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             attention_items = []
             for r in attention:
                 lo_name = report_names.get(r[0], "Unknown")
                 issue_parts = []
-                if r[4] and r[4] <= three_days:
+                if r[4] and r[4] <= lock_cutoff:
                     issue_parts.append(f"{r[2] or 'Unknown'} loan lock expires soon")
-                elif float(r[5] or 0) > 10:
+                elif float(r[5] or 0) > at_risk_days:
                     issue_parts.append(f"{r[2] or 'Unknown'} loan stalled {float(r[5]):.0f} days in {r[3]}")
 
                 attention_items.append({
                     "user_name": lo_name,
                     "loan_number": r[1],
                     "issue": "; ".join(issue_parts) if issue_parts else f"{r[2]} loan needs attention",
-                    "severity": "high" if r[4] and r[4] <= three_days else "medium",
+                    "severity": "high" if r[4] and r[4] <= lock_cutoff else "medium",
                 })
 
             return {"members": members, "attention_items": attention_items}
@@ -569,10 +576,16 @@ class MorningBriefingService:
     # Leadership data gathering (Level 3)
     # ------------------------------------------------------------------
 
-    def gather_leadership_data(self, db: Session, org_id: int, briefing_date: date) -> Dict:
+    def gather_leadership_data(
+        self, db: Session, org_id: int, briefing_date: date,
+        prefs: Optional[BriefingPreferences] = None,
+    ) -> Dict:
         """Gather org-wide roll-up for leadership briefing."""
+        if prefs is None:
+            prefs = BriefingPreferences()
         today = briefing_date
-        three_days = today + timedelta(days=3)
+        lock_cutoff = today + timedelta(days=prefs.thresholds["lock_expiring_days"])
+        at_risk_days = prefs.thresholds["at_risk_days"]
         week_ago = today - timedelta(days=7)
         two_weeks_ago = today - timedelta(days=14)
         terminal = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)
@@ -604,8 +617,8 @@ class MorningBriefingService:
                     COUNT(l.id) as loan_count,
                     COALESCE(SUM(l.amount), 0) as volume,
                     AVG(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400) as avg_days,
-                    COUNT(CASE WHEN l.lock_expiration_date <= :three_days
-                        OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > 10
+                    COUNT(CASE WHEN l.lock_expiration_date <= :lock_cutoff
+                        OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > :at_risk_days
                         THEN 1 END) as at_risk
                 FROM loans l
                 JOIN users u ON u.id = l.loan_officer_id
@@ -614,7 +627,7 @@ class MorningBriefingService:
                   AND (l.stage IS NULL OR UPPER(l.stage) NOT IN ({terminal}))
                 GROUP BY b.name
                 ORDER BY volume DESC
-            """), {"oid": org_id, "three_days": three_days}).fetchall()
+            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             branch_list = []
             for r in branches:
@@ -626,7 +639,7 @@ class MorningBriefingService:
                     "volume": float(r[2] or 0),
                     "avg_days_in_stage": round(avg_days, 1),
                     "at_risk_count": at_risk,
-                    "health": self.compute_health(at_risk=at_risk, stale_leads=0, sla_breach=avg_days > 10),
+                    "health": self.compute_health(at_risk=at_risk, stale_leads=0, sla_breach=avg_days > at_risk_days),
                 })
 
             # Top org risks
@@ -643,19 +656,19 @@ class MorningBriefingService:
                 WHERE l.organization_id = :oid
                   AND (l.stage IS NULL OR UPPER(l.stage) NOT IN ({terminal}))
                   AND (
-                    l.lock_expiration_date <= :three_days
-                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > 10
+                    l.lock_expiration_date <= :lock_cutoff
+                    OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - l.stage_changed_at)) / 86400 > :at_risk_days
                   )
                 ORDER BY
-                    CASE WHEN l.lock_expiration_date <= :three_days THEN 0 ELSE 1 END,
+                    CASE WHEN l.lock_expiration_date <= :lock_cutoff THEN 0 ELSE 1 END,
                     days DESC
                 LIMIT 10
-            """), {"oid": org_id, "three_days": three_days}).fetchall()
+            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             risks = []
             for r in top_risks:
                 issue = ""
-                if r[3] and r[3] <= three_days:
+                if r[3] and r[3] <= lock_cutoff:
                     issue = f"Lock expires {r[3].strftime('%m/%d') if hasattr(r[3], 'strftime') else r[3]}"
                 else:
                     issue = f"{float(r[4]):.0f} days in {r[2]}"
@@ -725,11 +738,11 @@ class MorningBriefingService:
 
         # Manager roll-up
         if level == "manager":
-            ctx.team = self.gather_manager_data(db, user_id, org_id, briefing_date)
+            ctx.team = self.gather_manager_data(db, user_id, org_id, briefing_date, prefs)
 
         # Leadership roll-up
         if level == "leadership":
-            ctx.team = self.gather_leadership_data(db, org_id, briefing_date)
+            ctx.team = self.gather_leadership_data(db, org_id, briefing_date, prefs)
 
         return ctx
 
