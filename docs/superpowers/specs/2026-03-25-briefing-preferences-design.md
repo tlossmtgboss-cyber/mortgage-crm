@@ -11,13 +11,18 @@ Let users control what appears in their morning briefing: toggle sections on/off
 - **Team/org sections**: Not toggleable — they're level-gated (manager/leadership only), always shown when applicable
 - **AI tone**: Three options (concise, balanced, detailed) — not freeform
 - **NULL preferences**: Service uses all defaults — zero migration pressure on existing users
+- **PUT semantics**: Full-object replacement (not partial merge). Frontend always sends the complete preferences object. A partial payload will have missing fields filled with Pydantic defaults.
+- **Extra fields**: Pydantic silently ignores unknown keys (default behavior). No `extra = "forbid"`.
+- **`timezone`**: Read-only in this endpoint (managed on User model elsewhere). GET returns it; PUT does not accept it.
 
 ## Data Model
 
 ### New column on User model (`backend/database/models/core.py`)
 
 ```python
-briefing_preferences = Column(JSON, nullable=True)  # NULL = all defaults
+from sqlalchemy.dialects.postgresql import JSONB
+
+briefing_preferences = Column(JSONB, nullable=True)  # NULL = all defaults
 ```
 
 ### Default structure (applied in code when NULL or keys missing)
@@ -83,7 +88,11 @@ class BriefingPreferences:
 
 Reads `user.briefing_preferences` (JSONB), deep-merges with defaults for any missing keys, returns `BriefingPreferences`. If NULL, returns all defaults.
 
-**Modified: `build_context(db, user, briefing_date)` → `build_context(db, user, briefing_date, prefs)`**
+**Modified: `build_context(db, user, briefing_date, prefs=None)`**
+
+`prefs` parameter is optional — if `None`, `build_context` calls `load_preferences(user)` internally. This preserves backward compatibility for existing callers and tests.
+
+The section-toggle logic lives inside `gather_individual_data()`: pass `prefs` through and check each section flag before its query call. This keeps the existing method structure intact.
 
 - Checks `prefs.sections["pipeline"]` before calling `_query_pipeline_snapshot()`
 - Checks `prefs.sections["at_risk"]` before calling `_query_at_risk_loans()`
@@ -91,7 +100,7 @@ Reads `user.briefing_preferences` (JSONB), deep-merges with defaults for any mis
 - Checks `prefs.sections["appointments"]` before calling `_query_todays_appointments()`
 - Checks `prefs.sections["conditions"]` before calling `_query_conditions()`
 - Checks `prefs.sections["yesterday"]` before calling `_query_yesterday_activity()`
-- Disabled sections get empty defaults (empty list or empty dict)
+- Disabled sections get empty defaults (empty list or empty dict) AND are omitted from the AI prompt in `_format_context_for_ai` (check `prefs.sections` before adding each block)
 
 **Modified: query methods accept threshold params**
 
@@ -99,7 +108,7 @@ Replace hardcoded values with parameters sourced from `prefs.thresholds`:
 
 - `_query_at_risk_loans(db, user_id, org_id, lock_days, stage_days, limit)` — uses `lock_expiring_days`, `at_risk_days`, `max_at_risk_items`
 - `_query_stale_leads(db, user_id, org_id, today, lead_days, high_score_days, limit)` — uses `stale_lead_days`, `stale_lead_high_score_days`, `max_stale_lead_items`
-- Manager/leadership queries also use the same thresholds for consistency
+- `gather_manager_data` and `gather_leadership_data` also accept `prefs.thresholds` and parameterize their at-risk/lock-expiring queries (lines ~358-376, ~519-539 in current service). When a manager's own preferences set `lock_expiring_days=7`, their team rollup uses that same threshold.
 
 **Modified: `generate_narrative(ctx, ai_tone)`**
 
@@ -144,7 +153,7 @@ Returns flat `briefing_enabled`, `briefing_hour`, `timezone` plus `sections`, `t
 
 **Modified: `PUT /preferences`**
 
-Accepts `BriefingPreferencesSchema`. Writes `briefing_enabled` and `briefing_hour` to their dedicated columns. Writes `sections`, `thresholds`, `ai_tone` to `user.briefing_preferences` JSONB.
+Accepts `BriefingPreferencesSchema`. Split-write: `briefing_enabled` and `briefing_hour` go to their dedicated User columns (used by Celery dispatch). `sections`, `thresholds`, `ai_tone` go to `user.briefing_preferences` JSONB. Add an inline comment in the route handler documenting this split.
 
 ### Celery task (`backend/tasks/morning_briefing_tasks.py`)
 
@@ -211,7 +220,7 @@ const [prefs, setPrefs] = useState({
 
 **Behavior:**
 - Single "Save Preferences" button saves all fields in one PUT call
-- "Generate Now" button stays — lets users preview changes immediately
+- "Generate Now" button stays — lets users preview changes immediately. It reads persisted preferences from the DB, so the user must save before generating. The "Generate Now" button should be disabled when there are unsaved changes (track dirty state).
 - All sub-sections disabled when `briefing_enabled` is false
 
 ### MorningBriefingCard.js — No changes
