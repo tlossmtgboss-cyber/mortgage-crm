@@ -56,13 +56,13 @@ def dispatch_briefings():
 
         for row in candidates:
             user_id, user_tz, briefing_hour, perm_role, org_id = (
-                row[0], row[1] or "America/New_York", row[2] or 7, row[3] or "sales", row[4],
+                row[0], row[1] or "America/Chicago", row[2] or 7, row[3] or "sales", row[4],
             )
 
             try:
                 tz = ZoneInfo(user_tz)
             except Exception:
-                tz = ZoneInfo("America/New_York")
+                tz = ZoneInfo("America/Chicago")
 
             local_now = now_utc.astimezone(tz)
             local_hour = local_now.hour
@@ -191,9 +191,12 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
                 return {"status": "already_exists"}
             raise
 
+        # Load user preferences (NULL = all defaults)
+        prefs = MorningBriefingService.load_preferences(user)
+
         # Gather data
         service = MorningBriefingService()
-        ctx = service.build_context(db, user, briefing_date)
+        ctx = service.build_context(db, user, briefing_date, prefs)
 
         briefing.briefing_data = {
             "pipeline": ctx.pipeline,
@@ -208,7 +211,7 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
 
         # Generate AI narrative
         ai_start = time.time()
-        narrative = service.generate_narrative(ctx)
+        narrative = service.generate_narrative(ctx, prefs.ai_tone, prefs)
         ai_duration = (time.time() - ai_start) * 1000
         briefing.ai_narrative = narrative
 
