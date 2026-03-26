@@ -390,51 +390,35 @@ async def public_booking_diag(request: Request, db: Session = Depends(get_db)):
         results["step4_err"] = f"{type(e).__name__}: {e}\n{_tb.format_exc()[-500:]}"
         db.rollback()
 
-    # Step 5: Replicate FULL auto-creation flow (creates BookingLink)
+    # Step 5: Test _generate_available_slots queries (same as /slots endpoint)
     try:
-        if isinstance(results.get('step2_user'), dict) and isinstance(results.get('step3_config'), dict) and isinstance(results.get('step4_appt_type'), dict):
-            uid = results['step2_user']['id']
-            oid = results['step2_user']['org_id']
-            tid = results['step4_appt_type']['id']
+        from datetime import date as date_cls, timedelta as td
+        from sqlalchemy import text as sa_text
+        tomorrow = date_cls.today() + td(days=1)
+        while tomorrow.weekday() >= 5:
+            tomorrow += td(days=1)
 
-            existing = db.query(BookingLink).filter(
-                or_(BookingLink.slug == "demo", BookingLink.slug.like("demo-%"))
-            ).first()
-            if existing:
-                results["step5_existing_link"] = {"id": existing.id, "slug": existing.slug}
-                existing.slug = "demo"
-                existing.is_active = True
-                existing.is_public = True
-                existing.appointment_type_ids = [tid]
-                db.commit()
-                results["step5_reactivated"] = True
-            else:
-                new_link = BookingLink(
-                    organization_id=oid, user_id=uid, slug="demo",
-                    link_name="Schedule a Demo",
-                    description="Book a personalized demo of Perennia AI",
-                    is_active=True, is_public=True,
-                    appointment_type_ids=[tid],
-                    custom_title="Schedule Your Demo",
-                    custom_description="See how Perennia AI can transform your mortgage operations."
-                )
-                db.add(new_link)
-                db.commit()
-                results["step5_created"] = True
+        # Check which scheduler tables exist
+        for tbl in ['scheduler_blocked_times', 'scheduler_appointments', 'scheduler_slot_holds',
+                     'recurring_availability', 'availability_exceptions']:
+            try:
+                row = db.execute(sa_text(f"SELECT COUNT(*) FROM {tbl}")).fetchone()
+                results[f"tbl_{tbl}"] = row[0] if row else "exists"
+            except Exception as e:
+                results[f"tbl_{tbl}"] = f"ERROR: {e}"
+                db.rollback()
 
-            # Step 6: Full response build (same as handler post-create)
-            link = db.query(BookingLink).filter(
-                BookingLink.slug == "demo", BookingLink.is_active == True, BookingLink.is_public == True
-            ).first()
-            if link:
-                results["step6_link"] = {"id": link.id, "title": link.custom_title or link.link_name}
-                if link.appointment_type_ids:
-                    types = db.query(AppointmentType).filter(
-                        AppointmentType.id.in_(link.appointment_type_ids), AppointmentType.is_active == True
-                    ).all()
-                    results["step6_types"] = [{"id": t.id, "name": t.type_name} for t in types]
-            else:
-                results["step6_link"] = "demo link not found after create"
+        # Test actual slot generation
+        uid = results.get('step2_user', {}).get('id')
+        oid = results.get('step2_user', {}).get('org_id')
+        if uid and oid:
+            slots = _generate_available_slots(
+                db=db, user_ids=[uid], start_date=tomorrow, end_date=tomorrow,
+                duration_minutes=30, org_id=oid, check_cross_source=False,
+            )
+            results["step5_slots"] = len(slots)
+            if slots:
+                results["step5_first_slot"] = slots[0]
     except Exception as e:
         results["step5_err"] = f"{type(e).__name__}: {e}\n{_tb.format_exc()[-800:]}"
         db.rollback()
