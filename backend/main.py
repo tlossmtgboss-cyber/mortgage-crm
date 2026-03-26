@@ -2038,7 +2038,55 @@ def _run_critical_schema_migrations():
             db.rollback()
             logger.debug(f"retention_days update: {e}")
 
-        # Fix N: Add missing columns to scheduler tables
+        # Fix N: Add missing columns to users table
+        # The User model defines columns that may not exist in the production table,
+        # causing ProgrammingError on any query that SELECTs all User columns.
+        users_columns = [
+            ("manager_id", "INTEGER"),
+            ("briefing_enabled", "BOOLEAN DEFAULT TRUE"),
+            ("briefing_hour", "INTEGER DEFAULT 7"),
+            ("briefing_preferences", "JSONB"),
+            ("email_verified", "BOOLEAN DEFAULT FALSE"),
+            ("onboarding_completed", "BOOLEAN DEFAULT FALSE"),
+            ("user_metadata", "JSON"),
+            ("phone", "VARCHAR(50)"),
+            ("nmls_number", "VARCHAR(50)"),
+            ("business_address", "VARCHAR(500)"),
+            ("current_role", "VARCHAR(100)"),
+            ("business_hours", "JSON"),
+            ("email_verified_at", "TIMESTAMP"),
+            ("phone_verified_at", "TIMESTAMP"),
+            ("slug", "VARCHAR(255)"),
+            ("company_logo_url", "TEXT"),
+            ("headshot_url", "TEXT"),
+            ("title", "TEXT"),
+            ("team_name", "TEXT"),
+            ("nmls_id", "VARCHAR(50)"),
+            ("timezone", "VARCHAR(100) DEFAULT 'America/Chicago'"),
+            ("last_activity_at", "TIMESTAMP"),
+            ("failed_login_attempts", "INTEGER DEFAULT 0"),
+            ("locked_until", "TIMESTAMP"),
+            ("last_failed_login_at", "TIMESTAMP"),
+            ("mfa_secret", "VARCHAR(255)"),
+            ("mfa_enabled", "BOOLEAN DEFAULT FALSE"),
+            ("mfa_backup_codes", "JSON"),
+            ("mfa_enabled_at", "TIMESTAMP"),
+            ("sso_provider", "VARCHAR(50)"),
+            ("sso_subject_id", "VARCHAR(255)"),
+        ]
+        u_added = 0
+        for col_name, col_type in users_columns:
+            try:
+                db.execute(sa_text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                db.commit()
+                u_added += 1
+            except Exception as e:
+                db.rollback()
+                logger.debug(f"users.{col_name} migration: {e}")
+        if u_added:
+            logger.info(f"✅ Ensured {u_added} users columns exist")
+
+        # Fix N+1: Add missing columns to scheduler tables
         # The BookingLink model defines columns (organization_id, etc.) that may not
         # exist in the production table, causing 503 on public booking endpoints.
         scheduler_table_migrations = {
