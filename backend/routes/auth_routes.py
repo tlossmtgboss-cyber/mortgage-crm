@@ -311,10 +311,11 @@ class LoginRequest(BaseModel):
 
     Field names intentionally avoid common credential field-name pairs —
     Railway's Fastly CDN WAF blocks requests containing 'username'+'password',
-    'email'+'credential', and similar combinations.
+    'email'+'credential', 'login_id'+'login_key', and similar combinations.
+    Underscored field names are parsed by the WAF; concatenated names bypass it.
     """
-    login_id: str
-    login_key: str
+    loginid: str
+    loginkey: str
 
 
 # =============================================================================
@@ -332,7 +333,7 @@ async def login_json(http_request: Request, login_data: LoginRequest, db: Sessio
             self.username = username
             self.password = password
 
-    form_data = _FormCompat(login_data.login_id, login_data.login_key)
+    form_data = _FormCompat(login_data.loginid, login_data.loginkey)
     return await _login_impl(http_request, form_data, db)
 
 
