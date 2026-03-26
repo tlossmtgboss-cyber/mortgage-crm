@@ -40,52 +40,39 @@ MANAGER_ROLES = ("management", "branch_manager", "regional_manager")
 
 # Default preferences (applied when user.briefing_preferences is NULL or keys are missing)
 _DEFAULT_SECTIONS = {
-    "pipeline_health": True, "sla_alerts": True, "tasks": True,
-    "lead_activity": True, "rate_watch": True, "team_performance": True,
-}
-# Legacy section keys mapped to new keys for backward compat
-_LEGACY_SECTION_MAP = {
-    "pipeline": "pipeline_health",
-    "at_risk": "sla_alerts",
-    "stale_leads": "lead_activity",
-    "appointments": "tasks",
-    "conditions": "sla_alerts",
-    "yesterday": "pipeline_health",
+    "pipeline": True, "at_risk": True, "stale_leads": True,
+    "appointments": True, "conditions": True, "yesterday": True,
 }
 _DEFAULT_THRESHOLDS = {
-    "sla_warning_days": 3, "stale_lead_days": 7, "rate_change_threshold": 0.125,
+    "at_risk_days": 10, "stale_lead_days": 7, "stale_lead_high_score_days": 3,
+    "lock_expiring_days": 3, "max_at_risk_items": 10, "max_stale_lead_items": 10,
 }
-# Legacy threshold keys mapped to new keys for backward compat
-_LEGACY_THRESHOLD_MAP = {
-    "at_risk_days": "sla_warning_days",
-    "stale_lead_high_score_days": "sla_warning_days",
-    "lock_expiring_days": "sla_warning_days",
-    "max_at_risk_items": None,
-    "max_stale_lead_items": None,
-}
-_DEFAULT_AI_TONE = "concise"
+_DEFAULT_AI_TONE = "balanced"
 
 # ------------------------------------------------------------------
 # Briefing preferences (user-customizable)
 # ------------------------------------------------------------------
 
-VALID_AI_TONES = ("concise", "detailed", "coaching")
+VALID_AI_TONES = ("concise", "balanced", "detailed")
 
 DEFAULT_BRIEFING_PREFERENCES = {
     "sections": {
-        "pipeline_health": True,
-        "sla_alerts": True,
-        "tasks": True,
-        "lead_activity": True,
-        "rate_watch": True,
-        "team_performance": True,
+        "pipeline": True,
+        "at_risk": True,
+        "stale_leads": True,
+        "appointments": True,
+        "conditions": True,
+        "yesterday": True,
     },
     "thresholds": {
-        "sla_warning_days": 3,
+        "at_risk_days": 10,
         "stale_lead_days": 7,
-        "rate_change_threshold": 0.125,
+        "stale_lead_high_score_days": 3,
+        "lock_expiring_days": 3,
+        "max_at_risk_items": 10,
+        "max_stale_lead_items": 10,
     },
-    "ai_tone": "concise",
+    "ai_tone": "balanced",
 }
 
 
@@ -93,48 +80,22 @@ DEFAULT_BRIEFING_PREFERENCES = {
 class BriefingPreferences:
     """Per-user customization for morning briefings."""
     sections: Dict[str, bool] = field(default_factory=lambda: dict(_DEFAULT_SECTIONS))
-    thresholds: Dict[str, Any] = field(default_factory=lambda: dict(_DEFAULT_THRESHOLDS))
-    ai_tone: str = "concise"  # concise, detailed, coaching
+    thresholds: Dict[str, int] = field(default_factory=lambda: dict(_DEFAULT_THRESHOLDS))
+    ai_tone: str = "balanced"  # concise, balanced, detailed
 
     @classmethod
     def load(cls, user: Any) -> "BriefingPreferences":
-        """Load preferences from user.briefing_preferences JSONB, merging with defaults.
-
-        Handles backward compatibility: if legacy section/threshold keys are found
-        they are mapped to new keys.
-        """
+        """Load preferences from user.briefing_preferences JSONB, merging with defaults."""
         raw = getattr(user, "briefing_preferences", None) or {}
 
-        # Start with defaults
         sections = dict(_DEFAULT_SECTIONS)
-        raw_sections = raw.get("sections") or {}
-        # Migrate legacy keys
-        for old_key, new_key in _LEGACY_SECTION_MAP.items():
-            if old_key in raw_sections and new_key not in raw_sections:
-                raw_sections[new_key] = raw_sections[old_key]
-        # Only apply known keys
-        for key in _DEFAULT_SECTIONS:
-            if key in raw_sections and isinstance(raw_sections[key], bool):
-                sections[key] = raw_sections[key]
+        sections.update(raw.get("sections") or {})
 
         thresholds = dict(_DEFAULT_THRESHOLDS)
-        raw_thresholds = raw.get("thresholds") or {}
-        # Migrate legacy keys
-        for old_key, new_key in _LEGACY_THRESHOLD_MAP.items():
-            if old_key in raw_thresholds and new_key and new_key not in raw_thresholds:
-                raw_thresholds[new_key] = raw_thresholds[old_key]
-        # Only apply known keys
-        for key in _DEFAULT_THRESHOLDS:
-            if key in raw_thresholds:
-                val = raw_thresholds[key]
-                if isinstance(val, (int, float)):
-                    thresholds[key] = val
+        thresholds.update(raw.get("thresholds") or {})
 
         tone = raw.get("ai_tone", _DEFAULT_AI_TONE)
-        # Accept legacy "balanced" as "concise"
-        if tone == "balanced":
-            tone = "concise"
-        if tone not in VALID_AI_TONES:
+        if tone not in ("concise", "balanced", "detailed"):
             tone = _DEFAULT_AI_TONE
 
         return cls(sections=sections, thresholds=thresholds, ai_tone=tone)
@@ -198,10 +159,39 @@ class MorningBriefingService:
         Reads user.briefing_preferences (JSONB). Deep-merges with defaults
         for any missing keys. Returns BriefingPreferences with all fields
         populated. If NULL, returns all defaults.
-        Handles backward compatibility with legacy section/threshold keys.
         """
-        # Delegate to the classmethod which already handles legacy migration
-        return BriefingPreferences.load(user)
+        raw = getattr(user, "briefing_preferences", None)
+        if not raw or not isinstance(raw, dict):
+            return BriefingPreferences()
+
+        defaults = deepcopy(DEFAULT_BRIEFING_PREFERENCES)
+
+        # Merge sections — only keep known keys
+        merged_sections = dict(defaults["sections"])
+        raw_sections = raw.get("sections")
+        if isinstance(raw_sections, dict):
+            for key in merged_sections:
+                if key in raw_sections and isinstance(raw_sections[key], bool):
+                    merged_sections[key] = raw_sections[key]
+
+        # Merge thresholds — only keep known keys
+        merged_thresholds = dict(defaults["thresholds"])
+        raw_thresholds = raw.get("thresholds")
+        if isinstance(raw_thresholds, dict):
+            for key in merged_thresholds:
+                if key in raw_thresholds and isinstance(raw_thresholds[key], int):
+                    merged_thresholds[key] = raw_thresholds[key]
+
+        # AI tone — validate against allowed values
+        ai_tone = raw.get("ai_tone", "balanced")
+        if ai_tone not in VALID_AI_TONES:
+            ai_tone = "balanced"
+
+        return BriefingPreferences(
+            sections=merged_sections,
+            thresholds=merged_thresholds,
+            ai_tone=ai_tone,
+        )
 
     # ------------------------------------------------------------------
     # Individual data gathering (Level 1)
@@ -218,29 +208,14 @@ class MorningBriefingService:
         today = briefing_date
         yesterday = today - timedelta(days=1)
         week_ahead = today + timedelta(days=7)
-        # Use new threshold keys with fallbacks for backward compat
-        sla_days = prefs.thresholds.get("sla_warning_days", prefs.thresholds.get("lock_expiring_days", 3))
-        lock_days = today + timedelta(days=sla_days)
-        at_risk_days = prefs.thresholds.get("sla_warning_days", prefs.thresholds.get("at_risk_days", 10))
-        stale_days = prefs.thresholds.get("stale_lead_days", 7)
-        stale_high_days = prefs.thresholds.get("stale_lead_high_score_days", 3)
-        max_at_risk = prefs.thresholds.get("max_at_risk_items", 10)
-        max_stale = prefs.thresholds.get("max_stale_lead_items", 10)
+        lock_days = today + timedelta(days=prefs.thresholds["lock_expiring_days"])
 
-        # Map new section keys to data queries (with fallback to legacy keys)
-        show_pipeline = prefs.sections.get("pipeline_health", prefs.sections.get("pipeline", True))
-        show_at_risk = prefs.sections.get("sla_alerts", prefs.sections.get("at_risk", True))
-        show_stale_leads = prefs.sections.get("lead_activity", prefs.sections.get("stale_leads", True))
-        show_appointments = prefs.sections.get("tasks", prefs.sections.get("appointments", True))
-        show_conditions = prefs.sections.get("sla_alerts", prefs.sections.get("conditions", True))
-        show_yesterday = prefs.sections.get("pipeline_health", prefs.sections.get("yesterday", True))
-
-        pipeline = self._query_pipeline_snapshot(db, user_id, org_id, week_ahead) if show_pipeline else {"active_count": 0, "total_volume": 0, "closing_soon": 0, "by_stage": {}}
-        at_risk = self._query_at_risk_loans(db, user_id, org_id, lock_days, at_risk_days, max_at_risk) if show_at_risk else []
-        stale_leads = self._query_stale_leads(db, user_id, org_id, today, stale_days, stale_high_days, max_stale) if show_stale_leads else []
-        appointments = self._query_todays_appointments(db, user_id, org_id, today, user_tz) if show_appointments else []
-        conditions = self._query_pending_conditions(db, user_id, org_id, today) if show_conditions else []
-        yesterday_activity = self._query_yesterday_activity(db, user_id, org_id, yesterday) if show_yesterday else {"funded": 0, "new_loans": 0, "conversions": 0}
+        pipeline = self._query_pipeline_snapshot(db, user_id, org_id, week_ahead) if prefs.sections.get("pipeline", True) else {"active_count": 0, "total_volume": 0, "closing_soon": 0, "by_stage": {}}
+        at_risk = self._query_at_risk_loans(db, user_id, org_id, lock_days, prefs.thresholds["at_risk_days"], prefs.thresholds["max_at_risk_items"]) if prefs.sections.get("at_risk", True) else []
+        stale_leads = self._query_stale_leads(db, user_id, org_id, today, prefs.thresholds["stale_lead_days"], prefs.thresholds["stale_lead_high_score_days"], prefs.thresholds["max_stale_lead_items"]) if prefs.sections.get("stale_leads", True) else []
+        appointments = self._query_todays_appointments(db, user_id, org_id, today, user_tz) if prefs.sections.get("appointments", True) else []
+        conditions = self._query_pending_conditions(db, user_id, org_id, today) if prefs.sections.get("conditions", True) else []
+        yesterday_activity = self._query_yesterday_activity(db, user_id, org_id, yesterday) if prefs.sections.get("yesterday", True) else {"funded": 0, "new_loans": 0, "conversions": 0}
 
         return {
             "pipeline": pipeline,
@@ -465,9 +440,9 @@ class MorningBriefingService:
         if prefs is None:
             prefs = BriefingPreferences()
         today = briefing_date
-        lock_cutoff = today + timedelta(days=prefs.thresholds.get("sla_warning_days", prefs.thresholds.get("lock_expiring_days", 3)))
-        at_risk_days = prefs.thresholds.get("sla_warning_days", prefs.thresholds.get("at_risk_days", 10))
-        lead_days = prefs.thresholds.get("stale_lead_days", 7)
+        lock_cutoff = today + timedelta(days=prefs.thresholds["lock_expiring_days"])
+        at_risk_days = prefs.thresholds["at_risk_days"]
+        lead_days = prefs.thresholds["stale_lead_days"]
 
         try:
             # Get direct reports
@@ -609,8 +584,8 @@ class MorningBriefingService:
         if prefs is None:
             prefs = BriefingPreferences()
         today = briefing_date
-        lock_cutoff = today + timedelta(days=prefs.thresholds.get("sla_warning_days", prefs.thresholds.get("lock_expiring_days", 3)))
-        at_risk_days = prefs.thresholds.get("sla_warning_days", prefs.thresholds.get("at_risk_days", 10))
+        lock_cutoff = today + timedelta(days=prefs.thresholds["lock_expiring_days"])
+        at_risk_days = prefs.thresholds["at_risk_days"]
         week_ago = today - timedelta(days=7)
         two_weeks_ago = today - timedelta(days=14)
         terminal = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)

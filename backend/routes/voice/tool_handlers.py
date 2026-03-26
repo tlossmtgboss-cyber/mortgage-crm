@@ -505,48 +505,72 @@ async def handle_browser_function_call(
             return {"success": False, "message": "Contact name and phone number are required."}
 
         try:
-            from services.voice_scheduling_workflow_service import VoiceSchedulingWorkflowService
-            from services.scheduling_conversation_service import SchedulingConversationService
+            # Get next 3 available slots to include in the SMS
+            today = datetime.now()
+            available_slots = []
+            for day_offset in range(1, 8):
+                check_date = today + timedelta(days=day_offset)
+                if check_date.weekday() >= 5:
+                    continue
+                date_str = check_date.strftime("%Y-%m-%d")
 
-            # 1. Create persistent workflow (state machine)
-            wf_service = VoiceSchedulingWorkflowService(db)
-            workflow = wf_service.create_workflow(
-                organization_id=organization_id or 0,
-                user_id=user_id or 0,
-                workflow_type="voice_scheduling",
-                contact_name=contact_name,
-                contact_phone=contact_phone,
-                meeting_type=meeting_type,
-                message_context=message_context,
+                # CRIT-2: Tenant-scoped appointment lookup
+                sched_params = {"check_date": date_str}
+                sched_org_filter = ""
+                if organization_id:
+                    sched_org_filter = "AND organization_id = :org_id"
+                    sched_params["org_id"] = organization_id
+                existing = db.execute(text(f"""
+                    SELECT appointment_datetime
+                    FROM appointments
+                    WHERE DATE(appointment_datetime) = :check_date
+                        AND status != 'cancelled'
+                        {sched_org_filter}
+                """), sched_params).fetchall()
+
+                booked_hours = {row.appointment_datetime.hour for row in existing} if existing else set()
+
+                for hour in [10, 14, 11, 15, 9, 13, 16]:
+                    if hour not in booked_hours and len(available_slots) < 3:
+                        slot_dt = check_date.replace(hour=hour, minute=0, second=0)
+                        available_slots.append(slot_dt.strftime("%A %m/%d at %I:%M %p"))
+
+                if len(available_slots) >= 3:
+                    break
+
+            # Build the SMS message
+            context_part = f" to {message_context}" if message_context else ""
+            slots_text = "\n".join(f"  {i+1}. {slot}" for i, slot in enumerate(available_slots))
+            sms_text = (
+                f"Hi {contact_name}, this is from your loan officer's office. "
+                f"We'd like to schedule a quick call{context_part}. "
+                f"Here are some available times:\n{slots_text}\n"
+                f"Reply with a number or suggest another time!"
             )
 
-            # 2. Initiate SMS conversation (fetches real availability, sends SMS, advances state)
-            conv_service = SchedulingConversationService(db)
-            result = conv_service.initiate_scheduling(
-                workflow_id=workflow.id,
-                user_id=user_id or 0,
-                organization_id=organization_id or 0,
-                contact_name=contact_name,
-                contact_phone=contact_phone,
-                meeting_type=meeting_type,
-                message_context=message_context,
+            # Send the SMS via Telnyx
+            from telephony.sms import send_sms as telnyx_send_sms
+            telnyx_api_key = os.getenv("TELNYX_API_KEY")
+            telnyx_from_number = os.getenv("TELNYX_FROM_NUMBER", os.getenv("TELNYX_PHONE_NUMBER", ""))
+            messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
+
+            if not telnyx_api_key or not telnyx_from_number:
+                return {"success": False, "message": "SMS not configured. Missing Telnyx credentials."}
+
+            telnyx_send_sms(
+                to=contact_phone,
+                from_=telnyx_from_number,
+                text=sms_text,
+                messaging_profile_id=messaging_profile_id or None,
+                api_key=telnyx_api_key,
             )
 
-            db.commit()
+            logger.info(f"Scheduling workflow started for {contact_name} at {mask_phone(contact_phone)}")
 
-            if result.get("success"):
-                logger.info(f"Scheduling workflow {workflow.id} started for {contact_name} at {mask_phone(contact_phone)}")
-                return {
-                    "success": True,
-                    "message": (
-                        f"Scheduling workflow started! SMS sent to {contact_name} with "
-                        f"{result.get('slots_offered', 0)} available time slots. "
-                        f"They can reply to pick a time or suggest another."
-                    ),
-                    "workflow_id": workflow.id,
-                }
-            else:
-                return {"success": False, "message": result.get("error", "Failed to initiate scheduling")}
+            return {
+                "success": True,
+                "message": f"Scheduling workflow started! SMS sent to {contact_name} with {len(available_slots)} available time slots. They can reply to pick a time."
+            }
 
         except Exception as e:
             logger.error(f"Error starting scheduling workflow: {e}")
