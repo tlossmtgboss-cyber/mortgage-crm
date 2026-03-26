@@ -2038,6 +2038,74 @@ def _run_critical_schema_migrations():
             db.rollback()
             logger.debug(f"retention_days update: {e}")
 
+        # Fix N: Add missing columns to scheduler tables
+        # The BookingLink model defines columns (organization_id, etc.) that may not
+        # exist in the production table, causing 503 on public booking endpoints.
+        scheduler_table_migrations = {
+            "scheduler_booking_links": [
+                ("organization_id", "INTEGER"),
+                ("user_id", "INTEGER"),
+                ("single_appointment_type_id", "INTEGER"),
+                ("requires_authentication", "BOOLEAN DEFAULT FALSE"),
+                ("password_protected", "BOOLEAN DEFAULT FALSE"),
+                ("password_hash", "VARCHAR(255)"),
+                ("custom_title", "VARCHAR(255)"),
+                ("custom_description", "TEXT"),
+                ("custom_logo_url", "VARCHAR(500)"),
+                ("custom_color", "VARCHAR(20)"),
+                ("max_bookings", "INTEGER"),
+                ("current_bookings", "INTEGER DEFAULT 0"),
+                ("max_per_person", "INTEGER"),
+                ("available_from", "TIMESTAMP"),
+                ("available_until", "TIMESTAMP"),
+                ("routing_strategy", "VARCHAR(50) DEFAULT 'relationship'"),
+                ("assigned_users", "JSONB"),
+                ("view_count", "INTEGER DEFAULT 0"),
+                ("booking_count", "INTEGER DEFAULT 0"),
+                ("last_booked_at", "TIMESTAMP"),
+                ("default_utm_source", "VARCHAR(100)"),
+                ("default_utm_medium", "VARCHAR(100)"),
+                ("default_utm_campaign", "VARCHAR(100)"),
+                ("expires_at", "TIMESTAMP"),
+            ],
+            "scheduler_configs": [
+                ("organization_id", "INTEGER"),
+                ("user_id", "INTEGER"),
+                ("working_hours", "JSONB"),
+                ("min_notice_hours", "INTEGER DEFAULT 2"),
+                ("max_advance_days", "INTEGER DEFAULT 30"),
+                ("buffer_before_minutes", "INTEGER DEFAULT 5"),
+                ("buffer_after_minutes", "INTEGER DEFAULT 5"),
+                ("max_meetings_per_day", "INTEGER DEFAULT 8"),
+            ],
+            "appointment_types": [
+                ("organization_id", "INTEGER"),
+                ("config_id", "INTEGER"),
+                ("type_key", "VARCHAR(100)"),
+                ("allowed_durations", "JSONB"),
+                ("meeting_type", "VARCHAR(50)"),
+                ("default_mode", "VARCHAR(20)"),
+                ("color", "VARCHAR(20)"),
+                ("icon", "VARCHAR(50)"),
+                ("intake_questions", "JSONB"),
+                ("requires_confirmation", "BOOLEAN DEFAULT FALSE"),
+                ("buffer_before_minutes", "INTEGER DEFAULT 5"),
+                ("buffer_after_minutes", "INTEGER DEFAULT 5"),
+            ],
+        }
+        for table_name, columns in scheduler_table_migrations.items():
+            tbl_added = 0
+            for col_name, col_type in columns:
+                try:
+                    db.execute(sa_text(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                    db.commit()
+                    tbl_added += 1
+                except Exception as e:
+                    db.rollback()
+                    logger.debug(f"{table_name}.{col_name} migration: {e}")
+            if tbl_added:
+                logger.info(f"✅ Ensured {tbl_added} {table_name} columns exist")
+
         logger.info("✅ Critical schema migrations complete")
     finally:
         db.close()
