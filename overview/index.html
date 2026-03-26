@@ -804,7 +804,142 @@
   }
 
   /* ==========================================
-     SCENE 8: SYSTEM REVEAL
+     SCENE 8: ARIA MOBILE
+  ========================================== */
+  #mobile {
+    min-height: 120vh; flex-direction: row;
+    gap: 80px; padding: 100px 48px; align-items: center; justify-content: center;
+    background: linear-gradient(180deg, var(--bg-1) 0%, var(--bg-0) 100%);
+  }
+
+  .mobile-text { max-width: 420px; }
+
+  .mobile-phone-frame {
+    width: 320px; flex-shrink: 0;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 36px;
+    padding: 16px;
+    box-shadow: 0 0 60px rgba(77,163,255,0.08), 0 0 120px rgba(77,163,255,0.04);
+    opacity: 0; transform: translateX(-40px) scale(0.97);
+  }
+
+  .mobile-phone-screen {
+    background: var(--bg-0);
+    border-radius: 22px;
+    padding: 20px 16px;
+    min-height: 520px;
+    display: flex; flex-direction: column;
+  }
+
+  .mobile-status-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    font-family: var(--font-mono); font-size: .55rem; letter-spacing: .08em;
+    color: var(--text-dim); padding: 0 4px 12px; margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .mobile-aria-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 20px;
+  }
+  .mobile-aria-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent-blue), rgba(130,210,255,0.6));
+    display: flex; align-items: center; justify-content: center;
+    font-size: .9rem;
+    box-shadow: 0 0 16px rgba(77,163,255,0.3);
+  }
+  .mobile-aria-name {
+    font-family: var(--font-display); font-size: 1.1rem; font-weight: 300;
+    color: var(--text-primary);
+  }
+  .mobile-aria-sub {
+    font-family: var(--font-mono); font-size: .55rem; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--text-dim);
+  }
+
+  .mobile-chat-bubble {
+    padding: 12px 14px; border-radius: 16px; margin-bottom: 10px;
+    font-size: .82rem; line-height: 1.55; max-width: 90%;
+    opacity: 0; transform: translateY(10px);
+    transition: all .5s;
+  }
+  .mobile-chat-bubble.visible { opacity: 1; transform: translateY(0); }
+  .mobile-chat-bubble.aria {
+    background: rgba(77,163,255,0.1);
+    border: 1px solid rgba(77,163,255,0.15);
+    color: var(--text-primary);
+    align-self: flex-start; border-bottom-left-radius: 4px;
+  }
+  .mobile-chat-bubble.user {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+    color: var(--text-secondary);
+    align-self: flex-end; border-bottom-right-radius: 4px;
+  }
+
+  .mobile-action-card {
+    background: var(--glass-bg); border: 1px solid var(--glass-border);
+    border-radius: 14px; padding: 14px; margin-top: 8px; margin-bottom: 10px;
+    opacity: 0; transform: translateY(10px);
+    transition: all .5s;
+  }
+  .mobile-action-card.visible { opacity: 1; transform: translateY(0); }
+  .mobile-action-title {
+    font-family: var(--font-mono); font-size: .6rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--accent-blue); margin-bottom: 8px;
+  }
+  .mobile-action-row {
+    display: flex; justify-content: space-between; font-size: .78rem;
+    padding: 4px 0;
+  }
+  .mobile-action-label { color: var(--text-dim); }
+  .mobile-action-value { color: var(--text-primary); }
+  .mobile-action-value.warn { color: var(--amber); }
+  .mobile-action-value.good { color: var(--green); }
+
+  .mobile-voice-btn {
+    margin-top: auto; padding: 12px; border-radius: 14px;
+    background: linear-gradient(135deg, rgba(77,163,255,0.15), rgba(77,163,255,0.08));
+    border: 1px solid rgba(77,163,255,0.2);
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-family: var(--font-mono); font-size: .65rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--accent-blue); cursor: default;
+    opacity: 0; transform: translateY(10px);
+    transition: all .5s;
+  }
+  .mobile-voice-btn.visible { opacity: 1; transform: translateY(0); }
+  .mobile-voice-btn .voice-pulse {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent-blue); box-shadow: 0 0 12px var(--accent-blue);
+    animation: pulse-dot 2s ease-in-out infinite;
+  }
+
+  .mobile-features {
+    display: flex; flex-direction: column; gap: 14px; margin-top: 24px;
+  }
+  .mobile-feature {
+    display: flex; align-items: flex-start; gap: 12px;
+    opacity: 0; transform: translateY(10px);
+    transition: all .5s;
+  }
+  .mobile-feature.visible { opacity: 1; transform: translateY(0); }
+  .mobile-feature-icon {
+    width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+    background: rgba(77,163,255,0.08);
+    border: 1px solid rgba(77,163,255,0.15);
+    display: flex; align-items: center; justify-content: center;
+    font-size: .8rem; color: var(--accent-blue);
+  }
+  .mobile-feature-text {
+    font-size: .85rem; color: var(--text-primary); font-weight: 400;
+  }
+  .mobile-feature-sub {
+    font-size: .75rem; color: var(--text-dim); margin-top: 2px;
+  }
+
+  /* ==========================================
+     SCENE 9: SYSTEM REVEAL
   ========================================== */
   #system {
     min-height: 100vh; flex-direction: column; align-items: center;
@@ -952,8 +1087,9 @@
   @media (max-width: 900px) {
     nav { padding: 16px 24px; }
     .nav-links { display: none; }
-    #documents, #workflow { flex-direction: column; gap: 48px; }
+    #documents, #workflow, #mobile { flex-direction: column; gap: 48px; }
     .doc-portal-card, .workflow-card { width: 100%; max-width: 480px; }
+    .mobile-phone-frame { width: 100%; max-width: 320px; }
     .command-grid { grid-template-columns: 1fr; }
     .call-layout { flex-direction: column; }
     .call-intelligence-panel { width: 100%; }
@@ -987,7 +1123,7 @@
   }
   .site-footer a:hover { color: var(--text-primary); }
 
-  /* BOOKING LIGHTBOX */
+  /* BOOKING LIGHTBOX — dark cinematic theme matching landing page */
   .booking-overlay {
     position: fixed; inset: 0; z-index: 10000;
     background: rgba(0,0,0,0.78);
@@ -995,94 +1131,244 @@
     display: flex; align-items: center; justify-content: center;
     opacity: 0; visibility: hidden;
     transition: opacity .3s ease, visibility .3s ease;
+    padding: 20px;
   }
   .booking-overlay.active { opacity: 1; visibility: visible; }
   .booking-box {
     position: relative;
-    width: 92vw; max-width: 460px;
+    width: 100%; max-width: 640px;
+    max-height: 92vh; overflow-y: auto;
     background: var(--bg-1);
     border: 1px solid var(--glass-border);
-    border-radius: 20px; overflow: hidden;
+    border-radius: 20px;
     box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 60px rgba(77,163,255,0.06);
     transform: scale(0.93) translateY(16px);
     transition: transform .35s cubic-bezier(0.16,1,0.3,1);
+    font-family: var(--font-body);
+    color: var(--text-primary);
   }
   .booking-overlay.active .booking-box { transform: scale(1) translateY(0); }
-  .booking-header {
+  /* Custom scrollbar for dark theme */
+  .booking-box::-webkit-scrollbar { width: 6px; }
+  .booking-box::-webkit-scrollbar-track { background: transparent; }
+  .booking-box::-webkit-scrollbar-thumb { background: rgba(77,163,255,0.2); border-radius: 3px; }
+  .booking-box-header {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 20px 24px 16px;
-    border-bottom: 1px solid var(--glass-border);
+    padding: 24px 32px 0;
   }
-  .booking-header h3 {
-    font-family: var(--font-display); font-size: 1.1rem; font-weight: 400;
+  .booking-box-header h2 {
+    font-family: var(--font-display); font-size: 1.25rem; font-weight: 400;
     color: var(--text-primary); margin: 0;
   }
   .booking-close {
     background: none; border: none; cursor: pointer;
-    color: var(--text-dim); font-size: 1.4rem; line-height: 1;
-    width: 32px; height: 32px; border-radius: 50%;
+    color: var(--text-dim); font-size: 1.5rem; line-height: 1;
+    width: 36px; height: 36px; border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
     transition: background .2s, color .2s;
   }
   .booking-close:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
-  .booking-body { padding: 24px; }
-  .booking-step { display: none; }
-  .booking-step.active { display: block; }
-  .booking-label {
-    display: block; font-size: .72rem; font-weight: 500;
-    letter-spacing: .1em; text-transform: uppercase;
-    color: var(--text-dim); margin-bottom: 8px;
+  .booking-body { padding: 20px 32px 32px; }
+
+  /* Step indicator */
+  .bk-steps { display: flex; gap: 4px; margin-bottom: 24px; }
+  .bk-step-item {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--text-dim);
   }
-  .booking-input {
-    width: 100%; padding: 12px 16px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid var(--glass-border);
-    border-radius: 10px; color: var(--text-primary);
-    font-family: var(--font-body); font-size: .92rem;
-    outline: none; transition: border-color .2s;
-    margin-bottom: 16px;
+  .bk-step-item.current { color: var(--accent-blue); font-weight: 500; }
+  .bk-step-item.completed { color: var(--green); }
+  .bk-step-num {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600;
+    background: rgba(255,255,255,0.06); color: var(--text-dim);
   }
-  .booking-input:focus { border-color: var(--accent-blue); }
-  .booking-input::placeholder { color: var(--text-dim); }
-  .booking-slots {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
-    margin-bottom: 16px; max-height: 220px; overflow-y: auto;
+  .bk-step-item.current .bk-step-num { background: var(--accent-blue); color: #040508; }
+  .bk-step-item.completed .bk-step-num { background: var(--green); color: #040508; }
+  .bk-step-sep { margin: 0 6px; color: var(--text-dim); font-size: 12px; }
+
+  /* Step visibility */
+  .bk-panel { display: none; }
+  .bk-panel.active { display: block; }
+
+  /* Section labels */
+  .bk-section-title {
+    font-size: 14px; font-weight: 500; color: var(--text-primary); margin: 0 0 12px;
+    letter-spacing: 0.02em;
   }
-  .booking-slot {
-    padding: 10px 8px; text-align: center;
-    background: rgba(255,255,255,0.03);
-    border: 1px solid var(--glass-border);
-    border-radius: 8px; cursor: pointer;
-    font-size: .82rem; color: var(--text-secondary);
-    transition: all .2s;
+  .bk-section-sub {
+    font-size: 13px; color: var(--text-dim); margin: -8px 0 12px;
   }
-  .booking-slot:hover { border-color: rgba(77,163,255,0.3); color: var(--text-primary); }
-  .booking-slot.selected {
+
+  /* Week date picker */
+  .bk-week-picker {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 24px;
+  }
+  .bk-week-nav {
+    width: 38px; height: 38px;
+    border: 1px solid var(--glass-border); border-radius: 50%;
+    background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: all .2s; flex-shrink: 0; color: var(--text-secondary);
+  }
+  .bk-week-nav:hover:not(:disabled) { border-color: var(--accent-blue); color: var(--accent-blue); }
+  .bk-week-nav:disabled { opacity: 0.25; cursor: not-allowed; }
+  .bk-week-nav svg { width: 16px; height: 16px; }
+  .bk-week-dates {
+    display: flex; gap: 8px; flex: 1; justify-content: center;
+  }
+  .bk-date-card {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 12px 8px; border: 2px solid transparent;
+    border-radius: 10px; background: rgba(255,255,255,0.04); cursor: pointer;
+    width: 64px; min-width: 64px; transition: all .2s;
+  }
+  .bk-date-card:hover:not(.disabled) { background: rgba(77,163,255,0.06); border-color: rgba(77,163,255,0.3); }
+  .bk-date-card.selected {
+    background: var(--accent-blue); border-color: var(--accent-blue);
+  }
+  .bk-date-card.selected .bk-day-name,
+  .bk-date-card.selected .bk-day-num,
+  .bk-date-card.selected .bk-month { color: #040508; }
+  .bk-date-card.disabled { opacity: 0.25; cursor: not-allowed; }
+  .bk-date-card.today:not(.selected) { border-color: var(--accent-blue); }
+  .bk-day-name { font-size: 9px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .bk-day-num { font-size: 22px; font-weight: 700; color: var(--text-primary); line-height: 1.2; }
+  .bk-month { font-size: 9px; color: var(--text-dim); text-transform: uppercase; }
+
+  /* Time dropdown */
+  .bk-time-wrap { position: relative; margin-bottom: 20px; }
+  .bk-time-select {
+    width: 100%; padding: 14px 40px 14px 16px;
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    font-size: 15px; color: var(--text-primary);
+    background: rgba(255,255,255,0.04); cursor: pointer;
+    appearance: none; -webkit-appearance: none;
+    font-family: var(--font-body);
+  }
+  .bk-time-select:focus { outline: none; border-color: var(--accent-blue); }
+  .bk-time-select option { background: var(--bg-1); color: var(--text-primary); }
+  .bk-time-arrow {
+    position: absolute; right: 14px; top: 50%; transform: translateY(-50%);
+    width: 18px; height: 18px; color: var(--text-dim); pointer-events: none;
+  }
+
+  /* Meeting mode toggle */
+  .bk-mode-toggle { display: flex; gap: 12px; margin-bottom: 24px; }
+  .bk-mode-btn {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 14px 16px; border: 1px solid var(--glass-border); border-radius: 10px;
+    background: transparent; cursor: pointer; font-size: 14px; color: var(--text-secondary);
+    transition: all .2s; font-family: var(--font-body);
+  }
+  .bk-mode-btn:hover { border-color: rgba(77,163,255,0.3); }
+  .bk-mode-btn.active {
     border-color: var(--accent-blue);
     background: var(--accent-blue-dim);
     color: var(--accent-blue);
   }
-  .booking-btn {
-    width: 100%; padding: 14px;
+  .bk-mode-btn svg { width: 18px; height: 18px; }
+
+  /* Primary button */
+  .bk-primary-btn {
+    width: 100%; padding: 16px;
     background: linear-gradient(135deg, rgba(77,163,255,0.9), rgba(120,200,255,0.8));
     color: #040508; font-family: var(--font-body); font-weight: 500;
-    font-size: .84rem; letter-spacing: .08em; text-transform: uppercase;
+    font-size: 0.9rem; letter-spacing: 0.06em; text-transform: uppercase;
     border: none; border-radius: 12px; cursor: pointer;
     transition: all .3s; box-shadow: 0 8px 32px rgba(77,163,255,0.25);
   }
-  .booking-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 40px rgba(77,163,255,0.35); }
-  .booking-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
-  .booking-msg {
-    text-align: center; padding: 16px 0;
-    font-size: .9rem; color: var(--text-secondary);
+  .bk-primary-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 40px rgba(77,163,255,0.35); }
+  .bk-primary-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* Form fields */
+  .bk-form-row { margin-bottom: 18px; }
+  .bk-form-row label {
+    display: block; font-size: 0.72rem; font-weight: 500; color: var(--text-dim);
+    margin-bottom: 6px; letter-spacing: 0.08em; text-transform: uppercase;
   }
-  .booking-check {
-    width: 48px; height: 48px; margin: 0 auto 16px;
-    border-radius: 50%; background: rgba(61,255,160,0.1);
-    border: 2px solid var(--green);
+  .bk-form-row label .bk-req { color: var(--red); }
+  .bk-form-row input,
+  .bk-form-row textarea {
+    width: 100%; padding: 12px 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    font-size: 14px; color: var(--text-primary);
+    font-family: var(--font-body); transition: border-color .2s;
+    outline: none;
+  }
+  .bk-form-row input:focus,
+  .bk-form-row textarea:focus { border-color: var(--accent-blue); }
+  .bk-form-row input::placeholder,
+  .bk-form-row textarea::placeholder { color: var(--text-dim); }
+  .bk-field-hint { font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+  .bk-field-error { font-size: 12px; color: var(--red); margin-top: 4px; }
+
+  /* Radio group */
+  .bk-radio-group { display: flex; gap: 20px; margin-top: 4px; }
+  .bk-radio-label {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    font-size: 14px; color: var(--text-secondary);
+  }
+  .bk-radio-label input[type="radio"] { width: 17px; height: 17px; accent-color: var(--accent-blue); }
+
+  /* Summary badge */
+  .bk-summary-badge {
+    display: inline-block; padding: 12px 20px;
+    background: rgba(77,163,255,0.08); border: 1px solid rgba(77,163,255,0.15);
+    border-radius: 10px; font-size: 14px; color: var(--accent-blue);
+  }
+
+  /* Error banner */
+  .bk-error {
+    background: rgba(255,107,107,0.1); color: var(--red);
+    border: 1px solid rgba(255,107,107,0.2);
+    padding: 10px 14px; border-radius: 10px;
+    margin-bottom: 16px; font-size: 13px; text-align: center;
+  }
+
+  /* Spinner */
+  .bk-spinner {
+    width: 36px; height: 36px;
+    border: 3px solid rgba(255,255,255,0.06); border-top-color: var(--accent-blue);
+    border-radius: 50%; animation: bk-spin 0.8s linear infinite;
+    margin: 20px auto;
+  }
+  @keyframes bk-spin { to { transform: rotate(360deg); } }
+
+  /* Confirmation */
+  .bk-confirm-icon {
+    width: 60px; height: 60px; margin: 0 auto 16px;
+    background: rgba(61,255,160,0.08); border: 2px solid var(--green);
+    border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.4rem; color: var(--green);
   }
+  .bk-confirm-icon svg { width: 28px; height: 28px; color: var(--green); }
+  .bk-confirm-title { font-family: var(--font-display); font-size: 1.4rem; font-weight: 400; color: var(--text-primary); margin: 0 0 8px; text-align: center; }
+  .bk-confirm-sub { font-size: 14px; color: var(--text-secondary); margin: 0 0 24px; text-align: center; line-height: 1.5; }
+  .bk-appt-summary {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+    border-radius: 12px; padding: 20px; margin-bottom: 24px;
+  }
+  .bk-appt-summary h4 { font-size: 0.72rem; font-weight: 500; color: var(--text-dim); margin: 0 0 14px; letter-spacing: 0.1em; text-transform: uppercase; }
+  .bk-appt-row {
+    display: flex; justify-content: space-between; padding: 8px 0;
+    border-bottom: 1px solid var(--glass-border); font-size: 14px;
+  }
+  .bk-appt-row:last-child { border-bottom: none; }
+  .bk-appt-row .bk-lbl { color: var(--text-dim); }
+  .bk-appt-row .bk-val { color: var(--text-primary); font-weight: 500; }
+
+  /* Footer */
+  .bk-powered {
+    text-align: center; margin-top: 24px; padding-top: 16px;
+    border-top: 1px solid var(--glass-border); font-size: 12px; color: var(--text-dim);
+  }
+  .bk-powered strong { color: var(--accent-blue); }
+
+  /* Loading state for slots */
+  .bk-no-slots { text-align: center; padding: 16px 0; font-size: 13px; color: var(--text-dim); }
 
   /* MOBILE RESPONSIVE */
   @media (max-width: 900px) {
@@ -1093,7 +1379,13 @@
     .nav-right { gap: 8px; }
     .nav-login { font-size: .7rem; padding: 8px 12px; }
     .nav-cta { font-size: .7rem; padding: 8px 16px; }
-    .booking-box { width: 96vw; border-radius: 14px; }
+    .booking-box { max-width: 100%; border-radius: 14px; }
+    .booking-body { padding: 16px 20px 24px; }
+    .booking-box-header { padding: 18px 20px 0; }
+    .bk-date-card { width: 44px; min-width: 44px; padding: 8px 4px; }
+    .bk-day-num { font-size: 17px; }
+    .bk-mode-toggle { flex-direction: column; gap: 8px; }
+    .bk-week-dates { gap: 4px; }
   }
 </style>
 </head>
@@ -1121,6 +1413,7 @@
     <a href="#documents">Documents</a>
     <a href="#call">Intelligence</a>
     <a href="#workflow">Workflow</a>
+    <a href="#mobile">Mobile</a>
   </div>
   <div class="nav-right" style="display:flex;align-items:center;gap:16px;">
     <a href="https://app.perenniaai.com" class="nav-login">Log In</a>
@@ -1612,7 +1905,111 @@
   </div>
 </section>
 
-<!-- SCENE 8: SYSTEM REVEAL -->
+<!-- SCENE 8: ARIA MOBILE -->
+<section id="mobile">
+  <div class="mobile-text section-left">
+    <div class="scene-label">Aria — Intelligent Mobile</div>
+    <h2 class="scene-headline">
+      <span class="line">Your pipeline moves</span>
+      <span class="line">with you.</span>
+    </h2>
+    <p style="margin-top:24px;font-size:.95rem;color:var(--text-secondary);line-height:1.7;opacity:0;transform:translateY(12px)" class="mobile-sub">Aria is the AI voice assistant that lives on your phone. She reads your pipeline, knows your schedule, and handles borrower questions while you're in the field. Talk to her. She talks back.</p>
+
+    <div class="mobile-features">
+      <div class="mobile-feature" id="mf1">
+        <div class="mobile-feature-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+        </div>
+        <div>
+          <div class="mobile-feature-text">Voice-First Interface</div>
+          <div class="mobile-feature-sub">Ask Aria anything about your pipeline. She responds in real time.</div>
+        </div>
+      </div>
+      <div class="mobile-feature" id="mf2">
+        <div class="mobile-feature-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12" y2="18"/></svg>
+        </div>
+        <div>
+          <div class="mobile-feature-text">Push Intelligence</div>
+          <div class="mobile-feature-sub">Rate lock alerts, doc expirations, and SLA deadlines pushed to your pocket.</div>
+        </div>
+      </div>
+      <div class="mobile-feature" id="mf3">
+        <div class="mobile-feature-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6A19.79 19.79 0 012.12 4.18 2 2 0 014.11 2h3"/><polyline points="16 2 22 2 22 8"/><line x1="15" y1="9" x2="22" y2="2"/></svg>
+        </div>
+        <div>
+          <div class="mobile-feature-text">One-Tap Actions</div>
+          <div class="mobile-feature-sub">Call borrowers, request docs, approve conditions — all from the field.</div>
+        </div>
+      </div>
+      <div class="mobile-feature" id="mf4">
+        <div class="mobile-feature-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <div>
+          <div class="mobile-feature-text">Morning Briefing</div>
+          <div class="mobile-feature-sub">Aria summarizes your day before your first coffee. Pipeline health, priorities, risks.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mobile-phone-frame" id="mobilePhone">
+    <div class="mobile-phone-screen">
+      <div class="mobile-status-bar">
+        <span>9:41 AM</span>
+        <span>Perennia AI</span>
+        <span>5G</span>
+      </div>
+
+      <div class="mobile-aria-header">
+        <div class="mobile-aria-avatar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+        </div>
+        <div>
+          <div class="mobile-aria-name">Aria</div>
+          <div class="mobile-aria-sub">Your AI Mortgage Assistant</div>
+        </div>
+      </div>
+
+      <div class="mobile-chat-bubble aria" id="mb1">Good morning, Tim. You have <strong>4 priority items</strong> today. The Jones rate lock expires Friday — that's your most urgent file.</div>
+
+      <div class="mobile-chat-bubble user" id="mb2">What about the Rivera file?</div>
+
+      <div class="mobile-chat-bubble aria" id="mb3">Rivera is in underwriting. VOE came back yesterday — bonus income verified at $22k. One condition remaining: updated bank statement. I've already sent the borrower a secure upload link.</div>
+
+      <div class="mobile-action-card" id="mAction">
+        <div class="mobile-action-title">Rivera — File Status</div>
+        <div class="mobile-action-row">
+          <span class="mobile-action-label">Stage</span>
+          <span class="mobile-action-value">Underwriting</span>
+        </div>
+        <div class="mobile-action-row">
+          <span class="mobile-action-label">Conditions</span>
+          <span class="mobile-action-value warn">1 Remaining</span>
+        </div>
+        <div class="mobile-action-row">
+          <span class="mobile-action-label">VOE</span>
+          <span class="mobile-action-value good">Verified</span>
+        </div>
+        <div class="mobile-action-row">
+          <span class="mobile-action-label">Bank Stmt</span>
+          <span class="mobile-action-value warn">Link Sent</span>
+        </div>
+      </div>
+
+      <div class="mobile-chat-bubble aria" id="mb4">Want me to call Rivera to follow up on the bank statement, or would you prefer to handle that one yourself?</div>
+
+      <div class="mobile-voice-btn" id="mVoice">
+        <div class="voice-pulse"></div>
+        Talk to Aria
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SCENE 9: SYSTEM REVEAL -->
 <section id="system">
   <div class="scene-label" style="text-align:center">The Complete System</div>
   <h2 class="scene-headline" style="text-align:center; max-width:680px">
@@ -1649,42 +2046,127 @@
   <div class="closing-tagline">Perennia AI · The Relationship Operating System for Mortgage Teams</div>
 </section>
 
-<!-- BOOKING LIGHTBOX -->
+<!-- BOOKING LIGHTBOX — mirrors CRM PublicBooking.js -->
 <div class="booking-overlay" id="bookingOverlay">
   <div class="booking-box">
-    <div class="booking-header">
-      <h3 id="bookingTitle">Book a Strategy Session</h3>
+    <div class="booking-box-header">
+      <h2>Book a Strategy Session</h2>
       <button class="booking-close" id="bookingClose" aria-label="Close">&times;</button>
     </div>
     <div class="booking-body">
-      <!-- Step 1: Date -->
-      <div class="booking-step active" id="step1">
-        <label class="booking-label">Select a Date</label>
-        <input type="date" class="booking-input" id="bookDate">
-        <label class="booking-label">Available Times</label>
-        <div class="booking-slots" id="bookSlots">
-          <div class="booking-msg" id="slotsMsg">Pick a date to see times</div>
+      <!-- Step indicator -->
+      <nav class="bk-steps" id="bkSteps" aria-label="Booking progress">
+        <div class="bk-step-item current" data-step="datetime">
+          <span class="bk-step-num">1</span><span>Date &amp; Time</span>
         </div>
-        <button class="booking-btn" id="btnNext1" disabled>Select Time</button>
+        <span class="bk-step-sep">&rsaquo;</span>
+        <div class="bk-step-item" data-step="form">
+          <span class="bk-step-num">2</span><span>Your Details</span>
+        </div>
+        <span class="bk-step-sep">&rsaquo;</span>
+        <div class="bk-step-item" data-step="confirmation">
+          <span class="bk-step-num">3</span><span>Confirmed</span>
+        </div>
+      </nav>
+
+      <div id="bkError" class="bk-error" style="display:none;"></div>
+
+      <!-- STEP 1: Date & Time -->
+      <div class="bk-panel active" id="panelDatetime">
+        <h3 class="bk-section-title">Select a Date</h3>
+
+        <div class="bk-week-picker">
+          <button class="bk-week-nav" id="bkPrevWeek" aria-label="Previous week">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <div class="bk-week-dates" id="bkWeekDates" role="listbox"></div>
+          <button class="bk-week-nav" id="bkNextWeek" aria-label="Next week">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+
+        <h3 class="bk-section-title">Select a Time</h3>
+        <p class="bk-section-sub" id="bkTimeSub">Choose a date first</p>
+        <div class="bk-time-wrap">
+          <select class="bk-time-select" id="bkTimeSelect" disabled aria-label="Select a time">
+            <option value="">-- Select a time --</option>
+          </select>
+          <svg class="bk-time-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+
+        <h3 class="bk-section-title">Meeting Format</h3>
+        <div class="bk-mode-toggle" role="group" aria-label="Meeting format">
+          <button class="bk-mode-btn" data-mode="phone" aria-pressed="false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L8.09 9.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+            Phone Call
+          </button>
+          <button class="bk-mode-btn active" data-mode="video" aria-pressed="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="14" height="14" rx="2"/><path d="M16 10l6-4v12l-6-4"/></svg>
+            Video Call
+          </button>
+        </div>
+
+        <button class="bk-primary-btn" id="bkNextToForm" disabled>Continue</button>
       </div>
-      <!-- Step 2: Details -->
-      <div class="booking-step" id="step2">
-        <label class="booking-label">Your Name</label>
-        <input type="text" class="booking-input" id="bookName" placeholder="Full name">
-        <label class="booking-label">Email</label>
-        <input type="email" class="booking-input" id="bookEmail" placeholder="you@example.com">
-        <label class="booking-label">Phone</label>
-        <input type="tel" class="booking-input" id="bookPhone" placeholder="(555) 123-4567">
-        <label class="booking-label">Notes (optional)</label>
-        <input type="text" class="booking-input" id="bookNotes" placeholder="Anything we should know?">
-        <button class="booking-btn" id="btnConfirm">Confirm Booking</button>
+
+      <!-- STEP 2: Your Details -->
+      <div class="bk-panel" id="panelForm">
+        <div style="text-align:center;margin-bottom:20px;">
+          <div class="bk-summary-badge" id="bkFormSummary"></div>
+        </div>
+
+        <div class="bk-form-row">
+          <label for="bkFirstName">First Name <span class="bk-req">*</span></label>
+          <input type="text" id="bkFirstName" placeholder="Jane">
+        </div>
+        <div class="bk-form-row">
+          <label for="bkLastName">Last Name <span class="bk-req">*</span></label>
+          <input type="text" id="bkLastName" placeholder="Doe">
+        </div>
+        <div class="bk-form-row">
+          <label for="bkEmail">Email <span class="bk-req">*</span></label>
+          <input type="email" id="bkEmail" placeholder="jane@email.com">
+        </div>
+        <div class="bk-form-row">
+          <label for="bkPhone">Phone</label>
+          <input type="tel" id="bkPhone" placeholder="(555) 555-5555">
+          <div class="bk-field-hint">Optional — for appointment reminders</div>
+        </div>
+        <div class="bk-form-row">
+          <label for="bkNotes">Notes</label>
+          <textarea id="bkNotes" rows="3" maxlength="500" placeholder="Anything we should know?"></textarea>
+        </div>
+        <div class="bk-form-row">
+          <label>Are you currently working with a loan officer?</label>
+          <div class="bk-radio-group">
+            <label class="bk-radio-label"><input type="radio" name="bkWorkingLO" value="no"><span>No</span></label>
+            <label class="bk-radio-label"><input type="radio" name="bkWorkingLO" value="yes"><span>Yes</span></label>
+          </div>
+        </div>
+
+        <button class="bk-primary-btn" id="bkSubmit">Schedule Appointment</button>
+
+        <div class="bk-powered">Powered by <strong>Perennia AI</strong></div>
       </div>
-      <!-- Step 3: Confirmation -->
-      <div class="booking-step" id="step3">
-        <div class="booking-check">&#10003;</div>
-        <div class="booking-msg" style="color:var(--text-primary);font-size:1.05rem;font-weight:500;">You're booked!</div>
-        <div class="booking-msg" id="confirmDetails"></div>
-        <button class="booking-btn" style="margin-top:16px;" onclick="closeBooking()">Done</button>
+
+      <!-- STEP 3: Confirmation -->
+      <div class="bk-panel" id="panelConfirmation">
+        <div class="bk-confirm-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+        </div>
+        <h2 class="bk-confirm-title">You're Booked!</h2>
+        <p class="bk-confirm-sub">A confirmation email has been sent. We look forward to speaking with you.</p>
+
+        <div class="bk-appt-summary" id="bkApptSummary">
+          <h4>Appointment Details</h4>
+          <div class="bk-appt-row"><span class="bk-lbl">Date</span><span class="bk-val" id="bkConfDate"></span></div>
+          <div class="bk-appt-row"><span class="bk-lbl">Time</span><span class="bk-val" id="bkConfTime"></span></div>
+          <div class="bk-appt-row"><span class="bk-lbl">Format</span><span class="bk-val" id="bkConfMode"></span></div>
+        </div>
+
+        <button class="bk-primary-btn" onclick="closeBooking()">Done</button>
+
+        <div class="bk-powered">Powered by <strong>Perennia AI</strong></div>
       </div>
     </div>
   </div>
@@ -1902,6 +2384,37 @@ ScrollTrigger.create({
   }
 });
 
+// Aria Mobile scene
+gsap.timeline({
+  scrollTrigger: { trigger: '#mobile', start: 'top 65%', once: true }
+})
+  .to('#mobile .scene-label', { opacity: 1, duration: 0.5 })
+  .to('#mobile .scene-headline .line', { opacity: 1, y: 0, duration: 0.7, stagger: 0.15 }, '-=0.2')
+  .to('.mobile-sub', { opacity: 1, y: 0, duration: 0.7 }, '-=0.2')
+  .to('#mobilePhone', { opacity: 1, x: 0, scale: 1, duration: 1.0, ease: 'power2.out' }, '-=0.4');
+
+ScrollTrigger.create({
+  trigger: '#mobile',
+  start: 'top 60%',
+  once: true,
+  onEnter: () => {
+    // Chat bubbles stagger in
+    ['mb1','mb2','mb3','mAction','mb4','mVoice'].forEach((id, idx) => {
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('visible');
+      }, 600 + idx * 350);
+    });
+    // Feature items stagger in
+    [1,2,3,4].forEach((i, idx) => {
+      setTimeout(() => {
+        const el = document.getElementById('mf' + i);
+        if (el) el.classList.add('visible');
+      }, 1200 + idx * 200);
+    });
+  }
+});
+
 // System orbit scene
 gsap.timeline({
   scrollTrigger: { trigger: '#system', start: 'top 65%', once: true }
@@ -1919,8 +2432,9 @@ const nodes = [
   { name: 'Realtor', role: 'Partner Portal', angle: 0, ring: 250 },
   { name: 'Underwriter', role: 'Risk Engine', angle: 72, ring: 250 },
   { name: 'Call AI', role: 'Intelligence', angle: 144, ring: 250 },
-  { name: 'Workflow', role: 'Engine', angle: 216, ring: 250 },
-  { name: 'Doc Portal', role: 'Smart Docs', angle: 288, ring: 250 },
+  { name: 'Workflow', role: 'Engine', angle: 200, ring: 250 },
+  { name: 'Aria', role: 'Mobile AI', angle: 252, ring: 250 },
+  { name: 'Doc Portal', role: 'Smart Docs', angle: 304, ring: 250 },
 ];
 
 nodes.forEach(node => {
@@ -2001,142 +2515,353 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
 
 <script>
 // ==========================================
-// BOOKING LIGHTBOX — calls Smart Calendar API
+// BOOKING LIGHTBOX — mirrors CRM PublicBooking.js
 // ==========================================
-var API = 'https://api.perenniaai.com/api/v1/scheduler';
-var SLUG = 'demo';
-var overlay = document.getElementById('bookingOverlay');
-var selectedSlot = null;
-var appointmentTypeId = null;
+(function() {
+  var API = 'https://api.perenniaai.com/api/v1/scheduler';
+  var SLUG = 'demo';
+  var overlay = document.getElementById('bookingOverlay');
 
-function openBooking() {
-  overlay.classList.add('active');
-  document.body.style.overflow = 'hidden';
-  // Set min date to today
-  var today = new Date().toISOString().split('T')[0];
-  document.getElementById('bookDate').min = today;
-  document.getElementById('bookDate').value = '';
-  resetSteps();
-  // Fetch booking config to get appointment type ID
-  fetch(API + '/public/book/' + SLUG)
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      if (d.appointment_types && d.appointment_types.length > 0) {
-        appointmentTypeId = d.appointment_types[0].id;
+  // State
+  var appointmentTypeId = null;
+  var durationMinutes = 30;
+  var weekStart = getStartOfWeek(new Date());
+  var selectedDate = null;
+  var selectedTime = null;
+  var meetingMode = 'video';
+  var availableSlots = [];
+  var currentStep = 'datetime'; // datetime, form, confirmation
+
+  // ---- Helpers ----
+  function getStartOfWeek(d) {
+    var day = d.getDay();
+    var diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday start
+    var mon = new Date(d);
+    mon.setDate(diff);
+    mon.setHours(0,0,0,0);
+    return mon;
+  }
+
+  function getWeekDates() {
+    var dates = [];
+    for (var i = 0; i < 7; i++) {
+      var d = new Date(weekStart);
+      d.setDate(weekStart.getDate() + i);
+      dates.push(d);
+    }
+    return dates;
+  }
+
+  function isToday(d) {
+    var now = new Date();
+    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  }
+
+  function isPast(d) {
+    var today = new Date();
+    today.setHours(0,0,0,0);
+    return d < today;
+  }
+
+  function fmtDayName(d) {
+    return d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
+  }
+
+  function fmtMonth(d) {
+    return d.toLocaleDateString('en-US', { month: 'short' }).toUpperCase();
+  }
+
+  function fmtFullDate(d) {
+    return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  }
+
+  function fmtTime(timeStr) {
+    var d = new Date(timeStr);
+    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  }
+
+  function fmtDateParam(d) {
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+
+  function showError(msg) {
+    var el = document.getElementById('bkError');
+    el.textContent = msg;
+    el.style.display = msg ? 'block' : 'none';
+  }
+
+  // ---- Step indicator ----
+  function updateStepIndicator() {
+    var steps = ['datetime', 'form', 'confirmation'];
+    var currentIdx = steps.indexOf(currentStep);
+    document.querySelectorAll('.bk-step-item').forEach(function(el) {
+      var step = el.getAttribute('data-step');
+      var idx = steps.indexOf(step);
+      el.classList.remove('current', 'completed');
+      if (idx < currentIdx) el.classList.add('completed');
+      else if (idx === currentIdx) el.classList.add('current');
+    });
+  }
+
+  function goToStep(step) {
+    currentStep = step;
+    document.querySelectorAll('.bk-panel').forEach(function(p) { p.classList.remove('active'); });
+    if (step === 'datetime') document.getElementById('panelDatetime').classList.add('active');
+    else if (step === 'form') document.getElementById('panelForm').classList.add('active');
+    else if (step === 'confirmation') document.getElementById('panelConfirmation').classList.add('active');
+    updateStepIndicator();
+    showError('');
+  }
+
+  // ---- Week picker rendering ----
+  function renderWeek() {
+    var container = document.getElementById('bkWeekDates');
+    container.innerHTML = '';
+    var dates = getWeekDates();
+    var todayStart = new Date(); todayStart.setHours(0,0,0,0);
+
+    // Disable prev if week contains today
+    var prevBtn = document.getElementById('bkPrevWeek');
+    prevBtn.disabled = weekStart <= todayStart;
+
+    dates.forEach(function(d) {
+      var card = document.createElement('button');
+      card.className = 'bk-date-card';
+      if (isPast(d)) card.classList.add('disabled');
+      if (isToday(d)) card.classList.add('today');
+      if (selectedDate && d.toDateString() === selectedDate.toDateString()) card.classList.add('selected');
+
+      card.innerHTML = '<span class="bk-day-name">' + fmtDayName(d) + '</span>' +
+        '<span class="bk-day-num">' + d.getDate() + '</span>' +
+        '<span class="bk-month">' + fmtMonth(d) + '</span>';
+
+      card.setAttribute('aria-label', d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }));
+
+      if (!isPast(d)) {
+        card.addEventListener('click', function() { selectDate(d); });
       }
-    })
-    .catch(function() {});
-}
+      container.appendChild(card);
+    });
+  }
 
-function closeBooking() {
-  overlay.classList.remove('active');
-  document.body.style.overflow = '';
-}
+  // ---- Date selection → fetch slots ----
+  function selectDate(d) {
+    selectedDate = d;
+    selectedTime = null;
+    availableSlots = [];
+    renderWeek();
+    updateContinueBtn();
 
-function resetSteps() {
-  selectedSlot = null;
-  document.querySelectorAll('.booking-step').forEach(function(s) { s.classList.remove('active'); });
-  document.getElementById('step1').classList.add('active');
-  document.getElementById('bookingTitle').textContent = 'Book a Strategy Session';
-  document.getElementById('bookSlots').innerHTML = '<div class="booking-msg">Pick a date to see times</div>';
-  document.getElementById('btnNext1').disabled = true;
-}
+    var timeSelect = document.getElementById('bkTimeSelect');
+    timeSelect.innerHTML = '<option value="">Loading...</option>';
+    timeSelect.disabled = true;
+    document.getElementById('bkTimeSub').textContent = 'Loading available times...';
 
-// Close handlers
-document.getElementById('bookingClose').addEventListener('click', closeBooking);
-overlay.addEventListener('click', function(e) { if (e.target === overlay) closeBooking(); });
-document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeBooking(); });
+    var url = API + '/public/book/' + SLUG + '/slots?start_date=' + fmtDateParam(d) + '&end_date=' + fmtDateParam(d);
+    if (appointmentTypeId) url += '&appointment_type_id=' + appointmentTypeId;
+    url += '&duration_minutes=' + durationMinutes;
 
-// Date change → fetch slots
-document.getElementById('bookDate').addEventListener('change', function() {
-  var dateVal = this.value;
-  if (!dateVal) return;
-  var slotsEl = document.getElementById('bookSlots');
-  slotsEl.innerHTML = '<div class="booking-msg">Loading...</div>';
-  document.getElementById('btnNext1').disabled = true;
-  selectedSlot = null;
+    fetch(url)
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var slots = data.slots || data.available_slots || data;
+        if (!Array.isArray(slots)) slots = [];
 
-  var url = API + '/public/book/' + SLUG + '/slots?start_date=' + dateVal + '&end_date=' + dateVal;
-  if (appointmentTypeId) url += '&appointment_type_id=' + appointmentTypeId;
+        availableSlots = slots;
+        timeSelect.innerHTML = '';
 
-  fetch(url)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      var slots = data.slots || data;
-      if (!slots || !slots.length) {
-        slotsEl.innerHTML = '<div class="booking-msg">No times available this day</div>';
-        return;
-      }
-      slotsEl.innerHTML = '';
-      slots.forEach(function(slot) {
-        var time = new Date(slot.start_time || slot.start || slot);
-        var label = time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-        var btn = document.createElement('div');
-        btn.className = 'booking-slot';
-        btn.textContent = label;
-        btn.addEventListener('click', function() {
-          document.querySelectorAll('.booking-slot').forEach(function(s) { s.classList.remove('selected'); });
-          btn.classList.add('selected');
-          selectedSlot = slot.start_time || slot.start || slot;
-          document.getElementById('btnNext1').disabled = false;
+        if (slots.length === 0) {
+          timeSelect.innerHTML = '<option value="">No times available</option>';
+          timeSelect.disabled = true;
+          document.getElementById('bkTimeSub').textContent = 'No availability on this date';
+          return;
+        }
+
+        timeSelect.innerHTML = '<option value="">-- Select a time --</option>';
+        slots.forEach(function(slot) {
+          var startTime = slot.start_time || slot.start;
+          var opt = document.createElement('option');
+          opt.value = startTime;
+          opt.textContent = fmtTime(startTime);
+          timeSelect.appendChild(opt);
         });
-        slotsEl.appendChild(btn);
+        timeSelect.disabled = false;
+        document.getElementById('bkTimeSub').textContent = slots.length + ' time' + (slots.length !== 1 ? 's' : '') + ' available';
+      })
+      .catch(function() {
+        timeSelect.innerHTML = '<option value="">Could not load times</option>';
+        timeSelect.disabled = true;
+        document.getElementById('bkTimeSub').textContent = 'Error loading times';
       });
-    })
-    .catch(function() {
-      slotsEl.innerHTML = '<div class="booking-msg">Could not load times</div>';
+  }
+
+  // ---- Time selection ----
+  document.getElementById('bkTimeSelect').addEventListener('change', function() {
+    selectedTime = this.value || null;
+    updateContinueBtn();
+  });
+
+  // ---- Meeting mode toggle ----
+  document.querySelectorAll('.bk-mode-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      meetingMode = btn.getAttribute('data-mode');
+      document.querySelectorAll('.bk-mode-btn').forEach(function(b) {
+        b.classList.remove('active');
+        b.setAttribute('aria-pressed', 'false');
+      });
+      btn.classList.add('active');
+      btn.setAttribute('aria-pressed', 'true');
     });
-});
+  });
 
-// Step 1 → Step 2
-document.getElementById('btnNext1').addEventListener('click', function() {
-  if (!selectedSlot) return;
-  document.getElementById('step1').classList.remove('active');
-  document.getElementById('step2').classList.add('active');
-  document.getElementById('bookingTitle').textContent = 'Your Details';
-});
+  function updateContinueBtn() {
+    document.getElementById('bkNextToForm').disabled = !(selectedDate && selectedTime);
+  }
 
-// Confirm booking
-document.getElementById('btnConfirm').addEventListener('click', function() {
-  var name = document.getElementById('bookName').value.trim();
-  var email = document.getElementById('bookEmail').value.trim();
-  var phone = document.getElementById('bookPhone').value.trim();
-  var notes = document.getElementById('bookNotes').value.trim();
-  if (!name || !email) { alert('Please enter your name and email.'); return; }
+  // ---- Week nav ----
+  document.getElementById('bkPrevWeek').addEventListener('click', function() {
+    var newStart = new Date(weekStart);
+    newStart.setDate(newStart.getDate() - 7);
+    var todayStart = new Date(); todayStart.setHours(0,0,0,0);
+    if (newStart >= getStartOfWeek(todayStart)) {
+      weekStart = newStart;
+      renderWeek();
+    }
+  });
 
-  var btn = document.getElementById('btnConfirm');
-  btn.disabled = true;
-  btn.textContent = 'Booking...';
+  document.getElementById('bkNextWeek').addEventListener('click', function() {
+    weekStart = new Date(weekStart);
+    weekStart.setDate(weekStart.getDate() + 7);
+    renderWeek();
+  });
 
-  fetch(API + '/public/book/' + SLUG + '/confirm', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      appointment_type_id: appointmentTypeId,
-      start_time: selectedSlot,
-      duration_minutes: 30,
-      attendee_name: name,
-      attendee_email: email,
-      attendee_phone: phone,
-      notes: notes
+  // ---- Step 1 → Step 2 ----
+  document.getElementById('bkNextToForm').addEventListener('click', function() {
+    if (!selectedDate || !selectedTime) return;
+    // Show summary badge
+    document.getElementById('bkFormSummary').textContent =
+      fmtFullDate(selectedDate) + ' — ' + fmtTime(selectedTime);
+    goToStep('form');
+  });
+
+  // ---- Step 2: Submit ----
+  document.getElementById('bkSubmit').addEventListener('click', function() {
+    var firstName = document.getElementById('bkFirstName').value.trim();
+    var lastName = document.getElementById('bkLastName').value.trim();
+    var email = document.getElementById('bkEmail').value.trim();
+    var phone = document.getElementById('bkPhone').value.trim();
+    var notes = document.getElementById('bkNotes').value.trim();
+    var workingLO = document.querySelector('input[name="bkWorkingLO"]:checked');
+
+    // Validate
+    if (!firstName) { showError('First name is required'); return; }
+    if (!lastName) { showError('Last name is required'); return; }
+    if (!email || email.indexOf('@') === -1) { showError('A valid email is required'); return; }
+
+    showError('');
+    var btn = document.getElementById('bkSubmit');
+    btn.disabled = true;
+    btn.textContent = 'Scheduling...';
+
+    fetch(API + '/public/book/' + SLUG + '/confirm', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        appointment_type_id: appointmentTypeId,
+        start_time: selectedTime,
+        duration_minutes: durationMinutes,
+        attendee_name: firstName + ' ' + lastName,
+        attendee_email: email,
+        attendee_phone: phone || undefined,
+        notes: notes || undefined,
+        meeting_mode: meetingMode,
+        custom_responses: workingLO ? { working_with_agent: workingLO.value } : undefined
+      })
     })
-  })
-    .then(function(r) { return r.json(); })
-    .then(function(d) {
-      document.getElementById('step2').classList.remove('active');
-      document.getElementById('step3').classList.add('active');
-      document.getElementById('bookingTitle').textContent = 'Confirmed';
-      var dt = new Date(selectedSlot);
-      document.getElementById('confirmDetails').textContent =
-        dt.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) +
-        ' at ' + dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-    })
-    .catch(function() {
-      btn.disabled = false;
-      btn.textContent = 'Confirm Booking';
-      alert('Something went wrong. Please try again.');
+      .then(function(r) {
+        if (!r.ok) throw new Error('Booking failed');
+        return r.json();
+      })
+      .then(function(data) {
+        // Fill confirmation details
+        document.getElementById('bkConfDate').textContent = fmtFullDate(selectedDate);
+        document.getElementById('bkConfTime').textContent = fmtTime(selectedTime);
+        document.getElementById('bkConfMode').textContent = meetingMode === 'video' ? 'Video Call' : 'Phone Call';
+        goToStep('confirmation');
+      })
+      .catch(function(err) {
+        btn.disabled = false;
+        btn.textContent = 'Schedule Appointment';
+        showError('Something went wrong. Please try again.');
+      });
+  });
+
+  // ---- Open / Close ----
+  window.openBooking = function() {
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    // Reset state
+    weekStart = getStartOfWeek(new Date());
+    selectedDate = null;
+    selectedTime = null;
+    meetingMode = 'video';
+    availableSlots = [];
+    appointmentTypeId = null;
+
+    // Reset form
+    document.getElementById('bkFirstName').value = '';
+    document.getElementById('bkLastName').value = '';
+    document.getElementById('bkEmail').value = '';
+    document.getElementById('bkPhone').value = '';
+    document.getElementById('bkNotes').value = '';
+    var radios = document.querySelectorAll('input[name="bkWorkingLO"]');
+    radios.forEach(function(r) { r.checked = false; });
+
+    // Reset mode toggle
+    document.querySelectorAll('.bk-mode-btn').forEach(function(b) {
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed', 'false');
     });
-});
+    document.querySelector('.bk-mode-btn[data-mode="video"]').classList.add('active');
+    document.querySelector('.bk-mode-btn[data-mode="video"]').setAttribute('aria-pressed', 'true');
+
+    // Reset time dropdown
+    document.getElementById('bkTimeSelect').innerHTML = '<option value="">-- Select a time --</option>';
+    document.getElementById('bkTimeSelect').disabled = true;
+    document.getElementById('bkTimeSub').textContent = 'Choose a date first';
+
+    // Reset submit button
+    document.getElementById('bkSubmit').disabled = false;
+    document.getElementById('bkSubmit').textContent = 'Schedule Appointment';
+
+    goToStep('datetime');
+    renderWeek();
+    updateContinueBtn();
+
+    // Fetch booking config
+    fetch(API + '/public/book/' + SLUG)
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        var types = d.appointment_types || (d.booking_page && d.booking_page.appointment_types) || [];
+        if (types.length > 0) {
+          appointmentTypeId = types[0].id;
+          if (types[0].default_duration_minutes) durationMinutes = types[0].default_duration_minutes;
+        }
+      })
+      .catch(function() {});
+  };
+
+  window.closeBooking = function() {
+    overlay.classList.remove('active');
+    document.body.style.overflow = '';
+  };
+
+  // Close handlers
+  document.getElementById('bookingClose').addEventListener('click', closeBooking);
+  overlay.addEventListener('click', function(e) { if (e.target === overlay) closeBooking(); });
+  document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && overlay.classList.contains('active')) closeBooking(); });
+})();
 </script>
 </body>
 </html>

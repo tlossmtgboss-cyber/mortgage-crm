@@ -431,6 +431,7 @@ class CallMonitoringOrchestrator:
         session_id: str,
         trigger: str = 'end_of_call',
         agent_types: Optional[List[str]] = None,
+        on_agent_complete: Optional[Any] = None,
     ) -> Dict[str, Any]:
         """
         Run AI agents on the session transcript.
@@ -495,8 +496,24 @@ class CallMonitoringOrchestrator:
         # Fetch additional context (loan/lead data)
         context = await self._enrich_context(context)
 
-        # Run agents in parallel
-        results = await self._run_agents_parallel(session_id, agents_to_run, context)
+        # P8: Inject per-agent feedback from approval patterns
+        try:
+            from services.call_monitoring.feedback_service import AgentFeedbackService
+            feedback_svc = AgentFeedbackService(self.db, self.organization_id)
+            agent_feedback = {}
+            for agent_type in agents_to_run:
+                prompt_feedback = feedback_svc.generate_feedback_prompt(agent_type)
+                if prompt_feedback:
+                    agent_feedback[agent_type] = prompt_feedback
+            if agent_feedback:
+                context['agent_feedback'] = agent_feedback
+        except Exception as fb_err:
+            logger.warning(f"Failed to load agent feedback (non-blocking): {fb_err}")
+
+        # Run agents in parallel (P4: with progressive streaming callback)
+        results = await self._run_agents_parallel(
+            session_id, agents_to_run, context, on_agent_complete=on_agent_complete
+        )
 
         # Merge artifacts
         merged = self._merge_artifacts(results)
@@ -543,8 +560,9 @@ class CallMonitoringOrchestrator:
         session_id: str,
         agent_types: List[str],
         context: Dict[str, Any],
+        on_agent_complete: Optional[Any] = None,
     ) -> Dict[str, ProcessingResult]:
-        """Run multiple agents in parallel."""
+        """Run multiple agents in parallel with optional progressive streaming (P4)."""
         tasks = []
 
         for agent_type in agent_types:
@@ -564,6 +582,12 @@ class CallMonitoringOrchestrator:
                 )
             else:
                 result_map[agent_type] = results[i]
+                # P4: Invoke on_agent_complete callback for progressive streaming
+                if on_agent_complete and results[i].success:
+                    try:
+                        await on_agent_complete(agent_type, results[i])
+                    except Exception as cb_err:
+                        logger.warning(f"on_agent_complete callback failed for {agent_type}: {cb_err}")
 
         return result_map
 

@@ -243,7 +243,11 @@ async def connect_to_openai_realtime_browser():
                         "properties": {
                             "client_name": {"type": "string", "description": "Name of the person on the call, if known"},
                             "client_phone": {"type": "string", "description": "Phone number of the person, if known"},
-                            "context": {"type": "string", "description": "Brief context like 'rate inquiry' or 'application follow-up'"}
+                            "context": {"type": "string", "description": "Brief context like 'rate inquiry' or 'application follow-up'"},
+                            "call_control_id": {"type": "string", "description": "Telephony call control ID to link CI session to a live call"},
+                            "call_provider": {"type": "string", "description": "Telephony provider (telnyx, twilio, etc.)"},
+                            "call_control_id": {"type": "string", "description": "Telephony call control ID to link CI session to a live call"},
+                            "call_provider": {"type": "string", "description": "Telephony provider (telnyx, twilio, etc.)"}
                         }
                     }
                 },

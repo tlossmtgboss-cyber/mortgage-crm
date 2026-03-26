@@ -29,6 +29,8 @@ class VoiceCIBridgeService:
         context: Optional[str] = None,
         client_name: Optional[str] = None,
         client_phone: Optional[str] = None,
+        telephony_call_id: Optional[str] = None,
+        call_provider: Optional[str] = None,
     ) -> str:
         """Create a new CI session and return session_id."""
         session_id = str(uuid.uuid4())
@@ -39,6 +41,10 @@ class VoiceCIBridgeService:
             metadata["client_name"] = client_name
         if client_phone:
             metadata["client_phone"] = client_phone
+        if telephony_call_id:
+            metadata["telephony_call_id"] = telephony_call_id
+        if call_provider:
+            metadata["call_provider"] = call_provider
         metadata["source"] = "aria_voice_app"
 
         import json
@@ -64,6 +70,59 @@ class VoiceCIBridgeService:
             extra={"session_id": session_id, "org_id": self.organization_id},
         )
         return session_id
+
+    async def append_transcript_chunk(
+        self, session_id: str, chunk_text: str
+    ) -> Dict[str, Any]:
+        """Append a transcript chunk to an active CI session (P2: periodic flush)."""
+        if not session_id or not chunk_text or not chunk_text.strip():
+            return {"success": False, "error": "session_id and non-empty chunk required"}
+        chunk_words = len(chunk_text.split())
+        result = self.db.execute(text("""
+            UPDATE call_sessions
+            SET full_transcript = COALESCE(full_transcript, '') || :chunk,
+                transcript_word_count = COALESCE(transcript_word_count, 0) + :chunk_words,
+                last_flush_at = NOW(), updated_at = NOW()
+            WHERE id = :session_id AND organization_id = :org_id AND status = 'active'
+            RETURNING id
+        """), {
+            "chunk": chr(10) + chunk_text if chunk_text else "",
+            "chunk_words": chunk_words,
+            "session_id": session_id,
+            "org_id": self.organization_id,
+        }).fetchone()
+        self.db.flush()
+        if not result:
+            return {"success": False, "error": f"Active session {session_id} not found"}
+        logger.info("CI transcript chunk appended", extra={"session_id": session_id, "chunk_words": chunk_words})
+        return {"success": True, "session_id": session_id, "chunk_words": chunk_words}
+
+    async def append_transcript_chunk(
+        self, session_id: str, chunk_text: str
+    ) -> Dict[str, Any]:
+        """Append a transcript chunk to an active CI session (P2: periodic flush)."""
+        if not session_id or not chunk_text or not chunk_text.strip():
+            return {"success": False, "error": "session_id and non-empty chunk required"}
+        chunk_words = len(chunk_text.split())
+        newline_prefix = chr(10)  # newline character
+        result = self.db.execute(text("""
+            UPDATE call_sessions
+            SET full_transcript = COALESCE(full_transcript, '') || :chunk,
+                transcript_word_count = COALESCE(transcript_word_count, 0) + :chunk_words,
+                last_flush_at = NOW(), updated_at = NOW()
+            WHERE id = :session_id AND organization_id = :org_id AND status = 'active'
+            RETURNING id
+        """), {
+            "chunk": newline_prefix + chunk_text if chunk_text else "",
+            "chunk_words": chunk_words,
+            "session_id": session_id,
+            "org_id": self.organization_id,
+        }).fetchone()
+        self.db.flush()
+        if not result:
+            return {"success": False, "error": f"Active session {session_id} not found"}
+        logger.info("CI transcript chunk appended", extra={"session_id": session_id, "chunk_words": chunk_words})
+        return {"success": True, "session_id": session_id, "chunk_words": chunk_words}
 
     async def stop_ci_session(
         self, session_id: Optional[str] = None, run_agents: bool = True
@@ -431,7 +490,7 @@ class VoiceCIBridgeService:
 
         for artifact in artifacts:
             try:
-                result = await self._execute_single_artifact(artifact)
+                result = await self._execute_single_artifact(artifact, session_id=session_id)
                 results.append(result)
 
                 self.db.execute(text("""
@@ -550,14 +609,32 @@ class VoiceCIBridgeService:
         }).fetchone()
         return str(row.id) if row else None
 
-    async def _execute_single_artifact(self, artifact) -> Dict[str, Any]:
-        """Execute a single artifact based on its type."""
+    async def _execute_single_artifact(self, artifact, session_id: Optional[str] = None) -> Dict[str, Any]:
+        """Execute a single artifact using SmartTaskExecutor (P5) with fallback."""
+        artifact_type = artifact.artifact_type
+        if artifact_type == "intake_field":
+            try:
+                from services.call_monitoring.intake_field_applier import IntakeFieldApplier
+                applier = IntakeFieldApplier(self.db, self.organization_id)
+                sid = session_id or await self._get_latest_session_id()
+                return await applier.apply_intake_fields(session_id=sid or "", user_id=self.user_id)
+            except Exception as e:
+                logger.error(f"IntakeFieldApplier failed: {e}")
+                return {"type": "intake_field_error", "title": artifact.title, "error": str(e)}
+        try:
+            from services.call_monitoring.smart_task_executor import SmartTaskExecutor
+            executor = SmartTaskExecutor(self.db, self.organization_id, self.user_id)
+            sid = session_id or await self._get_latest_session_id()
+            return await executor.execute_artifact(artifact, sid or "")
+        except Exception as e:
+            logger.warning(f"SmartTaskExecutor failed, using fallback: {e}")
+            return await self._execute_single_artifact_fallback(artifact)
+
+    async def _execute_single_artifact_fallback(self, artifact) -> Dict[str, Any]:
+        """Fallback artifact execution when SmartTaskExecutor is unavailable."""
         artifact_type = artifact.artifact_type
         content = artifact.content if isinstance(artifact.content, dict) else {}
-
         if artifact_type == "action_item":
-            # Create a CRM task
-            import uuid as uuid_mod
             self.db.execute(text("""
                 INSERT INTO tasks (id, title, description, priority, status, created_at, organization_id)
                 VALUES (gen_random_uuid(), :title, :description, :priority, 'pending', NOW(), :org_id)
@@ -568,9 +645,7 @@ class VoiceCIBridgeService:
                 "org_id": self.organization_id,
             })
             return {"type": "task_created", "title": artifact.title}
-
         elif artifact_type == "document_request":
-            # Create a task for the document request
             self.db.execute(text("""
                 INSERT INTO tasks (id, title, description, priority, status, created_at, organization_id)
                 VALUES (gen_random_uuid(), :title, :description, 'high', 'pending', NOW(), :org_id)
@@ -580,9 +655,7 @@ class VoiceCIBridgeService:
                 "org_id": self.organization_id,
             })
             return {"type": "doc_request_task_created", "title": artifact.title}
-
         elif artifact_type in ("scheduled_appointment", "follow_up_call"):
-            # Create an appointment
             self.db.execute(text("""
                 INSERT INTO appointments (id, caller_name, reason, status, created_at, organization_id, notes)
                 VALUES (gen_random_uuid(), :name, :reason, 'scheduled', NOW(), :org_id, :notes)
@@ -593,7 +666,5 @@ class VoiceCIBridgeService:
                 "notes": f"Created from Call Intelligence artifact: {artifact.title}",
             })
             return {"type": "appointment_created", "title": artifact.title}
-
         else:
-            # For other types, just mark as executed (no CRM action)
             return {"type": "marked_complete", "title": artifact.title}

@@ -791,7 +791,8 @@ async def handle_browser_function_call(
             session_uuid = uuid_mod.uuid4()
             now = datetime.now(timezone.utc)
 
-            # Build call_metadata JSONB payload
+            telephony_call_id = args.get("call_control_id", "") or args.get("telephony_call_id", "")
+            call_provider = args.get("call_provider", "")
             call_meta = {}
             if client_name:
                 call_meta["client_name"] = client_name
@@ -799,6 +800,10 @@ async def handle_browser_function_call(
                 call_meta["client_phone"] = client_phone
             if context_note:
                 call_meta["context"] = context_note
+            if telephony_call_id:
+                call_meta["telephony_call_id"] = telephony_call_id
+            if call_provider:
+                call_meta["call_provider"] = call_provider
 
             # Build participants JSONB
             participants = []
