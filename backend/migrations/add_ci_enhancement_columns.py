@@ -19,11 +19,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def run_migration():
+def run_migration(engine=None):
     """Add CI enhancement columns to call_sessions."""
-    from db import get_engine
+    from sqlalchemy import text
 
-    engine = get_engine()
+    if engine is None:
+        from db import engine as _engine
+        engine = _engine
 
     columns = [
         # P7: Link to telephony provider call
@@ -37,10 +39,10 @@ def run_migration():
         for table, column, col_type, default in columns:
             try:
                 default_clause = f" DEFAULT {default}" if default else ""
-                conn.execute(
+                conn.execute(text(
                     f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS "
                     f"{column} {col_type}{default_clause}"
-                )
+                ))
                 logger.info(f"Added column {table}.{column} ({col_type})")
             except Exception as e:
                 if "already exists" in str(e).lower():
@@ -50,22 +52,22 @@ def run_migration():
 
         # Add index on telephony_call_id for fast lookups
         try:
-            conn.execute("""
+            conn.execute(text("""
                 CREATE INDEX IF NOT EXISTS ix_call_sessions_telephony_call_id
                 ON call_sessions (telephony_call_id)
                 WHERE telephony_call_id IS NOT NULL
-            """)
+            """))
             logger.info("Created index ix_call_sessions_telephony_call_id")
         except Exception as e:
             logger.info(f"Index creation note: {e}")
 
         # Add index on call_provider for filtering
         try:
-            conn.execute("""
+            conn.execute(text("""
                 CREATE INDEX IF NOT EXISTS ix_call_sessions_call_provider
                 ON call_sessions (call_provider)
                 WHERE call_provider IS NOT NULL
-            """)
+            """))
             logger.info("Created index ix_call_sessions_call_provider")
         except Exception as e:
             logger.info(f"Index creation note: {e}")

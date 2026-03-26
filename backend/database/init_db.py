@@ -1754,6 +1754,22 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ briefing_preferences migration note: {e}")
 
+        # Add CI enhancement columns (telephony_call_id, call_provider, last_flush_at)
+        try:
+            from migrations.add_ci_enhancement_columns import run_migration as run_ci_enhancements
+            run_ci_enhancements(_engine)
+            logger.info("✅ CI enhancement columns ready")
+        except Exception as e:
+            logger.warning(f"⚠️ CI enhancement migration note: {e}")
+
+        # Create voice_workflows table
+        try:
+            from migrations.add_voice_workflows_table import run_migration as run_voice_workflows
+            run_voice_workflows(_engine)
+            logger.info("✅ voice_workflows table ready")
+        except Exception as e:
+            logger.warning(f"⚠️ voice_workflows migration note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
