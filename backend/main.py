@@ -2125,6 +2125,11 @@ def _run_critical_schema_migrations():
                 ("buffer_before_minutes", "INTEGER DEFAULT 5"),
                 ("buffer_after_minutes", "INTEGER DEFAULT 5"),
                 ("max_meetings_per_day", "INTEGER DEFAULT 8"),
+                ("ai_scheduling_config", "JSON"),
+                ("notification_settings", "JSON"),
+                ("setup_completed", "BOOLEAN DEFAULT FALSE"),
+                ("setup_progress", "JSON"),
+                ("feature_toggles", "JSON"),
             ],
             "appointment_types": [
                 ("organization_id", "INTEGER"),
