@@ -32,6 +32,9 @@ router = APIRouter()
 
 _ws_connections_lock = threading.Lock()
 _ws_connections_by_user: Dict[int, int] = defaultdict(int)
+# NOTE: This counter is process-local. In multi-worker deployments (Railway with >1 worker),
+# each worker tracks independently. For true rate limiting, use Redis-backed counter.
+# TODO: Migrate to Redis-based connection tracking for multi-worker support.
 _ws_connections_total = 0
 
 MAX_WS_PER_USER = 2
@@ -65,23 +68,35 @@ async def browser_voice_websocket(websocket: WebSocket):
     # --- CRIT-1: Authenticate BEFORE accepting the WebSocket ---
     token = websocket.query_params.get("token")
     if not token:
-        await websocket.close(code=4001, reason="Authentication required")
+        try:
+            await websocket.close(code=4001, reason="Authentication required")
+        except RuntimeError:
+            pass  # WebSocket already closed
         return
 
     try:
         from auth.tokens import verify_token
         token_data = verify_token(token)
         if not token_data or not token_data.user_id:
-            await websocket.close(code=4001, reason="Invalid token claims")
+            try:
+                await websocket.close(code=4001, reason="Invalid token claims")
+            except RuntimeError:
+                pass  # WebSocket already closed
             return
         ws_user_id = token_data.user_id
         ws_organization_id = token_data.tenant_id
         if not ws_organization_id:
-            await websocket.close(code=4001, reason="Invalid token claims: missing tenant")
+            try:
+                await websocket.close(code=4001, reason="Invalid token claims: missing tenant")
+            except RuntimeError:
+                pass  # WebSocket already closed
             return
     except Exception as e:
         logger.warning("WebSocket auth failed", extra={"error": str(e)})
-        await websocket.close(code=4001, reason="Authentication failed")
+        try:
+            await websocket.close(code=4001, reason="Authentication failed")
+        except RuntimeError:
+            pass  # WebSocket already closed
         return
 
     # H-12 fix: Rate limit WebSocket connections per user
@@ -89,12 +104,18 @@ async def browser_voice_websocket(websocket: WebSocket):
     with _ws_connections_lock:
         if _ws_connections_total >= MAX_WS_TOTAL:
             logger.warning(f"WebSocket rejected: server at capacity ({_ws_connections_total}/{MAX_WS_TOTAL})")
-            await websocket.close(code=4029, reason="Server at capacity")
+            try:
+                await websocket.close(code=4029, reason="Server at capacity")
+            except RuntimeError:
+                pass  # WebSocket already closed
             return
         user_conn_count = _ws_connections_by_user.get(ws_user_id, 0)
         if user_conn_count >= MAX_WS_PER_USER:
             logger.warning(f"WebSocket rejected: user {ws_user_id} at capacity ({user_conn_count}/{MAX_WS_PER_USER})")
-            await websocket.close(code=4029, reason="Too many connections")
+            try:
+                await websocket.close(code=4029, reason="Too many connections")
+            except RuntimeError:
+                pass  # WebSocket already closed
             return
         _ws_connections_by_user[ws_user_id] = user_conn_count + 1
         _ws_connections_total += 1
@@ -112,10 +133,21 @@ async def browser_voice_websocket(websocket: WebSocket):
                 required_level = tier_hierarchy.get(get_tier("voice_workflows").value, 0)
                 org_level = tier_hierarchy.get(org_tier, 0)
                 if org_level < required_level:
-                    await websocket.close(
-                        code=4003,
-                        reason="This feature requires the 'premium' tier. Contact sales to upgrade.",
-                    )
+                    try:
+                        await websocket.close(
+                            code=4003,
+                            reason="This feature requires the 'premium' tier. Contact sales to upgrade.",
+                        )
+                    except RuntimeError:
+                        pass  # WebSocket already closed
+                    finally:
+                        # MED-6: Ensure rate limiter is always decremented on early return
+                        with _ws_connections_lock:
+                            if ws_user_id in _ws_connections_by_user:
+                                _ws_connections_by_user[ws_user_id] = max(0, _ws_connections_by_user[ws_user_id] - 1)
+                                if _ws_connections_by_user[ws_user_id] == 0:
+                                    del _ws_connections_by_user[ws_user_id]
+                            _ws_connections_total = max(0, _ws_connections_total - 1)
                     return
             finally:
                 _tier_db.close()
@@ -127,6 +159,13 @@ async def browser_voice_websocket(websocket: WebSocket):
         logger.info("Browser voice WebSocket accepted", extra={"user_id": ws_user_id})
     except Exception as e:
         logger.error(f"Failed to accept WebSocket: {e}")
+        # MED-6: Ensure rate limiter is always decremented on early return
+        with _ws_connections_lock:
+            if ws_user_id in _ws_connections_by_user:
+                _ws_connections_by_user[ws_user_id] = max(0, _ws_connections_by_user[ws_user_id] - 1)
+                if _ws_connections_by_user[ws_user_id] == 0:
+                    del _ws_connections_by_user[ws_user_id]
+            _ws_connections_total = max(0, _ws_connections_total - 1)
         return
 
     openai_ws = None
@@ -142,11 +181,13 @@ async def browser_voice_websocket(websocket: WebSocket):
     # Tracks the active Call Intelligence session and accumulates transcript
     # text from OpenAI Realtime speech-to-text events so it can be persisted
     # to call_sessions.full_transcript when recording stops.
+    ci_lock = asyncio.Lock()  # HIGH-3: Protect concurrent access to ci_state transcript_parts
     ci_state = {
         "session_id": None,       # Set when start_call_recording succeeds
         "transcript_parts": [],   # List of (role, text) tuples
         "flushed_index": 0,       # P2: Index of last flushed part
         "flush_task": None,       # P2: Reference to periodic flush task
+        "needs_flush": False,     # HIGH-4: Flag for early flush when buffer exceeds cap
     }
 
     async def _flush_transcript_periodically():
@@ -154,20 +195,22 @@ async def browser_voice_websocket(websocket: WebSocket):
         FLUSH_INTERVAL = 30
         while True:
             await asyncio.sleep(FLUSH_INTERVAL)
-            sid = ci_state.get("session_id")
-            parts = ci_state.get("transcript_parts", [])
-            flushed = ci_state.get("flushed_index", 0)
-            if not sid or flushed >= len(parts):
-                continue
-            new_parts = parts[flushed:]
-            chunk = "
-".join(f"[{role}]: {txt}" for role, txt in new_parts)
+            async with ci_lock:
+                sid = ci_state.get("session_id")
+                parts = ci_state.get("transcript_parts", [])
+                flushed = ci_state.get("flushed_index", 0)
+                needs_flush = ci_state.get("needs_flush", False)
+                if not sid or (flushed >= len(parts) and not needs_flush):
+                    continue
+                new_parts = parts[flushed:]
+                ci_state["flushed_index"] = len(parts)
+                ci_state["needs_flush"] = False
+            chunk = "\n".join(f"[{role}]: {txt}" for role, txt in new_parts)
             try:
                 from services.voice_ci_bridge_service import VoiceCIBridgeService
                 bridge = VoiceCIBridgeService(db, ws_organization_id, ws_user_id)
                 await bridge.append_transcript_chunk(sid, chunk)
                 db.commit()
-                ci_state["flushed_index"] = len(parts)
             except Exception as flush_err:
                 logger.warning(f"Periodic transcript flush failed: {flush_err}")
                 try:
@@ -259,7 +302,12 @@ async def browser_voice_websocket(websocket: WebSocket):
                         })
                         # Accumulate for CI session transcript
                         if ci_state["session_id"] and transcript_text:
-                            ci_state["transcript_parts"].append(("Assistant", transcript_text))
+                            async with ci_lock:
+                                ci_state["transcript_parts"].append(("Assistant", transcript_text))
+                                # HIGH-4: Cap memory at 500 entries
+                                if len(ci_state["transcript_parts"]) > 500:
+                                    logger.warning("Transcript buffer exceeded 500 entries, triggering early flush")
+                                    ci_state["needs_flush"] = True
 
                     elif event_type == 'conversation.item.input_audio_transcription.completed':
                         # User speech transcription complete
@@ -272,7 +320,12 @@ async def browser_voice_websocket(websocket: WebSocket):
                         })
                         # Accumulate for CI session transcript
                         if ci_state["session_id"] and transcript_text:
-                            ci_state["transcript_parts"].append(("User", transcript_text))
+                            async with ci_lock:
+                                ci_state["transcript_parts"].append(("User", transcript_text))
+                                # HIGH-4: Cap memory at 500 entries
+                                if len(ci_state["transcript_parts"]) > 500:
+                                    logger.warning("Transcript buffer exceeded 500 entries, triggering early flush")
+                                    ci_state["needs_flush"] = True
 
                     elif event_type == 'input_audio_buffer.speech_started':
                         await websocket.send_json({
@@ -360,9 +413,11 @@ async def browser_voice_websocket(websocket: WebSocket):
                                     if func_name == "start_call_recording":
                                         ci_session_id = result.get("session_id")
                                         # Track active CI session for transcript accumulation
-                                        ci_state["session_id"] = ci_session_id
-                                        ci_state["transcript_parts"] = []
-                                        ci_state["flushed_index"] = 0
+                                        async with ci_lock:
+                                            ci_state["session_id"] = ci_session_id
+                                            ci_state["transcript_parts"] = []
+                                            ci_state["flushed_index"] = 0
+                                            ci_state["needs_flush"] = False
                                         # P2: Start periodic transcript flush task
                                         if ci_state.get("flush_task") is None:
                                             ci_state["flush_task"] = asyncio.create_task(
@@ -375,13 +430,15 @@ async def browser_voice_websocket(websocket: WebSocket):
                                         })
                                     elif func_name == "stop_call_recording":
                                         # Save accumulated transcript before session closes
-                                        ci_sid = ci_state["session_id"] or result.get("session_id")
-                                        if ci_sid and ci_state["transcript_parts"]:
+                                        async with ci_lock:
+                                            ci_sid = ci_state["session_id"] or result.get("session_id")
+                                            transcript_snapshot = list(ci_state["transcript_parts"])
+                                        if ci_sid and transcript_snapshot:
                                             try:
                                                 from services.voice_ci_bridge_service import VoiceCIBridgeService
                                                 full_text = "\n".join(
                                                     f"[{role}]: {utterance}"
-                                                    for role, utterance in ci_state["transcript_parts"]
+                                                    for role, utterance in transcript_snapshot
                                                 )
                                                 bridge = VoiceCIBridgeService(db, ws_organization_id, ws_user_id)
                                                 save_result = await bridge.update_session_transcript(ci_sid, full_text)
@@ -400,10 +457,12 @@ async def browser_voice_websocket(websocket: WebSocket):
                                         if ci_state.get("flush_task"):
                                             ci_state["flush_task"].cancel()
                                             ci_state["flush_task"] = None
-                                        # Reset CI state
-                                        ci_state["session_id"] = None
-                                        ci_state["transcript_parts"] = []
-                                        ci_state["flushed_index"] = 0
+                                        # Reset CI state under lock
+                                        async with ci_lock:
+                                            ci_state["session_id"] = None
+                                            ci_state["transcript_parts"] = []
+                                            ci_state["flushed_index"] = 0
+                                            ci_state["needs_flush"] = False
                                         await websocket.send_json({
                                             "type": "ci_processing_complete",
                                             "session_id": result.get("session_id"),
@@ -477,26 +536,30 @@ async def browser_voice_websocket(websocket: WebSocket):
             ci_state["flush_task"] = None
 
         # Save any unsaved CI transcript before tearing down
-        if ci_state["session_id"] and ci_state["transcript_parts"]:
+        async with ci_lock:
+            disconnect_sid = ci_state["session_id"]
+            disconnect_parts = list(ci_state["transcript_parts"])
+            ci_state["session_id"] = None
+            ci_state["transcript_parts"] = []
+            ci_state["flushed_index"] = 0
+            ci_state["needs_flush"] = False
+        if disconnect_sid and disconnect_parts:
             try:
                 from services.voice_ci_bridge_service import VoiceCIBridgeService
                 full_text = "\n".join(
                     f"[{role}]: {utterance}"
-                    for role, utterance in ci_state["transcript_parts"]
+                    for role, utterance in disconnect_parts
                 )
                 bridge = VoiceCIBridgeService(db, ws_organization_id, ws_user_id)
-                await bridge.update_session_transcript(ci_state["session_id"], full_text)
+                await bridge.update_session_transcript(disconnect_sid, full_text)
                 db.commit()
-                logger.info(f"CI transcript saved on disconnect for session {ci_state['session_id']}")
+                logger.info(f"CI transcript saved on disconnect for session {disconnect_sid}")
             except Exception as e:
                 logger.error(f"Failed to save CI transcript on disconnect: {e}")
                 try:
                     db.rollback()
                 except Exception:
                     pass
-            ci_state["session_id"] = None
-            ci_state["transcript_parts"] = []
-            ci_state["flushed_index"] = 0
 
         if openai_ws:
             try:

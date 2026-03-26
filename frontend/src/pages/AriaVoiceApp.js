@@ -5,6 +5,7 @@ import { authAPI, aiAPI } from '../services/api';
 import { useDashboard, useTasks, useLeads } from '../hooks/useQueries';
 import { setAuth } from '../utils/auth';
 import { getItem, STORAGE_KEYS } from '../utils/storage';
+import { secureFetch } from '../utils/security';
 import { haptics } from '../services/nativeServices';
 import useVoiceAudio from '../hooks/useVoiceAudio';
 import useVoiceConnection from '../hooks/useVoiceConnection';
@@ -69,13 +70,7 @@ const AriaVoiceApp = () => {
   });
 
   // --- Voice Workflows Hook ---
-  // We need API_BASE_URL — derive it the same way the connection hook does
-  const isLocalDev = typeof window !== 'undefined' && (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1' ||
-    window.location.hostname.startsWith('192.168.')
-  );
-  const API_BASE_URL = isLocalDev ? 'http://192.168.1.240:8000' : 'https://api.perenniaai.com';
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
   const {
     activeWorkflows,
@@ -105,6 +100,10 @@ const AriaVoiceApp = () => {
   // --- Handle CRM actions from voice commands ---
   const handleCRMAction = useCallback(async (action, params) => {
     const token = await getItem(STORAGE_KEYS.TOKEN);
+    if (!token) {
+      console.warn('[Aria] No auth token available');
+      return;
+    }
     const headers = {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
@@ -118,25 +117,25 @@ const AriaVoiceApp = () => {
     try {
       switch (action) {
         case 'send_sms':
-          await fetch(`${API_BASE_URL}/api/v1/communications/sms`, { method: 'POST', headers, body: JSON.stringify(params) });
+          await secureFetch(`${API_BASE_URL}/api/v1/communications/sms`, { method: 'POST', headers, body: JSON.stringify(params) });
           break;
         case 'send_email':
-          await fetch(`${API_BASE_URL}/api/v1/communications/email`, { method: 'POST', headers, body: JSON.stringify(params) });
+          await secureFetch(`${API_BASE_URL}/api/v1/communications/email`, { method: 'POST', headers, body: JSON.stringify(params) });
           break;
         case 'send_preapproval':
-          await fetch(`${API_BASE_URL}/api/v1/leads/${params.lead_id}/pre-approval`, { method: 'POST', headers, body: JSON.stringify(params) });
+          await secureFetch(`${API_BASE_URL}/api/v1/leads/${params.lead_id}/pre-approval`, { method: 'POST', headers, body: JSON.stringify(params) });
           break;
         case 'complete_task':
-          await fetch(`${API_BASE_URL}/api/v1/tasks/${params.task_id}/complete`, { method: 'POST', headers });
+          await secureFetch(`${API_BASE_URL}/api/v1/tasks/${params.task_id}/complete`, { method: 'POST', headers });
           break;
         case 'create_task':
-          await fetch(`${API_BASE_URL}/api/v1/tasks`, { method: 'POST', headers, body: JSON.stringify(params) });
+          await secureFetch(`${API_BASE_URL}/api/v1/tasks`, { method: 'POST', headers, body: JSON.stringify(params) });
           break;
         case 'schedule_appointment':
-          await fetch(`${API_BASE_URL}/api/v1/appointments`, { method: 'POST', headers, body: JSON.stringify(params) });
+          await secureFetch(`${API_BASE_URL}/api/v1/appointments`, { method: 'POST', headers, body: JSON.stringify(params) });
           break;
         case 'start_scheduling_workflow':
-          await fetch(`${API_BASE_URL}/api/v1/voice/workflows`, {
+          await secureFetch(`${API_BASE_URL}/api/v1/voice/workflows`, {
             method: 'POST', headers,
             body: JSON.stringify(params),
           });
@@ -163,7 +162,7 @@ const AriaVoiceApp = () => {
       setConversationHistory(prev => prev.map(m => m.id === actionId ? { ...m, status: 'success' } : m));
       haptics.success();
     } catch (err) {
-      console.error(`[${VOICE_ASSISTANT_CONFIG.name}] Action error:`, err);
+      console.error(`[Aria] Action error: ${err?.message || 'Unknown error'}`);
       setConversationHistory(prev => prev.map(m => m.id === actionId ? { ...m, status: 'error' } : m));
       haptics.error();
     }
@@ -220,13 +219,8 @@ const AriaVoiceApp = () => {
     checkAuth();
   }, []);
 
-  // Auto-attempt biometric login if available and user not authenticated
-  useEffect(() => {
-    if (!isAuthenticated && biometricAvailable && hasStoredCredentials) {
-      handleBiometricLogin();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, biometricAvailable, hasStoredCredentials]);
+  // MED-2: Biometric login requires explicit user tap — no auto-trigger.
+  // The biometric login button is rendered in the login prompt below.
 
   // Auto-scroll conversation
   useEffect(() => {
@@ -320,7 +314,7 @@ const AriaVoiceApp = () => {
         }].slice(-MAX_HISTORY));
       }
     } catch (err) {
-      console.error(`[${VOICE_ASSISTANT_CONFIG.name}] Text error:`, err);
+      console.error(`[Aria] Text error: ${err?.message || 'Unknown error'}`);
       setConversationHistory(prev => [...prev, {
         role: 'assistant',
         content: 'Sorry, I couldn\'t process that. Please try again.',
@@ -351,7 +345,7 @@ const AriaVoiceApp = () => {
       setLoginError('Biometric login failed. Please sign in manually.');
       haptics.warning();
     } catch (err) {
-      console.error('Biometric login error:', err);
+      console.error(`[Aria] Biometric login error: ${err?.message || 'Unknown error'}`);
       setLoginError('Authentication failed. Please sign in manually.');
       haptics.error();
     } finally {
@@ -383,7 +377,10 @@ const AriaVoiceApp = () => {
   };
 
   // --- Workflow Card sub-component ---
+  const VALID_STATES = new Set(['initiated', 'contact_found', 'sms_sent', 'awaiting_reply', 'negotiating', 'time_confirmed', 'appointment_booked', 'completed', 'expired', 'cancelled', 'failed']);
+
   const WorkflowCard = ({ wf }) => {
+    const safeState = VALID_STATES.has(wf.state) ? wf.state : 'unknown';
     const stateLabels = {
       initiated: 'Starting...',
       contact_found: 'Contact found',
@@ -396,12 +393,13 @@ const AriaVoiceApp = () => {
       expired: 'Expired',
       cancelled: 'Cancelled',
       failed: 'Failed',
+      unknown: 'Unknown',
     };
-    const isCancellable = ['initiated', 'contact_found', 'sms_sent', 'awaiting_reply', 'negotiating'].includes(wf.state);
-    const isActive = !['completed', 'expired', 'cancelled', 'failed', 'appointment_booked'].includes(wf.state);
-    const isFailed = wf.state === 'failed';
-    const isExpired = wf.state === 'expired';
-    const isCancelled = wf.state === 'cancelled';
+    const isCancellable = ['initiated', 'contact_found', 'sms_sent', 'awaiting_reply', 'negotiating'].includes(safeState);
+    const isActive = !['completed', 'expired', 'cancelled', 'failed', 'appointment_booked', 'unknown'].includes(safeState);
+    const isFailed = safeState === 'failed';
+    const isExpired = safeState === 'expired';
+    const isCancelled = safeState === 'cancelled';
     const timeDisplay = wf.updated_at ? timeAgo(wf.updated_at) : '';
 
     let stateClass = isActive ? 'aria-workflow--active' : 'aria-workflow--done';
@@ -428,8 +426,8 @@ const AriaVoiceApp = () => {
           <span className="aria-workflow-title">Scheduling with {wf.contact_name}</span>
         </div>
         <div className="aria-workflow-status">
-          <span className={`aria-workflow-state aria-workflow-state--${wf.state}`}>
-            {stateLabels[wf.state] || wf.state}
+          <span className={`aria-workflow-state aria-workflow-state--${safeState}`}>
+            {stateLabels[safeState] || safeState}
           </span>
           {isActive && <span className="aria-workflow-spinner" />}
           {timeDisplay && <span className="aria-workflow-time">{timeDisplay}</span>}

@@ -202,7 +202,7 @@ async def handle_ai_function_call(func_name: str, args: dict, call_context: dict
             })
             db.commit()
 
-            logger.info(f"Message saved: {name} - {message[:50]}...")
+            logger.info(f"Message saved: {name[:1]}*** - [message_len={len(message)}]")
 
             return {
                 "success": True,
@@ -250,7 +250,10 @@ async def handle_browser_function_call(
         )
         return {"success": False, "error": f"Rate limited: too many {func_name} calls. Please wait.", "message": f"Rate limited: too many {func_name} calls. Please wait."}
 
-    logger.info(f"Browser function call: {func_name}({args})", extra={"user_id": user_id, "org_id": organization_id})
+    # Truncate args to prevent PII in logs
+    func_args_str = str(args)
+    safe_args = func_args_str[:100] + "..." if len(func_args_str) > 100 else func_args_str
+    logger.info(f"Browser voice function call: {func_name} (args_len={len(func_args_str)})", extra={"user_id": user_id, "org_id": organization_id})
 
     if func_name == "search_contact":
         name_query = args.get("name", "").strip()
@@ -329,7 +332,7 @@ async def handle_browser_function_call(
                 api_key=telnyx_api_key,
             )
 
-            logger.info(f"SMS sent to {mask_phone(phone_number)} ({contact_name})")
+            logger.info(f"SMS sent to {mask_phone(phone_number)} ({contact_name[:1]}***)" if contact_name else f"SMS sent to {mask_phone(phone_number)}")
 
             return {
                 "success": True,
@@ -436,7 +439,7 @@ async def handle_browser_function_call(
             db.commit()
 
             formatted_time = appointment_datetime.strftime("%A, %B %d at %I:%M %p")
-            logger.info(f"Appointment scheduled: {contact_name} on {formatted_time}")
+            logger.info(f"Appointment scheduled: {contact_name[:1]}*** on {formatted_time}" if contact_name else f"Appointment scheduled on {formatted_time}")
 
             return {
                 "success": True,
@@ -565,7 +568,7 @@ async def handle_browser_function_call(
                 api_key=telnyx_api_key,
             )
 
-            logger.info(f"Scheduling workflow started for {contact_name} at {mask_phone(contact_phone)}")
+            logger.info(f"Scheduling workflow started for {contact_name[:1]}*** at {mask_phone(contact_phone)}" if contact_name else f"Scheduling workflow started at {mask_phone(contact_phone)}")
 
             return {
                 "success": True,
@@ -661,7 +664,7 @@ async def handle_browser_function_call(
                 logger.warning(f"Email sent but failed to log activity: {log_err}")
                 db.rollback()
 
-            logger.info(f"Email sent to {email_to} ({display_name}) subject='{subject}'")
+            logger.info(f"Email sent to {email_to[:3]}***@*** ({display_name[:1]}***) subject='{subject}'")
 
             return {
                 "success": True,
@@ -694,7 +697,7 @@ async def handle_browser_function_call(
                     server.login(smtp_user, smtp_pass)
                     server.send_message(msg)
 
-                logger.info(f"Email sent via SMTP to {email_to} subject='{subject}'")
+                logger.info(f"Email sent via SMTP to {email_to[:3]}***@*** subject='{subject}'")
                 return {
                     "success": True,
                     "message": f"Email sent to {contact_name or email_to} with subject '{subject}'."
@@ -1037,7 +1040,7 @@ async def handle_browser_function_call(
                         )
                         sg.send(mail)
                         sent_channels.append("email")
-                        logger.info(f"Document checklist sent via email to {recipient_email}")
+                        logger.info(f"Document checklist sent via email to {recipient_email[:3]}***@***")
                     else:
                         logger.warning("SendGrid not configured — skipping email delivery for document checklist")
                 except ImportError:

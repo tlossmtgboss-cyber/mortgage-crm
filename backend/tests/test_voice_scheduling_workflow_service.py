@@ -117,6 +117,15 @@ class FakeQuery:
         return self._results
 
 
+class FakeSavepoint:
+    """Mock for SQLAlchemy savepoint (begin_nested)."""
+    def commit(self):
+        pass
+
+    def rollback(self):
+        pass
+
+
 class FakeDB:
     """Mock database session."""
 
@@ -124,9 +133,13 @@ class FakeDB:
         self.added = []
         self.flushed = False
         self._query_results = []
+        self._deleted = []
 
     def add(self, obj):
         self.added.append(obj)
+
+    def delete(self, obj):
+        self._deleted.append(obj)
 
     def flush(self):
         self.flushed = True
@@ -134,6 +147,12 @@ class FakeDB:
         for obj in self.added:
             if hasattr(obj, "id") and obj.id is None:
                 obj.id = 100 + self.added.index(obj)
+
+    def commit(self):
+        pass
+
+    def begin_nested(self):
+        return FakeSavepoint()
 
     def query(self, model_cls):
         return FakeQuery(self._query_results)
@@ -798,7 +817,7 @@ class TestToStatusDict:
         assert result["type"] == "schedule_via_sms"
         assert result["state"] == "negotiating"
         assert result["contact_name"] == "Jane Borrower"
-        assert result["contact_phone"] == "+15551234567"
+        assert result["contact_phone"] == "****4567"
         assert result["meeting_type"] == "discovery_call"
         assert result["turn_count"] == 2
         assert result["max_turns"] == 8

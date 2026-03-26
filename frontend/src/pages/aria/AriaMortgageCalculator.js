@@ -46,6 +46,7 @@ const calculateMonthlyPayment = (principal, annualRate, years) => {
 };
 
 const calculatePMI = (loanAmount, homeValue, creditScore, loanType) => {
+  if (!homeValue || homeValue <= 0) return 0;
   if (loanType === 'va') return 0;
   const ltv = (loanAmount / homeValue) * 100;
   if (loanType === 'conventional' && ltv <= 80) return 0;
@@ -85,6 +86,7 @@ export default function AriaMortgageCalculator() {
     const insurance = homeInsurance / 12;
     const pmi = calculatePMI(loanAmount, homePrice, creditScore, loanType);
     const total = pi + tax + insurance + pmi;
+    if (!isFinite(total)) return null;
     return { pi, tax, insurance, pmi, total, loanAmount };
   }, [loanAmount, homePrice, interestRate, loanTerm, propertyTax, homeInsurance, creditScore, loanType]);
 

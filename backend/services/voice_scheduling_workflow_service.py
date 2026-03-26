@@ -165,6 +165,54 @@ class VoiceSchedulingWorkflowService:
         )
         return result
 
+    def find_active_workflow_by_phone_any_org(self, phone: str) -> Optional["VoiceWorkflow"]:
+        """Fallback: find an active workflow matching a phone WITHOUT tenant filter.
+
+        WARNING: This method searches across ALL organizations. It should ONLY be
+        used when the caller cannot resolve an organization_id from the inbound
+        "to" number (e.g., user_twilio_config table is missing/empty). Prefer
+        find_active_workflow_by_phone() with an explicit organization_id whenever
+        possible.
+
+        The result MUST be used with the workflow's own organization_id for all
+        downstream operations to maintain tenant isolation.
+
+        Args:
+            phone: Normalized phone number of the inbound SMS sender.
+        """
+        from database.models.voice_workflow import VoiceWorkflow, VoiceWorkflowState
+
+        logger.warning(
+            "Cross-org workflow lookup invoked — org resolution failed for inbound number",
+            extra={"contact_phone": _mask_phone(phone)},
+        )
+
+        result = (
+            self.db.query(VoiceWorkflow)
+            .filter(
+                VoiceWorkflow.contact_phone == phone,
+                VoiceWorkflow.state.in_([
+                    VoiceWorkflowState.SMS_SENT.value,
+                    VoiceWorkflowState.AWAITING_REPLY.value,
+                    VoiceWorkflowState.NEGOTIATING.value,
+                ]),
+                VoiceWorkflow.expires_at > datetime.utcnow(),
+            )
+            .order_by(VoiceWorkflow.created_at.desc())
+            .with_for_update(skip_locked=True)
+            .first()
+        )
+        logger.info(
+            "Cross-org workflow lookup completed",
+            extra={
+                "contact_phone": _mask_phone(phone),
+                "found": result is not None,
+                "workflow_id": str(result.id) if result else None,
+                "resolved_org_id": str(result.organization_id) if result else None,
+            },
+        )
+        return result
+
     def get_workflow(self, workflow_id: int, organization_id: int) -> Optional["VoiceWorkflow"]:
         """Get a workflow by ID with tenant isolation."""
         from database.models.voice_workflow import VoiceWorkflow

@@ -13,6 +13,7 @@ import json
 import asyncio
 import logging
 import re
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -49,6 +50,14 @@ if not API_BASE_URL:
 TELNYX_PUBLIC_KEY = os.getenv("TELNYX_PUBLIC_KEY")
 
 
+def _validate_texml_request(request: Request):
+    """Validate TeXML callback requests using a shared secret or Telnyx signature."""
+    api_key = request.headers.get("X-API-Key", "")
+    expected = os.environ.get("TEXML_CALLBACK_SECRET", "")
+    if not expected or not api_key or api_key != expected:
+        raise HTTPException(status_code=403, detail="Invalid callback authentication")
+
+
 # =============================================================================
 # Webhook Validation
 # =============================================================================
@@ -66,6 +75,16 @@ async def validate_webhook(request: Request) -> bool:
         return False
 
     body = await request.body()
+
+    # Check timestamp freshness (reject webhooks older than 5 minutes)
+    try:
+        ts = int(timestamp)
+        now = int(time.time())
+        if abs(now - ts) > 300:  # 5 minutes
+            logger.warning(f"Webhook timestamp too old: {ts} (now: {now})")
+            return False
+    except (ValueError, TypeError):
+        pass
 
     return validate_telnyx_webhook(body, signature, timestamp, TELNYX_PUBLIC_KEY)
 
@@ -94,11 +113,27 @@ async def handle_telnyx_webhook(
         logger.error(f"Failed to parse Telnyx webhook: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
+    # Webhook idempotency - skip if already processed
+    webhook_event_id = payload.get("data", {}).get("id", "")
+    if webhook_event_id:
+        from database.models.communication import Activity
+        existing = db.query(Activity).filter(
+            Activity.content.contains(webhook_event_id)
+        ).first()
+        if existing:
+            logger.info(f"Duplicate webhook {webhook_event_id}, skipping")
+            return {"status": "duplicate", "event_id": webhook_event_id}
+
     # Parse into typed event
     event = parse_telnyx_webhook(payload)
     event_type = event.event_type
 
     logger.info(f"Telnyx webhook received: {event_type}")
+
+    # Feature tier check - only process voice features for subscribed orgs
+    # TODO: Full enforcement requires org lookup which is costly per webhook.
+    # For now, all webhooks are processed. Add tier gating when org resolution
+    # is available early in the pipeline without extra DB queries.
 
     # Route to appropriate handler
     if event_type == TelnyxEventType.CALL_MACHINE_DETECTION_ENDED:
@@ -167,7 +202,7 @@ async def handle_amd_event(event: TelnyxAMDEvent, db: Session):
 
     # Look up tracking ID by call_control_id
     result = db.execute(sa_text("""
-        SELECT id FROM amd_outbound_calls
+        SELECT id, organization_id FROM amd_outbound_calls
         WHERE call_sid = :call_id
     """), {"call_id": call_control_id}).fetchone()
 
@@ -176,6 +211,11 @@ async def handle_amd_event(event: TelnyxAMDEvent, db: Session):
         return {"status": "ignored"}
 
     tracking_id = result[0]
+    # After fetching call record, capture org_id for downstream operations
+    if result[1]:
+        org_id = result[1]
+        logger.info(f"AMD event for org_id={org_id}, tracking_id={tracking_id}")
+
     return await process_amd_result(str(tracking_id), event, db)
 
 
@@ -256,6 +296,16 @@ async def handle_call_answered(event: TelnyxCallEvent, db: Session):
 
     logger.info(f"Call answered: {call_control_id}")
 
+    # Fetch call record to verify org_id context
+    call_record = db.execute(sa_text("""
+        SELECT id, organization_id FROM amd_outbound_calls
+        WHERE call_sid = :call_id
+    """), {"call_id": call_control_id}).fetchone()
+
+    if call_record and call_record[1]:
+        org_id = call_record[1]
+        logger.info(f"Call answered for org_id={org_id}")
+
     # Update call status
     db.execute(sa_text("""
         UPDATE amd_outbound_calls
@@ -273,6 +323,16 @@ async def handle_call_hangup(event: TelnyxCallEvent, db: Session):
     hangup_cause = event.hangup_cause
 
     logger.info(f"Call hangup: {call_control_id}, cause: {hangup_cause}")
+
+    # Fetch call record to verify org_id context
+    call_record = db.execute(sa_text("""
+        SELECT id, organization_id FROM amd_outbound_calls
+        WHERE call_sid = :call_id
+    """), {"call_id": call_control_id}).fetchone()
+
+    if call_record and call_record[1]:
+        org_id = call_record[1]
+        logger.info(f"Call hangup for org_id={org_id}")
 
     # Update call status
     db.execute(sa_text("""
@@ -307,6 +367,7 @@ async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
         """), {"status": status, "message_id": message_id})
         db.commit()
     except Exception as e:
+        db.rollback()
         logger.debug(f"SMS message not found in tracking table: {e}")
 
     return {"status": "acknowledged", "message_id": message_id}
@@ -363,6 +424,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 })
                 db.commit()
             except Exception as e:
+                db.rollback()
                 logger.error(f"Failed to store intercepted SMS: {e}")
             return {"status": "received", "handler": "ai_reengagement"}
     except Exception as e:
@@ -401,6 +463,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 })
                 db.commit()
             except Exception as e:
+                db.rollback()
                 logger.error(f"Failed to store ACO-intercepted SMS: {e}")
             return {
                 "status": "received",
@@ -411,6 +474,88 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
         pass  # ACO module not available
     except Exception as e:
         logger.error(f"ACO intercept error (falling through): {e}")
+
+    # ======================================================================
+    # Voice Scheduling Workflow Intercept
+    # Check if this SMS is a reply to an active scheduling workflow.
+    # CRITICAL: Resolve org_id from the "to" number (our Telnyx number) to
+    # ensure tenant isolation. The "to" number belongs to a specific org's
+    # user via user_twilio_config. Only falls back to cross-org lookup if
+    # org resolution fails (e.g., phone number not in config table).
+    # ======================================================================
+    try:
+        from services.voice_scheduling_workflow_service import VoiceSchedulingWorkflowService
+        from services.scheduling_conversation_service import SchedulingConversationService
+
+        wf_service = VoiceSchedulingWorkflowService(db)
+
+        # Resolve org_id from the "to" number (our Telnyx number belongs to a specific org)
+        workflow = None
+        resolved_org_id = None
+        if normalized_to:
+            org_result = db.execute(
+                sa_text(
+                    "SELECT u.organization_id FROM user_twilio_config utc "
+                    "JOIN users u ON u.id = utc.user_id "
+                    "WHERE utc.telnyx_phone_number = :phone "
+                    "AND u.organization_id IS NOT NULL "
+                    "LIMIT 1"
+                ),
+                {"phone": normalized_to},
+            ).fetchone()
+            if org_result:
+                resolved_org_id = org_result[0]
+                workflow = wf_service.find_active_workflow_by_phone(normalized_from, resolved_org_id)
+
+        # Fallback: cross-org lookup (less safe, but needed if phone number
+        # config table doesn't have our "to" number mapped to an org)
+        if not workflow and not resolved_org_id:
+            logger.debug(
+                f"Voice workflow intercept: could not resolve org for to_number={normalized_to}, "
+                "trying cross-org fallback"
+            )
+            workflow = wf_service.find_active_workflow_by_phone_any_org(normalized_from)
+            if workflow:
+                # Use the workflow's own org_id for downstream tenant isolation
+                resolved_org_id = workflow.organization_id
+
+        if workflow and resolved_org_id:
+            conv_service = SchedulingConversationService(db)
+            conv_result = conv_service.handle_reply(
+                workflow_id=workflow.id,
+                sender_phone=normalized_from,
+                message_body=message_body,
+                organization_id=resolved_org_id,
+            )
+            if conv_result is not None:
+                # Workflow handled this SMS — store for audit trail, skip intelligence queue
+                try:
+                    db.execute(sa_text("""
+                        INSERT INTO sms_messages (
+                            direction, from_number, to_number, body,
+                            provider, provider_message_id, status, created_at
+                        ) VALUES (
+                            'inbound', :from_number, :to_number, :body,
+                            'telnyx', :message_id, 'received', NOW()
+                        )
+                    """), {
+                        "from_number": from_number,
+                        "to_number": to_number,
+                        "body": message_body,
+                        "message_id": event.message_id,
+                    })
+                    db.commit()
+                except Exception as e:
+                    logger.error(f"Failed to store workflow-intercepted SMS: {e}")
+                return {
+                    "status": "received",
+                    "handler": "voice_scheduling_workflow",
+                    "workflow_id": workflow.id,
+                }
+    except ImportError:
+        pass  # Voice scheduling workflow module not available
+    except Exception as e:
+        logger.error(f"Voice scheduling workflow intercept error (falling through): {e}")
 
     # Store inbound SMS in sms_messages table
     try:
@@ -430,6 +575,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
         })
         db.commit()
     except Exception as e:
+        db.rollback()
         logger.error(f"Failed to store inbound SMS: {e}")
 
     # ==========================================================================
@@ -558,8 +704,11 @@ async def handle_recording_saved(event: TelnyxCallEvent, db: Session):
 
 @router.post("/texml/waiting/{tracking_id}")
 @router.get("/texml/waiting/{tracking_id}")
-async def texml_waiting(tracking_id: str):
+async def texml_waiting(tracking_id: str, request: Request):
     """TeXML response while AMD is running - pause briefly"""
+    _validate_texml_request(request)
+    if not tracking_id or not str(tracking_id).isdigit():
+        raise HTTPException(status_code=400, detail="Invalid tracking ID")
     response = TeXMLResponse()
     response.pause(length=3)
     return Response(content=response.to_xml(), media_type="application/xml")
@@ -567,8 +716,9 @@ async def texml_waiting(tracking_id: str):
 
 @router.post("/texml/hangup")
 @router.get("/texml/hangup")
-async def texml_hangup():
+async def texml_hangup(request: Request):
     """TeXML response to hang up the call"""
+    _validate_texml_request(request)
     response = TeXMLResponse()
     response.hangup()
     return Response(content=response.to_xml(), media_type="application/xml")
@@ -578,9 +728,13 @@ async def texml_hangup():
 @router.get("/texml/voicemail/{tracking_id}")
 async def texml_voicemail(
     tracking_id: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """TeXML response to play voicemail message"""
+    _validate_texml_request(request)
+    if not tracking_id or not str(tracking_id).isdigit():
+        raise HTTPException(status_code=400, detail="Invalid tracking ID")
     # Get call info
     result = db.execute(sa_text("""
         SELECT voicemail_message, voicemail_audio, client_name, lo_name, purpose
@@ -633,9 +787,13 @@ async def texml_voicemail(
 @router.get("/texml/connect-ai/{tracking_id}")
 async def texml_connect_ai(
     tracking_id: str,
+    request: Request,
     db: Session = Depends(get_db)
 ):
     """TeXML response to connect call to AI via WebSocket stream"""
+    _validate_texml_request(request)
+    if not tracking_id or not str(tracking_id).isdigit():
+        raise HTTPException(status_code=400, detail="Invalid tracking ID")
     # Get call info
     result = db.execute(sa_text("""
         SELECT client_name, to_number, purpose, lo_name

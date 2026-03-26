@@ -17,7 +17,7 @@ const config: CapacitorConfig = {
   },
   ios: {
     contentInset: 'automatic',
-    allowsLinkPreview: true,
+    allowsLinkPreview: false,
   }
 };
 

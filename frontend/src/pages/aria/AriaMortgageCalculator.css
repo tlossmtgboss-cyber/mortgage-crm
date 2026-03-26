@@ -15,8 +15,8 @@
 }
 
 .aria-calc-back {
-  width: 40px;
-  height: 40px;
+  min-width: 44px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -377,6 +377,17 @@
   height: 1px;
   background: #e5e7eb;
   margin: 4px 0;
+}
+
+/* Accessibility: focus-visible indicators */
+.aria-calc-back:focus-visible,
+.aria-calc-toggle:focus-visible,
+.aria-calc-select:focus-visible,
+.aria-calc-info-link:focus-visible,
+.aria-calc-submit:focus-visible,
+.aria-calc-slider:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 2px;
 }
 
 /* Accessibility: reduced motion */

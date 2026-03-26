@@ -153,7 +153,14 @@ class SchedulingConversationService:
         )
 
         # Get LO's available slots
-        slots = self._get_available_slots(user_id, organization_id, duration_minutes)
+        try:
+            slots = self._get_available_slots(user_id, organization_id, duration_minutes)
+        except Exception as e:
+            logger.error(
+                "Slot lookup failed during scheduling initiation",
+                extra={"workflow_id": workflow_id, "organization_id": organization_id, "error": str(e)},
+            )
+            return {"success": False, "error": "Unable to check availability right now. Please try again later."}
         if not slots:
             logger.warning(
                 "No available slots found for scheduling",
@@ -433,8 +440,10 @@ class SchedulingConversationService:
             logger.error(
                 "Failed to get available slots",
                 extra={"user_id": user_id, "organization_id": org_id, "error": str(e)},
+                exc_info=True,
             )
-            return []
+            # Re-raise so callers can distinguish "no slots" from "service error"
+            raise
 
     def _format_slots_for_sms(self, slots: List[Dict]) -> str:
         """Format time slots into human-readable SMS text."""
@@ -648,6 +657,17 @@ Return ONLY valid JSON:
                         return future.result(timeout=30)  # Wait up to 30s for booking
                 else:
                     return asyncio.run(create_appointment(**_build_appointment_kwargs()))
+
+            # Invalidate availability cache BEFORE booking to prevent parallel double-booking
+            try:
+                from services.availability_cache import get_availability_cache
+                cache = get_availability_cache()
+                cache.invalidate(user_id=user_id, organization_id=org_id)
+            except Exception as cache_err:
+                logger.warning(
+                    "Cache invalidation before booking failed",
+                    extra={"error": str(cache_err), "workflow_id": wf_id, "organization_id": org_id},
+                )
 
             # Attempt 1
             result = _run_create_appointment()
@@ -943,10 +963,17 @@ Return ONLY valid JSON:
             )
 
             # Check availability for the suggested time
-            slots = self._get_available_slots(
-                workflow.user_id, org_id,
-                workflow.meeting_duration_minutes or 30
-            )
+            try:
+                slots = self._get_available_slots(
+                    workflow.user_id, org_id,
+                    workflow.meeting_duration_minutes or 30
+                )
+            except Exception as e:
+                logger.error(
+                    "Slot lookup failed during alternative check",
+                    extra={"workflow_id": wf_id, "organization_id": org_id, "error": str(e)},
+                )
+                return {"action": "error", "error": "Unable to check availability right now. Please try again later."}
 
             # Check if any slot covers the suggested time
             available = False
@@ -1002,10 +1029,17 @@ Return ONLY valid JSON:
         org_id = workflow.organization_id
         wf_id = workflow.id
 
-        slots = self._get_available_slots(
-            workflow.user_id, org_id,
-            workflow.meeting_duration_minutes or 30
-        )
+        try:
+            slots = self._get_available_slots(
+                workflow.user_id, org_id,
+                workflow.meeting_duration_minutes or 30
+            )
+        except Exception as e:
+            logger.error(
+                "Slot lookup failed during offer alternatives",
+                extra={"workflow_id": wf_id, "organization_id": org_id, "error": str(e)},
+            )
+            return {"action": "error", "error": "Unable to check availability right now. Please try again later."}
         if not slots:
             msg = f"{reason}. Unfortunately, no other times are available this week. The loan officer will reach out directly."
             self._send_sms(workflow.contact_phone, msg, org_id)
@@ -1153,7 +1187,7 @@ Return ONLY valid JSON:
                 title=f"Schedule call with {workflow.contact_name}",
                 description=(
                     f"Automated scheduling via SMS didn't converge after {workflow.turn_count} turns. "
-                    f"Please reach out to {workflow.contact_name} at {workflow.contact_phone} directly."
+                    f"Please reach out to {workflow.contact_name} at {_mask_phone(workflow.contact_phone)} directly."
                 ),
                 due_date=datetime.utcnow() + timedelta(days=1),
                 priority="high",
@@ -1203,8 +1237,6 @@ Return ONLY valid JSON:
 
             # Send with timeout handling
             try:
-                import signal
-
                 # Use a simple timeout mechanism
                 result = ns.send_sms(
                     to_phone=phone,

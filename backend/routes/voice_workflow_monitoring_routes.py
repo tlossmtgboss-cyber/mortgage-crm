@@ -18,6 +18,7 @@ NOTE: This router must be registered in main.py:
 """
 
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -449,6 +450,8 @@ async def cancel_voice_workflow(
 # POST /api/v1/voice-workflows/{workflow_id}/admin-override
 # =============================================================================
 
+# TODO: Add rate limiting to prevent abuse of admin state transitions
+# Consider: max 10 transitions per user per minute
 @router.post("/{workflow_id}/admin-override", tags=["voice-workflows"])
 @require_feature_tier("voice_workflows")
 async def admin_override_workflow_state(
@@ -640,7 +643,6 @@ async def export_voice_workflow_gdpr_data(
         raise HTTPException(status_code=403, detail="Organization context required")
 
     # Normalize phone number
-    import re
     normalized_phone = re.sub(r'[^\d+]', '', contact_phone)
     if not normalized_phone:
         raise HTTPException(status_code=400, detail="Invalid phone number")
@@ -708,7 +710,7 @@ async def export_voice_workflow_gdpr_data(
         # Filter to only activities mentioning our workflow IDs
         relevant_audit = []
         for entry in audit_entries:
-            if any(f"workflow {wid}" in (entry.content or "") for wid in workflow_ids):
+            if any(re.search(rf'\bworkflow {wid}\b', entry.content or '') for wid in workflow_ids):
                 relevant_audit.append({
                     "activity_id": entry.id,
                     "content": entry.content,
