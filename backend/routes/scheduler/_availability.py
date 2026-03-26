@@ -28,6 +28,19 @@ from routes.scheduler._core import get_models
 logger = logging.getLogger(__name__)
 
 
+def _is_missing_table_error(ex: Exception) -> bool:
+    """Check if an exception indicates a missing/undefined table or column.
+
+    Used to distinguish infrastructure gaps (table doesn't exist yet) from
+    real data errors. Missing tables should fail-open (skip), not fail-closed.
+    """
+    from sqlalchemy.exc import ProgrammingError, OperationalError
+    if isinstance(ex, (ProgrammingError, OperationalError)):
+        err_str = str(ex).lower()
+        return "does not exist" in err_str or "undefined" in err_str
+    return False
+
+
 # ============================================================================
 # PERF-008: TTL CACHE FOR SCHEDULER CONFIG LOOKUPS
 # ============================================================================
@@ -246,10 +259,12 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
             if a.start_time and a.end_time:
                 conflicts.append((a.start_time, a.end_time))
     except Exception as e:
-        # Legacy source — import failures are expected if table doesn't exist;
-        # only fail closed on actual query errors (not ImportError)
+        # Legacy source — import failures and missing tables are expected
         if isinstance(e, ImportError):
             logger.warning(f"Legacy ScheduledAppointment cross-source check skipped (not installed): {e}")
+        elif _is_missing_table_error(e):
+            logger.warning(f"Legacy ScheduledAppointment table not available — skipping (fail-open): {e}")
+            db.rollback()
         else:
             logger.error(f"Legacy ScheduledAppointment cross-source check FAILED for user {target_user_id} — failing closed: {e}")
             degraded_sources.append("legacy_appointment")
@@ -277,6 +292,9 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CalendarEvent cross-source check skipped (not installed): {ex}")
+            elif _is_missing_table_error(ex):
+                logger.warning(f"CalendarEvent table not available — skipping (fail-open): {ex}")
+                db.rollback()
             else:
                 logger.error(f"CalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
                 _cb_record_failure("calendar_event", org_id=org_id)
@@ -305,6 +323,9 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CRMCalendarEvent cross-source check skipped (not installed): {ex}")
+            elif _is_missing_table_error(ex):
+                logger.warning(f"CRMCalendarEvent table not available — skipping (fail-open): {ex}")
+                db.rollback()
             else:
                 logger.error(f"CRMCalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
                 _cb_record_failure("crm_calendar_event", org_id=org_id)
