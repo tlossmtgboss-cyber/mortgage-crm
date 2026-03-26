@@ -85,9 +85,10 @@ _PORTAL_PREFIXES = (
 class PIIResponseFilterMiddleware(BaseHTTPMiddleware):
     """Middleware that inspects response bodies for PII leaks."""
 
-    def __init__(self, app, **kwargs):
+    def __init__(self, app, mode: str | None = None, **kwargs):
         super().__init__(app, **kwargs)
-        self.mode = os.environ.get("PII_RESPONSE_MODE", "warn").lower()
+        # Explicit parameter overrides env var; env var default is "warn"
+        self.mode = (mode or os.environ.get("PII_RESPONSE_MODE", "warn")).lower()
         self.portal_masking = os.environ.get(
             "PII_PORTAL_MASKING", "true"
         ).lower() in ("true", "1", "yes")
@@ -143,8 +144,9 @@ class PIIResponseFilterMiddleware(BaseHTTPMiddleware):
                 method, path, count, det_types,
             )
 
-            # Auto-mask portal responses if enabled
-            if is_portal and self.portal_masking:
+            # In "mask" mode, mask ALL responses with detected PII.
+            # In "warn" mode, only auto-mask portal responses if enabled.
+            if self.mode == "mask" or (is_portal and self.portal_masking):
                 body_text = self._mask(body_text)
                 body_bytes = body_text.encode("utf-8")
 

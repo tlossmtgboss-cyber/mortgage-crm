@@ -31,6 +31,7 @@ from typing import List, Optional, Dict, Any
 import uvicorn
 import os
 import logging
+import hashlib
 from openai import OpenAI
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import time
@@ -541,6 +542,24 @@ except Exception as e:
     logger.warning(f"⚠️ CORS middleware not loaded: {e}")
 
 # ============================================================================
+# PII RESPONSE FILTER — Safety-net scan for SSN / account-number leaks
+# Registered after CORS (LIFO: outermost, so it is the last filter on
+# outgoing response bodies).  Default mode is "mask" in production so any
+# accidental SSN in a JSON response is redacted before it reaches the client.
+# Override per-environment with PII_RESPONSE_MODE env var.
+# ============================================================================
+try:
+    from middleware.pii_response_filter import PIIResponseFilterMiddleware
+    app.add_middleware(
+        PIIResponseFilterMiddleware,
+        mode=os.environ.get("PII_RESPONSE_MODE", "mask"),
+    )
+    logger.info("✅ PII response filter middleware enabled (mode=%s)",
+                os.environ.get("PII_RESPONSE_MODE", "mask"))
+except Exception as e:
+    logger.warning(f"⚠️ PII response filter middleware not loaded: {e}")
+
+# ============================================================================
 # REQUEST CONTEXT MIDDLEWARE — Correlation IDs and structured request logging
 # Added AFTER CORS so it is the absolute outermost middleware (LIFO order).
 # Every request gets a unique X-Request-ID (generated or propagated from
@@ -671,15 +690,27 @@ async def get_current_user(
     # First, authenticate the actual user (manager)
     actual_user = None
 
-    # Check if token is an API key (starts with 'sk_')
-    # SEC-003: API keys are currently stored and compared in plaintext.
-    # TODO: Migrate to hashed API key storage (bcrypt or sha256) — store
-    # only the hash, compare hash(input) == stored_hash on lookup.
-    if token.startswith('sk_'):
+    # Check if token is an API key (starts with 'sk_' or 'pk_live_')
+    if token.startswith('sk_') or token.startswith('pk_live_'):
+        # Look up by SHA-256 hash first (migrated keys)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
         api_key = db.query(ApiKey).filter(
-            ApiKey.key == token,
+            ApiKey.key_hash == token_hash,
             ApiKey.is_active == True
         ).first()
+
+        # Fallback to plaintext for unmigrated keys
+        if not api_key:
+            api_key = db.query(ApiKey).filter(
+                ApiKey.key == token,
+                ApiKey.is_active == True
+            ).first()
+            if api_key:
+                # Auto-migrate: hash the key and clear plaintext
+                api_key.key_hash = token_hash
+                api_key.key_prefix = token[:8]
+                api_key.key = None
+                db.commit()
 
         if api_key is None:
             raise credentials_exception
@@ -804,16 +835,56 @@ async def get_current_user_flexible(
     # Check X-API-Key header first (for Zapier and similar integrations)
     api_key_header = request.headers.get("X-API-Key")
     if api_key_header:
-        # Try to find API key in database
+        # Look up by SHA-256 hash first (migrated keys)
+        header_hash = hashlib.sha256(api_key_header.encode()).hexdigest()
         api_key = db.query(ApiKey).filter(
-            ApiKey.key == api_key_header,
+            ApiKey.key_hash == header_hash,
             ApiKey.is_active == True
         ).first()
 
+        # Fallback to plaintext for unmigrated keys
+        if not api_key:
+            api_key = db.query(ApiKey).filter(
+                ApiKey.key == api_key_header,
+                ApiKey.is_active == True
+            ).first()
+            if api_key:
+                # Auto-migrate: hash the key and clear plaintext
+                api_key.key_hash = header_hash
+                api_key.key_prefix = api_key_header[:8]
+                api_key.key = None
+                db.commit()
+
         if api_key:
+            # Check API key expiration
+            if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="API key has expired",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
             # Update last used timestamp
             api_key.last_used_at = datetime.now(timezone.utc)
             db.commit()
+
+            # Store API key object for scope enforcement
+            if hasattr(request, 'state'):
+                request.state._api_key_obj = api_key
+
+            # Enforce endpoint scopes if key has scopes assigned
+            if api_key.scopes:
+                try:
+                    from auth.scope_enforcement import check_endpoint_scopes
+                    if not check_endpoint_scopes(request, api_key.scopes):
+                        raise HTTPException(
+                            status_code=status.HTTP_403_FORBIDDEN,
+                            detail="API key lacks required scope for this endpoint",
+                        )
+                except ImportError:
+                    pass  # Scope enforcement module not available
+                except HTTPException:
+                    raise
 
             # Set tenant context for API key organization (CRITICAL for tenant isolation)
             if api_key.organization_id:
@@ -860,21 +931,60 @@ async def get_current_user_flexible(
     if not token:
         raise credentials_exception
 
-    # Check if token is an API key (starts with 'sk_')
-    # SEC-003: API keys are currently stored and compared in plaintext.
-    # TODO: Migrate to hashed API key storage (bcrypt or sha256).
-    if token.startswith('sk_'):
+    # Check if token is an API key (starts with 'sk_' or 'pk_live_')
+    if token.startswith('sk_') or token.startswith('pk_live_'):
+        # Look up by SHA-256 hash first (migrated keys)
+        token_hash = hashlib.sha256(token.encode()).hexdigest()
         api_key = db.query(ApiKey).filter(
-            ApiKey.key == token,
+            ApiKey.key_hash == token_hash,
             ApiKey.is_active == True
         ).first()
+
+        # Fallback to plaintext for unmigrated keys
+        if not api_key:
+            api_key = db.query(ApiKey).filter(
+                ApiKey.key == token,
+                ApiKey.is_active == True
+            ).first()
+            if api_key:
+                # Auto-migrate: hash the key and clear plaintext
+                api_key.key_hash = token_hash
+                api_key.key_prefix = token[:8]
+                api_key.key = None
+                db.commit()
 
         if api_key is None:
             raise credentials_exception
 
+        # Check API key expiration
+        if api_key.expires_at and api_key.expires_at < datetime.now(timezone.utc):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="API key has expired",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
         # Update last used timestamp
         api_key.last_used_at = datetime.now(timezone.utc)
         db.commit()
+
+        # Store API key object for scope enforcement
+        if hasattr(request, 'state'):
+            request.state._api_key_obj = api_key
+
+        # Enforce endpoint scopes if key has scopes assigned
+        if api_key.scopes:
+            try:
+                from auth.scope_enforcement import check_endpoint_scopes
+                if not check_endpoint_scopes(request, api_key.scopes):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="API key lacks required scope for this endpoint",
+                    )
+            except ImportError:
+                pass  # Scope enforcement module not available
+            except HTTPException:
+                raise
 
         # Get the user associated with this API key
         actual_user = db.query(User).filter(User.id == api_key.user_id).first()
@@ -1664,11 +1774,13 @@ async def startup_event():
         logger.info("⏭️ Skipping startup DB operations (TESTING=1)")
         return
 
-    # SEC-003: Warn about plaintext API key storage
-    logger.warning(
-        "SEC-003: ApiKey.key column stores keys in plaintext. "
-        "Migrate to hashed storage (bcrypt or sha256) before production hardening."
-    )
+    # Run API key hash migration (adds key_hash/key_prefix columns, migrates plaintext keys)
+    try:
+        from migrations.hash_api_keys import run_migration as _run_api_key_hash_migration
+        _run_api_key_hash_migration(engine)
+        logger.info("API key hash migration completed successfully.")
+    except Exception as e:
+        logger.warning(f"API key hash migration skipped or failed: {e}")
 
     # Run critical schema migrations (missing columns that break page loads)
     try:

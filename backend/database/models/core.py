@@ -189,7 +189,9 @@ class ApiKey(Base):
     __tablename__ = "api_keys"
 
     id = Column(Integer, primary_key=True, index=True)
-    key = Column(String, unique=True, index=True, nullable=False)
+    key = Column(String, unique=True, index=True, nullable=True)  # Legacy plaintext — cleared after migration
+    key_hash = Column(String(64), nullable=True, index=True)  # SHA-256 hex digest of the raw key
+    key_prefix = Column(String(12), nullable=True)  # First 8 chars for display/identification
     name = Column(String, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)

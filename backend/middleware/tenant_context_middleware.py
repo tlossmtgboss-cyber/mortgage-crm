@@ -115,17 +115,25 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header[7:]  # Remove "Bearer " prefix
 
-            if token.startswith("sk_"):
+            if token.startswith("sk_") or token.startswith("pk_live_"):
                 # API key authentication - resolve user and set tenant context
                 try:
                     if self.get_db and self.user_model:
                         db = next(self.get_db())
                         try:
+                            import hashlib as _hashlib
                             from database.models.core import ApiKey
+                            _token_hash = _hashlib.sha256(token.encode()).hexdigest()
                             api_key = db.query(ApiKey).filter(
-                                ApiKey.key == token,
+                                ApiKey.key_hash == _token_hash,
                                 ApiKey.is_active == True
                             ).first()
+                            # Fallback to plaintext for unmigrated keys
+                            if not api_key:
+                                api_key = db.query(ApiKey).filter(
+                                    ApiKey.key == token,
+                                    ApiKey.is_active == True
+                                ).first()
                             if api_key:
                                 user = db.query(self.user_model).filter(
                                     self.user_model.id == api_key.user_id

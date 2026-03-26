@@ -15,7 +15,11 @@ Endpoint groups:
 Prefix: /api/smart-docs/eclosing
 """
 
+import hashlib
+import hmac
+import json
 import logging
+import os
 from datetime import date, datetime
 from typing import List, Optional
 
@@ -356,6 +360,16 @@ async def get_enote_status(
         raise HTTPException(status_code=500, detail="Failed to get eNote status")
 
 
+def _verify_eclosing_webhook(raw_body: bytes, signature: str) -> bool:
+    """Verify eClosing webhook HMAC-SHA256 signature."""
+    secret = os.environ.get("ECLOSING_WEBHOOK_SECRET", "")
+    if not secret:
+        logger.warning("ECLOSING_WEBHOOK_SECRET not configured — skipping webhook verification")
+        return True  # Fail-open in dev, should be set in production
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
 @router.post("/webhooks")
 async def handle_webhook(
     request: Request,
@@ -375,14 +389,18 @@ async def handle_webhook(
     from services.smart_docs.integrations.eclosing_service import EClosingService
 
     try:
-        webhook_data = await request.json()
+        raw_body = await request.body()
     except Exception:
-        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+        raise HTTPException(status_code=400, detail="Failed to read request body")
 
-    # TODO: Verify webhook signature in production
-    # signature = request.headers.get("X-Webhook-Signature", "")
-    # if not verify_signature(signature, webhook_data):
-    #     raise HTTPException(status_code=401, detail="Invalid signature")
+    signature = request.headers.get("X-Webhook-Signature", "")
+    if not _verify_eclosing_webhook(raw_body, signature):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+    try:
+        webhook_data = json.loads(raw_body)
+    except (json.JSONDecodeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     try:
         service = EClosingService(db)

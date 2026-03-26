@@ -1529,6 +1529,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
             # Check if the Zapier API key already exists - get from env or generate new
             import uuid
+            import hashlib as _hashlib
             zapier_api_key = os.getenv("ZAPIER_API_KEY", str(uuid.uuid4()))
             existing_key = db.query(ApiKey).filter(ApiKey.name == "Zapier Integration").first()
 
@@ -1537,13 +1538,16 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 return {
                     "status": "success",
                     "message": "Zapier API key already exists",
-                    "key": existing_key.key,
+                    "key_prefix": existing_key.key_prefix or (existing_key.key[:8] if existing_key.key else "****"),
                     "user_email": user.email
                 }
 
-            # Create the API key
+            # Create the API key — store only the hash, never plaintext
+            zapier_key_hash = _hashlib.sha256(zapier_api_key.encode()).hexdigest()
             new_api_key = ApiKey(
-                key=zapier_api_key,
+                key=None,
+                key_hash=zapier_key_hash,
+                key_prefix=zapier_api_key[:8],
                 name="Zapier Integration",
                 user_id=user.id,
                 organization_id=getattr(user, 'organization_id', None),
@@ -1557,7 +1561,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.info(f"Zapier API key created for user {user.id}")
             return {
                 "status": "success",
-                "message": "Zapier API key created successfully",
+                "message": "Zapier API key created successfully. Save this key — it will not be shown again.",
                 "key": zapier_api_key,
                 "user_email": user.email
             }

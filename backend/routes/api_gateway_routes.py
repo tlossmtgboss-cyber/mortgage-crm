@@ -395,9 +395,11 @@ def register_api_gateway_routes(app, get_db, get_current_user, **kwargs):
             # Generate API key
             api_key, key_hash = generate_api_key()
 
-            # Create database record
+            # Create database record — store only the hash, never plaintext
             db_key = ApiKey(
-                key=key_hash,
+                key=None,
+                key_hash=key_hash,
+                key_prefix=api_key[:8],
                 name=request.name,
                 user_id=current_user.id,
                 organization_id=current_user.organization_id,
@@ -590,6 +592,7 @@ def register_api_gateway_routes(app, get_db, get_current_user, **kwargs):
     )
     async def list_webhook_events(
         category: Optional[str] = Query(None, description="Filter by category"),
+        current_user=Depends(get_current_user),
         db: Session = Depends(get_db)
     ):
         """
