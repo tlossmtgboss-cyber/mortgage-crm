@@ -314,31 +314,51 @@ def _check_booking_email_rate_limit(db: Session, attendee_email: str, org_id: in
 # ============================================================================
 
 @router.get("/public/book-diag")
-async def public_booking_diag(request: Request):
+async def public_booking_diag(request: Request, db: Session = Depends(get_db)):
     """Temporary diagnostic endpoint — remove after debugging."""
     try:
         models = get_models()
         model_keys = list(models.keys()) if models else []
-        from db import SessionLocal
-        db = SessionLocal()
+        BookingLink = models.get('BookingLink')
+
+        # Test 1: rate limit
+        rate_ok = "skipped"
         try:
-            from sqlalchemy import text
-            db.execute(text("SELECT 1"))
-            db_ok = True
+            await _check_rate_limit(request)
+            rate_ok = True
         except Exception as e:
-            db_ok = str(e)
-        finally:
-            db.close()
+            rate_ok = f"{type(e).__name__}: {e}"
+
+        # Test 2: DB query
+        db_ok = True
+        link_info = None
+        try:
+            from sqlalchemy import text as sa_text
+            db.execute(sa_text("SELECT 1"))
+            if BookingLink:
+                link = db.query(BookingLink).filter(
+                    BookingLink.slug == "demo"
+                ).first()
+                if link:
+                    link_info = {"id": link.id, "slug": link.slug, "active": link.is_active}
+                else:
+                    link_info = "no demo link found"
+        except Exception as e:
+            db_ok = f"{type(e).__name__}: {e}"
+
         return {
             "status": "ok",
             "models_loaded": len(model_keys),
-            "model_keys_sample": model_keys[:10],
-            "db_ok": db_ok,
-            "has_BookingLink": "BookingLink" in model_keys,
+            "has_BookingLink": BookingLink is not None,
             "has_AppointmentType": "AppointmentType" in model_keys,
+            "db_ok": db_ok,
+            "rate_limit_ok": rate_ok,
+            "demo_link": link_info,
+            "depends_get_db": "resolved",
         }
     except Exception as e:
-        return {"status": "error", "error": str(e), "type": type(e).__name__}
+        import traceback
+        return {"status": "error", "error": str(e), "type": type(e).__name__, "tb": traceback.format_exc()}
 
 
 @router.get("/public/book/{slug}")
