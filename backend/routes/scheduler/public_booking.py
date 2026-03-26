@@ -316,29 +316,46 @@ def _check_booking_email_rate_limit(db: Session, attendee_email: str, org_id: in
 @router.get("/public/book-diag")
 async def public_booking_diag(request: Request):
     """Temporary diagnostic endpoint — remove after debugging."""
+    import traceback as _tb
+    results = {}
+
+    # Test 1: get_models
     try:
         models = get_models()
-        model_keys = list(models.keys()) if models else []
-        from db import SessionLocal
-        db = SessionLocal()
-        try:
-            from sqlalchemy import text
-            db.execute(text("SELECT 1"))
-            db_ok = True
-        except Exception as e:
-            db_ok = str(e)
-        finally:
-            db.close()
-        return {
-            "status": "ok",
-            "models_loaded": len(model_keys),
-            "model_keys_sample": model_keys[:10],
-            "db_ok": db_ok,
-            "has_BookingLink": "BookingLink" in model_keys,
-            "has_AppointmentType": "AppointmentType" in model_keys,
-        }
+        results["models"] = len(models) if models else 0
     except Exception as e:
-        return {"status": "error", "error": str(e), "type": type(e).__name__}
+        results["models_err"] = str(e)
+
+    # Test 2: manual get_db (not via Depends)
+    try:
+        gen = get_db(request)
+        db = next(gen)
+        from sqlalchemy import text as sa_text
+        db.execute(sa_text("SELECT 1"))
+        results["manual_get_db"] = "ok"
+        # Test BookingLink query
+        BookingLink = get_models().get('BookingLink')
+        if BookingLink:
+            link = db.query(BookingLink).filter(BookingLink.slug == "demo").first()
+            results["demo_link"] = {"id": link.id, "slug": link.slug} if link else "not found"
+        gen.close()
+    except Exception as e:
+        results["manual_get_db_err"] = f"{type(e).__name__}: {e}\n{_tb.format_exc()}"
+
+    # Test 3: Check what get_db import path is
+    results["get_db_module"] = get_db.__module__
+    results["get_db_qualname"] = get_db.__qualname__
+
+    # Test 4: rate limit
+    try:
+        await _check_rate_limit(request)
+        results["rate_limit"] = "ok"
+    except HTTPException as e:
+        results["rate_limit"] = f"HTTPException {e.status_code}: {e.detail}"
+    except Exception as e:
+        results["rate_limit_err"] = f"{type(e).__name__}: {e}"
+
+    return results
 
 
 @router.get("/public/book/{slug}")
