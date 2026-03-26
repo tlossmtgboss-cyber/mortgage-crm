@@ -2251,6 +2251,86 @@ def _run_critical_schema_migrations():
             if tbl_added:
                 logger.info(f"✅ Ensured {tbl_added} {table_name} columns exist")
 
+        # Fix N+2: Convert scheduler ENUM columns to VARCHAR
+        # Same pattern as Lead.stage and Loan.stage — the production DB has a
+        # PostgreSQL ENUM type that doesn't include newer status values (CONFIRMED,
+        # REMINDED, CHECKED_IN). Converting to VARCHAR lets any string value work.
+        enum_to_varchar_conversions = [
+            ("scheduler_appointments", "status", "appointmentstatus"),
+            ("scheduler_appointments", "meeting_type", "meetingtype"),
+            ("scheduler_appointments", "meeting_mode", "meetingmode"),
+        ]
+        for table, col, enum_type in enum_to_varchar_conversions:
+            try:
+                # Check if column is currently an enum type
+                col_info = db.execute(sa_text(
+                    "SELECT data_type, udt_name FROM information_schema.columns "
+                    "WHERE table_name = :tbl AND column_name = :col"
+                ), {"tbl": table, "col": col}).fetchone()
+                if col_info and col_info[0] == 'USER-DEFINED':
+                    db.execute(sa_text(
+                        f"ALTER TABLE {table} ALTER COLUMN {col} TYPE VARCHAR(50) USING {col}::text"
+                    ))
+                    db.commit()
+                    logger.info(f"✅ Converted {table}.{col} from enum to VARCHAR")
+                    # Drop the old enum type if it's no longer used
+                    try:
+                        db.execute(sa_text(f"DROP TYPE IF EXISTS {enum_type}"))
+                        db.commit()
+                    except Exception:
+                        db.rollback()
+            except Exception as e:
+                db.rollback()
+                logger.debug(f"Enum conversion {table}.{col}: {e}")
+
+        # Fix N+3: Create missing scheduler tables if they don't exist
+        missing_tables_sql = [
+            """CREATE TABLE IF NOT EXISTS scheduler_slot_holds (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER,
+                appointment_type_id INTEGER,
+                user_id INTEGER,
+                slot_start TIMESTAMP NOT NULL,
+                slot_end TIMESTAMP NOT NULL,
+                hold_token VARCHAR(64) UNIQUE,
+                held_by_email VARCHAR(255),
+                held_by_session VARCHAR(255),
+                expires_at TIMESTAMP NOT NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                converted_to_appointment_id INTEGER,
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+            """CREATE TABLE IF NOT EXISTS recurring_availability (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER,
+                user_id INTEGER,
+                day_of_week INTEGER NOT NULL,
+                start_time TIME NOT NULL,
+                end_time TIME NOT NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )""",
+            """CREATE TABLE IF NOT EXISTS availability_exceptions (
+                id SERIAL PRIMARY KEY,
+                organization_id INTEGER,
+                user_id INTEGER,
+                exception_date DATE NOT NULL,
+                start_time TIME,
+                end_time TIME,
+                is_available BOOLEAN DEFAULT FALSE,
+                reason VARCHAR(255),
+                created_at TIMESTAMP DEFAULT NOW()
+            )""",
+        ]
+        for create_sql in missing_tables_sql:
+            try:
+                db.execute(sa_text(create_sql))
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.debug(f"Table creation: {e}")
+
         logger.info("✅ Critical schema migrations complete")
     finally:
         db.close()
