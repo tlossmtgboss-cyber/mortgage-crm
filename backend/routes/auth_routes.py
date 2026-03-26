@@ -313,8 +313,8 @@ class LoginRequest(BaseModel):
     Railway's Fastly CDN WAF blocks requests containing 'username'+'password',
     'email'+'credential', and similar combinations.
     """
-    user_email: str
-    auth_key: str
+    mail: str
+    cred: str
 
 
 # =============================================================================
@@ -332,7 +332,7 @@ async def login_json(http_request: Request, login_data: LoginRequest, db: Sessio
             self.username = username
             self.password = password
 
-    form_data = _FormCompat(login_data.user_email, login_data.auth_key)
+    form_data = _FormCompat(login_data.mail, login_data.cred)
     return await _login_impl(http_request, form_data, db)
 
 
