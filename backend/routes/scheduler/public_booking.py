@@ -408,17 +408,38 @@ async def public_booking_diag(request: Request, db: Session = Depends(get_db)):
                 results[f"tbl_{tbl}"] = f"ERROR: {e}"
                 db.rollback()
 
-        # Test actual slot generation
+        # Test slot generation (without and with cross-source)
         uid = results.get('step2_user', {}).get('id')
         oid = results.get('step2_user', {}).get('org_id')
         if uid and oid:
-            slots = _generate_available_slots(
+            slots_no_cs = _generate_available_slots(
                 db=db, user_ids=[uid], start_date=tomorrow, end_date=tomorrow,
                 duration_minutes=30, org_id=oid, check_cross_source=False,
             )
-            results["step5_slots"] = len(slots)
-            if slots:
-                results["step5_first_slot"] = slots[0]
+            results["slots_no_cross_source"] = len(slots_no_cs)
+
+            # Test WITH cross-source to see what blocks
+            try:
+                from routes.scheduler._availability import _get_cross_source_conflicts
+                from datetime import time as time_cls
+                cs_start = datetime.combine(tomorrow, time_cls.min)
+                cs_end = datetime.combine(tomorrow, time_cls.max)
+                conflicts, degraded = _get_cross_source_conflicts(db, uid, cs_start, cs_end, org_id=oid)
+                results["cross_source_conflicts"] = len(conflicts)
+                results["cross_source_degraded"] = degraded
+                if conflicts:
+                    results["cross_source_sample"] = [
+                        {"start": str(c[0]), "end": str(c[1])} for c in conflicts[:3]
+                    ]
+            except Exception as cs_e:
+                results["cross_source_err"] = f"{type(cs_e).__name__}: {cs_e}"
+                db.rollback()
+
+            slots_with_cs = _generate_available_slots(
+                db=db, user_ids=[uid], start_date=tomorrow, end_date=tomorrow,
+                duration_minutes=30, org_id=oid, check_cross_source=True,
+            )
+            results["slots_with_cross_source"] = len(slots_with_cs)
     except Exception as e:
         results["step5_err"] = f"{type(e).__name__}: {e}\n{_tb.format_exc()[-800:]}"
         db.rollback()
