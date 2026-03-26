@@ -145,7 +145,35 @@ async def browser_voice_websocket(websocket: WebSocket):
     ci_state = {
         "session_id": None,       # Set when start_call_recording succeeds
         "transcript_parts": [],   # List of (role, text) tuples
+        "flushed_index": 0,       # P2: Index of last flushed part
+        "flush_task": None,       # P2: Reference to periodic flush task
     }
+
+    async def _flush_transcript_periodically():
+        """P2: Flush accumulated transcript to DB every 30 seconds."""
+        FLUSH_INTERVAL = 30
+        while True:
+            await asyncio.sleep(FLUSH_INTERVAL)
+            sid = ci_state.get("session_id")
+            parts = ci_state.get("transcript_parts", [])
+            flushed = ci_state.get("flushed_index", 0)
+            if not sid or flushed >= len(parts):
+                continue
+            new_parts = parts[flushed:]
+            chunk = "
+".join(f"[{role}]: {txt}" for role, txt in new_parts)
+            try:
+                from services.voice_ci_bridge_service import VoiceCIBridgeService
+                bridge = VoiceCIBridgeService(db, ws_organization_id, ws_user_id)
+                await bridge.append_transcript_chunk(sid, chunk)
+                db.commit()
+                ci_state["flushed_index"] = len(parts)
+            except Exception as flush_err:
+                logger.warning(f"Periodic transcript flush failed: {flush_err}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
     try:
         # Connect to OpenAI Realtime API
@@ -334,6 +362,12 @@ async def browser_voice_websocket(websocket: WebSocket):
                                         # Track active CI session for transcript accumulation
                                         ci_state["session_id"] = ci_session_id
                                         ci_state["transcript_parts"] = []
+                                        ci_state["flushed_index"] = 0
+                                        # P2: Start periodic transcript flush task
+                                        if ci_state.get("flush_task") is None:
+                                            ci_state["flush_task"] = asyncio.create_task(
+                                                _flush_transcript_periodically()
+                                            )
                                         logger.info(f"CI transcript accumulation started for session {ci_session_id}")
                                         await websocket.send_json({
                                             "type": "ci_session_started",
@@ -362,9 +396,14 @@ async def browser_voice_websocket(websocket: WebSocket):
                                                     db.rollback()
                                                 except Exception:
                                                     pass
+                                        # P2: Cancel flush task before resetting state
+                                        if ci_state.get("flush_task"):
+                                            ci_state["flush_task"].cancel()
+                                            ci_state["flush_task"] = None
                                         # Reset CI state
                                         ci_state["session_id"] = None
                                         ci_state["transcript_parts"] = []
+                                        ci_state["flushed_index"] = 0
                                         await websocket.send_json({
                                             "type": "ci_processing_complete",
                                             "session_id": result.get("session_id"),
@@ -432,6 +471,11 @@ async def browser_voice_websocket(websocket: WebSocket):
             logger.error(f"Error in browser_voice_session (send error to client): {e}")
             pass  # Client may have disconnected
     finally:
+        # P2: Cancel periodic flush task
+        if ci_state.get("flush_task"):
+            ci_state["flush_task"].cancel()
+            ci_state["flush_task"] = None
+
         # Save any unsaved CI transcript before tearing down
         if ci_state["session_id"] and ci_state["transcript_parts"]:
             try:
@@ -452,6 +496,7 @@ async def browser_voice_websocket(websocket: WebSocket):
                     pass
             ci_state["session_id"] = None
             ci_state["transcript_parts"] = []
+            ci_state["flushed_index"] = 0
 
         if openai_ws:
             try:
