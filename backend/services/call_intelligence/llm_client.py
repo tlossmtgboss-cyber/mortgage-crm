@@ -1,7 +1,7 @@
 """
 LLM Client for Call Intelligence
 
-Provides structured extraction using Claude or OpenAI models.
+Provides structured extraction using Claude, OpenAI, or Mistral models.
 Handles retries, rate limiting, and response parsing.
 
 This module provides LLM client implementations for intelligent data extraction
@@ -9,15 +9,17 @@ from mortgage call transcripts. Features include:
 - Token bucket rate limiting to prevent API throttling
 - Automatic retries with exponential backoff
 - JSON response parsing with validation
-- Support for both Anthropic Claude and OpenAI GPT models
+- Support for Anthropic Claude, OpenAI GPT, and Mistral AI models
 
 Clients:
     AnthropicClient: Uses Claude models (claude-3-sonnet, claude-3-haiku, etc.)
     OpenAIClient: Uses GPT models (gpt-4o, gpt-4o-mini, etc.)
+    MistralClient: Uses Mistral models (mistral-small-latest, mistral-large-latest, etc.)
 
 Configuration:
     Set environment variables or pass LLMConfig directly:
-    - ANTHROPIC_API_KEY / OPENAI_API_KEY: API credentials
+    - ANTHROPIC_API_KEY / OPENAI_API_KEY / MISTRAL_API_KEY: API credentials
+    - CI_LLM_PROVIDER: "anthropic", "openai", or "mistral"
     - CI_LLM_MODEL: Model name override
     - CI_LLM_TEMPERATURE: Temperature (0.0-1.0)
     - CI_LLM_MAX_TOKENS: Max response tokens
@@ -197,6 +199,11 @@ def get_rate_limiter(provider: str) -> TokenBucketRateLimiter:
                 requests_per_minute=ANTHROPIC_REQUESTS_PER_MINUTE,
                 burst_size=ANTHROPIC_BURST_SIZE,
             )
+        elif provider == "mistral":
+            _rate_limiters[provider] = TokenBucketRateLimiter(
+                requests_per_minute=MISTRAL_REQUESTS_PER_MINUTE,
+                burst_size=MISTRAL_BURST_SIZE,
+            )
         else:
             _rate_limiters[provider] = TokenBucketRateLimiter(
                 requests_per_minute=OPENAI_REQUESTS_PER_MINUTE,
@@ -209,11 +216,13 @@ class LLMProvider(str, Enum):
     """Supported LLM providers."""
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
+    MISTRAL = "mistral"
 
 
 # Default configuration constants
 DEFAULT_ANTHROPIC_MODEL = "claude-3-haiku-20240307"  # Fast and cost-effective for extraction
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"  # Cost-effective OpenAI model
+DEFAULT_MISTRAL_MODEL = "mistral-small-latest"  # Cost-effective Mistral model for extraction
 DEFAULT_MAX_TOKENS = 4096  # Sufficient for mortgage data extraction
 DEFAULT_TEMPERATURE = 0.0  # Deterministic for structured extraction
 DEFAULT_TIMEOUT_SECONDS = 30
@@ -224,8 +233,10 @@ MIN_WAIT_TIME_SECONDS = 0.1  # Minimum wait between rate limit checks
 MAX_RATE_LIMIT_ITERATIONS = 1000  # Safety limit to prevent infinite loops
 ANTHROPIC_REQUESTS_PER_MINUTE = 50  # Conservative limit for Anthropic API
 OPENAI_REQUESTS_PER_MINUTE = 60  # OpenAI default tier limit
+MISTRAL_REQUESTS_PER_MINUTE = 60  # Mistral default tier limit
 ANTHROPIC_BURST_SIZE = 5
 OPENAI_BURST_SIZE = 10
+MISTRAL_BURST_SIZE = 10
 
 # Retry/backoff constants
 MAX_BACKOFF_SECONDS = 30.0  # Cap exponential backoff to prevent excessive waits
@@ -380,8 +391,8 @@ class LLMConfig:
         """Create config from environment variables.
 
         Environment variables:
-            CI_LLM_PROVIDER: "anthropic" or "openai" (default: anthropic)
-            CI_LLM_MODEL: Model name (default: claude-3-haiku for Anthropic, gpt-4o-mini for OpenAI)
+            CI_LLM_PROVIDER: "anthropic", "openai", or "mistral" (default: anthropic)
+            CI_LLM_MODEL: Model name (default: provider-specific)
             CI_LLM_TEMPERATURE: 0.0-1.0 (default: 0.0 for deterministic extraction)
             CI_LLM_MAX_TOKENS: Max response tokens (default: 4096)
             CI_LLM_TIMEOUT: Request timeout in seconds (default: 30)
@@ -390,7 +401,12 @@ class LLMConfig:
         provider = LLMProvider(provider_str)
 
         # Use appropriate default model based on provider
-        default_model = DEFAULT_OPENAI_MODEL if provider == LLMProvider.OPENAI else DEFAULT_ANTHROPIC_MODEL
+        default_models = {
+            LLMProvider.ANTHROPIC: DEFAULT_ANTHROPIC_MODEL,
+            LLMProvider.OPENAI: DEFAULT_OPENAI_MODEL,
+            LLMProvider.MISTRAL: DEFAULT_MISTRAL_MODEL,
+        }
+        default_model = default_models.get(provider, DEFAULT_ANTHROPIC_MODEL)
 
         return cls(
             provider=provider,
@@ -1042,6 +1058,189 @@ class OpenAIClient(BaseLLMClient):
             raise  # Re-raise unexpected errors for caller to handle
 
 
+class MistralClient(BaseLLMClient):
+    """Mistral AI client for extraction."""
+
+    def __init__(self, config: LLMConfig = None):
+        self.config = config or LLMConfig.from_env()
+        # Ensure we're using a Mistral-compatible model
+        if self.config.model.startswith("claude") or self.config.model.startswith("gpt"):
+            env_model = os.getenv("CI_LLM_MODEL")
+            if env_model and not env_model.startswith(("claude", "gpt")):
+                self.config.model = env_model
+            else:
+                self.config.model = DEFAULT_MISTRAL_MODEL
+                logger.debug(
+                    f"MistralClient initialized with non-Mistral model in config, "
+                    f"using {DEFAULT_MISTRAL_MODEL} instead"
+                )
+        self._client = None
+
+    def _get_client(self):
+        """Lazy initialization of Mistral client."""
+        if self._client is None:
+            try:
+                from mistralai import Mistral
+                api_key = os.getenv("MISTRAL_API_KEY")
+                if not api_key:
+                    raise ValueError("MISTRAL_API_KEY environment variable not set")
+                self._client = Mistral(api_key=api_key)
+            except ImportError:
+                raise ImportError("mistralai package not installed. Run: pip install mistralai")
+        return self._client
+
+    async def extract(
+        self,
+        transcript: str,
+        schema: ExtractionSchema,
+        existing_data: Dict[str, Any] = None,
+    ) -> Dict[str, Any]:
+        """Extract structured data using Mistral."""
+        client = self._get_client()
+        rate_limiter = get_rate_limiter("mistral")
+
+        # Reuse Anthropic's prompt builder for consistency (includes PII redaction)
+        anthropic_client = AnthropicClient(self.config)
+        prompt, redaction_stats = anthropic_client._build_extraction_prompt(schema, transcript, existing_data)
+
+        if redaction_stats.get("total", 0) > 0:
+            logger.info(f"PII redacted before Mistral LLM call: {redaction_stats}")
+
+        circuit_breaker = get_circuit_breaker("mistral")
+
+        for attempt in range(self.config.max_retries):
+            try:
+                await circuit_breaker.check()
+                await rate_limiter.acquire(timeout=self.config.timeout)
+
+                response = await asyncio.wait_for(
+                    client.chat.complete_async(
+                        model=self.config.model,
+                        temperature=self.config.temperature,
+                        max_tokens=self.config.max_tokens,
+                        messages=[
+                            {"role": "system", "content": "You are an expert mortgage data extraction assistant. Always respond with valid JSON."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        response_format={"type": "json_object"},
+                    ),
+                    timeout=self.config.timeout
+                )
+
+                if not response.choices:
+                    logger.warning("Empty response choices from Mistral API")
+                    continue
+                content = response.choices[0].message.content
+                if not content:
+                    logger.warning("Empty message content from Mistral API")
+                    continue
+
+                # Track token usage
+                try:
+                    from services.performance_monitoring_service import perf_monitor
+                    usage = getattr(response, "usage", None)
+                    if usage:
+                        perf_monitor.track_token_usage(
+                            model=self.config.model,
+                            tokens_in=getattr(usage, "prompt_tokens", 0),
+                            tokens_out=getattr(usage, "completion_tokens", 0),
+                            duration_ms=0,
+                            call_type="extraction",
+                        )
+                except Exception as e:
+                    logger.warning(f"Token usage tracking failed in extract_structured_data (Mistral): {e}")
+
+                try:
+                    result = json.loads(content)
+                    await circuit_breaker.record_success()
+                    return result
+                except json.JSONDecodeError:
+                    logger.warning(f"Mistral extraction attempt {attempt + 1}: JSON parse failed, retrying...")
+                    if attempt < self.config.max_retries - 1:
+                        await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
+                    continue
+
+            except CircuitBreakerOpen:
+                raise
+            except asyncio.TimeoutError:
+                await circuit_breaker.record_failure()
+                logger.warning(f"Mistral extraction attempt {attempt + 1} timed out after {self.config.timeout}s")
+                if attempt < self.config.max_retries - 1:
+                    await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
+                else:
+                    raise LLMTimeoutError(f"Mistral extraction timed out after {self.config.max_retries} attempts")
+            except LLMRateLimitError:
+                logger.warning(f"Rate limit hit on attempt {attempt + 1}")
+                if attempt < self.config.max_retries - 1:
+                    await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
+                else:
+                    raise
+            except (ConnectionError, OSError) as e:
+                await circuit_breaker.record_failure()
+                logger.warning(f"Network error on attempt {attempt + 1}: {e}")
+                if attempt < self.config.max_retries - 1:
+                    await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
+                else:
+                    raise LLMAPIError(f"Network error calling Mistral API: {e}")
+            except Exception as e:
+                await circuit_breaker.record_failure()
+                logger.warning(f"Mistral extraction attempt {attempt + 1} failed ({type(e).__name__}): {e}")
+                if attempt < self.config.max_retries - 1:
+                    await asyncio.sleep(min(2 ** attempt, MAX_BACKOFF_SECONDS))
+                else:
+                    raise LLMAPIError(f"Mistral API error: {e}")
+
+        return {"extractions": {}, "notes": "Extraction failed"}
+
+    async def extract_with_prompt(
+        self,
+        prompt: str,
+        transcript: str,
+    ) -> Dict[str, Any]:
+        """Extract using custom prompt."""
+        client = self._get_client()
+
+        # PII redaction
+        redacted_transcript, redaction_stats = redact_transcript_for_llm(transcript)
+
+        if redaction_stats.get("total", 0) > 0:
+            logger.info(f"PII redacted before Mistral custom prompt call: {redaction_stats}")
+
+        redaction_notice = ""
+        if redaction_stats.get("total", 0) > 0:
+            redaction_notice = get_redaction_warning_for_llm()
+
+        try:
+            response = await asyncio.wait_for(
+                client.chat.complete_async(
+                    model=self.config.model,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                    messages=[
+                        {"role": "system", "content": "You are an expert mortgage data extraction assistant. Always respond with valid JSON."},
+                        {"role": "user", "content": f"{prompt}\n{redaction_notice}\nTranscript:\n{redacted_transcript}"}
+                    ],
+                    response_format={"type": "json_object"},
+                ),
+                timeout=self.config.timeout
+            )
+
+            if not response.choices or not response.choices[0].message.content:
+                logger.warning("Empty response from Mistral API")
+                return {}
+            return json.loads(response.choices[0].message.content)
+
+        except asyncio.TimeoutError:
+            logger.error(f"Mistral custom prompt extraction timed out after {self.config.timeout}s")
+            raise
+        except json.JSONDecodeError as e:
+            logger.error(f"Mistral custom prompt returned invalid JSON: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"Mistral custom prompt extraction failed: {type(e).__name__}: {e}")
+            raise
+
+
 def create_llm_client(config: LLMConfig = None) -> BaseLLMClient:
     """Factory function to create appropriate LLM client."""
     config = config or LLMConfig.from_env()
@@ -1050,6 +1249,8 @@ def create_llm_client(config: LLMConfig = None) -> BaseLLMClient:
         return AnthropicClient(config)
     elif config.provider == LLMProvider.OPENAI:
         return OpenAIClient(config)
+    elif config.provider == LLMProvider.MISTRAL:
+        return MistralClient(config)
     else:
         raise ValueError(f"Unsupported LLM provider: {config.provider}")
 
