@@ -314,51 +314,48 @@ def _check_booking_email_rate_limit(db: Session, attendee_email: str, org_id: in
 # ============================================================================
 
 @router.get("/public/book-diag")
-async def public_booking_diag(request: Request, db: Session = Depends(get_db)):
+async def public_booking_diag(request: Request):
     """Temporary diagnostic endpoint — remove after debugging."""
+    import traceback as _tb
+    results = {}
+
+    # Test 1: get_models
     try:
         models = get_models()
-        model_keys = list(models.keys()) if models else []
-        BookingLink = models.get('BookingLink')
-
-        # Test 1: rate limit
-        rate_ok = "skipped"
-        try:
-            await _check_rate_limit(request)
-            rate_ok = True
-        except Exception as e:
-            rate_ok = f"{type(e).__name__}: {e}"
-
-        # Test 2: DB query
-        db_ok = True
-        link_info = None
-        try:
-            from sqlalchemy import text as sa_text
-            db.execute(sa_text("SELECT 1"))
-            if BookingLink:
-                link = db.query(BookingLink).filter(
-                    BookingLink.slug == "demo"
-                ).first()
-                if link:
-                    link_info = {"id": link.id, "slug": link.slug, "active": link.is_active}
-                else:
-                    link_info = "no demo link found"
-        except Exception as e:
-            db_ok = f"{type(e).__name__}: {e}"
-
-        return {
-            "status": "ok",
-            "models_loaded": len(model_keys),
-            "has_BookingLink": BookingLink is not None,
-            "has_AppointmentType": "AppointmentType" in model_keys,
-            "db_ok": db_ok,
-            "rate_limit_ok": rate_ok,
-            "demo_link": link_info,
-            "depends_get_db": "resolved",
-        }
+        results["models"] = len(models) if models else 0
     except Exception as e:
-        import traceback
-        return {"status": "error", "error": str(e), "type": type(e).__name__, "tb": traceback.format_exc()}
+        results["models_err"] = str(e)
+
+    # Test 2: manual get_db (not via Depends)
+    try:
+        gen = get_db(request)
+        db = next(gen)
+        from sqlalchemy import text as sa_text
+        db.execute(sa_text("SELECT 1"))
+        results["manual_get_db"] = "ok"
+        # Test BookingLink query
+        BookingLink = get_models().get('BookingLink')
+        if BookingLink:
+            link = db.query(BookingLink).filter(BookingLink.slug == "demo").first()
+            results["demo_link"] = {"id": link.id, "slug": link.slug} if link else "not found"
+        gen.close()
+    except Exception as e:
+        results["manual_get_db_err"] = f"{type(e).__name__}: {e}\n{_tb.format_exc()}"
+
+    # Test 3: Check what get_db import path is
+    results["get_db_module"] = get_db.__module__
+    results["get_db_qualname"] = get_db.__qualname__
+
+    # Test 4: rate limit
+    try:
+        await _check_rate_limit(request)
+        results["rate_limit"] = "ok"
+    except HTTPException as e:
+        results["rate_limit"] = f"HTTPException {e.status_code}: {e.detail}"
+    except Exception as e:
+        results["rate_limit_err"] = f"{type(e).__name__}: {e}"
+
+    return results
 
 
 @router.get("/public/book/{slug}")
