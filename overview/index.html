@@ -987,6 +987,58 @@
   }
   .site-footer a:hover { color: var(--text-primary); }
 
+  /* BOOKING LIGHTBOX */
+  .booking-overlay {
+    position: fixed; inset: 0; z-index: 10000;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(12px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; visibility: hidden;
+    transition: opacity .35s ease, visibility .35s ease;
+  }
+  .booking-overlay.active {
+    opacity: 1; visibility: visible;
+  }
+  .booking-modal {
+    position: relative;
+    width: 90vw; max-width: 520px;
+    height: 85vh; max-height: 720px;
+    background: var(--bg-1);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 80px rgba(77,163,255,0.08);
+    transform: scale(0.92) translateY(20px);
+    transition: transform .35s cubic-bezier(0.16,1,0.3,1);
+  }
+  .booking-overlay.active .booking-modal {
+    transform: scale(1) translateY(0);
+  }
+  .booking-modal-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+  }
+  .booking-modal-title {
+    font-family: var(--font-display); font-size: 1.05rem;
+    font-weight: 400; color: var(--text-primary);
+  }
+  .booking-modal-close {
+    background: none; border: none; cursor: pointer;
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary); font-size: 1.2rem;
+    transition: background .2s, color .2s;
+  }
+  .booking-modal-close:hover {
+    background: rgba(255,255,255,0.08); color: var(--text-primary);
+  }
+  .booking-modal iframe {
+    width: 100%; height: calc(100% - 57px); border: none;
+    background: var(--bg-1);
+  }
+
   /* MOBILE RESPONSIVE */
   @media (max-width: 900px) {
     body { cursor: auto; }
@@ -996,6 +1048,10 @@
     .nav-right { gap: 8px; }
     .nav-login { font-size: .7rem; padding: 8px 12px; }
     .nav-cta { font-size: .7rem; padding: 8px 16px; }
+    .booking-modal {
+      width: 96vw; height: 92vh; max-height: none;
+      border-radius: 14px;
+    }
   }
 </style>
 </head>
@@ -1037,7 +1093,7 @@
   <p class="hero-sub">Everything connected. Everything visible.<br>Everything moving forward.</p>
   <div class="hero-ctas">
     <a href="#pipeline" class="btn-primary" style="text-decoration:none;">Watch the System Work</a>
-    <a href="https://app.perenniaai.com/register" class="btn-ghost" style="text-decoration:none;">Book a Strategy Session</a>
+    <button class="btn-ghost" onclick="openBooking()">Book a Strategy Session</button>
   </div>
   <div class="hero-pipeline-preview">
     <div class="pipeline-strip">
@@ -1544,12 +1600,23 @@
   <h2 class="closing-title">Relationships don't<br>end at closing.<br><em>They compound.</em></h2>
   <p class="closing-sub">From first contact to mortgage under management. Post-closing refinance opportunities, equity alerts, and annual reviews — all automated, all connected.</p>
   <div class="closing-ctas">
-    <a href="https://app.perenniaai.com/register" class="btn-primary" style="font-size:.9rem;padding:16px 40px;text-decoration:none;">Get Started Free</a>
+    <button class="btn-primary" style="font-size:.9rem;padding:16px 40px;" onclick="openBooking()">Book a Strategy Session</button>
     <a href="#pipeline" class="btn-ghost" style="font-size:.9rem;padding:16px 40px;text-decoration:none;">Watch the System Work</a>
-    <a href="https://app.perenniaai.com/register" class="btn-ghost" style="font-size:.9rem;padding:16px 40px;text-decoration:none;">Join the Pilot Group</a>
+    <a href="https://app.perenniaai.com/register" class="btn-ghost" style="font-size:.9rem;padding:16px 40px;text-decoration:none;">Get Started Free</a>
   </div>
   <div class="closing-tagline">Perennia AI · The Relationship Operating System for Mortgage Teams</div>
 </section>
+
+<!-- BOOKING LIGHTBOX -->
+<div class="booking-overlay" id="bookingOverlay">
+  <div class="booking-modal">
+    <div class="booking-modal-header">
+      <div class="booking-modal-title">Book a Strategy Session</div>
+      <button class="booking-modal-close" id="bookingClose" aria-label="Close">&times;</button>
+    </div>
+    <iframe id="bookingFrame" title="Schedule an Appointment" loading="lazy"></iframe>
+  </div>
+</div>
 
 <!-- FOOTER -->
 <footer class="site-footer">
@@ -1855,6 +1922,40 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
     const target = document.querySelector(link.getAttribute('href'));
     if (target) target.scrollIntoView({ behavior: 'smooth' });
   });
+});
+
+// ==========================================
+// BOOKING LIGHTBOX
+// ==========================================
+const bookingOverlay = document.getElementById('bookingOverlay');
+const bookingFrame = document.getElementById('bookingFrame');
+const BOOKING_URL = 'https://app.perenniaai.com/embed/book/demo?bg=070a10&accent=4DA3FF';
+
+function openBooking() {
+  if (!bookingFrame.src) bookingFrame.src = BOOKING_URL;
+  bookingOverlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeBooking() {
+  bookingOverlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('bookingClose').addEventListener('click', closeBooking);
+bookingOverlay.addEventListener('click', e => {
+  if (e.target === bookingOverlay) closeBooking();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && bookingOverlay.classList.contains('active')) closeBooking();
+});
+
+// Listen for booking completion from iframe
+window.addEventListener('message', e => {
+  if (e.origin !== 'https://app.perenniaai.com') return;
+  if (e.data && e.data.type === 'booking-confirmed') {
+    closeBooking();
+  }
 });
 </script>
 </body>
