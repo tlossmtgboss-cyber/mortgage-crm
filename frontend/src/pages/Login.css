@@ -323,3 +323,87 @@
   margin-bottom: 24px;
   line-height: 1.5;
 }
+
+/* =============================================
+   MOBILE RESPONSIVE — LOGIN
+   ============================================= */
+
+@media (max-width: 768px) {
+  .login-container {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 10vh;
+  }
+
+  .login-box {
+    padding: 28px 24px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+    border-radius: 10px;
+  }
+
+  .login-header {
+    margin-bottom: 24px;
+  }
+
+  .login-header h1 {
+    font-size: 26px;
+  }
+
+  .login-form {
+    gap: 16px;
+  }
+
+  .form-group input {
+    padding: 14px 16px;
+    font-size: 16px; /* Prevents iOS auto-zoom on focus */
+  }
+
+  .btn-primary,
+  .btn-secondary,
+  .btn-quick-test,
+  .btn-biometric {
+    padding: 14px;
+    font-size: 16px;
+    min-height: 48px;
+  }
+
+  .demo-credentials {
+    padding: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-container {
+    padding: 12px;
+    padding-top: 6vh;
+  }
+
+  .login-box {
+    padding: 24px 18px;
+    max-width: 100%;
+  }
+
+  .login-header h1 {
+    font-size: 22px;
+  }
+
+  .login-header p {
+    font-size: 13px;
+  }
+
+  .login-footer {
+    margin-top: 20px;
+    padding-top: 16px;
+  }
+
+  .login-footer p {
+    font-size: 12px;
+  }
+
+  .success-message .success-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 26px;
+    line-height: 48px;
+  }
+}

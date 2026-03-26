@@ -256,4 +256,73 @@ input:focus, select:focus, textarea:focus {
   background: rgba(192, 21, 47, 0.1);
   color: var(--color-error);
 }
-/* Force rebuild - 1767349199 */
+/* =============================================
+   GLOBAL MOBILE RESPONSIVE UTILITIES
+   ============================================= */
+
+/* Touch device: enforce 44px minimum tap targets */
+@media (hover: none) and (pointer: coarse) {
+  button,
+  .btn-primary,
+  .btn-secondary,
+  a.nav-link,
+  .filter-tab,
+  select,
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 44px;
+  }
+
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-width: 20px;
+    min-height: 20px;
+  }
+}
+
+/* Prevent iOS auto-zoom on input focus (requires 16px minimum) */
+@media screen and (max-width: 768px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+
+/* Responsive visibility utilities */
+@media (max-width: 768px) {
+  .mobile-hidden {
+    display: none !important;
+  }
+}
+
+@media (min-width: 769px) {
+  .desktop-hidden {
+    display: none !important;
+  }
+}
+
+/* Responsive text scaling */
+@media (max-width: 480px) {
+  :root {
+    --font-3xl: 22px;
+    --font-4xl: 26px;
+  }
+
+  .card {
+    padding: var(--space-md);
+  }
+
+  .card:hover {
+    transform: none;
+  }
+}
+
+/* Ensure modals and overlays work on mobile */
+@media (max-width: 768px) {
+  .MuiDialog-paper {
+    margin: 16px !important;
+    max-height: calc(100vh - 32px) !important;
+    width: calc(100% - 32px) !important;
+  }
+}

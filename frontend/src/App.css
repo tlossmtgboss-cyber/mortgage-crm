@@ -121,7 +121,25 @@
 }
 
 @media (max-width: 768px) {
+  .app-main {
+    padding: 0 12px;
+  }
+
   .app-main.with-assistant {
     margin-right: 0;
+  }
+
+  .app-main.with-task-sidebar.with-assistant {
+    margin-right: 0;
+  }
+
+  .app-main > * {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-main {
+    padding: 0 8px;
   }
 }

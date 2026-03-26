@@ -1121,3 +1121,110 @@
 .selected-row:hover {
   background-color: #bae6fd !important;
 }
+
+/* =============================================
+   MOBILE RESPONSIVE — LEADS PAGE
+   ============================================= */
+
+@media (max-width: 1024px) {
+  .leads-page-wrapper {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 768px) {
+  .leads-page {
+    padding: var(--space-sm);
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: var(--space-sm);
+    align-items: stretch;
+  }
+
+  .page-header h1 {
+    font-size: var(--font-xl);
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .filter-tabs {
+    padding-bottom: var(--space-sm);
+    gap: 6px;
+    /* Scroll hint gradient */
+    mask-image: linear-gradient(to right, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 90%, transparent 100%);
+  }
+
+  .filter-tab {
+    padding: 8px 12px;
+    font-size: 12px;
+    min-height: 36px;
+  }
+
+  .search-bar-container {
+    margin: 12px 0;
+  }
+
+  .search-bar {
+    font-size: 16px; /* Prevent iOS zoom */
+    padding: 12px 40px 12px 14px;
+  }
+
+  .table-container {
+    border-radius: var(--radius-base);
+    /* Horizontal scroll shadow hint */
+    background:
+      linear-gradient(to right, var(--color-bg-surface) 30%, transparent),
+      linear-gradient(to left, var(--color-bg-surface) 30%, transparent),
+      linear-gradient(to right, rgba(0,0,0,.08), transparent 15px),
+      linear-gradient(to left, rgba(0,0,0,.08), transparent 15px);
+    background-position: left center, right center, left center, right center;
+    background-repeat: no-repeat;
+    background-size: 20px 100%, 20px 100%, 15px 100%, 15px 100%;
+    background-attachment: local, local, scroll, scroll;
+  }
+
+  .leads-table th,
+  .leads-table td {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .bulk-actions-bar {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .bulk-actions-bar .bulk-status-select {
+    min-width: 120px;
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .leads-page {
+    padding: var(--space-xs);
+  }
+
+  .page-header h1 {
+    font-size: var(--font-lg);
+  }
+
+  .filter-tab {
+    padding: 6px 10px;
+    font-size: 11px;
+    min-height: 32px;
+  }
+
+  .leads-table th,
+  .leads-table td {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+}

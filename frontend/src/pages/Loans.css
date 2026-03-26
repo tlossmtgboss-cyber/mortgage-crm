@@ -796,3 +796,95 @@
     transform: translateY(0);
   }
 }
+
+/* =============================================
+   MOBILE RESPONSIVE — LOANS PAGE
+   ============================================= */
+
+@media (max-width: 1024px) {
+  .loans-page-wrapper {
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 768px) {
+  .loans-page {
+    padding: var(--space-sm);
+  }
+
+  .page-header h1 {
+    font-size: var(--font-xl);
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: var(--space-sm);
+    width: 100%;
+  }
+
+  .header-actions button,
+  .header-actions .btn-salesforce {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .filter-tabs {
+    gap: 6px;
+    mask-image: linear-gradient(to right, black 90%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 90%, transparent 100%);
+  }
+
+  .filter-tab {
+    padding: 8px 12px;
+    font-size: 12px;
+    min-height: 36px;
+  }
+
+  .search-bar {
+    font-size: 16px; /* Prevent iOS zoom */
+  }
+
+  .table-container {
+    border-radius: var(--radius-base);
+    background:
+      linear-gradient(to right, var(--color-bg-surface) 30%, transparent),
+      linear-gradient(to left, var(--color-bg-surface) 30%, transparent),
+      linear-gradient(to right, rgba(0,0,0,.08), transparent 15px),
+      linear-gradient(to left, rgba(0,0,0,.08), transparent 15px);
+    background-position: left center, right center, left center, right center;
+    background-repeat: no-repeat;
+    background-size: 20px 100%, 20px 100%, 15px 100%, 15px 100%;
+    background-attachment: local, local, scroll, scroll;
+  }
+
+  .loans-table th,
+  .loans-table td {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+
+  .sync-result {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .loans-page {
+    padding: var(--space-xs);
+  }
+
+  .page-header h1 {
+    font-size: var(--font-lg);
+  }
+
+  .filter-tab {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+
+  .loans-table th,
+  .loans-table td {
+    padding: 8px 10px;
+    font-size: 11px;
+  }
+}

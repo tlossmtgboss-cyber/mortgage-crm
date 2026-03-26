@@ -22,6 +22,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   const [selectedModule, setSelectedModule] = useState(null);
   const [openDropdown, setOpenDropdown] = useState(null);
   const [openSubmenu, setOpenSubmenu] = useState(null);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef(null);
 
   // Close dropdown when clicking outside
@@ -35,6 +36,21 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  // Close mobile menu on route change
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  // Prevent body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [mobileMenuOpen]);
 
   // Prefetch utilities for instant navigation
   const { prefetchLeads, prefetchLoans, prefetchDashboard, prefetchTasks, prefetchPortfolio, prefetchPartners } = usePrefetch();
@@ -284,6 +300,18 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
     <>
       <nav className="navigation">
         <div className="nav-container">
+          {/* Mobile hamburger button */}
+          <button
+            className={`mobile-menu-btn ${mobileMenuOpen ? 'active' : ''}`}
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            aria-label="Toggle navigation menu"
+            aria-expanded={mobileMenuOpen}
+          >
+            <span className="hamburger-line" />
+            <span className="hamburger-line" />
+            <span className="hamburger-line" />
+          </button>
+
           <div className="nav-links">
             {navItems.map((item) => renderNavItem(item))}
           </div>
@@ -302,6 +330,81 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
           </div>
         </div>
       </nav>
+
+      {/* Mobile drawer overlay */}
+      {mobileMenuOpen && (
+        <div className="mobile-menu-overlay" onClick={() => setMobileMenuOpen(false)} />
+      )}
+
+      {/* Mobile slide-out drawer */}
+      <div className={`mobile-menu-drawer ${mobileMenuOpen ? 'open' : ''}`}>
+        <div className="mobile-menu-header">
+          <span className="mobile-menu-title">Menu</span>
+          <button
+            className="mobile-menu-close"
+            onClick={() => setMobileMenuOpen(false)}
+            aria-label="Close menu"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="mobile-menu-items">
+          {navItems.map((item) => {
+            if (item.children && item.children.length > 0) {
+              return (
+                <div key={item.key} className="mobile-menu-group">
+                  <div className="mobile-menu-group-label">{item.label}</div>
+                  {item.children.map((child, idx) => {
+                    if (child.children) {
+                      return child.children.map((sub, subIdx) => (
+                        <Link
+                          key={`${idx}-${subIdx}`}
+                          to={sub.path}
+                          className={`mobile-menu-item mobile-menu-sub ${location.pathname === sub.path ? 'active' : ''}`}
+                          onClick={() => setMobileMenuOpen(false)}
+                        >
+                          {sub.label}
+                        </Link>
+                      ));
+                    }
+                    return (
+                      <Link
+                        key={idx}
+                        to={child.path}
+                        className={`mobile-menu-item ${location.pathname === child.path ? 'active' : ''}`}
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {child.icon && <i className={`fas ${child.icon}`} />}
+                        {child.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              );
+            }
+            return (
+              <Link
+                key={item.key}
+                to={item.path}
+                className={`mobile-menu-item ${isNavItemActive(item) ? 'active' : ''}`}
+                onClick={() => setMobileMenuOpen(false)}
+              >
+                {item.label}
+                {renderBadge(item)}
+              </Link>
+            );
+          })}
+        </div>
+        <div className="mobile-menu-footer">
+          <Link
+            to="/settings"
+            className="mobile-menu-item"
+            onClick={() => setMobileMenuOpen(false)}
+          >
+            Settings
+          </Link>
+        </div>
+      </div>
 
       {/* Upgrade Modal */}
       <UpgradeModal

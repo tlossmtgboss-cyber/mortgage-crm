@@ -601,3 +601,205 @@
   padding: 40px;
   color: #6b7280;
 }
+
+/* =============================================
+   MOBILE RESPONSIVE — LANDING PAGE
+   ============================================= */
+
+@media (max-width: 768px) {
+  .landing-nav-container {
+    padding: 12px 16px;
+  }
+
+  .landing-logo {
+    font-size: 20px;
+    gap: 8px;
+  }
+
+  .logo-icon {
+    font-size: 26px;
+  }
+
+  .landing-nav-actions {
+    gap: 8px;
+  }
+
+  .btn-login,
+  .btn-signup {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .hero-section {
+    padding: 100px 16px 60px 16px;
+    margin-top: 60px;
+  }
+
+  .hero-title {
+    font-size: 32px;
+    margin-bottom: 16px;
+  }
+
+  .hero-subtitle {
+    font-size: 16px;
+    margin-bottom: 28px;
+    line-height: 1.5;
+  }
+
+  .hero-cta {
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+  }
+
+  .btn-primary-large,
+  .btn-secondary-large {
+    padding: 14px 32px;
+    font-size: 16px;
+    width: 100%;
+    max-width: 300px;
+    text-align: center;
+  }
+
+  .features-section {
+    padding: 48px 16px;
+  }
+
+  .features-section h2 {
+    font-size: 28px;
+    margin-bottom: 36px;
+  }
+
+  .features-grid {
+    gap: 16px;
+  }
+
+  .feature-card {
+    padding: 24px;
+  }
+
+  .feature-card h3 {
+    font-size: 18px;
+  }
+
+  .pricing-section {
+    padding: 48px 16px;
+  }
+
+  .pricing-section h2 {
+    font-size: 28px;
+  }
+
+  .pricing-subtitle {
+    font-size: 16px;
+    margin-bottom: 36px;
+  }
+
+  .pricing-card {
+    padding: 28px 24px;
+  }
+
+  .pricing-card.featured {
+    transform: none;
+  }
+
+  .price-amount {
+    font-size: 36px;
+  }
+
+  .testimonials-section {
+    padding: 48px 16px;
+  }
+
+  .testimonials-section h2 {
+    font-size: 28px;
+    margin-bottom: 36px;
+  }
+
+  .testimonials-grid {
+    gap: 16px;
+  }
+
+  .cta-section {
+    padding: 48px 16px;
+  }
+
+  .cta-section h2 {
+    font-size: 28px;
+  }
+
+  .cta-section p {
+    font-size: 16px;
+  }
+
+  .landing-footer {
+    padding: 40px 16px 24px;
+  }
+
+  .footer-content {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    margin-bottom: 28px;
+  }
+
+  /* Adjust for success banner on mobile */
+  .landing-page:has(.application-success-banner) .landing-nav {
+    top: 72px;
+  }
+
+  .landing-page:has(.application-success-banner) .hero-section {
+    padding-top: calc(120px + 72px);
+  }
+
+  .success-banner-content {
+    padding: 0 8px;
+    gap: 12px;
+  }
+
+  .success-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 24px;
+  }
+
+  .success-text h3 {
+    font-size: 15px;
+  }
+
+  .success-text p {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 26px;
+  }
+
+  .hero-subtitle {
+    font-size: 15px;
+  }
+
+  .features-section h2,
+  .pricing-section h2,
+  .testimonials-section h2,
+  .cta-section h2 {
+    font-size: 24px;
+  }
+
+  .landing-nav-actions .btn-login {
+    display: none;
+  }
+
+  .btn-signup {
+    padding: 8px 20px;
+  }
+
+  .plan-name {
+    font-size: 20px;
+  }
+
+  .price-amount {
+    font-size: 32px;
+  }
+}
