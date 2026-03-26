@@ -3,8 +3,6 @@
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "Content-Security-Policy", "value": "frame-ancestors 'none'" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { "key": "Permissions-Policy", "value": "geolocation=(), microphone=(self), camera=(self)" },
@@ -12,9 +10,16 @@
       ]
     },
     {
-      "source": "/embed/(.*)",
+      "source": "/embed/:path*",
       "headers": [
         { "key": "Content-Security-Policy", "value": "frame-ancestors https://www.perenniaai.com https://perenniaai.com" }
+      ]
+    },
+    {
+      "source": "/:path((?!embed/).*)",
+      "headers": [
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Content-Security-Policy", "value": "frame-ancestors 'none'" }
       ]
     }
   ],
