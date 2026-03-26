@@ -149,15 +149,18 @@ async def handle_send_document_checklist(args: dict, db, organization_id, user_i
     if send_via in ("sms", "both") and recipient_phone:
         import os
         try:
-            import telnyx
-            telnyx.api_key = os.getenv("TELNYX_API_KEY")
+            from telephony.sms import send_sms as telnyx_send_sms
+            telnyx_api_key = os.getenv("TELNYX_API_KEY")
             telnyx_from = os.getenv("TELNYX_FROM_NUMBER", os.getenv("TELNYX_PHONE_NUMBER", ""))
             messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
 
-            send_params = {"from_": telnyx_from, "to": recipient_phone, "text": checklist_text}
-            if messaging_profile_id:
-                send_params["messaging_profile_id"] = messaging_profile_id
-            telnyx.Message.create(**send_params)
+            telnyx_send_sms(
+                to=recipient_phone,
+                from_=telnyx_from,
+                text=checklist_text,
+                messaging_profile_id=messaging_profile_id or None,
+                api_key=telnyx_api_key,
+            )
 
             logger.info(f"Document checklist sent via SMS to {recipient_phone[-4:]}")
         except Exception as e:

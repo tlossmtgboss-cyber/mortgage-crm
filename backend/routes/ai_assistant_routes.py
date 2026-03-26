@@ -365,11 +365,12 @@ async def execute_ai_function(
                 return {"success": False, "error": "Telnyx not configured"}
 
             try:
-                import telnyx
-                telnyx_message = telnyx.Message.create(
-                    from_=telnyx_phone,
+                from telephony.sms import send_sms as telnyx_send_sms
+                result = telnyx_send_sms(
                     to=recipient_phone,
+                    from_=telnyx_phone,
                     text=message_text,
+                    api_key=telnyx_key,
                 )
 
                 # Log activity
@@ -383,7 +384,7 @@ async def execute_ai_function(
                     db.add(activity)
                     db.commit()
 
-                msg_id = getattr(telnyx_message, 'id', None) or getattr(getattr(telnyx_message, 'data', None), 'id', None) or 'unknown'
+                msg_id = result.get("id", "unknown")
                 return {
                     "success": True,
                     "message_sid": msg_id,

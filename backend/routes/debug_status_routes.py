@@ -686,7 +686,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         """Send a test SMS to verify telephony provider is working"""
         import os
         try:
-            import telnyx
+            from telephony.sms import send_sms as telnyx_send_sms
 
             from_number = os.getenv("TELNYX_PHONE_NUMBER")
 
@@ -705,13 +705,13 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             if not phone.startswith("+"):
                 phone = "+1" + phone.replace("-", "").replace(" ", "")
 
-            sms = telnyx.Message.create(
-                from_=from_number,
+            result = telnyx_send_sms(
                 to=phone,
+                from_=from_number,
                 text=message,
             )
 
-            msg_id = getattr(sms, 'id', None) or getattr(getattr(sms, 'data', None), 'id', None) or 'unknown'
+            msg_id = result.get("id", "unknown")
 
             return {
                 "success": True,

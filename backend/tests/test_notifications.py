@@ -330,18 +330,18 @@ class TestSMSDeliveryFormatting:
         from services.notification_service import NotificationService
 
         service = NotificationService()
-
-        # Mock the Telnyx SMS module used by send_sms
-        mock_sms_data = MagicMock(id="MSG123")
-        mock_sms = MagicMock(data=mock_sms_data, id="MSG123")
         service.telephony_provider = "telnyx"
-        with patch('telnyx.Message.create', return_value=mock_sms):
+
+        mock_result = {"id": "msg-123", "status": "sent"}
+        with patch('telephony.sms.send_sms', return_value=mock_result):
             result = service.send_sms(
                 to_phone="+15551234567",
-                message="Your application has been submitted."
+                message="Your application has been submitted.",
+                skip_consent_check=True,
             )
 
-        assert result.get("success", True) or result.get("message_sid")
+        assert result.get("success") is True
+        assert result.get("message_sid") == "msg-123"
 
     def test_sms_respects_160_char_limit(self):
         """Test SMS messages are within character limits"""
@@ -362,22 +362,26 @@ class TestSMSDeliveryFormatting:
                 assert len(msg) <= 1600  # Max 10 segments
 
     def test_sms_includes_sender_id(self):
-        """Test SMS includes proper sender ID"""
-        with patch('telnyx.Message.create') as mock_telnyx_create:
-            mock_sms = MagicMock(data=MagicMock(id="MSG123"), id="MSG123")
-            mock_telnyx_create.return_value = mock_sms
+        """Test SMS includes proper sender ID / from number"""
+        from services.notification_service import NotificationService
 
-            from services.notification_service import NotificationService
-            service = NotificationService()
-            service.telephony_provider = "telnyx"
+        service = NotificationService()
+        service.telephony_provider = "telnyx"
+
+        mock_result = {"id": "msg-123", "status": "sent"}
+        with patch('telephony.sms.send_sms', return_value=mock_result) as mock_send:
             service.send_sms(
                 to_phone="+15551234567",
-                message="Test message"
+                message="Test message",
+                skip_consent_check=True,
             )
 
-            # Verify from_ number was passed to Telnyx
-            call_args = mock_telnyx_create.call_args
-            assert call_args is not None or True
+            # Verify from_ number was passed to telephony.sms.send_sms
+            mock_send.assert_called_once()
+            call_kwargs = mock_send.call_args[1] if mock_send.call_args[1] else {}
+            call_args_pos = mock_send.call_args[0] if mock_send.call_args[0] else ()
+            # from_ should be present as a keyword argument
+            assert "from_" in call_kwargs or len(call_args_pos) >= 2
 
     def test_sms_phone_number_formatting(self):
         """Test phone numbers are formatted correctly"""
@@ -413,18 +417,21 @@ class TestSMSDeliveryFormatting:
 
     def test_sms_error_handling(self):
         """Test SMS handles delivery errors gracefully"""
-        with patch('telnyx.Message.create', side_effect=Exception("SMS provider error")):
-            from services.notification_service import NotificationService
-            service = NotificationService()
-            service.telephony_provider = "telnyx"
+        from services.notification_service import NotificationService
 
+        service = NotificationService()
+        service.telephony_provider = "telnyx"
+
+        with patch('telephony.sms.send_sms', side_effect=Exception("SMS provider error")):
             result = service.send_sms(
                 to_phone="+15551234567",
-                message="Test message"
+                message="Test message",
+                skip_consent_check=True,
             )
 
-            # Should return error, not raise exception
-            assert result.get("error") or result.get("success") == False or True
+            # Should return error dict, not raise exception
+            assert result.get("success") is False
+            assert result.get("error")
 
 
 class TestEmailDelivery:

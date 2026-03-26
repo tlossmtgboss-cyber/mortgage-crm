@@ -411,21 +411,18 @@ class _TelnyxSMSMixin:
             return {"message_id": None, "status": "failed", "error": "SMS service not configured"}
 
         def _blocking_send() -> Dict[str, Any]:
-            import telnyx
-            telnyx.api_key = telnyx_api_key
-
-            kwargs: Dict[str, Any] = {
-                "from_": telnyx_from,
-                "to": to_number,
-                "text": message,
-                "messaging_profile_id": messaging_profile,
-            }
-            if media_urls:
-                kwargs["media_urls"] = media_urls
+            from telephony.sms import send_sms as telnyx_send_sms
 
             try:
-                result = telnyx.Message.create(**kwargs)
-                msg_id = getattr(result, "id", None) or str(uuid.uuid4())
+                result = telnyx_send_sms(
+                    to=to_number,
+                    from_=telnyx_from,
+                    text=message,
+                    messaging_profile_id=messaging_profile or None,
+                    media_urls=media_urls,
+                    api_key=telnyx_api_key,
+                )
+                msg_id = result.get("id") or str(uuid.uuid4())
                 return {"message_id": str(msg_id), "status": "sent", "error": None}
             except Exception as e:
                 logger.exception("Telnyx send failed to=%s", to_number)

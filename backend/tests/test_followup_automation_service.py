@@ -355,8 +355,8 @@ class TestSMSFollowup:
             "TELNYX_FROM_NUMBER": "+18001234567",
             "TELNYX_MESSAGING_PROFILE_ID": "profile_123",
         }):
-            with patch("services.smart_docs.followup_automation_service.telnyx") as mock_telnyx:
-                mock_telnyx.Message.create.return_value = MagicMock()
+            with patch("telephony.sms.send_sms") as mock_send_sms:
+                mock_send_sms.return_value = {"id": "msg-123", "status": "sent"}
 
                 result = service._send_sms_reminder(
                     campaign_id=1,
@@ -364,6 +364,14 @@ class TestSMSFollowup:
                     borrower_phone="+15551234567",
                     borrower_name="John",
                     document_count=3,
+                )
+
+                mock_send_sms.assert_called_once_with(
+                    to="+15551234567",
+                    from_="+18001234567",
+                    text=result["body"],
+                    messaging_profile_id="profile_123",
+                    api_key="test_key",
                 )
 
         assert result["status"] == "sent"
@@ -389,7 +397,8 @@ class TestSMSFollowup:
         service._get_campaign = MagicMock(return_value=campaign)
 
         with patch.dict(os.environ, {"TELNYX_API_KEY": "", "TELNYX_FROM_NUMBER": ""}, clear=False):
-            with patch("services.smart_docs.followup_automation_service.telnyx"):
+            with patch("telephony.sms.send_sms") as mock_send_sms:
+                mock_send_sms.return_value = {"id": "msg-123", "status": "sent"}
                 result = service._send_sms_reminder(
                     campaign_id=1,
                     template_slug="gentle_reminder_sms",
@@ -397,6 +406,8 @@ class TestSMSFollowup:
                     borrower_name="John",
                     document_count=2,
                 )
+                # send_sms should never be called when not configured
+                mock_send_sms.assert_not_called()
 
         assert result["status"] == "failed"
         assert "not configured" in result["error"]

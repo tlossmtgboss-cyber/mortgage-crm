@@ -91,7 +91,128 @@ class VoiceCIBridgeService:
             "CI session stopped from voice",
             extra={"session_id": session_id, "run_agents": run_agents},
         )
-        return {"success": True, "session_id": session_id}
+
+        agents_triggered = False
+        trigger_method = None
+
+        if run_agents:
+            agents_triggered, trigger_method = await self._trigger_agent_pipeline(
+                session_id
+            )
+
+        return {
+            "success": True,
+            "session_id": session_id,
+            "agents_triggered": agents_triggered,
+            "trigger_method": trigger_method,
+        }
+
+    async def _trigger_agent_pipeline(
+        self, session_id: str
+    ) -> tuple:
+        """
+        Trigger the AI agent pipeline for a completed session.
+
+        Preferred: Celery task (non-blocking, survives process restarts).
+        Fallback: asyncio.create_task with orchestrator (in-process async).
+
+        Returns:
+            (triggered: bool, method: str|None)
+        """
+        # --- Attempt 1: Celery task (preferred, non-blocking) ---
+        try:
+            from tasks.call_intelligence_tasks import process_transcript_task
+
+            # Fetch transcript from DB so the Celery worker has it
+            row = self.db.execute(text("""
+                SELECT full_transcript
+                FROM call_sessions
+                WHERE id = :session_id AND organization_id = :org_id
+            """), {
+                "session_id": session_id,
+                "org_id": self.organization_id,
+            }).fetchone()
+
+            transcript = row.full_transcript if row else None
+
+            if transcript:
+                process_transcript_task.delay({
+                    "call_id": session_id,
+                    "organization_id": self.organization_id,
+                    "transcript": transcript,
+                })
+                logger.info(
+                    "Agent pipeline triggered via Celery task",
+                    extra={"session_id": session_id},
+                )
+                return True, "celery"
+            else:
+                logger.warning(
+                    "No transcript available for Celery task, falling back to orchestrator",
+                    extra={"session_id": session_id},
+                )
+        except Exception as e:
+            logger.warning(
+                "Celery task dispatch failed, falling back to orchestrator: %s",
+                e,
+                extra={"session_id": session_id},
+            )
+
+        # --- Attempt 2: asyncio.create_task with orchestrator (fallback) ---
+        try:
+            import asyncio
+
+            asyncio.create_task(
+                self._run_agents_async(session_id, self.organization_id)
+            )
+            logger.info(
+                "Agent pipeline triggered via asyncio orchestrator",
+                extra={"session_id": session_id},
+            )
+            return True, "asyncio_orchestrator"
+        except Exception as e:
+            logger.error(
+                "Failed to trigger agent pipeline: %s",
+                e,
+                extra={"session_id": session_id},
+            )
+            return False, None
+
+    @staticmethod
+    async def _run_agents_async(
+        session_id: str, organization_id: int
+    ) -> None:
+        """
+        Run the CallMonitoringOrchestrator agents in a background coroutine.
+
+        Creates a fresh DB session so the caller's session isn't held open.
+        """
+        try:
+            from db import SessionLocal
+            from services.call_monitoring.orchestrator_service import (
+                CallMonitoringOrchestrator,
+            )
+
+            db = SessionLocal()
+            try:
+                orchestrator = CallMonitoringOrchestrator(
+                    db, organization_id=organization_id
+                )
+                await orchestrator.run_agents(
+                    session_id=session_id,
+                    trigger="voice_ci_bridge",
+                )
+                logger.info(
+                    "Orchestrator agents completed for session %s", session_id
+                )
+            finally:
+                db.close()
+        except Exception as e:
+            logger.error(
+                "Orchestrator background processing failed for session %s: %s",
+                session_id,
+                e,
+            )
 
     async def get_latest_session(self) -> Optional[Dict[str, Any]]:
         """Get most recent CI session for this user/org."""
@@ -369,6 +490,48 @@ class VoiceCIBridgeService:
             "documents": documents,
             "count": len(documents),
         }
+
+    async def update_session_transcript(
+        self, session_id: str, transcript_text: str
+    ) -> Dict[str, Any]:
+        """Append or update the full transcript for a CI session.
+
+        Overwrites full_transcript with the provided text and updates
+        transcript_word_count.  Intended to be called with the complete
+        accumulated transcript (not a delta).
+        """
+        if not session_id or not transcript_text:
+            return {"success": False, "error": "session_id and transcript_text required"}
+
+        word_count = len(transcript_text.split())
+
+        result = self.db.execute(text("""
+            UPDATE call_sessions
+            SET full_transcript = :transcript,
+                transcript_word_count = :word_count,
+                updated_at = NOW()
+            WHERE id = :session_id
+                AND organization_id = :org_id
+            RETURNING id
+        """), {
+            "transcript": transcript_text,
+            "word_count": word_count,
+            "session_id": session_id,
+            "org_id": self.organization_id,
+        }).fetchone()
+        self.db.flush()
+
+        if not result:
+            return {"success": False, "error": f"Session {session_id} not found"}
+
+        logger.info(
+            "CI session transcript updated",
+            extra={
+                "session_id": session_id,
+                "word_count": word_count,
+            },
+        )
+        return {"success": True, "session_id": session_id, "word_count": word_count}
 
     # -------------------------------------------------------------------------
     # Private helpers

@@ -210,16 +210,14 @@ class TestSMSConsentInPublicBooking:
     """Test SMS consent checking in public booking confirmation flow."""
 
     @patch("services.scheduler_sms_sender.check_sms_consent")
-    @patch("services.scheduler_sms_sender.telnyx", create=True)
+    @patch("telephony.sms.send_sms")
     @patch.dict("os.environ", {"TELNYX_PHONE_NUMBER": "+18438838956"})
-    def test_confirmation_sms_calls_consent_check(self, mock_telnyx, mock_consent):
+    def test_confirmation_sms_calls_consent_check(self, mock_send_sms, mock_consent):
         """Confirmation SMS must call check_sms_consent before sending."""
         from services.scheduler_sms_sender import send_appointment_confirmation_sms
 
         mock_consent.return_value = (True, "OK")
-        mock_msg = MagicMock()
-        mock_msg.data.id = "msg-123"
-        mock_telnyx.Message.create.return_value = mock_msg
+        mock_send_sms.return_value = {"id": "msg-123", "status": "sent"}
 
         result = send_appointment_confirmation_sms(
             attendee_phone="+15551234567",
@@ -232,12 +230,12 @@ class TestSMSConsentInPublicBooking:
 
         assert result is True
         mock_consent.assert_called_once_with("+15551234567", organization_id=42)
-        mock_telnyx.Message.create.assert_called_once()
+        mock_send_sms.assert_called_once()
 
     @patch("services.scheduler_sms_sender.check_sms_consent")
-    @patch("services.scheduler_sms_sender.telnyx", create=True)
+    @patch("telephony.sms.send_sms")
     @patch.dict("os.environ", {"TELNYX_PHONE_NUMBER": "+18438838956"})
-    def test_confirmation_sms_blocked_by_consent(self, mock_telnyx, mock_consent):
+    def test_confirmation_sms_blocked_by_consent(self, mock_send_sms, mock_consent):
         """Confirmation SMS should NOT be sent when consent check fails."""
         from services.scheduler_sms_sender import send_appointment_confirmation_sms
 
@@ -253,8 +251,8 @@ class TestSMSConsentInPublicBooking:
 
         assert result is False
         mock_consent.assert_called_once_with("+15551234567", organization_id=42)
-        # Telnyx should NOT have been called
-        mock_telnyx.Message.create.assert_not_called()
+        # send_sms should NOT have been called
+        mock_send_sms.assert_not_called()
 
     @patch("services.scheduler_sms_sender.check_sms_consent")
     @patch.dict("os.environ", {"TELNYX_PHONE_NUMBER": "+18438838956"})
@@ -276,9 +274,9 @@ class TestSMSConsentInPublicBooking:
         mock_consent.assert_called_once_with("+15559876543", organization_id=99)
 
     @patch("services.scheduler_sms_sender.check_sms_consent")
-    @patch("services.scheduler_sms_sender.telnyx", create=True)
+    @patch("telephony.sms.send_sms")
     @patch.dict("os.environ", {"TELNYX_PHONE_NUMBER": "+18438838956"})
-    def test_update_sms_checks_consent(self, mock_telnyx, mock_consent):
+    def test_update_sms_checks_consent(self, mock_send_sms, mock_consent):
         """Appointment update SMS must also check consent."""
         from services.scheduler_sms_sender import send_appointment_update_sms
 
@@ -294,12 +292,12 @@ class TestSMSConsentInPublicBooking:
 
         assert result is False
         mock_consent.assert_called_once_with("+15551234567", organization_id=42)
-        mock_telnyx.Message.create.assert_not_called()
+        mock_send_sms.assert_not_called()
 
     @patch("services.scheduler_sms_sender.check_sms_consent")
-    @patch("services.scheduler_sms_sender.telnyx", create=True)
+    @patch("telephony.sms.send_sms")
     @patch.dict("os.environ", {"TELNYX_PHONE_NUMBER": "+18438838956"})
-    def test_reminder_sms_checks_consent(self, mock_telnyx, mock_consent):
+    def test_reminder_sms_checks_consent(self, mock_send_sms, mock_consent):
         """Appointment reminder SMS must also check consent."""
         from services.scheduler_sms_sender import send_appointment_reminder_sms
 
@@ -315,7 +313,7 @@ class TestSMSConsentInPublicBooking:
 
         assert result == {"success": False, "error": "Consent blocked: No SMS consent on file"}
         mock_consent.assert_called_once_with("+15551234567", organization_id=42)
-        mock_telnyx.Message.create.assert_not_called()
+        mock_send_sms.assert_not_called()
 
 
 # =============================================================================
@@ -332,17 +330,15 @@ class TestSMSConsentInPipelineTrigger:
     """
 
     @patch("services.scheduler_sms_sender.check_sms_consent")
-    @patch("services.scheduler_sms_sender.telnyx", create=True)
+    @patch("telephony.sms.send_sms")
     @patch.dict("os.environ", {"TELNYX_PHONE_NUMBER": "+18438838956"})
-    def test_booking_link_sms_checks_consent(self, mock_telnyx, mock_consent):
+    def test_booking_link_sms_checks_consent(self, mock_send_sms, mock_consent):
         """If a booking link is sent via SMS, consent must be checked first."""
         from services.scheduler_sms_sender import send_appointment_confirmation_sms
 
         # Simulate a booking link sent as SMS confirmation
         mock_consent.return_value = (True, "OK")
-        mock_msg = MagicMock()
-        mock_msg.data.id = "msg-456"
-        mock_telnyx.Message.create.return_value = mock_msg
+        mock_send_sms.return_value = {"id": "msg-456", "status": "sent"}
 
         result = send_appointment_confirmation_sms(
             attendee_phone="+15559991234",
@@ -432,16 +428,14 @@ class TestSMSConsentInNoShowRecovery:
         assert "STOP" in reason
 
     @patch("services.scheduler_sms_sender.check_sms_consent")
-    @patch("services.scheduler_sms_sender.telnyx", create=True)
+    @patch("telephony.sms.send_sms")
     @patch.dict("os.environ", {"TELNYX_PHONE_NUMBER": "+18438838956"})
-    def test_recovery_sms_sent_when_consent_valid(self, mock_telnyx, mock_consent):
+    def test_recovery_sms_sent_when_consent_valid(self, mock_send_sms, mock_consent):
         """Recovery SMS should be sent when consent is valid and number not on DNC."""
         from services.scheduler_sms_sender import send_appointment_reminder_sms
 
         mock_consent.return_value = (True, "OK")
-        mock_msg = MagicMock()
-        mock_msg.data.id = "msg-recovery-001"
-        mock_telnyx.Message.create.return_value = mock_msg
+        mock_send_sms.return_value = {"id": "msg-recovery-001", "status": "sent"}
 
         result = send_appointment_reminder_sms(
             attendee_phone="+15557778888",
@@ -455,7 +449,7 @@ class TestSMSConsentInNoShowRecovery:
         assert result["success"] is True
         assert result["message_id"] == "msg-recovery-001"
         mock_consent.assert_called_once_with("+15557778888", organization_id=5)
-        mock_telnyx.Message.create.assert_called_once()
+        mock_send_sms.assert_called_once()
 
 
 # =============================================================================

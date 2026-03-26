@@ -248,7 +248,7 @@ async def handle_browser_function_call(
             "Voice tool rate limited",
             extra={"session_id": session_id, "tool": func_name}
         )
-        return {"error": f"Rate limited: too many {func_name} calls. Please wait."}
+        return {"success": False, "error": f"Rate limited: too many {func_name} calls. Please wait.", "message": f"Rate limited: too many {func_name} calls. Please wait."}
 
     logger.info(f"Browser function call: {func_name}({args})", extra={"user_id": user_id, "org_id": organization_id})
 
@@ -312,7 +312,7 @@ async def handle_browser_function_call(
             return {"success": False, "message": "Phone number and message are required to send SMS."}
 
         try:
-            import telnyx
+            from telephony.sms import send_sms as telnyx_send_sms
 
             telnyx_api_key = os.getenv("TELNYX_API_KEY")
             telnyx_from_number = os.getenv("TELNYX_FROM_NUMBER", os.getenv("TELNYX_PHONE_NUMBER", ""))
@@ -321,17 +321,13 @@ async def handle_browser_function_call(
             if not telnyx_api_key or not telnyx_from_number:
                 return {"success": False, "message": "SMS not configured. Missing Telnyx credentials."}
 
-            telnyx.api_key = telnyx_api_key
-
-            send_params = {
-                "from_": telnyx_from_number,
-                "to": phone_number,
-                "text": message_text,
-            }
-            if messaging_profile_id:
-                send_params["messaging_profile_id"] = messaging_profile_id
-
-            telnyx.Message.create(**send_params)
+            telnyx_send_sms(
+                to=phone_number,
+                from_=telnyx_from_number,
+                text=message_text,
+                messaging_profile_id=messaging_profile_id or None,
+                api_key=telnyx_api_key,
+            )
 
             logger.info(f"SMS sent to {mask_phone(phone_number)} ({contact_name})")
 
@@ -553,7 +549,7 @@ async def handle_browser_function_call(
             )
 
             # Send the SMS via Telnyx
-            import telnyx
+            from telephony.sms import send_sms as telnyx_send_sms
             telnyx_api_key = os.getenv("TELNYX_API_KEY")
             telnyx_from_number = os.getenv("TELNYX_FROM_NUMBER", os.getenv("TELNYX_PHONE_NUMBER", ""))
             messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
@@ -561,17 +557,13 @@ async def handle_browser_function_call(
             if not telnyx_api_key or not telnyx_from_number:
                 return {"success": False, "message": "SMS not configured. Missing Telnyx credentials."}
 
-            telnyx.api_key = telnyx_api_key
-
-            send_params = {
-                "from_": telnyx_from_number,
-                "to": contact_phone,
-                "text": sms_text,
-            }
-            if messaging_profile_id:
-                send_params["messaging_profile_id"] = messaging_profile_id
-
-            telnyx.Message.create(**send_params)
+            telnyx_send_sms(
+                to=contact_phone,
+                from_=telnyx_from_number,
+                text=sms_text,
+                messaging_profile_id=messaging_profile_id or None,
+                api_key=telnyx_api_key,
+            )
 
             logger.info(f"Scheduling workflow started for {contact_name} at {mask_phone(contact_phone)}")
 
@@ -917,10 +909,22 @@ async def handle_browser_function_call(
 
             logger.info(f"Call recording stopped: session={found_session_id[:8]}")
 
+            # Trigger AI agent pipeline (non-blocking)
+            agents_triggered = False
+            try:
+                from services.voice_ci_bridge_service import VoiceCIBridgeService
+                bridge = VoiceCIBridgeService(db, organization_id, user_id)
+                bridge._trigger_agent_pipeline(found_session_id)
+                agents_triggered = True
+                logger.info(f"Agent pipeline triggered for session={found_session_id[:8]}")
+            except Exception as agent_err:
+                logger.error(f"Agent trigger failed (non-blocking): {agent_err}")
+
             return {
                 "success": True,
                 "message": f"Call recording stopped. AI analysis is processing. Session: {found_session_id[:8]}.",
                 "session_id": found_session_id,
+                "agents_triggered": agents_triggered,
             }
 
         except Exception as e:
@@ -990,24 +994,20 @@ async def handle_browser_function_call(
 
             # Send via SMS using Telnyx
             if send_via in ("sms", "both") and recipient_phone:
-                import telnyx
+                from telephony.sms import send_sms as telnyx_send_sms
 
                 telnyx_api_key = os.getenv("TELNYX_API_KEY")
                 telnyx_from_number = os.getenv("TELNYX_FROM_NUMBER", os.getenv("TELNYX_PHONE_NUMBER", ""))
                 messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
 
                 if telnyx_api_key and telnyx_from_number:
-                    telnyx.api_key = telnyx_api_key
-
-                    sms_params = {
-                        "from_": telnyx_from_number,
-                        "to": recipient_phone,
-                        "text": checklist_text,
-                    }
-                    if messaging_profile_id:
-                        sms_params["messaging_profile_id"] = messaging_profile_id
-
-                    telnyx.Message.create(**sms_params)
+                    telnyx_send_sms(
+                        to=recipient_phone,
+                        from_=telnyx_from_number,
+                        text=checklist_text,
+                        messaging_profile_id=messaging_profile_id or None,
+                        api_key=telnyx_api_key,
+                    )
                     sent_channels.append("sms")
                     logger.info(f"Document checklist sent via SMS to {mask_phone(recipient_phone)}")
                 else:
@@ -1059,14 +1059,17 @@ async def handle_browser_function_call(
             db.rollback()
             return {"success": False, "message": f"Failed to send document checklist: {str(e)}"}
 
-    # CI tool dispatch — delegates to ci_tools module for tools without inline handlers
+    # CI tool dispatch — delegates to ci_tools module for remaining CI handlers
     elif func_name in (
         "get_recent_call_summary", "get_call_artifacts",
         "approve_artifact", "execute_artifacts",
+        "send_document_checklist",
     ):
         from .ci_tools import CI_TOOL_HANDLERS
-        handler = CI_TOOL_HANDLERS[func_name]
-        return await handler(args, db, organization_id, user_id)
+        handler = CI_TOOL_HANDLERS.get(func_name)
+        if handler:
+            return await handler(args=args, db=db, organization_id=organization_id, user_id=user_id)
+        return {"success": False, "message": f"CI tool '{func_name}' not found."}
 
     else:
         logger.warning(f"Unknown browser function called: {func_name}")

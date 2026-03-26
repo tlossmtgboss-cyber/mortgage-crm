@@ -339,10 +339,9 @@ class TestHandleSendDocumentChecklist:
 
         from routes.voice.ci_tools import handle_send_document_checklist
 
-        # telnyx SDK v2+ uses Client, not telnyx.Message directly.
-        # The handler code does `telnyx.Message.create(...)` so mock it with create=True.
-        with patch("telnyx.Message", create=True) as mock_message:
-            mock_message.create.return_value = MagicMock()
+        # Mock the centralized SMS helper (telephony.sms.send_sms)
+        with patch("telephony.sms.send_sms") as mock_send_sms:
+            mock_send_sms.return_value = {"id": "msg-123", "status": "sent"}
             with patch.dict(os.environ, {
                 "TELNYX_API_KEY": "fake-key",
                 "TELNYX_FROM_NUMBER": "+15550001111",

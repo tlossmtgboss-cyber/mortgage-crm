@@ -138,6 +138,15 @@ async def browser_voice_websocket(websocket: WebSocket):
     from db import SessionLocal
     db = SessionLocal()
 
+    # --- CI transcript accumulation state ---
+    # Tracks the active Call Intelligence session and accumulates transcript
+    # text from OpenAI Realtime speech-to-text events so it can be persisted
+    # to call_sessions.full_transcript when recording stops.
+    ci_state = {
+        "session_id": None,       # Set when start_call_recording succeeds
+        "transcript_parts": [],   # List of (role, text) tuples
+    }
+
     try:
         # Connect to OpenAI Realtime API
         openai_ws = await connect_to_openai_realtime_browser()
@@ -213,21 +222,29 @@ async def browser_voice_websocket(websocket: WebSocket):
                         })
 
                     elif event_type == 'response.audio_transcript.done':
+                        transcript_text = data.get('transcript', '')
                         await websocket.send_json({
                             "type": "transcript",
-                            "text": data.get('transcript', ''),
+                            "text": transcript_text,
                             "role": "assistant",
                             "is_final": True
                         })
+                        # Accumulate for CI session transcript
+                        if ci_state["session_id"] and transcript_text:
+                            ci_state["transcript_parts"].append(("Assistant", transcript_text))
 
                     elif event_type == 'conversation.item.input_audio_transcription.completed':
                         # User speech transcription complete
+                        transcript_text = data.get('transcript', '')
                         await websocket.send_json({
                             "type": "transcript",
-                            "text": data.get('transcript', ''),
+                            "text": transcript_text,
                             "role": "user",
                             "is_final": True
                         })
+                        # Accumulate for CI session transcript
+                        if ci_state["session_id"] and transcript_text:
+                            ci_state["transcript_parts"].append(("User", transcript_text))
 
                     elif event_type == 'input_audio_buffer.speech_started':
                         await websocket.send_json({
@@ -309,6 +326,59 @@ async def browser_voice_websocket(websocket: WebSocket):
                                 "status": action_status
                             })
 
+                            # Emit CI-specific events for Aria mobile app real-time updates
+                            if action_status == "success":
+                                try:
+                                    if func_name == "start_call_recording":
+                                        ci_session_id = result.get("session_id")
+                                        # Track active CI session for transcript accumulation
+                                        ci_state["session_id"] = ci_session_id
+                                        ci_state["transcript_parts"] = []
+                                        logger.info(f"CI transcript accumulation started for session {ci_session_id}")
+                                        await websocket.send_json({
+                                            "type": "ci_session_started",
+                                            "session_id": ci_session_id,
+                                        })
+                                    elif func_name == "stop_call_recording":
+                                        # Save accumulated transcript before session closes
+                                        ci_sid = ci_state["session_id"] or result.get("session_id")
+                                        if ci_sid and ci_state["transcript_parts"]:
+                                            try:
+                                                from services.voice_ci_bridge_service import VoiceCIBridgeService
+                                                full_text = "\n".join(
+                                                    f"[{role}]: {utterance}"
+                                                    for role, utterance in ci_state["transcript_parts"]
+                                                )
+                                                bridge = VoiceCIBridgeService(db, ws_organization_id, ws_user_id)
+                                                save_result = await bridge.update_session_transcript(ci_sid, full_text)
+                                                db.commit()
+                                                logger.info(
+                                                    f"CI transcript saved: {save_result.get('word_count', 0)} words "
+                                                    f"for session {ci_sid}"
+                                                )
+                                            except Exception as save_err:
+                                                logger.error(f"Failed to save CI transcript: {save_err}")
+                                                try:
+                                                    db.rollback()
+                                                except Exception:
+                                                    pass
+                                        # Reset CI state
+                                        ci_state["session_id"] = None
+                                        ci_state["transcript_parts"] = []
+                                        await websocket.send_json({
+                                            "type": "ci_processing_complete",
+                                            "session_id": result.get("session_id"),
+                                        })
+                                    elif func_name == "get_call_artifacts":
+                                        await websocket.send_json({
+                                            "type": "ci_artifact_generated",
+                                            "artifacts": result.get("artifacts", []),
+                                            "count": result.get("count", 0),
+                                        })
+                                except Exception as ci_evt_err:
+                                    # CI event emission is non-critical; log and continue
+                                    logger.warning(f"Failed to send CI event for {func_name}: {ci_evt_err}")
+
                             logger.info(f"Browser function {func_name} completed: {action_status}")
 
                         except Exception as func_err:
@@ -362,6 +432,27 @@ async def browser_voice_websocket(websocket: WebSocket):
             logger.error(f"Error in browser_voice_session (send error to client): {e}")
             pass  # Client may have disconnected
     finally:
+        # Save any unsaved CI transcript before tearing down
+        if ci_state["session_id"] and ci_state["transcript_parts"]:
+            try:
+                from services.voice_ci_bridge_service import VoiceCIBridgeService
+                full_text = "\n".join(
+                    f"[{role}]: {utterance}"
+                    for role, utterance in ci_state["transcript_parts"]
+                )
+                bridge = VoiceCIBridgeService(db, ws_organization_id, ws_user_id)
+                await bridge.update_session_transcript(ci_state["session_id"], full_text)
+                db.commit()
+                logger.info(f"CI transcript saved on disconnect for session {ci_state['session_id']}")
+            except Exception as e:
+                logger.error(f"Failed to save CI transcript on disconnect: {e}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+            ci_state["session_id"] = None
+            ci_state["transcript_parts"] = []
+
         if openai_ws:
             try:
                 await openai_ws.close()

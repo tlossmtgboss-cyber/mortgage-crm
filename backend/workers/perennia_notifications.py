@@ -255,17 +255,17 @@ class SMSSender:
     def _send_telnyx(self, to_phone: str, body: str) -> NotificationResult:
         """Send via Telnyx."""
         try:
-            import telnyx
+            from telephony.sms import send_sms as telnyx_send_sms
 
             telnyx_from = os.getenv("TELNYX_PHONE_NUMBER") or self.from_number
 
-            message = telnyx.Message.create(
-                from_=telnyx_from,
+            result = telnyx_send_sms(
                 to=to_phone,
+                from_=telnyx_from,
                 text=body,
             )
 
-            msg_id = getattr(message, 'id', None) or getattr(getattr(message, 'data', None), 'id', None) or 'unknown'
+            msg_id = result.get("id", "unknown")
 
             return NotificationResult(
                 success=True,
