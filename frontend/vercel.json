@@ -1,7 +1,17 @@
 {
   "headers": [
     {
-      "source": "/(.*)",
+      "source": "/embed/(.*)",
+      "headers": [
+        { "key": "Content-Security-Policy", "value": "frame-ancestors https://www.perenniaai.com https://perenniaai.com;" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "geolocation=(), microphone=(self), camera=(self)" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" }
+      ]
+    },
+    {
+      "source": "/((?!embed).*)",
       "headers": [
         { "key": "X-Frame-Options", "value": "DENY" },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
