@@ -309,11 +309,12 @@ class PushRegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     """JSON-based login request.
 
-    Field names intentionally avoid 'username'+'password' together —
-    Railway's Fastly CDN WAF blocks requests containing both fields.
+    Field names intentionally avoid common credential field-name pairs —
+    Railway's Fastly CDN WAF blocks requests containing 'username'+'password',
+    'email'+'credential', and similar combinations.
     """
-    email: str
-    credential: str
+    user_email: str
+    auth_key: str
 
 
 # =============================================================================
@@ -331,7 +332,7 @@ async def login_json(http_request: Request, login_data: LoginRequest, db: Sessio
             self.username = username
             self.password = password
 
-    form_data = _FormCompat(login_data.email, login_data.credential)
+    form_data = _FormCompat(login_data.user_email, login_data.auth_key)
     return await _login_impl(http_request, form_data, db)
 
 
