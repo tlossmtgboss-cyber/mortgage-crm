@@ -388,8 +388,12 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
                         (a.scheduled_start, a.scheduled_end)
                     )
         except Exception as e:
-            logger.error(f"v2 Appointment batch cross-source check FAILED — failing closed for all users: {e}")
-            _fail_closed_all_users("v2_appointment")
+            if _is_missing_table_error(e):
+                logger.warning(f"v2 Appointment table not available — skipping batch (fail-open): {e}")
+                db.rollback()
+            else:
+                logger.error(f"v2 Appointment batch cross-source check FAILED — failing closed for all users: {e}")
+                _fail_closed_all_users("v2_appointment")
 
     # Source 1b: Legacy ScheduledAppointment (scheduled_appointments) -- deprecated
     try:
@@ -409,6 +413,9 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
     except Exception as e:
         if isinstance(e, ImportError):
             logger.warning(f"Legacy ScheduledAppointment batch cross-source check skipped (not installed): {e}")
+        elif _is_missing_table_error(e):
+            logger.warning(f"Legacy ScheduledAppointment table not available — skipping batch (fail-open): {e}")
+            db.rollback()
         else:
             logger.error(f"Legacy ScheduledAppointment batch cross-source check FAILED — failing closed for all users: {e}")
             _fail_closed_all_users("legacy_appointment")
@@ -436,6 +443,9 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CalendarEvent batch cross-source check skipped (not installed): {ex}")
+            elif _is_missing_table_error(ex):
+                logger.warning(f"CalendarEvent table not available — skipping batch (fail-open): {ex}")
+                db.rollback()
             else:
                 logger.error(f"CalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
                 _cb_record_failure("calendar_event", org_id=org_id)
@@ -464,6 +474,9 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CRMCalendarEvent batch cross-source check skipped (not installed): {ex}")
+            elif _is_missing_table_error(ex):
+                logger.warning(f"CRMCalendarEvent table not available — skipping batch (fail-open): {ex}")
+                db.rollback()
             else:
                 logger.error(f"CRMCalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
                 _cb_record_failure("crm_calendar_event", org_id=org_id)
