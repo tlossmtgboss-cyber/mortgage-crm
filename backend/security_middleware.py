@@ -828,6 +828,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # Content Security Policy - Prevents XSS attacks
+        # Allow embedding from www.perenniaai.com for /embed/ routes (booking widget)
+        is_embed_route = request.url.path.startswith("/embed/")
+        if is_embed_route:
+            frame_policy = "frame-ancestors https://www.perenniaai.com https://perenniaai.com;"
+        else:
+            frame_policy = "frame-ancestors 'none';"
+
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; "
@@ -835,11 +842,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https:; "
             "connect-src 'self' https://api.openai.com https://api.anthropic.com https://graph.microsoft.com; "
-            "frame-ancestors 'none';"
+            f"{frame_policy}"
         )
 
-        # Prevent clickjacking attacks
-        response.headers["X-Frame-Options"] = "DENY"
+        # Prevent clickjacking attacks (allow embedding for /embed/ routes)
+        if is_embed_route:
+            response.headers["X-Frame-Options"] = "ALLOW-FROM https://www.perenniaai.com"
+        else:
+            response.headers["X-Frame-Options"] = "DENY"
 
         # Prevent MIME type sniffing
         response.headers["X-Content-Type-Options"] = "nosniff"
