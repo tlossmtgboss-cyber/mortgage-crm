@@ -687,7 +687,7 @@ def _generate_available_slots(
         # Use pre-loaded config
         config = config_by_user.get(user_id)
 
-        working_hours = config.working_hours if config else DEFAULT_WORKING_HOURS
+        working_hours = (config.working_hours if config and config.working_hours else DEFAULT_WORKING_HOURS)
         buffer_before = config.buffer_before_minutes if config else DEFAULT_BUFFER_BEFORE_MINUTES
         buffer_after = config.buffer_after_minutes if config else DEFAULT_BUFFER_AFTER_MINUTES
         min_notice = config.min_notice_hours if config else DEFAULT_MIN_NOTICE_HOURS

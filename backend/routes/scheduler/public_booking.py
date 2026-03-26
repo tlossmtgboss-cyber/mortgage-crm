@@ -21,7 +21,7 @@ calendar event creation, confirmation token generation, and response shaping.
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, BackgroundTasks
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, func
+from sqlalchemy import and_, or_, func
 from datetime import datetime, timedelta, date, time, timezone
 from typing import List, Optional
 import html
@@ -33,6 +33,7 @@ import pytz
 
 from smart_scheduler_models import (
     AppointmentStatus, MeetingType, MeetingMode,
+    DEFAULT_WORKING_HOURS,
 )
 from scheduler_models import (
     PublicBookingConfirmRequest, PublicAvailableSlotsRequest,
@@ -312,6 +313,34 @@ def _check_booking_email_rate_limit(db: Session, attendee_email: str, org_id: in
 # PUBLIC BOOKING ENDPOINTS (No auth required)
 # ============================================================================
 
+@router.get("/public/book-diag")
+async def public_booking_diag(request: Request):
+    """Temporary diagnostic endpoint — remove after debugging."""
+    try:
+        models = get_models()
+        model_keys = list(models.keys()) if models else []
+        from db import SessionLocal
+        db = SessionLocal()
+        try:
+            from sqlalchemy import text
+            db.execute(text("SELECT 1"))
+            db_ok = True
+        except Exception as e:
+            db_ok = str(e)
+        finally:
+            db.close()
+        return {
+            "status": "ok",
+            "models_loaded": len(model_keys),
+            "model_keys_sample": model_keys[:10],
+            "db_ok": db_ok,
+            "has_BookingLink": "BookingLink" in model_keys,
+            "has_AppointmentType": "AppointmentType" in model_keys,
+        }
+    except Exception as e:
+        return {"status": "error", "error": str(e), "type": type(e).__name__}
+
+
 @router.get("/public/book/{slug}")
 async def get_public_booking_page(
     slug: str,
@@ -384,6 +413,7 @@ async def get_public_booking_page(
                                 config_name=f"{first_name}'s Schedule",
                                 description=f"Availability settings for {user_name}",
                                 timezone=DEFAULT_TIMEZONE,
+                                working_hours=DEFAULT_WORKING_HOURS,
                                 default_duration_minutes=DEFAULT_APPOINTMENT_DURATION_MINUTES,
                                 min_notice_hours=DEFAULT_MIN_NOTICE_HOURS,
                                 max_advance_days=DEFAULT_MAX_ADVANCE_DAYS,
@@ -425,9 +455,10 @@ async def get_public_booking_page(
 
                         # Guard: check if a demo link already exists for this org
                         # (may have been created by a concurrent request or previously deactivated)
-                        demo_slug = f"demo-{secrets.token_hex(3)}"
+                        # Use exact "demo" slug so subsequent /slots and /confirm calls match.
+                        demo_slug = "demo"
                         existing_demo_link_query = db.query(BookingLink).filter(
-                            BookingLink.slug.like("demo%")
+                            or_(BookingLink.slug == "demo", BookingLink.slug.like("demo-%"))
                         )
                         if demo_org_id:
                             existing_demo_link_query = existing_demo_link_query.filter(
@@ -437,6 +468,7 @@ async def get_public_booking_page(
 
                         if existing_demo_link:
                             # Re-activate and update the existing link instead of creating a new one
+                            existing_demo_link.slug = "demo"  # Normalize slug for consistent lookup
                             existing_demo_link.is_active = True
                             existing_demo_link.is_public = True
                             existing_demo_link.appointment_type_ids = [user_type.id]
