@@ -390,16 +390,53 @@ async def public_booking_diag(request: Request, db: Session = Depends(get_db)):
         results["step4_err"] = f"{type(e).__name__}: {e}\n{_tb.format_exc()[-500:]}"
         db.rollback()
 
-    # Step 5: Column existence check via raw SQL
+    # Step 5: Replicate FULL auto-creation flow (creates BookingLink)
     try:
-        from sqlalchemy import text as sa_text
-        for table in ['scheduler_booking_links', 'scheduler_configs', 'appointment_types']:
-            cols = db.execute(sa_text(
-                "SELECT column_name FROM information_schema.columns WHERE table_name = :t ORDER BY ordinal_position"
-            ), {"t": table}).fetchall()
-            results[f"cols_{table}"] = [c[0] for c in cols]
+        if isinstance(results.get('step2_user'), dict) and isinstance(results.get('step3_config'), dict) and isinstance(results.get('step4_appt_type'), dict):
+            uid = results['step2_user']['id']
+            oid = results['step2_user']['org_id']
+            tid = results['step4_appt_type']['id']
+
+            existing = db.query(BookingLink).filter(
+                or_(BookingLink.slug == "demo", BookingLink.slug.like("demo-%"))
+            ).first()
+            if existing:
+                results["step5_existing_link"] = {"id": existing.id, "slug": existing.slug}
+                existing.slug = "demo"
+                existing.is_active = True
+                existing.is_public = True
+                existing.appointment_type_ids = [tid]
+                db.commit()
+                results["step5_reactivated"] = True
+            else:
+                new_link = BookingLink(
+                    organization_id=oid, user_id=uid, slug="demo",
+                    link_name="Schedule a Demo",
+                    description="Book a personalized demo of Perennia AI",
+                    is_active=True, is_public=True,
+                    appointment_type_ids=[tid],
+                    custom_title="Schedule Your Demo",
+                    custom_description="See how Perennia AI can transform your mortgage operations."
+                )
+                db.add(new_link)
+                db.commit()
+                results["step5_created"] = True
+
+            # Step 6: Full response build (same as handler post-create)
+            link = db.query(BookingLink).filter(
+                BookingLink.slug == "demo", BookingLink.is_active == True, BookingLink.is_public == True
+            ).first()
+            if link:
+                results["step6_link"] = {"id": link.id, "title": link.custom_title or link.link_name}
+                if link.appointment_type_ids:
+                    types = db.query(AppointmentType).filter(
+                        AppointmentType.id.in_(link.appointment_type_ids), AppointmentType.is_active == True
+                    ).all()
+                    results["step6_types"] = [{"id": t.id, "name": t.type_name} for t in types]
+            else:
+                results["step6_link"] = "demo link not found after create"
     except Exception as e:
-        results["step5_cols_err"] = str(e)
+        results["step5_err"] = f"{type(e).__name__}: {e}\n{_tb.format_exc()[-800:]}"
         db.rollback()
 
     return results
