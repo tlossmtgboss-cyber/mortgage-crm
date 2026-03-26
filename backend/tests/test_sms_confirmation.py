@@ -9,7 +9,7 @@ Covers:
 - Reminder processing (pending -> sent/failed)
 - SMS webhook handler: CONFIRM, CANCEL, RESCHEDULE, HELP, STOP
 - Phone number matching for inbound replies
-- Telnyx SDK and HTTP fallback send paths
+- telephony.sms.send_sms helper and HTTP fallback send paths
 """
 
 import pytest
@@ -55,29 +55,25 @@ def mock_appointment_no_phone():
 
 
 @pytest.fixture
-def mock_telnyx():
-    """Mock telnyx module for all tests that need it."""
-    mock_module = MagicMock()
-    mock_message_response = MagicMock()
-    mock_message_response.id = "msg-test-123"
-    mock_module.Message.create.return_value = mock_message_response
-    return mock_module
+def mock_send_sms():
+    """Mock telephony.sms.send_sms for all tests that need it."""
+    mock_fn = MagicMock(return_value={"id": "msg-123", "status": "sent"})
+    return mock_fn
 
 
 @pytest.fixture
-def sms_service(mock_telnyx):
+def sms_service(mock_send_sms):
     """Create an SMSConfirmationService with mocked Telnyx credentials."""
     with patch.dict("os.environ", {
         "TELNYX_API_KEY": "test-key-123",
         "TELNYX_PHONE_NUMBER": "+18438838956",
         "TELNYX_MESSAGING_PROFILE_ID": "40019bed-2fa1-4407-a0c6-fe4c6b222c93",
     }):
-        with patch.dict("sys.modules", {"telnyx": mock_telnyx}):
-            from services.sms_confirmation_service import SMSConfirmationService
-            service = SMSConfirmationService()
-            # Store the mock for assertions
-            service._mock_telnyx = mock_telnyx
-            return service
+        from services.sms_confirmation_service import SMSConfirmationService
+        service = SMSConfirmationService()
+        # Store the mock for assertions
+        service._mock_send_sms = mock_send_sms
+        return service
 
 
 @pytest.fixture
@@ -90,14 +86,27 @@ def mock_db():
     return session
 
 
-def _patch_send_deps(mock_telnyx):
-    """Context manager that patches all _send dependencies for the telnyx SDK path."""
+def _patch_send_deps(mock_send_sms):
+    """Return a combined context manager that patches telephony.sms.send_sms and consent check."""
     mock_consent = MagicMock(return_value=(True, "OK"))
     mock_sched_email = MagicMock(check_sms_consent=mock_consent)
-    return patch.dict("sys.modules", {
-        "scheduler_email_service": mock_sched_email,
-        "telnyx": mock_telnyx,
-    })
+
+    class _CombinedPatch:
+        """Context manager that applies both patches together."""
+        def __enter__(self):
+            self._p1 = patch("telephony.sms.send_sms", mock_send_sms)
+            self._p2 = patch.dict("sys.modules", {
+                "scheduler_email_service": mock_sched_email,
+            })
+            self._p1.__enter__()
+            self._p2.__enter__()
+            return self
+
+        def __exit__(self, *args):
+            self._p2.__exit__(*args)
+            self._p1.__exit__(*args)
+
+    return _CombinedPatch()
 
 
 # =============================================================================
@@ -110,7 +119,7 @@ class TestSMSConfirmationService:
     @pytest.mark.asyncio
     async def test_send_booking_confirmation_success(self, sms_service, mock_appointment):
         """Confirmation SMS is sent with correct message formatting."""
-        with _patch_send_deps(sms_service._mock_telnyx):
+        with _patch_send_deps(sms_service._mock_send_sms):
             result = await sms_service.send_booking_confirmation(
                 appointment=mock_appointment,
                 org_name="Acme Mortgage",
@@ -119,7 +128,7 @@ class TestSMSConfirmationService:
 
         assert result["sent"] is True
         assert result["error"] is None
-        sms_service._mock_telnyx.Message.create.assert_called_once()
+        sms_service._mock_send_sms.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_send_booking_confirmation_no_phone(self, sms_service, mock_appointment_no_phone):
@@ -135,7 +144,7 @@ class TestSMSConfirmationService:
     @pytest.mark.asyncio
     async def test_send_reminder_formats_time_text(self, sms_service, mock_appointment):
         """Reminder uses 'tomorrow' for 24h."""
-        with _patch_send_deps(sms_service._mock_telnyx):
+        with _patch_send_deps(sms_service._mock_send_sms):
             await sms_service.send_reminder(
                 appointment=mock_appointment,
                 hours_before=24,
@@ -143,15 +152,15 @@ class TestSMSConfirmationService:
                 organization_id=1,
             )
 
-        call_args = sms_service._mock_telnyx.Message.create.call_args
-        # telnyx.Message.create is called with keyword args
+        call_args = sms_service._mock_send_sms.call_args
+        # telephony.sms.send_sms is called with keyword args
         msg_text = call_args.kwargs.get("text", "")
         assert "tomorrow" in msg_text
 
     @pytest.mark.asyncio
     async def test_send_reminder_short_notice(self, sms_service, mock_appointment):
         """Reminder with 1-hour notice uses 'soon'."""
-        with _patch_send_deps(sms_service._mock_telnyx):
+        with _patch_send_deps(sms_service._mock_send_sms):
             await sms_service.send_reminder(
                 appointment=mock_appointment,
                 hours_before=1,
@@ -159,14 +168,14 @@ class TestSMSConfirmationService:
                 organization_id=1,
             )
 
-        call_args = sms_service._mock_telnyx.Message.create.call_args
+        call_args = sms_service._mock_send_sms.call_args
         msg_text = call_args.kwargs.get("text", "")
         assert "soon" in msg_text
 
     @pytest.mark.asyncio
     async def test_send_cancellation(self, sms_service, mock_appointment):
         """Cancellation SMS includes appointment details and reason."""
-        with _patch_send_deps(sms_service._mock_telnyx):
+        with _patch_send_deps(sms_service._mock_send_sms):
             result = await sms_service.send_cancellation(
                 appointment=mock_appointment,
                 org_name="Test Org",
@@ -181,7 +190,7 @@ class TestSMSConfirmationService:
         """Reschedule SMS includes both old and new times."""
         old_time = datetime(2026, 4, 14, 10, 0, tzinfo=timezone.utc)
 
-        with _patch_send_deps(sms_service._mock_telnyx):
+        with _patch_send_deps(sms_service._mock_send_sms):
             result = await sms_service.send_reschedule(
                 appointment=mock_appointment,
                 old_time=old_time,
@@ -196,14 +205,14 @@ class TestSMSConfirmationService:
         """SMS is blocked when consent check returns False."""
         mock_consent = MagicMock(return_value=(False, "DNC listed"))
         mock_sched_email = MagicMock(check_sms_consent=mock_consent)
-        with patch.dict("sys.modules", {
-            "scheduler_email_service": mock_sched_email,
-            "telnyx": sms_service._mock_telnyx,
-        }):
-            result = await sms_service.send_booking_confirmation(
-                appointment=mock_appointment,
-                organization_id=1,
-            )
+        with patch("telephony.sms.send_sms", sms_service._mock_send_sms):
+            with patch.dict("sys.modules", {
+                "scheduler_email_service": mock_sched_email,
+            }):
+                result = await sms_service.send_booking_confirmation(
+                    appointment=mock_appointment,
+                    organization_id=1,
+                )
 
         assert result["sent"] is False
         assert "Consent blocked" in result["error"]
@@ -212,14 +221,13 @@ class TestSMSConfirmationService:
     async def test_no_api_key_skips_send(self, mock_appointment):
         """SMS is skipped when TELNYX_API_KEY is not set."""
         with patch.dict("os.environ", {}, clear=True):
-            with patch.dict("sys.modules", {"telnyx": MagicMock()}):
-                from services.sms_confirmation_service import SMSConfirmationService
-                service = SMSConfirmationService()
-                service.api_key = None
+            from services.sms_confirmation_service import SMSConfirmationService
+            service = SMSConfirmationService()
+            service.api_key = None
 
-                result = await service.send_booking_confirmation(
-                    appointment=mock_appointment,
-                )
+            result = await service.send_booking_confirmation(
+                appointment=mock_appointment,
+            )
 
         assert result["sent"] is False
         assert "not configured" in result["error"]
@@ -231,30 +239,30 @@ class TestPhoneNormalization:
     @pytest.mark.asyncio
     async def test_10_digit_gets_plus_1(self, sms_service):
         """10-digit number gets +1 prefix."""
-        with _patch_send_deps(sms_service._mock_telnyx):
+        with _patch_send_deps(sms_service._mock_send_sms):
             await sms_service._send("5551234567", "test")
 
-        call_args = sms_service._mock_telnyx.Message.create.call_args
+        call_args = sms_service._mock_send_sms.call_args
         to_number = call_args.kwargs.get("to", "")
         assert to_number == "+15551234567"
 
     @pytest.mark.asyncio
     async def test_11_digit_with_1(self, sms_service):
         """11-digit number starting with 1 gets + prefix."""
-        with _patch_send_deps(sms_service._mock_telnyx):
+        with _patch_send_deps(sms_service._mock_send_sms):
             await sms_service._send("15551234567", "test")
 
-        call_args = sms_service._mock_telnyx.Message.create.call_args
+        call_args = sms_service._mock_send_sms.call_args
         to_number = call_args.kwargs.get("to", "")
         assert to_number == "+15551234567"
 
     @pytest.mark.asyncio
     async def test_e164_passed_through(self, sms_service):
         """Already-formatted E.164 number passes through unchanged."""
-        with _patch_send_deps(sms_service._mock_telnyx):
+        with _patch_send_deps(sms_service._mock_send_sms):
             await sms_service._send("+15551234567", "test")
 
-        call_args = sms_service._mock_telnyx.Message.create.call_args
+        call_args = sms_service._mock_send_sms.call_args
         to_number = call_args.kwargs.get("to", "")
         assert to_number == "+15551234567"
 
@@ -696,7 +704,7 @@ class TestFindUpcomingAppointment:
 
 
 class TestHTTPFallback:
-    """Test HTTP API fallback when telnyx SDK is unavailable."""
+    """Test HTTP API fallback when telephony.sms.send_sms is unavailable."""
 
     @pytest.mark.asyncio
     async def test_http_fallback_sends_message(self):
@@ -706,25 +714,24 @@ class TestHTTPFallback:
             "TELNYX_PHONE_NUMBER": "+18438838956",
             "TELNYX_MESSAGING_PROFILE_ID": "test-profile",
         }):
-            with patch.dict("sys.modules", {"telnyx": MagicMock()}):
-                from services.sms_confirmation_service import SMSConfirmationService
-                service = SMSConfirmationService()
-                service.api_key = "test-key"
+            from services.sms_confirmation_service import SMSConfirmationService
+            service = SMSConfirmationService()
+            service.api_key = "test-key"
 
-            mock_response = MagicMock()
-            mock_response.status_code = 200
-            mock_response.json.return_value = {"data": {"id": "msg-http-1"}}
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"data": {"id": "msg-http-1"}}
 
-            mock_client = AsyncMock()
-            mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-            mock_client.__aexit__ = AsyncMock(return_value=False)
-            mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
 
-            with patch("httpx.AsyncClient", return_value=mock_client):
-                result = await service._send_via_http("+15551234567", "Test message")
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await service._send_via_http("+15551234567", "Test message")
 
-            assert result["sent"] is True
-            assert result["message_id"] == "msg-http-1"
+        assert result["sent"] is True
+        assert result["message_id"] == "msg-http-1"
 
     @pytest.mark.asyncio
     async def test_http_fallback_handles_error(self):

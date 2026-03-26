@@ -4,22 +4,44 @@ import { useBiometricLogin } from '../hooks/useBiometricLogin';
 import { authAPI, aiAPI } from '../services/api';
 import { useDashboard, useTasks, useLeads } from '../hooks/useQueries';
 import { setAuth } from '../utils/auth';
+import { getItem, STORAGE_KEYS } from '../utils/storage';
 import { haptics } from '../services/nativeServices';
+import useVoiceAudio from '../hooks/useVoiceAudio';
+import useVoiceConnection from '../hooks/useVoiceConnection';
+import useVoiceWorkflows from '../hooks/useVoiceWorkflows';
+import MobileBottomNav from '../components/mobile/MobileBottomNav';
+import CallIntelligenceButton from '../components/aria/CallIntelligenceButton';
+import CallIntelligenceSlidePanel from '../components/aria/CallIntelligenceSlidePanel';
+import useAriaCallIntelligence from '../hooks/useAriaCallIntelligence';
+import { toast } from '../utils/toast';
 import './AriaVoiceApp.css';
+
+// White-label configuration — override per tenant
+const VOICE_ASSISTANT_CONFIG = {
+  name: window.__TENANT_CONFIG__?.voiceAssistantName || 'Aria',
+  brandFooter: window.__TENANT_CONFIG__?.brandFooter || null,
+  primaryColor: window.__TENANT_CONFIG__?.primaryColor || '#111827',
+};
+
+// H-3: Cap conversation history to prevent unbounded memory growth
+const MAX_HISTORY = 50;
 
 const AriaVoiceApp = () => {
   const navigate = useNavigate();
-  const [status, setStatus] = useState('idle'); // idle, connecting, listening, processing, speaking, error
+
+  // --- Local UI state ---
   const [transcript, setTranscript] = useState('');
   const [response, setResponse] = useState('');
-  const [error, setError] = useState(null);
   const [conversationHistory, setConversationHistory] = useState([]);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [loginError, setLoginError] = useState(null);
   const [textInput, setTextInput] = useState('');
   const [textLoading, setTextLoading] = useState(false);
-  const [showFallback, setShowFallback] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [showCIPanel, setShowCIPanel] = useState(false);
+
+  const conversationRef = useRef(null);
 
   const {
     isAvailable: biometricAvailable,
@@ -29,224 +51,69 @@ const AriaVoiceApp = () => {
     authenticateWithBiometrics,
   } = useBiometricLogin();
 
-  const wsRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const mediaStreamRef = useRef(null);
-  const processorRef = useRef(null);
-  const audioQueueRef = useRef([]);
-  const isPlayingRef = useRef(false);
-  const conversationRef = useRef(null);
-  const wsFailCountRef = useRef(0);
+  // --- Placeholder wsRef (populated by useVoiceConnection) ---
+  const connectionWsRef = useRef(null);
 
-  // Determine API URLs based on environment
+  // --- Voice Audio Hook ---
+  const {
+    startCapture,
+    stopCapture,
+    playAudioChunk,
+    cleanup: cleanupAudio,
+    setStatusRef,
+  } = useVoiceAudio({
+    wsRef: connectionWsRef,
+    onStatusChange: (s) => {
+      voiceConnection.setStatus(s);
+    },
+  });
+
+  // --- Voice Workflows Hook ---
+  // We need API_BASE_URL — derive it the same way the connection hook does
   const isLocalDev = typeof window !== 'undefined' && (
     window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1' ||
     window.location.hostname.startsWith('192.168.')
   );
-
   const API_BASE_URL = isLocalDev ? 'http://192.168.1.240:8000' : 'https://api.perenniaai.com';
-  const WS_BASE_URL = isLocalDev ? 'ws://192.168.1.240:8000' : 'wss://api.perenniaai.com';
 
-  // Check authentication on mount
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      setIsAuthenticated(true);
-    }
-  }, []);
+  const {
+    activeWorkflows,
+    cancelWorkflow,
+    updateWorkflowStatus,
+  } = useVoiceWorkflows({ apiBaseUrl: API_BASE_URL });
 
-  // Auto-attempt biometric login if available and user not authenticated
-  useEffect(() => {
-    if (!isAuthenticated && biometricAvailable && hasStoredCredentials) {
-      handleBiometricLogin();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated, biometricAvailable, hasStoredCredentials]);
+  // --- Call Intelligence Hook ---
+  const ci = useAriaCallIntelligence({
+    onArtifactsReady: (artifacts) => {
+      toast.info(`${artifacts.length} new call intelligence results`);
+    },
+    onSessionStarted: (sessionId) => {
+      setConversationHistory(prev => [...prev, {
+        role: 'assistant',
+        content: `Call Intelligence recording started. I'm analyzing the conversation in real-time.`,
+      }].slice(-MAX_HISTORY));
+    },
+    onSessionEnded: () => {
+      setConversationHistory(prev => [...prev, {
+        role: 'assistant',
+        content: `Call recording stopped. Processing with AI agents...`,
+      }].slice(-MAX_HISTORY));
+    },
+  });
 
-  // Auto-scroll conversation
-  useEffect(() => {
-    if (conversationRef.current) {
-      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
-    }
-  }, [conversationHistory]);
-
-  // Initialize audio context
-  const initAudioContext = useCallback(() => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)({
-        sampleRate: 16000
-      });
-    }
-    return audioContextRef.current;
-  }, []);
-
-  // Convert Float32Array to Int16Array (linear16)
-  const floatTo16BitPCM = (float32Array) => {
-    const int16Array = new Int16Array(float32Array.length);
-    for (let i = 0; i < float32Array.length; i++) {
-      const s = Math.max(-1, Math.min(1, float32Array[i]));
-      int16Array[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-    }
-    return int16Array;
-  };
-
-  // Play audio from base64 linear16 data
-  const playAudio = useCallback(async (base64Audio) => {
-    try {
-      const audioContext = initAudioContext();
-      const binaryString = atob(base64Audio);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
-      }
-      const int16Array = new Int16Array(bytes.buffer);
-      const float32Array = new Float32Array(int16Array.length);
-      for (let i = 0; i < int16Array.length; i++) {
-        float32Array[i] = int16Array[i] / 32768.0;
-      }
-      const audioBuffer = audioContext.createBuffer(1, float32Array.length, 16000);
-      audioBuffer.copyToChannel(float32Array, 0);
-      audioQueueRef.current.push(audioBuffer);
-      if (!isPlayingRef.current) {
-        playNextInQueue();
-      }
-    } catch (err) {
-      console.error('Error playing audio:', err);
-    }
-  }, [initAudioContext]);
-
-  // Play next audio in queue
-  const playNextInQueue = useCallback(() => {
-    if (audioQueueRef.current.length === 0) {
-      isPlayingRef.current = false;
-      setStatus('listening');
-      return;
-    }
-    isPlayingRef.current = true;
-    setStatus('speaking');
-    const audioBuffer = audioQueueRef.current.shift();
-    const audioContext = audioContextRef.current;
-    const source = audioContext.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(audioContext.destination);
-    source.onended = playNextInQueue;
-    source.start();
-  }, []);
-
-  // Connect to WebSocket
-  const connect = useCallback(async () => {
-    setStatus('connecting');
-    setError(null);
-
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        setError('Please log in first');
-        setStatus('error');
-        return;
-      }
-
-      const wsUrl = `${WS_BASE_URL}/api/v1/voice/ws/browser-voice?token=${token}`;
-      console.log('[Aria] Connecting to:', wsUrl);
-
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        console.log('[Aria] WebSocket connected');
-        // Send initial config with CRM context
-        ws.send(JSON.stringify({
-          type: 'config',
-          agent_name: 'Aria',
-          system_prompt: `You are Aria, an AI voice assistant for a mortgage CRM. You can help users:
-- Query leads, loans, and client information
-- Send pre-approval letters
-- Send SMS messages and emails
-- Complete and manage tasks
-- Check pipeline status and metrics
-- Schedule appointments
-- Look up borrower information
-
-Be conversational, helpful, and concise. When users ask to perform actions, confirm the details before executing.`,
-          voice: 'nova',
-          language: 'en-US'
-        }));
-        startAudioCapture();
-      };
-
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log('[Aria] Message:', data.type);
-
-        switch (data.type) {
-          case 'ready':
-            setStatus('listening');
-            wsFailCountRef.current = 0;
-            setShowFallback(false);
-            break;
-          case 'transcript':
-            setTranscript(data.text);
-            if (data.is_final) {
-              setConversationHistory(prev => [...prev, { role: 'user', content: data.text }]);
-              setTranscript('');
-              setStatus('processing');
-            }
-            break;
-          case 'response':
-            setResponse(data.text);
-            setConversationHistory(prev => [...prev, { role: 'assistant', content: data.text }]);
-            break;
-          case 'audio':
-            playAudio(data.data);
-            break;
-          case 'action':
-            // Handle CRM actions
-            handleCRMAction(data.action, data.params);
-            break;
-          case 'error':
-            setError(data.message);
-            setStatus('error');
-            break;
-        }
-      };
-
-      ws.onerror = (err) => {
-        console.error('[Aria] WebSocket error:', err);
-        wsFailCountRef.current += 1;
-        setError('Voice connection unavailable');
-        setStatus('error');
-        if (wsFailCountRef.current >= 1) {
-          setShowFallback(true);
-        }
-      };
-
-      ws.onclose = () => {
-        console.log('[Aria] WebSocket closed');
-        if (status !== 'idle') {
-          setStatus('idle');
-        }
-      };
-
-    } catch (err) {
-      console.error('[Aria] Connection error:', err);
-      setError(err.message);
-      setStatus('error');
-    }
-  }, [WS_BASE_URL, playAudio, status]);
-
-  // Handle CRM actions from voice commands
-  const handleCRMAction = async (action, params) => {
-    const token = localStorage.getItem('token');
+  // --- Handle CRM actions from voice commands ---
+  const handleCRMAction = useCallback(async (action, params) => {
+    const token = await getItem(STORAGE_KEYS.TOKEN);
     const headers = {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json',
     };
 
     // Add pending action card to conversation
     const actionId = Date.now();
     const actionEntry = { role: 'action', id: actionId, action, data: params || {}, status: 'pending' };
-    setConversationHistory(prev => [...prev, actionEntry]);
+    setConversationHistory(prev => [...prev, actionEntry].slice(-MAX_HISTORY));
 
     try {
       switch (action) {
@@ -268,17 +135,167 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
         case 'schedule_appointment':
           await fetch(`${API_BASE_URL}/api/v1/appointments`, { method: 'POST', headers, body: JSON.stringify(params) });
           break;
+        case 'start_scheduling_workflow':
+          await fetch(`${API_BASE_URL}/api/v1/voice/workflows`, {
+            method: 'POST', headers,
+            body: JSON.stringify(params),
+          });
+          break;
+        case 'start_call_recording':
+          await ci.startRecording();
+          setShowCIPanel(true);
+          break;
+        case 'stop_call_recording':
+          await ci.stopRecording();
+          break;
+        case 'get_recent_call_summary':
+        case 'get_call_artifacts':
+        case 'approve_artifact':
+        case 'execute_artifacts':
+        case 'send_document_checklist':
+          // These are handled server-side by voice tools — UI updates come via CI hook
+          break;
         default:
-          console.log('[Aria] Unknown action:', action);
+          console.log(`[${VOICE_ASSISTANT_CONFIG.name}] Unknown action:`, action);
           break;
       }
       // Update card to success
       setConversationHistory(prev => prev.map(m => m.id === actionId ? { ...m, status: 'success' } : m));
       haptics.success();
     } catch (err) {
-      console.error('[Aria] Action error:', err);
+      console.error(`[${VOICE_ASSISTANT_CONFIG.name}] Action error:`, err);
       setConversationHistory(prev => prev.map(m => m.id === actionId ? { ...m, status: 'error' } : m));
       haptics.error();
+    }
+  }, [API_BASE_URL]);
+
+  // --- Voice Connection Hook ---
+  const voiceConnection = useVoiceConnection({
+    onTranscript: (data) => {
+      setTranscript(data.text);
+      if (data.is_final) {
+        setConversationHistory(prev => [...prev, { role: 'user', content: data.text }].slice(-MAX_HISTORY));
+        setTranscript('');
+      }
+    },
+    onResponse: (data) => {
+      setResponse(data.text);
+      setConversationHistory(prev => [...prev, { role: 'assistant', content: data.text }].slice(-MAX_HISTORY));
+    },
+    onAudio: (base64Data) => {
+      playAudioChunk(base64Data);
+    },
+    onAction: handleCRMAction,
+    onWorkflowStatus: updateWorkflowStatus,
+    onError: (msg) => {
+      // Error state is set inside the hook; nothing additional needed here
+    },
+    onReady: () => {
+      // Could trigger UI celebration, currently a no-op
+    },
+    startAudioCapture: startCapture,
+    stopAudioCapture: stopCapture,
+    assistantName: VOICE_ASSISTANT_CONFIG.name,
+  });
+
+  // Sync the wsRef from connection hook into the audio hook's wsRef
+  // (they share the same ref object)
+  useEffect(() => {
+    connectionWsRef.current = voiceConnection.wsRef.current;
+  });
+
+  // Keep audio hook's statusRef in sync with connection status
+  useEffect(() => {
+    setStatusRef(voiceConnection.status);
+  }, [voiceConnection.status, setStatusRef]);
+
+  // Check authentication on mount (C-5: use secure storage)
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = await getItem(STORAGE_KEYS.TOKEN);
+      if (token) {
+        setIsAuthenticated(true);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  // Auto-attempt biometric login if available and user not authenticated
+  useEffect(() => {
+    if (!isAuthenticated && biometricAvailable && hasStoredCredentials) {
+      handleBiometricLogin();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, biometricAvailable, hasStoredCredentials]);
+
+  // Auto-scroll conversation
+  useEffect(() => {
+    if (conversationRef.current) {
+      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
+    }
+  }, [conversationHistory]);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => cleanupAudio();
+  }, [cleanupAudio]);
+
+  // H-10: Offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Time-ago formatting helper
+  const timeAgo = (dateStr) => {
+    const seconds = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+    if (seconds < 60) return 'just now';
+    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+    return `${Math.floor(seconds / 86400)}d ago`;
+  };
+
+  // Handle main button click
+  const handleMainButton = () => {
+    if (voiceConnection.status === 'idle' || voiceConnection.status === 'error') {
+      voiceConnection.connect();
+    } else {
+      voiceConnection.disconnect();
+    }
+  };
+
+  // Handle main button keyboard interaction (H-8: WCAG 2.1 AA)
+  const handleOrbKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleMainButton();
+    }
+  };
+
+  // Get aria-label for the orb based on status (H-8)
+  const getOrbAriaLabel = () => {
+    const s = voiceConnection.status;
+    switch (s) {
+      case 'idle':
+        return 'Start voice assistant';
+      case 'connecting':
+        return `Connecting to ${VOICE_ASSISTANT_CONFIG.name}`;
+      case 'listening':
+        return 'Stop voice assistant, currently listening';
+      case 'processing':
+        return 'Stop voice assistant, currently processing';
+      case 'speaking':
+        return `Stop voice assistant, ${VOICE_ASSISTANT_CONFIG.name} is speaking`;
+      case 'error':
+        return 'Retry voice assistant, an error occurred';
+      default:
+        return 'Voice assistant';
     }
   };
 
@@ -290,111 +307,26 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
 
     setTextInput('');
     setTextLoading(true);
-    setConversationHistory(prev => [...prev, { role: 'user', content: message }]);
+    setConversationHistory(prev => [...prev, { role: 'user', content: message }].slice(-MAX_HISTORY));
 
     try {
-      if (wsRef.current?.readyState === WebSocket.OPEN) {
-        // WS connected — send as text message
-        wsRef.current.send(JSON.stringify({ type: 'text', text: message }));
-        // Response arrives via WS 'response' handler
-      } else {
+      const sent = voiceConnection.sendMessage({ type: 'text', text: message });
+      if (!sent) {
         // WS down — use REST smart-chat API
         const result = await aiAPI.smartChat(message, { include_context: true });
         setConversationHistory(prev => [...prev, {
           role: 'assistant',
-          content: result.response || 'No response received.'
-        }]);
+          content: result.response || 'No response received.',
+        }].slice(-MAX_HISTORY));
       }
     } catch (err) {
-      console.error('[Aria] Text error:', err);
+      console.error(`[${VOICE_ASSISTANT_CONFIG.name}] Text error:`, err);
       setConversationHistory(prev => [...prev, {
         role: 'assistant',
-        content: 'Sorry, I couldn\'t process that. Please try again.'
-      }]);
+        content: 'Sorry, I couldn\'t process that. Please try again.',
+      }].slice(-MAX_HISTORY));
     } finally {
       setTextLoading(false);
-    }
-  };
-
-  // Start audio capture
-  const startAudioCapture = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 16000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
-
-      mediaStreamRef.current = stream;
-      const audioContext = initAudioContext();
-
-      if (audioContext.state === 'suspended') {
-        await audioContext.resume();
-      }
-
-      const source = audioContext.createMediaStreamSource(stream);
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
-
-      processor.onaudioprocess = (e) => {
-        if (wsRef.current?.readyState === WebSocket.OPEN && status === 'listening') {
-          const float32Data = e.inputBuffer.getChannelData(0);
-          const int16Data = floatTo16BitPCM(float32Data);
-          const base64Audio = btoa(String.fromCharCode(...new Uint8Array(int16Data.buffer)));
-          wsRef.current.send(JSON.stringify({
-            type: 'audio',
-            data: base64Audio
-          }));
-        }
-      };
-
-      source.connect(processor);
-      processor.connect(audioContext.destination);
-      setStatus('listening');
-
-    } catch (err) {
-      console.error('[Aria] Microphone error:', err);
-      setError('Microphone access denied. Please allow microphone access.');
-      setStatus('error');
-    }
-  }, [initAudioContext, status]);
-
-  // Disconnect
-  const disconnect = useCallback(() => {
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(track => track.stop());
-      mediaStreamRef.current = null;
-    }
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    audioQueueRef.current = [];
-    isPlayingRef.current = false;
-    setStatus('idle');
-    setTranscript('');
-    setResponse('');
-  }, []);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => disconnect();
-  }, [disconnect]);
-
-  // Handle main button click
-  const handleMainButton = () => {
-    if (status === 'idle' || status === 'error') {
-      connect();
-    } else {
-      disconnect();
     }
   };
 
@@ -407,7 +339,6 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
       const credentials = await authenticateWithBiometrics();
 
       if (credentials) {
-        // Use stored credentials to call login API
         const data = await authAPI.login(credentials.username, credentials.password);
 
         if (data.access_token) {
@@ -417,7 +348,6 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
           return;
         }
       }
-      // Biometric succeeded but no credentials or no token - fall back
       setLoginError('Biometric login failed. Please sign in manually.');
       haptics.warning();
     } catch (err) {
@@ -438,18 +368,119 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
     }
   };
 
-  // Get status display
+  // Get status display text
   const getStatusDisplay = () => {
-    switch (status) {
+    const s = voiceConnection.status;
+    switch (s) {
       case 'idle': return 'Tap to start';
-      case 'connecting': return 'Connecting to Aria...';
+      case 'connecting': return `Connecting to ${VOICE_ASSISTANT_CONFIG.name}...`;
       case 'listening': return 'Listening...';
       case 'processing': return 'Thinking...';
-      case 'speaking': return 'Aria is speaking...';
-      case 'error': return error || 'Error occurred';
+      case 'speaking': return `${VOICE_ASSISTANT_CONFIG.name} is speaking...`;
+      case 'error': return voiceConnection.error || 'Error occurred';
       default: return '';
     }
   };
+
+  // --- Workflow Card sub-component ---
+  const WorkflowCard = ({ wf }) => {
+    const stateLabels = {
+      initiated: 'Starting...',
+      contact_found: 'Contact found',
+      sms_sent: 'SMS sent',
+      awaiting_reply: 'Waiting for reply',
+      negotiating: 'Negotiating time',
+      time_confirmed: 'Time confirmed',
+      appointment_booked: 'Appointment booked!',
+      completed: 'Completed',
+      expired: 'Expired',
+      cancelled: 'Cancelled',
+      failed: 'Failed',
+    };
+    const isCancellable = ['initiated', 'contact_found', 'sms_sent', 'awaiting_reply', 'negotiating'].includes(wf.state);
+    const isActive = !['completed', 'expired', 'cancelled', 'failed', 'appointment_booked'].includes(wf.state);
+    const isFailed = wf.state === 'failed';
+    const isExpired = wf.state === 'expired';
+    const isCancelled = wf.state === 'cancelled';
+    const timeDisplay = wf.updated_at ? timeAgo(wf.updated_at) : '';
+
+    let stateClass = isActive ? 'aria-workflow--active' : 'aria-workflow--done';
+    if (isFailed) stateClass = 'aria-workflow--failed';
+    else if (isExpired) stateClass = 'aria-workflow--expired';
+    else if (isCancelled) stateClass = 'aria-workflow--cancelled';
+
+    return (
+      <div className={`aria-workflow-card ${stateClass}`} style={{ position: 'relative' }}>
+        {isCancellable && (
+          <button
+            className="aria-workflow-cancel-btn"
+            onClick={(e) => { e.stopPropagation(); cancelWorkflow(wf.workflow_id); }}
+            aria-label={`Cancel scheduling with ${wf.contact_name}`}
+            style={{ minHeight: '44px', minWidth: '44px' }}
+          >
+            &#x2715;
+          </button>
+        )}
+        <div className="aria-workflow-header">
+          <span className="aria-workflow-icon">
+            {isFailed ? '\u26A0\uFE0F' : isCancelled ? '\u274C' : '\uD83D\uDCC5'}
+          </span>
+          <span className="aria-workflow-title">Scheduling with {wf.contact_name}</span>
+        </div>
+        <div className="aria-workflow-status">
+          <span className={`aria-workflow-state aria-workflow-state--${wf.state}`}>
+            {stateLabels[wf.state] || wf.state}
+          </span>
+          {isActive && <span className="aria-workflow-spinner" />}
+          {timeDisplay && <span className="aria-workflow-time">{timeDisplay}</span>}
+        </div>
+
+        {isFailed && (
+          <div className="aria-workflow-detail">
+            Booking failed &mdash; please schedule manually
+            <br />
+            <button
+              className="aria-workflow-retry-btn"
+              onClick={() => {
+                handleCRMAction('start_scheduling_workflow', {
+                  contact_name: wf.contact_name,
+                  contact_id: wf.contact_id,
+                });
+              }}
+              aria-label={`Retry scheduling with ${wf.contact_name}`}
+              style={{ minHeight: '44px', minWidth: '44px' }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {isExpired && (
+          <div className="aria-workflow-detail">
+            Expired &mdash; no response received
+          </div>
+        )}
+
+        {isCancelled && (
+          <div className="aria-workflow-detail">
+            Cancelled
+          </div>
+        )}
+
+        {wf.confirmed_datetime && (
+          <div className="aria-workflow-detail">
+            Confirmed: {new Date(wf.confirmed_datetime).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // ======================================================================
+  // RENDER
+  // ======================================================================
+
+  const currentStatus = voiceConnection.status;
 
   // Render login prompt if not authenticated
   if (!isAuthenticated) {
@@ -461,33 +492,33 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
               <span className="aria-icon">A</span>
             </div>
           </div>
-          <h1 className="aria-title">Aria</h1>
+          <h1 className="aria-title">{VOICE_ASSISTANT_CONFIG.name}</h1>
           <p className="aria-subtitle">Your AI Voice Assistant</p>
 
           {loginError && (
-            <p className="aria-error" style={{ color: '#ff6b6b', fontSize: '14px', margin: '8px 0' }}>
+            <p className="aria-error" style={{ color: '#ff6b6b', fontSize: '14px', margin: '8px 0' }} role="alert">
               {loginError}
             </p>
           )}
 
-          {/* Biometric login button (Face ID / Touch ID) */}
           {biometricAvailable && hasStoredCredentials && (
             <button
               className="aria-login-btn aria-biometric-btn"
               onClick={handleBiometricLogin}
               disabled={loginLoading}
-              style={{ marginBottom: '12px' }}
+              aria-label={loginLoading ? 'Authenticating' : `Sign in with ${biometryDisplayName}`}
+              style={{ marginBottom: '12px', minHeight: '44px' }}
             >
               {loginLoading ? 'Authenticating...' : `Sign In with ${biometryDisplayName}`}
             </button>
           )}
 
-          {/* Standard sign in button */}
           <button
             className="aria-login-btn"
             onClick={() => navigate('/login?redirect=/aria')}
             disabled={loginLoading}
-            style={biometricAvailable && hasStoredCredentials ? { opacity: 0.7, fontSize: '14px' } : {}}
+            aria-label={biometricAvailable && hasStoredCredentials ? 'Sign in with email' : 'Sign in to continue'}
+            style={biometricAvailable && hasStoredCredentials ? { opacity: 0.7, fontSize: '14px', minHeight: '44px' } : { minHeight: '44px' }}
           >
             {biometricAvailable && hasStoredCredentials ? 'Sign In with Email' : 'Sign In to Continue'}
           </button>
@@ -501,52 +532,107 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
       <div className="aria-container">
         {/* Header */}
         <div className="aria-header">
-          <h1 className="aria-title">Aria</h1>
+          <h1 className="aria-title">{VOICE_ASSISTANT_CONFIG.name}</h1>
           <p className="aria-subtitle">Your AI Voice Assistant</p>
         </div>
 
-        {/* Main Voice Orb */}
-        <div className="aria-orb-container" onClick={handleMainButton}>
-          <div className={`aria-orb aria-orb-${status}`}>
+        {/* H-10: Offline banner */}
+        {isOffline && (
+          <div className="aria-offline-banner" role="alert">
+            You're offline — voice commands unavailable
+          </div>
+        )}
+
+        {/* Main Voice Orb — H-8: full keyboard + screen-reader accessibility */}
+        <div
+          className="aria-orb-container"
+          onClick={handleMainButton}
+          onKeyDown={handleOrbKeyDown}
+          role="button"
+          tabIndex={0}
+          aria-label={getOrbAriaLabel()}
+        >
+          <div className={`aria-orb aria-orb-${currentStatus}`}>
             <div className="aria-orb-inner">
-              {status === 'idle' && <span className="aria-mic-icon">🎙️</span>}
-              {status === 'connecting' && <div className="aria-spinner"></div>}
-              {status === 'listening' && <div className="aria-waves"></div>}
-              {status === 'processing' && <div className="aria-dots"></div>}
-              {status === 'speaking' && <div className="aria-pulse"></div>}
-              {status === 'error' && <span className="aria-error-icon">⚠️</span>}
+              {currentStatus === 'idle' && <span className="aria-mic-icon" aria-hidden="true">🎙️</span>}
+              {currentStatus === 'connecting' && <div className="aria-spinner" aria-hidden="true"></div>}
+              {currentStatus === 'listening' && <div className="aria-waves" aria-hidden="true"></div>}
+              {currentStatus === 'processing' && <div className="aria-dots" aria-hidden="true"></div>}
+              {currentStatus === 'speaking' && <div className="aria-pulse" aria-hidden="true"></div>}
+              {currentStatus === 'error' && <span className="aria-error-icon" aria-hidden="true">⚠️</span>}
             </div>
           </div>
-          <div className={`aria-ring aria-ring-${status}`}></div>
+          <div className={`aria-ring aria-ring-${currentStatus}`} aria-hidden="true"></div>
         </div>
 
-        {/* Status Text */}
-        <p className="aria-status">{getStatusDisplay()}</p>
+        {/* Call Intelligence Button — positioned below the orb */}
+        <div className="aria-ci-button-container">
+          <CallIntelligenceButton
+            onClick={() => {
+              if (ci.isActive) {
+                ci.stopRecording();
+              } else {
+                ci.startRecording();
+                setShowCIPanel(true);
+              }
+            }}
+            isRecording={ci.isActive}
+            isProcessing={ci.isStopping}
+            artifactCount={ci.pendingCount}
+            disabled={isOffline}
+          />
+          {ci.hasArtifacts && !showCIPanel && (
+            <button
+              className="aria-ci-results-btn"
+              onClick={() => setShowCIPanel(true)}
+              aria-label={`View ${ci.totalArtifactCount} call intelligence results`}
+            >
+              View Results ({ci.totalArtifactCount})
+            </button>
+          )}
+        </div>
+
+        {/* Status Text — H-8: live region for screen readers */}
+        <p className="aria-status" aria-live="polite">{getStatusDisplay()}</p>
 
         {/* Live Transcript */}
         {transcript && (
-          <div className="aria-transcript">
+          <div className="aria-transcript" aria-live="polite">
             <p>{transcript}</p>
           </div>
         )}
 
         {/* Fallback Dashboard */}
-        {showFallback && isAuthenticated && (
+        {voiceConnection.showFallback && isAuthenticated && (
           <FallbackDashboard onRetry={() => {
-            setShowFallback(false);
-            wsFailCountRef.current = 0;
-            connect();
+            voiceConnection.setShowFallback(false);
+            voiceConnection.wsFailCountRef.current = 0;
+            voiceConnection.connect();
           }} />
         )}
 
-        {/* Conversation History */}
-        <div className="aria-conversation" ref={conversationRef}>
+        {/* Active Workflows */}
+        {activeWorkflows.length > 0 && (
+          <div className="aria-workflows-section" aria-label="Active workflows">
+            {activeWorkflows.map(wf => (
+              <WorkflowCard key={wf.workflow_id} wf={wf} />
+            ))}
+          </div>
+        )}
+
+        {/* Conversation History — H-8: log role for screen readers */}
+        <div
+          className="aria-conversation"
+          ref={conversationRef}
+          role="log"
+          aria-label="Conversation history"
+        >
           {conversationHistory.slice(-6).map((msg, idx) => (
             msg.role === 'action' ? (
               <ActionCard key={msg.id || idx} msg={msg} />
             ) : (
               <div key={idx} className={`aria-message aria-message-${msg.role}`}>
-                <span className="aria-message-role">{msg.role === 'user' ? 'You' : 'Aria'}</span>
+                <span className="aria-message-role">{msg.role === 'user' ? 'You' : VOICE_ASSISTANT_CONFIG.name}</span>
                 <p className="aria-message-content">{msg.content}</p>
               </div>
             )
@@ -555,14 +641,19 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
 
         {/* Action Buttons */}
         <div className="aria-actions">
-          {status !== 'idle' && (
-            <button className="aria-stop-btn" onClick={disconnect}>
+          {currentStatus !== 'idle' && (
+            <button
+              className="aria-stop-btn"
+              onClick={voiceConnection.disconnect}
+              aria-label="Stop voice assistant"
+              style={{ minHeight: '44px', minWidth: '44px' }}
+            >
               Stop
             </button>
           )}
         </div>
 
-        {/* Text Input */}
+        {/* Text Input — H-8: aria-label */}
         {isAuthenticated && (
           <form className="aria-text-form" onSubmit={handleTextSubmit}>
             <input
@@ -570,25 +661,41 @@ Be conversational, helpful, and concise. When users ask to perform actions, conf
               type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder={textLoading ? 'Sending...' : 'Type to Aria...'}
+              placeholder={textLoading ? 'Sending...' : `Type to ${VOICE_ASSISTANT_CONFIG.name}...`}
               disabled={textLoading}
               autoComplete="off"
+              aria-label="Send text command"
             />
             <button
               className="aria-text-send"
               type="submit"
               disabled={!textInput.trim() || textLoading}
+              aria-label="Send message"
+              style={{ minHeight: '44px', minWidth: '44px' }}
             >
-              {textLoading ? '...' : '↑'}
+              {textLoading ? '...' : '\u2191'}
             </button>
           </form>
         )}
 
         {/* Footer */}
-        <div className="aria-footer">
-          <p>Powered by Perennia AI</p>
-        </div>
+        {VOICE_ASSISTANT_CONFIG.brandFooter !== '' && (
+          <div className="aria-footer">
+            <p>{VOICE_ASSISTANT_CONFIG.brandFooter || 'Powered by Perennia AI'}</p>
+          </div>
+        )}
       </div>
+
+      {/* Mobile bottom navigation */}
+      {isAuthenticated && <MobileBottomNav />}
+
+      {/* Call Intelligence Slide Panel */}
+      {showCIPanel && (
+        <CallIntelligenceSlidePanel
+          onClose={() => setShowCIPanel(false)}
+          ciSession={ci}
+        />
+      )}
     </div>
   );
 };
@@ -601,6 +708,11 @@ const ACTION_CONFIG = {
   complete_task:         { icon: '\u2713',     label: 'Task Completed',    color: '#10b981' },
   schedule_appointment:  { icon: '\u{1F4C5}', label: 'Appointment Set',   color: '#8b5cf6' },
   send_preapproval:      { icon: '\u{1F4C4}', label: 'Pre-Approval Sent', color: '#06b6d4' },
+  start_scheduling_workflow: { icon: '\u{1F4C5}', label: 'Scheduling Started', color: '#8b5cf6' },
+  start_call_recording:    { icon: '\u{1F9E0}', label: 'Recording Started', color: '#ef4444' },
+  stop_call_recording:     { icon: '\u{1F9E0}', label: 'Recording Stopped', color: '#f59e0b' },
+  approve_artifact:        { icon: '\u2705', label: 'Artifact Approved', color: '#10b981' },
+  execute_artifacts:       { icon: '\u26A1', label: 'Actions Executed',  color: '#3b82f6' },
 };
 
 const ActionCard = ({ msg }) => {
@@ -609,14 +721,14 @@ const ActionCard = ({ msg }) => {
     || msg.data?.title || msg.data?.borrower_name || '';
 
   return (
-    <div className={`aria-action-card aria-action-${msg.status}`}>
-      <span className="aria-action-icon" style={{ borderColor: config.color }}>{config.icon}</span>
+    <div className={`aria-action-card aria-action-${msg.status}`} role="status" aria-label={`${config.label}: ${msg.status}`}>
+      <span className="aria-action-icon" style={{ borderColor: config.color }} aria-hidden="true">{config.icon}</span>
       <div className="aria-action-body">
         <div className="aria-action-label">{config.label}</div>
         {detail && <div className="aria-action-detail">{detail}</div>}
       </div>
       <span className="aria-action-status">
-        {msg.status === 'pending' && <span className="aria-action-spinner" />}
+        {msg.status === 'pending' && <span className="aria-action-spinner" aria-label="Loading" />}
         {msg.status === 'success' && <span style={{ color: '#10b981' }}>Done</span>}
         {msg.status === 'error' && <span style={{ color: '#ef4444' }}>Failed</span>}
       </span>
@@ -638,15 +750,20 @@ const FallbackDashboard = ({ onRetry }) => {
 
   return (
     <div className="aria-fallback">
-      <button className="aria-fallback-retry" onClick={onRetry}>
-        Try Aria Again
+      <button
+        className="aria-fallback-retry"
+        onClick={onRetry}
+        aria-label={`Retry ${VOICE_ASSISTANT_CONFIG.name} voice connection`}
+        style={{ minHeight: '44px' }}
+      >
+        Try {VOICE_ASSISTANT_CONFIG.name} Again
       </button>
 
       {/* Pipeline */}
       <div className="aria-fallback-section">
         <div className="aria-fallback-title">Pipeline</div>
         {isLoading ? (
-          <div className="aria-fallback-shimmer" />
+          <div className="aria-fallback-shimmer" aria-label="Loading pipeline data" />
         ) : (
           <div className="aria-fallback-pipeline">
             {pipeline.map(s => (

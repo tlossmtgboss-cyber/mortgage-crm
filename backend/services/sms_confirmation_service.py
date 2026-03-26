@@ -40,12 +40,8 @@ class SMSConfirmationService:
         self.messaging_profile_id = os.getenv(
             "TELNYX_MESSAGING_PROFILE_ID", "40019bed-2fa1-4407-a0c6-fe4c6b222c93"
         )
-        if self.api_key:
-            try:
-                import telnyx
-                telnyx.api_key = self.api_key
-            except ImportError:
-                logger.warning("telnyx SDK not installed, SMS will use HTTP fallback")
+        if not self.api_key:
+            logger.warning("TELNYX_API_KEY not configured, SMS will use HTTP fallback")
 
     # =========================================================================
     # Public API: appointment lifecycle notifications
@@ -476,21 +472,17 @@ class SMSConfirmationService:
 
         # Send via Telnyx SDK
         try:
-            import telnyx
+            from telephony.sms import send_sms as telnyx_send_sms
 
-            telnyx.api_key = self.api_key
-            response = telnyx.Message.create(
-                from_=self.from_number,
+            result = telnyx_send_sms(
                 to=clean_number,
+                from_=self.from_number,
                 text=message,
-                messaging_profile_id=self.messaging_profile_id,
+                messaging_profile_id=self.messaging_profile_id or None,
+                api_key=self.api_key,
             )
 
-            msg_id = (
-                getattr(response, "id", None)
-                or getattr(getattr(response, "data", None), "id", None)
-                or "unknown"
-            )
+            msg_id = result.get("id", "unknown")
             logger.info(f"SMS sent to {clean_number}, message_id: {msg_id}")
             return {"sent": True, "message_id": str(msg_id), "error": None}
 

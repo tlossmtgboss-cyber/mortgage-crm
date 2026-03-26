@@ -1236,7 +1236,7 @@ class FollowupAutomationService:
 
         # Send via Telnyx
         try:
-            import telnyx
+            from telephony.sms import send_sms as telnyx_send_sms
             telnyx_api_key = os.getenv("TELNYX_API_KEY", "")
             telnyx_from = os.getenv("TELNYX_FROM_NUMBER", "")
             messaging_profile = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
@@ -1245,12 +1245,12 @@ class FollowupAutomationService:
                 logger.warning("Telnyx not configured, SMS not sent for campaign %d", campaign_id)
                 return {"status": "failed", "error": "SMS service not configured"}
 
-            telnyx.api_key = telnyx_api_key
-            telnyx.Message.create(
-                from_=telnyx_from,
+            telnyx_send_sms(
                 to=borrower_phone,
+                from_=telnyx_from,
                 text=message_body,
-                messaging_profile_id=messaging_profile,
+                messaging_profile_id=messaging_profile or None,
+                api_key=telnyx_api_key,
             )
             status = "sent"
         except Exception as e:

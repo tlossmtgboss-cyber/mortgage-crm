@@ -31,19 +31,17 @@ def _send_sms_with_retry(from_number: str, to_number: str, text: str,
 
     Returns (success: bool, message_id: str or None, error: str or None).
     """
-    import telnyx
+    from telephony.sms import send_sms as telnyx_send_sms
 
     last_error = None
     for attempt in range(1, max_retries + 1):
         try:
-            message = telnyx.Message.create(
-                from_=from_number,
+            result = telnyx_send_sms(
                 to=to_number,
+                from_=from_number,
                 text=text,
             )
-            msg_id = (getattr(message, 'id', None)
-                      or getattr(getattr(message, 'data', None), 'id', None)
-                      or 'unknown')
+            msg_id = result.get("id", "unknown")
             return True, msg_id, None
         except Exception as e:
             last_error = str(e)

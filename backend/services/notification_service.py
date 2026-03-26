@@ -924,15 +924,15 @@ class NotificationService:
                 logger.warning("Telnyx circuit breaker OPEN — SMS to %s deferred", self._mask_phone(to_phone))
                 return {"success": False, "error": "SMS service temporarily unavailable"}
 
-            import telnyx
+            from telephony.sms import send_sms as telnyx_send_sms
             telnyx_from = os.getenv("TELNYX_PHONE_NUMBER") or TELNYX_FROM_NUMBER
-            sms = telnyx.Message.create(
-                from_=telnyx_from,
+            result = telnyx_send_sms(
                 to=to_phone,
+                from_=telnyx_from,
                 text=message,
             )
 
-            msg_id = getattr(sms, 'id', None) or getattr(getattr(sms, 'data', None), 'id', None) or 'unknown'
+            msg_id = result.get("id", "unknown")
             logger.info("SMS sent to %s: %s", self._mask_phone(to_phone), msg_id)
             _telnyx_circuit_breaker.record_success()
 

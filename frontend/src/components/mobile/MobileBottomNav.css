@@ -1,0 +1,77 @@
+/* Mobile Bottom Tab Navigation */
+
+.mobile-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  height: 56px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.mobile-bottom-nav__tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s ease;
+}
+
+.mobile-bottom-nav__tab:active {
+  opacity: 0.6;
+}
+
+.mobile-bottom-nav__tab--active svg {
+  stroke: #1a73e8;
+}
+
+/* Center FAB button */
+.mobile-bottom-nav__fab {
+  flex: 1;
+  position: relative;
+}
+
+.mobile-bottom-nav__fab-circle {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #1a73e8 0%, #4f8ff7 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.35);
+  transform: translateY(-8px);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.mobile-bottom-nav__fab:active .mobile-bottom-nav__fab-circle {
+  transform: translateY(-6px);
+  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
+}
+
+/* Accessibility: reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .mobile-bottom-nav__tab,
+  .mobile-bottom-nav__fab-circle {
+    transition: none;
+  }
+}
+
+/* Focus visible outlines */
+.mobile-bottom-nav__tab:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: -2px;
+}

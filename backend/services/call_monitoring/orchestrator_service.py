@@ -175,22 +175,25 @@ class CallMonitoringOrchestrator:
         self._initialize_agents()
 
     def _initialize_agents(self):
-        """Initialize AI agents."""
-        from .agents.scribe_agent import ScribeAgent
-        from .agents.junior_lo_agent import JuniorLOAgent
-        from .agents.underwriter_agent import UnderwriterAgent
-        from .agents.calculator_agent import CalculatorAgent
-        from .agents.marketing_agent import MarketingAgent
-        from .agents.receptionist_agent import CallSchedulingAgent
+        """Initialize AI agents with graceful fallback on import/init failure."""
+        agent_specs = [
+            ('scribe', '.agents.scribe_agent', 'ScribeAgent'),
+            ('junior_lo', '.agents.junior_lo_agent', 'JuniorLOAgent'),
+            ('underwriter', '.agents.underwriter_agent', 'UnderwriterAgent'),
+            ('calculator', '.agents.calculator_agent', 'CalculatorAgent'),
+            ('marketing', '.agents.marketing_agent', 'MarketingAgent'),
+            ('receptionist', '.agents.receptionist_agent', 'CallSchedulingAgent'),
+        ]
 
-        self._agents = {
-            'scribe': ScribeAgent(self.db),
-            'junior_lo': JuniorLOAgent(self.db),
-            'underwriter': UnderwriterAgent(self.db),
-            'calculator': CalculatorAgent(self.db),
-            'marketing': MarketingAgent(self.db),
-            'receptionist': CallSchedulingAgent(self.db),
-        }
+        for name, module_path, class_name in agent_specs:
+            try:
+                import importlib
+                mod = importlib.import_module(module_path, package=__package__)
+                agent_class = getattr(mod, class_name)
+                self._agents[name] = agent_class(self.db)
+            except Exception as e:
+                logger.error(f"Failed to initialize agent '{name}': {e}")
+                # Agent skipped — run_agents will proceed without it
 
     # =========================================================================
     # SESSION MANAGEMENT
