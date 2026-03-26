@@ -165,6 +165,39 @@ class VoiceSchedulingWorkflowService:
         )
         return result
 
+    def find_active_workflow_by_phone_any_org(self, phone: str) -> Optional["VoiceWorkflow"]:
+        """Find an active workflow by phone number across all orgs.
+
+        Used by inbound SMS webhooks where we don't have org context yet.
+        The workflow itself carries the org_id, so tenant isolation is preserved
+        downstream when processing the reply.
+        """
+        from database.models.voice_workflow import VoiceWorkflow, VoiceWorkflowState
+
+        result = (
+            self.db.query(VoiceWorkflow)
+            .filter(
+                VoiceWorkflow.contact_phone == phone,
+                VoiceWorkflow.state.in_([
+                    VoiceWorkflowState.SMS_SENT.value,
+                    VoiceWorkflowState.AWAITING_REPLY.value,
+                    VoiceWorkflowState.NEGOTIATING.value,
+                ]),
+                VoiceWorkflow.expires_at > datetime.utcnow(),
+            )
+            .order_by(VoiceWorkflow.created_at.desc())
+            .first()
+        )
+        logger.info(
+            "Workflow lookup by phone (any org) completed",
+            extra={
+                "contact_phone": _mask_phone(phone),
+                "found": result is not None,
+                "workflow_id": str(result.id) if result else None,
+            },
+        )
+        return result
+
     def get_workflow(self, workflow_id: int, organization_id: int) -> Optional["VoiceWorkflow"]:
         """Get a workflow by ID with tenant isolation."""
         from database.models.voice_workflow import VoiceWorkflow

@@ -2646,17 +2646,16 @@ const API_BASE_URL = isProduction
   };
 
   const MorningBriefingSettings = () => {
-    const defaultSections = { pipeline: true, at_risk: true, stale_leads: true, appointments: true, conditions: true, yesterday: true };
-    const defaultThresholds = { at_risk_days: 10, stale_lead_days: 7, stale_lead_high_score_days: 3, lock_expiring_days: 3, max_at_risk_items: 10, max_stale_lead_items: 10 };
+    const defaultSections = { pipeline_health: true, sla_alerts: true, tasks: true, lead_activity: true, rate_watch: true, team_performance: true };
+    const defaultThresholds = { sla_warning_days: 3, stale_lead_days: 7, rate_change_threshold: 0.125 };
     const [prefs, setPrefs] = useState({
-      briefing_enabled: true, briefing_hour: 7, timezone: '',
-      sections: { ...defaultSections }, thresholds: { ...defaultThresholds }, ai_tone: 'balanced',
+      briefing_enabled: true, delivery_time: '07:00', timezone: '',
+      sections: { ...defaultSections }, thresholds: { ...defaultThresholds }, ai_tone: 'concise',
     });
     const [savedPrefs, setSavedPrefs] = useState(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [generating, setGenerating] = useState(false);
-    const [message, setMessage] = useState(null);
 
     useEffect(() => {
       const fetchPrefs = async () => {
@@ -2670,7 +2669,8 @@ const API_BASE_URL = isProduction
               ...data,
               sections: { ...defaultSections, ...(data.sections || {}) },
               thresholds: { ...defaultThresholds, ...(data.thresholds || {}) },
-              ai_tone: data.ai_tone || 'balanced',
+              ai_tone: data.ai_tone || 'concise',
+              delivery_time: data.delivery_time || '07:00',
             };
             setPrefs(merged);
             setSavedPrefs(JSON.stringify(merged));
@@ -2685,14 +2685,13 @@ const API_BASE_URL = isProduction
 
     const savePrefs = async () => {
       setSaving(true);
-      setMessage(null);
       try {
         const res = await fetch(`${API_BASE}/api/v1/briefing/preferences`, {
           method: 'PUT',
           headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify({
             briefing_enabled: prefs.briefing_enabled,
-            briefing_hour: prefs.briefing_hour,
+            delivery_time: prefs.delivery_time,
             sections: prefs.sections,
             thresholds: prefs.thresholds,
             ai_tone: prefs.ai_tone,
@@ -2704,133 +2703,153 @@ const API_BASE_URL = isProduction
             ...data,
             sections: { ...defaultSections, ...(data.sections || {}) },
             thresholds: { ...defaultThresholds, ...(data.thresholds || {}) },
-            ai_tone: data.ai_tone || 'balanced',
+            ai_tone: data.ai_tone || 'concise',
+            delivery_time: data.delivery_time || '07:00',
           };
           setPrefs(merged);
           setSavedPrefs(JSON.stringify(merged));
-          setMessage({ type: 'success', text: 'Briefing preferences saved' });
+          toast.success('Briefing preferences saved');
         } else {
-          setMessage({ type: 'error', text: 'Failed to save preferences' });
+          toast.error('Failed to save preferences');
         }
-      } catch (err) { setMessage({ type: 'error', text: 'Failed to save preferences' }); }
+      } catch (err) { toast.error('Failed to save preferences'); }
       finally { setSaving(false); }
     };
 
     const generateNow = async () => {
       setGenerating(true);
-      setMessage(null);
       try {
         const res = await fetch(`${API_BASE}/api/v1/briefing/generate-now?force=true`, {
           method: 'POST',
           headers: getAuthHeaders(),
         });
         if (res.ok) {
-          setMessage({ type: 'success', text: 'Briefing generation started — check your Dashboard in a minute' });
+          toast.success('Briefing generation started — check your Dashboard in a minute');
         } else {
           const data = await res.json().catch(() => ({}));
-          setMessage({ type: 'error', text: data?.detail || 'Failed to generate briefing' });
+          toast.error(data?.detail || 'Failed to generate briefing');
         }
       } catch (err) {
-        setMessage({ type: 'error', text: 'Failed to generate briefing' });
+        toast.error('Failed to generate briefing');
       }
       finally { setGenerating(false); }
     };
 
     const updateSection = (key, val) => setPrefs(p => ({ ...p, sections: { ...p.sections, [key]: val } }));
     const updateThreshold = (key, val) => {
-      const num = parseInt(val);
-      if (!isNaN(num) && num >= 1) setPrefs(p => ({ ...p, thresholds: { ...p.thresholds, [key]: num } }));
+      const num = parseFloat(val);
+      if (!isNaN(num) && num > 0) setPrefs(p => ({ ...p, thresholds: { ...p.thresholds, [key]: num } }));
     };
 
-    if (loading) return <div className="settings-section"><h3>Morning Briefing</h3><p>Loading...</p></div>;
+    if (loading) return <div className="briefing-settings"><h3>Morning Briefing</h3><p>Loading...</p></div>;
 
-    const hourOptions = [];
+    const deliveryTimeOptions = [];
     for (let h = 5; h <= 11; h++) {
-      hourOptions.push(<option key={h} value={h}>{`${h}:00 AM`}</option>);
+      const val = `${String(h).padStart(2, '0')}:00`;
+      deliveryTimeOptions.push(<option key={val} value={val}>{`${h}:00 AM`}</option>);
     }
 
     const sectionLabels = {
-      pipeline: 'Pipeline snapshot',
-      at_risk: 'At-risk loans',
-      stale_leads: 'Stale leads',
-      appointments: "Today's appointments",
-      conditions: 'Pending conditions',
-      yesterday: "Yesterday's activity",
+      pipeline_health: 'Pipeline Health',
+      sla_alerts: 'SLA Alerts',
+      tasks: 'Tasks',
+      lead_activity: 'Lead Activity',
+      rate_watch: 'Rate Watch',
+      team_performance: 'Team Performance',
     };
 
-    const thresholdLabels = {
-      at_risk_days: { label: 'Days without movement to flag', suffix: 'days' },
-      stale_lead_days: { label: 'Days silent to flag lead', suffix: 'days' },
-      stale_lead_high_score_days: { label: 'Days silent for high-score leads', suffix: 'days' },
-      lock_expiring_days: { label: 'Lock expiring within', suffix: 'days' },
-      max_at_risk_items: { label: 'Max at-risk items shown', suffix: '' },
-      max_stale_lead_items: { label: 'Max stale leads shown', suffix: '' },
+    const toneDescriptions = {
+      concise: 'Brief, numbers-focused summary',
+      detailed: 'In-depth analysis with context',
+      coaching: 'Actionable coaching tips and guidance',
+    };
+
+    const thresholdConfig = {
+      sla_warning_days: { label: 'SLA warning threshold', suffix: 'days', min: 1, max: 30, step: 1 },
+      stale_lead_days: { label: 'Stale lead threshold', suffix: 'days', min: 1, max: 60, step: 1 },
+      rate_change_threshold: { label: 'Rate change alert threshold', suffix: '%', min: 0.01, max: 1, step: 0.025 },
     };
 
     const disabled = !prefs.briefing_enabled;
 
     return (
-      <div className="settings-section">
+      <div className="briefing-settings">
         <h3>Morning Briefing</h3>
-        <p className="settings-description">Get a daily AI-powered briefing of your pipeline, priorities, and appointments delivered to your email and Dashboard.</p>
+        <p className="briefing-settings-description">Get a daily AI-powered briefing of your pipeline, priorities, and appointments delivered to your Dashboard.</p>
 
-        <div className="settings-row">
-          <label className="settings-toggle">
+        <div className="briefing-settings-row">
+          <label className="briefing-toggle">
             <input type="checkbox" checked={prefs.briefing_enabled} onChange={(e) => setPrefs({ ...prefs, briefing_enabled: e.target.checked })} />
             <span>Enable daily briefing</span>
           </label>
         </div>
 
-        <div className="settings-row">
-          <label>Delivery time</label>
-          <select value={prefs.briefing_hour} onChange={(e) => setPrefs({ ...prefs, briefing_hour: parseInt(e.target.value) })} disabled={disabled}>
-            {hourOptions}
-          </select>
-          {prefs.timezone && <span className="settings-hint">in your timezone: {prefs.timezone}</span>}
-        </div>
-
-        <div className="settings-row">
-          <label>AI narrative style</label>
-          <div className="settings-radio-group">
-            {['concise', 'balanced', 'detailed'].map(tone => (
-              <label key={tone} className="settings-radio">
-                <input type="radio" name="ai_tone" value={tone} checked={prefs.ai_tone === tone} onChange={() => setPrefs({ ...prefs, ai_tone: tone })} disabled={disabled} />
-                <span style={{ textTransform: 'capitalize' }}>{tone}</span>
-              </label>
-            ))}
+        <div className={`briefing-settings-body ${disabled ? 'briefing-disabled' : ''}`}>
+          <div className="briefing-subsection">
+            <h4>Sections</h4>
+            <p className="briefing-hint">Choose which sections appear in your briefing.</p>
+            <div className="briefing-checkboxes">
+              {Object.entries(sectionLabels).map(([key, label]) => (
+                <label key={key} className="briefing-toggle">
+                  <input type="checkbox" checked={prefs.sections[key] !== false} onChange={(e) => updateSection(key, e.target.checked)} disabled={disabled} />
+                  <span>{label}</span>
+                </label>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="settings-subsection">
-          <h4>Sections</h4>
-          <p className="settings-hint">Choose which sections appear in your briefing.</p>
-          <div className="settings-checkboxes">
-            {Object.entries(sectionLabels).map(([key, label]) => (
-              <label key={key} className="settings-toggle">
-                <input type="checkbox" checked={prefs.sections[key] !== false} onChange={(e) => updateSection(key, e.target.checked)} disabled={disabled} />
-                <span>{label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="settings-subsection">
-          <h4>Thresholds</h4>
-          <p className="settings-hint">Customize when items are flagged in your briefing.</p>
-          <div className="settings-thresholds">
-            {Object.entries(thresholdLabels).map(([key, { label, suffix }]) => (
-              <div key={key} className="settings-row settings-threshold-row">
-                <label>{label}</label>
-                <div className="settings-threshold-input">
-                  <input type="number" min="1" max="60" value={prefs.thresholds[key] || ''} onChange={(e) => updateThreshold(key, e.target.value)} disabled={disabled} style={{ width: 60, textAlign: 'center' }} />
-                  {suffix && <span className="settings-hint">{suffix}</span>}
+          <div className="briefing-subsection">
+            <h4>Thresholds</h4>
+            <p className="briefing-hint">Customize when items are flagged in your briefing.</p>
+            <div className="briefing-thresholds">
+              {Object.entries(thresholdConfig).map(([key, { label, suffix, min, max, step }]) => (
+                <div key={key} className="briefing-threshold-row">
+                  <label>{label}</label>
+                  <div className="briefing-threshold-input">
+                    <input
+                      type="number"
+                      min={min}
+                      max={max}
+                      step={step}
+                      value={prefs.thresholds[key] ?? ''}
+                      onChange={(e) => updateThreshold(key, e.target.value)}
+                      disabled={disabled}
+                    />
+                    {suffix && <span className="briefing-hint">{suffix}</span>}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          </div>
+
+          <div className="briefing-subsection">
+            <h4>AI Tone</h4>
+            <p className="briefing-hint">Set the narrative style for your briefing.</p>
+            <div className="briefing-radio-group">
+              {Object.entries(toneDescriptions).map(([tone, desc]) => (
+                <label key={tone} className="briefing-radio">
+                  <input type="radio" name="ai_tone" value={tone} checked={prefs.ai_tone === tone} onChange={() => setPrefs({ ...prefs, ai_tone: tone })} disabled={disabled} />
+                  <div className="briefing-radio-content">
+                    <span className="briefing-radio-label">{tone.charAt(0).toUpperCase() + tone.slice(1)}</span>
+                    <span className="briefing-radio-desc">{desc}</span>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div className="briefing-subsection">
+            <h4>Delivery Time</h4>
+            <div className="briefing-settings-row">
+              <select value={prefs.delivery_time} onChange={(e) => setPrefs({ ...prefs, delivery_time: e.target.value })} disabled={disabled}>
+                {deliveryTimeOptions}
+              </select>
+              {prefs.timezone && <span className="briefing-hint">{prefs.timezone}</span>}
+            </div>
           </div>
         </div>
 
-        <div className="settings-row settings-actions">
+        <div className="briefing-actions">
           <button onClick={savePrefs} disabled={saving || !isDirty} className="btn btn-primary">
             {saving ? 'Saving...' : isDirty ? 'Save Preferences' : 'Saved'}
           </button>
@@ -2838,12 +2857,6 @@ const API_BASE_URL = isProduction
             {generating ? 'Generating...' : 'Generate Now'}
           </button>
         </div>
-
-        {message && (
-          <div className={`settings-message ${message.type}`}>
-            {message.text}
-          </div>
-        )}
       </div>
     );
   };

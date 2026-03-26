@@ -36,29 +36,29 @@ def _get_deps():
 # --- Schemas ---
 
 class BriefingSections(BaseModel):
-    pipeline: bool = True
-    at_risk: bool = True
-    stale_leads: bool = True
-    appointments: bool = True
-    conditions: bool = True
-    yesterday: bool = True
+    pipeline_health: bool = True
+    sla_alerts: bool = True
+    tasks: bool = True
+    lead_activity: bool = True
+    rate_watch: bool = True
+    team_performance: bool = True
 
 
 class BriefingThresholds(BaseModel):
-    at_risk_days: int = Field(default=10, ge=1, le=30)
+    sla_warning_days: int = Field(default=3, ge=1, le=30)
     stale_lead_days: int = Field(default=7, ge=1, le=30)
-    stale_lead_high_score_days: int = Field(default=3, ge=1, le=14)
-    lock_expiring_days: int = Field(default=3, ge=1, le=14)
-    max_at_risk_items: int = Field(default=10, ge=1, le=20)
-    max_stale_lead_items: int = Field(default=10, ge=1, le=20)
+    rate_change_threshold: float = Field(default=0.125, ge=0.01, le=1.0)
+
+
+VALID_DELIVERY_TIMES = [f"{h:02d}:00" for h in range(5, 12)]  # 05:00 - 11:00
 
 
 class BriefingPreferencesSchema(BaseModel):
     briefing_enabled: bool = True
-    briefing_hour: int = Field(ge=0, le=23, default=7)
+    delivery_time: str = Field(default="07:00")
     sections: BriefingSections = BriefingSections()
     thresholds: BriefingThresholds = BriefingThresholds()
-    ai_tone: Literal["concise", "balanced", "detailed"] = "balanced"
+    ai_tone: Literal["concise", "detailed", "coaching"] = "concise"
 
 
 class BriefingResponse(BaseModel):
@@ -242,9 +242,12 @@ async def get_preferences(
     """Get briefing preferences (merged with defaults)."""
     from services.morning_briefing_service import MorningBriefingService
     prefs = MorningBriefingService.load_preferences(current_user)
+    # Convert briefing_hour int to delivery_time string for the frontend
+    briefing_hour = getattr(current_user, "briefing_hour", 7) or 7
+    delivery_time = f"{briefing_hour:02d}:00"
     return {
         "briefing_enabled": getattr(current_user, "briefing_enabled", True) if current_user.briefing_enabled is not None else True,
-        "briefing_hour": getattr(current_user, "briefing_hour", 7) or 7,
+        "delivery_time": delivery_time,
         "timezone": getattr(current_user, "timezone", "America/New_York"),
         "sections": prefs.sections,
         "thresholds": prefs.thresholds,
@@ -263,10 +266,17 @@ async def update_preferences(
     Split-write: briefing_enabled and briefing_hour go to dedicated User columns
     (used by Celery dispatch for fast SQL filtering). sections, thresholds, and
     ai_tone go to user.briefing_preferences JSONB.
+    delivery_time string ("07:00") is converted to briefing_hour int for the DB.
     """
+    # Convert delivery_time string to briefing_hour int
+    try:
+        hour = int(prefs.delivery_time.split(":")[0])
+    except (ValueError, IndexError):
+        hour = 7
+
     # Dedicated columns (fast SQL filtering by Celery dispatch)
     current_user.briefing_enabled = prefs.briefing_enabled
-    current_user.briefing_hour = prefs.briefing_hour
+    current_user.briefing_hour = hour
 
     # JSONB column (customization preferences)
     current_user.briefing_preferences = {
@@ -278,9 +288,10 @@ async def update_preferences(
 
     from services.morning_briefing_service import MorningBriefingService
     loaded = MorningBriefingService.load_preferences(current_user)
+    delivery_time = f"{current_user.briefing_hour:02d}:00"
     return {
         "briefing_enabled": current_user.briefing_enabled,
-        "briefing_hour": current_user.briefing_hour,
+        "delivery_time": delivery_time,
         "timezone": getattr(current_user, "timezone", "America/New_York"),
         "sections": loaded.sections,
         "thresholds": loaded.thresholds,

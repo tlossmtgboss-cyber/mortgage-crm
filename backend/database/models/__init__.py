@@ -619,6 +619,12 @@ from .sms_persistence import SMSCampaignRecord, ScheduledSMSJobRecord
 # Morning Briefing (daily AI-generated briefings per user)
 from .morning_briefing import MorningBriefing
 
+# Voice Workflow (multi-step voice command state machine)
+from .voice_workflow import VoiceWorkflow
+
+# SMS Dead Letter Queue (failed SMS retry persistence)
+from .sms_dead_letter import SMSDeadLetter
+
 
 __all__ = [
     # =====================
@@ -1253,4 +1259,10 @@ __all__ = [
     # Morning Briefing
     # =====================
     "MorningBriefing",
+
+    # =====================
+    # Voice Workflows
+    # =====================
+    "VoiceWorkflow",
+    "SMSDeadLetter",
 ]

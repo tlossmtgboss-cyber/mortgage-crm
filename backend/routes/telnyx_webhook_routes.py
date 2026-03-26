@@ -412,6 +412,61 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     except Exception as e:
         logger.error(f"ACO intercept error (falling through): {e}")
 
+    # ======================================================================
+    # Voice Scheduling Workflow Intercept
+    # Check if this SMS is a reply to an active voice scheduling workflow
+    # (e.g., contact replying with their preferred time slot).
+    # ======================================================================
+    try:
+        from services.voice_scheduling_workflow_service import VoiceSchedulingWorkflowService
+        from services.scheduling_conversation_service import SchedulingConversationService
+
+        # Look up active workflow by phone across all orgs this number could belong to
+        # The workflow service enforces tenant isolation internally
+        wf_service = VoiceSchedulingWorkflowService(db)
+        workflow = wf_service.find_active_workflow_by_phone_any_org(normalized_from)
+
+        if workflow:
+            conv_service = SchedulingConversationService(db)
+            reply_result = conv_service.handle_reply(
+                workflow_id=workflow.id,
+                sender_phone=normalized_from,
+                message_body=message_body,
+                organization_id=workflow.organization_id,
+            )
+            db.commit()
+
+            # Store audit trail
+            try:
+                db.execute(sa_text("""
+                    INSERT INTO sms_messages (
+                        direction, from_number, to_number, body,
+                        provider, provider_message_id, status, created_at
+                    ) VALUES (
+                        'inbound', :from_number, :to_number, :body,
+                        'telnyx', :message_id, 'received', NOW()
+                    )
+                """), {
+                    "from_number": from_number,
+                    "to_number": to_number,
+                    "body": message_body,
+                    "message_id": event.message_id,
+                })
+                db.commit()
+            except Exception as e:
+                logger.error(f"Failed to store workflow-intercepted SMS: {e}")
+
+            return {
+                "status": "received",
+                "handler": "voice_scheduling_workflow",
+                "workflow_id": workflow.id,
+                "action": reply_result.get("action", "processed"),
+            }
+    except ImportError:
+        pass  # Voice scheduling module not available
+    except Exception as e:
+        logger.error(f"Voice scheduling workflow intercept error (falling through): {e}")
+
     # Store inbound SMS in sms_messages table
     try:
         db.execute(sa_text("""
