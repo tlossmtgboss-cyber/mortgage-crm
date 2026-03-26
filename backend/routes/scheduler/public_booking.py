@@ -314,46 +314,93 @@ def _check_booking_email_rate_limit(db: Session, attendee_email: str, org_id: in
 # ============================================================================
 
 @router.get("/public/book-diag")
-async def public_booking_diag(request: Request):
-    """Temporary diagnostic endpoint — remove after debugging."""
+async def public_booking_diag(request: Request, db: Session = Depends(get_db)):
+    """Temporary diagnostic endpoint — uses Depends(get_db) like the real handler."""
     import traceback as _tb
-    results = {}
+    results = {"depends_get_db": "ok"}
 
-    # Test 1: get_models
+    # Step 1: BookingLink query (same as real handler)
     try:
-        models = get_models()
-        results["models"] = len(models) if models else 0
+        BookingLink = get_models()['BookingLink']
+        link = db.query(BookingLink).filter(
+            BookingLink.slug == "demo",
+            BookingLink.is_active == True,
+            BookingLink.is_public == True
+        ).first()
+        results["step1_booking_link"] = {"id": link.id, "slug": link.slug} if link else "not found"
     except Exception as e:
-        results["models_err"] = str(e)
+        results["step1_err"] = f"{type(e).__name__}: {e}"
+        db.rollback()
 
-    # Test 2: manual get_db (not via Depends)
+    # Step 2: User JOIN SchedulerConfig (same as real handler auto-create)
     try:
-        gen = get_db(request)
-        db = next(gen)
+        User = get_models().get('User')
+        SchedulerConfig = get_models()['SchedulerConfig']
+        if User:
+            target_user = db.query(User).join(
+                SchedulerConfig, SchedulerConfig.user_id == User.id
+            ).filter(
+                SchedulerConfig.is_active == True
+            ).first()
+            if target_user:
+                results["step2_user"] = {
+                    "id": target_user.id,
+                    "org_id": getattr(target_user, 'organization_id', None),
+                    "name": getattr(target_user, 'full_name', None) or getattr(target_user, 'name', 'unknown'),
+                }
+            else:
+                results["step2_user"] = "no user with active scheduler config"
+    except Exception as e:
+        results["step2_err"] = f"{type(e).__name__}: {e}\n{_tb.format_exc()[-500:]}"
+        db.rollback()
+
+    # Step 3: SchedulerConfig query
+    try:
+        if 'step2_user' in results and isinstance(results['step2_user'], dict):
+            uid = results['step2_user']['id']
+            config = db.query(SchedulerConfig).filter(
+                SchedulerConfig.user_id == uid
+            ).first()
+            if config:
+                results["step3_config"] = {
+                    "id": config.id,
+                    "active": config.is_active,
+                    "tz": getattr(config, 'timezone', None),
+                }
+            else:
+                results["step3_config"] = "not found"
+    except Exception as e:
+        results["step3_err"] = f"{type(e).__name__}: {e}\n{_tb.format_exc()[-500:]}"
+        db.rollback()
+
+    # Step 4: AppointmentType query
+    try:
+        AppointmentType = get_models()['AppointmentType']
+        if 'step3_config' in results and isinstance(results['step3_config'], dict):
+            cid = results['step3_config']['id']
+            atype = db.query(AppointmentType).filter(
+                AppointmentType.config_id == cid,
+                AppointmentType.is_active == True
+            ).first()
+            if atype:
+                results["step4_appt_type"] = {"id": atype.id, "name": atype.type_name}
+            else:
+                results["step4_appt_type"] = "not found"
+    except Exception as e:
+        results["step4_err"] = f"{type(e).__name__}: {e}\n{_tb.format_exc()[-500:]}"
+        db.rollback()
+
+    # Step 5: Column existence check via raw SQL
+    try:
         from sqlalchemy import text as sa_text
-        db.execute(sa_text("SELECT 1"))
-        results["manual_get_db"] = "ok"
-        # Test BookingLink query
-        BookingLink = get_models().get('BookingLink')
-        if BookingLink:
-            link = db.query(BookingLink).filter(BookingLink.slug == "demo").first()
-            results["demo_link"] = {"id": link.id, "slug": link.slug} if link else "not found"
-        gen.close()
+        for table in ['scheduler_booking_links', 'scheduler_configs', 'appointment_types']:
+            cols = db.execute(sa_text(
+                "SELECT column_name FROM information_schema.columns WHERE table_name = :t ORDER BY ordinal_position"
+            ), {"t": table}).fetchall()
+            results[f"cols_{table}"] = [c[0] for c in cols]
     except Exception as e:
-        results["manual_get_db_err"] = f"{type(e).__name__}: {e}\n{_tb.format_exc()}"
-
-    # Test 3: Check what get_db import path is
-    results["get_db_module"] = get_db.__module__
-    results["get_db_qualname"] = get_db.__qualname__
-
-    # Test 4: rate limit
-    try:
-        await _check_rate_limit(request)
-        results["rate_limit"] = "ok"
-    except HTTPException as e:
-        results["rate_limit"] = f"HTTPException {e.status_code}: {e.detail}"
-    except Exception as e:
-        results["rate_limit_err"] = f"{type(e).__name__}: {e}"
+        results["step5_cols_err"] = str(e)
+        db.rollback()
 
     return results
 
