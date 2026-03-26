@@ -1670,6 +1670,7 @@ scrollIndicator.classList.add('visible');
 // ==========================================
 // GSAP + SCROLL TRIGGER
 // ==========================================
+try {
 gsap.registerPlugin(ScrollTrigger);
 
 // HERO animations
@@ -1923,13 +1924,16 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
     if (target) target.scrollIntoView({ behavior: 'smooth' });
   });
 });
+} catch(e) { console.warn('GSAP animation error:', e); }
+</script>
 
+<script>
 // ==========================================
-// BOOKING LIGHTBOX
+// BOOKING LIGHTBOX (isolated script block)
 // ==========================================
-const bookingOverlay = document.getElementById('bookingOverlay');
-const bookingFrame = document.getElementById('bookingFrame');
-const BOOKING_URL = 'https://app.perenniaai.com/embed/book/demo?bg=070a10&accent=4DA3FF';
+var bookingOverlay = document.getElementById('bookingOverlay');
+var bookingFrame = document.getElementById('bookingFrame');
+var BOOKING_URL = 'https://app.perenniaai.com/embed/book/demo?bg=070a10&accent=4DA3FF';
 
 function openBooking() {
   if (!bookingFrame.src) bookingFrame.src = BOOKING_URL;
@@ -1943,15 +1947,15 @@ function closeBooking() {
 }
 
 document.getElementById('bookingClose').addEventListener('click', closeBooking);
-bookingOverlay.addEventListener('click', e => {
+bookingOverlay.addEventListener('click', function(e) {
   if (e.target === bookingOverlay) closeBooking();
 });
-document.addEventListener('keydown', e => {
+document.addEventListener('keydown', function(e) {
   if (e.key === 'Escape' && bookingOverlay.classList.contains('active')) closeBooking();
 });
 
 // Listen for booking completion from iframe
-window.addEventListener('message', e => {
+window.addEventListener('message', function(e) {
   if (e.origin !== 'https://app.perenniaai.com') return;
   if (e.data && e.data.type === 'booking-confirmed') {
     closeBooking();
