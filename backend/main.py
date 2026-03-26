@@ -1573,6 +1573,23 @@ try:
 except Exception as e:
     logger.warning(f"⚠️ Lead Assignment routes not loaded: {e}")
 
+# Morning Briefing routes
+try:
+    from routes.briefing_routes import router as briefing_router, set_dependencies as set_briefing_deps
+    set_briefing_deps(get_db, get_current_user)
+    app.include_router(briefing_router, tags=["Morning Briefing"])
+    logger.info("✅ Morning Briefing routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Morning Briefing routes not loaded: {e}")
+
+# Voice Workflow Monitoring routes
+try:
+    from routes.voice_workflow_monitoring_routes import router as voice_workflow_router
+    app.include_router(voice_workflow_router)
+    logger.info("✅ Voice Workflow Monitoring routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ Voice Workflow Monitoring routes not loaded: {e}")
+
 # ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py
 # ============================================================================
@@ -2144,6 +2161,81 @@ def _run_critical_schema_migrations():
                 ("requires_confirmation", "BOOLEAN DEFAULT FALSE"),
                 ("buffer_before_minutes", "INTEGER DEFAULT 5"),
                 ("buffer_after_minutes", "INTEGER DEFAULT 5"),
+            ],
+            "scheduler_blocked_times": [
+                ("organization_id", "INTEGER"),
+                ("user_id", "INTEGER"),
+                ("title", "VARCHAR(255)"),
+                ("description", "TEXT"),
+                ("block_type", "VARCHAR(50) DEFAULT 'custom'"),
+                ("start_datetime", "TIMESTAMP"),
+                ("end_datetime", "TIMESTAMP"),
+                ("all_day", "BOOLEAN DEFAULT FALSE"),
+                ("is_recurring", "BOOLEAN DEFAULT FALSE"),
+                ("recurrence_pattern", "JSON"),
+                ("recurrence_end_date", "DATE"),
+                ("applies_to_all_users", "BOOLEAN DEFAULT FALSE"),
+                ("applies_to_teams", "JSON"),
+                ("is_active", "BOOLEAN DEFAULT TRUE"),
+                ("created_at", "TIMESTAMP DEFAULT NOW()"),
+                ("updated_at", "TIMESTAMP DEFAULT NOW()"),
+                ("created_by_id", "INTEGER"),
+            ],
+            "scheduler_appointments": [
+                ("organization_id", "INTEGER"),
+                ("appointment_type_id", "INTEGER"),
+                ("assigned_user_id", "INTEGER"),
+                ("created_by_user_id", "INTEGER"),
+                ("lead_id", "INTEGER"),
+                ("loan_id", "INTEGER"),
+                ("contact_id", "INTEGER"),
+                ("idempotency_key", "VARCHAR(64)"),
+                ("external_id", "VARCHAR(100)"),
+                ("external_source", "VARCHAR(50)"),
+                ("title", "VARCHAR(255)"),
+                ("description", "TEXT"),
+                ("meeting_type", "VARCHAR(50)"),
+                ("meeting_mode", "VARCHAR(50)"),
+                ("scheduled_start", "TIMESTAMP"),
+                ("scheduled_end", "TIMESTAMP"),
+                ("duration_minutes", "INTEGER"),
+                ("timezone", "VARCHAR(50) DEFAULT 'America/Chicago'"),
+                ("location", "VARCHAR(255)"),
+                ("video_link", "VARCHAR(500)"),
+                ("phone_number", "VARCHAR(20)"),
+                ("dial_in_info", "TEXT"),
+                ("attendee_name", "VARCHAR(255)"),
+                ("attendee_email", "VARCHAR(255)"),
+                ("attendee_phone", "VARCHAR(20)"),
+                ("attendee_notes", "TEXT"),
+                ("intake_responses", "JSON"),
+                ("status", "VARCHAR(50) DEFAULT 'booked'"),
+                ("status_changed_at", "TIMESTAMP"),
+                ("status_changed_by", "INTEGER"),
+                ("completed_at", "TIMESTAMP"),
+                ("no_show_at", "TIMESTAMP"),
+                ("cancelled_at", "TIMESTAMP"),
+                ("cancellation_reason", "TEXT"),
+                ("rescheduled_from_id", "INTEGER"),
+                ("reschedule_count", "INTEGER DEFAULT 0"),
+                ("booked_by_ai", "BOOLEAN DEFAULT FALSE"),
+                ("ai_booking_context", "JSON"),
+                ("auto_confirmed", "BOOLEAN DEFAULT FALSE"),
+                ("google_calendar_event_id", "VARCHAR(255)"),
+                ("outlook_event_id", "VARCHAR(255)"),
+                ("last_synced_at", "TIMESTAMP"),
+                ("internal_notes", "TEXT"),
+                ("meeting_notes", "TEXT"),
+                ("version", "INTEGER DEFAULT 1"),
+                ("recovery_step", "INTEGER DEFAULT 0"),
+                ("recovery_started_at", "TIMESTAMP"),
+                ("recovery_completed_at", "TIMESTAMP"),
+                ("recovery_opted_out", "BOOLEAN DEFAULT FALSE"),
+                ("communication_consent_at", "TIMESTAMP"),
+                ("communication_consent_source", "VARCHAR(50)"),
+                ("booking_attribution", "JSON"),
+                ("created_at", "TIMESTAMP DEFAULT NOW()"),
+                ("updated_at", "TIMESTAMP DEFAULT NOW()"),
             ],
         }
         for table_name, columns in scheduler_table_migrations.items():
