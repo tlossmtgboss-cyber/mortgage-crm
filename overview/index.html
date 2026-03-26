@@ -987,6 +987,103 @@
   }
   .site-footer a:hover { color: var(--text-primary); }
 
+  /* BOOKING LIGHTBOX */
+  .booking-overlay {
+    position: fixed; inset: 0; z-index: 10000;
+    background: rgba(0,0,0,0.78);
+    backdrop-filter: blur(16px);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; visibility: hidden;
+    transition: opacity .3s ease, visibility .3s ease;
+  }
+  .booking-overlay.active { opacity: 1; visibility: visible; }
+  .booking-box {
+    position: relative;
+    width: 92vw; max-width: 460px;
+    background: var(--bg-1);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px; overflow: hidden;
+    box-shadow: 0 32px 80px rgba(0,0,0,0.6), 0 0 60px rgba(77,163,255,0.06);
+    transform: scale(0.93) translateY(16px);
+    transition: transform .35s cubic-bezier(0.16,1,0.3,1);
+  }
+  .booking-overlay.active .booking-box { transform: scale(1) translateY(0); }
+  .booking-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--glass-border);
+  }
+  .booking-header h3 {
+    font-family: var(--font-display); font-size: 1.1rem; font-weight: 400;
+    color: var(--text-primary); margin: 0;
+  }
+  .booking-close {
+    background: none; border: none; cursor: pointer;
+    color: var(--text-dim); font-size: 1.4rem; line-height: 1;
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .2s, color .2s;
+  }
+  .booking-close:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
+  .booking-body { padding: 24px; }
+  .booking-step { display: none; }
+  .booking-step.active { display: block; }
+  .booking-label {
+    display: block; font-size: .72rem; font-weight: 500;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--text-dim); margin-bottom: 8px;
+  }
+  .booking-input {
+    width: 100%; padding: 12px 16px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px; color: var(--text-primary);
+    font-family: var(--font-body); font-size: .92rem;
+    outline: none; transition: border-color .2s;
+    margin-bottom: 16px;
+  }
+  .booking-input:focus { border-color: var(--accent-blue); }
+  .booking-input::placeholder { color: var(--text-dim); }
+  .booking-slots {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+    margin-bottom: 16px; max-height: 220px; overflow-y: auto;
+  }
+  .booking-slot {
+    padding: 10px 8px; text-align: center;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--glass-border);
+    border-radius: 8px; cursor: pointer;
+    font-size: .82rem; color: var(--text-secondary);
+    transition: all .2s;
+  }
+  .booking-slot:hover { border-color: rgba(77,163,255,0.3); color: var(--text-primary); }
+  .booking-slot.selected {
+    border-color: var(--accent-blue);
+    background: var(--accent-blue-dim);
+    color: var(--accent-blue);
+  }
+  .booking-btn {
+    width: 100%; padding: 14px;
+    background: linear-gradient(135deg, rgba(77,163,255,0.9), rgba(120,200,255,0.8));
+    color: #040508; font-family: var(--font-body); font-weight: 500;
+    font-size: .84rem; letter-spacing: .08em; text-transform: uppercase;
+    border: none; border-radius: 12px; cursor: pointer;
+    transition: all .3s; box-shadow: 0 8px 32px rgba(77,163,255,0.25);
+  }
+  .booking-btn:hover { transform: translateY(-1px); box-shadow: 0 12px 40px rgba(77,163,255,0.35); }
+  .booking-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+  .booking-msg {
+    text-align: center; padding: 16px 0;
+    font-size: .9rem; color: var(--text-secondary);
+  }
+  .booking-check {
+    width: 48px; height: 48px; margin: 0 auto 16px;
+    border-radius: 50%; background: rgba(61,255,160,0.1);
+    border: 2px solid var(--green);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem; color: var(--green);
+  }
+
   /* MOBILE RESPONSIVE */
   @media (max-width: 900px) {
     body { cursor: auto; }
@@ -996,6 +1093,7 @@
     .nav-right { gap: 8px; }
     .nav-login { font-size: .7rem; padding: 8px 12px; }
     .nav-cta { font-size: .7rem; padding: 8px 16px; }
+    .booking-box { width: 96vw; border-radius: 14px; }
   }
 </style>
 </head>
@@ -1551,11 +1649,52 @@
   <div class="closing-tagline">Perennia AI · The Relationship Operating System for Mortgage Teams</div>
 </section>
 
+<!-- BOOKING LIGHTBOX -->
+<div class="booking-overlay" id="bookingOverlay">
+  <div class="booking-box">
+    <div class="booking-header">
+      <h3 id="bookingTitle">Book a Strategy Session</h3>
+      <button class="booking-close" id="bookingClose" aria-label="Close">&times;</button>
+    </div>
+    <div class="booking-body">
+      <!-- Step 1: Date -->
+      <div class="booking-step active" id="step1">
+        <label class="booking-label">Select a Date</label>
+        <input type="date" class="booking-input" id="bookDate">
+        <label class="booking-label">Available Times</label>
+        <div class="booking-slots" id="bookSlots">
+          <div class="booking-msg" id="slotsMsg">Pick a date to see times</div>
+        </div>
+        <button class="booking-btn" id="btnNext1" disabled>Select Time</button>
+      </div>
+      <!-- Step 2: Details -->
+      <div class="booking-step" id="step2">
+        <label class="booking-label">Your Name</label>
+        <input type="text" class="booking-input" id="bookName" placeholder="Full name">
+        <label class="booking-label">Email</label>
+        <input type="email" class="booking-input" id="bookEmail" placeholder="you@example.com">
+        <label class="booking-label">Phone</label>
+        <input type="tel" class="booking-input" id="bookPhone" placeholder="(555) 123-4567">
+        <label class="booking-label">Notes (optional)</label>
+        <input type="text" class="booking-input" id="bookNotes" placeholder="Anything we should know?">
+        <button class="booking-btn" id="btnConfirm">Confirm Booking</button>
+      </div>
+      <!-- Step 3: Confirmation -->
+      <div class="booking-step" id="step3">
+        <div class="booking-check">&#10003;</div>
+        <div class="booking-msg" style="color:var(--text-primary);font-size:1.05rem;font-weight:500;">You're booked!</div>
+        <div class="booking-msg" id="confirmDetails"></div>
+        <button class="booking-btn" style="margin-top:16px;" onclick="closeBooking()">Done</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- FOOTER -->
 <footer class="site-footer">
   <div style="margin-bottom:12px;">
     <a href="/privacy-policy">Privacy Policy</a>
-    <a href="mailto:hello@perenniaai.com">Contact</a>
+    <a href="mailto:admin@perenniaai.com">Contact</a>
   </div>
   <div>&copy; 2026 Perennia AI. All rights reserved.</div>
 </footer>
@@ -1862,18 +2001,142 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
 
 <script>
 // ==========================================
-// BOOKING POPUP
+// BOOKING LIGHTBOX — calls Smart Calendar API
 // ==========================================
+var API = 'https://api.perenniaai.com/api/v1/scheduler';
+var SLUG = 'demo';
+var overlay = document.getElementById('bookingOverlay');
+var selectedSlot = null;
+var appointmentTypeId = null;
+
 function openBooking() {
-  var w = 520, h = 720;
-  var left = Math.round((screen.width - w) / 2);
-  var top = Math.round((screen.height - h) / 2);
-  window.open(
-    'https://app.perenniaai.com/book/demo',
-    'perennia-booking',
-    'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',toolbar=no,menubar=no,scrollbars=yes,resizable=yes'
-  );
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+  // Set min date to today
+  var today = new Date().toISOString().split('T')[0];
+  document.getElementById('bookDate').min = today;
+  document.getElementById('bookDate').value = '';
+  resetSteps();
+  // Fetch booking config to get appointment type ID
+  fetch(API + '/public/book/' + SLUG)
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      if (d.appointment_types && d.appointment_types.length > 0) {
+        appointmentTypeId = d.appointment_types[0].id;
+      }
+    })
+    .catch(function() {});
 }
+
+function closeBooking() {
+  overlay.classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+function resetSteps() {
+  selectedSlot = null;
+  document.querySelectorAll('.booking-step').forEach(function(s) { s.classList.remove('active'); });
+  document.getElementById('step1').classList.add('active');
+  document.getElementById('bookingTitle').textContent = 'Book a Strategy Session';
+  document.getElementById('bookSlots').innerHTML = '<div class="booking-msg">Pick a date to see times</div>';
+  document.getElementById('btnNext1').disabled = true;
+}
+
+// Close handlers
+document.getElementById('bookingClose').addEventListener('click', closeBooking);
+overlay.addEventListener('click', function(e) { if (e.target === overlay) closeBooking(); });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeBooking(); });
+
+// Date change → fetch slots
+document.getElementById('bookDate').addEventListener('change', function() {
+  var dateVal = this.value;
+  if (!dateVal) return;
+  var slotsEl = document.getElementById('bookSlots');
+  slotsEl.innerHTML = '<div class="booking-msg">Loading...</div>';
+  document.getElementById('btnNext1').disabled = true;
+  selectedSlot = null;
+
+  var url = API + '/public/book/' + SLUG + '/slots?start_date=' + dateVal + '&end_date=' + dateVal;
+  if (appointmentTypeId) url += '&appointment_type_id=' + appointmentTypeId;
+
+  fetch(url)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      var slots = data.slots || data;
+      if (!slots || !slots.length) {
+        slotsEl.innerHTML = '<div class="booking-msg">No times available this day</div>';
+        return;
+      }
+      slotsEl.innerHTML = '';
+      slots.forEach(function(slot) {
+        var time = new Date(slot.start_time || slot.start || slot);
+        var label = time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        var btn = document.createElement('div');
+        btn.className = 'booking-slot';
+        btn.textContent = label;
+        btn.addEventListener('click', function() {
+          document.querySelectorAll('.booking-slot').forEach(function(s) { s.classList.remove('selected'); });
+          btn.classList.add('selected');
+          selectedSlot = slot.start_time || slot.start || slot;
+          document.getElementById('btnNext1').disabled = false;
+        });
+        slotsEl.appendChild(btn);
+      });
+    })
+    .catch(function() {
+      slotsEl.innerHTML = '<div class="booking-msg">Could not load times</div>';
+    });
+});
+
+// Step 1 → Step 2
+document.getElementById('btnNext1').addEventListener('click', function() {
+  if (!selectedSlot) return;
+  document.getElementById('step1').classList.remove('active');
+  document.getElementById('step2').classList.add('active');
+  document.getElementById('bookingTitle').textContent = 'Your Details';
+});
+
+// Confirm booking
+document.getElementById('btnConfirm').addEventListener('click', function() {
+  var name = document.getElementById('bookName').value.trim();
+  var email = document.getElementById('bookEmail').value.trim();
+  var phone = document.getElementById('bookPhone').value.trim();
+  var notes = document.getElementById('bookNotes').value.trim();
+  if (!name || !email) { alert('Please enter your name and email.'); return; }
+
+  var btn = document.getElementById('btnConfirm');
+  btn.disabled = true;
+  btn.textContent = 'Booking...';
+
+  fetch(API + '/public/book/' + SLUG + '/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      appointment_type_id: appointmentTypeId,
+      start_time: selectedSlot,
+      duration_minutes: 30,
+      attendee_name: name,
+      attendee_email: email,
+      attendee_phone: phone,
+      notes: notes
+    })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+      document.getElementById('step2').classList.remove('active');
+      document.getElementById('step3').classList.add('active');
+      document.getElementById('bookingTitle').textContent = 'Confirmed';
+      var dt = new Date(selectedSlot);
+      document.getElementById('confirmDetails').textContent =
+        dt.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }) +
+        ' at ' + dt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    })
+    .catch(function() {
+      btn.disabled = false;
+      btn.textContent = 'Confirm Booking';
+      alert('Something went wrong. Please try again.');
+    });
+});
 </script>
 </body>
 </html>
