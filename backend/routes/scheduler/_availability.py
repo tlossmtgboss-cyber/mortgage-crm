@@ -228,43 +228,47 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
     if _models and _models.get('Appointment'):
         try:
             V2Appt = _models['Appointment']
-            v2_query = db.query(V2Appt).filter(
-                V2Appt.assigned_user_id == target_user_id,
-                V2Appt.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
-                V2Appt.scheduled_start >= start_dt,
-                V2Appt.scheduled_start <= end_dt
-            )
-            v2_query = v2_query.filter(V2Appt.organization_id == org_id)
-            v2_appts = v2_query.all()
-            for a in v2_appts:
-                if a.scheduled_start and a.scheduled_end:
-                    conflicts.append((a.scheduled_start, a.scheduled_end))
+            with db.begin_nested():
+                v2_query = db.query(V2Appt).filter(
+                    V2Appt.assigned_user_id == target_user_id,
+                    V2Appt.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
+                    V2Appt.scheduled_start >= start_dt,
+                    V2Appt.scheduled_start <= end_dt
+                )
+                v2_query = v2_query.filter(V2Appt.organization_id == org_id)
+                v2_appts = v2_query.all()
+                for a in v2_appts:
+                    if a.scheduled_start and a.scheduled_end:
+                        conflicts.append((a.scheduled_start, a.scheduled_end))
         except Exception as e:
-            logger.error(f"v2 Appointment cross-source check FAILED for user {target_user_id} — failing closed: {e}")
-            degraded_sources.append("v2_appointment")
-            conflicts.append((start_dt, end_dt))
+            if _is_missing_table_error(e):
+                logger.warning(f"v2 Appointment table not available — skipping (fail-open): {e}")
+            else:
+                logger.error(f"v2 Appointment cross-source check FAILED for user {target_user_id} — failing closed: {e}")
+                degraded_sources.append("v2_appointment")
+                conflicts.append((start_dt, end_dt))
 
     # Source 1b: Legacy ScheduledAppointment (scheduled_appointments) -- deprecated, kept for backward compat
     try:
         from services.smart_scheduler_service import ScheduledAppointment as SAModel
-        sa_query = db.query(SAModel).filter(
-            SAModel.loan_officer_id == target_user_id,
-            SAModel.status.in_(["scheduled", "confirmed"]),
-            SAModel.start_time >= start_dt,
-            SAModel.start_time <= end_dt
-        )
-        sa_query = sa_query.filter(SAModel.organization_id == org_id)
-        sa_appts = sa_query.all()
-        for a in sa_appts:
-            if a.start_time and a.end_time:
-                conflicts.append((a.start_time, a.end_time))
+        with db.begin_nested():
+            sa_query = db.query(SAModel).filter(
+                SAModel.loan_officer_id == target_user_id,
+                SAModel.status.in_(["scheduled", "confirmed"]),
+                SAModel.start_time >= start_dt,
+                SAModel.start_time <= end_dt
+            )
+            sa_query = sa_query.filter(SAModel.organization_id == org_id)
+            sa_appts = sa_query.all()
+            for a in sa_appts:
+                if a.start_time and a.end_time:
+                    conflicts.append((a.start_time, a.end_time))
     except Exception as e:
         # Legacy source — import failures and missing tables are expected
         if isinstance(e, ImportError):
             logger.warning(f"Legacy ScheduledAppointment cross-source check skipped (not installed): {e}")
         elif _is_missing_table_error(e):
             logger.warning(f"Legacy ScheduledAppointment table not available — skipping (fail-open): {e}")
-            db.rollback()
         else:
             logger.error(f"Legacy ScheduledAppointment cross-source check FAILED for user {target_user_id} — failing closed: {e}")
             degraded_sources.append("legacy_appointment")
@@ -277,24 +281,24 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
     else:
         try:
             from database.models.communication import CalendarEvent
-            cal_query = db.query(CalendarEvent).filter(
-                CalendarEvent.user_id == target_user_id,
-                CalendarEvent.status != "cancelled",
-                CalendarEvent.start_time >= start_dt,
-                CalendarEvent.start_time <= end_dt
-            )
-            cal_query = cal_query.filter(CalendarEvent.organization_id == org_id)
-            cal_events = cal_query.all()
-            for e in cal_events:
-                if e.start_time and e.end_time:
-                    conflicts.append((e.start_time, e.end_time))
+            with db.begin_nested():
+                cal_query = db.query(CalendarEvent).filter(
+                    CalendarEvent.user_id == target_user_id,
+                    CalendarEvent.status != "cancelled",
+                    CalendarEvent.start_time >= start_dt,
+                    CalendarEvent.start_time <= end_dt
+                )
+                cal_query = cal_query.filter(CalendarEvent.organization_id == org_id)
+                cal_events = cal_query.all()
+                for e in cal_events:
+                    if e.start_time and e.end_time:
+                        conflicts.append((e.start_time, e.end_time))
             _cb_record_success("calendar_event", org_id=org_id)
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CalendarEvent cross-source check skipped (not installed): {ex}")
             elif _is_missing_table_error(ex):
                 logger.warning(f"CalendarEvent table not available — skipping (fail-open): {ex}")
-                db.rollback()
             else:
                 logger.error(f"CalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
                 _cb_record_failure("calendar_event", org_id=org_id)
@@ -308,24 +312,24 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
     else:
         try:
             from models.calendar_sync_models import CRMCalendarEvent
-            crm_query = db.query(CRMCalendarEvent).filter(
-                CRMCalendarEvent.owner_user_id == target_user_id,
-                CRMCalendarEvent.status != "canceled",
-                CRMCalendarEvent.start_at >= start_dt,
-                CRMCalendarEvent.start_at <= end_dt
-            )
-            crm_query = crm_query.filter(CRMCalendarEvent.organization_id == org_id)
-            crm_events = crm_query.all()
-            for e in crm_events:
-                if e.start_at and e.end_at:
-                    conflicts.append((e.start_at, e.end_at))
+            with db.begin_nested():
+                crm_query = db.query(CRMCalendarEvent).filter(
+                    CRMCalendarEvent.owner_user_id == target_user_id,
+                    CRMCalendarEvent.status != "canceled",
+                    CRMCalendarEvent.start_at >= start_dt,
+                    CRMCalendarEvent.start_at <= end_dt
+                )
+                crm_query = crm_query.filter(CRMCalendarEvent.organization_id == org_id)
+                crm_events = crm_query.all()
+                for e in crm_events:
+                    if e.start_at and e.end_at:
+                        conflicts.append((e.start_at, e.end_at))
             _cb_record_success("crm_calendar_event", org_id=org_id)
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CRMCalendarEvent cross-source check skipped (not installed): {ex}")
             elif _is_missing_table_error(ex):
                 logger.warning(f"CRMCalendarEvent table not available — skipping (fail-open): {ex}")
-                db.rollback()
             else:
                 logger.error(f"CRMCalendarEvent cross-source check FAILED for user {target_user_id} — failing closed: {ex}")
                 _cb_record_failure("crm_calendar_event", org_id=org_id)
@@ -375,22 +379,22 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
     if _models and _models.get('Appointment'):
         try:
             V2Appt = _models['Appointment']
-            v2_query = db.query(V2Appt).filter(
-                V2Appt.assigned_user_id.in_(user_ids),
-                V2Appt.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
-                V2Appt.scheduled_start >= start_dt,
-                V2Appt.scheduled_start <= end_dt
-            )
-            v2_query = v2_query.filter(V2Appt.organization_id == org_id)
-            for a in v2_query.all():
-                if a.scheduled_start and a.scheduled_end:
-                    conflicts_by_user[a.assigned_user_id].append(
-                        (a.scheduled_start, a.scheduled_end)
-                    )
+            with db.begin_nested():
+                v2_query = db.query(V2Appt).filter(
+                    V2Appt.assigned_user_id.in_(user_ids),
+                    V2Appt.status.in_([AppointmentStatus.BOOKED, AppointmentStatus.TENTATIVE]),
+                    V2Appt.scheduled_start >= start_dt,
+                    V2Appt.scheduled_start <= end_dt
+                )
+                v2_query = v2_query.filter(V2Appt.organization_id == org_id)
+                for a in v2_query.all():
+                    if a.scheduled_start and a.scheduled_end:
+                        conflicts_by_user[a.assigned_user_id].append(
+                            (a.scheduled_start, a.scheduled_end)
+                        )
         except Exception as e:
             if _is_missing_table_error(e):
                 logger.warning(f"v2 Appointment table not available — skipping batch (fail-open): {e}")
-                db.rollback()
             else:
                 logger.error(f"v2 Appointment batch cross-source check FAILED — failing closed for all users: {e}")
                 _fail_closed_all_users("v2_appointment")
@@ -398,24 +402,24 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
     # Source 1b: Legacy ScheduledAppointment (scheduled_appointments) -- deprecated
     try:
         from services.smart_scheduler_service import ScheduledAppointment as SAModel
-        sa_query = db.query(SAModel).filter(
-            SAModel.loan_officer_id.in_(user_ids),
-            SAModel.status.in_(["scheduled", "confirmed"]),
-            SAModel.start_time >= start_dt,
-            SAModel.start_time <= end_dt
-        )
-        sa_query = sa_query.filter(SAModel.organization_id == org_id)
-        for a in sa_query.all():
-            if a.start_time and a.end_time:
-                conflicts_by_user[a.loan_officer_id].append(
-                    (a.start_time, a.end_time)
-                )
+        with db.begin_nested():
+            sa_query = db.query(SAModel).filter(
+                SAModel.loan_officer_id.in_(user_ids),
+                SAModel.status.in_(["scheduled", "confirmed"]),
+                SAModel.start_time >= start_dt,
+                SAModel.start_time <= end_dt
+            )
+            sa_query = sa_query.filter(SAModel.organization_id == org_id)
+            for a in sa_query.all():
+                if a.start_time and a.end_time:
+                    conflicts_by_user[a.loan_officer_id].append(
+                        (a.start_time, a.end_time)
+                    )
     except Exception as e:
         if isinstance(e, ImportError):
             logger.warning(f"Legacy ScheduledAppointment batch cross-source check skipped (not installed): {e}")
         elif _is_missing_table_error(e):
             logger.warning(f"Legacy ScheduledAppointment table not available — skipping batch (fail-open): {e}")
-            db.rollback()
         else:
             logger.error(f"Legacy ScheduledAppointment batch cross-source check FAILED — failing closed for all users: {e}")
             _fail_closed_all_users("legacy_appointment")
@@ -427,25 +431,25 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
     else:
         try:
             from database.models.communication import CalendarEvent
-            cal_query = db.query(CalendarEvent).filter(
-                CalendarEvent.user_id.in_(user_ids),
-                CalendarEvent.status != "cancelled",
-                CalendarEvent.start_time >= start_dt,
-                CalendarEvent.start_time <= end_dt
-            )
-            cal_query = cal_query.filter(CalendarEvent.organization_id == org_id)
-            for e in cal_query.all():
-                if e.start_time and e.end_time:
-                    conflicts_by_user[e.user_id].append(
-                        (e.start_time, e.end_time)
-                    )
+            with db.begin_nested():
+                cal_query = db.query(CalendarEvent).filter(
+                    CalendarEvent.user_id.in_(user_ids),
+                    CalendarEvent.status != "cancelled",
+                    CalendarEvent.start_time >= start_dt,
+                    CalendarEvent.start_time <= end_dt
+                )
+                cal_query = cal_query.filter(CalendarEvent.organization_id == org_id)
+                for e in cal_query.all():
+                    if e.start_time and e.end_time:
+                        conflicts_by_user[e.user_id].append(
+                            (e.start_time, e.end_time)
+                        )
             _cb_record_success("calendar_event", org_id=org_id)
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CalendarEvent batch cross-source check skipped (not installed): {ex}")
             elif _is_missing_table_error(ex):
                 logger.warning(f"CalendarEvent table not available — skipping batch (fail-open): {ex}")
-                db.rollback()
             else:
                 logger.error(f"CalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
                 _cb_record_failure("calendar_event", org_id=org_id)
@@ -458,25 +462,25 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
     else:
         try:
             from models.calendar_sync_models import CRMCalendarEvent
-            crm_query = db.query(CRMCalendarEvent).filter(
-                CRMCalendarEvent.owner_user_id.in_(user_ids),
-                CRMCalendarEvent.status != "canceled",
-                CRMCalendarEvent.start_at >= start_dt,
-                CRMCalendarEvent.start_at <= end_dt
-            )
-            crm_query = crm_query.filter(CRMCalendarEvent.organization_id == org_id)
-            for e in crm_query.all():
-                if e.start_at and e.end_at:
-                    conflicts_by_user[e.owner_user_id].append(
-                        (e.start_at, e.end_at)
-                    )
+            with db.begin_nested():
+                crm_query = db.query(CRMCalendarEvent).filter(
+                    CRMCalendarEvent.owner_user_id.in_(user_ids),
+                    CRMCalendarEvent.status != "canceled",
+                    CRMCalendarEvent.start_at >= start_dt,
+                    CRMCalendarEvent.start_at <= end_dt
+                )
+                crm_query = crm_query.filter(CRMCalendarEvent.organization_id == org_id)
+                for e in crm_query.all():
+                    if e.start_at and e.end_at:
+                        conflicts_by_user[e.owner_user_id].append(
+                            (e.start_at, e.end_at)
+                        )
             _cb_record_success("crm_calendar_event", org_id=org_id)
         except Exception as ex:
             if isinstance(ex, ImportError):
                 logger.warning(f"CRMCalendarEvent batch cross-source check skipped (not installed): {ex}")
             elif _is_missing_table_error(ex):
                 logger.warning(f"CRMCalendarEvent table not available — skipping batch (fail-open): {ex}")
-                db.rollback()
             else:
                 logger.error(f"CRMCalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
                 _cb_record_failure("crm_calendar_event", org_id=org_id)
@@ -556,7 +560,11 @@ def _generate_available_slots(
         from routes.scheduler.maintenance import auto_cleanup_expired_holds
         auto_cleanup_expired_holds(db)
     except Exception:
-        # Never let cleanup failure block availability queries
+        # Rollback to clear any failed transaction state from missing tables
+        try:
+            db.rollback()
+        except Exception:
+            pass
         logger.debug("SlotHold auto-cleanup skipped (non-critical)", exc_info=True)
 
     _models = get_models()
@@ -680,6 +688,12 @@ def _generate_available_slots(
                             uid, len(_ra_check)
                         )
     except Exception as e:
+        # Rollback to clear any failed transaction state (e.g. missing table)
+        if not isinstance(e, ImportError):
+            try:
+                db.rollback()
+            except Exception:
+                pass
         logger.debug(f"RecurringAvailability not available, using JSON working_hours: {e}")
         _ra_service = None
 
@@ -710,6 +724,12 @@ def _generate_available_slots(
                     _exceptions_by_user_date[key] = []
                 _exceptions_by_user_date[key].append(exc)
         except Exception as e:
+            # Rollback to clear any failed transaction state (e.g. missing table)
+            if not isinstance(e, ImportError):
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
             logger.debug(f"Failed to batch-load AvailabilityExceptions, falling back to per-date queries: {e}")
             _exceptions_by_user_date = None  # Signal to skip preloading
 

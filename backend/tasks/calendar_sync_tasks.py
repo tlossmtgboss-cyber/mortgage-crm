@@ -46,6 +46,7 @@ async def push_event_to_salesforce(
     Push a single CRM event to Salesforce.
 
     Implements exponential backoff retry logic.
+    Uses tenant-scoped session based on event's owner organization.
 
     Args:
         crm_event_id: CRM event ID to push
@@ -55,11 +56,43 @@ async def push_event_to_salesforce(
     Returns:
         Result dictionary with success status and details
     """
-    db = SessionLocal()
-    attempt = 0
-    last_error = None
+    from sqlalchemy import text as sa_text
+    from database import get_db_with_tenant
 
+    # Look up org_id from the event's owner
+    lookup_db = SessionLocal()
     try:
+        row = lookup_db.execute(sa_text("""
+            SELECT u.organization_id
+            FROM crm_calendar_events e
+            JOIN users u ON u.id = e.owner_user_id
+            WHERE e.id = :eid
+        """), {"eid": crm_event_id}).fetchone()
+        org_id = row[0] if row else None
+    except Exception:
+        org_id = None
+    finally:
+        lookup_db.close()
+
+    # Use tenant-scoped session if org available, otherwise fall back
+    if org_id:
+        from contextlib import contextmanager
+        ctx = get_db_with_tenant(org_id)
+    else:
+        from contextlib import contextmanager
+        @contextmanager
+        def _fb():
+            _db = SessionLocal()
+            try:
+                yield _db
+            finally:
+                _db.close()
+        ctx = _fb()
+
+    with ctx as db:
+        attempt = 0
+        last_error = None
+
         while attempt < max_retries:
             attempt += 1
 
@@ -110,9 +143,6 @@ async def push_event_to_salesforce(
             "attempts": attempt
         }
 
-    finally:
-        db.close()
-
 
 def push_event_to_salesforce_sync(crm_event_id: str, **kwargs) -> dict:
     """Synchronous wrapper for push_event_to_salesforce"""
@@ -130,6 +160,8 @@ async def process_pending_sync_events(
     """
     Process all pending calendar sync events.
 
+    Uses tenant-scoped sessions per-org to enforce RLS.
+
     Args:
         batch_size: Maximum events to process in one run
         max_concurrent: Maximum concurrent sync operations
@@ -137,70 +169,80 @@ async def process_pending_sync_events(
     Returns:
         Summary of processed events
     """
-    db = SessionLocal()
+    from sqlalchemy import text as sa_text
+    from database import get_db_with_tenant
 
+    results = {
+        "processed": 0,
+        "succeeded": 0,
+        "failed": 0,
+        "events": []
+    }
+
+    # Get org list with un-scoped session
+    lookup_db = SessionLocal()
     try:
-        service = CalendarSyncService(db)
-        pending_events = service.get_pending_sync_events(limit=batch_size)
-
-        if not pending_events:
-            logger.info("No pending calendar sync events")
-            return {
-                "processed": 0,
-                "succeeded": 0,
-                "failed": 0,
-                "events": []
-            }
-
-        logger.info(f"Processing {len(pending_events)} pending calendar sync events")
-
-        results = {
-            "processed": 0,
-            "succeeded": 0,
-            "failed": 0,
-            "events": []
-        }
-
-        # Process in batches with concurrency limit
-        semaphore = asyncio.Semaphore(max_concurrent)
-
-        async def process_with_semaphore(event_id: str):
-            async with semaphore:
-                return await push_event_to_salesforce(event_id, max_retries=3)
-
-        tasks = [
-            process_with_semaphore(event.id)
-            for event in pending_events
+        org_ids = [
+            row[0] for row in
+            lookup_db.execute(sa_text(
+                "SELECT id FROM organizations WHERE is_active = true ORDER BY id"
+            )).fetchall()
         ]
-
-        task_results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        for i, result in enumerate(task_results):
-            results["processed"] += 1
-
-            if isinstance(result, Exception):
-                results["failed"] += 1
-                results["events"].append({
-                    "crm_event_id": pending_events[i].id,
-                    "success": False,
-                    "error": str(result)
-                })
-            elif isinstance(result, dict):
-                if result.get("success"):
-                    results["succeeded"] += 1
-                else:
-                    results["failed"] += 1
-                results["events"].append(result)
-
-        logger.info(
-            f"Processed {results['processed']} events: "
-            f"{results['succeeded']} succeeded, {results['failed']} failed"
-        )
-
-        return results
-
     finally:
-        db.close()
+        lookup_db.close()
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as db:
+                service = CalendarSyncService(db)
+                pending_events = service.get_pending_sync_events(limit=batch_size)
+
+                if not pending_events:
+                    continue
+
+                logger.info(f"Processing {len(pending_events)} pending calendar sync events for org {org_id}")
+
+                # Process in batches with concurrency limit
+                # Note: push_event_to_salesforce handles its own tenant-scoped session
+                semaphore = asyncio.Semaphore(max_concurrent)
+
+                async def process_with_semaphore(event_id: str):
+                    async with semaphore:
+                        return await push_event_to_salesforce(event_id, max_retries=3)
+
+                tasks = [
+                    process_with_semaphore(event.id)
+                    for event in pending_events
+                ]
+
+                task_results = await asyncio.gather(*tasks, return_exceptions=True)
+
+                for i, result in enumerate(task_results):
+                    results["processed"] += 1
+
+                    if isinstance(result, Exception):
+                        results["failed"] += 1
+                        results["events"].append({
+                            "crm_event_id": pending_events[i].id,
+                            "success": False,
+                            "error": str(result)
+                        })
+                    elif isinstance(result, dict):
+                        if result.get("success"):
+                            results["succeeded"] += 1
+                        else:
+                            results["failed"] += 1
+                        results["events"].append(result)
+
+        except Exception as e:
+            logger.error(f"Error processing pending sync events for org {org_id}: {e}")
+
+    logger.info(
+        f"Processed {results['processed']} events: "
+        f"{results['succeeded']} succeeded, {results['failed']} failed"
+    )
+
+    return results
 
 
 def process_pending_sync_events_sync(**kwargs) -> dict:
@@ -224,6 +266,8 @@ async def reconcile_calendar(
     - Fingerprint mismatches
     - Orphaned mappings
 
+    Uses tenant-scoped session based on user's organization.
+
     Args:
         user_id: User ID to reconcile
         lookback_hours: Hours to look back for modified events
@@ -231,9 +275,34 @@ async def reconcile_calendar(
     Returns:
         Reconciliation results
     """
-    db = SessionLocal()
+    from sqlalchemy import text as sa_text
+    from database import get_db_with_tenant
 
+    # Look up org_id from user
+    lookup_db = SessionLocal()
     try:
+        row = lookup_db.execute(sa_text(
+            "SELECT organization_id FROM users WHERE id = :uid"
+        ), {"uid": user_id}).fetchone()
+        org_id = row[0] if row else None
+    finally:
+        lookup_db.close()
+
+    if org_id:
+        from contextlib import contextmanager
+        ctx = get_db_with_tenant(org_id)
+    else:
+        from contextlib import contextmanager
+        @contextmanager
+        def _fb():
+            _db = SessionLocal()
+            try:
+                yield _db
+            finally:
+                _db.close()
+        ctx = _fb()
+
+    with ctx as db:
         service = CalendarSyncService(db)
         cutoff = datetime.utcnow() - timedelta(hours=lookback_hours)
 
@@ -303,9 +372,6 @@ async def reconcile_calendar(
         )
 
         return results
-
-    finally:
-        db.close()
 
 
 def reconcile_calendar_sync(user_id: int, **kwargs) -> dict:
@@ -409,84 +475,107 @@ async def poll_salesforce_events() -> dict:
 
     Queries Salesforce for events modified since last poll watermark.
     Creates/updates CRM events accordingly.
+    Uses tenant-scoped sessions per-org to enforce RLS.
 
     Returns:
         Summary of polling results
     """
-    db = SessionLocal()
+    from sqlalchemy import text as sa_text
+    from database import get_db_with_tenant
 
+    results = {
+        "users_polled": 0,
+        "total_pulled": 0,
+        "total_created": 0,
+        "total_updated": 0,
+        "total_skipped": 0,
+        "errors": []
+    }
+
+    # Get active profiles with org_id using un-scoped session
+    lookup_db = SessionLocal()
     try:
-        from salesforce_integration_models import IntegrationProfile
-        from models.calendar_sync_models import CalendarSyncSettings
-
-        results = {
-            "users_polled": 0,
-            "total_pulled": 0,
-            "total_created": 0,
-            "total_updated": 0,
-            "total_skipped": 0,
-            "errors": []
-        }
-
-        # Get all users with active Salesforce integration and polling enabled
-        active_profiles = db.query(IntegrationProfile).filter(
-            IntegrationProfile.provider == "salesforce",
-            IntegrationProfile.status == "active"
-        ).all()
-
-        for profile in active_profiles:
-            try:
-                # Check if polling is enabled for this user
-                settings = db.query(CalendarSyncSettings).filter(
-                    CalendarSyncSettings.user_id == profile.user_id
-                ).first()
-
-                if not settings or not settings.polling_enabled:
-                    continue
-
-                service = CalendarSyncService(db)
-
-                # Use last poll watermark or default to 24 hours
-                since = settings.last_poll_watermark
-                if not since:
-                    since = datetime.utcnow() - timedelta(hours=24)
-
-                pull_result = await service.pull_events_from_salesforce(
-                    user_id=profile.user_id,
-                    since=since,
-                    limit=settings.batch_size or 200
-                )
-
-                results["users_polled"] += 1
-                results["total_pulled"] += pull_result["pulled"]
-                results["total_created"] += pull_result["created"]
-                results["total_updated"] += pull_result["updated"]
-                results["total_skipped"] += pull_result["skipped_echo"] + pull_result["skipped_conflict"]
-
-                if pull_result["errors"]:
-                    results["errors"].extend(pull_result["errors"][:3])
-
-                logger.info(
-                    f"Polled Salesforce for user {profile.user_id}: "
-                    f"pulled={pull_result['pulled']}, created={pull_result['created']}"
-                )
-
-            except Exception as e:
-                logger.error(f"Error polling for user {profile.user_id}: {e}")
-                results["errors"].append({
-                    "user_id": profile.user_id,
-                    "error": "Internal server error"
-                })
-
-        logger.info(
-            f"Salesforce polling complete: {results['users_polled']} users, "
-            f"{results['total_pulled']} events processed"
-        )
-
+        profiles_data = lookup_db.execute(sa_text("""
+            SELECT ip.id, ip.user_id, u.organization_id
+            FROM integration_profiles ip
+            JOIN users u ON u.id = ip.user_id
+            WHERE ip.provider = 'salesforce'
+              AND ip.status = 'active'
+        """)).fetchall()
+    except Exception as e:
+        logger.warning(f"Could not query integration profiles for polling: {e}")
         return results
-
     finally:
-        db.close()
+        lookup_db.close()
+
+    # Group profiles by org_id
+    from collections import defaultdict
+    profiles_by_org = defaultdict(list)
+    for row in profiles_data:
+        org_id = row[2] or 0
+        profiles_by_org[org_id].append({"id": row[0], "user_id": row[1]})
+
+    for org_id, org_profiles in profiles_by_org.items():
+        if not org_id:
+            continue
+
+        try:
+            with get_db_with_tenant(org_id) as db:
+                from models.calendar_sync_models import CalendarSyncSettings
+
+                for profile_info in org_profiles:
+                    try:
+                        # Check if polling is enabled for this user
+                        settings = db.query(CalendarSyncSettings).filter(
+                            CalendarSyncSettings.user_id == profile_info["user_id"]
+                        ).first()
+
+                        if not settings or not settings.polling_enabled:
+                            continue
+
+                        service = CalendarSyncService(db)
+
+                        # Use last poll watermark or default to 24 hours
+                        since = settings.last_poll_watermark
+                        if not since:
+                            since = datetime.utcnow() - timedelta(hours=24)
+
+                        pull_result = await service.pull_events_from_salesforce(
+                            user_id=profile_info["user_id"],
+                            since=since,
+                            limit=settings.batch_size or 200
+                        )
+
+                        results["users_polled"] += 1
+                        results["total_pulled"] += pull_result["pulled"]
+                        results["total_created"] += pull_result["created"]
+                        results["total_updated"] += pull_result["updated"]
+                        results["total_skipped"] += pull_result["skipped_echo"] + pull_result["skipped_conflict"]
+
+                        if pull_result["errors"]:
+                            results["errors"].extend(pull_result["errors"][:3])
+
+                        logger.info(
+                            f"Polled Salesforce for user {profile_info['user_id']}: "
+                            f"pulled={pull_result['pulled']}, created={pull_result['created']}"
+                        )
+
+                    except Exception as e:
+                        logger.error(f"Error polling for user {profile_info['user_id']}: {e}")
+                        results["errors"].append({
+                            "user_id": profile_info["user_id"],
+                            "error": "Internal server error"
+                        })
+
+        except Exception as e:
+            logger.error(f"Error polling Salesforce events for org {org_id}: {e}")
+
+    logger.info(
+        f"Salesforce polling complete: {results['users_polled']} users, "
+        f"{results['total_pulled']} events processed"
+    )
+
+    return results
 
 
 def poll_salesforce_events_sync() -> dict:
@@ -505,15 +594,42 @@ async def sync_user_calendar(user_id: int) -> dict:
     1. Push pending CRM events to Salesforce
     2. Pull changed events from Salesforce
 
+    Uses tenant-scoped session based on user's organization.
+
     Args:
         user_id: CRM user ID
 
     Returns:
         Sync summary
     """
-    db = SessionLocal()
+    from sqlalchemy import text as sa_text
+    from database import get_db_with_tenant
 
+    # Look up org_id from user
+    lookup_db = SessionLocal()
     try:
+        row = lookup_db.execute(sa_text(
+            "SELECT organization_id FROM users WHERE id = :uid"
+        ), {"uid": user_id}).fetchone()
+        org_id = row[0] if row else None
+    finally:
+        lookup_db.close()
+
+    if org_id:
+        from contextlib import contextmanager
+        ctx = get_db_with_tenant(org_id)
+    else:
+        from contextlib import contextmanager
+        @contextmanager
+        def _fb():
+            _db = SessionLocal()
+            try:
+                yield _db
+            finally:
+                _db.close()
+        ctx = _fb()
+
+    with ctx as db:
         service = CalendarSyncService(db)
 
         results = {
@@ -557,9 +673,6 @@ async def sync_user_calendar(user_id: int) -> dict:
         logger.info(f"User {user_id} sync complete: push={results['push']}, pull={results['pull']}")
 
         return results
-
-    finally:
-        db.close()
 
 
 def sync_user_calendar_sync(user_id: int) -> dict:

@@ -866,24 +866,24 @@ def backfill_aggregation(
 # =============================================================================
 
 if __name__ == "__main__":
-    """Run aggregation from command line."""
+    """Run aggregation from command line with tenant-scoped sessions."""
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    from database import get_db
+    from database import SessionLocal, get_db_with_tenant
 
-    db = next(get_db())
-
+    # Get org list with un-scoped session
+    lookup_db = SessionLocal()
     try:
-        # Run for all organizations
-        from sqlalchemy import text
-        org_ids = [row[0] for row in db.execute(text("SELECT id FROM organizations")).fetchall()]
-        if not org_ids:
-            print("No organizations found in database.")
-        else:
-            print(f"Running daily aggregation for {len(org_ids)} organization(s)...")
-            for org_id in org_ids:
-                print(f"\n--- Organization {org_id} ---")
-                result = run_daily_aggregation(db, organization_id=org_id)
-                print(f"Aggregation complete: {result}")
+        org_ids = [row[0] for row in lookup_db.execute(text("SELECT id FROM organizations")).fetchall()]
     finally:
-        db.close()
+        lookup_db.close()
+
+    if not org_ids:
+        print("No organizations found in database.")
+    else:
+        print(f"Running daily aggregation for {len(org_ids)} organization(s)...")
+        for org_id in org_ids:
+            print(f"\n--- Organization {org_id} ---")
+            with get_db_with_tenant(org_id) as tenant_db:
+                result = run_daily_aggregation(tenant_db, organization_id=org_id)
+                print(f"Aggregation complete: {result}")

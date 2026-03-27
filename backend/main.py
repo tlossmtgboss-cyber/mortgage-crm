@@ -426,6 +426,15 @@ try:
 except Exception as e:
     logger.warning(f"Tenant rate limiting middleware not loaded: {e}")
 
+# RBAC Enforcement — defense-in-depth role checks on admin/manager routes.
+# Added BEFORE TenantContextMiddleware (LIFO: inner = runs after Tenant sets user).
+try:
+    from middleware.rbac_enforcement import RBACEnforcementMiddleware
+    app.add_middleware(RBACEnforcementMiddleware)
+    logger.info("RBAC enforcement middleware enabled")
+except Exception as e:
+    logger.warning(f"RBAC enforcement middleware not loaded: {e}")
+
 # Multi-Tenant: Add tenant context middleware
 # This sets request.state.user and request.state.tenant_context for authenticated requests
 try:

@@ -30,61 +30,88 @@ def process_render_job(self, job_id: int):
     This task is triggered when a new render job is created and handles
     the full render pipeline: script -> voiceover -> visuals -> composition.
 
+    Uses tenant-scoped session if the job has an organization_id.
+
     Args:
         job_id: The database ID of the render job to process
     """
-    from database import SessionLocal
+    from database import SessionLocal, get_db_with_tenant
     from services.video_render_service import video_render_service, RenderState
     from jobs.video_render_worker import VideoRenderWorker
+    from sqlalchemy import text as sa_text
 
     logger.info(f"Processing render job {job_id}")
 
-    db = None
+    # Look up org_id from the render job
+    lookup_db = SessionLocal()
     try:
-        db = SessionLocal()
+        row = lookup_db.execute(sa_text(
+            "SELECT organization_id FROM video_render_jobs WHERE id = :jid"
+        ), {"jid": job_id}).fetchone()
+        org_id = row[0] if row else None
+    except Exception:
+        org_id = None
+    finally:
+        lookup_db.close()
 
-        # Get the job
-        job = video_render_service.get_render_job(db, job_id)
-        if not job:
-            logger.error(f"Render job {job_id} not found")
-            return {"status": "error", "message": "Job not found"}
+    # Use tenant-scoped session if org_id is available
+    if org_id:
+        from contextlib import contextmanager
+        ctx = get_db_with_tenant(org_id)
+    else:
+        from contextlib import contextmanager
+        @contextmanager
+        def _fallback():
+            _db = SessionLocal()
+            try:
+                yield _db
+            finally:
+                _db.close()
+        ctx = _fallback()
 
-        # Check if job is already being processed or completed
-        if job["state"] in ["rendered", "published"]:
-            logger.info(f"Job {job_id} already completed with state {job['state']}")
-            return {"status": "skipped", "message": f"Job already {job['state']}"}
+    try:
+        with ctx as db:
+            # Get the job
+            job = video_render_service.get_render_job(db, job_id)
+            if not job:
+                logger.error(f"Render job {job_id} not found")
+                return {"status": "error", "message": "Job not found"}
 
-        if job["state"] == "failed" and job.get("retry_count", 0) >= job.get("max_retries", 3):
-            logger.warning(f"Job {job_id} has exceeded max retries")
-            return {"status": "skipped", "message": "Max retries exceeded"}
+            # Check if job is already being processed or completed
+            if job["state"] in ["rendered", "published"]:
+                logger.info(f"Job {job_id} already completed with state {job['state']}")
+                return {"status": "skipped", "message": f"Job already {job['state']}"}
 
-        # Create a worker instance and process
-        worker = VideoRenderWorker(SessionLocal)
-        worker._process_job(db, job)
+            if job["state"] == "failed" and job.get("retry_count", 0) >= job.get("max_retries", 3):
+                logger.warning(f"Job {job_id} has exceeded max retries")
+                return {"status": "skipped", "message": "Max retries exceeded"}
 
-        logger.info(f"Render job {job_id} completed successfully")
-        return {"status": "success", "job_id": job_id}
+            # Create a worker instance and process
+            worker = VideoRenderWorker(SessionLocal)
+            worker._process_job(db, job)
+
+            logger.info(f"Render job {job_id} completed successfully")
+            return {"status": "success", "job_id": job_id}
 
     except Exception as e:
         logger.exception(f"Error processing render job {job_id}")
 
-        # Mark job as failed
-        if db:
+        # Mark job as failed using a fresh session
+        try:
+            fail_db = SessionLocal()
             try:
-                job = video_render_service.get_render_job(db, job_id)
+                job = video_render_service.get_render_job(fail_db, job_id)
                 if job:
                     video_render_service.fail_job(
-                        db, job["job_id"], str(e), {"celery_task_id": self.request.id}
+                        fail_db, job["job_id"], str(e), {"celery_task_id": self.request.id}
                     )
-            except Exception as fail_error:
-                logger.error(f"Failed to mark job as failed: {fail_error}")
+            finally:
+                fail_db.close()
+        except Exception as fail_error:
+            logger.error(f"Failed to mark job as failed: {fail_error}")
 
         # Retry if we haven't exceeded max retries
         raise self.retry(exc=e)
-
-    finally:
-        if db:
-            db.close()
 
 
 @shared_task(

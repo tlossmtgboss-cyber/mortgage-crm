@@ -257,6 +257,7 @@ async def sync_all_users_salesforce(
         'completed_at': None
     }
 
+    # Get profiles and their org_ids with un-scoped session
     db = SessionLocal()
 
     try:
@@ -264,16 +265,22 @@ async def sync_all_users_salesforce(
 
         # Get all connected Salesforce profiles - wrapped in try/except for missing table
         try:
-            profiles = db.query(IntegrationProfile).filter(
-                IntegrationProfile.provider == 'salesforce',
-                IntegrationProfile.status.in_(['connected', 'active']),
-            ).all()
+            profiles_data = db.execute(text("""
+                SELECT ip.id, ip.user_id, u.organization_id
+                FROM integration_profiles ip
+                JOIN users u ON u.id = ip.user_id
+                WHERE ip.provider = 'salesforce'
+                  AND ip.status IN ('connected', 'active')
+            """)).fetchall()
 
             # Auto-enable sync on connected profiles that have it disabled
-            for profile in profiles:
-                if not profile.sync_enabled:
-                    logger.info(f"Auto-enabling sync for profile {profile.id} (user {profile.user_id})")
-                    profile.sync_enabled = True
+            db.execute(text("""
+                UPDATE integration_profiles
+                SET sync_enabled = TRUE
+                WHERE provider = 'salesforce'
+                  AND status IN ('connected', 'active')
+                  AND sync_enabled = FALSE
+            """))
             db.commit()
 
         except Exception as e:
@@ -283,152 +290,173 @@ async def sync_all_users_salesforce(
             results['completed_at'] = datetime.utcnow().isoformat()
             return results
 
-        logger.info(f"Starting INBOUND Salesforce sync for {len(profiles)} users (Salesforce → CRM only)")
-
-        for profile in profiles:
-            try:
-                results['users_processed'] += 1
-
-                # ===== EMAIL-BASED MATCHING: Match CRM clients to Salesforce =====
-                # This is the primary sync - matches by email and pulls ALL fields
-                if sync_client_fields:
-                    try:
-                        from services.salesforce.sync_service import salesforce_sync
-
-                        client_result = await salesforce_sync.sync_crm_clients_from_salesforce(
-                            db=db,
-                            integration_profile_id=profile.id,
-                            limit=100
-                        )
-                        results['inbound']['leads_matched'] += client_result.get('leads_matched', 0)
-                        results['inbound']['leads_updated'] += client_result.get('leads_updated', 0)
-                        results['inbound']['loans_matched'] += client_result.get('loans_matched', 0)
-                        results['inbound']['loans_updated'] += client_result.get('loans_updated', 0)
-                        if client_result.get('errors'):
-                            results['errors'].extend(client_result['errors'][:3])
-                    except Exception as e:
-                        logger.error(f"Client field sync failed for profile {profile.id}: {e}")
-                        results['errors'].append(f"Client sync: {str(e)[:100]}")
-                        try:
-                            db.rollback()
-                        except Exception as e2:
-                            logger.error(f"Error in sync_all_users_salesforce (client sync rollback): {e2}")
-
-                # ===== IMPORT NEW CLIENTS: Create CRM records for new SF records =====
-                if import_new_clients:
-                    try:
-                        from services.salesforce.sync_service import salesforce_sync
-
-                        import_result = await salesforce_sync.import_new_clients_from_salesforce(
-                            db=db,
-                            integration_profile_id=profile.id,
-                            days_back=import_days_back,
-                            limit=200
-                        )
-                        results['inbound']['new_leads_created'] += import_result.get('new_leads_created', 0)
-                        results['inbound']['new_loans_created'] += import_result.get('new_loans_created', 0)
-                        results['inbound']['duplicates_skipped'] += import_result.get('duplicates_skipped', 0)
-                        if import_result.get('errors'):
-                            results['errors'].extend(import_result['errors'][:3])
-                    except Exception as e:
-                        logger.error(f"New client import failed for profile {profile.id}: {e}")
-                        results['errors'].append(f"New client import: {str(e)[:100]}")
-                        try:
-                            db.rollback()
-                        except Exception as e2:
-                            logger.error(f"Error in sync_all_users_salesforce (import rollback): {e2}")
-
-                # ===== INBOUND: Pull emails from Salesforce =====
-                if sync_emails:
-                    try:
-                        email_result = await sync_emails_from_salesforce(
-                            integration_profile_id=profile.id,
-                            days_back=email_days_back,
-                            limit=200,
-                            db=db  # Reuse parent session
-                        )
-                        results['inbound']['emails_synced'] += email_result.get('emails_synced', 0)
-                        results['inbound']['emails_skipped'] += email_result.get('emails_skipped', 0)
-                        if email_result.get('errors'):
-                            results['errors'].extend(email_result['errors'][:3])
-                    except Exception as e:
-                        logger.error(f"Email sync failed for profile {profile.id}: {e}")
-                        results['errors'].append(f"Email sync: {str(e)[:100]}")
-                        # Rollback to recover from any transaction errors
-                        try:
-                            db.rollback()
-                        except Exception as e2:
-                            logger.error(f"Error in sync_all_users_salesforce (email sync rollback): {e2}")
-
-                # ===== INBOUND: Pull calendar from Salesforce =====
-                if sync_calendar:
-                    try:
-                        calendar_result = await sync_calendar_from_salesforce(
-                            integration_profile_id=profile.id,
-                            days_back=calendar_days_back,
-                            days_forward=calendar_days_forward,
-                            limit=200,
-                            db=db  # Reuse parent session
-                        )
-                        results['inbound']['events_synced'] += calendar_result.get('events_synced', 0)
-                        results['inbound']['tasks_synced'] += calendar_result.get('tasks_synced', 0)
-                        if calendar_result.get('errors'):
-                            results['errors'].extend(calendar_result['errors'][:3])
-                    except Exception as e:
-                        logger.error(f"Calendar sync failed for profile {profile.id}: {e}")
-                        results['errors'].append(f"Calendar sync: {str(e)[:100]}")
-                        # Rollback to recover from any transaction errors
-                        try:
-                            db.rollback()
-                        except Exception as e2:
-                            logger.error(f"Error in sync_all_users_salesforce (calendar sync rollback): {e2}")
-
-                # NO OUTBOUND SYNC - Data flows Salesforce → CRM only
-
-                # Update last sync time - use fresh transaction after any rollbacks
-                try:
-                    # CRITICAL: Ensure clean transaction state before updating
-                    try:
-                        db.rollback()
-                    except Exception as e2:
-                        logger.error(f"Error in sync_all_users_salesforce (pre-update rollback): {e2}")
-
-                    # Re-fetch profile to ensure we have a valid object in the current transaction
-                    from salesforce_integration_models import IntegrationProfile as IP
-                    fresh_profile = db.query(IP).filter(IP.id == profile.id).first()
-                    if fresh_profile:
-                        fresh_profile.last_sync_at = datetime.utcnow()
-                        db.commit()
-                        logger.info(f"Updated last_sync_at for profile {profile.id}")
-                except Exception as commit_err:
-                    logger.warning(f"Could not update last_sync_at for profile {profile.id}: {commit_err}")
-                    try:
-                        db.rollback()
-                    except Exception as e2:
-                        logger.error(f"Error in sync_all_users_salesforce (commit rollback): {e2}")
-
-            except Exception as e:
-                logger.error(f"Sync failed for user {profile.user_id}: {e}")
-                results['errors'].append(f"User {profile.user_id}: {str(e)[:100]}")
-                # Rollback to ensure clean state for next profile
-                try:
-                    db.rollback()
-                except Exception as e2:
-                    logger.error(f"Error in sync_all_users_salesforce (profile rollback): {e2}")
-
-        results['completed_at'] = datetime.utcnow().isoformat()
-
-        logger.info(
-            f"Salesforce INBOUND sync complete: {results['users_processed']} users | "
-            f"leads matched={results['inbound']['leads_matched']}, updated={results['inbound']['leads_updated']} | "
-            f"loans matched={results['inbound']['loans_matched']}, updated={results['inbound']['loans_updated']} | "
-            f"emails={results['inbound']['emails_synced']}, events={results['inbound']['events_synced']}"
-        )
-
-        return results
-
     finally:
         db.close()
+
+    logger.info(f"Starting INBOUND Salesforce sync for {len(profiles_data)} users (Salesforce → CRM only)")
+
+    # Group profiles by org_id for tenant-scoped processing
+    from database import get_db_with_tenant
+    from collections import defaultdict
+
+    profiles_by_org = defaultdict(list)
+    for row in profiles_data:
+        org_id = row[2] or 0
+        profiles_by_org[org_id].append({"id": row[0], "user_id": row[1]})
+
+    for org_id, org_profiles in profiles_by_org.items():
+        if not org_id:
+            continue
+
+        try:
+            with get_db_with_tenant(org_id) as db:
+                from salesforce_integration_models import IntegrationProfile
+
+                for profile_info in org_profiles:
+                    profile = db.query(IntegrationProfile).filter(
+                        IntegrationProfile.id == profile_info["id"]
+                    ).first()
+                    if not profile:
+                        continue
+
+                    try:
+                        results['users_processed'] += 1
+
+                        # ===== EMAIL-BASED MATCHING: Match CRM clients to Salesforce =====
+                        if sync_client_fields:
+                            try:
+                                from services.salesforce.sync_service import salesforce_sync
+
+                                client_result = await salesforce_sync.sync_crm_clients_from_salesforce(
+                                    db=db,
+                                    integration_profile_id=profile.id,
+                                    limit=100
+                                )
+                                results['inbound']['leads_matched'] += client_result.get('leads_matched', 0)
+                                results['inbound']['leads_updated'] += client_result.get('leads_updated', 0)
+                                results['inbound']['loans_matched'] += client_result.get('loans_matched', 0)
+                                results['inbound']['loans_updated'] += client_result.get('loans_updated', 0)
+                                if client_result.get('errors'):
+                                    results['errors'].extend(client_result['errors'][:3])
+                            except Exception as e:
+                                logger.error(f"Client field sync failed for profile {profile.id}: {e}")
+                                results['errors'].append(f"Client sync: {str(e)[:100]}")
+                                try:
+                                    db.rollback()
+                                except Exception as e2:
+                                    logger.error(f"Error in sync_all_users_salesforce (client sync rollback): {e2}")
+
+                        # ===== IMPORT NEW CLIENTS: Create CRM records for new SF records =====
+                        if import_new_clients:
+                            try:
+                                from services.salesforce.sync_service import salesforce_sync
+
+                                import_result = await salesforce_sync.import_new_clients_from_salesforce(
+                                    db=db,
+                                    integration_profile_id=profile.id,
+                                    days_back=import_days_back,
+                                    limit=200
+                                )
+                                results['inbound']['new_leads_created'] += import_result.get('new_leads_created', 0)
+                                results['inbound']['new_loans_created'] += import_result.get('new_loans_created', 0)
+                                results['inbound']['duplicates_skipped'] += import_result.get('duplicates_skipped', 0)
+                                if import_result.get('errors'):
+                                    results['errors'].extend(import_result['errors'][:3])
+                            except Exception as e:
+                                logger.error(f"New client import failed for profile {profile.id}: {e}")
+                                results['errors'].append(f"New client import: {str(e)[:100]}")
+                                try:
+                                    db.rollback()
+                                except Exception as e2:
+                                    logger.error(f"Error in sync_all_users_salesforce (import rollback): {e2}")
+
+                        # ===== INBOUND: Pull emails from Salesforce =====
+                        if sync_emails:
+                            try:
+                                email_result = await sync_emails_from_salesforce(
+                                    integration_profile_id=profile.id,
+                                    days_back=email_days_back,
+                                    limit=200,
+                                    db=db  # Reuse tenant-scoped session
+                                )
+                                results['inbound']['emails_synced'] += email_result.get('emails_synced', 0)
+                                results['inbound']['emails_skipped'] += email_result.get('emails_skipped', 0)
+                                if email_result.get('errors'):
+                                    results['errors'].extend(email_result['errors'][:3])
+                            except Exception as e:
+                                logger.error(f"Email sync failed for profile {profile.id}: {e}")
+                                results['errors'].append(f"Email sync: {str(e)[:100]}")
+                                try:
+                                    db.rollback()
+                                except Exception as e2:
+                                    logger.error(f"Error in sync_all_users_salesforce (email sync rollback): {e2}")
+
+                        # ===== INBOUND: Pull calendar from Salesforce =====
+                        if sync_calendar:
+                            try:
+                                calendar_result = await sync_calendar_from_salesforce(
+                                    integration_profile_id=profile.id,
+                                    days_back=calendar_days_back,
+                                    days_forward=calendar_days_forward,
+                                    limit=200,
+                                    db=db  # Reuse tenant-scoped session
+                                )
+                                results['inbound']['events_synced'] += calendar_result.get('events_synced', 0)
+                                results['inbound']['tasks_synced'] += calendar_result.get('tasks_synced', 0)
+                                if calendar_result.get('errors'):
+                                    results['errors'].extend(calendar_result['errors'][:3])
+                            except Exception as e:
+                                logger.error(f"Calendar sync failed for profile {profile.id}: {e}")
+                                results['errors'].append(f"Calendar sync: {str(e)[:100]}")
+                                try:
+                                    db.rollback()
+                                except Exception as e2:
+                                    logger.error(f"Error in sync_all_users_salesforce (calendar sync rollback): {e2}")
+
+                        # NO OUTBOUND SYNC - Data flows Salesforce → CRM only
+
+                        # Update last sync time
+                        try:
+                            try:
+                                db.rollback()
+                            except Exception as e2:
+                                logger.error(f"Error in sync_all_users_salesforce (pre-update rollback): {e2}")
+
+                            from salesforce_integration_models import IntegrationProfile as IP
+                            fresh_profile = db.query(IP).filter(IP.id == profile.id).first()
+                            if fresh_profile:
+                                fresh_profile.last_sync_at = datetime.utcnow()
+                                db.commit()
+                                logger.info(f"Updated last_sync_at for profile {profile.id}")
+                        except Exception as commit_err:
+                            logger.warning(f"Could not update last_sync_at for profile {profile.id}: {commit_err}")
+                            try:
+                                db.rollback()
+                            except Exception as e2:
+                                logger.error(f"Error in sync_all_users_salesforce (commit rollback): {e2}")
+
+                    except Exception as e:
+                        logger.error(f"Sync failed for user {profile.user_id}: {e}")
+                        results['errors'].append(f"User {profile.user_id}: {str(e)[:100]}")
+                        try:
+                            db.rollback()
+                        except Exception as e2:
+                            logger.error(f"Error in sync_all_users_salesforce (profile rollback): {e2}")
+
+        except Exception as e:
+            logger.error(f"Salesforce sync failed for org_id={org_id}: {e}")
+            results['errors'].append(f"Org {org_id}: {str(e)[:100]}")
+
+    results['completed_at'] = datetime.utcnow().isoformat()
+
+    logger.info(
+        f"Salesforce INBOUND sync complete: {results['users_processed']} users | "
+        f"leads matched={results['inbound']['leads_matched']}, updated={results['inbound']['leads_updated']} | "
+        f"loans matched={results['inbound']['loans_matched']}, updated={results['inbound']['loans_updated']} | "
+        f"emails={results['inbound']['emails_synced']}, events={results['inbound']['events_synced']}"
+    )
+
+    return results
 
 
 def sync_all_users_salesforce_sync(**kwargs) -> Dict[str, Any]:
@@ -608,6 +636,8 @@ async def trigger_user_sync(
     - Pulls calendar events from Salesforce
     - NO data is pushed to Salesforce
 
+    Uses tenant-scoped session based on user's organization.
+
     Args:
         user_id: CRM user ID
         sync_emails: Pull emails from Salesforce
@@ -618,9 +648,34 @@ async def trigger_user_sync(
     Returns:
         Combined sync results
     """
-    db = SessionLocal()
+    from database import get_db_with_tenant
 
+    # Look up org_id from user with un-scoped session
+    lookup_db = SessionLocal()
     try:
+        row = lookup_db.execute(text(
+            "SELECT organization_id FROM users WHERE id = :uid"
+        ), {"uid": user_id}).fetchone()
+        org_id = row[0] if row else None
+    finally:
+        lookup_db.close()
+
+    # Use tenant-scoped session if org available, otherwise fall back
+    if org_id:
+        from contextlib import contextmanager
+        ctx = get_db_with_tenant(org_id)
+    else:
+        from contextlib import contextmanager
+        @contextmanager
+        def _fb():
+            _db = SessionLocal()
+            try:
+                yield _db
+            finally:
+                _db.close()
+        ctx = _fb()
+
+    with ctx as db:
         from salesforce_integration_models import IntegrationProfile
 
         # Get profile
@@ -697,9 +752,6 @@ async def trigger_user_sync(
                 logger.error(f"Error in trigger_user_sync (commit rollback): {e2}")
 
         return results
-
-    finally:
-        db.close()
 
 
 def trigger_user_sync_sync(user_id: int, **kwargs) -> Dict[str, Any]:

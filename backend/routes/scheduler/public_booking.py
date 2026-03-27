@@ -510,8 +510,23 @@ async def get_public_booking_page(
                 AppointmentType.is_active == True
             )
             if link_type_org_id:
-                types_query = types_query.filter(AppointmentType.organization_id == link_type_org_id)
+                # Match org OR NULL org (auto-created types may have NULL org)
+                types_query = types_query.filter(
+                    or_(
+                        AppointmentType.organization_id == link_type_org_id,
+                        AppointmentType.organization_id.is_(None)
+                    )
+                )
             types = types_query.all()
+            # Auto-fix: backfill NULL org on matched types so future queries work
+            for t in types:
+                if t.organization_id is None and link_type_org_id:
+                    t.organization_id = link_type_org_id
+            if any(t.organization_id is None for t in types):
+                try:
+                    db.commit()
+                except Exception:
+                    db.rollback()
             for t in types:
                 appointment_types.append({
                     "id": t.id,

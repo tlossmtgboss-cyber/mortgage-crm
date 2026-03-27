@@ -311,4 +311,104 @@ def register_dr_routes(app, get_db, get_current_user, **kwargs):
 
         return result
 
+    # ==================================================================
+    # GET /api/v1/admin/data-retention/report
+    # ==================================================================
+
+    @app.get("/api/v1/admin/data-retention/report")
+    async def get_data_retention_report(
+        organization_id: Optional[int] = None,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Get a comprehensive data retention report (dry-run preview).
+
+        Shows what data is eligible for retention actions across both
+        CRM tables and SOC 2 compliance tables, without making changes.
+        Includes per-table record counts, cutoff dates, and planned
+        actions (delete, redact, skip).
+        """
+        _require_admin(current_user)
+
+        from services.data_retention import DataRetentionService
+
+        service = DataRetentionService(db)
+        org_id = organization_id or getattr(
+            current_user, "organization_id", None
+        )
+
+        # CRM retention preview (dry run)
+        crm_report = service.run_retention_cleanup(
+            organization_id=org_id,
+            dry_run=True,
+        )
+
+        # SOC 2 retention preview (best-effort)
+        soc2_report = {}
+        try:
+            from soc2_compliance.services.retention_service import RetentionService
+
+            soc2_service = RetentionService(db)
+            soc2_report = {
+                "preview": soc2_service.preview_retention_enforcement(),
+                "status": soc2_service.get_retention_status(),
+            }
+        except Exception as e:
+            logger.warning(f"SOC 2 retention report unavailable: {e}")
+            soc2_report = {"error": str(e)}
+
+        return {
+            "crm": crm_report,
+            "soc2": soc2_report,
+            "policy": service.get_retention_policy(org_id),
+        }
+
+    # ==================================================================
+    # POST /api/v1/admin/data-retention/enforce
+    # ==================================================================
+
+    @app.post("/api/v1/admin/data-retention/enforce")
+    async def enforce_data_retention(
+        dry_run: bool = True,
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Manually trigger data retention enforcement.
+
+        Dispatches the enforcement as an async Celery task so it does
+        not block the request. Returns the task ID for status polling.
+        Default is dry_run=True for safety.
+
+        To execute actual enforcement, pass dry_run=false.
+        """
+        _require_admin(current_user)
+
+        try:
+            from tasks.data_retention_tasks import enforce_data_retention as retention_task
+
+            task_result = retention_task.delay(dry_run=dry_run)
+
+            return {
+                "status": "dispatched",
+                "task_id": task_result.id,
+                "dry_run": dry_run,
+                "message": (
+                    "Retention enforcement dispatched as background task. "
+                    f"Task ID: {task_result.id}"
+                ),
+            }
+        except Exception as e:
+            logger.warning(
+                f"Celery dispatch failed, running synchronously: {e}"
+            )
+            # Fallback: run synchronously if Celery is unavailable
+            from services.data_retention import DataRetentionService
+
+            service = DataRetentionService(db)
+            result = service.run_retention_cleanup(dry_run=dry_run)
+            result["execution"] = "synchronous_fallback"
+            return result
+
     logger.info("DR management routes registered")

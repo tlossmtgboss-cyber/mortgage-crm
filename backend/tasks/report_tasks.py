@@ -58,9 +58,13 @@ try:
         """
         Check for due scheduled reports and deliver them via email.
         Runs on Celery Beat schedule (daily at configured hour).
+
+        Uses tenant-scoped DB sessions per-org to enforce RLS when
+        generating report data (e.g., querying loans, leads).
         """
         from database import SessionLocal
         from sqlalchemy import text
+        from tasks.base import tenant_task_session
 
         db = SessionLocal()
         try:
@@ -69,7 +73,7 @@ try:
             current_dow = now.weekday()  # 0=Monday
             current_dom = now.day
 
-            # Find due reports
+            # Find due reports (cross-tenant query on scheduled_reports metadata)
             due_reports = db.execute(text("""
                 SELECT id, organization_id, report_type, export_format, frequency,
                        recipients, title, day_of_week, day_of_month, hour_utc
@@ -83,6 +87,8 @@ try:
                     )
                     AND (last_sent_at IS NULL OR last_sent_at < CURRENT_DATE)
             """), {"hour": current_hour, "dow": current_dow, "dom": current_dom}).fetchall()
+            db.close()
+            db = None
 
             delivered = 0
             failed = 0
@@ -96,22 +102,29 @@ try:
                 title = report_row[6]
 
                 try:
-                    _generate_and_send_report(
-                        db=db,
-                        org_id=org_id,
-                        report_type=report_type,
-                        export_format=export_format,
-                        recipients=recipients,
-                        title=title,
-                    )
+                    # Use tenant-scoped session for report data generation
+                    with tenant_task_session(org_id) as tenant_db:
+                        _generate_and_send_report(
+                            db=tenant_db,
+                            org_id=org_id,
+                            report_type=report_type,
+                            export_format=export_format,
+                            recipients=recipients,
+                            title=title,
+                        )
 
-                    # Update last_sent_at
-                    db.execute(text("""
-                        UPDATE scheduled_reports
-                        SET last_sent_at = NOW()
-                        WHERE id = :id
-                    """), {"id": schedule_id})
-                    db.commit()
+                    # Update last_sent_at in a separate session
+                    update_db = SessionLocal()
+                    try:
+                        update_db.execute(text("""
+                            UPDATE scheduled_reports
+                            SET last_sent_at = NOW()
+                            WHERE id = :id
+                        """), {"id": schedule_id})
+                        update_db.commit()
+                    finally:
+                        update_db.close()
+
                     delivered += 1
 
                     logger.info(
@@ -121,7 +134,6 @@ try:
 
                 except Exception as e:
                     logger.error(f"Failed to deliver report {schedule_id}: {e}")
-                    db.rollback()
                     failed += 1
 
             logger.info(f"Scheduled report delivery: {delivered} delivered, {failed} failed")
@@ -129,10 +141,12 @@ try:
 
         except Exception as e:
             logger.error(f"Scheduled report task failed: {e}")
-            db.rollback()
+            if db:
+                db.rollback()
             raise
         finally:
-            db.close()
+            if db:
+                db.close()
 
     @celery_app.task(
         name="tasks.report_tasks.generate_and_email_report",
@@ -151,25 +165,24 @@ try:
         """
         Generate a single report and email it.
         Can be called on-demand or by the scheduler.
+        Uses tenant-scoped DB session to enforce RLS.
         """
-        from database import SessionLocal
+        from tasks.base import tenant_task_session
 
-        db = SessionLocal()
         try:
-            _generate_and_send_report(
-                db=db,
-                org_id=org_id,
-                report_type=report_type,
-                export_format=export_format,
-                recipients=recipients or [],
-                title=title,
-            )
+            with tenant_task_session(org_id) as db:
+                _generate_and_send_report(
+                    db=db,
+                    org_id=org_id,
+                    report_type=report_type,
+                    export_format=export_format,
+                    recipients=recipients or [],
+                    title=title,
+                )
             return {"success": True, "report_type": report_type, "recipients": len(recipients or [])}
         except Exception as e:
             logger.error(f"Report generation failed: {e}")
             raise self.retry(exc=e)
-        finally:
-            db.close()
 
 except ImportError:
     logger.warning("Celery not available — scheduled report tasks disabled")

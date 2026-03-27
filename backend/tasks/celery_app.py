@@ -74,6 +74,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.reminder_tasks",
             "tasks.app_completion_tasks",
             "tasks.morning_briefing_tasks",
+            "tasks.data_retention_tasks",
         ],
     )
 
@@ -136,6 +137,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.app_completion_tasks.recalculate_stale_reviews_task": {"queue": "low_priority"},
             "tasks.app_completion_tasks.send_pending_reminders_task": {"queue": "default"},
             "tasks.morning_briefing_tasks.*": {"queue": "ai_tasks"},
+            "tasks.data_retention_tasks.*": {"queue": "low_priority"},
         },
     )
 
@@ -247,16 +249,26 @@ celery_app.conf.beat_schedule = {
         "options": {"queue": "low_priority"},
     },
 
-    # Data Retention & DR Tasks
-    "run-data-retention-cleanup": {
-        "task": "tasks.sla_tasks.run_retention_cleanup_task",
-        "schedule": crontab(hour="3", minute="30", day_of_week="sunday"),  # Sunday 3:30 AM
+    # Data Retention & DR Tasks (migrated to tasks.data_retention_tasks)
+    "enforce-crm-data-retention": {
+        "task": "tasks.data_retention_tasks.enforce_data_retention",
+        "schedule": crontab(hour="2", minute="0"),  # Daily 2 AM UTC
         "options": {"queue": "low_priority"},
         "kwargs": {"dry_run": False},
     },
+    "enforce-soc2-data-retention": {
+        "task": "tasks.data_retention_tasks.enforce_soc2_retention",
+        "schedule": crontab(hour="3", minute="0"),  # Daily 3 AM UTC
+        "options": {"queue": "low_priority"},
+    },
+    "weekly-retention-report": {
+        "task": "tasks.data_retention_tasks.generate_retention_report",
+        "schedule": crontab(hour="3", minute="30", day_of_week="sunday"),  # Sunday 3:30 AM
+        "options": {"queue": "low_priority"},
+    },
     "verify-backup-integrity": {
-        "task": "tasks.sla_tasks.verify_backup_task",
-        "schedule": crontab(hour="5", minute="0"),  # Daily 5 AM
+        "task": "tasks.data_retention_tasks.verify_backup_integrity",
+        "schedule": crontab(hour="5", minute="0"),  # Daily 5 AM UTC
         "options": {"queue": "low_priority"},
     },
 

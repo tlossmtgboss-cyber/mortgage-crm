@@ -14,6 +14,7 @@ Provides:
 - Idempotency: Prevent duplicate webhook operations via X-Idempotency-Key
 - PII Response Filter: Scans API responses for PII leaks, auto-masks portal responses
 - Request Logging: Per-request structured JSON logging with request_id propagation
+- RBAC Enforcement: Defense-in-depth role checks on admin/manager routes
 """
 
 from .ai_usage_middleware import (
@@ -58,6 +59,8 @@ from .pii_response_filter import PIIResponseFilterMiddleware
 
 from .request_logging import RequestLoggingMiddleware
 
+from .rbac_enforcement import RBACEnforcementMiddleware
+
 __all__ = [
     # AI Usage
     "AIUsageTracker",
@@ -96,4 +99,6 @@ __all__ = [
     "PIIResponseFilterMiddleware",
     # Request Logging
     "RequestLoggingMiddleware",
+    # RBAC Enforcement
+    "RBACEnforcementMiddleware",
 ]

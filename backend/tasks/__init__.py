@@ -9,6 +9,7 @@ Provides:
 - usage_aggregation_tasks: Daily usage cost aggregation
 - calendar_sync_tasks: CRM ↔ Salesforce calendar synchronization
 - salesforce_sync_tasks: Salesforce email, calendar, and data sync
+- data_retention_tasks: Data retention enforcement (CRM + SOC 2)
 
 Redis is REQUIRED in production for:
 - Celery task broker and result backend
@@ -79,6 +80,13 @@ from .salesforce_sync_tasks import (
     register_salesforce_sync_jobs
 )
 
+from .data_retention_tasks import (
+    enforce_data_retention,
+    enforce_soc2_retention,
+    generate_retention_report,
+    verify_backup_integrity,
+)
+
 __all__ = [
     # Celery app
     "celery_app",
@@ -123,5 +131,10 @@ __all__ = [
     "check_salesforce_sync_health_sync",
     "trigger_user_sync",
     "trigger_user_sync_sync",
-    "register_salesforce_sync_jobs"
+    "register_salesforce_sync_jobs",
+    # Data retention
+    "enforce_data_retention",
+    "enforce_soc2_retention",
+    "generate_retention_report",
+    "verify_backup_integrity",
 ]

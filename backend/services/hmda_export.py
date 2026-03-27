@@ -108,8 +108,8 @@ LOAN_TYPE_MAP = {
 # HMDA Field Validation
 # ============================================================================
 
-# Fields required for a valid HMDA LAR record
-REQUIRED_FIELDS = [
+# Fields required for a valid HMDA LAR record (loan-level)
+REQUIRED_LOAN_FIELDS = [
     "loan_number",
     "action_taken",
     "loan_type",
@@ -118,6 +118,16 @@ REQUIRED_FIELDS = [
     "property_state",
     "property_county",
 ]
+
+# Demographic fields required for HMDA (stored on BorrowerApplication)
+REQUIRED_DEMOGRAPHIC_FIELDS = [
+    "applicant_ethnicity",
+    "applicant_race",
+    "applicant_sex",
+]
+
+# Backward-compat alias used by validate_hmda_readiness field coverage check
+REQUIRED_FIELDS = REQUIRED_LOAN_FIELDS
 
 # Fields that should be present but can use "NA" placeholder
 RECOMMENDED_FIELDS = [
@@ -131,12 +141,19 @@ RECOMMENDED_FIELDS = [
 def _validate_loan_for_hmda(
     loan: Any,
     loan_stage: str,
+    db: Optional["Session"] = None,
 ) -> List[Dict[str, str]]:
     """Validate that a loan has sufficient data for HMDA reporting.
+
+    Checks both loan-level required fields and demographic fields
+    stored on BorrowerApplication. If *db* is provided, performs a
+    lookup for the linked BorrowerApplication to verify demographic
+    data; otherwise demographic checks are skipped.
 
     Args:
         loan: Loan ORM object
         loan_stage: The loan's current stage string
+        db: Optional SQLAlchemy session for demographic field lookup
 
     Returns:
         List of validation error dicts with field name and message
@@ -159,6 +176,15 @@ def _validate_loan_for_hmda(
             "loan_number": loan.loan_number,
             "message": f"Loan stage '{loan_stage}' does not map to a HMDA action taken code. "
                        f"Valid terminal stages: {list(ACTION_TAKEN_MAP.keys())}",
+        })
+
+    # Loan purpose
+    if not loan.loan_purpose:
+        errors.append({
+            "field": "loan_purpose",
+            "loan_id": loan.id,
+            "loan_number": loan.loan_number,
+            "message": "Loan purpose is required for HMDA reporting",
         })
 
     # Loan amount
@@ -187,6 +213,35 @@ def _validate_loan_for_hmda(
             "loan_number": loan.loan_number,
             "message": "Property county is required for HMDA geocoding",
         })
+
+    # ----- Demographic fields from BorrowerApplication -----
+    if db is not None:
+        try:
+            from database.models.borrower import BorrowerApplication
+
+            app = db.query(BorrowerApplication).filter(
+                BorrowerApplication.loan_id == loan.id
+            ).first()
+
+            if not app:
+                errors.append({
+                    "field": "borrower_application",
+                    "loan_id": loan.id,
+                    "loan_number": loan.loan_number,
+                    "message": "No BorrowerApplication linked — all HMDA demographic fields are missing",
+                })
+            else:
+                for demo_field in REQUIRED_DEMOGRAPHIC_FIELDS:
+                    val = getattr(app, demo_field, None)
+                    if not val or (isinstance(val, str) and not val.strip()):
+                        errors.append({
+                            "field": demo_field,
+                            "loan_id": loan.id,
+                            "loan_number": loan.loan_number,
+                            "message": f"HMDA demographic field '{demo_field}' is missing on BorrowerApplication",
+                        })
+        except Exception as e:
+            logger.warning(f"Could not check demographics for loan {loan.id}: {e}")
 
     return errors
 
@@ -462,14 +517,14 @@ def generate_hmda_lar(
             "export_timestamp": datetime.utcnow().isoformat(),
         }
 
-    # Validate all loans
+    # Validate all loans (including demographic fields via db lookup)
     all_errors = []
     all_warnings = []
     valid_loans = []
 
     for loan in loans:
         stage = (loan.stage or "").upper()
-        errors = _validate_loan_for_hmda(loan, stage)
+        errors = _validate_loan_for_hmda(loan, stage, db=db)
 
         if errors:
             all_errors.extend(errors)
@@ -491,6 +546,23 @@ def generate_hmda_lar(
                 "field": "occupancy_type",
                 "message": "Occupancy type not set; will default to primary residence",
             })
+
+    # If there are validation errors, refuse to generate the LAR file.
+    # Return the errors so the caller can present them for remediation.
+    if all_errors:
+        return {
+            "lar_content": None,
+            "total_records": 0,
+            "total_loans_queried": len(loans),
+            "valid_loans": len(valid_loans),
+            "validation_errors": all_errors,
+            "validation_warnings": all_warnings,
+            "skipped_loans": len(loans) - len(valid_loans),
+            "export_timestamp": datetime.utcnow().isoformat(),
+            "reporting_year": year,
+            "organization_id": organization_id,
+            "lei": lei,
+        }
 
     # Build LAR content from valid loans
     lar_lines = []
@@ -532,8 +604,11 @@ def validate_hmda_readiness(
 ) -> Dict[str, Any]:
     """Check HMDA readiness without generating the export.
 
-    Useful for pre-flight checks to identify data gaps before attempting
-    a full HMDA LAR generation.
+    Validates every loan that would appear in the LAR export against
+    both loan-level required fields AND demographic fields stored on
+    the linked BorrowerApplication.  Returns per-loan validation
+    errors so the caller knows exactly which loans/fields need
+    remediation before a valid LAR can be produced.
 
     Args:
         db: SQLAlchemy database session
@@ -541,9 +616,11 @@ def validate_hmda_readiness(
         year: Reporting year
 
     Returns:
-        Dict with readiness status and field coverage statistics
+        Dict with readiness status, field coverage statistics, and
+        per-loan validation errors (loan_id, loan_number, missing_fields).
     """
     from database.models.lead_loan import Loan
+    from database.models.borrower import BorrowerApplication
 
     terminal_stages = list(ACTION_TAKEN_MAP.keys())
 
@@ -560,10 +637,11 @@ def validate_hmda_readiness(
             "is_ready": False,
             "total_loans": 0,
             "message": f"No terminal-stage loans found for year {year}",
+            "validation_errors": [],
         }
 
-    # Check field coverage
-    field_coverage = {
+    # ----- Loan-level field coverage -----
+    loan_level_fields = {
         "loan_number": 0,
         "loan_type": 0,
         "loan_purpose": 0,
@@ -577,39 +655,110 @@ def validate_hmda_readiness(
         "application_date": 0,
     }
 
+    # ----- Demographic field coverage -----
+    demographic_fields = {
+        "applicant_ethnicity": 0,
+        "applicant_race": 0,
+        "applicant_sex": 0,
+    }
+
     total = len(loans)
     errors_by_loan = {}
+    validation_errors: List[Dict[str, Any]] = []
+
+    # Pre-fetch all BorrowerApplications for the loan set in one query
+    loan_ids = [loan.id for loan in loans]
+    apps_by_loan_id: Dict[int, Any] = {}
+    if loan_ids:
+        apps = db.query(BorrowerApplication).filter(
+            BorrowerApplication.loan_id.in_(loan_ids)
+        ).all()
+        for a in apps:
+            apps_by_loan_id[a.loan_id] = a
 
     for loan in loans:
-        loan_errors = []
-        for field in field_coverage:
+        loan_key = loan.loan_number or str(loan.id)
+        missing_fields: List[str] = []
+
+        # Check loan-level fields
+        for field in loan_level_fields:
             val = getattr(loan, field, None)
             if val is not None and val != "" and val != 0:
-                field_coverage[field] += 1
+                loan_level_fields[field] += 1
             else:
-                loan_errors.append(field)
+                missing_fields.append(field)
 
-        if loan_errors:
-            errors_by_loan[loan.loan_number or loan.id] = loan_errors
+        # Check demographic fields from BorrowerApplication
+        app = apps_by_loan_id.get(loan.id)
+        if not app:
+            for demo_field in demographic_fields:
+                missing_fields.append(demo_field)
+        else:
+            for demo_field in demographic_fields:
+                val = getattr(app, demo_field, None)
+                if val is not None and (not isinstance(val, str) or val.strip()):
+                    demographic_fields[demo_field] += 1
+                else:
+                    missing_fields.append(demo_field)
+
+        if missing_fields:
+            errors_by_loan[loan_key] = missing_fields
+            validation_errors.append({
+                "loan_id": loan.id,
+                "loan_number": loan.loan_number,
+                "missing_fields": missing_fields,
+            })
+
+    # Merge all fields into a single coverage dict
+    all_field_coverage = {**loan_level_fields, **demographic_fields}
 
     # Calculate coverage percentages
     coverage_pct = {
         field: round((count / total) * 100, 1) if total > 0 else 0
-        for field, count in field_coverage.items()
+        for field, count in all_field_coverage.items()
     }
 
-    # Required fields must have 100% coverage
-    required_coverage = {f: coverage_pct[f] for f in REQUIRED_FIELDS if f in coverage_pct}
+    # Required fields: loan-level REQUIRED_FIELDS + demographic REQUIRED_DEMOGRAPHIC_FIELDS
+    # Map REQUIRED_FIELDS names to attribute names used in coverage dict
+    required_attr_map = {
+        "loan_number": "loan_number",
+        "action_taken": None,  # derived from stage, always present for terminal loans
+        "loan_type": "loan_type",
+        "loan_purpose": "loan_purpose",
+        "loan_amount": "amount",
+        "property_state": "property_state",
+        "property_county": "property_county",
+    }
+
+    required_coverage: Dict[str, float] = {}
+    for req_name, attr_name in required_attr_map.items():
+        if attr_name and attr_name in coverage_pct:
+            required_coverage[req_name] = coverage_pct[attr_name]
+
+    for demo_field in REQUIRED_DEMOGRAPHIC_FIELDS:
+        if demo_field in coverage_pct:
+            required_coverage[demo_field] = coverage_pct[demo_field]
+
     is_ready = all(pct == 100.0 for pct in required_coverage.values())
 
-    return {
+    result: Dict[str, Any] = {
         "is_ready": is_ready,
         "total_loans": total,
         "field_coverage": coverage_pct,
         "required_field_coverage": required_coverage,
         "loans_with_errors": len(errors_by_loan),
-        "error_details": errors_by_loan if len(errors_by_loan) <= 20 else {
-            "note": f"{len(errors_by_loan)} loans have missing fields (showing first 20)",
-            "samples": dict(list(errors_by_loan.items())[:20]),
-        },
+        "validation_errors": validation_errors if len(validation_errors) <= 50 else validation_errors[:50],
     }
+
+    if len(validation_errors) > 50:
+        result["validation_errors_note"] = (
+            f"{len(validation_errors)} loans have errors (showing first 50)"
+        )
+
+    # Legacy key kept for backward compat
+    result["error_details"] = errors_by_loan if len(errors_by_loan) <= 20 else {
+        "note": f"{len(errors_by_loan)} loans have missing fields (showing first 20)",
+        "samples": dict(list(errors_by_loan.items())[:20]),
+    }
+
+    return result

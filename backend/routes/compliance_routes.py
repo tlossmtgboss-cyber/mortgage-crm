@@ -568,7 +568,14 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
 
         Validates HMDA field completeness for all loans with an action
         taken date (funded, denied, withdrawn) in the specified year.
-        Returns summary statistics and per-loan validation results.
+        Checks **both** loan-level required fields and demographic
+        fields (ethnicity, race, sex) from BorrowerApplication.
+
+        Returns:
+            - Overall readiness status (``is_ready``)
+            - Per-field coverage percentages
+            - Per-loan validation results with missing field lists
+            - Summary statistics (complete/incomplete counts)
 
         Requires admin or compliance role.
         """
@@ -579,19 +586,22 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
 
         from datetime import date as date_type
         from database.models.lead_loan import Loan
+        from services.hmda_export import validate_hmda_readiness
 
         if year is None:
             year = date_type.today().year
 
-        # Get all loans for the org, then filter to those with a terminal
-        # action (funded, denied, withdrawn) in the target year
+        # Use the service-layer validation that checks loan + demographic fields
+        readiness = validate_hmda_readiness(db, org_id, year)
+
+        # Also run per-loan detailed validation via the route-level helper
+        # so the response includes the detailed field-by-field breakdown.
         loans = db.query(Loan).filter(
             Loan.organization_id == org_id,
         ).all()
 
         reportable_loans = []
         for loan in loans:
-            # Check funded_date, withdrawn_date, or stage in terminal states
             action_date = _get_action_date(loan)
             if action_date:
                 ad = action_date.date() if isinstance(action_date, datetime) else action_date
@@ -610,6 +620,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
                 "completeness_pct": validation["completeness_pct"],
                 "is_complete": validation["is_complete"],
                 "missing_required": validation["missing_required_count"],
+                "missing_required_fields": validation["missing_required"],
             })
             if validation["is_complete"]:
                 total_pass += 1
@@ -618,10 +629,14 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
 
         return {
             "year": year,
+            "is_ready": readiness["is_ready"],
             "total_loans": len(reportable_loans),
             "complete": total_pass,
             "incomplete": total_fail,
             "completeness_rate": round(total_pass / len(reportable_loans) * 100, 1) if reportable_loans else 0,
+            "required_field_coverage": readiness.get("required_field_coverage", {}),
+            "field_coverage": readiness.get("field_coverage", {}),
+            "validation_errors": readiness.get("validation_errors", []),
             "loans": results,
         }
 
@@ -661,6 +676,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
     )
     async def export_hmda_lar(
         year: int = Query(None, description="Reporting year (defaults to current year)"),
+        force: bool = Query(False, description="Force export even with validation errors"),
         db: Session = Depends(get_db),
         current_user=Depends(get_current_user),
     ):
@@ -668,6 +684,12 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
 
         Generates a CFPB Regulation C compliant pipe-delimited file
         containing all reportable loan data for the specified year.
+
+        Before generating the LAR, runs full HMDA field validation
+        including demographic fields (ethnicity, race, sex) from
+        BorrowerApplication.  If any loans fail validation, returns a
+        422 error with the list of validation failures instead of
+        producing a bad LAR file.  Use ``force=true`` to override.
 
         Fields per CFPB spec include: record identifier, LEI, loan type,
         loan purpose, preapproval, construction method, occupancy type,
@@ -685,11 +707,30 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
         from datetime import date as date_type
         from database.models.lead_loan import Loan
         from database.models.borrower import BorrowerApplication
+        from services.hmda_export import validate_hmda_readiness
         import io
 
         if year is None:
             year = date_type.today().year
 
+        # --- Pre-flight validation ---
+        if not force:
+            readiness = validate_hmda_readiness(db, org_id, year)
+            if not readiness["is_ready"]:
+                return {
+                    "status": "validation_failed",
+                    "message": (
+                        "HMDA LAR export blocked: required fields are missing on one or more loans. "
+                        "Fix the issues listed below or re-request with force=true to override."
+                    ),
+                    "year": year,
+                    "total_loans": readiness["total_loans"],
+                    "loans_with_errors": readiness["loans_with_errors"],
+                    "required_field_coverage": readiness["required_field_coverage"],
+                    "validation_errors": readiness["validation_errors"],
+                }
+
+        # --- Build LAR export ---
         loans = db.query(Loan).filter(
             Loan.organization_id == org_id,
         ).all()

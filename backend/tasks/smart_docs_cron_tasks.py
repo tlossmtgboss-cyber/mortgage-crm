@@ -118,36 +118,36 @@ async def process_document_followups() -> Dict:
 
     Schedule: Every 15 minutes
     """
-    from database import get_db
-    db = next(get_db())
+    from database import SessionLocal, get_db_with_tenant
+
+    # Get org list with an un-scoped session
+    db = SessionLocal()
     try:
         org_ids = _get_active_organizations(db)
-        logger.info("Follow-up processing: found %d active organizations", len(org_ids))
+    finally:
+        db.close()
 
-        total = {"processed": 0, "succeeded": 0, "failed": 0, "orgs_processed": 0, "org_errors": 0}
+    logger.info("Follow-up processing: found %d active organizations", len(org_ids))
 
-        for org_id in org_ids:
-            try:
-                result = _process_org_followups(db, org_id)
+    total = {"processed": 0, "succeeded": 0, "failed": 0, "orgs_processed": 0, "org_errors": 0}
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as tenant_db:
+                result = _process_org_followups(tenant_db, org_id)
                 total["processed"] += result.get("processed", 0)
                 total["succeeded"] += result.get("succeeded", 0)
                 total["failed"] += result.get("failed", 0)
                 total["orgs_processed"] += 1
                 if result.get("processed", 0) > 0:
                     logger.info("Follow-up processing org_id=%d: %s", org_id, result)
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                total["org_errors"] += 1
-                logger.exception("Follow-up processing failed for org_id=%d: %s", org_id, e)
+                tenant_db.commit()
+        except Exception as e:
+            total["org_errors"] += 1
+            logger.exception("Follow-up processing failed for org_id=%d: %s", org_id, e)
 
-        logger.info("Follow-up processing complete: %s", total)
-        return total
-    except Exception as e:
-        logger.exception("Follow-up processing failed globally: %s", e)
-        return {"error": str(e)}
-    finally:
-        db.close()
+    logger.info("Follow-up processing complete: %s", total)
+    return total
 
 
 # =============================================================================
@@ -258,40 +258,39 @@ async def check_document_expirations() -> Dict:
 
     Schedule: Daily at 6:00 AM
     """
-    from database import get_db
-    db = next(get_db())
+    from database import SessionLocal, get_db_with_tenant
+
+    db = SessionLocal()
     try:
         org_ids = _get_active_organizations(db)
-        logger.info("Expiration check: found %d active organizations", len(org_ids))
+    finally:
+        db.close()
 
-        total = {
-            "expired_count": 0, "expiring_soon_count": 0,
-            "campaigns_created": 0, "orgs_processed": 0, "org_errors": 0,
-            "checked_at": datetime.now(timezone.utc).isoformat(),
-        }
+    logger.info("Expiration check: found %d active organizations", len(org_ids))
 
-        for org_id in org_ids:
-            try:
-                result = _process_org_expirations(db, org_id)
+    total = {
+        "expired_count": 0, "expiring_soon_count": 0,
+        "campaigns_created": 0, "orgs_processed": 0, "org_errors": 0,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as tenant_db:
+                result = _process_org_expirations(tenant_db, org_id)
                 total["expired_count"] += result["expired_count"]
                 total["expiring_soon_count"] += result["expiring_soon_count"]
                 total["campaigns_created"] += result["campaigns_created"]
                 total["orgs_processed"] += 1
                 if result["expired_count"] or result["expiring_soon_count"]:
                     logger.info("Expiration check org_id=%d: %s", org_id, result)
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                total["org_errors"] += 1
-                logger.exception("Expiration check failed for org_id=%d: %s", org_id, e)
+                tenant_db.commit()
+        except Exception as e:
+            total["org_errors"] += 1
+            logger.exception("Expiration check failed for org_id=%d: %s", org_id, e)
 
-        logger.info("Expiration check complete: %s", total)
-        return total
-    except Exception as e:
-        logger.exception("Expiration check failed globally: %s", e)
-        return {"error": str(e)}
-    finally:
-        db.close()
+    logger.info("Expiration check complete: %s", total)
+    return total
 
 
 # =============================================================================
@@ -374,34 +373,33 @@ async def process_auto_renewals() -> Dict:
 
     Schedule: Daily at 7:00 AM
     """
-    from database import get_db
-    db = next(get_db())
+    from database import SessionLocal, get_db_with_tenant
+
+    db = SessionLocal()
     try:
         org_ids = _get_active_organizations(db)
-        logger.info("Auto-renewal: found %d active organizations", len(org_ids))
+    finally:
+        db.close()
 
-        total = {"renewed_count": 0, "orgs_processed": 0, "org_errors": 0}
+    logger.info("Auto-renewal: found %d active organizations", len(org_ids))
 
-        for org_id in org_ids:
-            try:
-                result = _process_org_auto_renewals(db, org_id)
+    total = {"renewed_count": 0, "orgs_processed": 0, "org_errors": 0}
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as tenant_db:
+                result = _process_org_auto_renewals(tenant_db, org_id)
                 total["renewed_count"] += result["renewed_count"]
                 total["orgs_processed"] += 1
                 if result["renewed_count"] > 0:
                     logger.info("Auto-renewal org_id=%d: %s", org_id, result)
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                total["org_errors"] += 1
-                logger.exception("Auto-renewal failed for org_id=%d: %s", org_id, e)
+                tenant_db.commit()
+        except Exception as e:
+            total["org_errors"] += 1
+            logger.exception("Auto-renewal failed for org_id=%d: %s", org_id, e)
 
-        logger.info("Auto-renewal complete: %s", total)
-        return total
-    except Exception as e:
-        logger.exception("Auto-renewal failed globally: %s", e)
-        return {"error": str(e)}
-    finally:
-        db.close()
+    logger.info("Auto-renewal complete: %s", total)
+    return total
 
 
 # =============================================================================
@@ -473,35 +471,34 @@ async def send_esignature_reminders() -> Dict:
 
     Schedule: Every 4 hours
     """
-    from database import get_db
-    db = next(get_db())
+    from database import SessionLocal, get_db_with_tenant
+
+    db = SessionLocal()
     try:
         org_ids = _get_active_organizations(db)
-        logger.info("E-sign reminders: found %d active organizations", len(org_ids))
+    finally:
+        db.close()
 
-        total = {"reminders_sent": 0, "expired_count": 0, "orgs_processed": 0, "org_errors": 0}
+    logger.info("E-sign reminders: found %d active organizations", len(org_ids))
 
-        for org_id in org_ids:
-            try:
-                result = _process_org_esign_reminders(db, org_id)
+    total = {"reminders_sent": 0, "expired_count": 0, "orgs_processed": 0, "org_errors": 0}
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as tenant_db:
+                result = _process_org_esign_reminders(tenant_db, org_id)
                 total["reminders_sent"] += result["reminders_sent"]
                 total["expired_count"] += result["expired_count"]
                 total["orgs_processed"] += 1
                 if result["reminders_sent"] or result["expired_count"]:
                     logger.info("E-sign reminders org_id=%d: %s", org_id, result)
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                total["org_errors"] += 1
-                logger.exception("E-sign reminders failed for org_id=%d: %s", org_id, e)
+                tenant_db.commit()
+        except Exception as e:
+            total["org_errors"] += 1
+            logger.exception("E-sign reminders failed for org_id=%d: %s", org_id, e)
 
-        logger.info("E-sign reminders complete: %s", total)
-        return total
-    except Exception as e:
-        logger.exception("E-sign reminders failed globally: %s", e)
-        return {"error": str(e)}
-    finally:
-        db.close()
+    logger.info("E-sign reminders complete: %s", total)
+    return total
 
 
 # =============================================================================
@@ -584,36 +581,35 @@ async def verify_document_integrity() -> Dict:
 
     Schedule: Daily at 2:00 AM
     """
-    from database import get_db
-    db = next(get_db())
+    from database import SessionLocal, get_db_with_tenant
+
+    db = SessionLocal()
     try:
         org_ids = _get_active_organizations(db)
-        logger.info("Integrity verification: found %d active organizations", len(org_ids))
+    finally:
+        db.close()
 
-        total = {"checked": 0, "tampered": 0, "errors": 0, "orgs_processed": 0, "org_errors": 0}
+    logger.info("Integrity verification: found %d active organizations", len(org_ids))
 
-        for org_id in org_ids:
-            try:
-                result = _process_org_integrity(db, org_id)
+    total = {"checked": 0, "tampered": 0, "errors": 0, "orgs_processed": 0, "org_errors": 0}
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as tenant_db:
+                result = _process_org_integrity(tenant_db, org_id)
                 total["checked"] += result["checked"]
                 total["tampered"] += result["tampered"]
                 total["errors"] += result["errors"]
                 total["orgs_processed"] += 1
                 if result["checked"] > 0:
                     logger.info("Integrity verification org_id=%d: %s", org_id, result)
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                total["org_errors"] += 1
-                logger.exception("Integrity verification failed for org_id=%d: %s", org_id, e)
+                tenant_db.commit()
+        except Exception as e:
+            total["org_errors"] += 1
+            logger.exception("Integrity verification failed for org_id=%d: %s", org_id, e)
 
-        logger.info("Integrity verification complete: %s", total)
-        return total
-    except Exception as e:
-        logger.exception("Integrity verification failed globally: %s", e)
-        return {"error": str(e)}
-    finally:
-        db.close()
+    logger.info("Integrity verification complete: %s", total)
+    return total
 
 
 # =============================================================================
@@ -691,39 +687,38 @@ async def process_call_intelligence_for_documents() -> Dict:
 
     Schedule: Every 30 minutes
     """
-    from database import get_db
-    db = next(get_db())
+    from database import SessionLocal, get_db_with_tenant
+
+    db = SessionLocal()
     try:
         org_ids = _get_active_organizations(db)
-        logger.info("Call intel processing: found %d active organizations", len(org_ids))
+    finally:
+        db.close()
 
-        total = {
-            "analyzed": 0, "needs_detected": 0,
-            "requests_created": 0, "orgs_processed": 0, "org_errors": 0,
-        }
+    logger.info("Call intel processing: found %d active organizations", len(org_ids))
 
-        for org_id in org_ids:
-            try:
-                result = _process_org_call_intelligence(db, org_id)
+    total = {
+        "analyzed": 0, "needs_detected": 0,
+        "requests_created": 0, "orgs_processed": 0, "org_errors": 0,
+    }
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as tenant_db:
+                result = _process_org_call_intelligence(tenant_db, org_id)
                 total["analyzed"] += result["analyzed"]
                 total["needs_detected"] += result["needs_detected"]
                 total["requests_created"] += result["requests_created"]
                 total["orgs_processed"] += 1
                 if result["analyzed"] > 0:
                     logger.info("Call intel processing org_id=%d: %s", org_id, result)
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                total["org_errors"] += 1
-                logger.exception("Call intel processing failed for org_id=%d: %s", org_id, e)
+                tenant_db.commit()
+        except Exception as e:
+            total["org_errors"] += 1
+            logger.exception("Call intel processing failed for org_id=%d: %s", org_id, e)
 
-        logger.info("Call intel processing complete: %s", total)
-        return total
-    except Exception as e:
-        logger.exception("Call intel processing failed globally: %s", e)
-        return {"error": str(e)}
-    finally:
-        db.close()
+    logger.info("Call intel processing complete: %s", total)
+    return total
 
 
 # =============================================================================
@@ -777,35 +772,35 @@ async def monitor_document_slas() -> Dict:
 
     Schedule: Every hour
     """
-    from database import get_db
-    db = next(get_db())
+    from database import SessionLocal, get_db_with_tenant
+
+    # Get org list with an un-scoped session
+    db = SessionLocal()
     try:
         org_ids = _get_active_organizations(db)
-        logger.info("SLA monitoring: found %d active organizations", len(org_ids))
+    finally:
+        db.close()
 
-        total = {"sla_breaches": 0, "sla_warnings": 0, "orgs_processed": 0, "org_errors": 0}
+    logger.info("SLA monitoring: found %d active organizations", len(org_ids))
 
-        for org_id in org_ids:
-            try:
-                result = _process_org_sla_monitoring(db, org_id)
+    total = {"sla_breaches": 0, "sla_warnings": 0, "orgs_processed": 0, "org_errors": 0}
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as tenant_db:
+                result = _process_org_sla_monitoring(tenant_db, org_id)
                 total["sla_breaches"] += result["sla_breaches"]
                 total["sla_warnings"] += result["sla_warnings"]
                 total["orgs_processed"] += 1
                 if result["sla_breaches"] or result["sla_warnings"]:
                     logger.info("SLA monitoring org_id=%d: %s", org_id, result)
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                total["org_errors"] += 1
-                logger.exception("SLA monitoring failed for org_id=%d: %s", org_id, e)
+                tenant_db.commit()
+        except Exception as e:
+            total["org_errors"] += 1
+            logger.exception("SLA monitoring failed for org_id=%d: %s", org_id, e)
 
-        logger.info("SLA monitoring complete: %s", total)
-        return total
-    except Exception as e:
-        logger.exception("SLA monitoring failed globally: %s", e)
-        return {"error": str(e)}
-    finally:
-        db.close()
+    logger.info("SLA monitoring complete: %s", total)
+    return total
 
 
 # =============================================================================
@@ -857,45 +852,46 @@ async def cleanup_smart_docs() -> Dict:
 
     Schedule: Daily at 3:00 AM
     """
-    from database import get_db
-    db = next(get_db())
+    from database import SessionLocal, get_db_with_tenant
+
+    retention_days = _get_audit_retention_days()
+
+    # Get org list with an un-scoped session
+    db = SessionLocal()
     try:
         org_ids = _get_active_organizations(db)
-        retention_days = _get_audit_retention_days()
-        logger.info(
-            "Cleanup: found %d active organizations, retention=%d days",
-            len(org_ids), retention_days,
-        )
+    finally:
+        db.close()
 
-        total = {
-            "expired_signing_tokens": 0,
-            "archivable_followup_events": 0,
-            "retention_days": retention_days,
-            "orgs_processed": 0,
-            "org_errors": 0,
-        }
+    logger.info(
+        "Cleanup: found %d active organizations, retention=%d days",
+        len(org_ids), retention_days,
+    )
 
-        for org_id in org_ids:
-            try:
-                result = _process_org_cleanup(db, org_id, retention_days)
+    total = {
+        "expired_signing_tokens": 0,
+        "archivable_followup_events": 0,
+        "retention_days": retention_days,
+        "orgs_processed": 0,
+        "org_errors": 0,
+    }
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as tenant_db:
+                result = _process_org_cleanup(tenant_db, org_id, retention_days)
                 total["expired_signing_tokens"] += result.get("expired_signing_tokens", 0)
                 total["archivable_followup_events"] += result.get("archivable_followup_events", 0)
                 total["orgs_processed"] += 1
                 if result.get("expired_signing_tokens", 0) > 0:
                     logger.info("Cleanup org_id=%d: %s", org_id, result)
-                db.commit()
-            except Exception as e:
-                db.rollback()
-                total["org_errors"] += 1
-                logger.exception("Cleanup failed for org_id=%d: %s", org_id, e)
+                tenant_db.commit()
+        except Exception as e:
+            total["org_errors"] += 1
+            logger.exception("Cleanup failed for org_id=%d: %s", org_id, e)
 
-        logger.info("Cleanup complete: %s", total)
-        return total
-    except Exception as e:
-        logger.exception("Cleanup failed globally: %s", e)
-        return {"error": str(e)}
-    finally:
-        db.close()
+    logger.info("Cleanup complete: %s", total)
+    return total
 
 
 # =============================================================================

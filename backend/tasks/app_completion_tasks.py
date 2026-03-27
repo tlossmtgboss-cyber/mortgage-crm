@@ -54,6 +54,8 @@ def trigger_application_review_task(
     a manual review is requested. Analyzes the loan file for missing
     documents, incomplete fields, and compliance gaps.
 
+    Uses tenant-scoped session via loan's organization_id for RLS.
+
     Args:
         loan_id: ID of the loan to review.
         triggered_by: Event that triggered the review (default APPLICATION_SUBMITTED).
@@ -62,6 +64,8 @@ def trigger_application_review_task(
         dict with review_id, score, and missing item count.
     """
     from db import SessionLocal
+    from database import get_db_with_tenant
+    from sqlalchemy import text as sa_text
     from services.smart_docs.app_completion_orchestrator import trigger_application_review
 
     logger.info(
@@ -70,34 +74,45 @@ def trigger_application_review_task(
     )
     start_time = datetime.now(timezone.utc)
 
-    session = SessionLocal()
+    # Look up org_id from the loan
+    lookup_db = SessionLocal()
     try:
-        result = trigger_application_review(
-            db=session,
-            loan_id=loan_id,
-            triggered_by=triggered_by,
-        )
-        session.commit()
+        row = lookup_db.execute(sa_text(
+            "SELECT organization_id FROM loans WHERE id = :lid"
+        ), {"lid": loan_id}).fetchone()
+        org_id = row[0] if row else None
+    finally:
+        lookup_db.close()
 
-        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
-        logger.info(
-            "Application review complete for loan_id=%s in %.1fs: "
-            "review_id=%s score=%s missing_items=%s",
-            loan_id, elapsed,
-            result.get("review_id"),
-            result.get("score"),
-            result.get("missing_item_count", 0),
-        )
-        return result
+    if not org_id:
+        logger.warning("Loan %d not found or has no org_id", loan_id)
+        return {"error": "loan_not_found"}
+
+    try:
+        with get_db_with_tenant(org_id) as session:
+            result = trigger_application_review(
+                db=session,
+                loan_id=loan_id,
+                triggered_by=triggered_by,
+            )
+            session.commit()
+
+            elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+            logger.info(
+                "Application review complete for loan_id=%s in %.1fs: "
+                "review_id=%s score=%s missing_items=%s",
+                loan_id, elapsed,
+                result.get("review_id"),
+                result.get("score"),
+                result.get("missing_item_count", 0),
+            )
+            return result
 
     except Exception as e:
-        session.rollback()
         logger.exception(
             "Application review failed for loan_id=%s: %s", loan_id, e,
         )
         raise self.retry(exc=e)
-    finally:
-        session.close()
 
 
 @celery_app.task(
@@ -178,11 +193,14 @@ def process_borrower_sms_response_task(
 )
 def recalculate_stale_reviews_task(self, stale_hours: int = 24) -> Dict:
     """
-    Recalculate completion scores for reviews older than the given threshold.
+    Recalculate completion scores for reviews older than the given threshold,
+    per organization.
 
     Documents may have been uploaded or fields updated since the last review.
     This task finds stale reviews and refreshes their scores so the dashboard
     always reflects current state.
+
+    Uses tenant-scoped sessions per-org to enforce RLS.
 
     Args:
         stale_hours: Reviews older than this many hours are recalculated.
@@ -191,67 +209,79 @@ def recalculate_stale_reviews_task(self, stale_hours: int = 24) -> Dict:
         dict with total_found, refreshed, failed counts.
     """
     from db import SessionLocal
+    from database import get_db_with_tenant
     from sqlalchemy import text as sa_text
     from services.smart_docs.app_completion_orchestrator import AppCompletionOrchestrator
 
     logger.info("Recalculating stale reviews (threshold=%dh)", stale_hours)
     start_time = datetime.now(timezone.utc)
 
-    session = SessionLocal()
+    # Get org list with un-scoped session
+    lookup_db = SessionLocal()
     try:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=stale_hours)
-
-        # Find active reviews that haven't been recalculated since the cutoff
-        stale_reviews = session.execute(sa_text("""
-            SELECT id, loan_id
-            FROM app_completion_reviews
-            WHERE status = 'ACTIVE'
-              AND updated_at < :cutoff
-            ORDER BY updated_at ASC
-            LIMIT 200
-        """), {"cutoff": cutoff}).fetchall()
-
-        total_found = len(stale_reviews)
-        refreshed = 0
-        failed = 0
-
-        if total_found == 0:
-            logger.info("No stale reviews found")
-            return {"total_found": 0, "refreshed": 0, "failed": 0}
-
-        orchestrator = AppCompletionOrchestrator(db=session)
-
-        for review in stale_reviews:
-            try:
-                orchestrator.recalculate_score(review_id=review.id)
-                refreshed += 1
-            except Exception as e:
-                failed += 1
-                logger.warning(
-                    "Failed to recalculate review %s (loan_id=%s): %s",
-                    review.id, review.loan_id, e,
-                )
-
-        session.commit()
-
-        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
-        logger.info(
-            "Stale review recalculation complete in %.1fs: "
-            "found=%d refreshed=%d failed=%d",
-            elapsed, total_found, refreshed, failed,
-        )
-        return {
-            "total_found": total_found,
-            "refreshed": refreshed,
-            "failed": failed,
-        }
-
-    except Exception as e:
-        session.rollback()
-        logger.exception("Stale review recalculation failed: %s", e)
-        raise self.retry(exc=e)
+        org_ids = [
+            row[0] for row in
+            lookup_db.execute(sa_text(
+                "SELECT id FROM organizations WHERE is_active = true ORDER BY id"
+            )).fetchall()
+        ]
     finally:
-        session.close()
+        lookup_db.close()
+
+    total_found = 0
+    refreshed = 0
+    failed = 0
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=stale_hours)
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as session:
+                # Find active reviews for this org that haven't been recalculated
+                stale_reviews = session.execute(sa_text("""
+                    SELECT acr.id, acr.loan_id
+                    FROM app_completion_reviews acr
+                    JOIN loans l ON l.id = acr.loan_id
+                    WHERE l.organization_id = :org_id
+                      AND acr.status = 'ACTIVE'
+                      AND acr.updated_at < :cutoff
+                    ORDER BY acr.updated_at ASC
+                    LIMIT 200
+                """), {"org_id": org_id, "cutoff": cutoff}).fetchall()
+
+                total_found += len(stale_reviews)
+
+                if not stale_reviews:
+                    continue
+
+                orchestrator = AppCompletionOrchestrator(db=session)
+
+                for review in stale_reviews:
+                    try:
+                        orchestrator.recalculate_score(review_id=review.id)
+                        refreshed += 1
+                    except Exception as e:
+                        failed += 1
+                        logger.warning(
+                            "Failed to recalculate review %s (loan_id=%s): %s",
+                            review.id, review.loan_id, e,
+                        )
+
+                session.commit()
+        except Exception as e:
+            logger.exception("Stale review recalculation failed for org_id=%d: %s", org_id, e)
+
+    elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+    logger.info(
+        "Stale review recalculation complete in %.1fs: "
+        "found=%d refreshed=%d failed=%d",
+        elapsed, total_found, refreshed, failed,
+    )
+    return {
+        "total_found": total_found,
+        "refreshed": refreshed,
+        "failed": failed,
+    }
 
 
 @celery_app.task(
@@ -263,9 +293,10 @@ def recalculate_stale_reviews_task(self, stale_hours: int = 24) -> Dict:
 def send_pending_reminders_task(self, reminder_delay_hours: int = 24) -> Dict:
     """
     Send follow-up reminders for missing items that were sent to the borrower
-    but received no response within the configured delay.
+    but received no response within the configured delay, per organization.
 
     Only sends one reminder per missing item to avoid spamming.
+    Uses tenant-scoped sessions per-org to enforce RLS.
 
     Args:
         reminder_delay_hours: Hours to wait before sending a reminder.
@@ -274,6 +305,7 @@ def send_pending_reminders_task(self, reminder_delay_hours: int = 24) -> Dict:
         dict with candidates_found, reminders_sent, failed counts.
     """
     from db import SessionLocal
+    from database import get_db_with_tenant
     from sqlalchemy import text as sa_text
     from services.smart_docs.app_completion_orchestrator import AppCompletionOrchestrator
 
@@ -282,67 +314,76 @@ def send_pending_reminders_task(self, reminder_delay_hours: int = 24) -> Dict:
     )
     start_time = datetime.now(timezone.utc)
 
-    session = SessionLocal()
+    # Get org list with un-scoped session
+    lookup_db = SessionLocal()
     try:
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=reminder_delay_hours)
-
-        # Find missing items in SENT_TO_BORROWER status with no response
-        # and no reminder already sent (reminder_sent_at IS NULL)
-        candidates = session.execute(sa_text("""
-            SELECT mi.id, mi.review_id, mi.item_type, mi.description,
-                   acr.loan_id
-            FROM app_completion_missing_items mi
-            JOIN app_completion_reviews acr ON acr.id = mi.review_id
-            WHERE mi.status = 'SENT_TO_BORROWER'
-              AND mi.reminder_sent_at IS NULL
-              AND mi.sent_at IS NOT NULL
-              AND mi.sent_at < :cutoff
-              AND acr.status = 'ACTIVE'
-            ORDER BY mi.sent_at ASC
-            LIMIT 100
-        """), {"cutoff": cutoff}).fetchall()
-
-        candidates_found = len(candidates)
-        reminders_sent = 0
-        failed = 0
-
-        if candidates_found == 0:
-            logger.info("No pending reminders to send")
-            return {"candidates_found": 0, "reminders_sent": 0, "failed": 0}
-
-        orchestrator = AppCompletionOrchestrator(db=session)
-
-        for item in candidates:
-            try:
-                orchestrator.send_item_reminder(
-                    missing_item_id=item.id,
-                    loan_id=item.loan_id,
-                )
-                reminders_sent += 1
-            except Exception as e:
-                failed += 1
-                logger.warning(
-                    "Failed to send reminder for item %s (loan_id=%s): %s",
-                    item.id, item.loan_id, e,
-                )
-
-        session.commit()
-
-        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
-        logger.info(
-            "Pending reminders complete in %.1fs: "
-            "found=%d sent=%d failed=%d",
-            elapsed, candidates_found, reminders_sent, failed,
-        )
-        return {
-            "candidates_found": candidates_found,
-            "reminders_sent": reminders_sent,
-            "failed": failed,
-        }
-
-    except Exception as e:
-        session.rollback()
-        logger.exception("Pending reminders task failed: %s", e)
-        raise self.retry(exc=e)
+        org_ids = [
+            row[0] for row in
+            lookup_db.execute(sa_text(
+                "SELECT id FROM organizations WHERE is_active = true ORDER BY id"
+            )).fetchall()
+        ]
     finally:
-        session.close()
+        lookup_db.close()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=reminder_delay_hours)
+    candidates_found = 0
+    reminders_sent = 0
+    failed = 0
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as session:
+                # Find missing items for this org
+                candidates = session.execute(sa_text("""
+                    SELECT mi.id, mi.review_id, mi.item_type, mi.description,
+                           acr.loan_id
+                    FROM app_completion_missing_items mi
+                    JOIN app_completion_reviews acr ON acr.id = mi.review_id
+                    JOIN loans l ON l.id = acr.loan_id
+                    WHERE l.organization_id = :org_id
+                      AND mi.status = 'SENT_TO_BORROWER'
+                      AND mi.reminder_sent_at IS NULL
+                      AND mi.sent_at IS NOT NULL
+                      AND mi.sent_at < :cutoff
+                      AND acr.status = 'ACTIVE'
+                    ORDER BY mi.sent_at ASC
+                    LIMIT 100
+                """), {"org_id": org_id, "cutoff": cutoff}).fetchall()
+
+                candidates_found += len(candidates)
+
+                if not candidates:
+                    continue
+
+                orchestrator = AppCompletionOrchestrator(db=session)
+
+                for item in candidates:
+                    try:
+                        orchestrator.send_item_reminder(
+                            missing_item_id=item.id,
+                            loan_id=item.loan_id,
+                        )
+                        reminders_sent += 1
+                    except Exception as e:
+                        failed += 1
+                        logger.warning(
+                            "Failed to send reminder for item %s (loan_id=%s): %s",
+                            item.id, item.loan_id, e,
+                        )
+
+                session.commit()
+        except Exception as e:
+            logger.exception("Pending reminders failed for org_id=%d: %s", org_id, e)
+
+    elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+    logger.info(
+        "Pending reminders complete in %.1fs: "
+        "found=%d sent=%d failed=%d",
+        elapsed, candidates_found, reminders_sent, failed,
+    )
+    return {
+        "candidates_found": candidates_found,
+        "reminders_sent": reminders_sent,
+        "failed": failed,
+    }

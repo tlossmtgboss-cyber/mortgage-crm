@@ -207,19 +207,60 @@ async def process_no_activity_triggers(db_session):
 
 
 def setup_outreach_scheduler(scheduler, SessionLocal):
-    """Set up scheduler jobs for outreach"""
+    """Set up scheduler jobs for outreach.
+
+    Uses tenant-scoped sessions per-org to enforce RLS.
+    """
 
     def run_drip_campaigns():
-        """Wrapper to run drip campaigns with DB session"""
+        """Wrapper to run drip campaigns with tenant-scoped DB sessions, per org."""
         import asyncio
-        with SessionLocal() as db:
-            asyncio.run(process_drip_campaigns(db))
+        from database import get_db_with_tenant
+        from sqlalchemy import text as sa_text
+
+        # Get org list with un-scoped session
+        db = SessionLocal()
+        try:
+            org_ids = [
+                row[0] for row in
+                db.execute(sa_text(
+                    "SELECT id FROM organizations WHERE is_active = true ORDER BY id"
+                )).fetchall()
+            ]
+        finally:
+            db.close()
+
+        for org_id in org_ids:
+            try:
+                with get_db_with_tenant(org_id) as tenant_db:
+                    asyncio.run(process_drip_campaigns(tenant_db))
+            except Exception as e:
+                logger.error("Drip campaigns failed for org_id=%d: %s", org_id, e)
 
     def run_no_activity_triggers():
-        """Wrapper to run no-activity triggers with DB session"""
+        """Wrapper to run no-activity triggers with tenant-scoped DB sessions, per org."""
         import asyncio
-        with SessionLocal() as db:
-            asyncio.run(process_no_activity_triggers(db))
+        from database import get_db_with_tenant
+        from sqlalchemy import text as sa_text
+
+        # Get org list with un-scoped session
+        db = SessionLocal()
+        try:
+            org_ids = [
+                row[0] for row in
+                db.execute(sa_text(
+                    "SELECT id FROM organizations WHERE is_active = true ORDER BY id"
+                )).fetchall()
+            ]
+        finally:
+            db.close()
+
+        for org_id in org_ids:
+            try:
+                with get_db_with_tenant(org_id) as tenant_db:
+                    asyncio.run(process_no_activity_triggers(tenant_db))
+            except Exception as e:
+                logger.error("No-activity triggers failed for org_id=%d: %s", org_id, e)
 
     # Process drip campaigns every 15 minutes
     scheduler.add_job(

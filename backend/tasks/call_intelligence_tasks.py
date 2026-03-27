@@ -81,6 +81,7 @@ def process_transcript_task(
     from services.call_intelligence.llm_client import create_llm_client
 
     call_id = request_data.get("call_id", "unknown")
+    org_id = request_data.get("organization_id")
     logger.info(f"Processing transcript task: {call_id}")
 
     try:
@@ -88,14 +89,27 @@ def process_transcript_task(
         request = CallIntelligenceRequest(
             call_id=call_id,
             loan_id=request_data.get("loan_id"),
-            organization_id=request_data.get("organization_id"),
+            organization_id=org_id,
             transcript=request_data.get("transcript", ""),
         )
 
-        # Get database session
-        db = get_db_session()
+        # Get tenant-scoped database session if org_id is available,
+        # otherwise fall back to un-scoped session
+        if org_id:
+            from tasks.base import tenant_task_session
+            ctx = tenant_task_session(org_id)
+        else:
+            from contextlib import contextmanager
+            @contextmanager
+            def _fallback_session():
+                db = get_db_session()
+                try:
+                    yield db
+                finally:
+                    db.close()
+            ctx = _fallback_session()
 
-        try:
+        with ctx as db:
             # Create LLM client and processor
             llm_client = create_llm_client()
             processor = CallIntelligenceProcessor(db, llm_client)
@@ -120,9 +134,6 @@ def process_transcript_task(
             )
 
             return result
-
-        finally:
-            db.close()
 
     except Exception as e:
         logger.exception(f"Transcript task failed for {call_id}: {e}")
@@ -177,10 +188,22 @@ def process_batch_task(
     logger.info(f"Processing batch task: {batch_id} with {len(request_ids)} requests")
 
     try:
-        # Get database session
-        db = get_db_session()
+        # Get tenant-scoped database session if org_id is available
+        if organization_id:
+            from tasks.base import tenant_task_session
+            ctx = tenant_task_session(organization_id)
+        else:
+            from contextlib import contextmanager
+            @contextmanager
+            def _fallback_session():
+                _db = get_db_session()
+                try:
+                    yield _db
+                finally:
+                    _db.close()
+            ctx = _fallback_session()
 
-        try:
+        with ctx as db:
             # Create LLM client and batch processor
             llm_client = create_llm_client()
             processor = BatchProcessor(db, llm_client)
@@ -209,9 +232,6 @@ def process_batch_task(
             )
 
             return result
-
-        finally:
-            db.close()
 
     except Exception as e:
         logger.exception(f"Batch task failed for {batch_id}: {e}")

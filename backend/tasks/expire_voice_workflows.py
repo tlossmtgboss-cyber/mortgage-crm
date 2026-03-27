@@ -31,44 +31,67 @@ logger = logging.getLogger(__name__)
 )
 def expire_stale_voice_workflows(self):
     """
-    Expire voice workflows past their expires_at timestamp.
+    Expire voice workflows past their expires_at timestamp, per organization.
 
     Queries for VoiceWorkflow rows that are still in an active state
     (not COMPLETED, EXPIRED, CANCELLED, or FAILED) but whose expires_at
     is in the past. Transitions them to EXPIRED.
 
+    Uses tenant-scoped sessions per-org to enforce RLS.
+
     Returns:
         dict with expired_count and run metadata.
     """
     from db import SessionLocal
+    from database import get_db_with_tenant
+    from sqlalchemy import text as sa_text
     from services.voice_scheduling_workflow_service import VoiceSchedulingWorkflowService
 
     logger.info("Starting voice workflow expiry check")
     start_time = datetime.now(timezone.utc)
 
-    session = SessionLocal()
+    # Get org list with un-scoped session
+    lookup_db = SessionLocal()
     try:
-        service = VoiceSchedulingWorkflowService(session)
-        expired_count = service.expire_stale_workflows()
-        session.commit()
-
-        elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
-        logger.info(
-            f"Voice workflow expiry complete in {elapsed:.1f}s: "
-            f"{expired_count} workflows expired"
-        )
-        return {
-            "expired_count": expired_count,
-            "elapsed_seconds": round(elapsed, 2),
-            "run_at": start_time.isoformat(),
-        }
-
-    except Exception as e:
-        session.rollback()
-        logger.exception(f"Voice workflow expiry failed: {e}")
-        raise self.retry(exc=e)
+        org_ids = [
+            row[0] for row in
+            lookup_db.execute(sa_text(
+                "SELECT id FROM organizations WHERE is_active = true ORDER BY id"
+            )).fetchall()
+        ]
     finally:
-        session.close()
+        lookup_db.close()
+
+    total_expired = 0
+    org_errors = 0
+
+    for org_id in org_ids:
+        try:
+            with get_db_with_tenant(org_id) as session:
+                service = VoiceSchedulingWorkflowService(session)
+                expired_count = service.expire_stale_workflows()
+                session.commit()
+                total_expired += expired_count
+                if expired_count > 0:
+                    logger.info(
+                        "Voice workflow expiry org_id=%d: %d expired",
+                        org_id, expired_count,
+                    )
+        except Exception as e:
+            org_errors += 1
+            logger.exception(f"Voice workflow expiry failed for org_id={org_id}: {e}")
+
+    elapsed = (datetime.now(timezone.utc) - start_time).total_seconds()
+    logger.info(
+        f"Voice workflow expiry complete in {elapsed:.1f}s: "
+        f"{total_expired} workflows expired across {len(org_ids)} orgs"
+    )
+    return {
+        "expired_count": total_expired,
+        "elapsed_seconds": round(elapsed, 2),
+        "run_at": start_time.isoformat(),
+        "org_errors": org_errors,
+    }
 
 
 if __name__ == "__main__":

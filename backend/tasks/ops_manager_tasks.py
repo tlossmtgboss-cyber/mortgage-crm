@@ -51,29 +51,31 @@ def _get_all_active_org_ids(db: Session) -> list:
 # ---------------------------------------------------------------------------
 
 async def _sweep_org(org_id: int, dry_run: bool = False) -> dict:
-    """Run pipeline sweep for a single org using OpsManagerAgent."""
+    """Run pipeline sweep for a single org using OpsManagerAgent.
+    Uses tenant-scoped session to enforce RLS."""
     from agents.specialized.ops_manager_agent import OpsManagerAgent
+    from database import get_db_with_tenant
 
-    db = _get_db_session()
     try:
-        context = {
-            "user_id": "system",
-            "user_email": "ops-scheduler@system",
-            "user_role": "system_admin",
-            "_shared_db": db,
-        }
-        agent = OpsManagerAgent(context)
-        result = await agent.execute_tool("run_pipeline_sweep", {
-            "organization_id": org_id,
-            "dry_run": dry_run,
-        })
-        return {
-            "organization_id": org_id,
-            "status": "success" if result.success else "error",
-            "impediments_found": (result.data or {}).get("impediments_found", 0),
-            "tasks_created": (result.data or {}).get("tasks_created", 0),
-            "error": result.error,
-        }
+        with get_db_with_tenant(org_id) as db:
+            context = {
+                "user_id": "system",
+                "user_email": "ops-scheduler@system",
+                "user_role": "system_admin",
+                "_shared_db": db,
+            }
+            agent = OpsManagerAgent(context)
+            result = await agent.execute_tool("run_pipeline_sweep", {
+                "organization_id": org_id,
+                "dry_run": dry_run,
+            })
+            return {
+                "organization_id": org_id,
+                "status": "success" if result.success else "error",
+                "impediments_found": (result.data or {}).get("impediments_found", 0),
+                "tasks_created": (result.data or {}).get("tasks_created", 0),
+                "error": result.error,
+            }
     except Exception as e:
         logger.error("Sweep failed for org %d: %s", org_id, e)
         return {
@@ -81,8 +83,6 @@ async def _sweep_org(org_id: int, dry_run: bool = False) -> dict:
             "status": "error",
             "error": str(e),
         }
-    finally:
-        db.close()
 
 
 async def _sweep_all_orgs_async(dry_run: bool = False) -> dict:
@@ -159,35 +159,31 @@ def run_auto_resolve_stale_tasks():
         db.close()
         db = None
 
+        from database import get_db_with_tenant
+
         total_resolved = 0
         for org_id in org_ids:
-            org_db = None
             try:
-                org_db = _get_db_session()
-                # Auto-resolve ai_tasks created by ops_manager that are > 7 days old
-                # and still in a non-terminal state
-                result = org_db.execute(text("""
-                    UPDATE ai_tasks
-                    SET type = 'COMPLETED',
-                        description = description || ' [Auto-resolved: stale after 7 days]',
-                        updated_at = NOW()
-                    WHERE organization_id = :org_id
-                      AND source = 'ops_manager'
-                      AND type != 'COMPLETED'
-                      AND created_at < NOW() - INTERVAL '7 days'
-                """), {"org_id": org_id})
-                org_db.commit()
-                count = result.rowcount
-                if count > 0:
-                    logger.info("Auto-resolved %d stale ops tasks for org %d", count, org_id)
-                total_resolved += count
+                with get_db_with_tenant(org_id) as org_db:
+                    # Auto-resolve ai_tasks created by ops_manager that are > 7 days old
+                    # and still in a non-terminal state
+                    result = org_db.execute(text("""
+                        UPDATE ai_tasks
+                        SET type = 'COMPLETED',
+                            description = description || ' [Auto-resolved: stale after 7 days]',
+                            updated_at = NOW()
+                        WHERE organization_id = :org_id
+                          AND source = 'ops_manager'
+                          AND type != 'COMPLETED'
+                          AND created_at < NOW() - INTERVAL '7 days'
+                    """), {"org_id": org_id})
+                    org_db.commit()
+                    count = result.rowcount
+                    if count > 0:
+                        logger.info("Auto-resolved %d stale ops tasks for org %d", count, org_id)
+                    total_resolved += count
             except Exception as e:
                 logger.error("Auto-resolve failed for org %d: %s", org_id, e)
-                if org_db:
-                    org_db.rollback()
-            finally:
-                if org_db:
-                    org_db.close()
 
         if total_resolved > 0:
             logger.info("Auto-resolve complete: %d total tasks resolved", total_resolved)

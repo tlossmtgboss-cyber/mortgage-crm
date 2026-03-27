@@ -18,9 +18,15 @@ logger = logging.getLogger(__name__)
 
 
 def _get_db_session():
-    """Create a fresh DB session for background tasks."""
+    """Create a fresh DB session for background tasks (no RLS tenant context)."""
     from db import SessionLocal
     return SessionLocal()
+
+
+def _get_tenant_db_session(org_id: int):
+    """Create a tenant-scoped DB session for background tasks (RLS enforced)."""
+    from tasks.base import tenant_task_session
+    return tenant_task_session(org_id)
 
 
 def _get_all_briefing_candidates(db):
@@ -153,132 +159,147 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
     start_time = time.time()
     briefing_date = date.fromisoformat(briefing_date_str)
 
-    db = _get_db_session()
+    # First, look up the user's org_id to establish tenant context.
+    # This initial query is un-scoped (users table may not have RLS).
+    lookup_db = _get_db_session()
     try:
-        # Load user with direct_reports
         from database.models import User
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
+        user_row = lookup_db.execute(
+            sa_text("SELECT id, organization_id FROM users WHERE id = :uid"),
+            {"uid": user_id},
+        ).fetchone()
+        if not user_row:
             logger.warning("Briefing: user %d not found", user_id)
             return {"error": "user_not_found"}
-
-        # Check for existing briefing (race condition guard)
-        existing = db.query(MorningBriefing).filter(
-            MorningBriefing.user_id == user_id,
-            MorningBriefing.briefing_date == briefing_date,
-        ).first()
-        if existing:
-            logger.info("Briefing already exists for user %d on %s", user_id, briefing_date_str)
-            return {"status": "already_exists"}
-
-        # Create pending record
-        briefing = MorningBriefing(
-            organization_id=user.organization_id,
-            user_id=user_id,
-            briefing_date=briefing_date,
-            briefing_level=briefing_level,
-            status="generating",
-        )
-        db.add(briefing)
-        try:
-            db.flush()
-        except Exception as flush_exc:
-            db.rollback()
-            # UniqueConstraint violation means another worker already created it
-            from sqlalchemy.exc import IntegrityError
-            if isinstance(flush_exc, IntegrityError):
-                logger.info("Briefing already exists (concurrent) for user %d on %s", user_id, briefing_date_str)
-                return {"status": "already_exists"}
-            raise
-
-        # Load user preferences (NULL = all defaults)
-        prefs = MorningBriefingService.load_preferences(user)
-
-        # Gather data
-        service = MorningBriefingService()
-        ctx = service.build_context(db, user, briefing_date, prefs)
-
-        briefing.briefing_data = {
-            "pipeline": ctx.pipeline,
-            "at_risk": ctx.at_risk,
-            "stale_leads": ctx.stale_leads,
-            "appointments": ctx.appointments,
-            "conditions": ctx.conditions,
-            "yesterday": ctx.yesterday,
-        }
-        if ctx.team:
-            briefing.team_data = ctx.team
-
-        # Generate AI narrative
-        ai_start = time.time()
-        narrative = service.generate_narrative(ctx, prefs.ai_tone, prefs)
-        ai_duration = (time.time() - ai_start) * 1000
-        briefing.ai_narrative = narrative
-
-        # Render email HTML
-        user_name = user.full_name if hasattr(user, "full_name") else (
-            f"{user.first_name or ''} {user.last_name or ''}".strip() or "there"
-        )
-        html = render_briefing_email(
-            user_name=user_name,
-            briefing_date=briefing_date,
-            level=briefing_level,
-            ai_narrative=narrative,
-            pipeline=ctx.pipeline,
-            at_risk=ctx.at_risk,
-            stale_leads=ctx.stale_leads,
-            appointments=ctx.appointments,
-            conditions=ctx.conditions,
-            yesterday=ctx.yesterday,
-            team=ctx.team,
-        )
-        briefing.html_content = html
-
-        # Send email
-        email_sent = False
-        try:
-            _send_briefing_email(user.email, user_name, briefing_date, briefing_level, html, ctx.pipeline)
-            briefing.email_sent_at = datetime.now(timezone.utc)
-            email_sent = True
-        except Exception as e:
-            logger.error("Briefing email send failed for user %d: %s", user_id, e)
-
-        briefing.status = "delivered" if email_sent else "failed"
-        briefing.updated_at = datetime.now(timezone.utc)
-        db.commit()
-
-        total_duration = (time.time() - start_time) * 1000
-        logger.info(
-            "briefing.generate.complete user_id=%d level=%s ai_ms=%.0f total_ms=%.0f email=%s",
-            user_id, briefing_level, ai_duration, total_duration, email_sent,
-        )
-
-        return {"status": briefing.status, "briefing_id": briefing.id}
-
-    except Exception as e:
-        db.rollback()
-        logger.error("Briefing generation failed for user %d: %s", user_id, e)
-        try:
-            self.retry(exc=e)
-        except self.MaxRetriesExceededError:
-            # Mark as failed after all retries
-            fail_db = _get_db_session()
-            try:
-                fail_briefing = fail_db.query(MorningBriefing).filter(
-                    MorningBriefing.user_id == user_id,
-                    MorningBriefing.briefing_date == briefing_date,
-                ).first()
-                if fail_briefing:
-                    fail_briefing.status = "failed"
-                    fail_briefing.updated_at = datetime.now(timezone.utc)
-                    fail_db.commit()
-            except Exception as mark_err:
-                logger.error("Failed to mark briefing as failed for user %d: %s", user_id, mark_err)
-            finally:
-                fail_db.close()
-            return {"error": str(e)}
+        org_id = user_row[1]
     finally:
-        db.close()
+        lookup_db.close()
+
+    if not org_id:
+        logger.warning("Briefing: user %d has no organization_id", user_id)
+        return {"error": "no_organization"}
+
+    # Use tenant-scoped session for all data queries (RLS enforced)
+    with _get_tenant_db_session(org_id) as db:
+        try:
+            from database.models import User
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user:
+                logger.warning("Briefing: user %d not found in tenant session", user_id)
+                return {"error": "user_not_found"}
+
+            # Check for existing briefing (race condition guard)
+            existing = db.query(MorningBriefing).filter(
+                MorningBriefing.user_id == user_id,
+                MorningBriefing.briefing_date == briefing_date,
+            ).first()
+            if existing:
+                logger.info("Briefing already exists for user %d on %s", user_id, briefing_date_str)
+                return {"status": "already_exists"}
+
+            # Create pending record
+            briefing = MorningBriefing(
+                organization_id=org_id,
+                user_id=user_id,
+                briefing_date=briefing_date,
+                briefing_level=briefing_level,
+                status="generating",
+            )
+            db.add(briefing)
+            try:
+                db.flush()
+            except Exception as flush_exc:
+                db.rollback()
+                # UniqueConstraint violation means another worker already created it
+                from sqlalchemy.exc import IntegrityError
+                if isinstance(flush_exc, IntegrityError):
+                    logger.info("Briefing already exists (concurrent) for user %d on %s", user_id, briefing_date_str)
+                    return {"status": "already_exists"}
+                raise
+
+            # Load user preferences (NULL = all defaults)
+            prefs = MorningBriefingService.load_preferences(user)
+
+            # Gather data
+            service = MorningBriefingService()
+            ctx = service.build_context(db, user, briefing_date, prefs)
+
+            briefing.briefing_data = {
+                "pipeline": ctx.pipeline,
+                "at_risk": ctx.at_risk,
+                "stale_leads": ctx.stale_leads,
+                "appointments": ctx.appointments,
+                "conditions": ctx.conditions,
+                "yesterday": ctx.yesterday,
+            }
+            if ctx.team:
+                briefing.team_data = ctx.team
+
+            # Generate AI narrative
+            ai_start = time.time()
+            narrative = service.generate_narrative(ctx, prefs.ai_tone, prefs)
+            ai_duration = (time.time() - ai_start) * 1000
+            briefing.ai_narrative = narrative
+
+            # Render email HTML
+            user_name = user.full_name if hasattr(user, "full_name") else (
+                f"{user.first_name or ''} {user.last_name or ''}".strip() or "there"
+            )
+            html = render_briefing_email(
+                user_name=user_name,
+                briefing_date=briefing_date,
+                level=briefing_level,
+                ai_narrative=narrative,
+                pipeline=ctx.pipeline,
+                at_risk=ctx.at_risk,
+                stale_leads=ctx.stale_leads,
+                appointments=ctx.appointments,
+                conditions=ctx.conditions,
+                yesterday=ctx.yesterday,
+                team=ctx.team,
+            )
+            briefing.html_content = html
+
+            # Send email
+            email_sent = False
+            try:
+                _send_briefing_email(user.email, user_name, briefing_date, briefing_level, html, ctx.pipeline)
+                briefing.email_sent_at = datetime.now(timezone.utc)
+                email_sent = True
+            except Exception as e:
+                logger.error("Briefing email send failed for user %d: %s", user_id, e)
+
+            briefing.status = "delivered" if email_sent else "failed"
+            briefing.updated_at = datetime.now(timezone.utc)
+            db.commit()
+
+            total_duration = (time.time() - start_time) * 1000
+            logger.info(
+                "briefing.generate.complete user_id=%d level=%s ai_ms=%.0f total_ms=%.0f email=%s",
+                user_id, briefing_level, ai_duration, total_duration, email_sent,
+            )
+
+            return {"status": briefing.status, "briefing_id": briefing.id}
+
+        except Exception as e:
+            db.rollback()
+            logger.error("Briefing generation failed for user %d: %s", user_id, e)
+            try:
+                self.retry(exc=e)
+            except self.MaxRetriesExceededError:
+                # Mark as failed after all retries
+                try:
+                    fail_briefing = db.query(MorningBriefing).filter(
+                        MorningBriefing.user_id == user_id,
+                        MorningBriefing.briefing_date == briefing_date,
+                    ).first()
+                    if fail_briefing:
+                        fail_briefing.status = "failed"
+                        fail_briefing.updated_at = datetime.now(timezone.utc)
+                        db.commit()
+                except Exception as mark_err:
+                    logger.error("Failed to mark briefing as failed for user %d: %s", user_id, mark_err)
+                return {"error": str(e)}
 
 
 def _send_briefing_email(
