@@ -9,6 +9,17 @@ from datetime import date
 from typing import Any, Dict, List, Optional
 
 
+def _darken_hex(hex_color: str, factor: float = 0.15) -> str:
+    """Darken a hex color by a factor (0-1). Used for gradient end-stop."""
+    hex_color = hex_color.lstrip("#")
+    if len(hex_color) != 6:
+        return f"#{hex_color}"
+    r = max(0, int(int(hex_color[0:2], 16) * (1 - factor)))
+    g = max(0, int(int(hex_color[2:4], 16) * (1 - factor)))
+    b = max(0, int(int(hex_color[4:6], 16) * (1 - factor)))
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 def render_briefing_email(
     user_name: str,
     briefing_date: date,
@@ -22,6 +33,11 @@ def render_briefing_email(
     yesterday: Dict[str, Any],
     team: Optional[Dict[str, Any]] = None,
     app_url: str = "https://app.perenniaai.com",
+    # Branding params:
+    company_name: str = "Perennia AI",
+    logo_url: Optional[str] = None,
+    primary_color: str = "#218d8d",
+    secondary_color: Optional[str] = None,
 ) -> str:
     """Render complete briefing email HTML."""
     date_str = briefing_date.strftime("%B %d, %Y")
@@ -38,19 +54,22 @@ def render_briefing_email(
     else:
         subject_detail = f"{active} active loans"
 
+    brand = primary_color
+    gradient_end = _darken_hex(primary_color)
+
     sections = []
 
     # AI narrative
     if ai_narrative:
-        sections.append(_section_priorities(ai_narrative))
+        sections.append(_section_priorities(ai_narrative, brand_color=brand))
     else:
-        sections.append(_section_priorities_unavailable())
+        sections.append(_section_priorities_unavailable(brand_color=brand))
 
     sections.append(_divider())
 
     # Personal pipeline (all levels)
     if active > 0 or level == "individual":
-        sections.append(_section_pipeline(pipeline))
+        sections.append(_section_pipeline(pipeline, brand_color=brand))
 
     # At-risk
     if at_risk:
@@ -62,7 +81,7 @@ def render_briefing_email(
 
     # Appointments
     if appointments:
-        sections.append(_section_appointments(appointments))
+        sections.append(_section_appointments(appointments, brand_color=brand))
 
     # Conditions
     if conditions:
@@ -71,14 +90,19 @@ def render_briefing_email(
     # Team section (manager)
     if level == "manager" and team:
         sections.append(_divider())
-        sections.append(_section_team(team))
+        sections.append(_section_team(team, brand_color=brand))
 
     # Org section (leadership)
     if level == "leadership" and team:
         sections.append(_divider())
-        sections.append(_section_org(team))
+        sections.append(_section_org(team, brand_color=brand))
 
     body = "\n".join(sections)
+
+    # Optional logo in header
+    logo_html = ""
+    if logo_url:
+        logo_html = f'<img src="{logo_url}" alt="{company_name}" style="max-height:40px;max-width:200px;margin-bottom:12px;display:block;">\n  '
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -89,8 +113,8 @@ def render_briefing_email(
 <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:8px;overflow:hidden;max-width:600px;width:100%;">
 
 <!-- Header -->
-<tr><td style="background:linear-gradient(135deg,#218d8d,#1a7070);padding:28px 32px;">
-  <h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">Good morning, {user_name}</h1>
+<tr><td style="background:linear-gradient(135deg,{primary_color},{gradient_end});padding:28px 32px;">
+  {logo_html}<h1 style="margin:0;color:#ffffff;font-size:20px;font-weight:600;">Good morning, {user_name}</h1>
   <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">{date_str}</p>
 </td></tr>
 
@@ -101,13 +125,13 @@ def render_briefing_email(
 
 <!-- CTA -->
 <tr><td style="padding:0 32px 32px;" align="center">
-  <a href="{app_url}/dashboard" style="display:inline-block;background:#218d8d;color:#ffffff;padding:12px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">Open Perennia</a>
+  <a href="{app_url}/dashboard" style="display:inline-block;background:{primary_color};color:#ffffff;padding:12px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;">Open {company_name}</a>
 </td></tr>
 
 <!-- Footer -->
 <tr><td style="padding:16px 32px;border-top:1px solid #e8e8ed;background:#fafafa;">
   <p style="margin:0;color:#8888a0;font-size:11px;text-align:center;">
-    Adjust or disable morning briefings in <a href="{app_url}/settings" style="color:#218d8d;">Settings</a>
+    Adjust or disable morning briefings in <a href="{app_url}/settings" style="color:{primary_color};">Settings</a>
   </p>
 </td></tr>
 
@@ -118,7 +142,7 @@ def render_briefing_email(
 </html>"""
 
 
-def _section_priorities(narrative: str) -> str:
+def _section_priorities(narrative: str, brand_color: str = "#218d8d") -> str:
     # Convert numbered items to styled HTML
     lines = narrative.strip().split("\n")
     items_html = ""
@@ -128,13 +152,13 @@ def _section_priorities(narrative: str) -> str:
             items_html += f'<p style="margin:8px 0;color:#1a1a2a;font-size:14px;line-height:1.6;">{line}</p>\n'
 
     return f"""
-<h2 style="margin:0 0 12px;color:#218d8d;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Top 3 Priorities</h2>
+<h2 style="margin:0 0 12px;color:{brand_color};font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Top 3 Priorities</h2>
 {items_html}"""
 
 
-def _section_priorities_unavailable() -> str:
-    return """
-<h2 style="margin:0 0 12px;color:#218d8d;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Your Pipeline</h2>
+def _section_priorities_unavailable(brand_color: str = "#218d8d") -> str:
+    return f"""
+<h2 style="margin:0 0 12px;color:{brand_color};font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Your Pipeline</h2>
 <p style="margin:0;color:#8888a0;font-size:13px;font-style:italic;">AI priorities unavailable today — here's your pipeline data.</p>"""
 
 
@@ -142,7 +166,7 @@ def _divider() -> str:
     return '<hr style="border:none;border-top:1px solid #e8e8ed;margin:20px 0;">'
 
 
-def _section_pipeline(pipeline: Dict) -> str:
+def _section_pipeline(pipeline: Dict, brand_color: str = "#218d8d") -> str:
     active = pipeline.get("active_count", 0)
     volume = pipeline.get("total_volume", 0)
     closing = pipeline.get("closing_soon", 0)
@@ -153,7 +177,7 @@ def _section_pipeline(pipeline: Dict) -> str:
         stage_rows += f'<tr><td style="padding:6px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;color:#4a4a5a;">{stage}</td><td style="padding:6px 12px;border-bottom:1px solid #f0f0f4;font-size:13px;color:#1a1a2a;font-weight:600;text-align:right;">{cnt}</td></tr>\n'
 
     return f"""
-<h2 style="margin:0 0 8px;color:#218d8d;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Pipeline Snapshot</h2>
+<h2 style="margin:0 0 8px;color:{brand_color};font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Pipeline Snapshot</h2>
 <p style="margin:0 0 12px;color:#4a4a5a;font-size:14px;">{active} active loans &middot; ${volume:,.0f} volume &middot; {closing} closing this week</p>
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border-radius:6px;overflow:hidden;">
 <tr><th style="padding:8px 12px;text-align:left;font-size:11px;color:#8888a0;text-transform:uppercase;border-bottom:1px solid #e8e8ed;">Stage</th><th style="padding:8px 12px;text-align:right;font-size:11px;color:#8888a0;text-transform:uppercase;border-bottom:1px solid #e8e8ed;">Count</th></tr>
@@ -178,12 +202,12 @@ def _section_stale_leads(items: List[Dict]) -> str:
 <ul style="margin:0;padding-left:20px;">{rows}</ul>"""
 
 
-def _section_appointments(items: List[Dict]) -> str:
+def _section_appointments(items: List[Dict], brand_color: str = "#218d8d") -> str:
     rows = ""
     for item in items:
         rows += f'<li style="margin:4px 0;font-size:13px;color:#4a4a5a;"><strong>{item["time"]}</strong> — {item["attendee"]}, {item["type"]}</li>\n'
     return f"""
-<h2 style="margin:20px 0 8px;color:#218d8d;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">&#128197; Today's Appointments ({len(items)})</h2>
+<h2 style="margin:20px 0 8px;color:{brand_color};font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">&#128197; Today's Appointments ({len(items)})</h2>
 <ul style="margin:0;padding-left:20px;">{rows}</ul>"""
 
 
@@ -202,7 +226,7 @@ def _health_dot(health: str) -> str:
     return f'<span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:{colors.get(health, "#ccc")};"></span>'
 
 
-def _section_team(team: Dict) -> str:
+def _section_team(team: Dict, brand_color: str = "#218d8d") -> str:
     members = team.get("members", [])
     attention = team.get("attention_items", [])
 
@@ -229,7 +253,7 @@ def _section_team(team: Dict) -> str:
 <ul style="margin:0;padding-left:20px;">{items}</ul>"""
 
     return f"""
-<h2 style="margin:0 0 12px;color:#218d8d;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Your Team</h2>
+<h2 style="margin:0 0 12px;color:{brand_color};font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Your Team</h2>
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#fafafa;border-radius:6px;overflow:hidden;">
 <tr>
 <th style="padding:8px 12px;text-align:left;font-size:11px;color:#8888a0;text-transform:uppercase;border-bottom:1px solid #e8e8ed;">Name</th>
@@ -241,7 +265,7 @@ def _section_team(team: Dict) -> str:
 {attention_html}"""
 
 
-def _section_org(team: Dict) -> str:
+def _section_org(team: Dict, brand_color: str = "#218d8d") -> str:
     snap = team.get("org_snapshot", {})
     branches = team.get("branches", [])
     risks = team.get("top_risks", [])
@@ -270,7 +294,7 @@ def _section_org(team: Dict) -> str:
 <ul style="margin:0;padding-left:20px;">{risk_items}</ul>"""
 
     return f"""
-<h2 style="margin:0 0 8px;color:#218d8d;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Organization Overview</h2>
+<h2 style="margin:0 0 8px;color:{brand_color};font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">Organization Overview</h2>
 <p style="margin:0 0 16px;color:#4a4a5a;font-size:14px;">
   ${snap.get('total_volume', 0):,.0f} pipeline &middot; {snap.get('active_count', 0)} active loans &middot;
   {snap.get('funded_this_week', 0)} funded this week {trend_arrow} vs {snap.get('funded_last_week', 0)} last week

@@ -1,0 +1,117 @@
+/* ============================================================
+   AnalyticsCard — reusable metric display card
+   ============================================================ */
+
+.analytics-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border-light);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  /* Default: no left accent border */
+  border-left: 3px solid transparent;
+  transition: border-color 0.15s ease;
+}
+
+/* ── Status modifiers ── */
+.analytics-card--success {
+  border-left-color: var(--color-success);
+}
+
+.analytics-card--warning {
+  border-left-color: var(--color-warning);
+}
+
+.analytics-card--error {
+  border-left-color: var(--color-error);
+}
+
+/* ── Header: icon + title ── */
+.analytics-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.analytics-card__icon {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+
+.analytics-card__title {
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.06em;
+  line-height: var(--line-tight);
+}
+
+/* ── Body: value + subtitle ── */
+.analytics-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.analytics-card__value {
+  font-size: var(--font-3xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+  line-height: var(--line-tight);
+}
+
+.analytics-card__subtitle {
+  font-size: var(--font-xs);
+  font-weight: var(--weight-normal, 400);
+  color: var(--color-text-tertiary);
+  line-height: var(--line-normal);
+}
+
+/* ── Footer: trend ── */
+.analytics-card__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.analytics-card__trend {
+  font-size: var(--font-sm);
+  font-weight: var(--weight-medium);
+  border-radius: var(--radius-full);
+  padding: 2px var(--space-xs);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}
+
+.analytics-card__trend--positive {
+  color: var(--color-success);
+  background: rgba(33, 127, 141, 0.08);
+}
+
+.analytics-card__trend--negative {
+  color: var(--color-error);
+  background: rgba(192, 21, 47, 0.08);
+}
+
+/* ── Children slot ── */
+.analytics-card__children {
+  border-top: 1px solid var(--color-border-light);
+  padding-top: var(--space-sm);
+  margin-top: var(--space-xs);
+}
+
+/* ── Mobile ── */
+@media (max-width: 480px) {
+  .analytics-card {
+    padding: var(--space-md);
+  }
+
+  .analytics-card__value {
+    font-size: var(--font-2xl);
+  }
+}
