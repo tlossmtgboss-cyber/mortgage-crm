@@ -90,6 +90,7 @@ factory-boy>=3.3.0
 faker>=22.0.0
 responses>=0.24.0
 freezegun>=1.2.0
+locust  # Load testing — dev dependency
 
 # Production Monitoring
 sentry-sdk[fastapi]>=1.38.0
