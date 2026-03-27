@@ -1623,6 +1623,20 @@ except Exception as e:
     logger.warning(f"API V2 routes skipped: {e}")
 
 # ============================================================================
+# APP BRANDING ROUTES (per-org white-label config for the main React app)
+# ============================================================================
+try:
+    from routes.branding_routes import register_branding_routes
+    register_branding_routes(
+        app=app,
+        get_db_func=get_db,
+        get_current_user_flexible=get_current_user_flexible,
+    )
+    logger.info("App branding routes loaded")
+except Exception as e:
+    logger.warning(f"App branding routes skipped: {e}")
+
+# ============================================================================
 # DB MIGRATION ROUTES
 # DISABLED: Schema mutations must not be exposed via HTTP (security audit March 2026)
 # ============================================================================

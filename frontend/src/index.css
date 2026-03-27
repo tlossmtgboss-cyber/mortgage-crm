@@ -1,6 +1,13 @@
 :root {
-  /* Color Palette */
-  --color-primary: #217F8D;
+  /* ── Brand custom properties (overridden at runtime by BrandingContext) ── */
+  --brand-primary: #218d8d;
+  --brand-secondary: #7c3aed;
+  --brand-accent: #059669;
+  --brand-header-bg: #ffffff;
+  --brand-font: Inter, sans-serif;
+
+  /* Color Palette — primary defers to brand color when set */
+  --color-primary: var(--brand-primary, #217F8D);
   --color-primary-hover: #1a6670;
   --color-success: #217F8D;
   --color-error: #C0152F;
