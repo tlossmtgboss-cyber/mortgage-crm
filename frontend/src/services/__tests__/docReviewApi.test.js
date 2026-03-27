@@ -29,16 +29,16 @@ const TOKEN = 'test-token-abc';
 const BASE = 'http://localhost:8000/api/v1/smart-docs/doc-review';
 
 function mockFetch(body = {}, ok = true, status = 200) {
-  global.fetch = jest.fn().mockResolvedValue({
+  global.fetch = vi.fn().mockResolvedValue({
     ok,
     status,
-    json: jest.fn().mockResolvedValue(body),
+    json: vi.fn().mockResolvedValue(body),
   });
 }
 
 beforeEach(() => {
   localStorage.setItem('token', TOKEN);
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 });
 
 afterEach(() => {
@@ -421,34 +421,34 @@ describe('aiExtractAndReview', () => {
 
 describe('error handling', () => {
   it('throws with detail message from JSON error body', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 404,
-      json: jest.fn().mockResolvedValue({ detail: 'Document not found' }),
+      json: vi.fn().mockResolvedValue({ detail: 'Document not found' }),
     });
     await expect(aiReview(999)).rejects.toThrow('Document not found');
   });
 
   it('throws fallback message when JSON parse fails', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
-      json: jest.fn().mockRejectedValue(new SyntaxError('bad json')),
+      json: vi.fn().mockRejectedValue(new SyntaxError('bad json')),
     });
     await expect(getQueueStats()).rejects.toThrow('Request failed');
   });
 
   it('throws detail when body has detail but no extra fields', async () => {
-    global.fetch = jest.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 409,
-      json: jest.fn().mockResolvedValue({ detail: 'Already claimed' }),
+      json: vi.fn().mockResolvedValue({ detail: 'Already claimed' }),
     });
     await expect(claimDocument(1, 'user-x')).rejects.toThrow('Already claimed');
   });
 
   it('re-throws network errors', async () => {
-    global.fetch = jest.fn().mockRejectedValue(new TypeError('Network request failed'));
+    global.fetch = vi.fn().mockRejectedValue(new TypeError('Network request failed'));
     await expect(getQueue()).rejects.toThrow('Network request failed');
   });
 });

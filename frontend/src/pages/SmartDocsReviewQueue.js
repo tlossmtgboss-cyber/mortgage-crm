@@ -9,7 +9,7 @@
  * - Batch AI Review for all unclaimed items grouped by loan
  */
 import React, { useState, useCallback } from 'react';
-import toast from 'react-hot-toast';
+import toast from '../utils/toast';
 
 import useReviewQueue from '../hooks/useReviewQueue';
 import ReviewQueueItem from '../components/smart-docs/ReviewQueueItem';
