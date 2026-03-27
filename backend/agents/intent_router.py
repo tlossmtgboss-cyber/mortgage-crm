@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 # Cache version — increment on any change to intent mappings, patterns, or LLM prompt.
 # This prefix is added to all cache keys so stale entries from previous deployments
 # are automatically bypassed without waiting for TTL expiration.
-INTENT_CACHE_VERSION = "v3"
+INTENT_CACHE_VERSION = "v4"
 
 
 # =============================================================================
@@ -75,6 +75,7 @@ class Intent(str, Enum):
     COACHING = "coaching"          # Team performance coaching
     CUSTOMER = "customer"          # Customer intelligence
     INTEGRATIONS = "integrations"  # LOS/vendor integrations
+    COMPOUND = "compound"          # Multi-action commands (e.g., "text X and schedule Y")
     GENERAL = "general"            # Default fallback
 
 
@@ -124,6 +125,7 @@ INTENT_TO_AGENTS: Dict[str, List[str]] = {
     "customer": ["customer_intelligence"],
     "integrations": ["integrations"],
     "operations": ["ops_manager"],
+    "compound": ["pipeline_analyst", "lead_nurturer", "smart_scheduler", "email_intelligence", "voice_os", "task_automation"],
     "general": ["pipeline_analyst", "task_automation"],  # Default
 }
 
@@ -150,6 +152,14 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"what (can|do) you do",
         r"help me",
         r"^(bye|goodbye|see you|later)",
+    ],
+    # Compound intents - MUST come before individual intents to catch multi-action commands
+    # e.g., "send a text and schedule a meeting" would also match "email" for "send"
+    "compound": [
+        r"(send|text|message|sms|email).{1,40}(and|then|also|plus).{1,40}(schedule|book|set up|arrange|calendar)",
+        r"(schedule|book|set up|arrange).{1,40}(and|then|also|plus).{1,40}(send|text|message|sms|email)",
+        r"(text|message|sms).{1,40}(and|then).{1,40}(schedule|book|set up|arrange|call|meet)",
+        r"(call|contact|reach out).{1,40}(and|then).{1,40}(schedule|book|set up|calendar)",
     ],
     # Historical comparisons - MUST come before pipeline to match Q3/Q4 queries
     "historical": [
@@ -387,7 +397,8 @@ Categories:
 - coaching: Team performance, training, metrics
 - customer: Customer 360, relationships, referrals
 - integrations: LOS sync, credit pulls, AUS
-- general: Unclear or multiple categories
+- compound: Multiple actions in one request (e.g., "text John and schedule a call")
+- general: Unclear or single ambiguous category
 
 Query: {query}
 
@@ -512,6 +523,19 @@ async def classify_intent(
         - elapsed_ms: Classification time in milliseconds
     """
     start = time.time()
+
+    # Guard against None/empty/non-string input
+    if not query or not isinstance(query, str):
+        return {
+            "intent": "general",
+            "confidence": 0.0,
+            "agents": INTENT_TO_AGENTS["general"],
+            "method": "fallback",
+            "matched_pattern": None,
+            "elapsed_ms": 0.0,
+        }
+    # Truncate long inputs to prevent regex DoS on adversarial strings
+    query = query[:1000]
 
     # Try fast pattern matching first
     intent, confidence, pattern = classify_intent_fast(query)

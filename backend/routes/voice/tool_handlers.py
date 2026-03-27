@@ -789,6 +789,9 @@ async def handle_browser_function_call(
         client_name = args.get("client_name", "")
         client_phone = args.get("client_phone", "")
         context_note = args.get("context", "")
+        # P1/P7: Accept telephony call ID to link CI session to actual phone call
+        telephony_call_id = args.get("call_control_id", "") or args.get("telephony_call_id", "")
+        call_provider = args.get("call_provider", "")
 
         try:
             session_uuid = uuid_mod.uuid4()
@@ -803,6 +806,7 @@ async def handle_browser_function_call(
                 call_meta["client_phone"] = client_phone
             if context_note:
                 call_meta["context"] = context_note
+            # P7: Store telephony call link
             if telephony_call_id:
                 call_meta["telephony_call_id"] = telephony_call_id
             if call_provider:

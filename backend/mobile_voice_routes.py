@@ -42,8 +42,11 @@ GOOGLE_TTS_LANGUAGE = os.getenv("GOOGLE_TTS_LANGUAGE", "en-US")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")  # Rachel - warm female voice
 TTS_MODEL = os.getenv("TTS_MODEL", "eleven_turbo_v2_5")  # Fast model for low latency
 
-# Aria system prompt for voice interactions
-ARIA_VOICE_PROMPT = """You are Aria, a warm and professional AI assistant for mortgage loan officers.
+# White-label voice assistant name — configurable per deployment/tenant (H-1)
+DEFAULT_VOICE_ASSISTANT_NAME = os.getenv("VOICE_ASSISTANT_NAME", "Aria")
+
+# Voice assistant system prompt — uses {assistant_name} placeholder for white-label support
+VOICE_ASSISTANT_PROMPT_TEMPLATE = """You are {assistant_name}, a warm and professional AI assistant for mortgage loan officers.
 You help them manage their pipeline, follow up with leads, schedule appointments, and answer questions.
 
 Voice conversation guidelines:
@@ -61,6 +64,22 @@ You have access to the CRM system and can:
 - Send text messages
 - Create tasks and follow-ups
 - Provide loan and market information"""
+
+
+def get_voice_assistant_name(organization_id: Optional[int] = None) -> str:
+    """Get the voice assistant name, potentially per-organization.
+
+    Currently returns the global default. In the future, this can be extended
+    to look up per-org branding from the database.
+    """
+    # TODO: Look up org-specific assistant name from organization settings table
+    return DEFAULT_VOICE_ASSISTANT_NAME
+
+
+def get_voice_assistant_prompt(assistant_name: Optional[str] = None) -> str:
+    """Get the voice assistant system prompt with the configured name."""
+    name = assistant_name or DEFAULT_VOICE_ASSISTANT_NAME
+    return VOICE_ASSISTANT_PROMPT_TEMPLATE.format(assistant_name=name)
 
 
 class DeepgramSTTClient:
@@ -300,7 +319,7 @@ class AriaVoiceAgent:
         import traceback
         try:
             # Use the AIAgentService which connects to the full LangGraph orchestrator
-            # This gives Aria access to all 160+ tools including:
+            # This gives the voice agent access to all 160+ tools including:
             # - Pipeline analysis (bottlenecks, metrics, aging)
             # - Lead management (scoring, follow-ups, outreach)
             # - Document tracking
@@ -400,10 +419,11 @@ class AriaVoiceAgent:
                 # Simple direct response for voice
                 voice_messages = self.conversation_history[-6:]  # Keep last 3 exchanges
 
+                assistant_name = get_voice_assistant_name()
                 ai_response = client.messages.create(
                     model="claude-sonnet-4-20250514",
                     max_tokens=200,
-                    system="""You are Aria, a helpful mortgage assistant. Keep responses brief (under 50 words) and conversational for voice. Be warm and professional.
+                    system=f"""You are {assistant_name}, a helpful mortgage assistant. Keep responses brief (under 50 words) and conversational for voice. Be warm and professional.
 
 Note: I'm currently unable to access the CRM system. Please let the user know that database features are temporarily unavailable and suggest they try again shortly.""",
                     messages=voice_messages
@@ -648,7 +668,7 @@ async def mobile_voice_websocket(
     db: Session = Depends(get_db)
 ):
     """
-    WebSocket endpoint for real-time voice conversation with Aria.
+    WebSocket endpoint for real-time voice conversation with the voice assistant.
 
     Protocol:
     - Client sends audio chunks as base64-encoded data
@@ -877,7 +897,7 @@ async def get_user_voice_preference(
     current_user: "User" = Depends(get_current_user_lazy),
     db: Session = Depends(get_db)
 ):
-    """Get user's saved voice preference for Aria conversations"""
+    """Get user's saved voice preference for voice assistant conversations"""
     try:
         # Check user_settings table for tts_voice and tts_provider
         result = db.execute(
@@ -911,7 +931,7 @@ async def save_user_voice_preference(
     current_user: "User" = Depends(get_current_user_lazy),
     db: Session = Depends(get_db)
 ):
-    """Save user's voice preference for Aria conversations"""
+    """Save user's voice preference for voice assistant conversations"""
     voice_id = request.get("voice_id")
     provider = request.get("provider")
 

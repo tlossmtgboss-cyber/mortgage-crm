@@ -26,24 +26,39 @@ router = APIRouter(prefix="/api/v1/voice-agent", tags=["voice-agent"])
 # Configuration
 DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
 
-# Aria system prompt for voice interactions
-ARIA_SYSTEM_PROMPT = """You are Aria, a warm and professional AI assistant for mortgage loan officers.
-You help them manage their pipeline, follow up with leads, schedule appointments, and answer questions.
+# White-label voice assistant name — configurable per deployment/tenant (H-1)
+DEFAULT_VOICE_ASSISTANT_NAME = os.getenv("VOICE_ASSISTANT_NAME", "Aria")
 
-Voice conversation guidelines:
-- Keep responses concise and conversational (under 50 words when possible)
-- Use natural speech patterns
-- Be warm, friendly, and professional
-- When asked to perform actions, confirm what you're doing
-- Ask clarifying questions when needed
+# Voice agent system prompt — uses {assistant_name} and {business_name} placeholders for white-label
+VOICE_AGENT_PROMPT_TEMPLATE = """You are {assistant_name}, an AI assistant for mortgage loan officers at {business_name}.
+
+You are warm, friendly, and professional. Keep responses concise — under 50 words when possible.
 
 You can help with:
-- Looking up leads and contacts
-- Checking pipeline status
-- Scheduling appointments
-- Sending text messages
-- Creating tasks and follow-ups
-- Providing loan and market information"""
+- Answering questions about leads, loans, and pipeline
+- Discussing scheduling options and availability
+- Composing text messages and emails (which the LO can review and send)
+- Planning tasks and follow-ups
+- Providing mortgage rate and market information
+
+IMPORTANT: You are a conversational assistant. You can discuss and plan actions, but
+you cannot directly send messages, book appointments, or modify CRM data. When the
+loan officer wants to take an action, confirm what they'd like to do and let them
+know it will be queued for execution through the voice assistant app.
+
+If unsure about something, say so. Don't make up loan details or rates."""
+
+
+def get_voice_agent_prompt(assistant_name: Optional[str] = None, business_name: str = "{business_name}") -> str:
+    """Get the voice agent system prompt with configurable assistant and business names.
+
+    Args:
+        assistant_name: Override assistant name. Defaults to DEFAULT_VOICE_ASSISTANT_NAME.
+        business_name: Business name to insert. Defaults to '{business_name}' placeholder
+                       for downstream formatting by the voice agent session.
+    """
+    name = assistant_name or DEFAULT_VOICE_ASSISTANT_NAME
+    return VOICE_AGENT_PROMPT_TEMPLATE.format(assistant_name=name, business_name=business_name)
 
 
 class DeepgramVoiceAgentSession:
@@ -118,7 +133,7 @@ class DeepgramVoiceAgentSession:
                         "type": "anthropic"
                     },
                     "model": "claude-3-haiku-20240307",
-                    "instructions": ARIA_SYSTEM_PROMPT
+                    "instructions": get_voice_agent_prompt()
                 },
                 "speak": {
                     "model": "aura-asteria-en"

@@ -72,6 +72,7 @@ FEATURE_TIERS: Dict[str, FeatureTier] = {
     # PREMIUM - maintained when resources allow
     "microsite_builder": FeatureTier.PREMIUM,
     "video_meetings": FeatureTier.PREMIUM,
+    "voice_workflows": FeatureTier.PREMIUM,
     "scheduler_surveys": FeatureTier.PREMIUM,
     "scheduler_waitlist": FeatureTier.PREMIUM,
     # Deleted modules (Mar 2026): scheduler_labels, scheduler_booking_meta, scheduler_sitemap

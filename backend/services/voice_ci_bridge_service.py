@@ -71,59 +71,6 @@ class VoiceCIBridgeService:
         )
         return session_id
 
-    async def append_transcript_chunk(
-        self, session_id: str, chunk_text: str
-    ) -> Dict[str, Any]:
-        """Append a transcript chunk to an active CI session (P2: periodic flush)."""
-        if not session_id or not chunk_text or not chunk_text.strip():
-            return {"success": False, "error": "session_id and non-empty chunk required"}
-        chunk_words = len(chunk_text.split())
-        result = self.db.execute(text("""
-            UPDATE call_sessions
-            SET full_transcript = COALESCE(full_transcript, '') || :chunk,
-                transcript_word_count = COALESCE(transcript_word_count, 0) + :chunk_words,
-                last_flush_at = NOW(), updated_at = NOW()
-            WHERE id = :session_id AND organization_id = :org_id AND status = 'active'
-            RETURNING id
-        """), {
-            "chunk": chr(10) + chunk_text if chunk_text else "",
-            "chunk_words": chunk_words,
-            "session_id": session_id,
-            "org_id": self.organization_id,
-        }).fetchone()
-        self.db.flush()
-        if not result:
-            return {"success": False, "error": f"Active session {session_id} not found"}
-        logger.info("CI transcript chunk appended", extra={"session_id": session_id, "chunk_words": chunk_words})
-        return {"success": True, "session_id": session_id, "chunk_words": chunk_words}
-
-    async def append_transcript_chunk(
-        self, session_id: str, chunk_text: str
-    ) -> Dict[str, Any]:
-        """Append a transcript chunk to an active CI session (P2: periodic flush)."""
-        if not session_id or not chunk_text or not chunk_text.strip():
-            return {"success": False, "error": "session_id and non-empty chunk required"}
-        chunk_words = len(chunk_text.split())
-        newline_prefix = chr(10)  # newline character
-        result = self.db.execute(text("""
-            UPDATE call_sessions
-            SET full_transcript = COALESCE(full_transcript, '') || :chunk,
-                transcript_word_count = COALESCE(transcript_word_count, 0) + :chunk_words,
-                last_flush_at = NOW(), updated_at = NOW()
-            WHERE id = :session_id AND organization_id = :org_id AND status = 'active'
-            RETURNING id
-        """), {
-            "chunk": newline_prefix + chunk_text if chunk_text else "",
-            "chunk_words": chunk_words,
-            "session_id": session_id,
-            "org_id": self.organization_id,
-        }).fetchone()
-        self.db.flush()
-        if not result:
-            return {"success": False, "error": f"Active session {session_id} not found"}
-        logger.info("CI transcript chunk appended", extra={"session_id": session_id, "chunk_words": chunk_words})
-        return {"success": True, "session_id": session_id, "chunk_words": chunk_words}
-
     async def stop_ci_session(
         self, session_id: Optional[str] = None, run_agents: bool = True
     ) -> Dict[str, Any]:
@@ -592,6 +539,46 @@ class VoiceCIBridgeService:
         )
         return {"success": True, "session_id": session_id, "word_count": word_count}
 
+    async def append_transcript_chunk(
+        self, session_id: str, chunk_text: str
+    ) -> Dict[str, Any]:
+        """Append a transcript chunk to an active CI session (P2: periodic flush).
+
+        Unlike update_session_transcript which overwrites, this APPENDS to the
+        existing full_transcript and updates word count incrementally.
+        """
+        if not session_id or not chunk_text or not chunk_text.strip():
+            return {"success": False, "error": "session_id and non-empty chunk required"}
+
+        chunk_words = len(chunk_text.split())
+
+        result = self.db.execute(text("""
+            UPDATE call_sessions
+            SET full_transcript = COALESCE(full_transcript, '') || :chunk,
+                transcript_word_count = COALESCE(transcript_word_count, 0) + :chunk_words,
+                last_flush_at = NOW(),
+                updated_at = NOW()
+            WHERE id = :session_id
+                AND organization_id = :org_id
+                AND status = 'active'
+            RETURNING id
+        """), {
+            "chunk": "\n" + chunk_text if chunk_text else "",
+            "chunk_words": chunk_words,
+            "session_id": session_id,
+            "org_id": self.organization_id,
+        }).fetchone()
+        self.db.flush()
+
+        if not result:
+            return {"success": False, "error": f"Active session {session_id} not found"}
+
+        logger.info(
+            "CI transcript chunk appended",
+            extra={"session_id": session_id, "chunk_words": chunk_words},
+        )
+        return {"success": True, "session_id": session_id, "chunk_words": chunk_words}
+
     # -------------------------------------------------------------------------
     # Private helpers
     # -------------------------------------------------------------------------
@@ -609,18 +596,27 @@ class VoiceCIBridgeService:
         }).fetchone()
         return str(row.id) if row else None
 
-    async def _execute_single_artifact(self, artifact, session_id: Optional[str] = None) -> Dict[str, Any]:
+    async def _execute_single_artifact(
+        self, artifact, session_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """Execute a single artifact using SmartTaskExecutor (P5) with fallback."""
         artifact_type = artifact.artifact_type
+
+        # P3: Intake fields use the IntakeFieldApplier
         if artifact_type == "intake_field":
             try:
                 from services.call_monitoring.intake_field_applier import IntakeFieldApplier
                 applier = IntakeFieldApplier(self.db, self.organization_id)
                 sid = session_id or await self._get_latest_session_id()
-                return await applier.apply_intake_fields(session_id=sid or "", user_id=self.user_id)
+                return await applier.apply_intake_fields(
+                    session_id=sid or "",
+                    user_id=self.user_id,
+                )
             except Exception as e:
                 logger.error(f"IntakeFieldApplier failed: {e}")
                 return {"type": "intake_field_error", "title": artifact.title, "error": str(e)}
+
+        # P5: Use SmartTaskExecutor for tasks and appointments
         try:
             from services.call_monitoring.smart_task_executor import SmartTaskExecutor
             executor = SmartTaskExecutor(self.db, self.organization_id, self.user_id)
@@ -631,30 +627,25 @@ class VoiceCIBridgeService:
             return await self._execute_single_artifact_fallback(artifact)
 
     async def _execute_single_artifact_fallback(self, artifact) -> Dict[str, Any]:
-        """Fallback artifact execution when SmartTaskExecutor is unavailable."""
+        """Fallback execution when SmartTaskExecutor is unavailable."""
         artifact_type = artifact.artifact_type
         content = artifact.content if isinstance(artifact.content, dict) else {}
-        if artifact_type == "action_item":
+
+        if artifact_type in ("action_item", "document_request", "task", "risk_flag"):
+            title = artifact.title
+            if artifact_type == "document_request":
+                title = f"Request: {title}"
             self.db.execute(text("""
                 INSERT INTO tasks (id, title, description, priority, status, created_at, organization_id)
                 VALUES (gen_random_uuid(), :title, :description, :priority, 'pending', NOW(), :org_id)
             """), {
-                "title": artifact.title,
+                "title": title,
                 "description": content.get("details", str(artifact.content or "")),
                 "priority": artifact.priority or "medium",
                 "org_id": self.organization_id,
             })
             return {"type": "task_created", "title": artifact.title}
-        elif artifact_type == "document_request":
-            self.db.execute(text("""
-                INSERT INTO tasks (id, title, description, priority, status, created_at, organization_id)
-                VALUES (gen_random_uuid(), :title, :description, 'high', 'pending', NOW(), :org_id)
-            """), {
-                "title": f"Request: {artifact.title}",
-                "description": f"Document needed: {content.get('details', artifact.title)}",
-                "org_id": self.organization_id,
-            })
-            return {"type": "doc_request_task_created", "title": artifact.title}
+
         elif artifact_type in ("scheduled_appointment", "follow_up_call"):
             self.db.execute(text("""
                 INSERT INTO appointments (id, caller_name, reason, status, created_at, organization_id, notes)

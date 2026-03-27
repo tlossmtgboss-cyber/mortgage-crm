@@ -616,8 +616,14 @@ from .compliance_log import ComplianceDecisionLog
 # SMS persistence models (campaign & scheduled job DB-backed state)
 from .sms_persistence import SMSCampaignRecord, ScheduledSMSJobRecord
 
+# SMS dead letter queue (persisted failed messages for retry/monitoring)
+from .sms_dead_letter import SMSDeadLetter
+
 # Morning Briefing (daily AI-generated briefings per user)
 from .morning_briefing import MorningBriefing
+
+# Voice Workflow (async multi-step voice command state machine)
+from .voice_workflow import VoiceWorkflow, VoiceWorkflowState, VoiceWorkflowType
 
 
 __all__ = [
@@ -1250,7 +1256,19 @@ __all__ = [
     "ScheduledSMSJobRecord",
 
     # =====================
+    # SMS Dead Letter Queue
+    # =====================
+    "SMSDeadLetter",
+
+    # =====================
     # Morning Briefing
     # =====================
     "MorningBriefing",
+
+    # =====================
+    # Voice Workflow (Async State Machine)
+    # =====================
+    "VoiceWorkflow",
+    "VoiceWorkflowState",
+    "VoiceWorkflowType",
 ]
