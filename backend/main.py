@@ -1637,6 +1637,20 @@ except Exception as e:
     logger.warning(f"App branding routes skipped: {e}")
 
 # ============================================================================
+# CUSTOM DOMAIN MANAGEMENT ROUTES
+# ============================================================================
+try:
+    from routes.custom_domain_routes import register_custom_domain_routes
+    register_custom_domain_routes(
+        app=app,
+        get_db_func=get_db,
+        get_current_user_flexible=get_current_user_flexible,
+    )
+    logger.info("Custom domain routes loaded")
+except Exception as e:
+    logger.warning(f"Custom domain routes skipped: {e}")
+
+# ============================================================================
 # DB MIGRATION ROUTES
 # DISABLED: Schema mutations must not be exposed via HTTP (security audit March 2026)
 # ============================================================================
