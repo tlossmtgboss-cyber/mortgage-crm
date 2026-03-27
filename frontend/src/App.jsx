@@ -146,6 +146,7 @@ const Support = lazyRetry(() => import('./pages/Support'));
 const AriaVoiceApp = lazyRetry(() => import('./pages/AriaVoiceApp'));
 const AriaCalendarPage = lazyRetry(() => import('./pages/aria/AriaCalendarPage'));
 const AriaMortgageCalculator = lazyRetry(() => import('./pages/aria/AriaMortgageCalculator'));
+const BriefingPage = lazyRetry(() => import('./pages/BriefingPage'));
 const PowerDialer = lazyRetry(() => import('./pages/PowerDialer'));
 const UserCreationWizard = lazyRetry(() => import('./pages/UserCreationWizard'));
 const UserBulkUpload = lazyRetry(() => import('./pages/UserBulkUpload'));
@@ -544,6 +545,7 @@ function App() {
           <Route path="/verify-account" element={<AccountVerification />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/briefing" element={<PrivateRoute><LazyPage><BriefingPage /></LazyPage></PrivateRoute>} />
           <Route path="/aria" element={<PrivateRoute><LazyPage><AriaVoiceApp /></LazyPage></PrivateRoute>} />
           <Route path="/aria/calendar" element={<PrivateRoute><LazyPage><AriaCalendarPage /></LazyPage></PrivateRoute>} />
           <Route path="/aria/calculator" element={<PrivateRoute><LazyPage><AriaMortgageCalculator /></LazyPage></PrivateRoute>} />
