@@ -245,6 +245,26 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
             user_name = user.full_name if hasattr(user, "full_name") else (
                 f"{user.first_name or ''} {user.last_name or ''}".strip() or "there"
             )
+
+            # Load white-label branding (if configured)
+            branding = {}
+            wl_config = None
+            try:
+                from database.models.white_label_config import WhiteLabelConfig
+                wl_config = db.query(WhiteLabelConfig).filter(
+                    WhiteLabelConfig.organization_id == user.organization_id,
+                    WhiteLabelConfig.is_active == True,
+                ).first()
+                if wl_config:
+                    branding = {
+                        "company_name": wl_config.company_name or "Perennia AI",
+                        "logo_url": wl_config.logo_url,
+                        "primary_color": wl_config.primary_color or "#218d8d",
+                        "secondary_color": wl_config.secondary_color,
+                    }
+            except Exception as e:
+                logger.warning("Failed to load white-label config for org %s: %s", user.organization_id, e)
+
             html = render_briefing_email(
                 user_name=user_name,
                 briefing_date=briefing_date,
@@ -257,13 +277,18 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
                 conditions=ctx.conditions,
                 yesterday=ctx.yesterday,
                 team=ctx.team,
+                **branding,
             )
             briefing.html_content = html
 
             # Send email
             email_sent = False
             try:
-                _send_briefing_email(user.email, user_name, briefing_date, briefing_level, html, ctx.pipeline)
+                _send_briefing_email(
+                    user.email, user_name, briefing_date, briefing_level, html, ctx.pipeline,
+                    from_name_override=branding.get("company_name"),
+                    from_email_override=wl_config.email_from_address if wl_config else None,
+                )
                 briefing.email_sent_at = datetime.now(timezone.utc)
                 email_sent = True
             except Exception as e:
@@ -305,6 +330,8 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
 def _send_briefing_email(
     to_email: str, user_name: str, briefing_date: date,
     level: str, html: str, pipeline: dict,
+    from_name_override: str = None,
+    from_email_override: str = None,
 ):
     """Send briefing email via SendGrid / notification service."""
     import sendgrid
@@ -322,8 +349,8 @@ def _send_briefing_email(
     level_labels = {"individual": f"{active} active loans", "manager": "team briefing", "leadership": f"${volume / 1_000_000:.1f}M pipeline"}
     subject = f"Your Morning Briefing — {short_date} — {level_labels.get(level, '')}"
 
-    from_email = os.getenv("BRIEFING_FROM_EMAIL", "briefing@perenniaai.com")
-    from_name = os.getenv("SENDGRID_FROM_NAME", "Perennia AI")
+    from_email = from_email_override or os.getenv("BRIEFING_FROM_EMAIL", "briefing@perenniaai.com")
+    from_name = from_name_override or os.getenv("SENDGRID_FROM_NAME", "Perennia AI")
 
     message = Mail(
         from_email=Email(from_email, from_name),
