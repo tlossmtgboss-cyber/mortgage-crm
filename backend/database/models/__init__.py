@@ -625,6 +625,9 @@ from .morning_briefing import MorningBriefing
 # Voice Workflow (async multi-step voice command state machine)
 from .voice_workflow import VoiceWorkflow, VoiceWorkflowState, VoiceWorkflowType
 
+# Demo Data (tracking seeded demo records for cleanup)
+from .demo_data import DemoDataRecord
+
 
 __all__ = [
     # =====================
@@ -1271,4 +1274,9 @@ __all__ = [
     "VoiceWorkflow",
     "VoiceWorkflowState",
     "VoiceWorkflowType",
+
+    # =====================
+    # Demo Data
+    # =====================
+    "DemoDataRecord",
 ]
