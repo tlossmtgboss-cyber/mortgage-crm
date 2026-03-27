@@ -5,14 +5,16 @@ Enterprise Readiness Domain 10 (Migration & Data Import):
   - Check 10.8:  Generic CSV lead/contact import
   - Check 10.9:  Field mapping UI support (save/load templates)
   - Check 10.10: Import validation with dry-run/preview mode
-  - Check 10.11: Import rollback capability
+  - Check 10.11: Import rollback capability (with hard-delete option)
   - Check 10.14: Bulk import progress tracking
 
 Endpoints:
   POST   /api/v1/imports/preview              - Dry-run preview of import
-  POST   /api/v1/imports/execute              - Execute import
+  POST   /api/v1/imports/execute              - Execute import (streaming + savepoints)
+  POST   /api/v1/imports/csv                  - Stream CSV import with field mapping
+  POST   /api/v1/imports/excel                - Stream Excel import
   POST   /api/v1/imports/leads                - Quick import (auto-map + execute)
-  GET    /api/v1/imports                      - List import history
+  GET    /api/v1/imports                      - List import history (audit trail)
   GET    /api/v1/imports/{import_id}/status    - Import progress/status
   POST   /api/v1/imports/{import_id}/rollback  - Rollback a completed import
   POST   /api/v1/imports/field-mappings        - Save field mapping template
@@ -40,8 +42,8 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-MAX_FILE_SIZE_MB = 10
-MAX_ROWS = 50_000
+MAX_FILE_SIZE_MB = 50
+MAX_ROWS = 100_000
 PREVIEW_ROW_COUNT = 10
 
 # Columns the Lead table actually accepts
@@ -613,19 +615,36 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
           - Validation errors per row
           - Summary statistics
         """
+        from services.import_service import check_file_size, stream_csv_rows, stream_excel_rows
+
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
 
-        # --- Read file ---
-        content = await file.read()
-        if len(content) > MAX_FILE_SIZE_MB * 1024 * 1024:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB.",
-            )
+        # --- Check file size without reading into memory ---
+        try:
+            check_file_size(file.file, MAX_FILE_SIZE_MB * 1024 * 1024)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        # --- Stream rows for preview ---
+        filename = file.filename or "upload.csv"
+        is_excel = filename.lower().endswith((".xlsx", ".xls"))
 
         try:
-            headers, rows = parse_upload(content, file.filename or "upload.csv")
+            if is_excel:
+                row_gen = stream_excel_rows(file.file)
+            else:
+                row_gen = stream_csv_rows(file.file)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        headers = None
+        rows: list[dict] = []
+        try:
+            for hdrs, row_dict, row_num in row_gen:
+                if headers is None:
+                    headers = hdrs
+                rows.append(row_dict)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
@@ -705,7 +724,7 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
         }
 
     # ==================================================================
-    # IMPORT EXECUTION ENDPOINT
+    # IMPORT EXECUTION ENDPOINT (transaction-safe with savepoints)
     # ==================================================================
 
     @app.post("/api/v1/imports/execute", tags=["Data Import"])
@@ -720,10 +739,14 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
         current_user=Depends(get_current_user),
     ):
         """
-        Execute a bulk lead import from CSV/Excel.
+        Execute a bulk lead import from CSV/Excel with transaction safety.
+
+        Uses savepoints for batch-level atomicity: if the import fails,
+        all changes are rolled back. Records are processed in streaming
+        chunks of 100 rows, never loading the entire file into memory.
 
         Parameters:
-          - file: CSV or Excel file
+          - file: CSV or Excel file (max 50MB)
           - field_mapping: JSON mapping of source_column -> lead_field
           - duplicate_strategy: 'skip' | 'update' | 'create'
           - default_stage: Default stage for new leads (default: 'New')
@@ -732,6 +755,8 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
 
         Returns import_id for tracking progress.
         """
+        from services.import_service import ImportService, check_file_size
+
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
         user_id = getattr(current_user, "id", None)
@@ -752,202 +777,220 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
                 detail="duplicate_strategy must be 'skip', 'update', or 'create'",
             )
 
-        # Read file
-        content = await file.read()
-        if len(content) > MAX_FILE_SIZE_MB * 1024 * 1024:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Maximum size is {MAX_FILE_SIZE_MB}MB.",
-            )
-
+        # Check file size without reading entire file into memory
         try:
-            headers, rows = parse_upload(content, file.filename or "upload.csv")
+            check_file_size(file.file, MAX_FILE_SIZE_MB * 1024 * 1024)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        if not rows:
-            raise HTTPException(status_code=400, detail="File contains no data rows")
+        svc = ImportService(db=db, user_id=user_id, organization_id=org_id)
 
-        # Create import job record
-        import_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc)
+        filename = file.filename or "upload.csv"
+        is_excel = filename.lower().endswith((".xlsx", ".xls"))
 
-        db.execute(text("""
-            INSERT INTO import_jobs
-                (id, organization_id, created_by, status, filename,
-                 total_rows, duplicate_strategy, field_mapping, started_at, created_at)
-            VALUES
-                (:id, :org_id, :user_id, 'processing', :filename,
-                 :total, :dup, :mapping, :now, :now)
-        """), {
-            "id": import_id,
-            "org_id": org_id,
-            "user_id": user_id,
-            "filename": file.filename,
-            "total": len(rows),
-            "dup": duplicate_strategy,
-            "mapping": json.dumps(mapping),
-            "now": now,
-        })
-        db.commit()
-
-        # --- Process rows ---
-        imported_count = 0
-        skipped_count = 0
-        error_count = 0
-        updated_count = 0
-        errors_list: list[dict] = []
-        imported_ids: list[int] = []
-
-        for i, raw_row in enumerate(rows):
-            # Map columns
-            mapped_row = {}
-            for src_col, target_field in mapping.items():
-                if src_col in raw_row:
-                    mapped_row[target_field] = raw_row[src_col]
-
-            clean, row_errors = validate_row(mapped_row, i + 1)
-
-            if row_errors:
-                error_count += 1
-                errors_list.append({"row": i + 1, "errors": row_errors})
-                if not skip_invalid_rows:
-                    # Abort entire import
-                    db.execute(text("""
-                        UPDATE import_jobs
-                        SET status = 'failed',
-                            processed_rows = :processed,
-                            error_rows = :errors,
-                            errors = :error_list,
-                            completed_at = :now
-                        WHERE id = :id
-                    """), {
-                        "id": import_id,
-                        "processed": i + 1,
-                        "errors": error_count,
-                        "error_list": json.dumps(errors_list),
-                        "now": datetime.now(timezone.utc),
-                    })
-                    db.commit()
-                    return {
-                        "import_id": import_id,
-                        "status": "failed",
-                        "message": f"Aborted at row {i + 1} due to validation error",
-                        "errors": errors_list,
-                    }
-                continue
-
-            # Apply defaults
-            if "stage" not in clean or not clean["stage"]:
-                clean["stage"] = default_stage
-            if default_source and ("source" not in clean or not clean["source"]):
-                clean["source"] = default_source
-
-            # Set organization scoping
-            clean["organization_id"] = org_id
-
-            # Duplicate check (by email within org)
-            existing_id = None
-            if clean.get("email") and duplicate_strategy != "create":
-                dup_row = db.execute(text("""
-                    SELECT id FROM leads
-                    WHERE email = :email AND organization_id = :org_id
-                    LIMIT 1
-                """), {"email": clean["email"], "org_id": org_id}).fetchone()
-                if dup_row:
-                    existing_id = dup_row[0]
-
-            if existing_id and duplicate_strategy == "skip":
-                skipped_count += 1
-                continue
-
-            if existing_id and duplicate_strategy == "update":
-                # Update existing lead with non-null imported values
-                update_fields = {
-                    k: v for k, v in clean.items()
-                    if v is not None and k not in ("organization_id",)
-                }
-                if update_fields:
-                    set_clauses = ", ".join(f"{k} = :{k}" for k in update_fields)
-                    update_fields["_id"] = existing_id
-                    db.execute(text(f"""
-                        UPDATE leads SET {set_clauses} WHERE id = :_id
-                    """), update_fields)
-                updated_count += 1
-                imported_ids.append(existing_id)
-                continue
-
-            # Insert new lead
-            clean["created_at"] = now
-            insert_cols = list(clean.keys())
-            col_names = ", ".join(insert_cols)
-            col_params = ", ".join(f":{c}" for c in insert_cols)
-
-            result = db.execute(text(f"""
-                INSERT INTO leads ({col_names})
-                VALUES ({col_params})
-                RETURNING id
-            """), clean)
-            new_id = result.fetchone()[0]
-            imported_ids.append(new_id)
-            imported_count += 1
-
-            # Periodic progress update (every 100 rows)
-            if (i + 1) % 100 == 0:
-                db.execute(text("""
-                    UPDATE import_jobs
-                    SET processed_rows = :processed,
-                        imported_rows = :imported,
-                        skipped_rows = :skipped,
-                        error_rows = :errors,
-                        updated_rows = :updated
-                    WHERE id = :id
-                """), {
-                    "id": import_id,
-                    "processed": i + 1,
-                    "imported": imported_count,
-                    "skipped": skipped_count,
-                    "errors": error_count,
-                    "updated": updated_count,
-                })
-                db.commit()
-
-        # Final update
-        db.execute(text("""
-            UPDATE import_jobs
-            SET status = 'completed',
-                processed_rows = :processed,
-                imported_rows = :imported,
-                skipped_rows = :skipped,
-                error_rows = :errors,
-                updated_rows = :updated,
-                errors = :error_list,
-                imported_lead_ids = :lead_ids,
-                completed_at = :now
-            WHERE id = :id
-        """), {
-            "id": import_id,
-            "processed": len(rows),
-            "imported": imported_count,
-            "skipped": skipped_count,
-            "errors": error_count,
-            "updated": updated_count,
-            "error_list": json.dumps(errors_list[:200]),
-            "lead_ids": json.dumps(imported_ids),
-            "now": datetime.now(timezone.utc),
-        })
-        db.commit()
+        try:
+            if is_excel:
+                result = svc.import_excel(
+                    file_stream=file.file,
+                    entity_type="leads",
+                    field_mapping=mapping,
+                    filename=filename,
+                    duplicate_strategy=duplicate_strategy,
+                    default_stage=default_stage,
+                    default_source=default_source,
+                    skip_invalid_rows=skip_invalid_rows,
+                    validate_row_fn=validate_row,
+                    transform_value_fn=transform_value,
+                )
+            else:
+                result = svc.import_csv(
+                    file_stream=file.file,
+                    entity_type="leads",
+                    field_mapping=mapping,
+                    filename=filename,
+                    duplicate_strategy=duplicate_strategy,
+                    default_stage=default_stage,
+                    default_source=default_source,
+                    skip_invalid_rows=skip_invalid_rows,
+                    validate_row_fn=validate_row,
+                    transform_value_fn=transform_value,
+                )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         return {
-            "import_id": import_id,
-            "status": "completed",
-            "filename": file.filename,
-            "total_rows": len(rows),
-            "imported": imported_count,
-            "updated": updated_count,
-            "skipped": skipped_count,
-            "errors": error_count,
-            "error_details": errors_list[:50],
+            "import_id": result.import_id,
+            "status": result.status,
+            "filename": result.filename,
+            "total_rows": result.total_rows,
+            "imported": result.imported,
+            "updated": result.updated,
+            "skipped": result.skipped,
+            "errors": result.errors,
+            "error_details": result.error_details[:50],
+            "message": result.message,
+        }
+
+    # ==================================================================
+    # STREAMING CSV IMPORT ENDPOINT
+    # ==================================================================
+
+    @app.post("/api/v1/imports/csv", tags=["Data Import"])
+    async def import_csv(
+        file: UploadFile = File(...),
+        field_mapping: str = Form(...),
+        duplicate_strategy: str = Form("skip"),
+        default_stage: str = Form("New"),
+        default_source: Optional[str] = Form(None),
+        skip_invalid_rows: bool = Form(True),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Stream-process a CSV file with transaction safety.
+
+        Processes the file row-by-row using a streaming CSV parser.
+        Each batch of 100 rows is wrapped in a database savepoint.
+        On failure, all changes are atomically rolled back.
+
+        Parameters:
+          - file: CSV file (max 50MB)
+          - field_mapping: JSON mapping of source_column -> lead_field
+          - duplicate_strategy: 'skip' | 'update' | 'create'
+          - default_stage: Default stage for new leads
+          - default_source: Default source value
+          - skip_invalid_rows: If true, skip invalid rows
+        """
+        from services.import_service import ImportService, check_file_size
+
+        _ensure_tables(db)
+        org_id = getattr(current_user, "organization_id", None) or 0
+        user_id = getattr(current_user, "id", None)
+
+        try:
+            mapping = json.loads(field_mapping)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid field_mapping JSON")
+
+        if not mapping:
+            raise HTTPException(status_code=400, detail="field_mapping is required")
+
+        try:
+            check_file_size(file.file, MAX_FILE_SIZE_MB * 1024 * 1024)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        svc = ImportService(db=db, user_id=user_id, organization_id=org_id)
+
+        try:
+            result = svc.import_csv(
+                file_stream=file.file,
+                entity_type="leads",
+                field_mapping=mapping,
+                filename=file.filename or "upload.csv",
+                duplicate_strategy=duplicate_strategy,
+                default_stage=default_stage,
+                default_source=default_source,
+                skip_invalid_rows=skip_invalid_rows,
+                validate_row_fn=validate_row,
+                transform_value_fn=transform_value,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        return {
+            "import_id": result.import_id,
+            "status": result.status,
+            "filename": result.filename,
+            "total_rows": result.total_rows,
+            "imported": result.imported,
+            "updated": result.updated,
+            "skipped": result.skipped,
+            "errors": result.errors,
+            "error_details": result.error_details[:50],
+            "message": result.message,
+        }
+
+    # ==================================================================
+    # STREAMING EXCEL IMPORT ENDPOINT
+    # ==================================================================
+
+    @app.post("/api/v1/imports/excel", tags=["Data Import"])
+    async def import_excel(
+        file: UploadFile = File(...),
+        field_mapping: str = Form(...),
+        sheet_name: Optional[str] = Form(None),
+        duplicate_strategy: str = Form("skip"),
+        default_stage: str = Form("New"),
+        default_source: Optional[str] = Form(None),
+        skip_invalid_rows: bool = Form(True),
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Stream-process an Excel file with transaction safety.
+
+        Uses openpyxl read_only mode for memory-efficient streaming.
+        Each batch of 100 rows is wrapped in a database savepoint.
+
+        Parameters:
+          - file: Excel file (.xlsx/.xls, max 50MB)
+          - field_mapping: JSON mapping of source_column -> lead_field
+          - sheet_name: Specific sheet name (None = active sheet)
+          - duplicate_strategy: 'skip' | 'update' | 'create'
+          - default_stage: Default stage for new leads
+          - default_source: Default source value
+          - skip_invalid_rows: If true, skip invalid rows
+        """
+        from services.import_service import ImportService, check_file_size
+
+        _ensure_tables(db)
+        org_id = getattr(current_user, "organization_id", None) or 0
+        user_id = getattr(current_user, "id", None)
+
+        try:
+            mapping = json.loads(field_mapping)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid field_mapping JSON")
+
+        if not mapping:
+            raise HTTPException(status_code=400, detail="field_mapping is required")
+
+        try:
+            check_file_size(file.file, MAX_FILE_SIZE_MB * 1024 * 1024)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        svc = ImportService(db=db, user_id=user_id, organization_id=org_id)
+
+        try:
+            result = svc.import_excel(
+                file_stream=file.file,
+                entity_type="leads",
+                field_mapping=mapping,
+                filename=file.filename or "upload.xlsx",
+                sheet_name=sheet_name,
+                duplicate_strategy=duplicate_strategy,
+                default_stage=default_stage,
+                default_source=default_source,
+                skip_invalid_rows=skip_invalid_rows,
+                validate_row_fn=validate_row,
+                transform_value_fn=transform_value,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        return {
+            "import_id": result.import_id,
+            "status": result.status,
+            "filename": result.filename,
+            "total_rows": result.total_rows,
+            "imported": result.imported,
+            "updated": result.updated,
+            "skipped": result.skipped,
+            "errors": result.errors,
+            "error_details": result.error_details[:50],
+            "message": result.message,
         }
 
     # ==================================================================
@@ -965,24 +1008,38 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
     ):
         """
         Quick import: auto-detect field mappings from headers and import leads.
+        Uses streaming + savepoints for transaction safety.
         For full control, use /preview then /execute.
         """
+        from services.import_service import ImportService, check_file_size, stream_csv_rows, stream_excel_rows
+
         _ensure_tables(db)
+        org_id = getattr(current_user, "organization_id", None) or 0
+        user_id = getattr(current_user, "id", None)
 
-        content = await file.read()
-        if len(content) > MAX_FILE_SIZE_MB * 1024 * 1024:
-            raise HTTPException(
-                status_code=400,
-                detail=f"File too large. Maximum is {MAX_FILE_SIZE_MB}MB.",
-            )
-
+        # Check file size
         try:
-            headers, rows = parse_upload(content, file.filename or "upload.csv")
+            check_file_size(file.file, MAX_FILE_SIZE_MB * 1024 * 1024)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        if not rows:
+        filename = file.filename or "upload.csv"
+        is_excel = filename.lower().endswith((".xlsx", ".xls"))
+
+        # Read a small preview to detect headers for auto-mapping
+        # (We need headers before we can start the import)
+        try:
+            if is_excel:
+                gen = stream_excel_rows(file.file)
+            else:
+                gen = stream_csv_rows(file.file)
+
+            # Get first row to extract headers
+            headers, first_row, _ = next(gen)
+        except StopIteration:
             raise HTTPException(status_code=400, detail="File contains no data rows")
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         mapping = auto_detect_mapping(headers)
         if not mapping:
@@ -992,141 +1049,53 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
                 "Please use /api/v1/imports/preview with explicit field_mapping.",
             )
 
-        # Re-upload internally via execute_import by constructing the form data
-        # Instead, inline the logic to avoid re-reading the file
-        org_id = getattr(current_user, "organization_id", None) or 0
-        user_id = getattr(current_user, "id", None)
+        # Reset file to beginning for full import
+        file.file.seek(0)
 
-        import_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc)
+        svc = ImportService(db=db, user_id=user_id, organization_id=org_id)
 
-        db.execute(text("""
-            INSERT INTO import_jobs
-                (id, organization_id, created_by, status, filename,
-                 total_rows, duplicate_strategy, field_mapping, started_at, created_at)
-            VALUES
-                (:id, :org_id, :user_id, 'processing', :filename,
-                 :total, :dup, :mapping, :now, :now)
-        """), {
-            "id": import_id,
-            "org_id": org_id,
-            "user_id": user_id,
-            "filename": file.filename,
-            "total": len(rows),
-            "dup": duplicate_strategy,
-            "mapping": json.dumps(mapping),
-            "now": now,
-        })
-        db.commit()
-
-        imported_count = 0
-        skipped_count = 0
-        error_count = 0
-        updated_count = 0
-        errors_list: list[dict] = []
-        imported_ids: list[int] = []
-
-        for i, raw_row in enumerate(rows):
-            mapped_row = {}
-            for src_col, target_field in mapping.items():
-                if src_col in raw_row:
-                    mapped_row[target_field] = raw_row[src_col]
-
-            clean, row_errors = validate_row(mapped_row, i + 1)
-
-            if row_errors:
-                error_count += 1
-                errors_list.append({"row": i + 1, "errors": row_errors})
-                continue
-
-            if "stage" not in clean or not clean["stage"]:
-                clean["stage"] = default_stage
-            if default_source and ("source" not in clean or not clean["source"]):
-                clean["source"] = default_source
-
-            clean["organization_id"] = org_id
-
-            # Duplicate check
-            existing_id = None
-            if clean.get("email") and duplicate_strategy != "create":
-                dup_row = db.execute(text("""
-                    SELECT id FROM leads
-                    WHERE email = :email AND organization_id = :org_id
-                    LIMIT 1
-                """), {"email": clean["email"], "org_id": org_id}).fetchone()
-                if dup_row:
-                    existing_id = dup_row[0]
-
-            if existing_id and duplicate_strategy == "skip":
-                skipped_count += 1
-                continue
-
-            if existing_id and duplicate_strategy == "update":
-                update_fields = {
-                    k: v for k, v in clean.items()
-                    if v is not None and k not in ("organization_id",)
-                }
-                if update_fields:
-                    set_clauses = ", ".join(f"{k} = :{k}" for k in update_fields)
-                    update_fields["_id"] = existing_id
-                    db.execute(text(f"""
-                        UPDATE leads SET {set_clauses} WHERE id = :_id
-                    """), update_fields)
-                updated_count += 1
-                imported_ids.append(existing_id)
-                continue
-
-            clean["created_at"] = now
-            insert_cols = list(clean.keys())
-            col_names = ", ".join(insert_cols)
-            col_params = ", ".join(f":{c}" for c in insert_cols)
-
-            result = db.execute(text(f"""
-                INSERT INTO leads ({col_names})
-                VALUES ({col_params})
-                RETURNING id
-            """), clean)
-            new_id = result.fetchone()[0]
-            imported_ids.append(new_id)
-            imported_count += 1
-
-        # Final job update
-        db.execute(text("""
-            UPDATE import_jobs
-            SET status = 'completed',
-                processed_rows = :processed,
-                imported_rows = :imported,
-                skipped_rows = :skipped,
-                error_rows = :errors,
-                updated_rows = :updated,
-                errors = :error_list,
-                imported_lead_ids = :lead_ids,
-                completed_at = :now
-            WHERE id = :id
-        """), {
-            "id": import_id,
-            "processed": len(rows),
-            "imported": imported_count,
-            "skipped": skipped_count,
-            "errors": error_count,
-            "updated": updated_count,
-            "error_list": json.dumps(errors_list[:200]),
-            "lead_ids": json.dumps(imported_ids),
-            "now": datetime.now(timezone.utc),
-        })
-        db.commit()
+        try:
+            if is_excel:
+                result = svc.import_excel(
+                    file_stream=file.file,
+                    entity_type="leads",
+                    field_mapping=mapping,
+                    filename=filename,
+                    duplicate_strategy=duplicate_strategy,
+                    default_stage=default_stage,
+                    default_source=default_source,
+                    skip_invalid_rows=True,
+                    validate_row_fn=validate_row,
+                    transform_value_fn=transform_value,
+                )
+            else:
+                result = svc.import_csv(
+                    file_stream=file.file,
+                    entity_type="leads",
+                    field_mapping=mapping,
+                    filename=filename,
+                    duplicate_strategy=duplicate_strategy,
+                    default_stage=default_stage,
+                    default_source=default_source,
+                    skip_invalid_rows=True,
+                    validate_row_fn=validate_row,
+                    transform_value_fn=transform_value,
+                )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
         return {
-            "import_id": import_id,
-            "status": "completed",
+            "import_id": result.import_id,
+            "status": result.status,
             "auto_detected_mapping": mapping,
-            "filename": file.filename,
-            "total_rows": len(rows),
-            "imported": imported_count,
-            "updated": updated_count,
-            "skipped": skipped_count,
-            "errors": error_count,
-            "error_details": errors_list[:50],
+            "filename": result.filename,
+            "total_rows": result.total_rows,
+            "imported": result.imported,
+            "updated": result.updated,
+            "skipped": result.skipped,
+            "errors": result.errors,
+            "error_details": result.error_details[:50],
+            "message": result.message,
         }
 
     # ==================================================================
@@ -1139,72 +1108,31 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
         db: Session = Depends(get_db),
         current_user=Depends(get_current_user),
     ):
-        """Get import job progress and status."""
+        """Get import job progress and status.
+
+        For active imports, returns real-time in-memory progress.
+        For completed imports, returns the persisted record.
+        """
+        from services.import_service import ImportService
+
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
+        user_id = getattr(current_user, "id", None)
 
-        row = db.execute(text("""
-            SELECT id, status, filename, total_rows, processed_rows,
-                   imported_rows, skipped_rows, error_rows, updated_rows,
-                   duplicate_strategy, field_mapping, errors,
-                   started_at, completed_at, rolled_back_at, created_at
-            FROM import_jobs
-            WHERE id = :id AND organization_id = :org_id
-        """), {"id": import_id, "org_id": org_id}).fetchone()
+        svc = ImportService(db=db, user_id=user_id, organization_id=org_id)
+        result = svc.get_import_status(import_id)
 
-        if not row:
+        if not result:
             raise HTTPException(status_code=404, detail="Import job not found")
 
-        total = row[3] or 1
-        processed = row[4] or 0
-        progress_pct = round((processed / total) * 100, 1) if total > 0 else 0
-
-        errors_data = row[11]
-        if isinstance(errors_data, str):
-            try:
-                errors_data = json.loads(errors_data)
-            except json.JSONDecodeError:
-                errors_data = []
-
-        mapping_data = row[10]
-        if isinstance(mapping_data, str):
-            try:
-                mapping_data = json.loads(mapping_data)
-            except json.JSONDecodeError:
-                mapping_data = {}
-
-        return {
-            "import_id": row[0],
-            "status": row[1],
-            "filename": row[2],
-            "progress": {
-                "total_rows": row[3],
-                "processed_rows": processed,
-                "percentage": progress_pct,
-            },
-            "results": {
-                "imported": row[5] or 0,
-                "skipped": row[6] or 0,
-                "errors": row[7] or 0,
-                "updated": row[8] or 0,
-            },
-            "duplicate_strategy": row[9],
-            "field_mapping": mapping_data,
-            "error_details": errors_data[:50] if isinstance(errors_data, list) else [],
-            "timestamps": {
-                "started_at": row[12].isoformat() if row[12] else None,
-                "completed_at": row[13].isoformat() if row[13] else None,
-                "rolled_back_at": row[14].isoformat() if row[14] else None,
-                "created_at": row[15].isoformat() if row[15] else None,
-            },
-            "can_rollback": row[1] == "completed" and row[14] is None,
-        }
+        return result
 
     # ==================================================================
-    # IMPORT HISTORY
+    # IMPORT HISTORY (Audit Trail)
     # ==================================================================
 
     @app.get("/api/v1/imports", tags=["Data Import"])
+    @app.get("/api/v1/imports/history", tags=["Data Import"])
     async def list_imports(
         limit: int = Query(20, ge=1, le=100),
         offset: int = Query(0, ge=0),
@@ -1212,156 +1140,58 @@ def register_data_import_routes(app, get_db, get_current_user, **kwargs):
         db: Session = Depends(get_db),
         current_user=Depends(get_current_user),
     ):
-        """List import history for this organization."""
+        """List import history for this organization (audit trail).
+
+        Returns who imported what, when, and how many records were affected.
+        """
+        from services.import_service import ImportService
+
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
+        user_id = getattr(current_user, "id", None)
 
-        filters = ["organization_id = :org_id"]
-        params: dict = {"org_id": org_id, "limit": limit, "offset": offset}
-
-        if status:
-            filters.append("status = :status")
-            params["status"] = status
-
-        where_clause = " AND ".join(filters)
-
-        # Get total count
-        count_row = db.execute(text(f"""
-            SELECT COUNT(*) FROM import_jobs WHERE {where_clause}
-        """), params).fetchone()
-        total = count_row[0] if count_row else 0
-
-        rows = db.execute(text(f"""
-            SELECT id, status, filename, total_rows, imported_rows,
-                   skipped_rows, error_rows, updated_rows,
-                   duplicate_strategy, started_at, completed_at,
-                   rolled_back_at, created_at
-            FROM import_jobs
-            WHERE {where_clause}
-            ORDER BY created_at DESC
-            LIMIT :limit OFFSET :offset
-        """), params).fetchall()
-
-        return {
-            "total": total,
-            "limit": limit,
-            "offset": offset,
-            "imports": [
-                {
-                    "import_id": r[0],
-                    "status": r[1],
-                    "filename": r[2],
-                    "total_rows": r[3],
-                    "imported": r[4] or 0,
-                    "skipped": r[5] or 0,
-                    "errors": r[6] or 0,
-                    "updated": r[7] or 0,
-                    "duplicate_strategy": r[8],
-                    "started_at": r[9].isoformat() if r[9] else None,
-                    "completed_at": r[10].isoformat() if r[10] else None,
-                    "rolled_back_at": r[11].isoformat() if r[11] else None,
-                    "created_at": r[12].isoformat() if r[12] else None,
-                    "can_rollback": r[1] == "completed" and r[11] is None,
-                }
-                for r in rows
-            ],
-        }
+        svc = ImportService(db=db, user_id=user_id, organization_id=org_id)
+        return svc.get_import_history(
+            limit=limit,
+            offset=offset,
+            status_filter=status,
+        )
 
     # ==================================================================
-    # IMPORT ROLLBACK
+    # IMPORT ROLLBACK (soft-delete or hard-delete)
     # ==================================================================
 
     @app.post("/api/v1/imports/{import_id}/rollback", tags=["Data Import"])
     async def rollback_import(
         import_id: str,
+        hard_delete: bool = Query(False, description="If true, permanently delete records instead of soft-delete"),
         db: Session = Depends(get_db),
         current_user=Depends(get_current_user),
     ):
         """
-        Rollback a completed import by soft-deleting imported leads.
-        Sets stage to 'Withdrawn' and marks them as import-rolled-back
-        so they can be recovered if needed.
+        Rollback a completed import.
+
+        By default, performs soft-delete (sets stage to 'Withdrawn' with
+        a rollback note). Pass ?hard_delete=true to permanently remove
+        the imported records.
+
+        The operation is wrapped in a savepoint for safety.
         """
+        from services.import_service import ImportService
+
         _ensure_tables(db)
         org_id = getattr(current_user, "organization_id", None) or 0
+        user_id = getattr(current_user, "id", None)
 
-        # Get the import job
-        job = db.execute(text("""
-            SELECT id, status, imported_lead_ids, rolled_back_at
-            FROM import_jobs
-            WHERE id = :id AND organization_id = :org_id
-        """), {"id": import_id, "org_id": org_id}).fetchone()
+        svc = ImportService(db=db, user_id=user_id, organization_id=org_id)
 
-        if not job:
-            raise HTTPException(status_code=404, detail="Import job not found")
-
-        if job[1] != "completed":
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cannot rollback import with status '{job[1]}'. Only 'completed' imports can be rolled back.",
+        try:
+            return svc.rollback_import(
+                batch_id=import_id,
+                hard_delete=hard_delete,
             )
+        except ValueError as e:
+            status_code = 404 if "not found" in str(e).lower() else 400
+            raise HTTPException(status_code=status_code, detail=str(e))
 
-        if job[3] is not None:
-            raise HTTPException(status_code=400, detail="This import has already been rolled back")
-
-        # Get imported lead IDs
-        lead_ids_raw = job[2]
-        if isinstance(lead_ids_raw, str):
-            try:
-                lead_ids = json.loads(lead_ids_raw)
-            except json.JSONDecodeError:
-                lead_ids = []
-        elif isinstance(lead_ids_raw, list):
-            lead_ids = lead_ids_raw
-        else:
-            lead_ids = []
-
-        if not lead_ids:
-            raise HTTPException(
-                status_code=400,
-                detail="No imported lead IDs recorded for this import. Rollback not possible.",
-            )
-
-        # Soft-delete: set stage to 'Withdrawn' and add rollback note
-        rollback_note = f"[IMPORT ROLLBACK] Rolled back import {import_id} at {datetime.now(timezone.utc).isoformat()}"
-        rolled_back_count = 0
-
-        # Process in batches of 100 to avoid overly large IN clauses
-        for batch_start in range(0, len(lead_ids), 100):
-            batch = lead_ids[batch_start:batch_start + 100]
-            placeholders = ", ".join(f":id_{j}" for j in range(len(batch)))
-            params_batch: dict = {f"id_{j}": lid for j, lid in enumerate(batch)}
-            params_batch["org_id"] = org_id
-            params_batch["note"] = rollback_note
-
-            result = db.execute(text(f"""
-                UPDATE leads
-                SET stage = 'Withdrawn',
-                    notes = CASE
-                        WHEN notes IS NULL THEN :note
-                        ELSE notes || E'\\n' || :note
-                    END
-                WHERE id IN ({placeholders})
-                  AND organization_id = :org_id
-            """), params_batch)
-            rolled_back_count += result.rowcount
-
-        # Update import job status
-        db.execute(text("""
-            UPDATE import_jobs
-            SET status = 'rolled_back',
-                rolled_back_at = :now
-            WHERE id = :id
-        """), {"id": import_id, "now": datetime.now(timezone.utc)})
-        db.commit()
-
-        return {
-            "import_id": import_id,
-            "status": "rolled_back",
-            "leads_affected": rolled_back_count,
-            "total_lead_ids": len(lead_ids),
-            "rolled_back_at": datetime.now(timezone.utc).isoformat(),
-            "message": f"Successfully rolled back {rolled_back_count} leads (set to Withdrawn stage)",
-        }
-
-    logger.info("Data import routes registered (10 endpoints)")
+    logger.info("Data import routes registered (13 endpoints)")

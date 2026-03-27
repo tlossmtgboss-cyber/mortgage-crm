@@ -146,6 +146,10 @@ class Document(Base):
         Index('ix_documents_loan_id', 'loan_id'),
         Index('ix_documents_doc_type', 'doc_type'),
         Index('ix_documents_organization_id', 'organization_id'),
+        # Performance indexes (added via add_performance_indexes migration)
+        Index('ix_documents_loan_status', 'loan_id', 'status'),
+        Index('ix_documents_borrower_status', 'borrower_id', 'status'),
+        Index('ix_documents_org_status', 'organization_id', 'status'),
     )
 
     id = Column(Integer, primary_key=True, index=True)

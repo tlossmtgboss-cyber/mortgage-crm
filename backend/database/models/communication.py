@@ -14,7 +14,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, JSON, Enum as SQLEnum, Index, Numeric
+    Text, ForeignKey, JSON, Enum as SQLEnum, Index, Numeric, text
 )
 from sqlalchemy.orm import relationship
 
@@ -40,6 +40,10 @@ class Activity(Base):
         Index('ix_activities_lead_created', 'lead_id', 'created_at'),
         Index('ix_activities_organization_id', 'organization_id'),
         Index('ix_activities_org_created', 'organization_id', 'created_at'),
+        # Performance indexes (added via add_performance_indexes migration)
+        Index('ix_activities_loan_created', 'loan_id', 'created_at'),
+        Index('ix_activities_org_type', 'organization_id', 'type'),
+        Index('ix_activities_user_created', 'user_id', 'created_at'),
         {'extend_existing': True},
     )
 
@@ -70,6 +74,9 @@ class StageHistory(Base):
         Index('ix_stage_history_changed_at', 'changed_at'),
         Index('ix_stage_history_entity', 'entity_type', 'entity_id'),
         Index('ix_stage_history_organization_id', 'organization_id'),
+        # Performance indexes (added via add_performance_indexes migration)
+        Index('ix_stage_history_org_changed', 'organization_id', 'changed_at'),
+        Index('ix_stage_history_entity_timeline', 'entity_type', 'entity_id', 'changed_at'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -142,6 +149,12 @@ class ConversationMemory(Base):
 class SMSMessage(Base):
     """SMS message log"""
     __tablename__ = "sms_messages"
+    __table_args__ = (
+        # Performance indexes (added via add_performance_indexes migration)
+        Index('ix_sms_messages_lead_created', 'lead_id', 'created_at'),
+        Index('ix_sms_messages_loan_created', 'loan_id', 'created_at'),
+        Index('ix_sms_messages_org_created', 'organization_id', 'created_at'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
@@ -204,6 +217,11 @@ class SMSConversation(Base):
 class EmailMessage(Base):
     """Email message log"""
     __tablename__ = "email_messages"
+    __table_args__ = (
+        # Performance indexes (added via add_performance_indexes migration)
+        Index('ix_email_messages_lead_created', 'lead_id', 'created_at'),
+        Index('ix_email_messages_org_created', 'organization_id', 'created_at'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
@@ -229,6 +247,15 @@ class EmailMessage(Base):
 class Email(Base):
     """Stores emails fetched from Microsoft Graph API"""
     __tablename__ = "emails"
+    __table_args__ = (
+        # Performance indexes (added via add_performance_indexes migration)
+        Index(
+            'ix_emails_unprocessed',
+            'organization_id', 'received_date',
+            postgresql_where=text("processed = false"),
+        ),
+        Index('ix_emails_org_user', 'organization_id', 'user_id'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
@@ -492,6 +519,12 @@ class VoicemailEvent(Base):
 class CalendarEvent(Base):
     """Calendar events for scheduling"""
     __tablename__ = "calendar_events"
+    __table_args__ = (
+        # Performance indexes (added via add_performance_indexes migration)
+        Index('ix_calendar_events_user_start', 'user_id', 'start_time'),
+        Index('ix_calendar_events_org_start', 'organization_id', 'start_time'),
+        Index('ix_calendar_events_status', 'status'),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)  # Multi-tenant isolation

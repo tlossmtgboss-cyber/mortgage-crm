@@ -14,7 +14,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, JSON, Enum as SQLEnum, Index
+    Text, ForeignKey, JSON, Enum as SQLEnum, Index, text
 )
 from sqlalchemy.orm import relationship
 
@@ -38,6 +38,9 @@ class AITask(Base):
         Index('ix_ai_tasks_loan_id', 'loan_id'),
         Index('ix_ai_tasks_due_date', 'due_date'),
         Index('ix_ai_tasks_organization_id', 'organization_id'),
+        # Performance indexes (added via add_performance_indexes migration)
+        Index('ix_ai_tasks_assigned_type', 'assigned_to_id', 'type'),
+        Index('ix_ai_tasks_org_assigned', 'organization_id', 'assigned_to_id'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -83,6 +86,14 @@ class Task(Base):
         Index('ix_tasks_owner_status', 'owner_id', 'status'),
         Index('ix_tasks_organization_id', 'organization_id'),
         Index('ix_tasks_org_status', 'organization_id', 'status'),
+        # Performance indexes (added via add_performance_indexes migration)
+        Index('ix_tasks_org_due_date', 'organization_id', 'due_date'),
+        Index('ix_tasks_owner_due_date', 'owner_id', 'due_date'),
+        Index(
+            'ix_tasks_pending_due',
+            'owner_id', 'due_date',
+            postgresql_where=text("status = 'pending'"),
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)

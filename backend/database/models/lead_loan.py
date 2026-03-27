@@ -17,7 +17,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, JSON, Enum as SQLEnum, Index, Numeric
+    Text, ForeignKey, JSON, Enum as SQLEnum, Index, Numeric, text
 )
 from sqlalchemy.orm import relationship, validates
 
@@ -51,6 +51,15 @@ class Lead(Base):
         Index('ix_leads_organization_id', 'organization_id'),
         Index('ix_leads_org_stage', 'organization_id', 'stage'),
         Index('ix_leads_org_created', 'organization_id', 'created_at'),
+        # Performance indexes (added via add_performance_indexes migration)
+        Index('ix_leads_last_contact', 'last_contact'),
+        Index('ix_leads_ai_score', 'ai_score'),
+        Index('ix_leads_source', 'source'),
+        Index('ix_leads_loan_number', 'loan_number'),
+        Index('ix_leads_salesforce_id', 'salesforce_id'),
+        Index('ix_leads_owner_last_contact', 'owner_id', 'last_contact'),
+        Index('ix_leads_org_source', 'organization_id', 'source'),
+        Index('ix_leads_org_ai_score', 'organization_id', 'ai_score'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
@@ -281,6 +290,24 @@ class Loan(Base):
         Index('ix_loans_organization_id', 'organization_id'),
         Index('ix_loans_org_stage', 'organization_id', 'stage'),
         Index('ix_loans_org_created', 'organization_id', 'created_at'),
+        # Performance indexes (added via add_performance_indexes migration)
+        Index('ix_loans_borrower_name', 'borrower_name'),
+        Index('ix_loans_closing_date', 'closing_date'),
+        Index('ix_loans_stage_changed_at', 'stage_changed_at'),
+        Index('ix_loans_lock_expiration_date', 'lock_expiration_date'),
+        Index('ix_loans_loan_type', 'loan_type'),
+        Index('ix_loans_application_date', 'application_date'),
+        Index('ix_loans_org_closing_date', 'organization_id', 'closing_date'),
+        Index('ix_loans_org_funded_date', 'organization_id', 'funded_date'),
+        Index('ix_loans_lo_funded_date', 'loan_officer_id', 'funded_date'),
+        Index('ix_loans_org_lock_exp', 'organization_id', 'lock_expiration_date'),
+        Index(
+            'ix_loans_active_pipeline',
+            'organization_id', 'stage', 'loan_officer_id',
+            postgresql_where=text(
+                "stage NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY')"
+            ),
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)

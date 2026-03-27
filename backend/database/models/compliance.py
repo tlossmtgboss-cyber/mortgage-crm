@@ -17,7 +17,7 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, JSON, Enum as SQLEnum, Index, Numeric
+    Text, ForeignKey, JSON, Enum as SQLEnum, Index, Numeric, text
 )
 from sqlalchemy.orm import relationship
 
@@ -228,6 +228,16 @@ class ComplianceAlert(Base):
         Index('ix_compliance_alerts_loan_id', 'loan_id'),
         Index('ix_compliance_alerts_org_id', 'organization_id'),
         Index('ix_compliance_alerts_status', 'status'),
+        # Performance indexes (added via add_performance_indexes migration)
+        Index('ix_compliance_alerts_loan_status', 'loan_id', 'status'),
+        Index('ix_compliance_alerts_org_severity', 'organization_id', 'severity'),
+        Index('ix_compliance_alerts_org_type', 'organization_id', 'alert_type'),
+        Index('ix_compliance_alerts_deadline', 'deadline_date'),
+        Index(
+            'ix_compliance_alerts_open_deadline',
+            'organization_id', 'deadline_date',
+            postgresql_where=text("status = 'open'"),
+        ),
     )
 
     id = Column(Integer, primary_key=True, index=True)
