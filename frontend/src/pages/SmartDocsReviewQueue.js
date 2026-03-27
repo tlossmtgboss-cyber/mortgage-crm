@@ -9,7 +9,7 @@
  * - Batch AI Review for all unclaimed items grouped by loan
  */
 import React, { useState, useCallback } from 'react';
-import toast from '../utils/toast';
+import { toast } from '../utils/toast';
 
 import useReviewQueue from '../hooks/useReviewQueue';
 import ReviewQueueItem from '../components/smart-docs/ReviewQueueItem';
@@ -112,7 +112,7 @@ export default function SmartDocsReviewQueue() {
   const handleBatchAiReview = useCallback(async () => {
     const unclaimed = items.filter((item) => !item.claimed_by_id);
     if (!unclaimed.length) {
-      toast('No unclaimed documents to review', { icon: 'ℹ️' });
+      toast.info('No unclaimed documents to review');
       return;
     }
 
@@ -139,7 +139,8 @@ export default function SmartDocsReviewQueue() {
         try {
           await docReviewApi.batchAiReview(loanId);
           successCount += byLoan[loanId].length;
-        } catch {
+        } catch (err) {
+          console.error(`Batch AI review failed for loan ${loanId}:`, err);
           errorCount += byLoan[loanId].length;
         }
       })

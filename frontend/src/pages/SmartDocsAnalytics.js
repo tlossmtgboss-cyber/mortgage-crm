@@ -5,7 +5,7 @@
  * Tabs: Overview, SLA Compliance, AI Performance, Team Productivity, Bottlenecks
  */
 import React, { useState, useEffect } from 'react';
-import toast from '../utils/toast';
+import { toast } from '../utils/toast';
 import { useDocAnalytics } from '../hooks/useDocAnalytics';
 import AnalyticsCard from '../components/smart-docs/AnalyticsCard';
 import {
