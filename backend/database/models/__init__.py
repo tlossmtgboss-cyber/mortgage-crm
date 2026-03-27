@@ -298,6 +298,9 @@ from .compliance import (
     AdverseActionReason,
 )
 
+# 50-state disclosure requirements
+from .state_disclosure import StateDisclosure
+
 # AI Prospect Re-Engagement models
 from .ai_prospect_conversation import (
     AIProspectConversation,
@@ -885,6 +888,11 @@ __all__ = [
     "ToleranceCategory",
     "DisclosureType",
     "AdverseActionReason",
+
+    # =====================
+    # State Disclosures (50-state)
+    # =====================
+    "StateDisclosure",
 
     # =====================
     # AI Prospect Re-Engagement

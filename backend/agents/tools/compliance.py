@@ -691,13 +691,12 @@ def get_state_requirements(
     state: Optional[str] = None,
     loan_id: Optional[int] = None,
 ) -> ToolResult:
-    """Get state-specific requirements."""
+    """Get state-specific requirements. Queries the state_disclosures DB table first;
+    falls back to the hardcoded dict for the original 4 states if the table is
+    empty or unavailable."""
     try:
         if loan_id and not state:
-            # Get state from loan
-            loan_query = """
-                SELECT property_state FROM loans WHERE id = :loan_id
-            """
+            loan_query = "SELECT property_state FROM loans WHERE id = :loan_id"
             loan = execute_single(loan_query, {"loan_id": loan_id})
             if loan:
                 state = loan.get("property_state")
@@ -707,7 +706,51 @@ def get_state_requirements(
 
         state = state.upper()
 
-        # State requirements database (simplified)
+        # ------------------------------------------------------------------
+        # 1. Try the database-backed state_disclosures table first
+        # ------------------------------------------------------------------
+        try:
+            db_results = execute_query(
+                "SELECT state_name, category, requirement, applies_to_loan_types, regulatory_reference "
+                "FROM state_disclosures WHERE state_code = :state ORDER BY category, id",
+                {"state": state},
+            )
+        except Exception:
+            db_results = []
+
+        if db_results:
+            state_name = db_results[0]["state_name"]
+            by_category: dict = {}
+            for row in db_results:
+                cat = row["category"]
+                if cat not in by_category:
+                    by_category[cat] = []
+                entry: dict = {"requirement": row["requirement"]}
+                if row["regulatory_reference"]:
+                    entry["reference"] = row["regulatory_reference"]
+                if row["applies_to_loan_types"]:
+                    entry["applies_to"] = row["applies_to_loan_types"]
+                by_category[cat].append(entry)
+
+            data = {
+                "state": state,
+                "state_name": state_name,
+                "source": "database",
+                "has_specific_requirements": True,
+                "categories": by_category,
+                "total_requirements": len(db_results),
+            }
+            return ToolResult.success(
+                data=data,
+                message=(
+                    f"{state_name}: {len(db_results)} requirements "
+                    f"across {len(by_category)} categories"
+                ),
+            )
+
+        # ------------------------------------------------------------------
+        # 2. Fallback: original hardcoded dict for CA / TX / FL / NY
+        # ------------------------------------------------------------------
         state_requirements = {
             "CA": {
                 "name": "California",
@@ -775,9 +818,9 @@ def get_state_requirements(
         requirements = state_requirements.get(state)
 
         if not requirements:
-            # Return generic federal requirements
             return ToolResult.success({
                 "state": state,
+                "source": "fallback",
                 "has_specific_requirements": False,
                 "message": f"No state-specific requirements on file for {state}. Federal requirements apply.",
                 "federal_requirements": [
@@ -791,6 +834,7 @@ def get_state_requirements(
         return ToolResult.success({
             "state": state,
             "state_name": requirements["name"],
+            "source": "fallback",
             "has_specific_requirements": True,
             "disclosures": requirements["disclosures"],
             "waiting_periods": requirements["waiting_periods"],
