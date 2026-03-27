@@ -39,7 +39,7 @@ class MicrosoftOutlookClient:
         self.tenant_id = os.getenv("MICROSOFT_TENANT_ID", "common")  # 'common' for multi-tenant
         self.redirect_uri = os.getenv(
             "MICROSOFT_REDIRECT_URI",
-            "https://api.perenniaai.com/api/v1/microsoft/callback"
+            "https://api.perenniaai.com/oauth/microsoft/callback"
         )
 
         # Microsoft OAuth endpoints - using 'common' for multi-tenant support
@@ -48,6 +48,7 @@ class MicrosoftOutlookClient:
         self.api_base_url = "https://graph.microsoft.com/v1.0"
 
         self.enabled = bool(self.client_id and self.client_secret)
+        self.last_token_error = None  # Set by exchange_code_for_token on failure
 
         if self.enabled:
             logger.info("Microsoft Outlook API initialized successfully")
@@ -85,8 +86,16 @@ class MicrosoftOutlookClient:
         return f"{self.auth_url}?{urlencode(params)}"
 
     def exchange_code_for_token(self, code: str) -> Optional[Dict[str, Any]]:
-        """Exchange authorization code for access token"""
+        """Exchange authorization code for access token.
+
+        Returns token dict on success, or None on failure.
+        On failure, self.last_token_error is set with the error details.
+        """
+        self.last_token_error = None
+
         if not self.enabled:
+            self.last_token_error = "Microsoft OAuth not configured (missing client_id or client_secret)"
+            logger.error(self.last_token_error)
             return None
 
         try:
@@ -103,7 +112,31 @@ class MicrosoftOutlookClient:
                 data=data,
                 headers={"Content-Type": "application/x-www-form-urlencoded"}
             )
-            response.raise_for_status()
+
+            if response.status_code != 200:
+                error_data = {}
+                try:
+                    error_data = response.json()
+                except Exception:
+                    pass
+                error_code = error_data.get("error", "unknown")
+                error_desc = error_data.get("error_description", response.text[:200])
+                logger.error(f"Microsoft token exchange failed [{response.status_code}]: {error_code} - {error_desc}")
+
+                # Map common AADSTS errors to user-friendly messages
+                if "AADSTS7000215" in str(error_desc):
+                    self.last_token_error = "Microsoft client secret has expired. Generate a new secret in Azure Portal > App registrations > Certificates & secrets."
+                elif "AADSTS50011" in str(error_desc):
+                    self.last_token_error = "Redirect URI mismatch. Check Azure AD app registration redirect URIs."
+                elif "AADSTS70008" in str(error_desc):
+                    self.last_token_error = "Authorization code expired. Please try connecting again."
+                elif "AADSTS54005" in str(error_desc):
+                    self.last_token_error = "Authorization code already used. Please try connecting again."
+                elif "AADSTS700016" in str(error_desc):
+                    self.last_token_error = "Application not found in Azure AD. Check MICROSOFT_CLIENT_ID."
+                else:
+                    self.last_token_error = f"Microsoft error: {error_desc[:200]}"
+                return None
 
             token_data = response.json()
             logger.info("Successfully exchanged code for Microsoft access token")
@@ -121,10 +154,8 @@ class MicrosoftOutlookClient:
                 "scope": token_data.get("scope"),
             }
 
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"Microsoft token exchange HTTP error: {e.response.text}")
-            return None
         except Exception as e:
+            self.last_token_error = f"Token exchange error: {str(e)}"
             logger.error(f"Error exchanging code for token: {e}")
             return None
 

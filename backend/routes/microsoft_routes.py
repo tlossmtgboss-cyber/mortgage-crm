@@ -143,9 +143,11 @@ async def microsoft_callback(
     token_data = microsoft_outlook_client.exchange_code_for_token(code)
 
     if not token_data:
-        logger.error("Failed to exchange Microsoft authorization code")
+        error_detail = getattr(microsoft_outlook_client, 'last_token_error', None) or "Unknown token exchange error"
+        logger.error(f"Failed to exchange Microsoft authorization code: {error_detail}")
+        from urllib.parse import quote
         return RedirectResponse(
-            url=f"{frontend_url}/settings/integrations?error=microsoft_token_exchange_failed"
+            url=f"{frontend_url}/settings/integrations?error=microsoft_token_exchange_failed&message={quote(error_detail)}"
         )
 
     # Get user info
