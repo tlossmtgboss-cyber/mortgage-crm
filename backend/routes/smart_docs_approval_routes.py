@@ -254,6 +254,8 @@ async def approve_document(
         ).first()
         if request:
             request.status = RequestStatus.ACCEPTED
+            request.completed_at = datetime.utcnow()
+            request.fulfilled_at = datetime.utcnow()
 
     db.commit()
 
@@ -895,6 +897,7 @@ async def approve_document_with_review(
         if request:
             request.status = RequestStatus.ACCEPTED
             request.completed_at = datetime.utcnow()
+            request.fulfilled_at = datetime.utcnow()
 
     db.commit()
 
