@@ -18,6 +18,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import UnifiedTaskSidebar from './components/UnifiedTaskSidebar';
 import GlobalLayoutFix from './components/GlobalLayoutFix';
 import GlobalSearch from './components/GlobalSearch';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import './App.css';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
@@ -549,6 +550,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
+        <OfflineIndicator />
         <ImpersonationProvider>
         <PermissionProvider>
         <ModuleProvider>
