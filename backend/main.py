@@ -2500,8 +2500,10 @@ def _run_critical_schema_migrations():
 @app.post("/api/v1/management/seed-demo")
 async def seed_demo_account(request: Request):
     """One-time endpoint to create App Store review demo account. Protected by SECRET_KEY."""
-    auth = request.headers.get("X-Management-Key", "")
-    if auth != SECRET_KEY:
+    body = await request.json()
+    auth = body.get("key", "")
+    # Strip whitespace from both to handle SECRET_KEY with embedded newlines
+    if auth.strip() != SECRET_KEY.strip() or not auth.strip():
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
