@@ -440,6 +440,8 @@ class CallMonitoringOrchestrator:
             session_id: Call session ID
             trigger: What triggered the run (end_of_call, manual, periodic)
             agent_types: Specific agents to run, or None for all
+            on_agent_complete: Optional callback(agent_type, result) called
+                when each individual agent finishes (P4: progressive streaming)
 
         Returns:
             Processing results from all agents
@@ -497,16 +499,17 @@ class CallMonitoringOrchestrator:
         context = await self._enrich_context(context)
 
         # P8: Inject per-agent feedback from approval patterns
+        agent_feedback = {}
         try:
             from services.call_monitoring.feedback_service import AgentFeedbackService
             feedback_svc = AgentFeedbackService(self.db, self.organization_id)
-            agent_feedback = {}
             for agent_type in agents_to_run:
                 prompt_feedback = feedback_svc.generate_feedback_prompt(agent_type)
                 if prompt_feedback:
                     agent_feedback[agent_type] = prompt_feedback
             if agent_feedback:
                 context['agent_feedback'] = agent_feedback
+                logger.info(f"Feedback injected for {len(agent_feedback)} agents")
         except Exception as fb_err:
             logger.warning(f"Failed to load agent feedback (non-blocking): {fb_err}")
 
@@ -588,6 +591,16 @@ class CallMonitoringOrchestrator:
                         await on_agent_complete(agent_type, results[i])
                     except Exception as cb_err:
                         logger.warning(f"on_agent_complete callback failed for {agent_type}: {cb_err}")
+
+            # P4: Notify caller as each agent completes (progressive streaming)
+            if on_agent_complete:
+                try:
+                    callback_result = on_agent_complete(agent_type, result_map[agent_type])
+                    # Support async callbacks
+                    if asyncio.iscoroutine(callback_result):
+                        await callback_result
+                except Exception as cb_err:
+                    logger.warning(f"on_agent_complete callback failed for {agent_type}: {cb_err}")
 
         return result_map
 

@@ -85,6 +85,11 @@ export const NAVIGATION_ITEMS = {
     label: 'Calendar',
     module: 'base'
   },
+  briefing: {
+    path: '/briefing',
+    label: 'Morning Briefing',
+    module: 'base'
+  },
   scorecard: {
     path: '/scorecard',
     label: 'Scorecard',
@@ -348,6 +353,7 @@ export const ROLE_NAVIGATION = {
     'smartDocs',
     'marketing',            // Marketing page (includes Voice & Call Center, Video OS)
     'calendar',
+    'briefing',             // Morning Briefing page
     'scorecard',            // Scorecard
     'goalTracker',          // Goal Tracker for production goals
     'partners',
@@ -379,6 +385,7 @@ export const ROLE_NAVIGATION = {
     'smartDocs',
     'marketing',            // Marketing page (includes Voice & Call Center, Video OS)
     'calendar',
+    'briefing',             // Morning Briefing page
     'scorecard',
     'goalTracker',          // Goal Tracker for production goals
     'partners',
@@ -405,6 +412,7 @@ export const ROLE_NAVIGATION = {
     'smartDocs',
     'marketing',            // Marketing page includes Voice & Call Center tools
     'calendar',
+    'briefing',             // Morning Briefing page
     'scorecard',            // Scorecard for performance tracking
     'goalTracker',          // Goal Tracker for production goals
     'partners',
@@ -424,6 +432,7 @@ export const ROLE_NAVIGATION = {
     'reconciliation',
     'smartDocs',
     'calendar',
+    'briefing',       // Morning Briefing page
     'aiUnderwriter'
   ],
 
@@ -437,6 +446,7 @@ export const ROLE_NAVIGATION = {
     'reconciliation',
     'smartDocs',
     'calendar',
+    'briefing',       // Morning Briefing page
     'aiUnderwriter'
   ],
 
@@ -448,6 +458,7 @@ export const ROLE_NAVIGATION = {
     'reconciliation',
     'smartDocs',
     'calendar',
+    'briefing',     // Morning Briefing page
     'aiUnderwriter'
   ],
 
@@ -459,6 +470,7 @@ export const ROLE_NAVIGATION = {
     'reconciliation',
     'smartDocs',
     'calendar',
+    'briefing',     // Morning Briefing page
     'aiUnderwriter'
   ],
 
@@ -470,6 +482,7 @@ export const ROLE_NAVIGATION = {
     'reconciliation',
     'smartDocs',
     'calendar',
+    'briefing',     // Morning Briefing page
     'aiUnderwriter'
   ],
 
@@ -484,6 +497,7 @@ export const ROLE_NAVIGATION = {
     'smartDocs',
     'marketing',
     'calendar',
+    'briefing',         // Morning Briefing page
     'scorecard',        // Scorecard for performance tracking
     'goalTracker',      // Goal Tracker for production goals
     'aiUnderwriter',
@@ -498,6 +512,7 @@ export const ROLE_NAVIGATION = {
     'tasks',
     'reconciliation',
     'calendar',
+    'briefing',         // Morning Briefing page
     'accounting',       // Accounting System
     // 'recruiting'  // DEPRECATED: Premium feature deregistered — not yet launched
   ]

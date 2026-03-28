@@ -396,6 +396,114 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     logger.info(f"Inbound SMS from {from_number}: {message_body[:50]}...")
 
     # ======================================================================
+    # Voice Workflow Scheduling Intercept
+    # Check if this SMS belongs to an active voice-commanded scheduling
+    # workflow BEFORE other intercepts. These are time-sensitive
+    # availability negotiation conversations.
+    # ======================================================================
+    _vw_intercept_workflow_id = None
+    try:
+        from services.voice_scheduling_workflow_service import VoiceSchedulingWorkflowService
+        from services.scheduling_conversation_service import SchedulingConversationService
+
+        # --- Tenant isolation: derive org_id from the receiving Telnyx number ---
+        # VerifiedCallerId maps phone_number -> organization_id.
+        # If the receiving number is not in verified_caller_ids, we fall back to
+        # querying without an org filter but log a warning so this gap is visible.
+        _vw_org_id = None
+        try:
+            org_row = db.execute(sa_text("""
+                SELECT organization_id FROM verified_caller_ids
+                WHERE phone_number = :to_phone AND organization_id IS NOT NULL
+                LIMIT 1
+            """), {"to_phone": normalized_to}).fetchone()
+            if org_row:
+                _vw_org_id = org_row[0]
+            else:
+                logger.warning(
+                    "voice_scheduling_intercept: no org mapping for receiving number %s "
+                    "(last4=%s) — querying workflows without tenant filter",
+                    normalized_to, normalized_to[-4:],
+                )
+        except Exception as e:
+            logger.warning("voice_scheduling_intercept: org lookup failed, proceeding without tenant filter: %s", e)
+
+        vw_service = VoiceSchedulingWorkflowService(db)
+
+        # Tenant-isolated lookup: org_id is required by the service
+        if _vw_org_id is not None:
+            active_workflow = vw_service.find_active_workflow_by_phone(normalized_from, organization_id=_vw_org_id)
+        else:
+            # No org mapping found — cannot safely query without tenant filter
+            logger.warning(
+                "voice_scheduling_intercept: skipping workflow lookup — no org_id resolved for receiving number ...%s",
+                normalized_to[-4:] if normalized_to else "????",
+            )
+            active_workflow = None
+
+        if active_workflow:
+            _vw_intercept_workflow_id = active_workflow.id
+            logger.info(
+                "voice_scheduling_intercept: matched workflow_id=%d, phone=...%s, org_id=%s",
+                active_workflow.id, normalized_from[-4:], active_workflow.organization_id,
+            )
+
+            sched_service = SchedulingConversationService(db)
+            logger.info(
+                "voice_scheduling_intercept: delegating to handle_reply, "
+                "workflow_id=%d, message_preview='%s'",
+                active_workflow.id, (message_body or "")[:50],
+            )
+            sched_result = sched_service.handle_reply(
+                workflow_id=active_workflow.id,
+                sender_phone=normalized_from,
+                message_body=message_body,
+                organization_id=_vw_org_id,
+            )
+            if sched_result is not None:
+                # Store SMS in sms_messages for compliance audit trail.
+                # Note: the message body is ALSO recorded in the workflow's
+                # conversation_history via workflow.add_message("contact", ...)
+                # inside handle_reply, so audit coverage is dual-path.
+                try:
+                    db.execute(sa_text("""
+                        INSERT INTO sms_messages (
+                            direction, from_number, to_number, body,
+                            provider, provider_message_id, status, created_at
+                        ) VALUES (
+                            'inbound', :from_number, :to_number, :body,
+                            'telnyx', :message_id, 'received', NOW()
+                        )
+                    """), {
+                        "from_number": from_number,
+                        "to_number": to_number,
+                        "body": message_body,
+                        "message_id": event.message_id,
+                    })
+                    db.commit()
+                except Exception as e:
+                    logger.error(
+                        "voice_scheduling_intercept: failed to store SMS audit record, "
+                        "workflow_id=%d: %s", active_workflow.id, e,
+                    )
+                logger.info(
+                    "voice_scheduling_intercept: completed, workflow_id=%d, result_status=%s",
+                    active_workflow.id, sched_result.get("action", "unknown"),
+                )
+                return {"status": "received", "handler": "voice_scheduling", "result": sched_result}
+        else:
+            logger.debug(
+                "voice_scheduling_intercept: no active workflow for phone=...%s",
+                normalized_from[-4:],
+            )
+    except Exception as e:
+        logger.exception(
+            "voice_scheduling_intercept: error (falling through to next handler), "
+            "workflow_id=%s, from=...%s",
+            _vw_intercept_workflow_id, normalized_from[-4:],
+        )
+
+    # ======================================================================
     # AI Prospect Re-Engagement Intercept
     # Check if this SMS belongs to an active AI conversation BEFORE
     # normal SMS intelligence processing. If handled, still store the

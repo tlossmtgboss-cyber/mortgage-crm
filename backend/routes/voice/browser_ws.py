@@ -190,8 +190,9 @@ async def browser_voice_websocket(websocket: WebSocket):
         "needs_flush": False,     # HIGH-4: Flag for early flush when buffer exceeds cap
     }
 
+    # P2: Periodic transcript flush coroutine
     async def _flush_transcript_periodically():
-        """P2: Flush accumulated transcript to DB every 30 seconds."""
+        """Flush accumulated transcript to DB every 30 seconds."""
         FLUSH_INTERVAL = 30
         while True:
             await asyncio.sleep(FLUSH_INTERVAL)
@@ -203,7 +204,6 @@ async def browser_voice_websocket(websocket: WebSocket):
                 if not sid or (flushed >= len(parts) and not needs_flush):
                     continue
                 new_parts = parts[flushed:]
-                ci_state["flushed_index"] = len(parts)
                 ci_state["needs_flush"] = False
             chunk = "\n".join(f"[{role}]: {txt}" for role, txt in new_parts)
             try:
@@ -211,6 +211,9 @@ async def browser_voice_websocket(websocket: WebSocket):
                 bridge = VoiceCIBridgeService(db, ws_organization_id, ws_user_id)
                 await bridge.append_transcript_chunk(sid, chunk)
                 db.commit()
+                async with ci_lock:
+                    ci_state["flushed_index"] = len(parts)
+                logger.debug(f"CI transcript flushed: {len(new_parts)} parts for session {sid[:8]}")
             except Exception as flush_err:
                 logger.warning(f"Periodic transcript flush failed: {flush_err}")
                 try:
@@ -418,17 +421,22 @@ async def browser_voice_websocket(websocket: WebSocket):
                                             ci_state["transcript_parts"] = []
                                             ci_state["flushed_index"] = 0
                                             ci_state["needs_flush"] = False
-                                        # P2: Start periodic transcript flush task
-                                        if ci_state.get("flush_task") is None:
-                                            ci_state["flush_task"] = asyncio.create_task(
-                                                _flush_transcript_periodically()
-                                            )
+                                        # P2: Cancel existing flush task before starting new one
+                                        if ci_state.get("flush_task"):
+                                            ci_state["flush_task"].cancel()
+                                        ci_state["flush_task"] = asyncio.create_task(
+                                            _flush_transcript_periodically()
+                                        )
                                         logger.info(f"CI transcript accumulation started for session {ci_session_id}")
                                         await websocket.send_json({
                                             "type": "ci_session_started",
                                             "session_id": ci_session_id,
                                         })
                                     elif func_name == "stop_call_recording":
+                                        # P2: Stop periodic flush
+                                        if ci_state.get("flush_task"):
+                                            ci_state["flush_task"].cancel()
+                                            ci_state["flush_task"] = None
                                         # Save accumulated transcript before session closes
                                         async with ci_lock:
                                             ci_sid = ci_state["session_id"] or result.get("session_id")
@@ -530,11 +538,10 @@ async def browser_voice_websocket(websocket: WebSocket):
             logger.error(f"Error in browser_voice_session (send error to client): {e}")
             pass  # Client may have disconnected
     finally:
-        # P2: Cancel periodic flush task
+        # P2: Cancel periodic flush task on disconnect
         if ci_state.get("flush_task"):
             ci_state["flush_task"].cancel()
             ci_state["flush_task"] = None
-
         # Save any unsaved CI transcript before tearing down
         async with ci_lock:
             disconnect_sid = ci_state["session_id"]

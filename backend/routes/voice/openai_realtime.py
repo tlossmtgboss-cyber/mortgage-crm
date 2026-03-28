@@ -244,10 +244,8 @@ async def connect_to_openai_realtime_browser():
                             "client_name": {"type": "string", "description": "Name of the person on the call, if known"},
                             "client_phone": {"type": "string", "description": "Phone number of the person, if known"},
                             "context": {"type": "string", "description": "Brief context like 'rate inquiry' or 'application follow-up'"},
-                            "call_control_id": {"type": "string", "description": "Telephony call control ID to link CI session to a live call"},
-                            "call_provider": {"type": "string", "description": "Telephony provider (telnyx, twilio, etc.)"},
-                            "call_control_id": {"type": "string", "description": "Telephony call control ID to link CI session to a live call"},
-                            "call_provider": {"type": "string", "description": "Telephony provider (telnyx, twilio, etc.)"}
+                            "call_control_id": {"type": "string", "description": "Telnyx call control ID or Twilio call SID to link this CI session to an active telephony call"},
+                            "call_provider": {"type": "string", "enum": ["telnyx", "twilio"], "description": "Telephony provider for the linked call"}
                         }
                     }
                 },

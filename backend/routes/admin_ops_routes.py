@@ -2879,6 +2879,63 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             logger.error(f"Error clearing all CRM data: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail="Internal server error")
 
+    # ========================================================================
+    # DEMO DATA SEEDING & CLEANUP
+    # ========================================================================
+
+    @app.post("/api/v1/admin/seed-demo-data")
+    async def seed_demo_data_endpoint(
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Seed realistic demo data into the current user's organization.
+        Admin/site_admin/platform_admin only.
+        """
+        if not hasattr(current_user, 'role') or current_user.role not in ('admin', 'site_admin', 'platform_admin'):
+            raise HTTPException(status_code=403, detail="Admin role required to seed demo data")
+
+        try:
+            from scripts.seed_demo_org import seed_demo_data
+            result = seed_demo_data(
+                db,
+                organization_id=current_user.organization_id,
+                user_id=current_user.id,
+            )
+            return {
+                "status": "ok",
+                "message": f"Seeded {result['total']} demo entities",
+                **result,
+            }
+        except Exception as e:
+            logger.exception("Demo data seeding failed")
+            raise HTTPException(status_code=500, detail="Internal server error")
+
+    @app.delete("/api/v1/admin/seed-demo-data")
+    async def clear_demo_data_endpoint(
+        db: Session = Depends(get_db),
+        current_user=Depends(get_current_user),
+    ):
+        """Remove all demo-seeded data from the current user's organization.
+        Admin/site_admin/platform_admin only.
+        """
+        if not hasattr(current_user, 'role') or current_user.role not in ('admin', 'site_admin', 'platform_admin'):
+            raise HTTPException(status_code=403, detail="Admin role required to clear demo data")
+
+        try:
+            from scripts.seed_demo_org import clear_demo_data
+            result = clear_demo_data(
+                db,
+                organization_id=current_user.organization_id,
+            )
+            return {
+                "status": "ok",
+                "message": f"Removed {result['total']} demo entities",
+                **result,
+            }
+        except Exception as e:
+            logger.exception("Demo data cleanup failed")
+            raise HTTPException(status_code=500, detail="Internal server error")
+
     @app.get("/api/v1/admin/crm-data-counts")
     async def get_crm_data_counts(
         admin_key: str = Query(None),
