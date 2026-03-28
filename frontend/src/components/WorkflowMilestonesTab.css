@@ -92,3 +92,50 @@
   font-size: 14px;
   line-height: 1.6;
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .workflow-milestones-tab {
+    padding: 16px;
+  }
+
+  .section-header h2 {
+    font-size: 20px;
+  }
+
+  .placeholder-section {
+    padding: 20px;
+  }
+
+  .placeholder-features {
+    padding: 14px;
+  }
+
+  .placeholder-features h4 {
+    font-size: 15px;
+  }
+
+  .migration-notice {
+    padding: 12px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .workflow-milestones-tab {
+    padding: 12px;
+  }
+
+  .placeholder-section {
+    padding: 16px;
+  }
+
+  .placeholder-section h3 {
+    font-size: 17px;
+  }
+
+  .placeholder-features li {
+    margin-bottom: 8px;
+    font-size: 14px;
+  }
+}

@@ -322,3 +322,70 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .impersonation-modal {
+    width: calc(100% - 32px);
+    max-height: calc(100vh - 32px);
+  }
+
+  .modal-header {
+    padding: 16px 20px;
+  }
+
+  .modal-header h2 {
+    font-size: 20px;
+  }
+
+  .modal-body {
+    padding: 20px;
+  }
+
+  .employee-info {
+    flex-direction: column;
+    text-align: center;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .radio-option {
+    padding: 12px;
+  }
+
+  .modal-footer {
+    padding: 16px 20px;
+    flex-direction: column;
+  }
+
+  .btn-cancel,
+  .btn-start {
+    width: 100%;
+    text-align: center;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  .impersonation-modal {
+    width: calc(100% - 16px);
+    border-radius: 8px;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .modal-header {
+    padding: 14px 16px;
+  }
+
+  .modal-footer {
+    padding: 14px 16px;
+  }
+
+  .radio-content strong {
+    font-size: 14px;
+  }
+}

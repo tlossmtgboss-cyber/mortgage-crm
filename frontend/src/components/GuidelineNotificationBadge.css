@@ -39,3 +39,12 @@
     filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8));
   }
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .notification-badge {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

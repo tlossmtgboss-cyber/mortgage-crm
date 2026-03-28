@@ -189,3 +189,36 @@
   font-size: 12px;
   font-weight: normal;
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .clickable-email,
+  .clickable-phone {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 0;
+  }
+
+  .phone-action-btn {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    font-size: 18px;
+  }
+
+  .phone-with-actions {
+    gap: 12px;
+  }
+
+  .phone-action-buttons {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .phone-with-actions {
+    flex-wrap: wrap;
+  }
+}
