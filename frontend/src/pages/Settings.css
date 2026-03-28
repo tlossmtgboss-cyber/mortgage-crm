@@ -4639,3 +4639,80 @@ textarea.text-input {
     gap: 12px;
   }
 }
+
+/* =============================================
+   DARK MODE OVERRIDES — SETTINGS
+   ============================================= */
+
+[data-theme="dark"] .settings-header h1,
+[data-theme="dark"] .settings-main h2,
+[data-theme="dark"] .header-text h2 {
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .settings-header p,
+[data-theme="dark"] .section-description,
+[data-theme="dark"] .header-text .section-description {
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .settings-main {
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .sidebar-btn {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .sidebar-btn:hover,
+[data-theme="dark"] .sidebar-btn.child:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--brand-primary);
+}
+
+[data-theme="dark"] .sidebar-btn.active,
+[data-theme="dark"] .sidebar-btn.child.active {
+  background: var(--brand-primary);
+  color: white;
+  border-color: var(--brand-primary);
+}
+
+[data-theme="dark"] .sidebar-btn.parent.expanded {
+  background: rgba(33, 141, 141, 0.1);
+  color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+[data-theme="dark"] .sidebar-children {
+  border-left-color: var(--color-border);
+}
+
+[data-theme="dark"] .sidebar-btn.child {
+  background: transparent;
+}
+
+[data-theme="dark"] .expand-icon {
+  color: var(--color-text-tertiary);
+}
+
+[data-theme="dark"] .settings-sidebar::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+}
+
+[data-theme="dark"] .settings-sidebar::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+}
+
+[data-theme="dark"] .integration-search {
+  border-color: var(--color-border);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .connection-status-card {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border);
+}

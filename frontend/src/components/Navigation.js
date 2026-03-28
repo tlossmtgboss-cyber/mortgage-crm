@@ -8,6 +8,7 @@ import { usePrefetch } from '../hooks/useQueries';
 import NotificationBell from './NotificationBell';
 import UpgradeModal from './UpgradeModal';
 import RoleSwitcher from './RoleSwitcher';
+import ThemeToggle from './ThemeToggle';
 import './Navigation.css';
 
 /**
@@ -333,6 +334,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             <NotificationBell />
             {/* Multi-Role Switcher - shows when user has multiple assigned roles */}
             <RoleSwitcher />
+            <ThemeToggle />
             <Link
               to="/settings"
               className={`settings-link ${isActive('/settings') ? 'active' : ''}`}

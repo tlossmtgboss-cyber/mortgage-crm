@@ -2614,3 +2614,133 @@
     font-size: 20px;
   }
 }
+
+/* =============================================
+   DARK MODE OVERRIDES
+   ============================================= */
+
+[data-theme="dark"] .dashboard {
+  background: var(--color-bg-base);
+}
+
+[data-theme="dark"] .dashboard-header-compact {
+  border-bottom-color: var(--color-border);
+}
+
+[data-theme="dark"] .dashboard-header-compact h1,
+[data-theme="dark"] .block-header h2,
+[data-theme="dark"] .task-title,
+[data-theme="dark"] .money-value,
+[data-theme="dark"] .kpi-number,
+[data-theme="dark"] .target-amount,
+[data-theme="dark"] .issue-borrower,
+[data-theme="dark"] .metric-value,
+[data-theme="dark"] .unified-header h3,
+[data-theme="dark"] .count-number {
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .header-date,
+[data-theme="dark"] .task-stage,
+[data-theme="dark"] .money-label,
+[data-theme="dark"] .kpi-label,
+[data-theme="dark"] .kpi-caption,
+[data-theme="dark"] .count-label,
+[data-theme="dark"] .target-text,
+[data-theme="dark"] .metric-label,
+[data-theme="dark"] .issue-problem,
+[data-theme="dark"] .source-text,
+[data-theme="dark"] .click-to-view p,
+[data-theme="dark"] .ai-text,
+[data-theme="dark"] .ai-projection,
+[data-theme="dark"] .ai-alert-item {
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .dashboard-block,
+[data-theme="dark"] .settings-main {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .task-item,
+[data-theme="dark"] .money-stat,
+[data-theme="dark"] .kpi-card,
+[data-theme="dark"] .metric-item,
+[data-theme="dark"] .task-source-badge {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .block-header {
+  border-bottom-color: var(--color-border);
+}
+
+[data-theme="dark"] .task-actions {
+  border-top-color: var(--color-border);
+}
+
+[data-theme="dark"] .pipeline-table th {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border-bottom-color: var(--color-border);
+}
+
+[data-theme="dark"] .pipeline-table td {
+  border-bottom-color: var(--color-border-light);
+}
+
+[data-theme="dark"] .clickable-row:hover,
+[data-theme="dark"] .task-summary-view.clickable-container:hover {
+  background: var(--color-bg-hover);
+}
+
+[data-theme="dark"] .clickable-block:hover {
+  border-color: var(--brand-primary);
+}
+
+[data-theme="dark"] .drag-handle {
+  background: var(--color-bg-surface);
+  color: var(--brand-primary);
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme="dark"] .ai-suggestion,
+[data-theme="dark"] .ai-projection {
+  background: rgba(33, 141, 141, 0.12);
+}
+
+[data-theme="dark"] .ai-alerts-container,
+[data-theme="dark"] .ai-alerts-section {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+[data-theme="dark"] .ai-alerts-header h3,
+[data-theme="dark"] .ai-alert-title {
+  color: #fbbf24;
+}
+
+[data-theme="dark"] .ai-alert-row {
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .issue-item {
+  background: rgba(239, 68, 68, 0.08);
+}
+
+[data-theme="dark"] .kpi-progress-bar,
+[data-theme="dark"] .target-bar {
+  background: var(--color-bg-hover);
+}
+
+[data-theme="dark"] .btn-task-action {
+  background: transparent;
+  color: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+[data-theme="dark"] .btn-task-action:hover {
+  background: var(--brand-primary);
+  color: white;
+}

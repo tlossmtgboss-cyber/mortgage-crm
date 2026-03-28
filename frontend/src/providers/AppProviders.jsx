@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ThemeProvider } from '../contexts/ThemeContext';
 import { ImpersonationProvider } from '../contexts/ImpersonationContext';
 import { PermissionProvider } from '../contexts/PermissionContext';
 import { ModuleProvider } from '../contexts/ModuleContext';
@@ -27,15 +28,17 @@ export { queryClient };
 function AppProviders({ children }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <ErrorBoundary>
-        <ImpersonationProvider>
-          <PermissionProvider>
-            <ModuleProvider>
-              {children}
-            </ModuleProvider>
-          </PermissionProvider>
-        </ImpersonationProvider>
-      </ErrorBoundary>
+      <ThemeProvider>
+        <ErrorBoundary>
+          <ImpersonationProvider>
+            <PermissionProvider>
+              <ModuleProvider>
+                {children}
+              </ModuleProvider>
+            </PermissionProvider>
+          </ImpersonationProvider>
+        </ErrorBoundary>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
