@@ -318,6 +318,8 @@ async def upload_document_for_requirement(
         # Update request status based on result
         if result.decision and result.decision.value == "ACCEPT":
             request.status = RequestStatus.ACCEPTED
+            request.completed_at = datetime.utcnow()
+            request.fulfilled_at = datetime.utcnow()
         elif result.decision and result.decision.value == "REJECT":
             request.status = RequestStatus.REJECTED
         elif request.status == RequestStatus.OPEN:
