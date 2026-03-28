@@ -179,6 +179,8 @@ class User(Base):
     leads = relationship("Lead", back_populates="owner")
     loans = relationship("Loan", back_populates="loan_officer")
 
+    device_tokens = relationship("DeviceToken", back_populates="user", cascade="all, delete-orphan")
+
     # Manager hierarchy (self-referential)
     manager = relationship("User", remote_side="User.id", foreign_keys="User.manager_id",
                            backref="direct_reports")

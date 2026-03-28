@@ -58,7 +58,11 @@ def register_auth_security_routes(app, get_db, get_current_user, get_current_use
     try:
         from routes.auth_routes import router as auth_routes_router, setup_auth_routes
         app.include_router(auth_routes_router, tags=["Authentication"])
-        setup_auth_routes(app, oauth2_scheme, get_current_user)
+        try:
+            from database.models.device_token import DeviceToken
+        except ImportError:
+            DeviceToken = None
+        setup_auth_routes(app, oauth2_scheme, get_current_user, DeviceToken=DeviceToken)
         logger.info("Authentication routes loaded (/token, password reset, registration)")
     except Exception as e:
         logger.warning(f"Authentication routes not loaded: {e}")

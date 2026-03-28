@@ -157,6 +157,9 @@ from .security import (
     Notification,
 )
 
+# Device token models (push notifications)
+from .device_token import DeviceToken
+
 # Subscription & billing models
 from .subscription import (
     SubscriptionPlan,
