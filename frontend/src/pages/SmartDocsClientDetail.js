@@ -16,9 +16,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
+import { resendPortalLink } from '../services/docDeliveryApi';
 import IncomeCalculatorModal from '../components/income/IncomeCalculatorModal';
 import ESignModal from '../components/esign/ESignModal';
 import RequestDocumentModal from '../components/smart-docs/RequestDocumentModal';
+import SendNeedsListModal from '../components/smart-docs/SendNeedsListModal';
+import SendReminderModal from '../components/smart-docs/SendReminderModal';
 import './SmartDocsClientDetail.css';
 import { toast } from '../utils/toast';
 
@@ -40,6 +43,22 @@ function SmartDocsClientDetail() {
   const [esignModalOpen, setEsignModalOpen] = useState(false);
   const [selectedDocForEsign, setSelectedDocForEsign] = useState(null);
   const [requestDocModalOpen, setRequestDocModalOpen] = useState(false);
+  const [needsListModalOpen, setNeedsListModalOpen] = useState(false);
+  const [reminderModalOpen, setReminderModalOpen] = useState(false);
+  const [portalLinkDropdownOpen, setPortalLinkDropdownOpen] = useState(false);
+  const [portalLinkSending, setPortalLinkSending] = useState(false);
+
+  // Close portal link dropdown on outside click
+  useEffect(() => {
+    if (!portalLinkDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (!e.target.closest('.portal-link-dropdown-container')) {
+        setPortalLinkDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [portalLinkDropdownOpen]);
 
   // Available document types for dropdown (must match backend DocType enum)
   const DOCUMENT_TYPES = [
@@ -623,6 +642,26 @@ function SmartDocsClientDetail() {
     return names[normalizedType] || docType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   };
 
+  // Count open documents for delivery actions
+  const openDocumentCount = documents.filter((doc) => {
+    const status = (doc.status || '').toUpperCase();
+    return status === 'OPEN' || status === 'REQUESTED' || status === 'OVERDUE' || status === 'PENDING';
+  }).length;
+
+  // Handle resend portal link
+  const handleResendPortalLink = async (channel) => {
+    setPortalLinkDropdownOpen(false);
+    setPortalLinkSending(true);
+    try {
+      await resendPortalLink(loanId, channel);
+      toast.success(`Portal link sent via ${channel}`);
+    } catch (err) {
+      toast.error(err.message || `Failed to send portal link via ${channel}`);
+    } finally {
+      setPortalLinkSending(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="client-detail-page">
@@ -653,6 +692,50 @@ function SmartDocsClientDetail() {
           >
             📝 Request Document
           </button>
+          {openDocumentCount > 0 && (
+            <>
+              <button
+                className="send-needs-btn"
+                onClick={() => setNeedsListModalOpen(true)}
+                title="Send needs list to borrower"
+              >
+                📨 Send Needs List
+              </button>
+              <button
+                className="send-reminder-btn"
+                onClick={() => setReminderModalOpen(true)}
+                title="Send reminder for outstanding documents"
+              >
+                🔔 Send Reminder
+              </button>
+            </>
+          )}
+          <div className="portal-link-dropdown-container">
+            <button
+              className="portal-link-btn"
+              onClick={() => setPortalLinkDropdownOpen(!portalLinkDropdownOpen)}
+              disabled={portalLinkSending}
+              title="Resend borrower portal link"
+            >
+              {portalLinkSending ? '...' : '🔗 Portal Link'}
+            </button>
+            {portalLinkDropdownOpen && (
+              <div className="portal-link-dropdown">
+                <button
+                  className="portal-link-option"
+                  onClick={() => handleResendPortalLink('email')}
+                >
+                  ✉️ Send via Email
+                </button>
+                <button
+                  className="portal-link-option"
+                  onClick={() => handleResendPortalLink('sms')}
+                >
+                  📱 Send via SMS
+                </button>
+              </div>
+            )}
+          </div>
           <button
             className="income-calc-btn"
             onClick={() => setShowIncomeModal(true)}
@@ -990,6 +1073,25 @@ function SmartDocsClientDetail() {
           setRequestDocModalOpen(false);
           fetchClientData();
         }}
+      />
+
+      {/* Send Needs List Modal */}
+      <SendNeedsListModal
+        isOpen={needsListModalOpen}
+        onClose={() => setNeedsListModalOpen(false)}
+        loanId={parseInt(loanId)}
+        borrowerName={client?.name}
+        loanNumber={client?.loanNumber}
+        documentCount={openDocumentCount}
+      />
+
+      {/* Send Reminder Modal */}
+      <SendReminderModal
+        isOpen={reminderModalOpen}
+        onClose={() => setReminderModalOpen(false)}
+        loanId={parseInt(loanId)}
+        borrowerName={client?.name}
+        documents={documents}
       />
     </div>
   );

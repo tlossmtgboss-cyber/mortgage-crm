@@ -15,6 +15,7 @@ import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import { isMasterAdmin } from '../config/roleConfig';
 import AdminContracts from '../components/AdminContracts';
+import BatchReminderModal from '../components/smart-docs/BatchReminderModal';
 import './SmartDocs.css';
 import { toast } from '../utils/toast';
 
@@ -45,6 +46,9 @@ function SmartDocs() {
   const [queueData, setQueueData] = useState({ queue: [], total: 0, summary: {} });
   const [queueSummary, setQueueSummary] = useState(null);
   const [slaFilter, setSlaFilter] = useState('all');
+
+  // Batch reminder modal state
+  const [batchReminderOpen, setBatchReminderOpen] = useState(false);
 
   // Fetch all loans and categorize them
   const fetchAllLoans = useCallback(async () => {
@@ -467,6 +471,17 @@ function SmartDocs() {
           <h1>Smart Docs</h1>
           <p className="subtitle">Track and manage document collection across all clients</p>
         </div>
+        {outstandingDocs.applicants.length > 0 && (
+          <div className="header-batch-actions">
+            <button
+              className="btn-batch-reminder"
+              onClick={() => setBatchReminderOpen(true)}
+              title="Send reminders to all borrowers with outstanding documents"
+            >
+              📨 Send Batch Reminder ({outstandingDocs.applicants.length})
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Duplicate Warning Banner */}
@@ -1008,6 +1023,14 @@ function SmartDocs() {
           </button>
         </div>
       )}
+
+      {/* Batch Reminder Modal */}
+      <BatchReminderModal
+        isOpen={batchReminderOpen}
+        onClose={() => setBatchReminderOpen(false)}
+        loanIds={outstandingDocs.applicants.map((a) => a.loan_id)}
+        loanCount={outstandingDocs.applicants.length}
+      />
     </div>
   );
 }
