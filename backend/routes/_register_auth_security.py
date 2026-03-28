@@ -23,6 +23,14 @@ def register_auth_security_routes(app, get_db, get_current_user, get_current_use
     except Exception as e:
         logger.warning(f"Well-known routes not loaded: {e}")
 
+    # Privacy and legal pages (no auth required — App Store requirement)
+    try:
+        from routes.privacy_routes import router as privacy_router
+        app.include_router(privacy_router)
+        logger.info("Privacy/legal routes loaded")
+    except Exception as e:
+        logger.warning(f"Privacy routes not loaded: {e}")
+
     # SECURITY: Include CSRF token routes
     try:
         from middleware.csrf_protection import create_csrf_routes
