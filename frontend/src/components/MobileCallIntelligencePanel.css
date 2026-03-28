@@ -634,3 +634,64 @@
   cursor: pointer;
   min-height: 44px;
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .mcip-agent-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px;
+  }
+
+  .mcip-header {
+    padding: 10px 12px;
+  }
+
+  .mcip-content {
+    padding: 10px 12px;
+  }
+
+  .mcip-tabs {
+    margin: 10px 12px 0;
+  }
+
+  .mcip-client-banner {
+    margin: 0 12px;
+  }
+
+  .mcip-record-area {
+    padding: 16px 12px;
+  }
+
+  .mcip-sheet {
+    max-height: 80vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .mcip-agent-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .mcip-title {
+    font-size: 15px;
+  }
+
+  .mcip-record-btn {
+    width: 68px;
+    height: 68px;
+  }
+
+  .mcip-record-inner {
+    width: 40px;
+    height: 40px;
+  }
+
+  .mcip-agent-name {
+    font-size: 10px;
+  }
+
+  .mcip-agent-icon {
+    font-size: 20px;
+  }
+}

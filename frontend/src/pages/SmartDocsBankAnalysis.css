@@ -1,0 +1,157 @@
+/**
+ * SmartDocsBankAnalysis Page Styles
+ *
+ * BEM prefix: .sd-bank
+ * Uses CSS custom properties with hard-coded fallbacks.
+ */
+
+/* ---------------------------------------------------------------------------
+   Page Container
+--------------------------------------------------------------------------- */
+
+.sd-bank {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-lg, 24px);
+}
+
+/* ---------------------------------------------------------------------------
+   Header
+--------------------------------------------------------------------------- */
+
+.sd-bank__header {
+  margin-bottom: var(--space-lg, 24px);
+}
+
+.sd-bank__title {
+  margin: 0 0 4px;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--color-text-primary, #1f2937);
+}
+
+.sd-bank__subtitle {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--color-text-secondary, #6b7280);
+}
+
+/* ---------------------------------------------------------------------------
+   Summary Cards Grid
+--------------------------------------------------------------------------- */
+
+.sd-bank__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md, 16px);
+  margin-bottom: var(--space-lg, 24px);
+}
+
+/* ---------------------------------------------------------------------------
+   Search Row
+--------------------------------------------------------------------------- */
+
+.sd-bank__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 8px);
+  margin-bottom: var(--space-lg, 24px);
+}
+
+.sd-bank__search-input {
+  flex: 1;
+  max-width: 400px;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--color-bg-primary, #ffffff);
+  color: var(--color-text-primary, #1f2937);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.sd-bank__search-input::placeholder {
+  color: var(--color-text-secondary, #9ca3af);
+}
+
+.sd-bank__search-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.sd-bank__search-btn {
+  padding: 10px 20px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: var(--color-primary, #2563eb);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.sd-bank__search-btn:hover:not(:disabled) {
+  background: var(--color-primary-dark, #1d4ed8);
+}
+
+.sd-bank__search-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ---------------------------------------------------------------------------
+   Loading / Error States
+--------------------------------------------------------------------------- */
+
+.sd-bank__loading {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--color-text-secondary, #6b7280);
+  font-size: 0.9rem;
+}
+
+.sd-bank__error {
+  padding: 20px 24px;
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  color: #b91c1c;
+  font-size: 0.875rem;
+  margin-bottom: var(--space-lg, 24px);
+}
+
+/* ---------------------------------------------------------------------------
+   Responsive
+--------------------------------------------------------------------------- */
+
+@media (max-width: 768px) {
+  .sd-bank {
+    padding: var(--space-md, 16px);
+  }
+
+  .sd-bank__summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .sd-bank__summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sd-bank__search {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sd-bank__search-input {
+    max-width: none;
+  }
+
+  .sd-bank__search-btn {
+    width: 100%;
+  }
+}

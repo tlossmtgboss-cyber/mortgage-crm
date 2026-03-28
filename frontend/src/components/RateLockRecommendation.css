@@ -335,3 +335,68 @@
   color: #dc3545;
   margin-bottom: 12px;
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .rate-lock-compact {
+    padding: 6px 12px;
+    gap: 6px;
+  }
+
+  .compact-text {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+
+  .rate-lock-widget .widget-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .rate-lock-widget .widget-content {
+    padding: 12px;
+  }
+
+  .recommendation-main {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .action-icon {
+    font-size: 24px;
+  }
+
+  .action-name {
+    font-size: 15px;
+  }
+
+  .quant-summary {
+    padding: 8px;
+  }
+
+  .summary-row,
+  .detail-row {
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 0;
+  }
+
+  .action-btn-primary {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  .rate-lock-widget .widget-content {
+    padding: 10px;
+  }
+
+  .key-reasons li {
+    font-size: 11px;
+  }
+}

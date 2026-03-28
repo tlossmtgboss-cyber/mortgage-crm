@@ -696,3 +696,116 @@
   color: #dc2626;
   margin-bottom: 16px;
 }
+
+/* =============================================
+   MOBILE RESPONSIVE — EXPERIMENTS DASHBOARD
+   ============================================= */
+
+@media (max-width: 768px) {
+  .experiments-dashboard {
+    padding: 16px;
+  }
+
+  .experiments-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .btn-create {
+    width: 100%;
+    text-align: center;
+  }
+
+  .experiments-filters {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .experiments-count {
+    margin-left: 0;
+  }
+
+  .experiments-content {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .experiments-list {
+    max-height: none;
+  }
+
+  .experiment-details {
+    max-height: none;
+  }
+
+  .details-header {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .details-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .details-actions button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .analysis-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .modal-content {
+    max-width: 100%;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .variant-form-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .experiments-dashboard {
+    padding: 12px;
+  }
+
+  .header-title h2 {
+    font-size: 22px;
+  }
+
+  .experiment-card {
+    padding: 12px;
+  }
+
+  .experiment-details {
+    padding: 16px;
+  }
+
+  .analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-header {
+    padding: 16px;
+  }
+
+  .modal-body {
+    padding: 16px;
+  }
+
+  .modal-footer {
+    padding: 12px 16px;
+  }
+}

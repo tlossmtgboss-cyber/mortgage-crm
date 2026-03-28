@@ -509,3 +509,104 @@
   font-size: 16px;
   color: #666;
 }
+
+/* =============================================
+   MOBILE RESPONSIVE — MISSION CONTROL
+   ============================================= */
+
+@media (max-width: 768px) {
+  .mission-control-page {
+    padding: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .status-strip {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .mc-section {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .section-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .metrics-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .integrations-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .security-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .jobs-table {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .jobs-table th,
+  .jobs-table td {
+    padding: 10px 8px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .alert-header {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+@media (max-width: 480px) {
+  .mission-control-page {
+    padding: 12px;
+  }
+
+  .page-header h1 {
+    font-size: 22px;
+  }
+
+  .status-card {
+    padding: 14px;
+  }
+
+  .status-value {
+    font-size: 20px;
+  }
+
+  .metric-card {
+    padding: 14px;
+  }
+
+  .metric-value {
+    font-size: 22px;
+  }
+
+  .security-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .section-header h2 {
+    font-size: 17px;
+  }
+}

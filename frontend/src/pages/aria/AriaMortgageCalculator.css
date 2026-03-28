@@ -1,53 +1,11 @@
 /* Aria Mortgage Calculator — Mobile-first input form */
 
 .aria-calc-page {
-  /* White-label theme variables — override per tenant */
-  --aria-color-primary: #111827;
-  --aria-color-primary-hover: #374151;
-  --aria-color-bg: #ffffff;
-  --aria-color-bg-secondary: #f9fafb;
-  --aria-color-bg-tertiary: #f3f4f6;
-  --aria-color-border: #e5e7eb;
-  --aria-color-border-light: #d1d5db;
-  --aria-color-text-primary: #111827;
-  --aria-color-text-secondary: #374151;
-  --aria-color-text-tertiary: #6b7280;
-  --aria-color-text-muted: #9ca3af;
-  --aria-color-accent: #1a73e8;
-  --aria-color-accent-light: rgba(26, 115, 232, 0.15);
-  --aria-color-success: #059669;
-  --aria-color-warning: #d97706;
-  --aria-color-error: #dc2626;
-  --aria-color-error-light: #fef2f2;
-  --aria-color-error-border: #fecaca;
-
-  /* Workflow status colors */
-  --aria-workflow-active-bg: #f0fdf4;
-  --aria-workflow-active-border: #bbf7d0;
-  --aria-workflow-failed-bg: #fef2f2;
-  --aria-workflow-failed-border: #fecaca;
-  --aria-workflow-expired-opacity: 0.6;
-
-  /* Touch targets */
-  --aria-touch-target-min: 44px;
-
-  /* Border radius */
-  --aria-radius-sm: 8px;
-  --aria-radius-md: 10px;
-  --aria-radius-lg: 12px;
-  --aria-radius-xl: 16px;
-
-  /* Shadows */
-  --aria-shadow-sm: rgba(0, 0, 0, 0.2);
-
-  /* Calc-specific body text (slightly different shade than primary) */
-  --aria-calc-body-text: #1f2937;
-
   min-height: 100vh;
   min-height: -webkit-fill-available;
-  background: var(--aria-color-bg);
+  background: var(--aria-color-bg, #fff);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: var(--aria-calc-body-text);
+  color: var(--aria-color-text-primary, #1f2937);
   padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -70,7 +28,7 @@
 }
 
 .aria-calc-back:active {
-  background: var(--aria-color-bg-tertiary);
+  background: var(--aria-color-bg-tertiary, #f3f4f6);
 }
 
 /* Content */
@@ -81,13 +39,13 @@
 .aria-calc-title {
   font-size: 28px;
   font-weight: 800;
-  color: var(--aria-color-text-primary);
+  color: var(--aria-color-text-primary, #111827);
   margin: 0 0 6px;
 }
 
 .aria-calc-subtitle {
   font-size: 15px;
-  color: var(--aria-color-text-tertiary);
+  color: var(--aria-color-text-tertiary, #6b7280);
   margin: 0 0 24px;
   line-height: 1.4;
 }
@@ -104,7 +62,7 @@
   margin-bottom: 20px;
   font-size: 16px;
   font-weight: 700;
-  color: var(--aria-color-text-primary);
+  color: var(--aria-color-text-primary, #111827);
 }
 
 .aria-calc-section-icon {
@@ -126,21 +84,21 @@
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: var(--aria-color-text-secondary);
+  color: var(--aria-color-text-secondary, #374151);
   margin-bottom: 6px;
 }
 
 .aria-calc-label-hint {
   font-weight: 400;
-  color: var(--aria-color-text-muted);
+  color: var(--aria-color-text-muted, #9ca3af);
 }
 
 /* Toggle group (Purchase / Refinance, loan term) */
 .aria-calc-toggle-group {
   display: flex;
   gap: 0;
-  border: 1px solid var(--aria-color-border-light);
-  border-radius: var(--aria-radius-md);
+  border: 1px solid var(--aria-color-border-light, #d1d5db);
+  border-radius: var(--aria-radius-md, 10px);
   overflow: hidden;
 }
 
@@ -152,14 +110,14 @@
   gap: 8px;
   padding: 12px 16px;
   border: none;
-  background: var(--aria-color-bg);
+  background: var(--aria-color-bg, #fff);
   font-size: 15px;
   font-weight: 500;
-  color: var(--aria-color-text-secondary);
+  color: var(--aria-color-text-secondary, #374151);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background 0.15s ease;
-  border-right: 1px solid var(--aria-color-border-light);
+  border-right: 1px solid var(--aria-color-border-light, #d1d5db);
 }
 
 .aria-calc-toggle:last-child {
@@ -167,7 +125,7 @@
 }
 
 .aria-calc-toggle--active {
-  background: var(--aria-color-bg-tertiary);
+  background: var(--aria-color-bg-tertiary, #f3f4f6);
   font-weight: 600;
 }
 
@@ -175,14 +133,14 @@
   width: 16px;
   height: 16px;
   border-radius: 50%;
-  border: 2px solid var(--aria-color-border-light);
+  border: 2px solid var(--aria-color-border-light, #d1d5db);
   flex-shrink: 0;
 }
 
 .aria-calc-toggle__radio--checked {
-  border-color: var(--aria-color-primary);
-  background: var(--aria-color-primary);
-  box-shadow: inset 0 0 0 3px var(--aria-color-bg);
+  border-color: var(--aria-color-text-primary, #111827);
+  background: var(--aria-color-text-primary, #111827);
+  box-shadow: inset 0 0 0 3px var(--aria-color-bg, #fff);
 }
 
 /* Select dropdown */
@@ -193,11 +151,11 @@
 .aria-calc-select {
   width: 100%;
   padding: 12px 40px 12px 14px;
-  border: 1px solid var(--aria-color-border-light);
-  border-radius: var(--aria-radius-md);
-  background: var(--aria-color-bg);
+  border: 1px solid var(--aria-color-border-light, #d1d5db);
+  border-radius: var(--aria-radius-md, 10px);
+  background: var(--aria-color-bg, #fff);
   font-size: 16px;
-  color: var(--aria-color-text-primary);
+  color: var(--aria-color-text-primary, #111827);
   appearance: none;
   -webkit-appearance: none;
   cursor: pointer;
@@ -205,8 +163,8 @@
 
 .aria-calc-select:focus {
   outline: none;
-  border-color: var(--aria-color-accent);
-  box-shadow: 0 0 0 2px var(--aria-color-accent-light);
+  border-color: var(--aria-color-accent, #1a73e8);
+  box-shadow: 0 0 0 2px var(--aria-color-accent-light, rgba(26, 115, 232, 0.15));
 }
 
 .aria-calc-select-arrow {
@@ -215,7 +173,7 @@
   top: 50%;
   transform: translateY(-50%);
   pointer-events: none;
-  color: var(--aria-color-text-tertiary);
+  color: var(--aria-color-text-tertiary, #6b7280);
   font-size: 14px;
 }
 
@@ -229,24 +187,24 @@
   border: none;
   background: transparent;
   font-size: 13px;
-  color: var(--aria-color-text-tertiary);
+  color: var(--aria-color-text-tertiary, #6b7280);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
 .aria-calc-info-link:active {
-  color: var(--aria-color-text-secondary);
+  color: var(--aria-color-text-secondary, #374151);
 }
 
 .aria-calc-info-box {
   margin-top: 8px;
   padding: 12px;
-  background: var(--aria-color-bg-secondary);
-  border: 1px solid var(--aria-color-border);
-  border-radius: var(--aria-radius-md);
+  background: var(--aria-color-bg-secondary, #f9fafb);
+  border: 1px solid var(--aria-color-border, #e5e7eb);
+  border-radius: var(--aria-radius-md, 10px);
   font-size: 14px;
   line-height: 1.5;
-  color: var(--aria-color-text-secondary);
+  color: var(--aria-color-text-secondary, #374151);
 }
 
 .aria-calc-info-box strong {
@@ -262,28 +220,28 @@
 .aria-calc-currency-input {
   display: flex;
   align-items: center;
-  border: 1px solid var(--aria-color-border-light);
-  border-radius: var(--aria-radius-md);
+  border: 1px solid var(--aria-color-border-light, #d1d5db);
+  border-radius: var(--aria-radius-md, 10px);
   overflow: hidden;
-  background: var(--aria-color-bg);
+  background: var(--aria-color-bg, #fff);
 }
 
 .aria-calc-currency-input:focus-within {
-  border-color: var(--aria-color-accent);
-  box-shadow: 0 0 0 2px var(--aria-color-accent-light);
+  border-color: var(--aria-color-accent, #1a73e8);
+  box-shadow: 0 0 0 2px var(--aria-color-accent-light, rgba(26, 115, 232, 0.15));
 }
 
 .aria-calc-currency-prefix {
   padding: 12px 0 12px 14px;
   font-size: 16px;
-  color: var(--aria-color-text-muted);
+  color: var(--aria-color-text-muted, #9ca3af);
   flex-shrink: 0;
 }
 
 .aria-calc-currency-suffix {
   padding: 12px 14px 12px 0;
   font-size: 16px;
-  color: var(--aria-color-text-muted);
+  color: var(--aria-color-text-muted, #9ca3af);
   flex-shrink: 0;
 }
 
@@ -294,7 +252,7 @@
   border: none;
   background: transparent;
   font-size: 16px;
-  color: var(--aria-color-text-primary);
+  color: var(--aria-color-text-primary, #111827);
   outline: none;
 }
 
@@ -310,7 +268,7 @@
   margin: 10px 0 4px;
   -webkit-appearance: none;
   appearance: none;
-  background: var(--aria-color-border);
+  background: var(--aria-color-border, #e5e7eb);
   border-radius: 3px;
   outline: none;
 }
@@ -320,9 +278,9 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--aria-color-primary);
-  border: 3px solid var(--aria-color-bg);
-  box-shadow: 0 1px 4px var(--aria-shadow-sm);
+  background: var(--aria-color-text-primary, #111827);
+  border: 3px solid var(--aria-color-bg, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
   cursor: pointer;
 }
 
@@ -330,9 +288,9 @@
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--aria-color-primary);
-  border: 3px solid var(--aria-color-bg);
-  box-shadow: 0 1px 4px var(--aria-shadow-sm);
+  background: var(--aria-color-text-primary, #111827);
+  border: 3px solid var(--aria-color-bg, #fff);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
   cursor: pointer;
 }
 
@@ -340,12 +298,12 @@
   display: flex;
   justify-content: space-between;
   font-size: 12px;
-  color: var(--aria-color-text-muted);
+  color: var(--aria-color-text-muted, #9ca3af);
 }
 
 .aria-calc-slider-value {
   font-weight: 700;
-  color: var(--aria-color-text-primary);
+  color: var(--aria-color-text-primary, #111827);
   font-size: 16px;
 }
 
@@ -354,9 +312,9 @@
   width: 100%;
   padding: 16px;
   border: none;
-  border-radius: var(--aria-radius-lg);
-  background: var(--aria-color-primary);
-  color: var(--aria-color-bg);
+  border-radius: var(--aria-radius-lg, 12px);
+  background: var(--aria-color-text-primary, #111827);
+  color: var(--aria-color-bg, #fff);
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
@@ -366,27 +324,27 @@
 }
 
 .aria-calc-submit:active {
-  background: var(--aria-color-primary-hover);
+  background: var(--aria-color-text-secondary, #374151);
 }
 
 /* Results */
 .aria-calc-results {
   margin-top: 24px;
-  border: 1px solid var(--aria-color-border);
-  border-radius: var(--aria-radius-xl);
+  border: 1px solid var(--aria-color-border, #e5e7eb);
+  border-radius: var(--aria-radius-xl, 16px);
   overflow: hidden;
 }
 
 .aria-calc-results__total {
   padding: 20px;
-  background: var(--aria-color-bg-secondary);
+  background: var(--aria-color-bg-secondary, #f9fafb);
   text-align: center;
 }
 
 .aria-calc-results__total-label {
   display: block;
   font-size: 14px;
-  color: var(--aria-color-text-tertiary);
+  color: var(--aria-color-text-tertiary, #6b7280);
   margin-bottom: 4px;
 }
 
@@ -394,7 +352,7 @@
   display: block;
   font-size: 36px;
   font-weight: 800;
-  color: var(--aria-color-text-primary);
+  color: var(--aria-color-text-primary, #111827);
 }
 
 .aria-calc-results__breakdown {
@@ -407,17 +365,17 @@
   align-items: center;
   padding: 8px 0;
   font-size: 15px;
-  color: var(--aria-color-text-secondary);
+  color: var(--aria-color-text-secondary, #374151);
 }
 
 .aria-calc-results__row--loan {
-  color: var(--aria-color-text-tertiary);
+  color: var(--aria-color-text-tertiary, #6b7280);
   font-size: 14px;
 }
 
 .aria-calc-results__divider {
   height: 1px;
-  background: var(--aria-color-border);
+  background: var(--aria-color-border, #e5e7eb);
   margin: 4px 0;
 }
 
@@ -428,7 +386,7 @@
 .aria-calc-info-link:focus-visible,
 .aria-calc-submit:focus-visible,
 .aria-calc-slider:focus-visible {
-  outline: 2px solid #1a73e8;
+  outline: 2px solid var(--aria-color-accent, #1a73e8);
   outline-offset: 2px;
 }
 

@@ -87,3 +87,15 @@ button.readonly-disabled {
   margin-bottom: 2px;
   z-index: 1000;
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  /* Disable hover-only tooltips on touch - they don't work well */
+  .permission-gate-disabled[title]:hover::before,
+  .permission-gate-readonly[title]:hover::before,
+  .permission-gate-disabled[title]:hover::after,
+  .permission-gate-readonly[title]:hover::after {
+    display: none;
+  }
+}

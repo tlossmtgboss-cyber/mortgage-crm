@@ -1,0 +1,142 @@
+/* ============================================================
+   DocumentTimeline — Vertical event timeline for loan documents
+   ============================================================ */
+
+/* Loading state */
+.dt-loading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-sm);
+}
+
+.dt-loading__spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: dt-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes dt-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Empty state */
+.dt-empty {
+  padding: var(--space-md);
+  color: var(--color-text-tertiary);
+  font-size: var(--font-sm);
+}
+
+/* Timeline container */
+.dt-timeline {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Individual event row */
+.dt-event {
+  display: flex;
+  gap: var(--space-sm);
+  min-height: 0;
+}
+
+/* Left track: marker circle + vertical connector */
+.dt-event__track {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+  width: 28px;
+}
+
+/* Circular marker */
+.dt-marker {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+  color: #fff;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+/* Marker color variants */
+.dt-marker--primary  { background-color: var(--color-primary); }
+.dt-marker--success  { background-color: var(--color-success); }
+.dt-marker--error    { background-color: var(--color-error); }
+.dt-marker--warning  { background-color: var(--color-warning); }
+.dt-marker--info     { background-color: var(--color-info); }
+
+/* Vertical connector line between markers */
+.dt-connector {
+  width: 2px;
+  flex: 1;
+  min-height: var(--space-md);
+  background-color: var(--color-border);
+  margin: 2px 0;
+}
+
+/* Right-side event content */
+.dt-event__body {
+  flex: 1;
+  padding-bottom: var(--space-md);
+  min-width: 0;
+}
+
+/* Meta row: type label + timestamp */
+.dt-event__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  margin-top: 4px; /* vertically center with marker */
+}
+
+.dt-event__type {
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+  letter-spacing: 0.04em;
+}
+
+.dt-event__timestamp {
+  font-size: var(--font-xs);
+  color: var(--color-text-tertiary);
+}
+
+/* Document type (bold) */
+.dt-event__doc-type {
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+  margin-top: var(--space-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Description text */
+.dt-event__description {
+  font-size: var(--font-sm);
+  color: var(--color-text-secondary);
+  margin-top: var(--space-xs);
+  line-height: 1.4;
+}
+
+/* User name */
+.dt-event__user {
+  font-size: var(--font-xs);
+  color: var(--color-text-tertiary);
+  margin-top: var(--space-xs);
+}

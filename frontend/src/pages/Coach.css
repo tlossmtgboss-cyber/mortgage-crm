@@ -8,3 +8,23 @@
   max-width: 1200px;
   margin: 0 auto;
 }
+
+/* =============================================
+   MOBILE RESPONSIVE — COACH
+   ============================================= */
+
+@media (max-width: 768px) {
+  .coach-page {
+    padding: 20px 12px;
+  }
+
+  .coach-page-container {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .coach-page {
+    padding: 16px 8px;
+  }
+}

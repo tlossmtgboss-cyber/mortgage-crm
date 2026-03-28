@@ -1,0 +1,274 @@
+/* ============================================================
+   IncomeWorksheet — bordered card with income source table
+   and maker-checker approval actions
+   ============================================================ */
+
+.iw {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-surface);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.iw--empty {
+  padding: var(--space-xl);
+  text-align: center;
+  color: var(--color-text-tertiary);
+}
+
+/* ── Header ── */
+.iw__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-lg);
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border-light);
+  gap: var(--space-md);
+}
+
+.iw__header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.iw__title {
+  margin: 0;
+  font-size: var(--font-lg);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+  line-height: var(--line-tight);
+}
+
+/* Status badge */
+.iw__status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.iw__status-badge--success {
+  background: rgba(33, 127, 141, 0.12);
+  color: var(--color-success);
+  border: 1px solid rgba(33, 127, 141, 0.25);
+}
+
+.iw__status-badge--error {
+  background: rgba(192, 21, 47, 0.10);
+  color: var(--color-error);
+  border: 1px solid rgba(192, 21, 47, 0.25);
+}
+
+.iw__status-badge--warning {
+  background: rgba(168, 75, 47, 0.10);
+  color: var(--color-warning);
+  border: 1px solid rgba(168, 75, 47, 0.25);
+}
+
+/* Total monthly income */
+.iw__header-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.iw__total-label {
+  font-size: var(--font-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.iw__total-value {
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-primary);
+  line-height: var(--line-tight);
+}
+
+/* ── Table ── */
+.iw__table-wrapper {
+  overflow-x: auto;
+}
+
+.iw__empty-table {
+  padding: var(--space-xl);
+  text-align: center;
+  color: var(--color-text-tertiary);
+  font-size: var(--font-sm);
+}
+
+.iw__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-sm);
+}
+
+.iw__table thead {
+  background: var(--color-bg-secondary);
+}
+
+.iw__table th {
+  padding: 10px var(--space-md);
+  text-align: left;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--color-border-light);
+  white-space: nowrap;
+}
+
+.iw__table td {
+  padding: 12px var(--space-md);
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border-light);
+  vertical-align: middle;
+}
+
+.iw__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.iw__table tbody tr:hover td {
+  background: var(--color-bg-hover);
+}
+
+.iw__cell-name {
+  font-weight: var(--weight-medium);
+}
+
+.iw__cell-amount {
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Confidence badges */
+.iw__confidence {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.iw__confidence--high {
+  background: rgba(33, 127, 141, 0.12);
+  color: var(--color-success);
+}
+
+.iw__confidence--medium {
+  background: rgba(168, 75, 47, 0.10);
+  color: var(--color-warning);
+}
+
+.iw__confidence--low {
+  background: rgba(192, 21, 47, 0.10);
+  color: var(--color-error);
+}
+
+/* Verified badge */
+.iw__verified-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.iw__verified-badge--yes {
+  background: rgba(33, 127, 141, 0.12);
+  color: var(--color-success);
+}
+
+.iw__verified-badge--no {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}
+
+/* Override button */
+.iw__override-btn {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+
+.iw__override-btn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: rgba(33, 127, 141, 0.05);
+}
+
+/* ── Actions footer ── */
+.iw__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border-light);
+  background: var(--color-bg-surface);
+}
+
+.iw__btn {
+  padding: 8px 20px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.iw__btn--primary {
+  background: var(--color-primary);
+  color: #fff;
+  border: 1px solid var(--color-primary);
+}
+
+.iw__btn--primary:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.iw__btn--secondary {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.iw__btn--secondary:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+
+/* ── Mobile ── */
+@media (max-width: 768px) {
+  .iw__header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-sm);
+  }
+
+  .iw__header-right {
+    align-items: flex-start;
+  }
+}

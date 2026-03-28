@@ -1,0 +1,296 @@
+/* ============================================================
+   SmartDocsReviewQueue Page
+   ============================================================ */
+
+/* ── Page container ── */
+.sd-review-queue {
+  padding: var(--space-lg, 24px);
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg, 24px);
+}
+
+/* ============================================================
+   Header
+   ============================================================ */
+
+.sd-review-queue__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md, 16px);
+  flex-wrap: wrap;
+}
+
+.sd-review-queue__header-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sd-review-queue__title {
+  margin: 0;
+  font-size: var(--font-2xl, 1.5rem);
+  font-weight: var(--weight-bold, 700);
+  color: var(--color-text-primary, #111827);
+  line-height: var(--line-tight, 1.25);
+}
+
+.sd-review-queue__subtitle {
+  margin: 0;
+  font-size: var(--font-sm, 0.875rem);
+  color: var(--color-text-tertiary, #6b7280);
+}
+
+.sd-review-queue__header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm, 12px);
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   Stat Cards — 4-column grid
+   ============================================================ */
+
+.sd-review-queue__stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md, 16px);
+}
+
+/* ============================================================
+   Priority filter pills
+   ============================================================ */
+
+.sd-review-queue__filters {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs, 8px);
+  flex-wrap: wrap;
+}
+
+.sd-review-queue__filter-pill {
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--weight-medium, 500);
+  padding: 6px 16px;
+  border-radius: var(--radius-full, 9999px);
+  border: 1px solid var(--color-border-light, #e5e7eb);
+  background: var(--color-bg-surface, #fff);
+  color: var(--color-text-secondary, #374151);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
+}
+
+.sd-review-queue__filter-pill:hover {
+  background: var(--color-bg-secondary, #f9fafb);
+}
+
+.sd-review-queue__filter-pill--active {
+  background: var(--color-primary, #2563eb);
+  color: #fff;
+  border-color: var(--color-primary, #2563eb);
+}
+
+.sd-review-queue__filter-pill--active:hover {
+  background: var(--color-primary-dark, #1d4ed8);
+  border-color: var(--color-primary-dark, #1d4ed8);
+}
+
+/* ============================================================
+   Queue list
+   ============================================================ */
+
+.sd-review-queue__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm, 12px);
+}
+
+/* ============================================================
+   Pagination
+   ============================================================ */
+
+.sd-review-queue__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-md, 16px);
+  padding: var(--space-md, 16px) 0;
+}
+
+.sd-review-queue__page-info {
+  font-size: var(--font-sm, 0.875rem);
+  color: var(--color-text-secondary, #374151);
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Shared button styles
+   ============================================================ */
+
+.sd-review-queue__btn {
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--weight-medium, 500);
+  padding: 8px 18px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, opacity 0.15s ease;
+  line-height: 1.4;
+}
+
+.sd-review-queue__btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.sd-review-queue__btn--primary {
+  background: var(--color-primary, #2563eb);
+  color: #fff;
+  border-color: var(--color-primary, #2563eb);
+}
+
+.sd-review-queue__btn--primary:hover:not(:disabled) {
+  background: var(--color-primary-dark, #1d4ed8);
+  border-color: var(--color-primary-dark, #1d4ed8);
+}
+
+.sd-review-queue__btn--secondary {
+  background: var(--color-bg-surface, #fff);
+  color: var(--color-text-secondary, #374151);
+  border-color: var(--color-border-light, #e5e7eb);
+}
+
+.sd-review-queue__btn--secondary:hover:not(:disabled) {
+  background: var(--color-bg-secondary, #f9fafb);
+}
+
+.sd-review-queue__btn--ghost {
+  background: transparent;
+  color: var(--color-text-tertiary, #6b7280);
+  border-color: transparent;
+}
+
+.sd-review-queue__btn--ghost:hover:not(:disabled) {
+  color: var(--color-text-primary, #111827);
+  background: var(--color-bg-secondary, #f9fafb);
+}
+
+/* ============================================================
+   States: loading, empty, error
+   ============================================================ */
+
+.sd-review-queue__loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md, 16px);
+  padding: var(--space-xl, 48px) 0;
+  color: var(--color-text-tertiary, #6b7280);
+  font-size: var(--font-sm, 0.875rem);
+}
+
+.sd-review-queue__spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--color-border-light, #e5e7eb);
+  border-top-color: var(--color-primary, #2563eb);
+  border-radius: 50%;
+  animation: sd-spin 0.75s linear infinite;
+}
+
+@keyframes sd-spin {
+  to { transform: rotate(360deg); }
+}
+
+.sd-review-queue__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-md, 16px);
+  padding: var(--space-xl, 48px) 0;
+  color: var(--color-text-tertiary, #6b7280);
+  text-align: center;
+}
+
+.sd-review-queue__empty-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
+.sd-review-queue__empty p {
+  margin: 0;
+  font-size: var(--font-sm, 0.875rem);
+}
+
+.sd-review-queue__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md, 16px);
+  padding: var(--space-md, 16px);
+  background: rgba(192, 21, 47, 0.06);
+  border: 1px solid rgba(192, 21, 47, 0.2);
+  border-radius: var(--radius-md, 8px);
+  font-size: var(--font-sm, 0.875rem);
+  color: var(--color-error, #c0152f);
+}
+
+.sd-review-queue__error button {
+  font-size: var(--font-sm, 0.875rem);
+  font-weight: var(--weight-medium, 500);
+  padding: 4px 12px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid rgba(192, 21, 47, 0.3);
+  background: transparent;
+  color: var(--color-error, #c0152f);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sd-review-queue__error button:hover {
+  background: rgba(192, 21, 47, 0.1);
+}
+
+/* ============================================================
+   Responsive — 768px: 2-col stats, stacked header
+   ============================================================ */
+
+@media (max-width: 768px) {
+  .sd-review-queue__stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .sd-review-queue__header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sd-review-queue__header-actions {
+    width: 100%;
+  }
+
+  .sd-review-queue__header-actions .sd-review-queue__btn {
+    flex: 1;
+    text-align: center;
+  }
+}
+
+/* ============================================================
+   Responsive — 480px: 1-col stats
+   ============================================================ */
+
+@media (max-width: 480px) {
+  .sd-review-queue__stats {
+    grid-template-columns: 1fr;
+  }
+
+  .sd-review-queue__pagination {
+    flex-wrap: wrap;
+  }
+}

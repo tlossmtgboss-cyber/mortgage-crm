@@ -168,7 +168,16 @@ class SchedulerConfig(Base):
 
     # Working hours (JSON for flexibility)
     # Format: {"monday": {"start": "09:00", "end": "17:00", "enabled": true}, ...}
-    working_hours = Column(JSON, default=dict)
+    # Default: M-F 9am-5pm enabled; Sat/Sun disabled but with 9am-1pm as template
+    working_hours = Column(JSON, default=lambda: {
+        "monday": {"start": "09:00", "end": "17:00", "enabled": True},
+        "tuesday": {"start": "09:00", "end": "17:00", "enabled": True},
+        "wednesday": {"start": "09:00", "end": "17:00", "enabled": True},
+        "thursday": {"start": "09:00", "end": "17:00", "enabled": True},
+        "friday": {"start": "09:00", "end": "17:00", "enabled": True},
+        "saturday": {"start": "09:00", "end": "13:00", "enabled": False},
+        "sunday": {"start": "09:00", "end": "13:00", "enabled": False},
+    })
 
     # Meeting preferences
     preferred_meeting_modes = Column(JSON, default=lambda: ["video", "phone"])

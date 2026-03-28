@@ -3,9 +3,9 @@
 .aria-calendar-page {
   min-height: 100vh;
   min-height: -webkit-fill-available;
-  background: #fff;
+  background: var(--aria-color-bg, #fff);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  color: #1f2937;
+  color: var(--aria-color-text-primary, #1f2937);
   padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
 }
 
@@ -14,9 +14,9 @@
   position: sticky;
   top: 0;
   z-index: 20;
-  background: #fff;
+  background: var(--aria-color-bg, #fff);
   padding: env(safe-area-inset-top, 12px) 16px 12px;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--aria-color-bg-tertiary, #f3f4f6);
 }
 
 .aria-cal-header__title-row {
@@ -39,37 +39,38 @@
 .aria-cal-header__month {
   font-size: 24px;
   font-weight: 700;
-  color: #111827;
+  color: var(--aria-color-text-primary, #111827);
 }
 
 .aria-cal-header__chevron {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--aria-color-text-tertiary, #6b7280);
 }
 
+/* WCAG touch target fix: 44px minimum (was 40×40) */
 .aria-cal-header__list-btn {
-  width: 40px;
-  height: 40px;
+  min-width: var(--aria-touch-target-min, 44px);
+  min-height: var(--aria-touch-target-min, 44px);
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  background: #f9fafb;
-  border-radius: 10px;
+  background: var(--aria-color-bg-secondary, #f9fafb);
+  border-radius: var(--aria-radius-md, 10px);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
 .aria-cal-header__list-btn:active {
-  background: #e5e7eb;
+  background: var(--aria-color-border, #e5e7eb);
 }
 
 /* Month picker */
 .aria-cal-month-picker {
   margin-top: 12px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  background: var(--aria-color-bg, #fff);
+  border: 1px solid var(--aria-color-border, #e5e7eb);
+  border-radius: var(--aria-radius-lg, 12px);
   padding: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
@@ -83,14 +84,15 @@
   font-size: 16px;
 }
 
+/* WCAG touch target fix: 44px minimum (was 32×32) */
 .aria-cal-month-picker__nav button {
-  width: 32px;
-  height: 32px;
+  min-width: var(--aria-touch-target-min, 44px);
+  min-height: var(--aria-touch-target-min, 44px);
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  background: #f3f4f6;
+  background: var(--aria-color-bg-tertiary, #f3f4f6);
   border-radius: 8px;
   cursor: pointer;
   font-size: 16px;
@@ -105,22 +107,22 @@
 .aria-cal-month-picker__item {
   padding: 8px 4px;
   border: none;
-  background: #f9fafb;
+  background: var(--aria-color-bg-secondary, #f9fafb);
   border-radius: 8px;
   cursor: pointer;
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--aria-color-text-secondary, #374151);
   -webkit-tap-highlight-color: transparent;
 }
 
 .aria-cal-month-picker__item:active {
-  background: #e5e7eb;
+  background: var(--aria-color-border, #e5e7eb);
 }
 
 .aria-cal-month-picker__item--active {
-  background: #1a73e8;
-  color: #fff;
+  background: var(--aria-color-accent, #1a73e8);
+  color: var(--aria-color-bg, #fff);
 }
 
 /* Content */
@@ -136,21 +138,21 @@
 .aria-cal-day-header {
   font-size: 14px;
   font-weight: 700;
-  color: #111827;
+  color: var(--aria-color-text-primary, #111827);
   margin-bottom: 8px;
   padding-bottom: 4px;
 }
 
 .aria-cal-day-header--today {
-  color: #1a73e8;
+  color: var(--aria-color-accent, #1a73e8);
 }
 
 /* Appointment card */
 .aria-cal-card {
   display: flex;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  background: var(--aria-color-bg, #fff);
+  border: 1px solid var(--aria-color-border, #e5e7eb);
+  border-radius: var(--aria-radius-lg, 12px);
   margin-bottom: 8px;
   overflow: hidden;
   cursor: pointer;
@@ -159,7 +161,7 @@
 }
 
 .aria-cal-card:active {
-  background: #f9fafb;
+  background: var(--aria-color-bg-secondary, #f9fafb);
 }
 
 .aria-cal-card--expanded {
@@ -181,19 +183,19 @@
 .aria-cal-card__attendee {
   font-size: 16px;
   font-weight: 600;
-  color: #111827;
+  color: var(--aria-color-text-primary, #111827);
   line-height: 1.3;
 }
 
 .aria-cal-card__title {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--aria-color-text-tertiary, #6b7280);
   margin-top: 2px;
 }
 
 .aria-cal-card__time {
   font-size: 13px;
-  color: #9ca3af;
+  color: var(--aria-color-text-muted, #9ca3af);
   margin-top: 4px;
 }
 
@@ -201,7 +203,7 @@
 .aria-cal-card__details {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid #f3f4f6;
+  border-top: 1px solid var(--aria-color-bg-tertiary, #f3f4f6);
 }
 
 .aria-cal-card__detail-row {
@@ -214,14 +216,14 @@
 
 .aria-cal-card__detail-label {
   font-weight: 600;
-  color: #6b7280;
+  color: var(--aria-color-text-tertiary, #6b7280);
   min-width: 90px;
   flex-shrink: 0;
 }
 
 .aria-cal-card__detail-notes p {
   margin: 4px 0 0;
-  color: #374151;
+  color: var(--aria-color-text-secondary, #374151);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -256,20 +258,22 @@
   gap: 8px;
 }
 
+/* WCAG touch target fix: explicit 44px minimum height */
 .aria-cal-card__action-btn {
   padding: 8px 16px;
-  border: 1px solid #d1d5db;
+  min-height: var(--aria-touch-target-min, 44px);
+  border: 1px solid var(--aria-color-border-light, #d1d5db);
   border-radius: 8px;
-  background: #fff;
+  background: var(--aria-color-bg, #fff);
   font-size: 14px;
   font-weight: 500;
-  color: #374151;
+  color: var(--aria-color-text-secondary, #374151);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
 .aria-cal-card__action-btn:active {
-  background: #f3f4f6;
+  background: var(--aria-color-bg-tertiary, #f3f4f6);
 }
 
 /* Loading / Error / Empty states */
@@ -281,15 +285,15 @@
   align-items: center;
   justify-content: center;
   padding: 60px 20px;
-  color: #9ca3af;
+  color: var(--aria-color-text-muted, #9ca3af);
   font-size: 15px;
 }
 
 .aria-cal-spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid #e5e7eb;
-  border-top-color: #1a73e8;
+  border: 3px solid var(--aria-color-border, #e5e7eb);
+  border-top-color: var(--aria-color-accent, #1a73e8);
   border-radius: 50%;
   animation: aria-cal-spin 0.7s linear infinite;
   margin-bottom: 12px;
@@ -299,12 +303,14 @@
   to { transform: rotate(360deg); }
 }
 
+/* WCAG touch target fix: explicit 44px minimum height */
 .aria-cal-error button {
   margin-top: 12px;
   padding: 8px 20px;
-  border: 1px solid #d1d5db;
+  min-height: var(--aria-touch-target-min, 44px);
+  border: 1px solid var(--aria-color-border-light, #d1d5db);
   border-radius: 8px;
-  background: #fff;
+  background: var(--aria-color-bg, #fff);
   font-size: 14px;
   cursor: pointer;
 }
@@ -331,6 +337,6 @@
 .aria-cal-header__list-btn:focus-visible,
 .aria-cal-month-picker__item:focus-visible,
 .aria-cal-card__action-btn:focus-visible {
-  outline: 2px solid #1a73e8;
+  outline: 2px solid var(--aria-color-accent, #1a73e8);
   outline-offset: 2px;
 }

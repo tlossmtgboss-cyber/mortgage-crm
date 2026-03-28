@@ -97,3 +97,54 @@
 .placeholder-features li:last-child {
   margin-bottom: 0;
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .roles-responsibilities-tab {
+    padding: 16px;
+  }
+
+  .section-header h2 {
+    font-size: 20px;
+  }
+
+  .section-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 0;
+  }
+
+  .section-tab-btn {
+    padding: 10px 14px;
+    font-size: 13px;
+    white-space: nowrap;
+    min-height: 44px;
+  }
+
+  .section-content {
+    padding: 16px;
+  }
+
+  .placeholder-features {
+    padding: 12px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .roles-responsibilities-tab {
+    padding: 12px;
+  }
+
+  .section-content {
+    padding: 12px;
+  }
+
+  .section-header h2 {
+    font-size: 18px;
+  }
+
+  .placeholder-section h3 {
+    font-size: 17px;
+  }
+}

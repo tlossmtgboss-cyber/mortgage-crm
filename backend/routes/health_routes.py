@@ -980,6 +980,11 @@ def register_health_routes(app, get_db, **kwargs):
             content={"status": "not_ready", "checks": checks, "errors": errors}
         )
 
+    @app.get("/ready")
+    async def ready_alias():
+        """Root-level readiness alias for load balancers."""
+        return await readiness_check()
+
     # ========================================================================
     # Health live (lines ~16951-16954 in inline_legacy_routes.py)
     # ========================================================================

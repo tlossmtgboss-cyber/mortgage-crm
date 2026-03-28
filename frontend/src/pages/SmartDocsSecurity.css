@@ -1,0 +1,353 @@
+/* Smart Docs Security & Compliance Page */
+
+.sd-security {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Header */
+.sd-security__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sd-security__title {
+  font-size: 1.6em;
+  font-weight: 700;
+  color: #1e293b;
+  margin: 0;
+}
+
+.sd-security__subtitle {
+  color: #64748b;
+  font-size: 0.9em;
+  margin: 4px 0 0;
+}
+
+/* Period Selector */
+.sd-security__period-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.sd-security__period-label {
+  font-size: 0.85em;
+  font-weight: 500;
+  color: #475569;
+}
+
+.sd-security__period-select {
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.88em;
+  color: #334155;
+  background: #fff;
+  cursor: pointer;
+}
+
+.sd-security__period-select:focus {
+  outline: none;
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* Tabs */
+.sd-security__tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 20px;
+}
+
+.sd-security__tab {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  font-size: 0.92em;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.sd-security__tab:hover {
+  color: #1e293b;
+}
+
+.sd-security__tab.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  font-weight: 600;
+}
+
+/* Content area */
+.sd-security__content {
+  min-height: 200px;
+}
+
+/* Loading / Empty */
+.sd-security__loading {
+  text-align: center;
+  padding: 48px 24px;
+  color: #94a3b8;
+  font-size: 0.95em;
+}
+
+.sd-security__empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: #94a3b8;
+  font-size: 0.95em;
+  background: #f8fafc;
+  border: 1px dashed #e2e8f0;
+  border-radius: 10px;
+}
+
+.sd-security__empty--success {
+  color: #15803d;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+}
+
+/* ============================================================
+   Compliance Grid (4-column)
+   ============================================================ */
+.sd-security__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* Open Issues */
+.sd-security__issues {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.sd-security__issues-title {
+  font-size: 0.95em;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 14px;
+}
+
+.sd-security__issues-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sd-security__issue-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-left: 4px solid #e2e8f0;
+  background: #f8fafc;
+  border-radius: 0 6px 6px 0;
+}
+
+.sd-security__issue-text {
+  font-size: 0.88em;
+  color: #334155;
+  flex: 1;
+}
+
+/* ============================================================
+   Table
+   ============================================================ */
+.sd-security__table-container {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.sd-security__table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.sd-security__table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 0.78em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #94a3b8;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.sd-security__table td {
+  padding: 11px 16px;
+  font-size: 0.88em;
+  color: #334155;
+  border-bottom: 1px solid #f1f5f9;
+  vertical-align: middle;
+}
+
+.sd-security__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.sd-security__table tbody tr:hover td {
+  background: #f8fafc;
+}
+
+/* Timestamp cell: monospace for readability */
+.sd-security__ts-cell {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.82em !important;
+  white-space: nowrap;
+  color: #64748b !important;
+}
+
+/* Details cell: truncate at 300px */
+.sd-security__details-cell {
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================================
+   Badge
+   ============================================================ */
+.sd-security__badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72em;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 12px;
+  text-transform: capitalize;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   Suspicious Activity Alerts
+   ============================================================ */
+.sd-security__alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sd-security__alert {
+  border-left: 4px solid #e2e8f0;
+  border-radius: 0 10px 10px 0;
+  padding: 14px 18px;
+  transition: box-shadow 0.15s;
+}
+
+.sd-security__alert:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.sd-security__alert-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.sd-security__alert-type {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.sd-security__alert-desc {
+  font-size: 0.88em;
+  color: #475569;
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.sd-security__alert-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 0.78em;
+  color: #94a3b8;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
+   Responsive: 768px → 2-column grid
+   ============================================================ */
+@media (max-width: 768px) {
+  .sd-security {
+    padding: 16px;
+  }
+
+  .sd-security__header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .sd-security__period-selector {
+    justify-content: flex-end;
+  }
+
+  .sd-security__tabs {
+    overflow-x: auto;
+  }
+
+  .sd-security__tab {
+    padding: 10px 14px;
+    font-size: 0.88em;
+  }
+
+  .sd-security__grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .sd-security__details-cell {
+    max-width: 160px;
+  }
+}
+
+/* ============================================================
+   Responsive: 480px → 1-column grid
+   ============================================================ */
+@media (max-width: 480px) {
+  .sd-security__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sd-security__table th,
+  .sd-security__table td {
+    padding: 10px 12px;
+  }
+
+  .sd-security__alert-header {
+    flex-wrap: wrap;
+  }
+
+  .sd-security__details-cell {
+    max-width: 120px;
+  }
+}

@@ -1,0 +1,165 @@
+/* ============================================================
+   SmartDocsIncome — Income Calculation Page
+   ============================================================ */
+
+.sd-income {
+  padding: var(--space-lg);
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-lg);
+}
+
+/* ── Page header ── */
+.sd-income__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.sd-income__title {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-2xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-primary);
+  line-height: var(--line-tight);
+}
+
+.sd-income__subtitle {
+  margin: 0;
+  font-size: var(--font-sm);
+  color: var(--color-text-secondary);
+  line-height: var(--line-normal);
+}
+
+/* ── Summary analytics grid — 4 columns ── */
+.sd-income__summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+}
+
+/* ── Search bar ── */
+.sd-income__search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.sd-income__loan-input {
+  flex: 1;
+  min-width: 200px;
+  max-width: 360px;
+  padding: 9px 14px;
+  font-size: var(--font-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.sd-income__loan-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.12);
+}
+
+.sd-income__loan-input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+/* Buttons */
+.sd-income__btn {
+  padding: 9px 20px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  white-space: nowrap;
+}
+
+.sd-income__btn--primary {
+  background: var(--color-primary);
+  color: #fff;
+  border: 1px solid var(--color-primary);
+}
+
+.sd-income__btn--primary:hover {
+  background: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+}
+
+.sd-income__btn--secondary {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+.sd-income__btn--secondary:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-text-secondary);
+  color: var(--color-text-primary);
+}
+
+/* ── Loading state ── */
+.sd-income__loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  color: var(--color-text-secondary);
+  font-size: var(--font-sm);
+}
+
+.sd-income__spinner {
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: sd-income-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes sd-income-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Responsive ── */
+
+/* 2-column grid at 768px */
+@media (max-width: 768px) {
+  .sd-income {
+    padding: var(--space-md);
+  }
+
+  .sd-income__summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* 1-column grid at 480px; search stacks */
+@media (max-width: 480px) {
+  .sd-income__summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sd-income__search {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sd-income__loan-input {
+    max-width: 100%;
+  }
+
+  .sd-income__btn {
+    width: 100%;
+    text-align: center;
+  }
+}
