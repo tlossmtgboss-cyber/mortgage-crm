@@ -2,6 +2,7 @@ import React, { useMemo, useCallback, useState, useRef, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
 import { useModules } from '../contexts/ModuleContext';
+import { useBranding } from '../contexts/BrandingContext';
 import { getNavigationForRole, roleHasDashboard, isMasterAdmin, getMasterAdminNavigation } from '../config/roleConfig';
 import { usePrefetch } from '../hooks/useQueries';
 import NotificationBell from './NotificationBell';
@@ -18,6 +19,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   const location = useLocation();
   const { effectiveRole, userRole, viewAsRole, hasAnyPermission } = usePermissions();
   const { hasModule, getModule, loading: modulesLoading } = useModules();
+  const { brandName, logoUrl } = useBranding();
   const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
   const [selectedModule, setSelectedModule] = useState(null);
   const [openDropdown, setOpenDropdown] = useState(null);
@@ -311,6 +313,17 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
             <span className="hamburger-line" />
             <span className="hamburger-line" />
           </button>
+
+          {/* Brand logo / name — driven by per-org WhiteLabelConfig */}
+          {logoUrl ? (
+            <Link to="/" className="nav-brand" title={brandName}>
+              <img src={logoUrl} alt={brandName} className="nav-brand-logo" />
+            </Link>
+          ) : (
+            <Link to="/" className="nav-brand nav-brand-text" title={brandName}>
+              {brandName}
+            </Link>
+          )}
 
           <div className="nav-links">
             {navItems.map((item) => renderNavItem(item))}

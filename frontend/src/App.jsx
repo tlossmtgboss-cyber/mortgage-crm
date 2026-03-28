@@ -7,6 +7,7 @@ import { isAuthenticatedSync as isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { PermissionProvider, usePermissions } from './contexts/PermissionContext';
 import { ModuleProvider, useModules } from './contexts/ModuleContext';
+import { BrandingProvider } from './contexts/BrandingContext';
 import { getUserEffectiveRole, getDefaultRouteForRole } from './config/roleConfig';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
@@ -527,6 +528,7 @@ function App() {
         <ImpersonationProvider>
         <PermissionProvider>
         <ModuleProvider>
+        <BrandingProvider>
           <Router>
             <GlobalLayoutFix />
             <ImpersonationBanner />
@@ -4562,6 +4564,7 @@ function App() {
         <GlobalSearch />
         </div>
       </Router>
+        </BrandingProvider>
         </ModuleProvider>
         </PermissionProvider>
         </ImpersonationProvider>

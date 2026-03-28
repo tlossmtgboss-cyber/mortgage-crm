@@ -1,513 +1,409 @@
 """
-Custom Domain Routes
+Custom Domain SSL Routes — White-Label Portal Domains
 
-API endpoints for managing custom domains.
-Allows admins to add, remove, verify, and list custom domains.
+API endpoints for enterprise custom-domain provisioning. Stores domain state
+in WhiteLabelConfig (smart_docs_white_label_configs table) and optionally
+integrates with Vercel for automatic SSL cert issuance.
 
-Verification Flow:
-1. User adds domain via POST /api/admin/domains
-2. System generates verification token
-3. User adds TXT record to their DNS
-4. User calls POST /api/admin/domains/{domain}/verify-dns
-5. System checks TXT record and DNS configuration
-6. Domain is marked as verified if all checks pass
+Flow:
+  1. POST  /api/v1/admin/custom-domain/setup   — Register domain, get TXT token
+  2. Add TXT DNS record at registrar
+  3. POST  /api/v1/admin/custom-domain/verify   — DNS lookup; marks verified, calls Vercel
+  4. GET   /api/v1/admin/custom-domain/status   — Poll SSL status
+  5. DELETE /api/v1/admin/custom-domain          — Remove domain and revoke Vercel entry
+
+Registered via register_custom_domain_routes(app, get_db_func, get_current_user_flexible)
+from main.py — never imported at module load time to avoid circular imports.
+
+Requires admin / site_admin / platform_admin permission role.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
-from datetime import datetime
+import logging
+import uuid
 
-from database import get_db
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
+logger = logging.getLogger(__name__)
+
+_ADMIN_ROLES = {"admin", "site_admin", "platform_admin"}
 
 
-def _get_current_user():
-    """Lazy import to avoid circular imports."""
-    import main
-    return main.get_current_user
+def register_custom_domain_routes(app, get_db_func, get_current_user_flexible):
+    """Register custom-domain endpoints with the FastAPI app.
 
+    Called from main.py during startup. All auth/DB dependencies are received
+    as arguments — no module-level imports from main.py.
 
-router = APIRouter(
-    prefix="/api/admin/domains",
-    tags=["Custom Domains"],
-    dependencies=[Depends(_get_current_user())],
-)
-
-
-# ============================================================================
-# Schemas
-# ============================================================================
-
-class DomainCreate(BaseModel):
-    domain: str  # e.g., "www.timloss.com" (without https://)
-    organization_id: Optional[int] = None
-    user_id: Optional[int] = None
-    notes: Optional[str] = None
-
-
-class DomainResponse(BaseModel):
-    id: int
-    domain: str
-    is_verified: bool
-    is_active: bool
-    ssl_status: str
-    verification_token: Optional[str] = None
-    organization_id: Optional[int]
-    user_id: Optional[int]
-    created_at: Optional[str]
-    verified_at: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-
-class DomainListResponse(BaseModel):
-    domains: List[DomainResponse]
-    total: int
-
-
-class VerificationInstructions(BaseModel):
-    domain: str
-    verification_token: str
-    txt_record_name: str
-    txt_record_value: str
-    cname_target: str
-    a_record_ip: str
-    instructions: List[str]
-
-
-class VerificationResult(BaseModel):
-    domain: str
-    fully_verified: bool
-    ownership_verified: bool
-    dns_configured: bool
-    txt_verification: Dict[str, Any]
-    dns_verification: Dict[str, Any]
-    next_steps: List[Dict[str, Any]]
-
-
-# ============================================================================
-# Endpoints
-# ============================================================================
-
-@router.get("", response_model=DomainListResponse)
-async def list_domains(db: Session = Depends(get_db)):
+    Startup side-effect: runs ADD COLUMN IF NOT EXISTS migrations for the four
+    new SSL columns on smart_docs_white_label_configs.
     """
-    List all custom domains.
-
-    Returns all configured custom domains with their status.
-    """
-    try:
-        from services.custom_domain_service import get_domain_service
-        service = get_domain_service()
-        domains = service.list_domains()
-
-        return {
-            "domains": domains,
-            "total": len(domains)
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to list domains"
-        )
-
-
-@router.post("", response_model=DomainResponse)
-async def add_domain(
-    domain_data: DomainCreate,
-    db: Session = Depends(get_db)
-):
-    """
-    Add a new custom domain.
-
-    This creates the domain entry with a verification token.
-    The domain is NOT immediately active - it must be verified first.
-
-    Steps after adding:
-    1. Get verification instructions via GET /api/admin/domains/{domain}/verification-instructions
-    2. Add TXT record to your DNS
-    3. Configure CNAME or A record
-    4. Verify via POST /api/admin/domains/{domain}/verify-dns
-    """
+    from fastapi import Depends, HTTPException, status
+    from pydantic import BaseModel
+    from sqlalchemy.orm import Session
     from sqlalchemy import text
-    from services.dns_verification_service import dns_verification_service
 
-    # Clean domain (remove protocol if provided)
-    domain = domain_data.domain.lower().strip()
-    if domain.startswith("https://"):
-        domain = domain[8:]
-    if domain.startswith("http://"):
-        domain = domain[7:]
-
+    # ------------------------------------------------------------------ #
+    # Startup migration — idempotent, safe to run on every deploy          #
+    # ------------------------------------------------------------------ #
     try:
-        # Check if already exists
-        existing = db.execute(text(
-            "SELECT id FROM custom_domains WHERE domain = :domain"
-        ), {"domain": domain}).fetchone()
-
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=f"Domain {domain} already exists"
+        db_gen = get_db_func()
+        db = next(db_gen)
+        for col, col_type, default in [
+            ("ssl_status", "VARCHAR(20)", "'pending'"),
+            ("domain_verified", "BOOLEAN", "FALSE"),
+            ("domain_verification_token", "VARCHAR(100)", "NULL"),
+            ("vercel_domain_id", "VARCHAR(100)", "NULL"),
+        ]:
+            db.execute(
+                text(
+                    f"ALTER TABLE smart_docs_white_label_configs "
+                    f"ADD COLUMN IF NOT EXISTS {col} {col_type} DEFAULT {default}"
+                )
             )
-
-        # Generate verification token
-        verification_token = dns_verification_service.generate_verification_token(domain)
-
-        # Insert new domain with verification token (not verified yet)
-        db.execute(text("""
-            INSERT INTO custom_domains
-            (domain, user_id, organization_id, is_active, is_verified, verification_token, notes, created_at)
-            VALUES (:domain, :user_id, :org_id, true, false, :token, :notes, CURRENT_TIMESTAMP)
-        """), {
-            "domain": domain,
-            "user_id": domain_data.user_id,
-            "org_id": domain_data.organization_id,
-            "token": verification_token,
-            "notes": domain_data.notes
-        })
         db.commit()
+        logger.info("Custom domain columns migrated on smart_docs_white_label_configs")
+    except Exception as exc:
+        logger.warning("Custom domain column migration skipped: %s", exc)
 
-        # Get the inserted domain
-        result = db.execute(text("""
-            SELECT id, domain, is_verified, is_active, ssl_status, verification_token,
-                   organization_id, user_id, created_at, verified_at
-            FROM custom_domains WHERE domain = :domain
-        """), {"domain": domain}).fetchone()
+    # ------------------------------------------------------------------ #
+    # Pydantic schemas                                                      #
+    # ------------------------------------------------------------------ #
 
-        return {
-            "id": result[0],
-            "domain": result[1],
-            "is_verified": result[2],
-            "is_active": result[3],
-            "ssl_status": result[4],
-            "verification_token": result[5],
-            "organization_id": result[6],
-            "user_id": result[7],
-            "created_at": result[8].isoformat() if result[8] else None,
-            "verified_at": result[9].isoformat() if result[9] else None
-        }
+    class DomainSetupRequest(BaseModel):
+        domain: str  # e.g. "portal.acmemortgage.com"
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to add domain"
-        )
+    # ------------------------------------------------------------------ #
+    # Helpers                                                               #
+    # ------------------------------------------------------------------ #
 
-
-@router.delete("/{domain}")
-async def remove_domain(domain: str, db: Session = Depends(get_db)):
-    """
-    Remove (deactivate) a custom domain.
-
-    The domain will no longer be allowed for CORS.
-    """
-    try:
-        from services.custom_domain_service import get_domain_service
-        service = get_domain_service()
-
-        success = service.remove_domain(domain)
-
-        if not success:
+    def _require_admin(current_user):
+        role = getattr(current_user, "permission_role", None) or ""
+        if role not in _ADMIN_ROLES:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Domain {domain} not found"
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin role required for custom domain management.",
             )
 
-        return {"success": True, "message": f"Domain {domain} deactivated"}
+    def _get_white_label_config(db: Session, organization_id: int):
+        """Return the org's WhiteLabelConfig row or None."""
+        from database.models.white_label_config import WhiteLabelConfig
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to remove domain"
+        return (
+            db.query(WhiteLabelConfig)
+            .filter(
+                WhiteLabelConfig.organization_id == organization_id,
+                WhiteLabelConfig.is_active == True,
+            )
+            .first()
         )
 
+    def _clean_domain(raw: str) -> str:
+        """Strip protocol prefix and lowercase."""
+        domain = raw.lower().strip()
+        for prefix in ("https://", "http://"):
+            if domain.startswith(prefix):
+                domain = domain[len(prefix):]
+        return domain.rstrip("/")
 
-@router.get("/{domain}/verification-instructions", response_model=VerificationInstructions)
-async def get_verification_instructions(domain: str, db: Session = Depends(get_db)):
-    """
-    Get DNS verification instructions for a domain.
+    # ------------------------------------------------------------------ #
+    # POST /api/v1/admin/custom-domain/setup                               #
+    # ------------------------------------------------------------------ #
 
-    Returns the TXT record and CNAME/A record configuration needed
-    to verify domain ownership and configure routing.
-    """
-    from sqlalchemy import text
-    from services.dns_verification_service import dns_verification_service
+    @app.post("/api/v1/admin/custom-domain/setup", tags=["Custom Domain SSL"])
+    async def setup_custom_domain(
+        body: DomainSetupRequest,
+        db: Session = Depends(get_db_func),
+        current_user=Depends(get_current_user_flexible),
+    ):
+        """Initiate custom-domain setup for the caller's organisation.
 
-    try:
-        # Get domain and verification token
-        result = db.execute(text("""
-            SELECT domain, verification_token, is_verified
-            FROM custom_domains
-            WHERE domain = :domain
-        """), {"domain": domain}).fetchone()
+        Generates a verification token (UUID-based TXT record value), stores it
+        alongside the domain in WhiteLabelConfig, and returns DNS instructions.
 
-        if not result:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Domain {domain} not found"
-            )
+        The caller must:
+        1. Create a DNS TXT record ``_perennia-verify.<domain>`` with the
+           returned ``verification_token`` value.
+        2. Create a DNS CNAME record pointing the domain to
+           ``cname.vercel-dns.com``.
+        3. Call POST /api/v1/admin/custom-domain/verify once DNS has propagated.
+        """
+        _require_admin(current_user)
 
-        domain_name = result[0]
-        verification_token = result[1]
-        is_verified = result[2]
-
-        # If no token exists, generate one
-        if not verification_token:
-            verification_token = dns_verification_service.generate_verification_token(domain_name)
-            db.execute(text("""
-                UPDATE custom_domains
-                SET verification_token = :token
-                WHERE domain = :domain
-            """), {"token": verification_token, "domain": domain_name})
-            db.commit()
-
-        txt_record_name = dns_verification_service.get_txt_record_name(domain_name)
-
-        instructions = [
-            f"Step 1: Add a TXT record to verify domain ownership",
-            f"   Record Name: {txt_record_name}",
-            f"   Record Value: {verification_token}",
-            f"",
-            f"Step 2: Configure DNS to point to our servers (choose one):",
-            f"   Option A - CNAME Record (recommended):",
-            f"      Name: {domain_name}",
-            f"      Value: {dns_verification_service.EXPECTED_CNAME_TARGETS[0]}",
-            f"",
-            f"   Option B - A Record:",
-            f"      Name: {domain_name}",
-            f"      Value: {dns_verification_service.EXPECTED_A_RECORDS[0]}",
-            f"",
-            f"Step 3: Wait for DNS propagation (up to 48 hours, usually faster)",
-            f"",
-            f"Step 4: Verify your domain at POST /api/admin/domains/{domain_name}/verify-dns"
-        ]
-
-        if is_verified:
-            instructions.insert(0, "✓ This domain is already verified!")
-
-        return {
-            "domain": domain_name,
-            "verification_token": verification_token,
-            "txt_record_name": txt_record_name,
-            "txt_record_value": verification_token,
-            "cname_target": dns_verification_service.EXPECTED_CNAME_TARGETS[0],
-            "a_record_ip": dns_verification_service.EXPECTED_A_RECORDS[0],
-            "instructions": instructions
-        }
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get verification instructions"
-        )
-
-
-@router.post("/{domain}/verify-dns", response_model=VerificationResult)
-async def verify_domain_dns(domain: str, db: Session = Depends(get_db)):
-    """
-    Perform DNS verification for a domain.
-
-    Checks:
-    1. TXT record for ownership verification
-    2. CNAME or A record for DNS configuration
-
-    If both pass, the domain is marked as verified.
-    """
-    from sqlalchemy import text
-    from services.dns_verification_service import dns_verification_service
-
-    try:
-        # Get domain and verification token
-        result = db.execute(text("""
-            SELECT domain, verification_token, is_verified
-            FROM custom_domains
-            WHERE domain = :domain
-        """), {"domain": domain}).fetchone()
-
-        if not result:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Domain {domain} not found"
-            )
-
-        domain_name = result[0]
-        verification_token = result[1]
-
-        if not verification_token:
+        organization_id = getattr(current_user, "organization_id", None)
+        if organization_id is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No verification token found. Get instructions first."
+                detail="No organization associated with this user.",
             )
 
-        # Perform full verification
-        verification_result = dns_verification_service.perform_full_verification(
-            domain=domain_name,
-            verification_token=verification_token
-        )
+        domain = _clean_domain(body.domain)
+        if not domain:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Invalid domain value.",
+            )
 
-        # If fully verified, update database
-        if verification_result["fully_verified"]:
-            db.execute(text("""
-                UPDATE custom_domains
-                SET is_verified = true,
-                    verified_at = CURRENT_TIMESTAMP,
-                    ssl_status = 'pending'
-                WHERE domain = :domain
-            """), {"domain": domain_name})
-            db.commit()
+        config = _get_white_label_config(db, organization_id)
+        if config is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=(
+                    "No active white-label configuration found for your organisation. "
+                    "Create one first via the White-Label settings."
+                ),
+            )
 
-            # Refresh the domain cache
-            from services.custom_domain_service import get_domain_service
-            get_domain_service()._refresh_cache()
+        # Generate a fresh verification token
+        verification_token = f"perennia-verify={uuid.uuid4().hex}"
 
-        return verification_result
-
-    except HTTPException:
-        raise
-    except SQLAlchemyError as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to verify domain"
-        )
-
-
-@router.post("/{domain}/verify")
-async def verify_domain_manual(domain: str, db: Session = Depends(get_db)):
-    """
-    Manually mark a domain as verified (admin override).
-
-    Use this only for domains that have been verified through
-    other means (e.g., direct communication with domain owner).
-    """
-    from sqlalchemy import text
-
-    try:
-        result = db.execute(text("""
-            UPDATE custom_domains
-            SET is_verified = true, verified_at = CURRENT_TIMESTAMP
-            WHERE domain = :domain
-        """), {"domain": domain})
+        config.custom_domain = domain
+        config.domain_verification_token = verification_token
+        config.domain_verified = False
+        config.ssl_status = "pending"
+        config.vercel_domain_id = None
         db.commit()
 
-        if result.rowcount == 0:
+        txt_record_name = f"_perennia-verify.{domain}"
+        return {
+            "domain": domain,
+            "verification_token": verification_token,
+            "dns_instructions": {
+                "txt_record": {
+                    "name": txt_record_name,
+                    "type": "TXT",
+                    "value": verification_token,
+                    "purpose": "Domain ownership verification",
+                },
+                "cname_record": {
+                    "name": domain,
+                    "type": "CNAME",
+                    "value": "cname.vercel-dns.com",
+                    "purpose": "Route traffic to Perennia portal",
+                },
+            },
+            "message": (
+                f"Add the TXT record {txt_record_name} = {verification_token} "
+                "to your DNS, then call /verify."
+            ),
+            "next_step": "POST /api/v1/admin/custom-domain/verify",
+        }
+
+    # ------------------------------------------------------------------ #
+    # POST /api/v1/admin/custom-domain/verify                              #
+    # ------------------------------------------------------------------ #
+
+    @app.post("/api/v1/admin/custom-domain/verify", tags=["Custom Domain SSL"])
+    async def verify_custom_domain(
+        db: Session = Depends(get_db_func),
+        current_user=Depends(get_current_user_flexible),
+    ):
+        """Verify domain ownership via DNS TXT lookup.
+
+        Performs a live DNS query for the TXT record placed by the client. On
+        success:
+        - Sets ``domain_verified = True`` and ``ssl_status = "provisioning"``
+        - Calls Vercel API to add the domain (triggers SSL cert issuance)
+        - Stores the Vercel domain ID for future management
+
+        Vercel integration is best-effort — if VERCEL_TOKEN / VERCEL_PROJECT_ID
+        are not set the domain is still marked verified and manual DNS works.
+        """
+        _require_admin(current_user)
+
+        organization_id = getattr(current_user, "organization_id", None)
+        if organization_id is None:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Domain {domain} not found"
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No organization associated with this user.",
             )
 
-        # Refresh the domain cache
-        from services.custom_domain_service import get_domain_service
-        get_domain_service()._refresh_cache()
-
-        return {"success": True, "message": f"Domain {domain} manually verified"}
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to verify domain"
-        )
-
-
-@router.get("/{domain}/status")
-async def get_domain_status(domain: str, db: Session = Depends(get_db)):
-    """
-    Get detailed status of a domain including DNS verification status.
-
-    Performs real-time DNS checks to show current configuration.
-    """
-    from sqlalchemy import text
-    from services.dns_verification_service import dns_verification_service
-
-    try:
-        # Get domain from database
-        result = db.execute(text("""
-            SELECT id, domain, is_verified, is_active, ssl_status,
-                   verification_token, verified_at, created_at,
-                   organization_id, user_id
-            FROM custom_domains
-            WHERE domain = :domain
-        """), {"domain": domain}).fetchone()
-
-        if not result:
+        config = _get_white_label_config(db, organization_id)
+        if config is None or not config.custom_domain:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Domain {domain} not found"
+                detail="No custom domain configured. Call /setup first.",
             )
 
-        domain_info = {
-            "id": result[0],
-            "domain": result[1],
-            "is_verified": result[2],
-            "is_active": result[3],
-            "ssl_status": result[4],
-            "verification_token": result[5],
-            "verified_at": result[6].isoformat() if result[6] else None,
-            "created_at": result[7].isoformat() if result[7] else None,
-            "organization_id": result[8],
-            "user_id": result[9]
-        }
+        domain = config.custom_domain
+        expected_token = config.domain_verification_token
 
-        # Perform live DNS checks
-        dns_config = dns_verification_service.verify_dns_configuration(result[1])
-        reachability = dns_verification_service.check_domain_reachability(result[1])
+        if not expected_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No verification token found. Call /setup first.",
+            )
 
-        # Check TXT record if we have a token
-        txt_status = None
-        if result[5]:
-            txt_result = dns_verification_service.verify_txt_record(result[1], result[5])
-            txt_status = txt_result.to_dict()
+        # ---- DNS TXT lookup ------------------------------------------ #
+        txt_record_name = f"_perennia-verify.{domain}"
+        verified = False
+        dns_error = None
+
+        try:
+            import dns.resolver  # dnspython
+
+            answers = dns.resolver.resolve(txt_record_name, "TXT")
+            found_values = []
+            for rdata in answers:
+                for string in rdata.strings:
+                    found_values.append(string.decode("utf-8", errors="replace"))
+
+            if expected_token in found_values:
+                verified = True
+            else:
+                dns_error = (
+                    f"TXT record found but value did not match. "
+                    f"Expected '{expected_token}', found: {found_values}"
+                )
+        except Exception as exc:
+            dns_error = f"DNS lookup failed: {exc}"
+
+        if not verified:
+            return {
+                "verified": False,
+                "ssl_status": config.ssl_status,
+                "message": (
+                    dns_error
+                    or "Verification token not found in DNS. Check record and retry."
+                ),
+            }
+
+        # ---- Mark verified ------------------------------------------- #
+        config.domain_verified = True
+        config.ssl_status = "provisioning"
+
+        # ---- Vercel integration (best-effort) ------------------------- #
+        vercel_domain_id = None
+        try:
+            from services import vercel_domain_service
+
+            result = vercel_domain_service.add_domain(domain)
+            # Vercel returns {"name": domain, "apexName": ..., ...} on success
+            if result and not result.get("error") and not result.get("skipped"):
+                vercel_domain_id = result.get("name") or result.get("id") or domain
+                config.ssl_status = "provisioning"
+                logger.info("Vercel domain added: %s -> %s", domain, vercel_domain_id)
+        except Exception as exc:
+            logger.warning("Vercel add_domain failed for %s: %s", domain, exc)
+
+        config.vercel_domain_id = vercel_domain_id
+        db.commit()
 
         return {
-            "domain": domain_info,
-            "dns_configuration": dns_config.to_dict(),
-            "txt_verification": txt_status,
-            "reachability": reachability,
-            "ready_for_traffic": domain_info["is_verified"] and dns_config.success
+            "verified": True,
+            "ssl_status": config.ssl_status,
+            "vercel_domain_id": vercel_domain_id,
+            "message": (
+                "Domain ownership verified. SSL provisioning is underway — "
+                "check /status in a few minutes."
+            ),
         }
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to get domain status"
-        )
+    # ------------------------------------------------------------------ #
+    # GET /api/v1/admin/custom-domain/status                               #
+    # ------------------------------------------------------------------ #
 
+    @app.get("/api/v1/admin/custom-domain/status", tags=["Custom Domain SSL"])
+    async def get_custom_domain_status(
+        db: Session = Depends(get_db_func),
+        current_user=Depends(get_current_user_flexible),
+    ):
+        """Return the current custom-domain state for the caller's organisation.
 
-@router.get("/check/{origin}")
-async def check_origin(origin: str):
-    """
-    Check if an origin is allowed (for debugging).
+        If Vercel credentials are present, also polls the Vercel API to refresh
+        the SSL status before returning.
+        """
+        _require_admin(current_user)
 
-    Pass the full origin (e.g., https://www.timloss.com).
-    """
-    try:
-        from services.custom_domain_service import get_domain_service
-        service = get_domain_service()
+        organization_id = getattr(current_user, "organization_id", None)
+        if organization_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No organization associated with this user.",
+            )
 
-        is_allowed = service.is_allowed_origin(origin)
+        config = _get_white_label_config(db, organization_id)
+        if config is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No active white-label configuration found.",
+            )
+
+        if not config.custom_domain:
+            return {
+                "domain": None,
+                "domain_verified": False,
+                "ssl_status": "pending",
+                "vercel_domain_id": None,
+                "message": "No custom domain configured yet.",
+            }
+
+        # Refresh SSL status from Vercel if we have credentials and a domain ID
+        if config.domain_verified and config.custom_domain:
+            try:
+                from services import vercel_domain_service
+
+                live_ssl = vercel_domain_service.check_ssl_status(config.custom_domain)
+                if live_ssl not in ("unknown", config.ssl_status):
+                    config.ssl_status = live_ssl
+                    db.commit()
+            except Exception as exc:
+                logger.warning("Vercel SSL status check failed: %s", exc)
 
         return {
-            "origin": origin,
-            "is_allowed": is_allowed
+            "domain": config.custom_domain,
+            "domain_verified": bool(config.domain_verified),
+            "ssl_status": config.ssl_status or "pending",
+            "vercel_domain_id": config.vercel_domain_id,
+            "verification_token": config.domain_verification_token,
         }
 
-    except Exception as e:
+    # ------------------------------------------------------------------ #
+    # DELETE /api/v1/admin/custom-domain                                   #
+    # ------------------------------------------------------------------ #
+
+    @app.delete("/api/v1/admin/custom-domain", tags=["Custom Domain SSL"])
+    async def remove_custom_domain(
+        db: Session = Depends(get_db_func),
+        current_user=Depends(get_current_user_flexible),
+    ):
+        """Remove the custom domain for the caller's organisation.
+
+        - Calls Vercel API to deregister the domain (best-effort)
+        - Clears all domain columns on WhiteLabelConfig
+        """
+        _require_admin(current_user)
+
+        organization_id = getattr(current_user, "organization_id", None)
+        if organization_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No organization associated with this user.",
+            )
+
+        config = _get_white_label_config(db, organization_id)
+        if config is None or not config.custom_domain:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No custom domain configured.",
+            )
+
+        domain = config.custom_domain
+
+        # Vercel removal (best-effort)
+        try:
+            from services import vercel_domain_service
+
+            vercel_domain_service.remove_domain(domain)
+        except Exception as exc:
+            logger.warning("Vercel remove_domain failed for %s: %s", domain, exc)
+
+        # Clear all domain columns
+        config.custom_domain = None
+        config.ssl_status = "pending"
+        config.domain_verified = False
+        config.domain_verification_token = None
+        config.vercel_domain_id = None
+        db.commit()
+
         return {
-            "origin": origin,
-            "is_allowed": False,
-            "error": "Internal server error"
+            "success": True,
+            "message": f"Custom domain '{domain}' removed successfully.",
         }
