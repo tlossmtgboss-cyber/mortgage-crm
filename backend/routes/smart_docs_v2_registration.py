@@ -209,6 +209,14 @@ def register_smart_docs_v2_routes(app):
     except Exception as e:
         logger.warning(f"Failed to register benchmark routes: {e}")
 
+    # Delivery Workflow routes (needs list, reminders, portal links, batch send)
+    try:
+        from routes.smart_docs_delivery_routes import router as delivery_router
+        app.include_router(delivery_router, prefix=prefix)
+        registered.append("delivery")
+    except Exception as e:
+        logger.warning(f"Failed to register delivery routes: {e}")
+
     logger.info(f"Smart Docs V2: registered {len(registered)} route modules: {', '.join(registered)}")
 
     # Run database migration on startup (creates tables if not exist)
