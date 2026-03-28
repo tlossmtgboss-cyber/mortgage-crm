@@ -110,3 +110,7 @@ google-auth-oauthlib>=1.1.0
 google-api-python-client>=2.100.0
 google-cloud-texttospeech>=2.17.2
 pdf2image>=1.16.0
+
+# Push notifications
+apns2>=0.7.2
+firebase-admin>=6.0.0

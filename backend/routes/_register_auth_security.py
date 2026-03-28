@@ -15,6 +15,22 @@ def register_auth_security_routes(app, get_db, get_current_user, get_current_use
 
     oauth2_scheme = kwargs.get('oauth2_scheme')
 
+    # Well-known routes (no auth required — Apple/Google verification)
+    try:
+        from routes.well_known_routes import router as well_known_router
+        app.include_router(well_known_router)
+        logger.info("Well-known routes loaded (AASA, assetlinks)")
+    except Exception as e:
+        logger.warning(f"Well-known routes not loaded: {e}")
+
+    # Privacy and legal pages (no auth required — App Store requirement)
+    try:
+        from routes.privacy_routes import router as privacy_router
+        app.include_router(privacy_router)
+        logger.info("Privacy/legal routes loaded")
+    except Exception as e:
+        logger.warning(f"Privacy routes not loaded: {e}")
+
     # SECURITY: Include CSRF token routes
     try:
         from middleware.csrf_protection import create_csrf_routes
@@ -58,10 +74,23 @@ def register_auth_security_routes(app, get_db, get_current_user, get_current_use
     try:
         from routes.auth_routes import router as auth_routes_router, setup_auth_routes
         app.include_router(auth_routes_router, tags=["Authentication"])
-        setup_auth_routes(app, oauth2_scheme, get_current_user)
+        try:
+            from database.models.device_token import DeviceToken
+        except ImportError:
+            DeviceToken = None
+        setup_auth_routes(app, oauth2_scheme, get_current_user, DeviceToken=DeviceToken)
         logger.info("Authentication routes loaded (/token, password reset, registration)")
     except Exception as e:
         logger.warning(f"Authentication routes not loaded: {e}")
+
+    # Include push notification trigger routes
+    try:
+        from routes.push_notification_routes import router as push_router, setup_push_routes
+        app.include_router(push_router)
+        setup_push_routes(app, get_current_user)
+        logger.info("Push notification routes loaded")
+    except Exception as e:
+        logger.warning(f"Push notification routes not loaded: {e}")
 
     # Include MFA routes (TOTP setup, verify, disable, status)
     try:

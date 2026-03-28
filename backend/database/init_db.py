@@ -1770,6 +1770,13 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ voice_workflows migration note: {e}")
 
+        try:
+            from migrations.add_device_tokens_table import run_migration as run_device_tokens
+            run_device_tokens()
+            logger.info("✅ device_tokens table ready")
+        except Exception as e:
+            logger.warning(f"⚠️ device_tokens migration note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")

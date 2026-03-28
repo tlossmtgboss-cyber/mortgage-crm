@@ -15,6 +15,7 @@
     "@capacitor/haptics": "^8.0.0",
     "@capacitor/ios": "^8.0.0",
     "@capacitor/keyboard": "^8.0.0",
+    "@capacitor/network": "^8.0.1",
     "@capacitor/preferences": "^8.0.0",
     "@capacitor/push-notifications": "^8.0.0",
     "@capacitor/splash-screen": "^8.0.0",
@@ -62,7 +63,11 @@
     "ios:open": "./scripts/ios-run-dev.sh --open",
     "ios:build": "./scripts/ios-build.sh release",
     "ios:build:testflight": "./scripts/ios-build.sh testflight",
-    "ios:upload": "./scripts/ios-upload-testflight.sh"
+    "ios:upload": "./scripts/ios-upload-testflight.sh",
+    "android:build": "./scripts/android-build.sh debug",
+    "android:build:release": "./scripts/android-build.sh release",
+    "android:open": "npx cap open android",
+    "android:sync": "npx cap sync android"
   },
   "eslintConfig": {
     "extends": [

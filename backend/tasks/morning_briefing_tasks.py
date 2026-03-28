@@ -296,6 +296,16 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
 
             briefing.status = "delivered" if email_sent else "failed"
             briefing.updated_at = datetime.now(timezone.utc)
+
+            # Send push notification that briefing is ready
+            try:
+                from routes.push_notification_routes import notify_briefing_ready
+                at_risk_count = len(ctx.at_risk) if ctx.at_risk else 0
+                active_count = ctx.pipeline.get("active_count", 0) if ctx.pipeline else 0
+                notify_briefing_ready(db, user_id, active_count, at_risk_count)
+            except Exception as push_err:
+                logger.debug("Push notification skipped: %s", push_err)
+
             db.commit()
 
             total_duration = (time.time() - start_time) * 1000

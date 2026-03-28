@@ -14,7 +14,11 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: 'automatic',
     allowsLinkPreview: false,
-  }
+  },
+  android: {
+    allowMixedContent: false,
+    backgroundColor: '#1a1a2e',
+  },
 };
 
 export default config;
