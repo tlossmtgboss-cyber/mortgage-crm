@@ -63,7 +63,11 @@
     "ios:open": "./scripts/ios-run-dev.sh --open",
     "ios:build": "./scripts/ios-build.sh release",
     "ios:build:testflight": "./scripts/ios-build.sh testflight",
-    "ios:upload": "./scripts/ios-upload-testflight.sh"
+    "ios:upload": "./scripts/ios-upload-testflight.sh",
+    "android:build": "./scripts/android-build.sh debug",
+    "android:build:release": "./scripts/android-build.sh release",
+    "android:open": "npx cap open android",
+    "android:sync": "npx cap sync android"
   },
   "eslintConfig": {
     "extends": [

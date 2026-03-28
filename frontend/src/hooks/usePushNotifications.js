@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { pushNotifications, isNative } from '../services/nativeServices';
 import { API_BASE_URL } from '../services/api';
 
@@ -45,7 +46,7 @@ export function usePushNotifications() {
             },
             body: JSON.stringify({
               device_token: token,
-              platform: 'ios',
+              platform: Capacitor.getPlatform(),
             }),
           });
 
