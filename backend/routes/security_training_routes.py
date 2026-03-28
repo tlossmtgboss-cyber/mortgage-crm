@@ -183,7 +183,7 @@ async def record_training_completion(
         passing_score=body.passing_score,
         certificate_id=certificate_id,
         expires_at=completed_at + timedelta(days=365) if passed else None,
-        metadata=body.metadata,
+        training_metadata=body.metadata,
     )
     db.add(record)
     db.commit()
@@ -350,7 +350,7 @@ async def get_user_training_history(
                 "certificate_id": r.certificate_id,
                 "attested_at": r.attested_at.isoformat() if r.attested_at else None,
                 "expires_at": r.expires_at.isoformat() if r.expires_at else None,
-                "metadata": r.metadata,
+                "metadata": r.training_metadata,
                 "created_at": r.created_at.isoformat() if r.created_at else None,
             }
             for r in records

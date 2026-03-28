@@ -50,7 +50,8 @@ class SecurityTrainingRecord(Base):
     expires_at = Column(DateTime(timezone=True), nullable=True)
 
     # Flexible metadata (training provider, module version, etc.)
-    metadata = Column(JSON, nullable=True)
+    # Note: 'metadata' is reserved by SQLAlchemy's Declarative API
+    training_metadata = Column("metadata", JSON, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
