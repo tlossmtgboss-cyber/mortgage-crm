@@ -209,3 +209,85 @@
   border-bottom: 2px solid #218D8D;
 }
 
+/* =============================================
+   MOBILE RESPONSIVE — CLIENT PROFILE
+   ============================================= */
+
+@media (max-width: 768px) {
+  .client-profile-page {
+    padding: 16px;
+  }
+
+  .profile-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+
+  .profile-content {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .profile-content.with-assistant {
+    margin-right: 0;
+  }
+
+  .assistant-sidebar {
+    position: fixed;
+    width: 100%;
+    left: 0;
+    right: 0;
+  }
+
+  .info-card,
+  .conversations-card {
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .smart-ai-section {
+    padding: 16px;
+  }
+
+  .conv-header {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .loading,
+  .error {
+    padding: 40px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .client-profile-page {
+    padding: 12px;
+  }
+
+  .profile-header {
+    margin-bottom: 16px;
+  }
+
+  .info-card h2,
+  .conversations-card h2 {
+    font-size: 16px;
+    margin-bottom: 12px;
+  }
+
+  .info-item p {
+    font-size: 14px;
+  }
+
+  .btn-ai {
+    width: 100%;
+    text-align: center;
+  }
+}
+

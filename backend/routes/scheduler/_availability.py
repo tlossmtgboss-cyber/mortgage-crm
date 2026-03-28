@@ -12,6 +12,7 @@ from collections import defaultdict
 import pytz
 import logging
 import time as time_mod
+import requests
 
 from smart_scheduler_models import (
     AppointmentStatus, DayOfWeek, SlotPriority, DEFAULT_WORKING_HOURS,
@@ -163,6 +164,172 @@ def _cb_should_skip(provider: str, org_id: int = None) -> bool:
         state["open_until"] = None
         return False
     return True
+
+
+# ============================================================================
+# MICROSOFT OUTLOOK CALENDAR HELPER
+# ============================================================================
+
+# Module-level cache for Outlook calendar events to avoid duplicate API calls
+# within a single availability request window.
+# Key: (user_id, start_iso, end_iso) -> list of (start_dt, end_dt) tuples
+_outlook_cache: dict = {}
+_OUTLOOK_CACHE_TTL = 120  # 2 minutes
+
+
+def _fetch_outlook_calendar_events(user_id: int, start_dt: datetime, end_dt: datetime, db) -> list:
+    """Fetch busy periods from Microsoft Outlook calendar via Graph API.
+
+    Returns a list of (start, end) datetime tuples representing busy time blocks.
+    Uses MicrosoftOAuthToken for authentication, with automatic token refresh.
+    Results are cached for the request window to avoid hammering the API.
+
+    Returns an empty list (fail-open) if:
+    - No Microsoft OAuth token exists for the user
+    - Token refresh fails
+    - Graph API call fails
+
+    This is a synchronous function (the slot generator is sync).
+    """
+    # Check cache first
+    cache_key = (user_id, start_dt.isoformat(), end_dt.isoformat())
+    cached = _outlook_cache.get(cache_key)
+    if cached and time_mod.time() - cached["ts"] < _OUTLOOK_CACHE_TTL:
+        return cached["events"]
+
+    events = []
+
+    try:
+        from database.models.microsoft import MicrosoftOAuthToken
+        from services.dre_helpers import decrypt_token, encrypt_token
+
+        oauth_record = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.user_id == user_id,
+        ).first()
+
+        if not oauth_record or not oauth_record.access_token:
+            # No Microsoft token — skip silently
+            _outlook_cache[cache_key] = {"events": [], "ts": time_mod.time()}
+            return []
+
+        # Check if token needs refresh
+        access_token = None
+        if oauth_record.token_expires_at:
+            token_expiry = oauth_record.token_expires_at
+            if token_expiry.tzinfo is None:
+                token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+            if token_expiry < datetime.now(timezone.utc) + timedelta(minutes=5):
+                # Token expired or expiring soon — try synchronous refresh
+                if not oauth_record.refresh_token:
+                    logger.debug(f"Outlook calendar: no refresh token for user {user_id}, skipping")
+                    _outlook_cache[cache_key] = {"events": [], "ts": time_mod.time()}
+                    return []
+
+                import os
+                client_id = os.getenv("MICROSOFT_CLIENT_ID")
+                client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
+                if not client_id or not client_secret:
+                    logger.debug("Outlook calendar: Microsoft OAuth credentials not configured, skipping")
+                    _outlook_cache[cache_key] = {"events": [], "ts": time_mod.time()}
+                    return []
+
+                try:
+                    refresh_token = decrypt_token(oauth_record.refresh_token)
+                    refresh_resp = requests.post(
+                        "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+                        data={
+                            "client_id": client_id,
+                            "client_secret": client_secret,
+                            "refresh_token": refresh_token,
+                            "grant_type": "refresh_token",
+                            "scope": "https://graph.microsoft.com/Calendars.Read offline_access",
+                        },
+                        timeout=10,
+                    )
+                    if refresh_resp.status_code == 200:
+                        token_data = refresh_resp.json()
+                        oauth_record.access_token = encrypt_token(token_data["access_token"])
+                        oauth_record.refresh_token = encrypt_token(token_data["refresh_token"])
+                        oauth_record.token_expires_at = datetime.now(timezone.utc) + timedelta(seconds=token_data["expires_in"])
+                        oauth_record.updated_at = datetime.now(timezone.utc)
+                        db.commit()
+                        access_token = token_data["access_token"]
+                        logger.info(f"Outlook calendar: refreshed token for user {user_id}")
+                    else:
+                        logger.warning(f"Outlook calendar: token refresh failed for user {user_id}: {refresh_resp.status_code}")
+                        _outlook_cache[cache_key] = {"events": [], "ts": time_mod.time()}
+                        return []
+                except Exception as e:
+                    logger.warning(f"Outlook calendar: token refresh error for user {user_id}: {e}")
+                    _outlook_cache[cache_key] = {"events": [], "ts": time_mod.time()}
+                    return []
+
+        # Decrypt access token if we didn't just refresh it
+        if access_token is None:
+            try:
+                access_token = decrypt_token(oauth_record.access_token)
+            except Exception as e:
+                logger.warning(f"Outlook calendar: failed to decrypt token for user {user_id}: {e}")
+                _outlook_cache[cache_key] = {"events": [], "ts": time_mod.time()}
+                return []
+
+        # Query Microsoft Graph calendarView
+        # Format datetimes as ISO 8601 strings for the Graph API
+        start_iso = start_dt.strftime("%Y-%m-%dT%H:%M:%S")
+        end_iso = end_dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+        graph_resp = requests.get(
+            "https://graph.microsoft.com/v1.0/me/calendarView",
+            params={
+                "startDateTime": start_iso,
+                "endDateTime": end_iso,
+                "$select": "start,end,showAs,isCancelled",
+                "$top": 200,
+            },
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Prefer": 'outlook.timezone="UTC"',
+            },
+            timeout=15,
+        )
+
+        if graph_resp.status_code == 200:
+            data = graph_resp.json()
+            for event in data.get("value", []):
+                # Skip cancelled events and free/tentative time
+                if event.get("isCancelled"):
+                    continue
+                show_as = event.get("showAs", "busy")
+                if show_as in ("free", "unknown"):
+                    continue
+
+                # Parse start/end from Graph API response
+                try:
+                    evt_start_str = event.get("start", {}).get("dateTime", "")
+                    evt_end_str = event.get("end", {}).get("dateTime", "")
+                    if evt_start_str and evt_end_str:
+                        # Graph returns ISO format; strip trailing Z if present
+                        evt_start = datetime.fromisoformat(evt_start_str.rstrip("Z"))
+                        evt_end = datetime.fromisoformat(evt_end_str.rstrip("Z"))
+                        events.append((evt_start, evt_end))
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Outlook calendar: failed to parse event datetime: {e}")
+                    continue
+
+            logger.debug(f"Outlook calendar: fetched {len(events)} busy events for user {user_id}")
+        elif graph_resp.status_code == 401:
+            logger.warning(f"Outlook calendar: 401 Unauthorized for user {user_id} (token may be invalid)")
+        else:
+            logger.warning(f"Outlook calendar: Graph API returned {graph_resp.status_code} for user {user_id}")
+
+    except ImportError:
+        logger.debug("Outlook calendar: MicrosoftOAuthToken or dre_helpers not available, skipping")
+    except Exception as e:
+        logger.warning(f"Outlook calendar: unexpected error for user {user_id}: {e}")
+
+    # Cache result regardless of success/failure
+    _outlook_cache[cache_key] = {"events": events, "ts": time_mod.time()}
+    return events
 
 
 # ============================================================================
@@ -336,6 +503,24 @@ def _get_cross_source_conflicts(db, target_user_id: int, start_dt, end_dt, org_i
                 degraded_sources.append("crm_calendar_event")
                 conflicts.append((start_dt, end_dt))
 
+    # Source 4: Microsoft Outlook calendar (via Graph API)
+    # Fail-open: if the token is missing or API fails, skip without blocking slots.
+    # Uses circuit breaker to avoid hammering a broken Graph API endpoint.
+    if _cb_should_skip("outlook_calendar", org_id=org_id):
+        logger.debug(f"Outlook calendar check skipped for user {target_user_id} — circuit breaker open")
+        degraded_sources.append("outlook_calendar")
+    else:
+        try:
+            outlook_events = _fetch_outlook_calendar_events(target_user_id, start_dt, end_dt, db)
+            if outlook_events:
+                conflicts.extend(outlook_events)
+            _cb_record_success("outlook_calendar", org_id=org_id)
+        except Exception as ex:
+            logger.warning(f"Outlook calendar cross-source check failed for user {target_user_id}: {ex}")
+            _cb_record_failure("outlook_calendar", org_id=org_id)
+            # Fail-open for Outlook: don't block all slots on Graph API failures
+            degraded_sources.append("outlook_calendar")
+
     return conflicts, degraded_sources
 
 
@@ -485,6 +670,32 @@ def _get_cross_source_conflicts_batch(db, user_ids: list, start_dt, end_dt, org_
                 logger.error(f"CRMCalendarEvent batch cross-source check FAILED — failing closed for all users: {ex}")
                 _cb_record_failure("crm_calendar_event", org_id=org_id)
                 _fail_closed_all_users("crm_calendar_event")
+
+    # Source 4: Microsoft Outlook calendar (via Graph API) — per-user fetch
+    # Fail-open: if the token is missing or API fails for a user, skip that user.
+    # Uses circuit breaker to avoid hammering a broken Graph API endpoint.
+    if _cb_should_skip("outlook_calendar", org_id=org_id):
+        logger.debug("Outlook calendar batch check skipped — circuit breaker open")
+        degraded_sources.append("outlook_calendar")
+    else:
+        any_success = False
+        any_failure = False
+        for uid in user_ids:
+            try:
+                outlook_events = _fetch_outlook_calendar_events(uid, start_dt, end_dt, db)
+                if outlook_events:
+                    conflicts_by_user[uid].extend(outlook_events)
+                    any_success = True
+            except Exception as ex:
+                logger.warning(f"Outlook calendar batch check failed for user {uid}: {ex}")
+                any_failure = True
+                # Fail-open per-user: don't block all slots for one user's failure
+
+        if any_success:
+            _cb_record_success("outlook_calendar", org_id=org_id)
+        elif any_failure:
+            _cb_record_failure("outlook_calendar", org_id=org_id)
+            degraded_sources.append("outlook_calendar")
 
     return conflicts_by_user, degraded_sources
 

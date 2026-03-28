@@ -115,3 +115,37 @@
 .click-to-dial-btn.inline.calling {
   background: #ffebee;
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .click-to-dial-btn.small {
+    padding: 8px 12px;
+    font-size: 13px;
+    min-height: 44px;
+  }
+
+  .click-to-dial-btn.medium {
+    padding: 10px 16px;
+    font-size: 14px;
+    min-height: 44px;
+  }
+
+  .click-to-dial-btn.icon-only {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+  }
+
+  .click-to-dial-btn.icon-only.small {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px;
+  }
+
+  .click-to-dial-btn.inline {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px;
+  }
+}

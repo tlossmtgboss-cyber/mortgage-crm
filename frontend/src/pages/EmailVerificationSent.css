@@ -103,3 +103,60 @@
 .btn-back-home:hover {
   background-color: #f9fafb;
 }
+
+/* =============================================
+   MOBILE RESPONSIVE — EMAIL VERIFICATION SENT
+   ============================================= */
+
+@media (max-width: 768px) {
+  .verification-sent-page {
+    padding: 16px;
+  }
+
+  .verification-card {
+    padding: 32px 20px;
+    max-width: 100%;
+    border-radius: 12px;
+  }
+
+  .verification-card h1 {
+    font-size: 24px;
+  }
+
+  .success-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+  }
+
+  .info-box {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .verification-card {
+    padding: 24px 16px;
+  }
+
+  .verification-card h1 {
+    font-size: 20px;
+  }
+
+  .main-message {
+    font-size: 14px;
+  }
+
+  .instructions {
+    font-size: 14px;
+  }
+
+  .btn-resend,
+  .btn-back-home {
+    width: 100%;
+    text-align: center;
+  }
+
+  .help-section p {
+    font-size: 13px;
+  }
+}

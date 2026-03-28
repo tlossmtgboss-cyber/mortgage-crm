@@ -339,3 +339,77 @@
   background: #ccc;
   cursor: not-allowed;
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .document-drop-modal {
+    width: calc(100% - 32px);
+    max-height: calc(100vh - 32px);
+    max-width: none;
+  }
+
+  .document-drop-modal .modal-header {
+    padding: 16px;
+  }
+
+  .document-drop-modal .modal-header h2 {
+    font-size: 18px;
+  }
+
+  .file-preview {
+    padding: 16px;
+  }
+
+  .form-section {
+    padding: 16px;
+  }
+
+  .search-box {
+    flex-direction: column;
+  }
+
+  .search-box button {
+    width: 100%;
+  }
+
+  .modal-actions {
+    padding: 16px;
+    flex-direction: column;
+  }
+
+  .modal-actions .btn-cancel,
+  .modal-actions .btn-upload {
+    width: 100%;
+    text-align: center;
+  }
+
+  .result-item {
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 44px;
+  }
+
+  .result-email,
+  .result-number {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .document-drop-modal {
+    width: calc(100% - 16px);
+    border-radius: 8px;
+  }
+
+  .classification-result {
+    padding: 12px 16px;
+  }
+
+  .ai-suggestion {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+}

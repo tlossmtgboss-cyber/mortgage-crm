@@ -238,6 +238,6 @@ DEFAULT_WORKING_HOURS = {
     'wednesday': {'start': '09:00', 'end': '17:00', 'enabled': True},
     'thursday': {'start': '09:00', 'end': '17:00', 'enabled': True},
     'friday': {'start': '09:00', 'end': '17:00', 'enabled': True},
-    'saturday': {'start': '10:00', 'end': '14:00', 'enabled': False},
-    'sunday': {'start': '10:00', 'end': '14:00', 'enabled': False}
+    'saturday': {'start': '09:00', 'end': '13:00', 'enabled': False},
+    'sunday': {'start': '09:00', 'end': '13:00', 'enabled': False},
 }

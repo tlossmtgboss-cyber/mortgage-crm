@@ -452,3 +452,103 @@
   font-size: 0.85rem;
   color: #6b7280;
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .admin-contracts {
+    padding: 16px;
+  }
+
+  .admin-contracts-header h1 {
+    font-size: 1.35rem;
+  }
+
+  .contracts-summary-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .summary-card {
+    padding: 14px;
+  }
+
+  .summary-card .card-value {
+    font-size: 1.35rem;
+  }
+
+  .contracts-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .contracts-toolbar .toolbar-left {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .contracts-search {
+    min-width: unset;
+    width: 100%;
+  }
+
+  .btn-create-contract {
+    width: 100%;
+    text-align: center;
+  }
+
+  .contracts-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .contracts-table th,
+  .contracts-table td {
+    padding: 10px 12px;
+    font-size: 0.8rem;
+    white-space: nowrap;
+  }
+
+  .modal-content {
+    width: calc(100% - 32px);
+    max-height: calc(100vh - 32px);
+    padding: 20px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-actions {
+    flex-direction: column;
+  }
+
+  .modal-actions .btn-cancel,
+  .modal-actions .btn-submit {
+    width: 100%;
+    text-align: center;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-contracts {
+    padding: 12px;
+  }
+
+  .contracts-summary-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .contracts-tabs .tab-btn {
+    padding: 8px 12px;
+    font-size: 0.8rem;
+  }
+
+  .modal-content {
+    padding: 16px;
+  }
+
+  .modal-content h2 {
+    font-size: 1.1rem;
+  }
+}

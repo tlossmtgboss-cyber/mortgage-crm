@@ -142,3 +142,46 @@
   color: #7f8c8d;
   font-size: 15px;
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .job-description-section {
+    padding: 16px;
+  }
+
+  .section-header-with-actions {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .section-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .btn-save-description {
+    min-height: 44px;
+  }
+
+  .rich-text-editor-wrapper .ql-container,
+  .rich-text-editor-wrapper .ql-editor {
+    min-height: 200px;
+  }
+
+  .editor-footer {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .job-description-section {
+    padding: 12px;
+  }
+
+  .section-header-with-actions h3 {
+    font-size: 16px;
+  }
+}

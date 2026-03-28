@@ -193,3 +193,51 @@
     box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.2);
   }
 }
+
+/* ── Mobile Responsive ─────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .guideline-sidebar {
+    width: 100%;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 1000;
+    padding: 16px;
+  }
+
+  .sidebar-header {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+  }
+
+  .sidebar-header h3 {
+    font-size: 1rem;
+  }
+
+  .source-header {
+    padding: 10px 12px;
+    min-height: 44px;
+  }
+
+  .update-item {
+    padding: 10px;
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  .guideline-sidebar {
+    padding: 12px;
+  }
+
+  .source-title h4 {
+    font-size: 0.85rem;
+  }
+
+  .update-title {
+    font-size: 0.8rem;
+  }
+}
