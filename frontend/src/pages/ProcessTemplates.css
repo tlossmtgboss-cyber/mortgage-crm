@@ -580,3 +580,117 @@
 .btn-save:hover {
   background-color: #059669;
 }
+
+/* =============================================
+   MOBILE RESPONSIVE — PROCESS TEMPLATES
+   ============================================= */
+
+@media (max-width: 768px) {
+  .process-templates-container {
+    padding: 16px;
+  }
+
+  .page-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+    margin-bottom: 20px;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .header-actions button {
+    width: 100%;
+    text-align: center;
+  }
+
+  .role-tabs {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 4px;
+    margin-bottom: 20px;
+  }
+
+  .role-tab {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+
+  .efficiency-analysis {
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+
+  .analysis-summary {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .tasks-container {
+    padding: 16px;
+  }
+
+  .tasks-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .task-card {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .task-meta {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .task-actions {
+    align-self: flex-end;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-content {
+    width: 95%;
+  }
+
+  .suggestion-header {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 480px) {
+  .process-templates-container {
+    padding: 12px;
+  }
+
+  .page-header h1 {
+    font-size: 22px;
+  }
+
+  .role-tab {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .summary-stat .value {
+    font-size: 20px;
+  }
+
+  .task-header h3 {
+    font-size: 14px;
+  }
+
+  .tasks-header h2 {
+    font-size: 18px;
+  }
+}

@@ -99,3 +99,44 @@
 .oauth-close-btn:active {
   transform: translateY(0);
 }
+
+/* =============================================
+   MOBILE RESPONSIVE — OAUTH CALLBACK
+   ============================================= */
+
+@media (max-width: 768px) {
+  .oauth-callback-page {
+    padding: 16px;
+  }
+
+  .oauth-callback-card {
+    padding: 32px 20px;
+    max-width: 100%;
+  }
+
+  .oauth-callback-card h2 {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .oauth-callback-card {
+    padding: 24px 16px;
+    border-radius: 12px;
+  }
+
+  .oauth-icon {
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+  }
+
+  .oauth-callback-card h2 {
+    font-size: 18px;
+  }
+
+  .oauth-close-btn {
+    width: 100%;
+    text-align: center;
+  }
+}
