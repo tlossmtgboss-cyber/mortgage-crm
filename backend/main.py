@@ -2492,6 +2492,30 @@ def _run_critical_schema_migrations():
     finally:
         db.close()
 
+# ============================================================================
+# TEMPORARY: One-time seed endpoint for App Store demo account
+# Remove after demo account is created
+# ============================================================================
+
+@app.post("/api/v1/management/seed-demo")
+async def seed_demo_account(request: Request):
+    """One-time endpoint to create App Store review demo account. Protected by SECRET_KEY."""
+    auth = request.headers.get("X-Management-Key", "")
+    if auth != SECRET_KEY:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        import importlib
+        import scripts.seed_demo_account as seed_mod
+        importlib.reload(seed_mod)  # ensure fresh run
+        seed_mod.main()
+        return {"status": "success", "message": "Demo account seeded successfully"}
+    except SystemExit:
+        return JSONResponse(status_code=500, content={"status": "error", "message": "Seed script exited (DATABASE_URL missing?)"})
+    except Exception as e:
+        logger.exception("Demo seed failed")
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
 # MAIN
 # ============================================================================
 
