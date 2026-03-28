@@ -11,6 +11,11 @@
 /* Header */
 .smart-docs-header {
   margin-bottom: 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
 }
 
 .smart-docs-header .header-content h1 {
@@ -24,6 +29,35 @@
   margin: 0;
   color: #6b7280;
   font-size: 0.95rem;
+}
+
+/* Batch Actions */
+.header-batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-batch-reminder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-batch-reminder:hover {
+  background: linear-gradient(135deg, #6d28d9 0%, #7c3aed 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 
 /* Filters Bar */
