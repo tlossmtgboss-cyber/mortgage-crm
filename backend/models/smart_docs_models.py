@@ -147,8 +147,10 @@ class DocumentRequest(Base):
 
     # Status
     status = Column(SQLEnum(RequestStatus), default=RequestStatus.OPEN)
+    is_required = Column(Boolean, default=True, server_default="true")
     due_date = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
+    fulfilled_at = Column(DateTime, nullable=True)  # When request was fulfilled (synced with completed_at)
 
     # SLA Tracking
     sla_due_at = Column(DateTime, nullable=True)  # 3 business days from created_at

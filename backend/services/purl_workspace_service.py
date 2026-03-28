@@ -238,6 +238,28 @@ def calculate_document_requirements_from_application(application_data: Dict[str,
     return docs
 
 
+# Mapping from application-generated doc IDs to Smart Docs DocType enum values
+_APP_ID_TO_DOC_TYPE = {
+    "id": "DRIVERS_LICENSE",
+    "tax_returns": "TAX_RETURN",
+    "business_tax_returns": "BUSINESS_TAX_RETURN",
+    "profit_loss": "PROFIT_LOSS",
+    "business_license": "OTHER",
+    "paystubs": "PAYSTUB",
+    "w2": "W2",
+    "bank_statements": "BANK_STATEMENT",
+    "gift_letter": "GIFT_LETTER",
+    "gift_donor_statements": "BANK_STATEMENT",
+    "coborrower_id": "DRIVERS_LICENSE",
+    "coborrower_income": "PAYSTUB",
+}
+
+
+def _map_app_id_to_doc_type(app_id: str) -> str:
+    """Map application-generated document ID to a Smart Docs DocType value."""
+    return _APP_ID_TO_DOC_TYPE.get(app_id, "OTHER")
+
+
 class PURLWorkspaceService:
     """
     Service for PURL workspace operations.
@@ -551,27 +573,15 @@ class PURLWorkspaceService:
                     ).order_by(DocumentRequest.priority.desc(), DocumentRequest.created_at).all()
 
                     document_requirements = [
-                        {
-                            "id": req.id,
-                            "doc_type": req.doc_type.value if hasattr(req.doc_type, 'value') else str(req.doc_type),
-                            "title": req.title,
-                            "description": req.description,
-                            "instructions": req.instructions,
-                            "status": req.status.value if hasattr(req.status, 'value') else str(req.status),
-                            "priority": req.priority.value if hasattr(req.priority, 'value') else str(req.priority),
-                            "due_date": req.due_date.isoformat() if req.due_date else None,
-                            "applies_to": req.applies_to.value if hasattr(req.applies_to, 'value') else str(req.applies_to),
-                            "is_required": req.is_required,
-                            "fulfilled_at": req.fulfilled_at.isoformat() if req.fulfilled_at else None,
-                        }
+                        self._document_request_to_dict(req)
                         for req in requests
                     ]
                     logger.info(f"Loaded {len(document_requirements)} document requirements for loan {current_loan.id}")
                 except Exception as e:
                     logger.warning(f"Failed to load document requirements: {e}")
 
-            # If no document requirements from database, generate from application data
-            if not document_requirements:
+            # If no Smart Docs requests exist, generate from application and persist
+            if not document_requirements and SMART_DOCS_AVAILABLE and current_loan:
                 try:
                     app_data = {}
                     if application:
@@ -579,11 +589,49 @@ class PURLWorkspaceService:
                         logger.info(f"Generating document requirements from application data: {app_data.get('declarations', {})}")
                     else:
                         logger.info("No application found, generating default document requirements")
-                    document_requirements = calculate_document_requirements_from_application(app_data)
-                    logger.info(f"Generated {len(document_requirements)} document requirements from application data")
+                    app_requirements = calculate_document_requirements_from_application(app_data)
+                    logger.info(f"Generated {len(app_requirements)} document requirements from application data")
+
+                    # Persist each as a DocumentRequest so Smart Docs becomes the single source of truth
+                    persisted_requests = []
+                    for req_data in app_requirements:
+                        doc_type = _map_app_id_to_doc_type(req_data.get("id", ""))
+                        applies_to_val = "CO_BORROWER" if "coborrower" in req_data.get("id", "") else "BORROWER"
+                        new_req = DocumentRequest(
+                            loan_id=current_loan.id,
+                            doc_type=doc_type,
+                            title=req_data.get("name", req_data.get("id", "Document")),
+                            description=req_data.get("description"),
+                            status="OPEN",
+                            is_required=True,
+                            priority="NORMAL",
+                            applies_to=applies_to_val,
+                        )
+                        self.db.add(new_req)
+                        persisted_requests.append(new_req)
+
+                    self.db.flush()  # Assign IDs without committing full transaction
+
+                    # Re-query to get the persisted versions with IDs
+                    document_requirements = [
+                        self._document_request_to_dict(req)
+                        for req in persisted_requests
+                    ]
+                    logger.info(f"Persisted {len(document_requirements)} document requirements as Smart Docs requests for loan {current_loan.id}")
                 except Exception as e:
-                    logger.error(f"Failed to generate document requirements from application: {e}", exc_info=True)
+                    logger.error(f"Failed to generate/persist document requirements from application: {e}", exc_info=True)
                     # Rollback to clear the failed transaction state so subsequent queries can proceed
+                    self.db.rollback()
+
+            # If still no requirements (Smart Docs not available or persistence failed), use fallback
+            if not document_requirements:
+                try:
+                    app_data = {}
+                    if application:
+                        app_data = application.data if hasattr(application, 'data') else {}
+                    document_requirements = calculate_document_requirements_from_application(app_data)
+                except Exception as e:
+                    logger.error(f"Failed to generate fallback document requirements: {e}", exc_info=True)
                     self.db.rollback()
                     # Provide default documents as ultimate fallback
                     document_requirements = [
@@ -1114,6 +1162,34 @@ class PURLWorkspaceService:
             "due_at": milestone.due_at.isoformat() if milestone.due_at else None,
             "metadata": milestone.meta_data if hasattr(milestone, 'meta_data') else {},
             "created_at": milestone.created_at.isoformat() if milestone.created_at else None
+        }
+
+    def _document_request_to_dict(self, req) -> Dict[str, Any]:
+        """Convert a DocumentRequest model to a dictionary for the PURL portal.
+
+        Uses the new is_required and fulfilled_at columns, with safe fallbacks
+        for rows that were created before the migration ran.
+        """
+        # Safe access for is_required: defaults to True if column doesn't exist yet
+        is_required = getattr(req, 'is_required', True)
+        if is_required is None:
+            is_required = True
+
+        # Safe access for fulfilled_at: fall back to completed_at if fulfilled_at not set
+        fulfilled_at = getattr(req, 'fulfilled_at', None) or getattr(req, 'completed_at', None)
+
+        return {
+            "id": req.id,
+            "doc_type": req.doc_type.value if hasattr(req.doc_type, 'value') else str(req.doc_type),
+            "title": req.title,
+            "description": req.description,
+            "instructions": req.instructions,
+            "status": req.status.value if hasattr(req.status, 'value') else str(req.status),
+            "priority": req.priority.value if hasattr(req.priority, 'value') else str(req.priority),
+            "due_date": req.due_date.isoformat() if req.due_date else None,
+            "applies_to": req.applies_to.value if hasattr(req.applies_to, 'value') else str(req.applies_to),
+            "is_required": is_required,
+            "fulfilled_at": fulfilled_at.isoformat() if fulfilled_at else None,
         }
 
     def _emit_event(
