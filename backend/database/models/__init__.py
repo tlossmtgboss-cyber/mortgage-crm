@@ -628,6 +628,9 @@ from .voice_workflow import VoiceWorkflow, VoiceWorkflowState, VoiceWorkflowType
 # Demo Data (tracking seeded demo records for cleanup)
 from .demo_data import DemoDataRecord
 
+# Security Training Records (SOC 2 CC1.4 training evidence)
+from .security_training import SecurityTrainingRecord
+
 
 __all__ = [
     # =====================
@@ -1279,4 +1282,9 @@ __all__ = [
     # Demo Data
     # =====================
     "DemoDataRecord",
+
+    # =====================
+    # Security Training (SOC 2 CC1.4)
+    # =====================
+    "SecurityTrainingRecord",
 ]

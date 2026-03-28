@@ -1518,6 +1518,14 @@ try:
 except Exception as e:
     logger.warning(f"SOC 2 Compliance admin routes skipped: {e}")
 
+# SOC 2 Security Training Tracking (CC1.4 evidence)
+try:
+    from routes.security_training_routes import router as security_training_router
+    app.include_router(security_training_router, tags=["SOC 2 Training"])
+    logger.info("Security training routes loaded")
+except Exception as e:
+    logger.warning(f"Security training routes skipped: {e}")
+
 # ============================================================================
 # PIPELINE APPOINTMENT TRIGGER ROUTES — Auto-schedule from stage changes
 # ============================================================================
