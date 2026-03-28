@@ -2,6 +2,7 @@ import { useState, useEffect, lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Capacitor } from '@capacitor/core';
+import { App as CapApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { isAuthenticatedSync as isAuthenticated } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
@@ -393,6 +394,28 @@ function App() {
   // Hide Capacitor splash screen on mount
   useEffect(() => {
     SplashScreen.hide().catch(() => {});
+  }, []);
+
+  // Handle deep links when app is opened via universal link
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    const listener = CapApp.addListener('appUrlOpen', (event) => {
+      try {
+        const url = new URL(event.url);
+        const path = url.pathname + url.search;
+        if (path && path !== '/') {
+          window.history.pushState({}, '', path);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+      } catch (e) {
+        console.error('Deep link error:', e);
+      }
+    });
+
+    return () => {
+      listener.then(l => l.remove());
+    };
   }, []);
 
   const [assistantOpen, setAssistantOpen] = useState(false);
