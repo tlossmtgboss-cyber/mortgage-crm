@@ -27,18 +27,7 @@ from sqlalchemy.orm import Session, joinedload
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Terminal loan stages excluded from "active pipeline" queries.
-# Kept here as the single canonical constant so callers don't re-define it.
-# ---------------------------------------------------------------------------
-TERMINAL_LOAN_STAGES: tuple[str, ...] = (
-    "FUNDED",
-    "CANCELLED",
-    "DENIED",
-    "DEAD",
-    "WITHDRAWN",
-    "DOES_NOT_QUALIFY",
-)
+from services.workflow_constants import TERMINAL_LOAN_STAGES
 
 
 # =============================================================================

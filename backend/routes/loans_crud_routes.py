@@ -648,6 +648,16 @@ async def update_loan(
                 except Exception as e:
                     logger.warning(f"Portal stage sync failed for loan {loan.id}: {e}")
 
+                # Event-driven workflow enrollment (eliminates 60s polling delay)
+                try:
+                    from services.workflow_scheduler import trigger_workflow_evaluation_for_loan
+                    trigger_workflow_evaluation_for_loan(
+                        db, loan.id, new_stage,
+                        user_id=getattr(current_user, "id", None),
+                    )
+                except Exception as e:
+                    logger.warning(f"Workflow evaluation trigger failed for loan {loan.id}: {e}")
+
                 # ACO trigger — run completeness review on key stage transitions
                 ACO_TRIGGER_STAGES = (
                     "APPLICATION", "DISCLOSED", "SUBMITTED",

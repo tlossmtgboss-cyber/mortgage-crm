@@ -1,0 +1,62 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "V5ZA5FZ2J8.com.perenniaai.crm"
+        ],
+        "components": [
+          {
+            "/": "/loans/*",
+            "comment": "Loan detail deep links"
+          },
+          {
+            "/": "/leads/*",
+            "comment": "Lead detail deep links"
+          },
+          {
+            "/": "/tasks/*",
+            "comment": "Task detail deep links"
+          },
+          {
+            "/": "/aria",
+            "comment": "Voice assistant"
+          },
+          {
+            "/": "/dashboard",
+            "comment": "Main dashboard"
+          },
+          {
+            "/": "/calendar",
+            "comment": "Calendar"
+          },
+          {
+            "/": "/smart-docs/*",
+            "comment": "Document management"
+          },
+          {
+            "/": "/notifications",
+            "comment": "Notification center"
+          },
+          {
+            "/": "/apply/*",
+            "comment": "Borrower application"
+          },
+          {
+            "/": "/book/*",
+            "comment": "Booking"
+          },
+          {
+            "/": "/portal/*",
+            "comment": "Borrower portal"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "V5ZA5FZ2J8.com.perenniaai.crm"
+    ]
+  }
+}

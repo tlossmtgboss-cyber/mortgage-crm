@@ -8,15 +8,10 @@
 /**
  * Ensures the input is always an array
  * @param {any} data - Data that should be an array
- * @param {string} propertyName - Optional property name to extract from object
+ * @param {...string} keys - Optional property names to try extracting from object (checked in order)
  * @returns {Array} - Always returns an array
  */
-export const ensureArray = (data, propertyName = null) => {
-  // If a property name is specified, try to extract it first
-  if (propertyName && data && typeof data === 'object' && !Array.isArray(data)) {
-    data = data[propertyName];
-  }
-
+export const ensureArray = (data, ...keys) => {
   // If already an array, return it
   if (Array.isArray(data)) {
     return data;
@@ -25,6 +20,15 @@ export const ensureArray = (data, propertyName = null) => {
   // If null or undefined, return empty array
   if (data === null || data === undefined) {
     return [];
+  }
+
+  // If explicit keys were provided, try each in order
+  if (keys.length > 0 && data && typeof data === 'object') {
+    for (const key of keys) {
+      if (key && data[key] && Array.isArray(data[key])) {
+        return data[key];
+      }
+    }
   }
 
   // If it's an object, check for common array wrapper properties
@@ -38,8 +42,8 @@ export const ensureArray = (data, propertyName = null) => {
     }
 
     // If object has numeric keys, convert to array
-    const keys = Object.keys(data);
-    if (keys.length > 0 && keys.every(key => !isNaN(key))) {
+    const objKeys = Object.keys(data);
+    if (objKeys.length > 0 && objKeys.every(key => !isNaN(key))) {
       return Object.values(data);
     }
   }

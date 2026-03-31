@@ -8,6 +8,7 @@ reminders, and health endpoints.
 
 import logging
 import os
+import re
 from datetime import datetime
 from typing import Optional
 
@@ -40,6 +41,82 @@ from routes.smart_docs_models import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# File Upload Security Validation
+# =============================================================================
+
+# Allowed MIME types for document uploads
+ALLOWED_MIME_TYPES = {
+    'application/pdf',
+    'image/jpeg',
+    'image/png',
+    'image/tiff',
+    'image/gif',
+    'image/bmp',
+    'image/webp',
+}
+
+# Magic byte signatures for file type verification
+MAGIC_BYTES = {
+    b'%PDF': 'application/pdf',
+    b'\xff\xd8\xff': 'image/jpeg',
+    b'\x89PNG': 'image/png',
+    b'GIF87a': 'image/gif',
+    b'GIF89a': 'image/gif',
+    b'II\x2a\x00': 'image/tiff',  # Little-endian TIFF
+    b'MM\x00\x2a': 'image/tiff',  # Big-endian TIFF
+    b'BM': 'image/bmp',
+    b'RIFF': 'image/webp',  # WebP starts with RIFF
+}
+
+
+def validate_upload_file(file_content_type: str, file_bytes_header: bytes, filename: str) -> tuple:
+    """Validate uploaded file. Returns (is_valid, error_message, sanitized_filename)."""
+    # 1. Check MIME type against whitelist
+    if file_content_type not in ALLOWED_MIME_TYPES:
+        return False, f"File type '{file_content_type}' is not allowed. Accepted types: PDF, JPEG, PNG, TIFF, GIF", None
+
+    # 2. Verify magic bytes match claimed MIME type
+    detected_type = None
+    for magic, mime in MAGIC_BYTES.items():
+        if file_bytes_header[:len(magic)] == magic:
+            detected_type = mime
+            break
+
+    if detected_type and detected_type != file_content_type:
+        # Special case: some TIFF variants
+        if not (detected_type.startswith('image/tiff') and file_content_type.startswith('image/tiff')):
+            return False, "File content does not match declared file type", None
+
+    # 3. Sanitize filename
+    sanitized = sanitize_filename(filename)
+
+    return True, None, sanitized
+
+
+def sanitize_filename(filename: str) -> str:
+    """Remove dangerous characters from filename."""
+    if not filename:
+        return "unnamed_document"
+    # Remove path components
+    filename = filename.replace('\\', '/').split('/')[-1]
+    # Remove null bytes and control characters
+    filename = re.sub(r'[\x00-\x1f\x7f]', '', filename)
+    # Replace potentially dangerous characters
+    filename = re.sub(r'[<>:"|?*]', '_', filename)
+    # Remove leading/trailing dots and spaces
+    filename = filename.strip('. ')
+    # Ensure not empty after sanitization
+    if not filename:
+        return "unnamed_document"
+    # Limit length
+    if len(filename) > 255:
+        name, ext = filename.rsplit('.', 1) if '.' in filename else (filename, '')
+        filename = name[:250] + ('.' + ext if ext else '')
+    return filename
+
 
 router = APIRouter(
     tags=["Smart Documents"],
@@ -318,11 +395,23 @@ async def upload_document(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
+    # Read magic bytes for type verification, then reset stream
+    header = await file.read(8)
+    await file.seek(0)
+
+    # Validate MIME type, magic bytes, and sanitize filename
+    claimed_content_type = file.content_type or "application/octet-stream"
+    is_valid, validation_error, safe_filename = validate_upload_file(
+        claimed_content_type, header, file.filename
+    )
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=validation_error)
+
     # Read file content
     file_content = await file.read()
 
     # Get file info
-    mime_type = file.content_type or "application/octet-stream"
+    mime_type = claimed_content_type
     file_size = len(file_content)
 
     # Validate file size (max 20MB)
@@ -361,7 +450,7 @@ async def upload_document(
     storage_key = s3_service.generate_storage_key(
         loan_id=loan_id,
         borrower_id=borrower_id,
-        file_name=file.filename,
+        file_name=safe_filename,
         organization_id=org_id,
     )
 
@@ -370,7 +459,7 @@ async def upload_document(
         request_id=request_id,
         loan_id=loan_id,
         borrower_id=borrower_id,
-        file_name=file.filename,
+        file_name=safe_filename,
         mime_type=mime_type,
         file_size=file_size,
         storage_key=storage_key,
@@ -390,7 +479,7 @@ async def upload_document(
             "loan_id": str(loan_id),
             "borrower_id": str(borrower_id),
             "document_id": str(document.id),
-            "original_filename": file.filename
+            "original_filename": safe_filename
         }
     )
 
@@ -411,7 +500,7 @@ async def upload_document(
         document_id=document.id,
         file_content=file_content,
         mime_type=mime_type,
-        filename=file.filename,
+        filename=safe_filename,
         doc_type=parsed_doc_type,
         request_id=request_id,
     )

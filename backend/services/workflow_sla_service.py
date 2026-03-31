@@ -102,6 +102,13 @@ class WorkflowSLAService:
             if not workflow_config:
                 return {"success": False, "error": f"Workflow '{workflow_key}' not found"}
 
+            # Advisory lock prevents duplicate enrollment when concurrent stage updates
+            # race between the existence check and the INSERT.
+            # Lock key is derived from entity type + entity ID + config ID to allow
+            # parallel enrollment of different entities.
+            lock_key = hash(f"workflow_enroll_lead_{lead_id}_{workflow_config.id}") & 0x7FFFFFFF
+            self.db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
+
             # Check for existing active workflow of same type
             existing = self._get_active_workflow_instance(lead_id=lead_id, workflow_config_id=workflow_config.id)
             if existing:
@@ -183,6 +190,13 @@ class WorkflowSLAService:
             workflow_config = self._get_workflow_config(workflow_key, org_id)
             if not workflow_config:
                 return {"success": False, "error": f"Workflow '{workflow_key}' not found"}
+
+            # Advisory lock prevents duplicate enrollment when concurrent stage updates
+            # race between the existence check and the INSERT.
+            # Lock key is derived from entity type + entity ID + config ID to allow
+            # parallel enrollment of different entities.
+            lock_key = hash(f"workflow_enroll_loan_{loan_id}_{workflow_config.id}") & 0x7FFFFFFF
+            self.db.execute(text("SELECT pg_advisory_xact_lock(:lock_key)"), {"lock_key": lock_key})
 
             # Check for existing active workflow of same type
             existing = self._get_active_workflow_instance(loan_id=loan_id, workflow_config_id=workflow_config.id)

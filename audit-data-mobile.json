@@ -1,0 +1,459 @@
+{
+  "audit_metadata": {
+    "timestamp": "2026-03-31T12:30:00Z",
+    "environment": "local",
+    "skill_version": "1.1.0",
+    "method": "static_analysis",
+    "scope": "mobile_app_crm_integration"
+  },
+  "summary": {
+    "total_checks": 42,
+    "critical": 2,
+    "warning": 5,
+    "pass": 31,
+    "skipped": 0,
+    "info": 4,
+    "health_score": 65
+  },
+  "findings": [
+    {
+      "check_id": "WF-001",
+      "category": "workflow_integrity",
+      "name": "MobileNotificationCenter route registration",
+      "severity": "critical",
+      "finding": "MobileNotificationCenter.jsx (516 lines) exists but is not registered in routes/index.jsx. No navigation path reaches this page.",
+      "impact": "Mobile users cannot view or manage notifications. Notification badge is visible but non-functional.",
+      "recommendation": "Add route in routes/index.jsx and link from MobileBottomNav or More menu.",
+      "evidence": {"file": "MobileNotificationCenter.jsx:8", "declared_route": "/aria/notifications", "routes_index_mentions": 0}
+    },
+    {
+      "check_id": "WF-002",
+      "category": "workflow_integrity",
+      "name": "Event-driven workflow enrollment triggers",
+      "severity": "pass",
+      "finding": "13 trigger call sites across lead/loan update endpoints call trigger_workflow_evaluation_for_lead/loan()."
+    },
+    {
+      "check_id": "WF-003",
+      "category": "workflow_integrity",
+      "name": "Scheduler polling fallback active",
+      "severity": "pass",
+      "finding": "WorkflowScheduler polling at 5-minute intervals continues as fallback for missed event triggers."
+    },
+    {
+      "check_id": "WF-004",
+      "category": "workflow_integrity",
+      "name": "Lead stage mapping coverage",
+      "severity": "pass",
+      "finding": "10 lead stages mapped to workflows, 7 intentionally skipped. Full coverage."
+    },
+    {
+      "check_id": "WF-005",
+      "category": "workflow_integrity",
+      "name": "Loan stage mapping coverage",
+      "severity": "pass",
+      "finding": "13 loan stages mapped to workflows (under_contract, last_mile, post_close), 7 intentionally skipped. Includes WF-010 additions: UW_RECEIVED, CONDITIONAL_APPROVAL, APPROVED, CLOSING, DOCS."
+    },
+    {
+      "check_id": "WF-006",
+      "category": "workflow_integrity",
+      "name": "Workflow deduplication on enrollment",
+      "severity": "pass",
+      "finding": "WorkflowSLAService.enroll_lead/loan checks for existing active workflow before creating new enrollment."
+    },
+    {
+      "check_id": "WF-007",
+      "category": "workflow_integrity",
+      "name": "Task generation and assignment",
+      "severity": "pass",
+      "finding": "WorkflowTaskGenerator generates tasks for 10 types (phone, text, email, etc.) with role-based assignment and capacity checks (MAX_PENDING_TASKS_PER_USER=50)."
+    },
+    {
+      "check_id": "WF-008",
+      "category": "workflow_integrity",
+      "name": "Mobile dashboard shows workflow tasks",
+      "severity": "pass",
+      "finding": "MobileHomeDashboard fetches /api/v1/workflow/tasks and displays pending count, health indicators, and AI eligibility badges."
+    },
+    {
+      "check_id": "AT-001",
+      "category": "automation_triggers",
+      "name": "Aria chat reconciles after tool execution",
+      "severity": "pass",
+      "finding": "ai_chat_routes.py tracks completed_action_types (sms, task) and calls reconcile_after_action() after successful tool execution."
+    },
+    {
+      "check_id": "AT-002",
+      "category": "automation_triggers",
+      "name": "CI artifact execution triggers reconciliation",
+      "severity": "pass",
+      "finding": "call_monitoring_routes.py calls _reconcile_ci_artifacts_with_workflows() after artifact execution via ARTIFACT_ACTION_MAP."
+    },
+    {
+      "check_id": "AT-003",
+      "category": "automation_triggers",
+      "name": "Sibling task cancellation on contact_made",
+      "severity": "pass",
+      "finding": "workflow_reconciliation.py _cancel_sibling_tasks() cancels tasks with same task_group_key when contact is made."
+    },
+    {
+      "check_id": "AT-004",
+      "category": "automation_triggers",
+      "name": "13 event-driven trigger call sites",
+      "severity": "pass",
+      "finding": "8 lead trigger sites (leads_detail_routes x2, webhook_routes, ai_assistant_routes, followupboss_webhook_routes, conversation_intelligence_routes, borrower_application_routes, client_profile_routes) and 5 loan trigger sites (loans_crud_routes, webhook_routes, los_webhook_routes, client_profile_routes, mum_activity_routes)."
+    },
+    {
+      "check_id": "AT-005",
+      "category": "automation_triggers",
+      "name": "Task instance deduplication",
+      "severity": "pass",
+      "finding": "workflow_task_generator.py _create_task_instance() checks for existing active task with same instance_id, day_config_id, task_type before creating."
+    },
+    {
+      "check_id": "AT-006",
+      "category": "automation_triggers",
+      "name": "Trigger functions are best-effort (non-blocking)",
+      "severity": "pass",
+      "finding": "All 13 trigger call sites wrap in try/except with logger.warning(). Workflow evaluation failure never blocks the stage update response."
+    },
+    {
+      "check_id": "SLA-001",
+      "category": "sla_configuration",
+      "name": "All 7 SLA transitions have durations",
+      "severity": "pass",
+      "finding": "SLA_TARGETS dict defines 7 stage-to-stage transitions with day counts (3/7/2/5/3/3/5)."
+    },
+    {
+      "check_id": "SLA-002",
+      "category": "sla_configuration",
+      "name": "3-level escalation chain defined",
+      "severity": "pass",
+      "finding": "ESCALATION_CHAIN: L1=8 biz hrs (assignee notification), L2=16 biz hrs (manager + reassign), L3=24 biz hrs (branch_manager + flag critical)."
+    },
+    {
+      "check_id": "SLA-003",
+      "category": "sla_configuration",
+      "name": "Business hours calculation",
+      "severity": "pass",
+      "finding": "_business_hours_elapsed() counts only Mon-Fri 8AM-6PM (10h/day), properly skips weekends."
+    },
+    {
+      "check_id": "SLA-004",
+      "category": "sla_configuration",
+      "name": "Admin fallback for NULL manager_id",
+      "severity": "pass",
+      "finding": "_find_org_admin_fallback() searches for admin/manager in same organization when manager_id is NULL during escalation."
+    },
+    {
+      "check_id": "SLA-005",
+      "category": "sla_configuration",
+      "name": "Pipeline alerts use UTC timestamps",
+      "severity": "pass",
+      "finding": "pipeline_alerts_routes.py uses datetime.now(timezone.utc).replace(tzinfo=None) for naive UTC consistency with DB columns."
+    },
+    {
+      "check_id": "SLA-006",
+      "category": "sla_configuration",
+      "name": "Escalation thresholds in business hours",
+      "severity": "pass",
+      "finding": "Thresholds (8/16/24) are compared against _business_hours_elapsed(), not calendar hours."
+    },
+    {
+      "check_id": "SEC-001",
+      "category": "security",
+      "name": "useNotifications hook bypasses CSRF-protected api instance",
+      "severity": "critical",
+      "finding": "useNotifications.js lines 23-33 use raw fetch() with manual auth headers instead of the shared api axios instance that injects CSRF tokens.",
+      "impact": "POST/PATCH mutation operations (mark-read, dismiss) lack CSRF protection. Also misses X-Mobile-App header.",
+      "recommendation": "Refactor to use api.get()/api.post()/api.patch() from services/api.js."
+    },
+    {
+      "check_id": "SEC-002",
+      "category": "security",
+      "name": "All mobile pages use shared api instance",
+      "severity": "pass",
+      "finding": "MobileHomeDashboard, MobileLeadsList, MobilePipelineView, MobileAriaChat, MobileCallIntelligence all use api.js or service wrappers (mobileAriaApi, leadsAPI, callMonitoringAPI)."
+    },
+    {
+      "check_id": "SEC-003",
+      "category": "security",
+      "name": "Auth protected routes (privateOnly wrapper)",
+      "severity": "pass",
+      "finding": "All mobile routes wrapped in privateOnly() which requires PrivateRoute + isAuthenticatedSync()."
+    },
+    {
+      "check_id": "SEC-004",
+      "category": "security",
+      "name": "Capacitor navigation allowlist",
+      "severity": "pass",
+      "finding": "capacitor.config.ts allowNavigation restricted to perenniaai.com, app.perenniaai.com, api.perenniaai.com, www.perenniaai.com."
+    },
+    {
+      "check_id": "TH-001",
+      "category": "task_health",
+      "name": "Response normalization consistency",
+      "severity": "warning",
+      "finding": "MobileHomeDashboard uses ad-hoc response normalization (Array.isArray check, data?.loans fallback) while MobileLeadsList has cleaner ensureArray() helper. Inconsistent across pages.",
+      "recommendation": "Use ensureArray() helper consistently across all mobile pages."
+    },
+    {
+      "check_id": "TH-002",
+      "category": "task_health",
+      "name": "Silent zero fallback on dashboard error",
+      "severity": "warning",
+      "finding": "MobileHomeDashboard line 382 sets all stats to zero on catch without user indication.",
+      "recommendation": "Show per-section error states instead of silent zeros."
+    },
+    {
+      "check_id": "TH-003",
+      "category": "task_health",
+      "name": "Silent catch on workflow context fetch",
+      "severity": "warning",
+      "finding": "MobileAriaChat.jsx lines 399-401 catch workflow task fetch errors with empty catch block. No logging or user indication.",
+      "recommendation": "Add console.warn() for debuggability."
+    },
+    {
+      "check_id": "TH-004",
+      "category": "task_health",
+      "name": "Analytics endpoint missing in backend",
+      "severity": "warning",
+      "finding": "mobileAnalytics.js line 24 posts to /api/v1/analytics/mobile which has no backend route. Events are silently lost.",
+      "recommendation": "Create the backend endpoint or disable the flush mechanism."
+    },
+    {
+      "check_id": "TH-005",
+      "category": "task_health",
+      "name": "mobileAuditLogger not imported anywhere",
+      "severity": "warning",
+      "finding": "mobileAuditLogger.js (445 lines) provides compliance audit logging but is not imported by any mobile page or component.",
+      "recommendation": "Evaluate compliance requirements and integrate or remove."
+    },
+    {
+      "check_id": "TH-006",
+      "category": "task_health",
+      "name": "Mobile tasks endpoint queries tasks table",
+      "severity": "pass",
+      "finding": "mobile_tasks_routes.py GET /api/v1/mobile/tasks queries the tasks table (not ai_tasks), with proper status filtering including virtual 'overdue'."
+    },
+    {
+      "check_id": "TH-007",
+      "category": "task_health",
+      "name": "Pipeline stages match LoanStage enum",
+      "severity": "pass",
+      "finding": "MobilePipelineView PIPELINE_STAGES covers 16 stages including DISCLOSED, UW_RECEIVED, CONDITIONAL_APPROVAL, SUSPENDED, DOCS, NURTURE."
+    },
+    {
+      "check_id": "TH-008",
+      "category": "task_health",
+      "name": "Aria chat passes workflow context",
+      "severity": "pass",
+      "finding": "MobileAriaChat.jsx fetches pending workflow tasks and passes context to executeTask/sendAriaMessage calls."
+    },
+    {
+      "check_id": "TH-009",
+      "category": "task_health",
+      "name": "Call Intelligence uses speechService.js",
+      "severity": "pass",
+      "finding": "MobileCallIntelligence.jsx line 591 uses dynamic import of speechService.js (not inline Web Speech API)."
+    },
+    {
+      "check_id": "TH-010",
+      "category": "task_health",
+      "name": "Mobile dashboard fetches task summary from mobile endpoint",
+      "severity": "pass",
+      "finding": "MobileHomeDashboard uses /api/v1/mobile/tasks/summary (not the broken /api/v1/tasks) for task stats."
+    },
+    {
+      "check_id": "RL-001",
+      "category": "routing_logic",
+      "name": "Role-based task assignment with capacity checks",
+      "severity": "pass",
+      "finding": "workflow_role_assignment.py provides role-based routing with MAX_PENDING_TASKS_PER_USER=50 capacity limit."
+    },
+    {
+      "check_id": "RL-002",
+      "category": "routing_logic",
+      "name": "Fallback routing (least-loaded user)",
+      "severity": "pass",
+      "finding": "resolve_user_for_role() falls back to org default, entity owner, then least-loaded user with the role."
+    },
+    {
+      "check_id": "RL-003",
+      "category": "routing_logic",
+      "name": "MobileBottomNav covers core pages",
+      "severity": "pass",
+      "finding": "5 tabs: Home (/mobile-home), Pipeline (/mobile/pipeline), Aria (/mobile-aria), Contacts (/mobile/leads), More (speed dial)."
+    },
+    {
+      "check_id": "RL-004",
+      "category": "routing_logic",
+      "name": "AI confidence threshold for auto-execution",
+      "severity": "pass",
+      "finding": "WorkflowAIExecutor auto-executes tasks at 0.95 confidence threshold. Below 0.70 requires manual action."
+    },
+    {
+      "check_id": "INFO-001",
+      "category": "optimization",
+      "name": "MobileBottomNav has no notification link",
+      "severity": "info",
+      "finding": "Bottom nav has 5 tabs but no direct path to notifications. Users must use the More menu (not yet wired)."
+    },
+    {
+      "check_id": "INFO-002",
+      "category": "optimization",
+      "name": "MobileCallIntelligence is 1,403 lines",
+      "severity": "info",
+      "finding": "Largest mobile component. Could benefit from extraction of speech recognition, artifact management, and timer logic into custom hooks.",
+      "recommendation": "Consider extracting into useSpeechRecognition, useArtifactPolling, useCallTimer hooks."
+    },
+    {
+      "check_id": "INFO-003",
+      "category": "optimization",
+      "name": "mobileAnalytics sends events to nonexistent endpoint",
+      "severity": "info",
+      "finding": "Event batching and flush mechanism works but /api/v1/analytics/mobile returns 404. Events silently lost."
+    },
+    {
+      "check_id": "INFO-004",
+      "category": "optimization",
+      "name": "Mobile-optimized aggregate endpoints exist",
+      "severity": "info",
+      "finding": "mobile_api_routes.py provides /api/v1/mobile/dashboard, /pipeline, /leads, /notifications, /quick-lead, /rate-lock-alerts for reduced round-trips. Good architecture."
+    }
+  ],
+  "dependency_graph": {
+    "workflows": {
+      "prospect": {
+        "triggers_in": ["lead stage New/Attempted Contact/Prospect"],
+        "tasks_created": ["phone", "text", "email"],
+        "sla_bindings": ["APPLICATION_to_DISCLOSED"]
+      },
+      "prequal": {
+        "triggers_in": ["lead stage Application/Pre-Qualified/Document Fulfillment"],
+        "tasks_created": ["phone", "text", "email", "manual"],
+        "sla_bindings": ["DISCLOSED_to_SUBMITTED"]
+      },
+      "lead_purchase": {
+        "triggers_in": ["purchased lead detection"],
+        "tasks_created": ["phone_am", "text_am", "phone_pm", "text_pm"],
+        "sla_bindings": []
+      },
+      "under_contract": {
+        "triggers_in": ["loan stage DISCLOSED through APPROVED"],
+        "tasks_created": ["email", "manual", "phone"],
+        "sla_bindings": ["SUBMITTED_to_UW_RECEIVED", "UW_RECEIVED_to_APPROVED", "APPROVED_to_CLEAR_TO_CLOSE"]
+      },
+      "last_mile": {
+        "triggers_in": ["loan stage CTC through DOCS_OUT"],
+        "tasks_created": ["email", "manual"],
+        "sla_bindings": ["CLEAR_TO_CLOSE_to_DOCS_OUT", "DOCS_OUT_to_FUNDED"]
+      },
+      "post_close": {
+        "triggers_in": ["loan stage FUNDED"],
+        "tasks_created": ["email", "referral_partner"],
+        "sla_bindings": []
+      }
+    },
+    "edges": [
+      {"from": "stage_change_endpoint", "to": "trigger_workflow_evaluation", "type": "event_driven"},
+      {"from": "trigger_workflow_evaluation", "to": "WorkflowSLAService.enroll", "type": "immediate"},
+      {"from": "WorkflowSLAService.enroll", "to": "WorkflowTaskGenerator.generate_tasks", "type": "immediate"},
+      {"from": "WorkflowTaskGenerator", "to": "workflow_task_instances", "type": "creates"},
+      {"from": "WorkflowAIExecutor", "to": "workflow_task_instances", "type": "auto_executes"},
+      {"from": "aria_autonomous", "to": "reconcile_after_action", "type": "post_execution"},
+      {"from": "call_intelligence", "to": "reconcile_after_action", "type": "post_execution"},
+      {"from": "reconcile_after_action", "to": "workflow_task_instances", "type": "completes"},
+      {"from": "reconcile_after_action", "to": "sibling_tasks", "type": "cancels"},
+      {"from": "WorkflowScheduler", "to": "workflow_task_instances", "type": "polling_fallback"}
+    ]
+  },
+  "sla_config": {
+    "configured_sla_targets": 7,
+    "escalation_routes_found": 3,
+    "escalation_thresholds_business_hours": [8, 16, 24],
+    "business_hours": "Mon-Fri 8AM-6PM (10h/day)",
+    "admin_fallback": true,
+    "note": "No runtime SLA breach API -- data from static analysis only"
+  },
+  "task_distribution": {
+    "by_type": {
+      "phone": "role-based with capacity check",
+      "text": "AI-eligible (auto at 0.95 confidence)",
+      "email": "AI-eligible (auto at 0.95 confidence)",
+      "manual": "role-based assignment",
+      "referral_partner": "role-based assignment"
+    },
+    "capacity_limit": 50,
+    "fallback": "least-loaded user with role",
+    "note": "No runtime task distribution data -- static analysis only"
+  },
+  "trigger_health": {
+    "total_registered": 13,
+    "lead_triggers": 8,
+    "loan_triggers": 5,
+    "reconciliation_sources": ["aria_autonomous", "call_intelligence"],
+    "orphaned_handlers": 0,
+    "note": "All triggers are best-effort, non-blocking, with lazy imports"
+  },
+  "mobile_coverage": {
+    "total_pages": 7,
+    "routed_pages": 6,
+    "unrouted_pages": ["MobileNotificationCenter"],
+    "api_instance_compliance": {
+      "using_shared_api": 6,
+      "using_raw_fetch": 1,
+      "violating_file": "useNotifications.js"
+    },
+    "native_features": ["haptics", "network_status", "app_state", "preferences", "speech_recognition"],
+    "capacitor_version": "8.1.0"
+  },
+  "files_analyzed": [
+    "frontend/src/pages/MobileHomeDashboard.jsx",
+    "frontend/src/pages/MobileHomeDashboard.css",
+    "frontend/src/pages/MobileLeadsList.jsx",
+    "frontend/src/pages/MobileAriaChat.jsx",
+    "frontend/src/pages/MobileAriaChat.css",
+    "frontend/src/pages/MobilePipelineView.jsx",
+    "frontend/src/pages/MobilePipelineView.css",
+    "frontend/src/pages/MobileCallIntelligence.jsx",
+    "frontend/src/pages/MobileCallIntelligencePage.js",
+    "frontend/src/pages/MobileNotificationCenter.jsx",
+    "frontend/src/components/mobile/MobileBottomNav.jsx",
+    "frontend/src/components/mobile/MobileLeadCard.jsx",
+    "frontend/src/components/mobile/MobileDocumentUpload.jsx",
+    "frontend/src/components/mobile/RateLockAlert.jsx",
+    "frontend/src/components/mobile/OfflineSyncStatus.jsx",
+    "frontend/src/components/mobile/PullToRefreshContainer.jsx",
+    "frontend/src/components/mobile/QuickAddLeadModal.jsx",
+    "frontend/src/services/mobileAriaApi.js",
+    "frontend/src/services/mobileAnalytics.js",
+    "frontend/src/services/mobileAuditLogger.js",
+    "frontend/src/services/api.js",
+    "frontend/src/services/speechService.js",
+    "frontend/src/hooks/useNotifications.js",
+    "frontend/src/routes/index.jsx",
+    "frontend/capacitor.config.ts",
+    "backend/routes/mobile_tasks_routes.py",
+    "backend/routes/mobile_api_routes.py",
+    "backend/routes/ai_chat_routes.py",
+    "backend/routes/call_monitoring_routes.py",
+    "backend/routes/pipeline_alerts_routes.py",
+    "backend/routes/leads_detail_routes.py",
+    "backend/routes/loans_crud_routes.py",
+    "backend/routes/webhook_routes.py",
+    "backend/routes/los_webhook_routes.py",
+    "backend/routes/borrower_application_routes.py",
+    "backend/routes/followupboss_webhook_routes.py",
+    "backend/routes/conversation_intelligence_routes.py",
+    "backend/routes/ai_assistant_routes.py",
+    "backend/routes/mum_activity_routes.py",
+    "backend/services/workflow_scheduler.py",
+    "backend/services/workflow_reconciliation.py",
+    "backend/services/workflow_sla_service.py",
+    "backend/services/workflow_task_generator.py",
+    "backend/services/workflow_role_assignment.py",
+    "backend/services/workflow_ai_executor.py",
+    "backend/main.py"
+  ]
+}

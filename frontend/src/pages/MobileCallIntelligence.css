@@ -1,0 +1,1105 @@
+/* =============================================================================
+   MobileCallIntelligence.css
+   Mobile-first CI page: tab bar, record screen, artifact cards, history list.
+   Follows the same design tokens as MobileHomeDashboard.css and
+   MobileCallIntelligencePanel.css.
+   ============================================================================= */
+
+/* ---- Custom properties ---- */
+.mci-root {
+  --mci-bg: #f8fafc;
+  --mci-surface: #ffffff;
+  --mci-border: #e5e7eb;
+  --mci-text-primary: #111827;
+  --mci-text-secondary: #6b7280;
+  --mci-text-muted: #9ca3af;
+  --mci-accent: #3b82f6;
+  --mci-red: #ef4444;
+  --mci-green: #10b981;
+  --mci-purple: #8b5cf6;
+  --mci-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.05);
+  --mci-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.05);
+  --mci-radius: 12px;
+  --mci-radius-sm: 8px;
+  --mci-tab-height: 48px;
+  --mci-header-height: 56px;
+
+  /* iOS safe areas */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ---- Root container ---- */
+.mci-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh; /* dynamic viewport height */
+  background: var(--mci-bg);
+  color: var(--mci-text-primary);
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* =============================================================================
+   HEADER
+   ============================================================================= */
+
+.mci-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: calc(var(--mci-header-height) + var(--safe-top));
+  padding-top: var(--safe-top);
+  padding-left: 4px;
+  padding-right: 16px;
+  background: #1e293b;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.mci-header-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: var(--mci-radius-sm);
+  color: #f1f5f9;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mci-header-back:active {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.mci-header-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: #f8fafc;
+  flex: 1;
+  text-align: center;
+  letter-spacing: -0.01em;
+}
+
+.mci-header-right {
+  min-width: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+/* Recording timer in header */
+.mci-header-timer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(239, 68, 68, 0.18);
+  color: #fca5a5;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+.mci-rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mci-red);
+  animation: mci-rec-pulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes mci-rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+/* =============================================================================
+   TAB BAR
+   ============================================================================= */
+
+.mci-tab-bar {
+  display: flex;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  flex-shrink: 0;
+  position: sticky;
+  top: calc(var(--mci-header-height) + var(--safe-top));
+  z-index: 9;
+}
+
+.mci-tab {
+  flex: 1;
+  height: var(--mci-tab-height);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #94a3b8;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: color 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+}
+
+.mci-tab--active {
+  color: #f8fafc;
+  border-bottom-color: var(--mci-accent);
+}
+
+.mci-tab:active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.mci-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--mci-red);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 9px;
+  line-height: 1;
+}
+
+/* =============================================================================
+   MAIN CONTENT AREA
+   ============================================================================= */
+
+.mci-main {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(24px + var(--safe-bottom));
+}
+
+.mci-tab-panel {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* =============================================================================
+   RECORD TAB — CLIENT LOOKUP
+   ============================================================================= */
+
+.mci-client-lookup {
+  background: var(--mci-surface);
+  border-radius: var(--mci-radius);
+  padding: 12px 14px;
+  box-shadow: var(--mci-shadow-sm);
+}
+
+/* Client search row */
+.mci-client-search-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.mci-client-search-input {
+  flex: 1;
+  height: 40px;
+  padding: 0 12px;
+  background: #f9fafb;
+  border: 1px solid var(--mci-border);
+  border-radius: var(--mci-radius-sm);
+  font-size: 15px;
+  color: var(--mci-text-primary);
+  outline: none;
+  -webkit-appearance: none;
+  min-width: 0;
+}
+
+.mci-client-search-input:focus {
+  border-color: var(--mci-accent);
+  background: #fff;
+}
+
+.mci-client-search-input::placeholder {
+  color: var(--mci-text-muted);
+}
+
+.mci-client-search-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mci-client-search-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--mci-accent);
+  border: none;
+  border-radius: var(--mci-radius-sm);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mci-client-search-btn:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+
+.mci-client-search-btn:active:not(:disabled) {
+  background: #2563eb;
+}
+
+/* Detected client display */
+.mci-client-detected {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mci-client-detected-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.mci-client-detected-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mci-client-detected-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mci-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mci-client-detected-phone {
+  font-size: 13px;
+  color: var(--mci-text-secondary);
+}
+
+.mci-client-clear {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f3f4f6;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mci-client-clear:active {
+  background: #e5e7eb;
+}
+
+/* =============================================================================
+   RECORD TAB — MIC BUTTON
+   ============================================================================= */
+
+.mci-record-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 24px 0 8px;
+  gap: 14px;
+}
+
+/* Animated pulse ring around the button */
+.mci-mic-ring {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mci-mic-ring--active::before,
+.mci-mic-ring--active::after {
+  content: '';
+  position: absolute;
+  inset: -16px;
+  border-radius: 50%;
+  border: 2px solid rgba(239, 68, 68, 0.4);
+  animation: mci-ring-expand 1.8s ease-out infinite;
+}
+
+.mci-mic-ring--active::after {
+  animation-delay: 0.9s;
+}
+
+@keyframes mci-ring-expand {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+/* The mic button itself */
+.mci-mic-btn {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: none;
+  background: #9ca3af;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+  z-index: 1;
+  transition: background 0.2s, transform 0.1s;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mci-mic-btn--recording {
+  background: var(--mci-red);
+  animation: mci-mic-glow 2s ease-in-out infinite;
+}
+
+@keyframes mci-mic-glow {
+  0%, 100% { box-shadow: 0 4px 14px rgba(239, 68, 68, 0.3); }
+  50% { box-shadow: 0 4px 28px rgba(239, 68, 68, 0.55); }
+}
+
+.mci-mic-btn:active:not(:disabled) {
+  transform: scale(0.94);
+}
+
+.mci-mic-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+/* Labels below button */
+.mci-record-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--mci-text-secondary);
+  letter-spacing: -0.01em;
+}
+
+.mci-status-msg {
+  font-size: 13px;
+  color: var(--mci-text-muted);
+  padding: 4px 12px;
+  background: #f3f4f6;
+  border-radius: 20px;
+}
+
+/* =============================================================================
+   RECORD TAB — LIVE TRANSCRIPT
+   ============================================================================= */
+
+.mci-transcript-container {
+  background: var(--mci-surface);
+  border-radius: var(--mci-radius);
+  box-shadow: var(--mci-shadow-sm);
+  overflow: hidden;
+  flex: 1;
+}
+
+.mci-transcript-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--mci-border);
+}
+
+.mci-transcript-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mci-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.mci-transcript-cursor-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--mci-red);
+  font-weight: 500;
+}
+
+.mci-blink-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--mci-red);
+  animation: mci-blink 1s step-end infinite;
+}
+
+@keyframes mci-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.mci-transcript-body {
+  padding: 12px 14px;
+  max-height: 220px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--mci-text-primary);
+}
+
+.mci-transcript-empty {
+  color: var(--mci-text-muted);
+  font-family: inherit;
+  font-size: 14px;
+  margin: 0;
+  font-style: italic;
+}
+
+.mci-transcript-final {
+  color: var(--mci-text-primary);
+}
+
+.mci-transcript-interim {
+  color: var(--mci-text-muted);
+  font-style: italic;
+}
+
+/* =============================================================================
+   ARTIFACTS TAB — BULK ACTION BUTTONS
+   ============================================================================= */
+
+.mci-bulk-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.mci-bulk-btn {
+  flex: 1;
+  height: 44px;
+  border: none;
+  border-radius: var(--mci-radius-sm);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s;
+}
+
+.mci-bulk-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mci-bulk-btn:active:not(:disabled) {
+  opacity: 0.85;
+}
+
+.mci-bulk-btn--approve {
+  background: var(--mci-green);
+  color: #fff;
+}
+
+.mci-bulk-btn--execute {
+  background: var(--mci-accent);
+  color: #fff;
+}
+
+/* =============================================================================
+   ARTIFACTS TAB — ARTIFACT CARDS
+   ============================================================================= */
+
+.mci-artifact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mci-artifact-card {
+  background: var(--mci-surface);
+  border-radius: var(--mci-radius);
+  border-left: 4px solid var(--artifact-border, #9ca3af);
+  box-shadow: var(--mci-shadow-sm);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mci-artifact-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mci-artifact-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.mci-artifact-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mci-text-secondary);
+  flex: 1;
+  text-transform: capitalize;
+}
+
+.mci-artifact-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  text-transform: capitalize;
+  flex-shrink: 0;
+}
+
+/* Status-specific overrides via data attribute */
+.mci-artifact-status-badge[data-status="pending"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.mci-artifact-status-badge[data-status="approved"] {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.mci-artifact-status-badge[data-status="executed"] {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.mci-artifact-status-badge[data-status="rejected"] {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.mci-artifact-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mci-text-primary);
+  line-height: 1.4;
+}
+
+.mci-artifact-content {
+  font-size: 14px;
+  color: var(--mci-text-secondary);
+  line-height: 1.55;
+}
+
+/* Artifact action button row */
+.mci-artifact-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.mci-action-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.1s, opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.mci-action-btn:active:not(:disabled) {
+  transform: scale(0.9);
+}
+
+.mci-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mci-action-approve {
+  background: var(--mci-green);
+}
+
+.mci-action-reject {
+  background: var(--mci-red);
+}
+
+.mci-action-execute {
+  background: var(--mci-accent);
+}
+
+/* Polling indicator */
+.mci-poll-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--mci-text-muted);
+  padding: 8px 0;
+}
+
+/* =============================================================================
+   HISTORY TAB — SESSION LIST
+   ============================================================================= */
+
+.mci-history-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.mci-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--mci-surface);
+  border: 1px solid var(--mci-border);
+  border-radius: var(--mci-radius-sm);
+  padding: 7px 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--mci-text-secondary);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mci-refresh-btn:active {
+  background: #f3f4f6;
+}
+
+.mci-refresh-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.mci-session-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mci-session-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--mci-surface);
+  border-radius: var(--mci-radius);
+  box-shadow: var(--mci-shadow-sm);
+  padding: 14px;
+  border: 1px solid var(--mci-border);
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  -webkit-tap-highlight-color: transparent;
+  transition: box-shadow 0.15s;
+}
+
+.mci-session-card:active {
+  box-shadow: none;
+  background: #f9fafb;
+}
+
+.mci-session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mci-session-client {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--mci-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.mci-session-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mci-session-date {
+  font-size: 12px;
+  color: var(--mci-text-muted);
+}
+
+.mci-session-duration {
+  font-size: 12px;
+  color: var(--mci-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mci-session-artifacts {
+  font-size: 11px;
+  font-weight: 600;
+  background: #eff6ff;
+  color: #1d4ed8;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.mci-session-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.mci-session-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  text-transform: capitalize;
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.mci-session-status-badge[data-status="completed"],
+.mci-session-status-badge[data-status="ended"] {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.mci-session-status-badge[data-status="active"],
+.mci-session-status-badge[data-status="recording"] {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.mci-session-status-badge[data-status="processing"] {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* =============================================================================
+   HISTORY DETAIL VIEW
+   ============================================================================= */
+
+.mci-history-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mci-history-detail-header {
+  background: var(--mci-surface);
+  border-radius: var(--mci-radius);
+  padding: 14px;
+  box-shadow: var(--mci-shadow-sm);
+}
+
+.mci-history-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--mci-accent);
+  padding: 0;
+  margin-bottom: 10px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mci-history-back-btn:active {
+  opacity: 0.7;
+}
+
+.mci-history-detail-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--mci-text-primary);
+  margin-bottom: 4px;
+}
+
+.mci-history-detail-date {
+  font-size: 13px;
+  color: var(--mci-text-muted);
+}
+
+/* =============================================================================
+   EMPTY STATES
+   ============================================================================= */
+
+.mci-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  text-align: center;
+}
+
+.mci-empty-icon {
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.mci-empty-title {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--mci-text-primary);
+  margin: 0 0 6px;
+}
+
+.mci-empty-body {
+  font-size: 14px;
+  color: var(--mci-text-muted);
+  margin: 0;
+  line-height: 1.55;
+  max-width: 280px;
+}
+
+/* =============================================================================
+   SKELETON LOADERS
+   ============================================================================= */
+
+@keyframes mci-skeleton-shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+.mci-skeleton-card {
+  background: var(--mci-surface);
+  border-radius: var(--mci-radius);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: var(--mci-shadow-sm);
+}
+
+.mci-skeleton-line {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    #f0f0f0 25%,
+    #e0e0e0 37%,
+    #f0f0f0 63%
+  );
+  background-size: 800px 100%;
+  animation: mci-skeleton-shimmer 1.4s ease infinite;
+}
+
+.mci-skeleton-title {
+  height: 16px;
+  width: 60%;
+}
+
+.mci-skeleton-body {
+  width: 100%;
+}
+
+.mci-skeleton-short {
+  width: 45%;
+}
+
+/* =============================================================================
+   SPINNER
+   ============================================================================= */
+
+.mci-spinner-small {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: mci-spin 0.7s linear infinite;
+  opacity: 0.6;
+}
+
+@keyframes mci-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* =============================================================================
+   DARK MODE
+   ============================================================================= */
+
+@media (prefers-color-scheme: dark) {
+  .mci-root {
+    --mci-bg: #0f172a;
+    --mci-surface: #1e293b;
+    --mci-border: #334155;
+    --mci-text-primary: #f1f5f9;
+    --mci-text-secondary: #94a3b8;
+    --mci-text-muted: #64748b;
+    --mci-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+    --mci-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  }
+
+  .mci-client-search-input {
+    background: #0f172a;
+    color: #f1f5f9;
+    border-color: #334155;
+  }
+
+  .mci-client-search-input:focus {
+    background: #1e293b;
+  }
+
+  .mci-client-search-input::placeholder {
+    color: #475569;
+  }
+
+  .mci-mic-btn {
+    background: #475569;
+  }
+
+  .mci-transcript-body {
+    color: #e2e8f0;
+  }
+
+  .mci-transcript-final {
+    color: #e2e8f0;
+  }
+
+  .mci-transcript-interim {
+    color: #64748b;
+  }
+
+  .mci-status-msg {
+    background: #1e293b;
+    color: #94a3b8;
+  }
+
+  .mci-skeleton-line {
+    background: linear-gradient(
+      90deg,
+      #1e293b 25%,
+      #334155 37%,
+      #1e293b 63%
+    );
+    background-size: 800px 100%;
+  }
+
+  .mci-session-artifacts {
+    background: #1e3a5f;
+    color: #93c5fd;
+  }
+
+  .mci-session-status-badge {
+    background: #334155;
+    color: #94a3b8;
+  }
+
+  .mci-session-status-badge[data-status="completed"],
+  .mci-session-status-badge[data-status="ended"] {
+    background: #064e3b;
+    color: #6ee7b7;
+  }
+
+  .mci-session-card:active {
+    background: #1e293b;
+  }
+
+  .mci-artifact-status-badge[data-status="pending"] {
+    background: #451a03;
+    color: #fcd34d;
+  }
+
+  .mci-artifact-status-badge[data-status="approved"] {
+    background: #064e3b;
+    color: #6ee7b7;
+  }
+
+  .mci-artifact-status-badge[data-status="executed"] {
+    background: #1e3a5f;
+    color: #93c5fd;
+  }
+
+  .mci-artifact-status-badge[data-status="rejected"] {
+    background: #1e293b;
+    color: #64748b;
+  }
+
+  .mci-history-toolbar .mci-refresh-btn {
+    background: #1e293b;
+    border-color: #334155;
+    color: #94a3b8;
+  }
+
+  .mci-history-toolbar .mci-refresh-btn:active {
+    background: #0f172a;
+  }
+}
+
+/* =============================================================================
+   REDUCED MOTION
+   ============================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  .mci-mic-ring--active::before,
+  .mci-mic-ring--active::after,
+  .mci-mic-btn--recording,
+  .mci-rec-dot,
+  .mci-blink-cursor,
+  .mci-skeleton-line,
+  .mci-spinner-small {
+    animation: none;
+  }
+
+  .mci-mic-btn--recording {
+    /* Keep visible static state */
+    background: var(--mci-red);
+    box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+  }
+}

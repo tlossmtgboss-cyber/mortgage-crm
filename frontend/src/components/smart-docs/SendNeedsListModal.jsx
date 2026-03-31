@@ -42,6 +42,16 @@ function SendNeedsListModal({
   useEffect(() => {
     if (!isOpen) return;
 
+    const modal = modalRef.current;
+    if (!modal) return;
+
+    const focusable = modal.querySelectorAll(
+      'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+
+    // Focus the first focusable element when modal opens
+    if (focusable.length > 0) focusable[0].focus();
+
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         onClose();
@@ -49,10 +59,7 @@ function SendNeedsListModal({
       }
 
       // Focus trap
-      if (e.key === 'Tab' && modalRef.current) {
-        const focusable = modalRef.current.querySelectorAll(
-          'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        );
+      if (e.key === 'Tab') {
         if (focusable.length === 0) return;
 
         const first = focusable[0];
@@ -68,8 +75,8 @@ function SendNeedsListModal({
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    modal.addEventListener('keydown', handleKeyDown);
+    return () => modal.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
   const toggleChannel = useCallback((channel) => {
@@ -121,15 +128,15 @@ function SendNeedsListModal({
       }}
       role="dialog"
       aria-modal="true"
-      aria-label="Send Needs List"
+      aria-labelledby="snl-modal-title"
     >
       <div className="send-needs-list-modal" ref={modalRef}>
         <div className="snl-header">
-          <h2>Send Needs List</h2>
+          <h2 id="snl-modal-title">Send Needs List</h2>
           <button
             className="snl-close-btn"
             onClick={onClose}
-            aria-label="Close modal"
+            aria-label="Close dialog"
           >
             &times;
           </button>
@@ -166,6 +173,7 @@ function SendNeedsListModal({
                     type="checkbox"
                     checked={channels.email}
                     onChange={() => toggleChannel('email')}
+                    aria-label="Send via email"
                   />
                   <span className="snl-channel-icon">&#9993;</span>
                   <span>Email</span>
@@ -175,6 +183,7 @@ function SendNeedsListModal({
                     type="checkbox"
                     checked={channels.sms}
                     onChange={() => toggleChannel('sms')}
+                    aria-label="Send via SMS"
                   />
                   <span className="snl-channel-icon">&#128241;</span>
                   <span>SMS</span>
@@ -200,6 +209,7 @@ function SendNeedsListModal({
                 placeholder="Add a personal note to include with the needs list..."
                 rows={3}
                 maxLength={500}
+                aria-label="Additional message"
               />
               <span className="snl-char-count">{message.length}/500</span>
             </div>
@@ -212,6 +222,7 @@ function SendNeedsListModal({
               className="snl-btn snl-btn-cancel"
               onClick={onClose}
               disabled={sending}
+              aria-label="Close dialog"
             >
               Cancel
             </button>
@@ -219,6 +230,7 @@ function SendNeedsListModal({
               type="submit"
               className="snl-btn snl-btn-send"
               disabled={sending || !hasSelectedChannel}
+              aria-label="Send needs list to borrower"
             >
               {sending ? 'Sending...' : 'Send Needs List'}
             </button>

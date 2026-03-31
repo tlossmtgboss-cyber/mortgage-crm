@@ -78,16 +78,23 @@ function SendReminderModal({
   useEffect(() => {
     if (!isOpen) return;
 
+    const modal = modalRef.current;
+    if (!modal) return;
+
+    const focusable = modal.querySelectorAll(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+
+    // Focus the first focusable element when modal opens
+    if (focusable.length > 0) focusable[0].focus();
+
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         onClose();
         return;
       }
 
-      if (e.key === 'Tab' && modalRef.current) {
-        const focusable = modalRef.current.querySelectorAll(
-          'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        );
+      if (e.key === 'Tab') {
         if (focusable.length === 0) return;
 
         const first = focusable[0];
@@ -103,8 +110,8 @@ function SendReminderModal({
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    modal.addEventListener('keydown', handleKeyDown);
+    return () => modal.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
   const toggleDoc = useCallback((docId) => {
@@ -178,15 +185,15 @@ function SendReminderModal({
       }}
       role="dialog"
       aria-modal="true"
-      aria-label="Send Document Reminder"
+      aria-labelledby="sr-modal-title"
     >
       <div className="send-reminder-modal" ref={modalRef}>
         <div className="sr-header">
-          <h2>Send Reminder</h2>
+          <h2 id="sr-modal-title">Send Reminder</h2>
           <button
             className="sr-close-btn"
             onClick={onClose}
-            aria-label="Close modal"
+            aria-label="Close dialog"
           >
             &times;
           </button>
@@ -212,6 +219,11 @@ function SendReminderModal({
                   type="button"
                   className="sr-select-all-btn"
                   onClick={toggleAll}
+                  aria-label={
+                    selectedIds.size === openDocs.length
+                      ? 'Deselect all documents'
+                      : 'Select all documents'
+                  }
                 >
                   {selectedIds.size === openDocs.length
                     ? 'Deselect All'
@@ -239,6 +251,7 @@ function SendReminderModal({
                           type="checkbox"
                           checked={selectedIds.has(doc.id)}
                           onChange={() => toggleDoc(doc.id)}
+                          aria-label={`Include ${getDocDisplayName(doc)}${isOverdue ? ' (overdue)' : ''}`}
                         />
                         <div className="sr-doc-info">
                           <span className="sr-doc-name">
@@ -280,6 +293,7 @@ function SendReminderModal({
                     type="checkbox"
                     checked={channels.email}
                     onChange={() => toggleChannel('email')}
+                    aria-label="Send via email"
                   />
                   <span className="sr-channel-icon">&#9993;</span>
                   <span>Email</span>
@@ -289,6 +303,7 @@ function SendReminderModal({
                     type="checkbox"
                     checked={channels.sms}
                     onChange={() => toggleChannel('sms')}
+                    aria-label="Send via SMS"
                   />
                   <span className="sr-channel-icon">&#128241;</span>
                   <span>SMS</span>
@@ -309,6 +324,7 @@ function SendReminderModal({
               className="sr-btn sr-btn-cancel"
               onClick={onClose}
               disabled={sending}
+              aria-label="Close dialog"
             >
               Cancel
             </button>
@@ -316,6 +332,7 @@ function SendReminderModal({
               type="submit"
               className="sr-btn sr-btn-send"
               disabled={sending || !hasSelectedChannel || !hasSelectedDocs}
+              aria-label={`Send reminder for ${selectedIds.size} document${selectedIds.size !== 1 ? 's' : ''} to borrower`}
             >
               {sending
                 ? 'Sending...'

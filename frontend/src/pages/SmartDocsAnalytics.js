@@ -4,7 +4,7 @@
  * Full analytics dashboard with 5 tabs and a period selector.
  * Tabs: Overview, SLA Compliance, AI Performance, Team Productivity, Bottlenecks
  */
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from '../utils/toast';
 import { useDocAnalytics } from '../hooks/useDocAnalytics';
 import AnalyticsCard from '../components/smart-docs/AnalyticsCard';
@@ -39,6 +39,7 @@ const SEVERITY_LABELS = {
 function SmartDocsAnalytics() {
   const [days, setDays] = useState(30);
   const [activeTab, setActiveTab] = useState('overview');
+  const tabRefs = useRef({});
 
   // Extended data loaded separately
   const [aiPerf, setAiPerf] = useState(null);
@@ -77,6 +78,39 @@ function SmartDocsAnalytics() {
     };
   }, [days]);
 
+  const handleTabKeyDown = useCallback((e, tab) => {
+    const currentIndex = TABS.findIndex((t) => t.id === tab);
+    let newIndex;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        e.preventDefault();
+        newIndex = (currentIndex + 1) % TABS.length;
+        setActiveTab(TABS[newIndex].id);
+        tabRefs.current[TABS[newIndex].id]?.focus();
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        e.preventDefault();
+        newIndex = (currentIndex - 1 + TABS.length) % TABS.length;
+        setActiveTab(TABS[newIndex].id);
+        tabRefs.current[TABS[newIndex].id]?.focus();
+        break;
+      case 'Home':
+        e.preventDefault();
+        setActiveTab(TABS[0].id);
+        tabRefs.current[TABS[0].id]?.focus();
+        break;
+      case 'End':
+        e.preventDefault();
+        setActiveTab(TABS[TABS.length - 1].id);
+        tabRefs.current[TABS[TABS.length - 1].id]?.focus();
+        break;
+      default:
+        break;
+    }
+  }, []);
+
   function handlePeriodChange(e) {
     setDays(Number(e.target.value));
   }
@@ -88,7 +122,7 @@ function SmartDocsAnalytics() {
   if (loading) {
     return (
       <div className="sd-analytics">
-        <div className="loading">Loading analytics...</div>
+        <div className="loading" role="alert" aria-live="polite">Loading analytics...</div>
       </div>
     );
   }
@@ -96,7 +130,7 @@ function SmartDocsAnalytics() {
   if (error) {
     return (
       <div className="sd-analytics">
-        <div className="error">
+        <div className="error" role="alert">
           <p>Failed to load analytics: {error}</p>
           <button onClick={handleRefresh} className="sd-analytics__refresh-btn">
             Retry
@@ -129,19 +163,25 @@ function SmartDocsAnalytics() {
               </option>
             ))}
           </select>
-          <button className="sd-analytics__refresh-btn" onClick={handleRefresh}>
+          <button
+            className="sd-analytics__refresh-btn"
+            onClick={handleRefresh}
+            aria-label="Refresh analytics"
+          >
             Refresh
           </button>
         </div>
       </div>
 
       {/* Tab Bar */}
-      <div className="sd-analytics__tabs" role="tablist">
+      <div className="sd-analytics__tabs" role="tablist" aria-label="Analytics sections">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             role="tab"
             aria-selected={activeTab === tab.id}
+            tabIndex={activeTab === tab.id ? 0 : -1}
+            ref={(el) => { tabRefs.current[tab.id] = el; }}
             className={[
               'sd-analytics__tab',
               activeTab === tab.id ? 'sd-analytics__tab--active' : '',
@@ -149,6 +189,7 @@ function SmartDocsAnalytics() {
               .filter(Boolean)
               .join(' ')}
             onClick={() => setActiveTab(tab.id)}
+            onKeyDown={(e) => handleTabKeyDown(e, tab.id)}
           >
             {tab.label}
           </button>
@@ -156,7 +197,7 @@ function SmartDocsAnalytics() {
       </div>
 
       {/* Tab Content */}
-      <div className="sd-analytics__content" role="tabpanel">
+      <div className="sd-analytics__content" role="tabpanel" aria-busy={loading}>
         {activeTab === 'overview' && <OverviewTab dashboard={dashboard} />}
         {activeTab === 'sla' && <SlaTab sla={sla} />}
         {activeTab === 'ai' && <AiTab aiPerf={aiPerf} />}

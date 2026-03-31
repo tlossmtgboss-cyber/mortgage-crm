@@ -1,20 +1,41 @@
 """
-User Invitation Routes
-Handles inviting new users to the system and managing invitation lifecycle.
+User Invitation Routes (Consolidated)
+
+All invitation storage now uses the employee_invites table (Path B).
+These endpoints maintain backward compatibility with the /api/v1/invitations prefix
+while routing through the canonical EmployeeInvite model.
+
+Previously stored tokens in User.user_metadata JSON — now deprecated.
 """
 
-import secrets
 import logging
 from datetime import datetime, timedelta, timezone
-from typing import Optional, List
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
+
+from utils.roles import ALLOWED_ROLES, INVITE_GRANTING_ROLES, ADMIN_ROLES, validate_role
+from utils.token_security import generate_invite_token, safe_token_compare
+from utils.password_policy import validate_password
+from utils.invitation_audit import log_invite_event, mask_email_for_audit
 
 logger = logging.getLogger(__name__)
+
+try:
+    from middleware.rate_limiter import rate_limit, ip_key
+except ImportError:
+    logger.warning("Rate limiter unavailable for invitation routes")
+
+    def rate_limit(**kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+    def ip_key(request):
+        return "unknown"
 
 router = APIRouter(prefix="/api/v1/invitations", tags=["User Invitations"])
 
@@ -27,7 +48,7 @@ class InviteUserRequest(BaseModel):
     """Request to invite a new user"""
     email: EmailStr = Field(..., description="Email address to invite")
     full_name: str = Field(..., min_length=1, max_length=200, description="Full name of the user")
-    role: str = Field(default="sales", description="Permission role: admin, leadership, management, sales, processing, operations")
+    role: str = Field(default="sales", description="Permission role")
     send_email: bool = Field(default=True, description="Whether to send the invitation email")
 
 
@@ -53,17 +74,12 @@ class SetPasswordRequest(BaseModel):
 
 class ResendInvitationRequest(BaseModel):
     """Request to resend an invitation"""
-    user_id: int = Field(..., description="User ID to resend invitation to")
+    user_id: int = Field(..., description="Invite ID to resend")
 
 
 # ============================================================================
-# HELPER FUNCTIONS
+# ROUTE FACTORY
 # ============================================================================
-
-def generate_invitation_token() -> str:
-    """Generate a secure invitation token"""
-    return secrets.token_urlsafe(32)
-
 
 def get_user_invitation_routes(
     get_db,
@@ -75,130 +91,175 @@ def get_user_invitation_routes(
 ):
     """
     Factory function to create invitation routes with injected dependencies.
+    Now uses employee_invites table (Path B) as canonical storage.
     """
     import os
     FRONTEND_URL = os.getenv("FRONTEND_URL", "https://perenniaai.com")
+
+    def _get_invite_models():
+        """Lazy-load EmployeeInvite and InviteStatus."""
+        from database.models.permission import EmployeeInvite
+        from database.enums import InviteStatus
+        return EmployeeInvite, InviteStatus
+
+    def _check_invite_permission(current_user):
+        """Check if user can manage invites. Returns normalized role."""
+        user_role = (getattr(current_user, 'permission_role', '') or '').lower().strip()
+        user_functional_role = (getattr(current_user, 'role', '') or '').lower().strip()
+        is_master = current_user.id == 1
+
+        can_invite = (
+            user_role in INVITE_GRANTING_ROLES or
+            user_functional_role in INVITE_GRANTING_ROLES or
+            is_master
+        )
+
+        if not can_invite:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only admins, leadership, and management can manage invites"
+            )
+        return user_role
+
+    def _enforce_org(current_user):
+        """Enforce org assignment. Returns org_id (None for master admin)."""
+        _org_id = getattr(current_user, 'organization_id', None)
+        if not _org_id and current_user.id != 1:
+            raise HTTPException(status_code=403, detail="User not assigned to an organization")
+        return _org_id
 
     @router.post("", response_model=InvitationResponse)
     async def invite_user(
         request: InviteUserRequest,
         req: Request,
         db: Session = Depends(get_db),
-        current_user = Depends(get_current_user)
+        current_user=Depends(get_current_user)
     ):
-        """
-        Invite a new user to the system.
+        """Invite a new user. Creates an EmployeeInvite record."""
+        EmployeeInvite, InviteStatus = _get_invite_models()
 
-        Admins, leadership, and management can invite new users.
-        Creates a pending user account and sends an activation email.
-        """
-        # Check permission - allow admin, leadership, and management roles
-        # Also allow the first user (master admin) regardless of role
-        allowed_roles = ['admin', 'leadership', 'management']
-        user_role = (current_user.permission_role or '').lower().strip()
-        user_functional_role = (getattr(current_user, 'role', '') or '').lower().strip()
-        is_master_user = current_user.id == 1
+        inviter_role = _check_invite_permission(current_user)
+        _org_id = _enforce_org(current_user)
 
-        # Also check if user has admin in their functional role field (some users have role vs permission_role)
-        has_admin_role = (
-            user_role in allowed_roles or
-            user_functional_role in allowed_roles or
-            'admin' in user_role or
-            'admin' in user_functional_role
-        )
-
-        logger.info(f"Invite permission check: user_id={current_user.id}, permission_role='{current_user.permission_role}', role='{getattr(current_user, 'role', None)}', is_master={is_master_user}, has_admin={has_admin_role}")
-
-        if not is_master_user and not has_admin_role:
-            logger.warning(f"User {current_user.id} with role '{current_user.permission_role}' attempted to invite user")
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only admins, leadership, and management can invite users"
-            )
-
-        # Check if email already exists
-        existing_user = db.query(User).filter(User.email == request.email).first()
-        if existing_user:
-            if existing_user.is_active:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="A user with this email already exists and is active"
-                )
-            else:
-                # User exists but is inactive - resend invitation
-                return await _resend_invitation_for_user(existing_user, db, request.send_email, FRONTEND_URL, email_service)
-
-        # Validate role
-        valid_roles = ['admin', 'leadership', 'management', 'sales', 'processing', 'operations']
-        if request.role not in valid_roles:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid role. Must be one of: {', '.join(valid_roles)}"
-            )
-
+        # Validate requested role
         try:
-            # Generate invitation token
-            invitation_token = generate_invitation_token()
-            expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+            validated_role = validate_role(request.role)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
-            # Create the user with pending status
-            # Split full_name into first/last for User columns
-            _name_parts = (request.full_name or '').strip().split(' ', 1)
-            new_user = User(
-                email=request.email,
-                hashed_password="",  # Will be set during activation
-                first_name=_name_parts[0] if _name_parts else '',
-                last_name=_name_parts[1] if len(_name_parts) > 1 else '',
-                role="pending",
-                permission_role=request.role,
-                is_active=False,
-                # Store invitation data in user_metadata JSON field
-                user_metadata={
-                    "invitation_token": invitation_token,
-                    "invitation_expires_at": expires_at.isoformat(),
-                    "invited_by": current_user.id,
-                    "invited_at": datetime.now(timezone.utc).isoformat(),
-                    "status": "pending"
-                }
-            )
+        # Prevent role escalation
+        if validated_role in ADMIN_ROLES and inviter_role not in ADMIN_ROLES and current_user.id != 1:
+            raise HTTPException(status_code=403, detail="Only admins can create admin invites")
 
-            # Set organization_id if current user has one
-            if hasattr(current_user, 'organization_id') and current_user.organization_id:
-                new_user.organization_id = current_user.organization_id
+        # Check if email already in use (active user in same org)
+        _email_query = db.query(User).filter(User.email == request.email, User.is_active == True)
+        if _org_id:
+            _email_query = _email_query.filter(User.organization_id == _org_id)
+        if _email_query.first():
+            raise HTTPException(status_code=400, detail="A user with this email already exists and is active")
 
-            db.add(new_user)
+        # Check for existing pending invite in same org
+        _invite_query = db.query(EmployeeInvite).filter(
+            EmployeeInvite.email == request.email,
+            EmployeeInvite.status == InviteStatus.PENDING
+        )
+        if _org_id:
+            _invite_query = _invite_query.filter(EmployeeInvite.organization_id == _org_id)
+        existing_invite = _invite_query.first()
+
+        if existing_invite:
+            # Resend the existing invite with a fresh token
+            existing_invite.invite_token = generate_invite_token()
+            existing_invite.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
             db.commit()
-            db.refresh(new_user)
+            db.refresh(existing_invite)
 
-            invitation_url = f"{FRONTEND_URL}/activate?token={invitation_token}"
+            _name = f"{existing_invite.first_name or ''} {existing_invite.last_name or ''}".strip()
 
-            # Send invitation email if requested
+            log_invite_event(db, "invite_resent", invite_id=existing_invite.id,
+                             actor_id=current_user.id, org_id=_org_id, target_email=request.email)
+
+            invite_url = f"{FRONTEND_URL}/accept-invite?token={existing_invite.invite_token}"
+
             if request.send_email:
                 try:
-                    email_sent = email_service.send_activation_email(
+                    email_service.send_activation_email(
                         to_email=request.email,
-                        user_name=request.full_name.split()[0],  # First name
+                        user_name=_name.split()[0] if _name else "User",
+                        activation_token=existing_invite.invite_token,
+                        base_url=FRONTEND_URL
+                    )
+                except Exception as e:
+                    logger.error(f"Error sending invite email: {e}")
+
+            return InvitationResponse(
+                id=existing_invite.id,
+                email=existing_invite.email,
+                full_name=_name,
+                role=existing_invite.permission_role or "sales",
+                status="pending (resent)",
+                invitation_token=existing_invite.invite_token if not request.send_email else None,
+                invitation_url=invite_url if not request.send_email else None,
+                expires_at=existing_invite.expires_at.isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat()
+            )
+
+        # Create new EmployeeInvite record
+        try:
+            invitation_token = generate_invite_token()
+            expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+
+            _name_parts = (request.full_name or '').strip().split(' ', 1)
+            first_name = _name_parts[0] if _name_parts else ''
+            last_name = _name_parts[1] if len(_name_parts) > 1 else ''
+
+            invite = EmployeeInvite(
+                email=request.email,
+                first_name=first_name,
+                last_name=last_name,
+                permission_role=validated_role,
+                invite_token=invitation_token,
+                status=InviteStatus.PENDING,
+                invited_by_user_id=current_user.id,
+                organization_id=_org_id,
+                expires_at=expires_at,
+                initial_config={}
+            )
+            db.add(invite)
+            db.flush()  # Get invite.id before commit
+
+            # Audit log in same transaction so it commits together
+            log_invite_event(db, "invite_created", invite_id=invite.id,
+                             actor_id=current_user.id, org_id=_org_id, target_email=request.email,
+                             details={"role": validated_role})
+
+            db.commit()
+            db.refresh(invite)
+
+            invite_url = f"{FRONTEND_URL}/accept-invite?token={invitation_token}"
+
+            if request.send_email:
+                try:
+                    email_service.send_activation_email(
+                        to_email=request.email,
+                        user_name=first_name or "User",
                         activation_token=invitation_token,
                         base_url=FRONTEND_URL
                     )
-                    if email_sent:
-                        logger.info(f"Invitation email sent to {request.email}")
-                    else:
-                        logger.warning(f"Failed to send invitation email to {request.email}")
+                    logger.info(f"Invitation email sent to {mask_email_for_audit(request.email)}")
                 except Exception as e:
                     logger.error(f"Error sending invitation email: {e}")
-                    # Don't fail the invitation creation if email fails
 
-            logger.info(f"User invited: {request.email} by {current_user.email}")
+            logger.info(f"Invite created for {mask_email_for_audit(request.email)} by user {current_user.id}")
 
             return InvitationResponse(
-                id=new_user.id,
-                email=new_user.email,
-                full_name=new_user.full_name,
-                role=request.role,
+                id=invite.id,
+                email=invite.email,
+                full_name=f"{first_name} {last_name}".strip(),
+                role=validated_role,
                 status="pending",
-                invitation_token=invitation_token if not request.send_email else None,  # Only return token if email not sent
-                invitation_url=invitation_url if not request.send_email else None,
+                invitation_token=invitation_token if not request.send_email else None,
+                invitation_url=invite_url if not request.send_email else None,
                 expires_at=expires_at.isoformat(),
                 created_at=datetime.now(timezone.utc).isoformat()
             )
@@ -207,111 +268,59 @@ def get_user_invitation_routes(
             raise
         except Exception as e:
             db.rollback()
-            logger.error(f"Error inviting user: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create invitation"
-            )
-
-
-    async def _resend_invitation_for_user(user, db: Session, send_email: bool, frontend_url: str, email_svc) -> InvitationResponse:
-        """Helper to resend invitation for existing inactive user"""
-        # Generate new token
-        invitation_token = generate_invitation_token()
-        expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-
-        # Update user metadata
-        user_meta = user.user_metadata or {}
-        user_meta["invitation_token"] = invitation_token
-        user_meta["invitation_expires_at"] = expires_at.isoformat()
-        user_meta["resent_at"] = datetime.now(timezone.utc).isoformat()
-        user.user_metadata = user_meta
-
-        db.commit()
-        db.refresh(user)
-
-        invitation_url = f"{frontend_url}/activate?token={invitation_token}"
-
-        # Send email
-        if send_email:
-            try:
-                email_svc.send_activation_email(
-                    to_email=user.email,
-                    user_name=user.full_name.split()[0] if user.full_name else "User",
-                    activation_token=invitation_token,
-                    base_url=frontend_url
-                )
-            except SQLAlchemyError as e:
-                logger.error(f"Error sending invitation email: {e}")
-
-        return InvitationResponse(
-            id=user.id,
-            email=user.email,
-            full_name=user.full_name or "",
-            role=user.permission_role or "sales",
-            status="pending (resent)",
-            invitation_token=invitation_token if not send_email else None,
-            invitation_url=invitation_url if not send_email else None,
-            expires_at=expires_at.isoformat(),
-            created_at=datetime.now(timezone.utc).isoformat()
-        )
+            logger.error(f"Error creating invite: {e}")
+            raise HTTPException(status_code=500, detail="Failed to create invitation")
 
 
     @router.get("")
     async def list_invitations(
         status_filter: Optional[str] = None,
         db: Session = Depends(get_db),
-        current_user = Depends(get_current_user)
+        current_user=Depends(get_current_user)
     ):
-        """
-        List all pending invitations.
+        """List invitations from employee_invites table."""
+        EmployeeInvite, InviteStatus = _get_invite_models()
 
-        Only admins and leadership can view invitations.
-        """
-        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only admins and leadership can view invitations"
-            )
+        _check_invite_permission(current_user)
+        _org_id = _enforce_org(current_user)
 
-        # Query inactive users (pending invitations)
-        query = db.query(User).filter(User.is_active == False)
+        query = db.query(EmployeeInvite).order_by(EmployeeInvite.created_at.desc())
 
-        if status_filter == "pending":
-            query = query.filter(User.hashed_password == "")
-        elif status_filter == "expired":
-            # This would require checking user_metadata, which is more complex
-            pass
+        if _org_id:
+            query = query.filter(EmployeeInvite.organization_id == _org_id)
 
-        pending_users = query.all()
+        if status_filter and status_filter != "all":
+            try:
+                query = query.filter(EmployeeInvite.status == InviteStatus(status_filter))
+            except ValueError:
+                pass
 
-        invitations = []
-        for user in pending_users:
-            user_meta = user.user_metadata or {}
-            expires_at = user_meta.get("invitation_expires_at")
-            is_expired = False
+        invites = query.all()
 
-            if expires_at:
-                try:
-                    exp_dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-                    is_expired = exp_dt < datetime.now(timezone.utc)
-                except Exception as e:
-                    logger.error(f"Error parsing invitation expiry date: {e}")
-
-            invitations.append({
-                "id": user.id,
-                "email": user.email,
-                "full_name": user.full_name,
-                "role": user.permission_role,
-                "status": "expired" if is_expired else "pending",
-                "invited_at": user_meta.get("invited_at"),
-                "expires_at": expires_at,
-                "resent_at": user_meta.get("resent_at")
-            })
+        def _effective_status(inv):
+            """Return 'expired' if a pending invite has passed its expires_at."""
+            raw = inv.status.value if hasattr(inv.status, 'value') else str(inv.status)
+            if raw == 'pending' and inv.expires_at and inv.expires_at < datetime.now(timezone.utc):
+                return 'expired'
+            return raw
 
         return {
-            "invitations": invitations,
-            "total": len(invitations)
+            "invites": [
+                {
+                    "id": inv.id,
+                    "email": inv.email,
+                    "first_name": inv.first_name,
+                    "last_name": inv.last_name,
+                    "job_title": getattr(inv, 'job_title', None),
+                    "permission_role": inv.permission_role,
+                    "status": _effective_status(inv),
+                    "invite_token": inv.invite_token if hasattr(inv.status, 'value') and inv.status.value == 'pending' and not (inv.expires_at and inv.expires_at < datetime.now(timezone.utc)) else None,
+                    "created_at": inv.created_at.isoformat() if inv.created_at else None,
+                    "expires_at": inv.expires_at.isoformat() if inv.expires_at else None,
+                    "accepted_at": inv.accepted_at.isoformat() if getattr(inv, 'accepted_at', None) else None,
+                }
+                for inv in invites
+            ]
         }
 
 
@@ -319,184 +328,237 @@ def get_user_invitation_routes(
     async def resend_invitation(
         request: ResendInvitationRequest,
         db: Session = Depends(get_db),
-        current_user = Depends(get_current_user)
+        current_user=Depends(get_current_user)
     ):
-        """
-        Resend an invitation email to a pending user.
-        """
-        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only admins and leadership can resend invitations"
+        """Resend an invitation by invite ID."""
+        EmployeeInvite, InviteStatus = _get_invite_models()
+
+        _check_invite_permission(current_user)
+        _org_id = _enforce_org(current_user)
+
+        invite = db.query(EmployeeInvite).filter(EmployeeInvite.id == request.user_id).first()
+        if not invite:
+            raise HTTPException(status_code=404, detail="Invitation not found")
+
+        if _org_id and invite.organization_id != _org_id:
+            raise HTTPException(status_code=404, detail="Invitation not found")
+
+        if invite.status not in (InviteStatus.PENDING, InviteStatus.EXPIRED):
+            raise HTTPException(status_code=400, detail="Can only resend pending or expired invites")
+
+        # Fresh token and extended expiry
+        invite.invite_token = generate_invite_token()
+        invite.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+        invite.status = InviteStatus.PENDING
+        db.commit()
+        db.refresh(invite)
+
+        invite_url = f"{FRONTEND_URL}/accept-invite?token={invite.invite_token}"
+
+        try:
+            email_service.send_activation_email(
+                to_email=invite.email,
+                user_name=invite.first_name or "User",
+                activation_token=invite.invite_token,
+                base_url=FRONTEND_URL
             )
+        except Exception as e:
+            logger.error(f"Error resending invitation email: {e}")
 
-        user = db.query(User).filter(User.id == request.user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        log_invite_event(db, "invite_resent", invite_id=invite.id,
+                         actor_id=current_user.id, org_id=_org_id, target_email=invite.email)
 
-        if user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="User is already active"
-            )
-
-        return await _resend_invitation_for_user(user, db, True, FRONTEND_URL, email_service)
+        _name = f"{invite.first_name or ''} {invite.last_name or ''}".strip()
+        return InvitationResponse(
+            id=invite.id,
+            email=invite.email,
+            full_name=_name,
+            role=invite.permission_role or "sales",
+            status="pending (resent)",
+            invitation_token=invite.invite_token,
+            invitation_url=invite_url,
+            expires_at=invite.expires_at.isoformat(),
+            created_at=datetime.now(timezone.utc).isoformat()
+        )
 
 
     @router.delete("/{user_id}")
     async def revoke_invitation(
         user_id: int,
         db: Session = Depends(get_db),
-        current_user = Depends(get_current_user)
+        current_user=Depends(get_current_user)
     ):
-        """
-        Revoke a pending invitation by deleting the user.
-        """
-        if current_user.permission_role not in ['admin', 'site_admin', 'leadership']:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only admins and leadership can revoke invitations"
-            )
+        """Revoke a pending invitation (soft delete — sets status to revoked)."""
+        EmployeeInvite, InviteStatus = _get_invite_models()
 
-        user = db.query(User).filter(User.id == user_id).first()
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
+        _check_invite_permission(current_user)
+        _org_id = _enforce_org(current_user)
 
-        if user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Cannot revoke invitation for active user"
-            )
+        invite = db.query(EmployeeInvite).filter(EmployeeInvite.id == user_id).first()
+        if not invite:
+            raise HTTPException(status_code=404, detail="Invitation not found")
 
-        email = user.email
-        db.delete(user)
+        if _org_id and invite.organization_id != _org_id:
+            raise HTTPException(status_code=404, detail="Invitation not found")
+
+        if invite.status not in (InviteStatus.PENDING, InviteStatus.EXPIRED):
+            raise HTTPException(status_code=400, detail="Can only revoke pending or expired invites")
+
+        invite.status = InviteStatus.REVOKED
+        invite.invite_token = None  # Clear token
         db.commit()
 
-        logger.info(f"Invitation revoked for {email} by {current_user.email}")
+        log_invite_event(db, "invite_revoked", invite_id=invite.id,
+                         actor_id=current_user.id, org_id=_org_id, target_email=invite.email)
 
-        return {"message": f"Invitation for {email} has been revoked"}
+        logger.info(f"Invite {invite.id} revoked by user {current_user.id}")
+
+        return {"message": f"Invitation for {mask_email_for_audit(invite.email)} has been revoked"}
 
 
     @router.get("/validate/{token}")
+    @rate_limit(limit=10, window=300, key_func=ip_key)
     async def validate_invitation_token(
         token: str,
+        request: Request,
         db: Session = Depends(get_db)
     ):
         """
-        Validate an invitation token (public endpoint for activation page).
+        Validate an invitation token (public endpoint).
+        Now uses indexed lookup on employee_invites table instead of full table scan.
         """
-        # Find user with this token
-        users = db.query(User).filter(User.is_active == False).all()
+        EmployeeInvite, InviteStatus = _get_invite_models()
 
-        for user in users:
-            user_meta = user.user_metadata or {}
-            import hmac
-            if hmac.compare_digest(user_meta.get("invitation_token") or "", token):
-                # Check expiration
-                expires_at = user_meta.get("invitation_expires_at")
-                if expires_at:
-                    try:
-                        exp_dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-                        if exp_dt < datetime.now(timezone.utc):
-                            raise HTTPException(
-                                status_code=status.HTTP_400_BAD_REQUEST,
-                                detail="Invitation has expired. Please request a new invitation."
-                            )
-                    except ValueError:
-                        pass
+        invite = db.query(EmployeeInvite).filter(EmployeeInvite.invite_token == token).first()
 
-                return {
-                    "valid": True,
-                    "email": user.email,
-                    "full_name": user.full_name,
-                    "role": user.permission_role
-                }
+        if not invite or not safe_token_compare(invite.invite_token, token):
+            raise HTTPException(status_code=400, detail="Invalid or expired invitation token")
 
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired invitation token"
-        )
+        if invite.status != InviteStatus.PENDING:
+            raise HTTPException(status_code=400, detail=f"Invitation has been {invite.status.value}")
+
+        if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
+            invite.status = InviteStatus.EXPIRED
+            db.commit()
+            raise HTTPException(status_code=400, detail="Invitation has expired. Please request a new invitation.")
+
+        return {
+            "valid": True,
+            "email": invite.email,
+            "full_name": f"{invite.first_name or ''} {invite.last_name or ''}".strip(),
+            "role": invite.permission_role
+        }
 
 
     @router.post("/activate")
+    @rate_limit(limit=5, window=300, key_func=ip_key)
     async def activate_account(
-        request: SetPasswordRequest,
+        request: Request,
+        body: SetPasswordRequest,
         db: Session = Depends(get_db)
     ):
         """
         Activate account by setting password (public endpoint).
+        Now uses employee_invites table for token lookup and creates user on accept.
         """
-        if request.password != request.confirm_password:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Passwords do not match"
-            )
+        if body.password != body.confirm_password:
+            raise HTTPException(status_code=400, detail="Passwords do not match")
 
-        # Validate password strength
-        if len(request.password) < 8:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Password must be at least 8 characters"
-            )
+        # Unified password policy
+        validate_password(body.password)
 
-        # Find user with this token
-        users = db.query(User).filter(User.is_active == False).all()
-        target_user = None
+        EmployeeInvite, InviteStatus = _get_invite_models()
+        _client_ip = request.client.host if request.client else None
 
-        for user in users:
-            user_meta = user.user_metadata or {}
-            import hmac
-            if hmac.compare_digest(user_meta.get("invitation_token") or "", request.token):
-                # Check expiration
-                expires_at = user_meta.get("invitation_expires_at")
-                if expires_at:
-                    try:
-                        exp_dt = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-                        if exp_dt < datetime.now(timezone.utc):
-                            raise HTTPException(
-                                status_code=status.HTTP_400_BAD_REQUEST,
-                                detail="Invitation has expired. Please request a new invitation."
-                            )
-                    except ValueError:
-                        pass
-                target_user = user
-                break
+        # Indexed lookup instead of full table scan
+        invite = db.query(EmployeeInvite).filter(EmployeeInvite.invite_token == body.token).first()
 
-        if not target_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid or expired invitation token"
-            )
+        if not invite or not safe_token_compare(invite.invite_token, body.token):
+            log_invite_event(db, "invite_accept_failed", details={"reason": "invalid_token"}, ip_address=_client_ip)
+            raise HTTPException(status_code=400, detail="Invalid or expired invitation token")
+
+        if invite.status != InviteStatus.PENDING:
+            log_invite_event(db, "invite_accept_failed", invite_id=invite.id,
+                             target_email=invite.email, details={"reason": f"status_{invite.status.value}"},
+                             ip_address=_client_ip)
+            raise HTTPException(status_code=400, detail=f"Invitation has been {invite.status.value}")
+
+        if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
+            invite.status = InviteStatus.EXPIRED
+            db.commit()
+            log_invite_event(db, "invite_accept_failed", invite_id=invite.id,
+                             target_email=invite.email, details={"reason": "expired"}, ip_address=_client_ip)
+            raise HTTPException(status_code=400, detail="Invitation has expired. Please request a new invitation.")
+
+        # --- Seat limit enforcement with FOR UPDATE lock ---
+        _org_id = invite.organization_id
+        if not _org_id and invite.invited_by_user_id:
+            _inviter = db.query(User).filter(User.id == invite.invited_by_user_id).first()
+            if _inviter:
+                _org_id = getattr(_inviter, 'organization_id', None)
+
+        if _org_id:
+            from sqlalchemy import func as _fn
+            _sub_row = db.execute(
+                text(
+                    "SELECT max_users FROM organization_subscriptions "
+                    "WHERE organization_id = :org_id AND status = 'active' LIMIT 1 "
+                    "FOR UPDATE"
+                ),
+                {"org_id": _org_id}
+            ).fetchone()
+
+            if _sub_row and _sub_row[0] is not None and _sub_row[0] > 0:
+                _active_count = db.query(_fn.count(User.id)).filter(
+                    User.organization_id == _org_id,
+                    User.is_active == True
+                ).scalar() or 0
+                if _active_count >= _sub_row[0]:
+                    raise HTTPException(status_code=403, detail="Seat limit reached. Contact your administrator to upgrade.")
 
         try:
-            # Set password and activate
-            target_user.hashed_password = get_password_hash(request.password)
-            target_user.is_active = True
-            target_user.role = target_user.permission_role  # Sync role field
+            # Create user from invite data
+            new_user = User(
+                email=invite.email,
+                hashed_password=get_password_hash(body.password),
+                first_name=invite.first_name or '',
+                last_name=invite.last_name or '',
+                role=invite.permission_role,
+                permission_role=invite.permission_role,
+                is_active=True,
+                organization_id=_org_id,
+                branch_id=invite.branch_id,
+            )
+            db.add(new_user)
+            db.flush()
 
-            # Update metadata
-            user_meta = target_user.user_metadata or {}
-            user_meta["status"] = "active"
-            user_meta["activated_at"] = datetime.now(timezone.utc).isoformat()
-            user_meta.pop("invitation_token", None)  # Remove token
-            target_user.user_metadata = user_meta
+            # Update invite status
+            invite.status = InviteStatus.ACCEPTED
+            invite.accepted_at = datetime.now(timezone.utc)
+            invite.user_id = new_user.id
+            invite.invite_token = None  # Clear token after use
 
             db.commit()
-            db.refresh(target_user)
+            db.refresh(new_user)
 
             # Generate access token for immediate login
-            access_token = create_access_token(data={"sub": target_user.email})
+            access_token = create_access_token(data={"sub": new_user.email})
 
-            logger.info(f"User activated: {target_user.email}")
+            log_invite_event(db, "invite_accepted", invite_id=invite.id,
+                             org_id=_org_id, target_email=invite.email,
+                             details={"user_id": new_user.id, "role": invite.permission_role},
+                             ip_address=_client_ip)
+
+            logger.info(f"User activated via invite {invite.id}: {mask_email_for_audit(invite.email)}")
 
             return {
                 "success": True,
                 "message": "Account activated successfully",
                 "user": {
-                    "id": target_user.id,
-                    "email": target_user.email,
-                    "full_name": target_user.full_name,
-                    "role": target_user.permission_role
+                    "id": new_user.id,
+                    "email": new_user.email,
+                    "full_name": f"{new_user.first_name} {new_user.last_name}".strip(),
+                    "role": new_user.permission_role
                 },
                 "access_token": access_token,
                 "token_type": "bearer"
@@ -507,9 +569,6 @@ def get_user_invitation_routes(
         except Exception as e:
             db.rollback()
             logger.error(f"Error activating user: {e}")
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to activate account"
-            )
+            raise HTTPException(status_code=500, detail="Failed to activate account")
 
     return router

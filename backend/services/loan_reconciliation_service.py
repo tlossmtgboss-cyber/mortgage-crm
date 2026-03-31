@@ -53,64 +53,15 @@ class ReconciliationResult:
     audit_metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-# Ordinal position of each LoanStage in the pipeline.
-# Higher = further along. Terminal/special states are negative.
-STAGE_ORDER: Dict[str, int] = {
-    "APPLICATION": 10,
-    "DISCLOSED": 15,
-    "PROCESSING": 20,
-    "SUBMITTED": 30,
-    "UNDERWRITING": 40,
-    "UW_RECEIVED": 45,
-    "CONDITIONAL_APPROVAL": 50,
-    "APPROVED": 60,
-    "CTC": 70,
-    "CLEAR_TO_CLOSE": 70,
-    "CLOSING": 80,
-    "DOCS": 85,
-    "DOCS_OUT": 85,
-    "FUNDED": 100,
-    # Terminal / special states
-    "CANCELLED": -10,
-    "DENIED": -20,
-    "DEAD": -30,
-    "WITHDRAWN": -40,
-    "DOES_NOT_QUALIFY": -50,
-    "SUSPENDED": -5,
-    "NURTURE": -1,
-}
-
-FUNDED_STAGES = {"FUNDED"}
-PAUSE_STAGES = {"SUSPENDED"}
-ARCHIVE_STAGES = {"CANCELLED", "WITHDRAWN", "DENIED", "DEAD", "DOES_NOT_QUALIFY"}
-COMPLIANCE_TRIGGER_STAGES = {"DENIED"}
-
-# Stages that are "active" in the pipeline (positive ordinal)
-ACTIVE_STAGES = {stage for stage, order in STAGE_ORDER.items() if order > 0 and stage not in FUNDED_STAGES}
-
-# Maps each CRM stage to the loans table date field stamped on disposition
-STAGE_TO_DATE_FIELD: Dict[str, Optional[str]] = {
-    "APPLICATION": "application_date",
-    "DISCLOSED": "initial_disclosures_sent_date",
-    "PROCESSING": "file_received_date",
-    "SUBMITTED": "uw_received_date",
-    "UNDERWRITING": "uw_received_date",
-    "UW_RECEIVED": "uw_received_date",
-    "CONDITIONAL_APPROVAL": "conditional_approval_date",
-    "APPROVED": "loan_approved_date",
-    "CTC": "clear_to_close_date",
-    "CLEAR_TO_CLOSE": "clear_to_close_date",
-    "CLOSING": "scheduled_closing_date",
-    "DOCS_OUT": "docs_out_date",
-    "FUNDED": "funded_date",
-    "SUSPENDED": "suspended_date",
-    "WITHDRAWN": "withdrawn_date",
-    "CANCELLED": None,
-    "DENIED": None,
-    "DEAD": None,
-    "DOES_NOT_QUALIFY": None,
-    "NURTURE": None,
-}
+from services.workflow_constants import (
+    STAGE_ORDER,
+    FUNDED_STAGES,
+    PAUSE_STAGES,
+    ARCHIVE_STAGES,
+    COMPLIANCE_TRIGGER_STAGES,
+    ACTIVE_LOAN_STAGES as ACTIVE_STAGES,
+    STAGE_TO_DATE_FIELD,
+)
 
 
 # =============================================================================

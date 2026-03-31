@@ -356,8 +356,22 @@ async def backfill_sla_tasks_batch(
 
 
 def sync_backfill_sla_tasks_batch(limit: int = 100) -> Dict[str, Any]:
-    """Synchronous wrapper for use with APScheduler."""
-    return asyncio.run(backfill_sla_tasks_batch(limit=limit))
+    """Synchronous wrapper for use with APScheduler.
+
+    Safe to call from both sync and async contexts.
+    """
+    import concurrent.futures
+
+    coro = backfill_sla_tasks_batch(limit=limit)
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+    return asyncio.run(coro)
 
 
 # =============================================================================

@@ -14,8 +14,17 @@ const API_BASE = `${API_BASE_URL}/api/v1/smart-docs/delivery`;
  */
 async function handleResponse(response) {
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    const error = await response.json().catch(() => ({}));
+    if (response.status === 403) {
+      throw new Error(error.detail || 'Access denied. You do not have permission for this action.');
+    }
+    if (response.status === 401) {
+      throw new Error('Session expired. Please log in again.');
+    }
+    if (response.status === 429) {
+      throw new Error('Too many requests. Please wait a moment and try again.');
+    }
+    throw new Error(error.detail || `Request failed (${response.status})`);
   }
   return response.json();
 }

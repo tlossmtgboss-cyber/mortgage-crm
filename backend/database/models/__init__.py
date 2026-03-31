@@ -160,6 +160,9 @@ from .security import (
 # Device token models (push notifications)
 from .device_token import DeviceToken
 
+# Notification preference models (push notification settings)
+from .notification_preference import NotificationPreference
+
 # Subscription & billing models
 from .subscription import (
     SubscriptionPlan,
@@ -771,6 +774,16 @@ __all__ = [
     "SystemAlert",
     "SystemJobsLog",
     "Notification",
+
+    # =====================
+    # Device Tokens (Push Notifications)
+    # =====================
+    "DeviceToken",
+
+    # =====================
+    # Notification Preferences
+    # =====================
+    "NotificationPreference",
 
     # =====================
     # Subscription & Billing

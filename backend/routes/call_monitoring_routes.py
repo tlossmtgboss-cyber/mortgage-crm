@@ -179,6 +179,94 @@ class ReviewDataResponse(BaseModel):
 
 
 # =============================================================================
+# WORKFLOW RECONCILIATION HELPER
+# =============================================================================
+
+# Map CI artifact types to workflow action types for reconciliation.
+# Only actionable artifacts that overlap with workflow-generated tasks are mapped;
+# non-actionable types (summary, scribe_recap, etc.) are intentionally excluded.
+_ARTIFACT_ACTION_MAP: Dict[str, str] = {
+    "task": "task",
+    "follow_up_draft": "email",
+    "follow_up_call": "call",
+    "document_request": "document_request",
+    "scheduled_appointment": "appointment",
+    "calendar_action": "appointment",
+    "risk_flag": "condition",
+}
+
+
+async def _reconcile_ci_artifacts_with_workflows(
+    db: Session,
+    session_id: str,
+    executed_artifacts: List[Dict[str, Any]],
+    orchestrator: "CallMonitoringOrchestrator",
+    user_id: str,
+) -> None:
+    """
+    Best-effort reconciliation: after CI artifacts are executed, mark matching
+    workflow_task_instances as completed so the workflow engine doesn't create
+    duplicate outreach or trigger false SLA escalations.
+
+    This is intentionally fire-and-forget — reconciliation failures are logged
+    but never block the CI artifact response.
+    """
+    try:
+        from services.workflow_reconciliation import reconcile_after_action
+    except ImportError:
+        # workflow_reconciliation service not yet deployed — skip silently
+        logger.debug("workflow_reconciliation module not available; skipping CI reconciliation")
+        return
+
+    # Fetch session to get lead_id / loan_id
+    try:
+        session = orchestrator.get_session(session_id)
+        if not session:
+            logger.warning(f"CI reconciliation: session {session_id} not found")
+            return
+
+        session_lead_id = session.get("lead_id")
+        session_loan_id = session.get("loan_id")
+
+        # If there's no lead or loan association, there are no workflow tasks to reconcile
+        if not session_lead_id and not session_loan_id:
+            return
+
+        reconciled_count = 0
+        for artifact in executed_artifacts:
+            artifact_type = artifact.get("artifact_type")
+            action_type = _ARTIFACT_ACTION_MAP.get(artifact_type)
+            if not action_type:
+                # Non-actionable artifact type (summary, etc.) — nothing to reconcile
+                continue
+
+            try:
+                await reconcile_after_action(
+                    db=db,
+                    action_type=action_type,
+                    lead_id=session_lead_id,
+                    loan_id=session_loan_id,
+                    completed_by=user_id,
+                    completion_source="call_intelligence",
+                )
+                reconciled_count += 1
+            except Exception as e:
+                logger.warning(
+                    f"CI workflow reconciliation failed for artifact "
+                    f"{artifact.get('artifact_id')} (type={artifact_type}): {e}"
+                )
+
+        if reconciled_count > 0:
+            logger.info(
+                f"CI workflow reconciliation: reconciled {reconciled_count} "
+                f"action(s) for session {session_id}"
+            )
+
+    except Exception as e:
+        logger.warning(f"CI workflow reconciliation failed for session {session_id}: {e}")
+
+
+# =============================================================================
 # CALLER IDENTIFICATION ENDPOINTS
 # =============================================================================
 
@@ -1080,6 +1168,8 @@ async def execute_artifacts(
     Execute approved artifacts.
 
     This creates tasks, document requests, conditions, etc. from approved artifacts.
+    After execution, reconciles with workflow task instances to prevent duplicate
+    outreach and false escalations.
     """
     try:
         orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
@@ -1090,6 +1180,18 @@ async def execute_artifacts(
         )
 
         executed_count = len(results.get("executed", []))
+
+        # Best-effort workflow reconciliation: mark matching workflow_task_instances
+        # as completed so the workflow engine doesn't create duplicate outreach or
+        # trigger false SLA escalations for work already done via CI artifacts.
+        if executed_count > 0:
+            await _reconcile_ci_artifacts_with_workflows(
+                db=db,
+                session_id=session_id,
+                executed_artifacts=results.get("executed", []),
+                orchestrator=orchestrator,
+                user_id=str(current_user.get("id")),
+            )
 
         return {
             "status": "success",
@@ -1145,7 +1247,8 @@ async def submit_review(
     """
     Submit the review with approved artifacts.
 
-    This approves selected artifacts and triggers execution.
+    This approves selected artifacts, triggers execution, and reconciles with
+    workflow task instances to prevent duplicate outreach.
     """
     try:
         orchestrator = CallMonitoringOrchestrator(db, organization_id=current_user.get("organization_id"))
@@ -1169,6 +1272,16 @@ async def submit_review(
         orchestrator.update_session(session_id, status='completed')
 
         executed_count = len(results.get("executed", []))
+
+        # Best-effort workflow reconciliation after artifact execution
+        if executed_count > 0:
+            await _reconcile_ci_artifacts_with_workflows(
+                db=db,
+                session_id=session_id,
+                executed_artifacts=results.get("executed", []),
+                orchestrator=orchestrator,
+                user_id=user_id,
+            )
 
         return {
             "status": "success",
@@ -1822,6 +1935,7 @@ async def create_artifact_share_link(
             expires_in_days=request.expires_in_days,
             title_override=request.title_override,
             description_override=request.description_override,
+            organization_id=current_user.get("organization_id"),
         )
 
         # Build full URL
@@ -1949,6 +2063,7 @@ async def deactivate_share_link(
         success = service.deactivate_share(
             share_token=share_token,
             user_id=current_user.get("id"),
+            organization_id=current_user.get("organization_id"),
         )
 
         if not success:
@@ -1982,7 +2097,10 @@ async def get_artifact_shares(
         from services.calculator_share_service import CalculatorShareService
 
         service = CalculatorShareService(db)
-        shares = service.get_shares_for_artifact(artifact_id)
+        shares = service.get_shares_for_artifact(
+            artifact_id,
+            organization_id=current_user.get("organization_id"),
+        )
 
         return {
             "status": "success",

@@ -1,0 +1,115 @@
+/* OfflineSyncStatus — banner positioned above mobile bottom nav */
+
+.offline-sync-banner {
+  position: fixed;
+  left: 0;
+  right: 0;
+  /* 56px nav height + safe area */
+  bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  transition: transform 0.25s ease, opacity 0.25s ease;
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.offline-sync-banner--hidden {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* State variants */
+
+.offline-sync-banner--pending {
+  background: #fef3c7;
+  color: #92400e;
+  border-top: 1px solid #fbbf24;
+}
+
+.offline-sync-banner--syncing {
+  background: #dbeafe;
+  color: #1e40af;
+  border-top: 1px solid #60a5fa;
+}
+
+.offline-sync-banner--success {
+  background: #d1fae5;
+  color: #065f46;
+  border-top: 1px solid #34d399;
+}
+
+.offline-sync-banner--failed {
+  background: #fee2e2;
+  color: #991b1b;
+  border-top: 1px solid #f87171;
+}
+
+.offline-sync-banner--offline {
+  background: #f3f4f6;
+  color: #6b7280;
+  border-top: 1px solid #d1d5db;
+}
+
+/* Spinner */
+
+.offline-sync-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: offline-sync-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes offline-sync-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Retry button */
+
+.offline-sync-retry {
+  margin-left: 8px;
+  padding: 3px 10px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+
+.offline-sync-retry:active {
+  opacity: 0.7;
+}
+
+/* Icon (small inline SVG wrapper) */
+
+.offline-sync-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Accessibility: reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .offline-sync-banner {
+    transition: none;
+  }
+  .offline-sync-spinner {
+    animation: none;
+  }
+}

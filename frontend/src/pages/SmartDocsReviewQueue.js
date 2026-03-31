@@ -8,7 +8,7 @@
  * - Claim / release / AI review actions with toast feedback
  * - Batch AI Review for all unclaimed items grouped by loan
  */
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { toast } from '../utils/toast';
 
 import useReviewQueue from '../hooks/useReviewQueue';
@@ -58,6 +58,7 @@ export default function SmartDocsReviewQueue() {
 
   const [activePriority, setActivePriority] = useState('ALL');
   const [batchLoading, setBatchLoading] = useState(false);
+  const filterPillRefs = useRef({});
 
   // ---------------------------------------------------------------------------
   // Priority filter
@@ -71,6 +72,39 @@ export default function SmartDocsReviewQueue() {
       setFilters({ priority });
     }
   }, [setFilters]);
+
+  const handleFilterKeyDown = useCallback((e, priority) => {
+    const currentIndex = PRIORITY_FILTERS.indexOf(priority);
+    let newIndex;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        e.preventDefault();
+        newIndex = (currentIndex + 1) % PRIORITY_FILTERS.length;
+        handlePriorityFilter(PRIORITY_FILTERS[newIndex]);
+        filterPillRefs.current[PRIORITY_FILTERS[newIndex]]?.focus();
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        e.preventDefault();
+        newIndex = (currentIndex - 1 + PRIORITY_FILTERS.length) % PRIORITY_FILTERS.length;
+        handlePriorityFilter(PRIORITY_FILTERS[newIndex]);
+        filterPillRefs.current[PRIORITY_FILTERS[newIndex]]?.focus();
+        break;
+      case 'Home':
+        e.preventDefault();
+        handlePriorityFilter(PRIORITY_FILTERS[0]);
+        filterPillRefs.current[PRIORITY_FILTERS[0]]?.focus();
+        break;
+      case 'End':
+        e.preventDefault();
+        handlePriorityFilter(PRIORITY_FILTERS[PRIORITY_FILTERS.length - 1]);
+        filterPillRefs.current[PRIORITY_FILTERS[PRIORITY_FILTERS.length - 1]]?.focus();
+        break;
+      default:
+        break;
+    }
+  }, [handlePriorityFilter]);
 
   // ---------------------------------------------------------------------------
   // Actions
@@ -198,6 +232,7 @@ export default function SmartDocsReviewQueue() {
             className="sd-review-queue__btn sd-review-queue__btn--secondary"
             onClick={refresh}
             disabled={loading}
+            aria-label="Refresh review queue"
           >
             {loading ? 'Loading…' : 'Refresh'}
           </button>
@@ -205,6 +240,7 @@ export default function SmartDocsReviewQueue() {
             className="sd-review-queue__btn sd-review-queue__btn--primary"
             onClick={handleBatchAiReview}
             disabled={batchLoading || loading}
+            aria-label="Run batch AI review on all unclaimed documents"
           >
             {batchLoading ? 'Running…' : 'Batch AI Review'}
           </button>
@@ -238,10 +274,15 @@ export default function SmartDocsReviewQueue() {
       </div>
 
       {/* ── Priority filter tabs ── */}
-      <div className="sd-review-queue__filters" role="group" aria-label="Filter by priority">
+      <div className="sd-review-queue__filters" role="tablist" aria-label="Filter by priority">
         {PRIORITY_FILTERS.map((p) => (
           <button
             key={p}
+            role="tab"
+            aria-selected={activePriority === p}
+            aria-current={activePriority === p ? 'true' : undefined}
+            tabIndex={activePriority === p ? 0 : -1}
+            ref={(el) => { filterPillRefs.current[p] = el; }}
             className={[
               'sd-review-queue__filter-pill',
               activePriority === p ? 'sd-review-queue__filter-pill--active' : '',
@@ -249,6 +290,7 @@ export default function SmartDocsReviewQueue() {
               .filter(Boolean)
               .join(' ')}
             onClick={() => handlePriorityFilter(p)}
+            onKeyDown={(e) => handleFilterKeyDown(e, p)}
           >
             {p}
           </button>
@@ -257,7 +299,7 @@ export default function SmartDocsReviewQueue() {
 
       {/* ── Error state ── */}
       {error && (
-        <div className="sd-review-queue__error">
+        <div className="sd-review-queue__error" role="alert">
           <span>Could not load queue: {error}</span>
           <button onClick={refresh}>Retry</button>
         </div>
@@ -289,7 +331,7 @@ export default function SmartDocsReviewQueue() {
 
       {/* ── Queue list ── */}
       {items.length > 0 && (
-        <div className="sd-review-queue__list">
+        <div className="sd-review-queue__list" aria-busy={loading}>
           {items.map((doc) => (
             <ReviewQueueItem
               key={doc.id}
@@ -311,16 +353,18 @@ export default function SmartDocsReviewQueue() {
             className="sd-review-queue__btn sd-review-queue__btn--secondary"
             onClick={prevPage}
             disabled={!hasPrev || loading}
+            aria-label="Previous page"
           >
             Previous
           </button>
-          <span className="sd-review-queue__page-info">
+          <span className="sd-review-queue__page-info" aria-live="polite">
             Showing {from}–{to} of {total}
           </span>
           <button
             className="sd-review-queue__btn sd-review-queue__btn--secondary"
             onClick={nextPage}
             disabled={!hasNext || loading}
+            aria-label="Next page"
           >
             Next
           </button>

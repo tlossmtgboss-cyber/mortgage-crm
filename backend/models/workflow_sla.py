@@ -52,8 +52,9 @@ class WorkflowTaskStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress" # Task being worked on
     COMPLETED = "completed"     # Successfully completed
     SKIPPED = "skipped"         # Skipped (contact made via other method)
-    FAILED = "failed"           # Execution failed
+    FAILED = "failed"           # Execution failed, will be retried
     CANCELLED = "cancelled"     # Cancelled (workflow cancelled or sibling completed)
+    DEAD_LETTER = "dead_letter" # Permanently failed after max retries
 
 
 class WorkflowTaskType(str, enum.Enum):

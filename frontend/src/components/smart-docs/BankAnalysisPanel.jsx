@@ -59,7 +59,11 @@ function BankAnalysisPanel({ analysis, onSourceDeposit }) {
       {/* Header */}
       <div className="bap__header">
         <h2 className="bap__title">Bank Statement Analysis</h2>
-        <span className={`bap__risk-badge bap__risk-badge--${riskModifier}`}>
+        <span
+          className={`bap__risk-badge bap__risk-badge--${riskModifier}`}
+          role={riskLevel === 'HIGH' || riskLevel === 'MEDIUM' ? 'alert' : undefined}
+          aria-label={`Risk level: ${riskLevel}`}
+        >
           {riskLevel} RISK
         </span>
       </div>
@@ -95,19 +99,23 @@ function BankAnalysisPanel({ analysis, onSourceDeposit }) {
           <p className="bap__empty">No large deposits found.</p>
         ) : (
           <div className="bap__table-container">
-            <table className="bap__table">
+            <table
+              className="bap__table"
+              aria-label="Large deposits requiring sourcing documentation"
+            >
               <thead>
                 <tr>
-                  <th>Date</th>
-                  <th>Amount</th>
-                  <th>Description</th>
-                  <th>Sourced</th>
-                  <th>Action</th>
+                  <th scope="col">Date</th>
+                  <th scope="col">Amount</th>
+                  <th scope="col">Description</th>
+                  <th scope="col">Sourced</th>
+                  <th scope="col">Action</th>
                 </tr>
               </thead>
               <tbody>
                 {largeDeposits.map((deposit, idx) => {
                   const isSourced = Boolean(deposit.sourced || deposit.is_sourced);
+                  const depositDesc = deposit.description || deposit.memo || formatCurrency(deposit.amount);
                   return (
                     <tr key={deposit.id || idx}>
                       <td>{formatDate(deposit.date || deposit.transaction_date)}</td>
@@ -126,6 +134,7 @@ function BankAnalysisPanel({ analysis, onSourceDeposit }) {
                             className="bap__source-btn"
                             onClick={() => onSourceDeposit(deposit)}
                             type="button"
+                            aria-label={`Source deposit: ${depositDesc}`}
                           >
                             Source
                           </button>
@@ -150,7 +159,7 @@ function BankAnalysisPanel({ analysis, onSourceDeposit }) {
         ) : (
           <div className="bap__flag-list">
             {nsfOverdrafts.map((item, idx) => (
-              <div key={item.id || idx} className="bap__flag bap__flag--error">
+              <div key={item.id || idx} className="bap__flag bap__flag--error" role="alert">
                 <div className="bap__flag-header">
                   <span className="bap__flag-label">
                     {item.type || item.event_type || 'NSF / Overdraft'}
@@ -183,7 +192,7 @@ function BankAnalysisPanel({ analysis, onSourceDeposit }) {
         ) : (
           <div className="bap__debt-list">
             {undisclosedDebts.map((debt, idx) => (
-              <div key={debt.id || idx} className="bap__flag bap__flag--warning">
+              <div key={debt.id || idx} className="bap__flag bap__flag--warning" role="alert">
                 <div className="bap__debt-info">
                   <span className="bap__debt-payee">
                     {debt.payee || debt.creditor || debt.description || 'Unknown Payee'}

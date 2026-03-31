@@ -36,10 +36,20 @@ function AnalyticsCard({ title, value, subtitle, trend, status, icon, children }
         : `${trend}%`
       : null;
 
+  // Build a descriptive aria-label combining title, value, status, and trend
+  const ariaLabelParts = [`${title}: ${value}`];
+  if (status) ariaLabelParts.push(`Status: ${status}`);
+  if (trendLabel !== null) ariaLabelParts.push(`Trend: ${trendLabel}`);
+  const ariaLabel = ariaLabelParts.join(', ');
+
   return (
-    <div className={cardClass}>
+    <div
+      className={cardClass}
+      role="status"
+      aria-label={ariaLabel}
+    >
       <div className="analytics-card__header">
-        {icon && <span className="analytics-card__icon">{icon}</span>}
+        {icon && <span className="analytics-card__icon" aria-hidden="true">{icon}</span>}
         <span className="analytics-card__title">{String(title).toUpperCase()}</span>
       </div>
 

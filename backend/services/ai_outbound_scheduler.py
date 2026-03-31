@@ -39,6 +39,8 @@ from typing import Any, Dict, List, Optional, Tuple
 from sqlalchemy import and_, or_, func, text, desc
 from sqlalchemy.orm import Session
 
+from services.workflow_constants import TERMINAL_LOAN_STAGES_SET as _TERMINAL_LOAN_STAGES
+
 logger = logging.getLogger(__name__)
 
 # TCPA safe-harbor calling window
@@ -185,9 +187,7 @@ class CallerClassifier:
         "CLOSING", "DOCS", "DOCS_OUT", "NURTURE",
     })
 
-    TERMINAL_STAGES = frozenset({
-        "FUNDED", "CANCELLED", "DENIED", "DEAD", "WITHDRAWN", "DOES_NOT_QUALIFY",
-    })
+    TERMINAL_STAGES = _TERMINAL_LOAN_STAGES
 
     # Lead stages that indicate active pipeline engagement
     ACTIVE_LEAD_STAGES = frozenset({

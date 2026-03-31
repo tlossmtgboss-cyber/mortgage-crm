@@ -4,7 +4,7 @@ Workflow Scheduler Service
 Handles scheduled workflow operations:
 - Periodic task generation for active workflows
 - Status change detection and workflow enrollment
-- Overdue task escalation
+- Overdue task escalation (using business hours, not calendar time)
 - Workflow completion checks
 
 Can be run as a background task or triggered via API/cron.
@@ -18,7 +18,98 @@ from sqlalchemy.orm import Session
 import asyncio
 from sqlalchemy.exc import SQLAlchemyError
 
+from services.workflow_constants import (
+    LEAD_STATUS_WORKFLOW_MAP,
+    LEAD_SKIP_STAGES,
+    LOAN_STAGE_WORKFLOW_MAP,
+    LOAN_SKIP_STAGES,
+    ESCALATION_CHAIN,
+)
+
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# BUSINESS HOURS HELPER (SLA-008)
+# =============================================================================
+
+def _business_hours_elapsed(start_dt: datetime, end_dt: datetime) -> float:
+    """
+    Calculate business hours elapsed between two datetimes.
+
+    Business hours: Monday-Friday, 8:00 AM - 6:00 PM (10 hours/day).
+    Weekends (Saturday/Sunday) are skipped entirely.
+
+    Returns the number of business hours as a float.
+    """
+    if end_dt <= start_dt:
+        return 0.0
+
+    BIZ_START_HOUR = 8
+    BIZ_END_HOUR = 18
+    HOURS_PER_DAY = BIZ_END_HOUR - BIZ_START_HOUR  # 10
+
+    total_hours = 0.0
+    current = start_dt
+
+    while current < end_dt:
+        weekday = current.weekday()  # 0=Mon, 6=Sun
+
+        # Skip weekends
+        if weekday >= 5:
+            # Advance to next Monday at BIZ_START_HOUR
+            days_to_monday = 7 - weekday
+            current = current.replace(
+                hour=BIZ_START_HOUR, minute=0, second=0, microsecond=0
+            ) + timedelta(days=days_to_monday)
+            continue
+
+        # Clamp current time to business hours
+        day_start = current.replace(
+            hour=BIZ_START_HOUR, minute=0, second=0, microsecond=0
+        )
+        day_end = current.replace(
+            hour=BIZ_END_HOUR, minute=0, second=0, microsecond=0
+        )
+
+        # If current is before business hours, advance to start
+        if current < day_start:
+            current = day_start
+            continue
+
+        # If current is after business hours, advance to next business day
+        if current >= day_end:
+            next_day = current + timedelta(days=1)
+            current = next_day.replace(
+                hour=BIZ_START_HOUR, minute=0, second=0, microsecond=0
+            )
+            continue
+
+        # We're within business hours on a weekday
+        # Calculate hours until end of business day or end_dt, whichever is sooner
+        effective_end = min(end_dt, day_end)
+
+        # If effective_end is on a weekend or before current, move on
+        if effective_end <= current:
+            next_day = current + timedelta(days=1)
+            current = next_day.replace(
+                hour=BIZ_START_HOUR, minute=0, second=0, microsecond=0
+            )
+            continue
+
+        hours_this_segment = (effective_end - current).total_seconds() / 3600.0
+        total_hours += hours_this_segment
+
+        # Move to after this segment
+        if effective_end >= day_end:
+            next_day = current + timedelta(days=1)
+            current = next_day.replace(
+                hour=BIZ_START_HOUR, minute=0, second=0, microsecond=0
+            )
+        else:
+            current = effective_end
+
+    return total_hours
 
 
 class WorkflowScheduler:
@@ -33,13 +124,8 @@ class WorkflowScheduler:
     STATUS_CHECK_INTERVAL = 60  # 1 minute
     ESCALATION_INTERVAL = 3600  # 1 hour
 
-    # SLA-002: Multi-level escalation chain
-    # Level -> {hours_overdue threshold, target recipient, action to take}
-    ESCALATION_CHAIN = {
-        1: {"hours_overdue": 24, "target": "assignee", "action": "notify"},
-        2: {"hours_overdue": 48, "target": "manager", "action": "notify_and_reassign"},
-        3: {"hours_overdue": 72, "target": "branch_manager", "action": "notify_and_flag"},
-    }
+    # Imported from workflow_constants (canonical source of truth)
+    ESCALATION_CHAIN = ESCALATION_CHAIN
 
     def __init__(self, db: Session):
         self.db = db
@@ -132,18 +218,9 @@ class WorkflowScheduler:
         """Process lead status changes for workflow enrollment."""
         results = {"processed": 0, "enrolled": 0, "errors": []}
 
-        # Status to workflow mapping
-        # Values match LeadStage enum values (as strings after cast)
-        status_workflow_map = {
-            'New': 'prospect',
-            'Attempted Contact': 'prospect',
-            'Prospect': 'prospect',
-            'Application': 'prequal',
-            'Pre-Qualified': 'prequal',
-            'Pre-Approved': 'pre_approved',
-            'Does Not Qualify': 'credit_repair',
-            'Long-Term Nurture': 'nurture',
-        }
+        # Imported from workflow_constants (canonical source of truth)
+        status_workflow_map = LEAD_STATUS_WORKFLOW_MAP
+        skip_stages = LEAD_SKIP_STAGES
 
         # Find leads that changed status recently and don't have an active workflow
         # We use stage_changed_at if available, otherwise fall back to updated_at
@@ -163,6 +240,10 @@ class WorkflowScheduler:
 
         for lead_id, stage, source in leads:
             results["processed"] += 1
+
+            # Skip stages that should not trigger workflow enrollment
+            if stage in skip_stages:
+                continue
 
             # Determine workflow
             workflow_key = status_workflow_map.get(stage)
@@ -195,18 +276,9 @@ class WorkflowScheduler:
         """Process loan status changes for workflow enrollment."""
         results = {"processed": 0, "enrolled": 0, "errors": []}
 
-        # Stage to workflow mapping
-        # Values match LoanStage enum values (as strings after cast)
-        stage_workflow_map = {
-            'Disclosed': 'under_contract',
-            'Processing': 'under_contract',
-            'Submitted': 'under_contract',
-            'UW Received': 'under_contract',
-            'Approved': 'under_contract',
-            'CTC': 'last_mile',
-            'Docs Out': 'last_mile',
-            'Funded': 'post_close',
-        }
+        # Imported from workflow_constants (canonical source of truth)
+        stage_workflow_map = LOAN_STAGE_WORKFLOW_MAP
+        loan_skip_stages = LOAN_SKIP_STAGES
 
         # Find loans that changed stage recently
         loans = self.db.execute(text("""
@@ -221,6 +293,10 @@ class WorkflowScheduler:
 
         for loan_id, stage in loans:
             results["processed"] += 1
+
+            # Skip stages that should not trigger workflow enrollment
+            if stage in loan_skip_stages:
+                continue
 
             workflow_key = stage_workflow_map.get(stage)
             if not workflow_key:
@@ -277,6 +353,7 @@ class WorkflowScheduler:
             """)).fetchall()
 
             escalated = 0
+            now = datetime.now(timezone.utc)
             for task in overdue:
                 task_id = task[0]
                 task_name = task[1]
@@ -286,12 +363,13 @@ class WorkflowScheduler:
                 loan_id = task[5]
                 org_id = task[6]
                 current_level = task[7] or 0
-                hours_overdue = task[8] or 0
+                # SLA-008: Use business hours instead of raw calendar hours
+                biz_hours_overdue = _business_hours_elapsed(due_date, now) if due_date else 0
 
-                # Determine target escalation level based on hours overdue
+                # Determine target escalation level based on business hours overdue
                 target_level = 0
                 for level, config in sorted(self.ESCALATION_CHAIN.items()):
-                    if hours_overdue >= config["hours_overdue"]:
+                    if biz_hours_overdue >= config["hours_overdue"]:
                         target_level = level
 
                 # Skip if already escalated to this level or no escalation needed
@@ -312,7 +390,7 @@ class WorkflowScheduler:
                 """), {
                     "id": task_id,
                     "health": "broken" if target_level >= 2 else "healthy",
-                    "msg": f"Escalation level {target_level}: {chain_config['action']} ({hours_overdue:.0f}h overdue)",
+                    "msg": f"Escalation level {target_level}: {chain_config['action']} ({biz_hours_overdue:.0f} biz hours overdue)",
                     "level": target_level,
                 })
 
@@ -328,7 +406,7 @@ class WorkflowScheduler:
                         "task_id": task_id,
                         "alert_type": f"escalation_level_{target_level}",
                         "severity": severity,
-                        "message": f"Task overdue {hours_overdue:.0f}h - escalated to {chain_config['target']}",
+                        "message": f"Task overdue {biz_hours_overdue:.0f} biz hours - escalated to {chain_config['target']}",
                     })
                 except Exception as e:
                     logger.exception(f"Failed to insert escalation alert record: {e}")
@@ -340,7 +418,8 @@ class WorkflowScheduler:
                     target_level=target_level,
                     chain_config=chain_config,
                     user_id=user_id,
-                    hours_overdue=hours_overdue,
+                    org_id=org_id,
+                    hours_overdue=biz_hours_overdue,
                 )
 
                 escalated += 1
@@ -359,6 +438,33 @@ class WorkflowScheduler:
             logger.error(f"Task escalation failed: {e}")
             return {"success": False, "error": "Internal server error"}
 
+    def _find_org_admin_fallback(self, user_id: int, org_id: Optional[int]) -> Optional[tuple]:
+        """
+        SLA-007: Fallback when manager_id is NULL.
+
+        Finds an admin or manager in the same organization to receive escalation.
+        Returns (email, full_name) tuple or None.
+        """
+        if not org_id:
+            return None
+
+        logger.warning(f"No manager_id for user {user_id}, using org admin fallback")
+
+        fallback = self.db.execute(text("""
+            SELECT email, full_name
+            FROM users
+            WHERE organization_id = :org_id
+            AND role IN ('admin', 'manager')
+            AND email IS NOT NULL
+            AND id != :uid
+            ORDER BY
+                CASE role WHEN 'admin' THEN 1 WHEN 'manager' THEN 2 ELSE 3 END,
+                created_at ASC
+            LIMIT 1
+        """), {"org_id": org_id, "uid": user_id}).fetchone()
+
+        return fallback
+
     def _send_escalation_notification(
         self,
         task_id: int,
@@ -366,7 +472,8 @@ class WorkflowScheduler:
         target_level: int,
         chain_config: Dict,
         user_id: int,
-        hours_overdue: float,
+        org_id: Optional[int] = None,
+        hours_overdue: float = 0,
     ):
         """Send escalation notification to the appropriate target."""
         try:
@@ -384,6 +491,9 @@ class WorkflowScheduler:
                     LEFT JOIN users m ON m.id = u.manager_id
                     WHERE u.id = :uid AND m.email IS NOT NULL
                 """), {"uid": user_id}).fetchone()
+                # SLA-007: Fallback if manager_id is NULL
+                if not recipient or not recipient[0]:
+                    recipient = self._find_org_admin_fallback(user_id, org_id)
             elif target == "branch_manager":
                 recipient = self.db.execute(text("""
                     SELECT m.email, m.full_name
@@ -392,6 +502,9 @@ class WorkflowScheduler:
                     LEFT JOIN users m ON m.id = mgr.manager_id
                     WHERE u.id = :uid AND m.email IS NOT NULL
                 """), {"uid": user_id}).fetchone()
+                # SLA-007: Fallback if branch manager chain is NULL
+                if not recipient or not recipient[0]:
+                    recipient = self._find_org_admin_fallback(user_id, org_id)
             else:
                 recipient = None
 
@@ -407,15 +520,118 @@ class WorkflowScheduler:
                     <p>A workflow task requires attention:</p>
                     <ul>
                         <li><strong>Task:</strong> {task_name}</li>
-                        <li><strong>Overdue by:</strong> {hours_overdue:.0f} hours</li>
+                        <li><strong>Overdue by:</strong> {hours_overdue:.0f} business hours</li>
                         <li><strong>Escalation Level:</strong> {target_level}/3</li>
                         <li><strong>Action Required:</strong> {chain_config['action'].replace('_', ' ').title()}</li>
                     </ul>
                     <p>Please review and take action immediately.</p>
                     """
                 )
+            else:
+                logger.warning(
+                    f"No recipient found for escalation of task {task_id} "
+                    f"(target={target}, user_id={user_id}, org_id={org_id})"
+                )
         except Exception as e:
             logger.warning(f"Could not send escalation notification for task {task_id}: {e}")
+
+    # =========================================================================
+    # DEAD LETTER: RETRY FAILED TASKS
+    # =========================================================================
+
+    # Maximum retries before a task is moved to dead letter.
+    # Must stay in sync with WorkflowAIExecutor.MAX_TASK_RETRIES.
+    MAX_TASK_RETRIES = 5
+
+    def process_failed_tasks(self) -> Dict[str, Any]:
+        """
+        Retry workflow tasks that are in 'failed' status.
+
+        Failed tasks with retry_count < MAX_TASK_RETRIES are reset to 'pending'
+        so the AI executor picks them up on the next cycle.
+
+        Tasks that have already exhausted retries (should already be 'dead_letter')
+        are skipped. This method acts as a safety net in case _mark_task_failed
+        did not promote a task to dead_letter correctly.
+
+        Dead-letter tasks are never retried; they require manual intervention.
+        """
+        try:
+            # Find failed tasks that are eligible for retry
+            failed_tasks = self.db.execute(text("""
+                SELECT
+                    wti.id,
+                    wti.task_name,
+                    COALESCE(wti.retry_count, 0) as retry_count,
+                    wti.error_message
+                FROM workflow_task_instances wti
+                JOIN workflow_instances wi ON wi.id = wti.workflow_instance_id
+                WHERE wti.status = 'failed'
+                AND wi.status = 'active'
+                AND COALESCE(wti.retry_count, 0) < :max_retries
+                LIMIT 50
+            """), {"max_retries": self.MAX_TASK_RETRIES}).fetchall()
+
+            retried = 0
+            dead_lettered = 0
+
+            for task in failed_tasks:
+                task_id = task[0]
+                task_name = task[1]
+                retry_count = task[2]
+                last_error = task[3]
+
+                if retry_count >= self.MAX_TASK_RETRIES:
+                    # Safety net: promote to dead_letter if somehow missed
+                    self.db.execute(text("""
+                        UPDATE workflow_task_instances
+                        SET status = 'dead_letter',
+                            health_status = 'broken',
+                            error_message = :error,
+                            updated_at = NOW()
+                        WHERE id = :id AND status = 'failed'
+                    """), {
+                        "id": task_id,
+                        "error": f"Dead letter (safety net): {(last_error or '')[:400]}",
+                    })
+                    dead_lettered += 1
+                    logger.error(
+                        f"Task {task_id} ({task_name}) moved to dead letter "
+                        f"(safety net, retry_count={retry_count})"
+                    )
+                else:
+                    # Reset to pending for retry
+                    self.db.execute(text("""
+                        UPDATE workflow_task_instances
+                        SET status = 'pending',
+                            health_status = 'healthy',
+                            updated_at = NOW()
+                        WHERE id = :id AND status = 'failed'
+                    """), {"id": task_id})
+                    retried += 1
+                    logger.info(
+                        f"Task {task_id} ({task_name}) reset to pending for retry "
+                        f"(attempt {retry_count + 1}/{self.MAX_TASK_RETRIES})"
+                    )
+
+            if retried or dead_lettered:
+                self.db.commit()
+
+            logger.info(
+                f"Failed task processing: {retried} retried, "
+                f"{dead_lettered} moved to dead letter"
+            )
+
+            return {
+                "success": True,
+                "retried_count": retried,
+                "dead_lettered_count": dead_lettered,
+            }
+
+        except SQLAlchemyError as e:
+            self.db.rollback()
+            logger.error(f"Failed task processing error: {e}")
+            return {"success": False, "error": "Internal server error"}
 
     # =========================================================================
     # WORKFLOW COMPLETION CHECKS
@@ -440,7 +656,7 @@ class WorkflowScheduler:
                 AND NOT EXISTS (
                     SELECT 1 FROM workflow_task_instances wti
                     WHERE wti.workflow_instance_id = wi.id
-                    AND wti.status IN ('scheduled', 'pending', 'in_progress')
+                    AND wti.status IN ('scheduled', 'pending', 'in_progress', 'failed')
                 )
                 AND EXISTS (
                     SELECT 1 FROM workflow_task_instances wti2
@@ -528,11 +744,15 @@ class WorkflowScheduler:
             task_result = self.generate_due_tasks()
             results["operations"]["task_generation"] = task_result
 
-            # 3. Escalate overdue tasks
+            # 3. Retry failed tasks (dead letter mechanism)
+            failed_result = self.process_failed_tasks()
+            results["operations"]["failed_task_retries"] = failed_result
+
+            # 4. Escalate overdue tasks
             escalation_result = self.escalate_overdue_tasks()
             results["operations"]["escalation"] = escalation_result
 
-            # 4. Check workflow completions
+            # 5. Check workflow completions
             completion_result = self.check_workflow_completions()
             results["operations"]["completions"] = completion_result
 
@@ -599,3 +819,186 @@ def run_scheduled_workflow_tasks(db: Session) -> Dict[str, Any]:
     """
     scheduler = WorkflowScheduler(db)
     return scheduler.run_all_scheduled_tasks()
+
+
+# =============================================================================
+# EVENT-DRIVEN WORKFLOW TRIGGERS
+# =============================================================================
+# These functions provide immediate workflow enrollment after stage changes,
+# eliminating the up-to-60-second delay from the scheduler polling loop.
+# The scheduler still runs as a fallback; WorkflowSLAService.enroll_lead/loan
+# deduplicates by checking for existing active workflows before creating new ones.
+# =============================================================================
+
+# Duplicated from WorkflowScheduler to avoid instantiating the full scheduler
+# for a single-entity evaluation. Keep in sync with the maps above.
+_LEAD_STATUS_WORKFLOW_MAP = {
+    'New': 'prospect',
+    'Attempted Contact': 'prospect',
+    'Prospect': 'prospect',
+    'Application': 'prequal',
+    'Pre-Qualified': 'prequal',
+    'Pre-Approved': 'pre_approved',
+    'Does Not Qualify': 'credit_repair',
+    'Credit Repair': 'credit_repair',
+    'Long-Term Nurture': 'nurture',
+    'Document Fulfillment': 'prequal',
+}
+
+_LEAD_SKIP_STAGES = {
+    'Under Contract', 'Closed', 'Disclosed', 'Funded',
+    'AMR', 'Referral Source', 'Do Not Call',
+}
+
+_LOAN_STAGE_WORKFLOW_MAP = {
+    'DISCLOSED': 'under_contract',
+    'PROCESSING': 'under_contract',
+    'SUBMITTED': 'under_contract',
+    'UW_RECEIVED': 'under_contract',
+    'UNDERWRITING': 'under_contract',
+    'CONDITIONAL_APPROVAL': 'under_contract',
+    'APPROVED': 'under_contract',
+    'CTC': 'last_mile',
+    'CLEAR_TO_CLOSE': 'last_mile',
+    'CLOSING': 'last_mile',
+    'DOCS': 'last_mile',
+    'DOCS_OUT': 'last_mile',
+    'FUNDED': 'post_close',
+}
+
+_LOAN_SKIP_STAGES = {
+    'SUSPENDED', 'CANCELLED', 'DENIED', 'DEAD',
+    'WITHDRAWN', 'DOES_NOT_QUALIFY', 'NURTURE',
+}
+
+
+def trigger_workflow_evaluation_for_lead(
+    db: Session,
+    lead_id: int,
+    new_stage: str,
+    lead_source: Optional[str] = None,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Immediately evaluate workflow enrollment for a lead after a stage change.
+
+    Called by lead update endpoints to avoid waiting for the scheduler poll.
+    Best-effort: logs errors but never raises. The scheduler polling loop
+    remains as a fallback, and WorkflowSLAService deduplicates enrollment.
+
+    Args:
+        db: Active database session (already committed with the stage change).
+        lead_id: ID of the lead whose stage changed.
+        new_stage: The new stage value (string).
+        lead_source: Lead source string (for purchased lead detection).
+        user_id: User who triggered the change (optional).
+
+    Returns:
+        Dict with result info (enrolled, skipped, or error).
+    """
+    try:
+        if not new_stage:
+            return {"status": "skipped", "reason": "no_stage"}
+
+        # Normalize stage string
+        stage = new_stage.strip()
+
+        if stage in _LEAD_SKIP_STAGES:
+            return {"status": "skipped", "reason": "skip_stage", "stage": stage}
+
+        workflow_key = _LEAD_STATUS_WORKFLOW_MAP.get(stage)
+
+        # Special case: purchased leads use lead_purchase workflow
+        if lead_source and 'purchased' in lead_source.lower() and stage in ('New', 'Attempted Contact', 'Prospect'):
+            workflow_key = 'lead_purchase'
+
+        if not workflow_key:
+            return {"status": "skipped", "reason": "unmapped_stage", "stage": stage}
+
+        from services.workflow_sla_service import WorkflowSLAService
+        workflow_service = WorkflowSLAService(db)
+        result = workflow_service.enroll_lead(
+            lead_id=lead_id,
+            workflow_key=workflow_key,
+            trigger_status=stage,
+            user_id=user_id,
+        )
+
+        if result.get("success"):
+            logger.info(
+                f"Event-driven workflow enrollment: lead {lead_id} -> "
+                f"workflow '{workflow_key}' (stage={stage})"
+            )
+            return {"status": "enrolled", "workflow_key": workflow_key, "result": result}
+        else:
+            error = result.get("error", "")
+            if "already enrolled" in error.lower():
+                return {"status": "skipped", "reason": "already_enrolled"}
+            logger.warning(f"Workflow enrollment failed for lead {lead_id}: {error}")
+            return {"status": "failed", "error": error}
+
+    except Exception as e:
+        logger.warning(f"Event-driven workflow trigger failed for lead {lead_id}: {e}")
+        return {"status": "error", "error": str(e)}
+
+
+def trigger_workflow_evaluation_for_loan(
+    db: Session,
+    loan_id: int,
+    new_stage: str,
+    user_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """
+    Immediately evaluate workflow enrollment for a loan after a stage change.
+
+    Called by loan update endpoints to avoid waiting for the scheduler poll.
+    Best-effort: logs errors but never raises. The scheduler polling loop
+    remains as a fallback, and WorkflowSLAService deduplicates enrollment.
+
+    Args:
+        db: Active database session (already committed with the stage change).
+        loan_id: ID of the loan whose stage changed.
+        new_stage: The new stage value (string, UPPERCASE expected).
+        user_id: User who triggered the change (optional).
+
+    Returns:
+        Dict with result info (enrolled, skipped, or error).
+    """
+    try:
+        if not new_stage:
+            return {"status": "skipped", "reason": "no_stage"}
+
+        stage = new_stage.strip()
+
+        if stage in _LOAN_SKIP_STAGES:
+            return {"status": "skipped", "reason": "skip_stage", "stage": stage}
+
+        workflow_key = _LOAN_STAGE_WORKFLOW_MAP.get(stage)
+        if not workflow_key:
+            return {"status": "skipped", "reason": "unmapped_stage", "stage": stage}
+
+        from services.workflow_sla_service import WorkflowSLAService
+        workflow_service = WorkflowSLAService(db)
+        result = workflow_service.enroll_loan(
+            loan_id=loan_id,
+            workflow_key=workflow_key,
+            trigger_status=stage,
+            user_id=user_id,
+        )
+
+        if result.get("success"):
+            logger.info(
+                f"Event-driven workflow enrollment: loan {loan_id} -> "
+                f"workflow '{workflow_key}' (stage={stage})"
+            )
+            return {"status": "enrolled", "workflow_key": workflow_key, "result": result}
+        else:
+            error = result.get("error", "")
+            if "already enrolled" in error.lower():
+                return {"status": "skipped", "reason": "already_enrolled"}
+            logger.warning(f"Workflow enrollment failed for loan {loan_id}: {error}")
+            return {"status": "failed", "error": error}
+
+    except Exception as e:
+        logger.warning(f"Event-driven workflow trigger failed for loan {loan_id}: {e}")
+        return {"status": "error", "error": str(e)}

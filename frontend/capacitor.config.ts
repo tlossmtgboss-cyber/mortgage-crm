@@ -1,23 +1,29 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
+// Production configuration - uses bundled web assets (no dev server)
 const config: CapacitorConfig = {
-  appId: process.env.CAPACITOR_APP_ID || 'com.perenniaai.crm',
-  appName: process.env.CAPACITOR_APP_NAME || 'Perennia AI',
+  appId: 'com.perenniaai.crm',
+  appName: 'PerenniaAI CRM Platform',
   webDir: 'build',
   server: {
-    ...(process.env.CAPACITOR_SERVER_URL ? { url: process.env.CAPACITOR_SERVER_URL, cleartext: true } : {}),
+    // Production: no dev server URL, uses bundled assets
+    // Only allow navigation to production domains
     allowNavigation: [
-      ...(process.env.CAPACITOR_ALLOWED_DOMAINS?.split(',') || []),
-      'perenniaai.com', 'app.perenniaai.com', 'api.perenniaai.com', 'www.perenniaai.com', 'localhost', '127.0.0.1',
+      'perenniaai.com',
+      'app.perenniaai.com',
+      'api.perenniaai.com',
+      'www.perenniaai.com'
     ],
   },
   ios: {
     contentInset: 'automatic',
     allowsLinkPreview: false,
   },
-  android: {
-    allowMixedContent: false,
-    backgroundColor: '#1a1a2e',
+  plugins: {
+    Keyboard: {
+      resize: 'body',
+      resizeOnFullScreen: true,
+    },
   },
 };
 

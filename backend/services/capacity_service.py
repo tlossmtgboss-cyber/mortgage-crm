@@ -716,15 +716,18 @@ def sync_update_capacity(db: Session, user_id: int, organization_id: Optional[in
     """
     Synchronous wrapper for capacity update.
     Use this when you can't await in the calling context.
+
+    Safe to call from both sync and async contexts.
     """
     import asyncio
     try:
-        loop = asyncio.get_event_loop()
-        if loop.is_running():
-            # Already in async context, schedule as task
-            asyncio.create_task(update_capacity_on_assignment(db, user_id, organization_id))
-        else:
-            loop.run_until_complete(update_capacity_on_assignment(db, user_id, organization_id))
+        loop = asyncio.get_running_loop()
     except RuntimeError:
-        # No event loop, create one
+        loop = None
+
+    if loop and loop.is_running():
+        # Already in async context — schedule as fire-and-forget task
+        loop.create_task(update_capacity_on_assignment(db, user_id, organization_id))
+    else:
+        # No running loop — safe to use asyncio.run() directly
         asyncio.run(update_capacity_on_assignment(db, user_id, organization_id))

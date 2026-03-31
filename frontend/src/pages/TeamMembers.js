@@ -6,9 +6,6 @@ import { toast } from '../utils/toast';
 import './Settings.css';
 import './Leads.css';
 
-// Debug: Log API_BASE_URL on module load
-console.log('[DEBUG] TeamMembers API_BASE_URL:', API_BASE_URL);
-
 function TeamMembers() {
   const navigate = useNavigate();
   const { userRole, hasAnyPermission, isAdmin } = usePermissions();
@@ -87,18 +84,14 @@ function TeamMembers() {
   // Load workflow roles
   const loadWorkflowRoles = useCallback(async () => {
     const url = `${API_BASE_URL}/api/v1/settings/team-roles`;
-    console.log('[DEBUG] Loading workflow roles from:', url);
 
     try {
       const response = await fetch(url, {
         headers: getAuthHeaders(),
       });
 
-      console.log('[DEBUG] Workflow roles response status:', response.status);
-
       if (response.ok) {
         const data = await response.json();
-        console.log('[DEBUG] Workflow roles data:', data);
         setWorkflowRoles(data.assignments || []);
 
         // Build reverse mapping: userId -> [roleId1, roleId2, ...]
@@ -110,12 +103,9 @@ function TeamMembers() {
           }
         });
         setRoleAssignments(assignments);
-      } else {
-        const errorText = await response.text();
-        console.error('[DEBUG] Workflow roles error response:', errorText);
       }
     } catch (error) {
-      console.error('[DEBUG] Error loading workflow roles:', error);
+      console.error('Failed to load workflow roles:', error);
     }
   }, [getAuthHeaders]);
 

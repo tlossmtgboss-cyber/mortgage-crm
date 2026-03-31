@@ -1,0 +1,342 @@
+/* ==========================================================================
+   Dynamic Type — iOS font-scaling support
+   ==========================================================================
+   This stylesheet ensures the Perennia AI mobile app respects the user's
+   Dynamic Type preference in iOS Settings.
+
+   How it works:
+   - iOS WKWebView adjusts the <html> font-size when the user changes their
+     preferred text size. CSS `rem` units scale automatically.
+   - The useDynamicType hook sets data attributes on <html>:
+       data-dt-size="large"          (named category)
+       data-dt-accessibility="true"  (when scale > 1.35x)
+       data-dt-reflow="true"         (when scale > 1.6x)
+     as well as the --dt-scale custom property.
+   - This file provides layout rules that adapt to those attributes.
+
+   Key principles:
+   1. All text uses rem (scales with system setting).
+   2. Icons and touch targets use px (fixed minimum dimensions).
+   3. Line-heights are unitless (proportional to font-size).
+   4. Containers use rem padding (grows with text).
+   5. No fixed heights on text containers.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. TYPOGRAPHY — rem-based sizing
+   -------------------------------------------------------------------------- */
+
+/* Override the px-based font-size custom properties from index.css with rem
+   equivalents. Components referencing these variables get automatic scaling. */
+:root {
+  --dt-font-xs: 0.6875rem;   /* ~11px at 1x */
+  --dt-font-sm: 0.8125rem;   /* ~13px at 1x */
+  --dt-font-base: 0.875rem;  /* ~14px at 1x */
+  --dt-font-md: 1rem;        /* ~16px at 1x */
+  --dt-font-lg: 1.125rem;    /* ~18px at 1x */
+  --dt-font-xl: 1.25rem;     /* ~20px at 1x */
+  --dt-font-2xl: 1.5rem;     /* ~24px at 1x */
+  --dt-font-3xl: 1.75rem;    /* ~28px at 1x */
+  --dt-font-4xl: 1.875rem;   /* ~30px at 1x */
+
+  /* Default scale (overridden by useDynamicType at runtime) */
+  --dt-scale: 1;
+}
+
+
+/* --------------------------------------------------------------------------
+   2. COMMON COMPONENT PATTERNS — scalable defaults
+   -------------------------------------------------------------------------- */
+
+/* Cards */
+.card-title,
+.dt-title {
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.card-body,
+.dt-body {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.card-meta,
+.dt-meta {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: var(--color-text-secondary, #666);
+}
+
+/* Labels and captions */
+.dt-label {
+  font-size: 0.75rem;
+  font-weight: var(--weight-medium, 500);
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+.dt-caption {
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  color: var(--color-text-tertiary, #999);
+}
+
+/* Headings */
+.dt-h1 { font-size: 1.75rem; line-height: 1.2; }
+.dt-h2 { font-size: 1.5rem;  line-height: 1.25; }
+.dt-h3 { font-size: 1.25rem; line-height: 1.3; }
+.dt-h4 { font-size: 1rem;    line-height: 1.3; }
+
+
+/* --------------------------------------------------------------------------
+   3. FIXED-SIZE ELEMENTS — icons, touch targets, avatars
+   --------------------------------------------------------------------------
+   These must NOT scale with Dynamic Type so they stay tappable and
+   do not crowd out content at large sizes.
+   -------------------------------------------------------------------------- */
+
+.dt-icon,
+.icon {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  flex-shrink: 0;
+}
+
+.dt-icon-sm {
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
+  flex-shrink: 0;
+}
+
+.dt-icon-lg {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  flex-shrink: 0;
+}
+
+/* Touch targets — Apple HIG minimum 44pt */
+.dt-touch-target,
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Avatars — fixed so they do not blow up at large text */
+.dt-avatar {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dt-avatar-sm {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+}
+
+.dt-avatar-lg {
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  min-height: 56px;
+}
+
+
+/* --------------------------------------------------------------------------
+   4. LAYOUT HELPERS — containers that grow vertically with text
+   -------------------------------------------------------------------------- */
+
+/* Ensure text containers never clip content due to a fixed height */
+.dt-text-container {
+  min-height: 0;
+  height: auto;
+  overflow: visible;
+}
+
+/* Scalable spacing using rem */
+.dt-pad {
+  padding: 1rem;
+}
+
+.dt-pad-sm {
+  padding: 0.5rem;
+}
+
+.dt-pad-lg {
+  padding: 1.5rem;
+}
+
+/* Gap that grows with font-size */
+.dt-gap {
+  gap: 0.75rem;
+}
+
+.dt-gap-sm {
+  gap: 0.5rem;
+}
+
+.dt-gap-lg {
+  gap: 1rem;
+}
+
+/* Stat rows / inline label-value pairs that reflow at large sizes */
+.dt-stat-row {
+  display: flex;
+  flex-direction: row;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.dt-inline-label {
+  display: inline;
+  white-space: nowrap;
+}
+
+
+/* --------------------------------------------------------------------------
+   5. NO TEXT TRUNCATION — prevent critical info from being cut off
+   -------------------------------------------------------------------------- */
+
+/* By default, allow wrapping on elements that carry meaningful content.
+   Apply .dt-allow-wrap to any element where truncation would hide data. */
+.dt-allow-wrap {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  white-space: normal;
+}
+
+/* For items that MUST truncate (e.g. sidebar nav labels), use this.
+   Single-line ellipsis is acceptable for non-critical decorative labels. */
+.dt-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* --------------------------------------------------------------------------
+   6. ACCESSIBILITY SIZE ADAPTATIONS (scale > 1.35x)
+   --------------------------------------------------------------------------
+   Triggered when useDynamicType sets data-dt-accessibility="true" on <html>.
+   -------------------------------------------------------------------------- */
+
+[data-dt-accessibility="true"] .dt-stat-row,
+[data-dt-accessibility="true"] .stat-row {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+[data-dt-accessibility="true"] .dt-inline-label,
+[data-dt-accessibility="true"] .inline-label {
+  display: block;
+  margin-bottom: 0.125rem;
+}
+
+/* Increase tap target size at accessibility scale */
+[data-dt-accessibility="true"] .dt-touch-target,
+[data-dt-accessibility="true"] .touch-target {
+  min-height: 48px;
+  min-width: 48px;
+}
+
+/* Widen spacing so text does not feel cramped */
+[data-dt-accessibility="true"] .dt-pad,
+[data-dt-accessibility="true"] .dt-pad-sm {
+  padding: 1rem;
+}
+
+
+/* --------------------------------------------------------------------------
+   7. REFLOW ADAPTATIONS (scale > 1.6x)
+   --------------------------------------------------------------------------
+   At very large text sizes, horizontal layouts stack vertically and
+   decorative elements are hidden to maximise readable content area.
+   -------------------------------------------------------------------------- */
+
+[data-dt-reflow="true"] .dt-stat-row,
+[data-dt-reflow="true"] .stat-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Hide decorative / non-essential UI at reflow scale */
+[data-dt-reflow="true"] .dt-decorative,
+[data-dt-reflow="true"] .decorative {
+  display: none;
+}
+
+/* Badges, secondary icons, background illustrations — hide */
+[data-dt-reflow="true"] .dt-hide-at-reflow {
+  display: none;
+}
+
+/* Stack horizontal card layouts */
+[data-dt-reflow="true"] .dt-card-row {
+  flex-direction: column;
+}
+
+/* Full-width buttons at reflow */
+[data-dt-reflow="true"] .dt-button-group {
+  flex-direction: column;
+}
+
+[data-dt-reflow="true"] .dt-button-group > * {
+  width: 100%;
+}
+
+/* Table-like grids collapse to stacked cards */
+[data-dt-reflow="true"] .dt-grid-collapse {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+
+/* --------------------------------------------------------------------------
+   8. SAFE-AREA + DYNAMIC TYPE INTERACTION
+   --------------------------------------------------------------------------
+   Ensure padding accounts for both the iOS safe area and scaled text.
+   -------------------------------------------------------------------------- */
+
+.dt-safe-pad {
+  padding-top: max(1rem, env(safe-area-inset-top));
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+}
+
+
+/* --------------------------------------------------------------------------
+   9. TRANSITION FOR SMOOTH SCALING
+   --------------------------------------------------------------------------
+   When the user changes their Dynamic Type setting and returns to the app,
+   the layout shift should animate rather than jump.
+   -------------------------------------------------------------------------- */
+
+html[data-dt-size] * {
+  transition:
+    font-size 0.15s ease-out,
+    padding 0.15s ease-out,
+    gap 0.15s ease-out;
+}
+
+/* Opt out of the transition for elements where animation would be janky
+   (e.g. fast-scrolling lists). */
+.dt-no-transition,
+.dt-no-transition * {
+  transition: none !important;
+}

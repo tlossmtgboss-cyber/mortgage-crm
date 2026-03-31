@@ -342,9 +342,23 @@ Return ONLY the JSON array with all 12 styles."""
 
     # Synchronous versions for non-async contexts
     def generate_characteristics_sync(self, context: Dict, name: str) -> str:
-        """Synchronous version of generate_characteristics."""
+        """Synchronous version of generate_characteristics.
+
+        Safe to call from both sync and async contexts.
+        """
         import asyncio
-        return asyncio.run(self._generate_characteristics(context, name))
+        import concurrent.futures
+
+        coro = self._generate_characteristics(context, name)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(asyncio.run, coro).result()
+        return asyncio.run(coro)
 
     def generate_all_content_sync(
         self,
@@ -353,8 +367,22 @@ Return ONLY the JSON array with all 12 styles."""
         wheel_position: WheelPosition,
         candidate_name: str = "the candidate"
     ) -> GeneratedContent:
-        """Synchronous version of generate_all_content."""
+        """Synchronous version of generate_all_content.
+
+        Safe to call from both sync and async contexts.
+        """
         import asyncio
-        return asyncio.run(self.generate_all_content(
+        import concurrent.futures
+
+        coro = self.generate_all_content(
             disc_result, motivator_result, wheel_position, candidate_name
-        ))
+        )
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(asyncio.run, coro).result()
+        return asyncio.run(coro)

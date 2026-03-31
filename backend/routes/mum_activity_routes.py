@@ -161,6 +161,16 @@ def register_mum_activity_routes(app, get_db, get_current_user, get_current_user
             except Exception as e:
                 logger.warning(f"SLA tracking hook failed for MUM promotion loan {loan.id}: {e}")
 
+            # Event-driven workflow enrollment (eliminates 60s polling delay)
+            try:
+                from services.workflow_scheduler import trigger_workflow_evaluation_for_loan
+                trigger_workflow_evaluation_for_loan(
+                    db, loan.id, 'FUNDED',
+                    user_id=current_user.id,
+                )
+            except Exception as e:
+                logger.warning(f"Workflow evaluation trigger failed for MUM loan {loan.id}: {e}")
+
         return {
             "status": "success",
             "message": f"Loan {loan.loan_number} converted to MUM client",

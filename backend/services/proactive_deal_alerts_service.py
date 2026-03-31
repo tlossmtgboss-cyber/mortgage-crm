@@ -22,6 +22,8 @@ from enum import Enum
 import uuid
 from sqlalchemy.exc import SQLAlchemyError
 
+from services.workflow_constants import STAGE_SLA_DAYS as _CANONICAL_SLA_DAYS
+
 logger = logging.getLogger(__name__)
 
 
@@ -129,14 +131,8 @@ class ProactiveDealAlertsService:
     """
 
     # SLA thresholds by stage (in days)
-    SLA_THRESHOLDS = {
-        "application": 3,      # App to disclosure
-        "processing": 5,       # Processing time
-        "submitted": 3,        # Time in underwriting queue
-        "underwriting": 5,     # UW decision time
-        "approved": 3,         # Approved to CTC
-        "clear_to_close": 5,   # CTC to funding
-    }
+    # Derived from canonical STAGE_SLA_DAYS with lowercase keys for compatibility
+    SLA_THRESHOLDS = {k.lower(): v for k, v in _CANONICAL_SLA_DAYS.items()}
 
     # Alert templates
     ALERT_TEMPLATES = {

@@ -15,6 +15,20 @@ from db import get_db
 
 logger = logging.getLogger(__name__)
 
+try:
+    from middleware.rate_limiter import rate_limit, ip_key
+except ImportError:
+    logger.warning("Rate limiter unavailable for onboarding routes")
+
+    def rate_limit(**kwargs):
+        """No-op fallback when rate limiter is unavailable."""
+        def decorator(func):
+            return func
+        return decorator
+
+    def ip_key(request):
+        return "unknown"
+
 
 def _extract_token(request) -> str:
     """Extract Bearer token from Authorization header."""
@@ -1231,44 +1245,12 @@ async def delete_team_member(
 
 
 # ============================================================================
-# INVITE VALIDATION ENDPOINTS (public, no auth required)
+# INVITE VALIDATION ENDPOINTS
+# DEPRECATED: These are now handled by onboarding_extended_routes.py
+# which includes constant-time token comparison and audit logging.
+# The invite_router still exists for backward compat but the /api/invite/{token}
+# endpoint has been removed to prevent duplicate route registration.
 # ============================================================================
-
-@invite_router.get("/api/invite/{token}")
-async def get_invite_details(token: str, db: Session = Depends(get_db)):
-    """Get invite details for employee invite acceptance page (public endpoint)."""
-    try:
-        from database.models.permission import EmployeeInvite, InviteStatus
-    except ImportError:
-        # Fallback: try importing from main
-        try:
-            import main
-            EmployeeInvite = main.EmployeeInvite
-            InviteStatus = main.InviteStatus
-        except AttributeError:
-            raise HTTPException(status_code=404, detail="Invite system not configured")
-
-    invite = db.query(EmployeeInvite).filter(EmployeeInvite.invite_token == token).first()
-
-    if not invite:
-        raise HTTPException(status_code=404, detail="Invite not found or has expired")
-
-    if invite.status != InviteStatus.PENDING:
-        raise HTTPException(status_code=400, detail=f"Invite has been {invite.status.value}")
-
-    if invite.expires_at and invite.expires_at < datetime.now(timezone.utc):
-        invite.status = InviteStatus.EXPIRED
-        db.commit()
-        raise HTTPException(status_code=400, detail="Invite has expired")
-
-    return {
-        "email": invite.email,
-        "first_name": invite.first_name,
-        "last_name": invite.last_name,
-        "job_title": getattr(invite, 'job_title', None),
-        "permission_role": invite.permission_role,
-        "expires_at": invite.expires_at.isoformat() if invite.expires_at else None
-    }
 
 
 # ============================================================================

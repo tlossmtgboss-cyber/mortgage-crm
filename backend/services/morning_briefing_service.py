@@ -17,22 +17,9 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-# SLA targets in days (same as CLAUDE.md pipeline tools)
-SLA_TARGETS = {
-    "APPLICATION": 3,
-    "DISCLOSED": 7,
-    "SUBMITTED": 2,
-    "UNDERWRITING": 5,
-    "UW_RECEIVED": 5,
-    "APPROVED": 3,
-    "CONDITIONAL_APPROVAL": 3,
-    "CLEAR_TO_CLOSE": 3,
-    "CTC": 3,
-    "DOCS_OUT": 5,
-}
-
-TERMINAL_STAGES = (
-    "FUNDED", "CANCELLED", "DENIED", "DEAD", "WITHDRAWN", "DOES_NOT_QUALIFY",
+from services.workflow_constants import (
+    STAGE_SLA_DAYS as SLA_TARGETS,
+    TERMINAL_LOAN_STAGES as TERMINAL_STAGES,
 )
 
 LEADERSHIP_ROLES = ("leadership", "admin", "site_admin", "platform_admin")

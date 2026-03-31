@@ -67,6 +67,82 @@ def sanitize_text(text: str, max_length: int = 10000) -> str:
     return cleaned.strip()[:max_length]
 
 
+# ============================================================================
+# AI CHAT INPUT SANITIZATION (Prompt Injection Defense)
+# ============================================================================
+
+# Patterns that commonly indicate prompt injection attempts.
+# These are stripped/neutralized before user text reaches the LLM.
+_PROMPT_INJECTION_PATTERNS = [
+    r"(?i)ignore\s+(all\s+)?(previous|above|prior|earlier|preceding)\s+(instructions?|prompts?|rules?|context)",
+    r"(?i)disregard\s+(all\s+)?(previous|above|prior|earlier|preceding)\s+(instructions?|prompts?|rules?)",
+    r"(?i)forget\s+(all\s+)?(previous|above|prior|your)\s+(instructions?|prompts?|rules?|context)",
+    r"(?i)you\s+are\s+now\s+(a|an|in)\b",
+    r"(?i)new\s+(system\s+)?instructions?\s*:",
+    r"(?i)system\s*prompt\s*:",
+    r"(?i)override\s+(system|previous|all)\s+(prompt|instructions?|rules?)",
+    r"(?i)\bact\s+as\s+(a|an|if)\b",
+    r"(?i)pretend\s+(you\s+are|to\s+be|you're)",
+    r"(?i)do\s+not\s+follow\s+(the|your|any)\s+(previous|system|above)",
+    r"(?i)from\s+now\s+on\s+(you|ignore|disregard|forget)",
+    r"<\|.*?\|>",  # Special token delimiters (e.g., <|im_start|>)
+    r"\[INST\]|\[/INST\]",  # Instruction delimiters from other model formats
+    r"<<SYS>>|<</SYS>>",  # Llama-style system delimiters
+]
+
+# Compiled for performance (compiled once at import time)
+_INJECTION_REGEXES = [re.compile(p) for p in _PROMPT_INJECTION_PATTERNS]
+
+# Maximum length for chat messages sent to the LLM
+MAX_CHAT_MESSAGE_LENGTH = 4000
+
+
+def sanitize_chat_input(user_message: str, max_length: int = MAX_CHAT_MESSAGE_LENGTH) -> str:
+    """
+    Sanitize user input destined for an LLM chat endpoint.
+
+    Defenses applied:
+    1. Strip leading/trailing whitespace
+    2. Remove HTML tags (prevent injection via markup)
+    3. Neutralize common prompt injection patterns
+    4. Remove special token delimiters from other model formats
+    5. Remove null bytes and control characters
+    6. Cap message length to prevent context stuffing
+
+    Args:
+        user_message: Raw user input string
+        max_length: Maximum allowed character length (default 4000)
+
+    Returns:
+        Sanitized string safe to include in LLM messages
+    """
+    if not user_message:
+        return ""
+
+    sanitized = user_message.strip()
+
+    # Strip HTML tags
+    if NH3_AVAILABLE:
+        sanitized = nh3.clean(sanitized, tags=set())
+    else:
+        sanitized = re.sub(r'<[^>]+>', '', sanitized)
+
+    # Neutralize prompt injection patterns by replacing with [FILTERED]
+    for pattern in _INJECTION_REGEXES:
+        sanitized = pattern.sub("[FILTERED]", sanitized)
+
+    # Remove null bytes and non-printable control characters (keep newlines/tabs)
+    sanitized = sanitized.replace('\x00', '')
+    sanitized = re.sub(r'[\x01-\x08\x0b\x0c\x0e-\x1f\x7f]', '', sanitized)
+
+    # Cap message length to prevent context stuffing
+    if len(sanitized) > max_length:
+        sanitized = sanitized[:max_length]
+        logger.info(f"Chat input truncated from {len(user_message)} to {max_length} chars")
+
+    return sanitized
+
+
 def sanitize_html(html: str, max_length: int = 50000) -> str:
     """
     Allow basic HTML formatting but remove dangerous tags/attributes.

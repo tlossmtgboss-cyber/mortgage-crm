@@ -1474,86 +1474,13 @@ def create_admin_promo_routes(app, get_current_user):
 # =============================================================================
 
 def create_push_notification_routes(app, get_current_user, DeviceToken):
+    """No-op — push notification routes are now registered by
+    routes/push_notification_routes.py via setup_push_routes().
+
+    This function is kept as a stub so existing callers
+    (setup_auth_routes) do not break.
     """
-    Create push notification routes with proper authentication.
-    Called from main.py after importing the router.
-    """
-    from fastapi import Depends
-
-    @app.post("/api/v1/push/register")
-    async def register_push_token(
-        request: PushRegisterRequest,
-        current_user = Depends(get_current_user),
-        db: Session = Depends(get_db)
-    ):
-        """
-        Register a device token for push notifications.
-        Called from the mobile app after getting APNs token.
-        """
-        try:
-            # Check if token already exists for this user
-            existing = db.query(DeviceToken).filter(
-                DeviceToken.user_id == current_user.id,
-                DeviceToken.device_token == request.device_token
-            ).first()
-
-            if existing:
-                # Update existing token
-                existing.is_active = True
-                existing.platform = request.platform
-                existing.updated_at = datetime.now(timezone.utc)
-            else:
-                # Create new token
-                new_token = DeviceToken(
-                    user_id=current_user.id,
-                    device_token=request.device_token,
-                    platform=request.platform,
-                    is_active=True
-                )
-                db.add(new_token)
-
-            db.commit()
-            logger.info(f"Push token registered for user {current_user.id} on {request.platform}")
-
-            return {
-                "success": True,
-                "message": "Device token registered successfully"
-            }
-        except Exception as e:
-            logger.error(f"Error registering push token: {str(e)}")
-            db.rollback()
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to register device token"
-            )
-
-    @app.delete("/api/v1/push/unregister")
-    async def unregister_push_token(
-        device_token: str,
-        current_user = Depends(get_current_user),
-        db: Session = Depends(get_db)
-    ):
-        """
-        Unregister a device token (e.g., on logout).
-        """
-        try:
-            db.query(DeviceToken).filter(
-                DeviceToken.user_id == current_user.id,
-                DeviceToken.device_token == device_token
-            ).update({"is_active": False})
-            db.commit()
-
-            return {
-                "success": True,
-                "message": "Device token unregistered"
-            }
-        except Exception as e:
-            logger.error(f"Error unregistering push token: {str(e)}")
-            db.rollback()
-            raise HTTPException(
-                status_code=500,
-                detail="Failed to unregister device token"
-            )
+    pass
 
 
 # =============================================================================

@@ -1,0 +1,154 @@
+/* ============================================================================
+   SwipeableTabView - Mobile swipe navigation between tabs
+   ============================================================================ */
+
+.swipeable-tab-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  /* Prevent the entire component from scrolling horizontally */
+  touch-action: pan-y;
+}
+
+/* --------------------------------------------------------------------------
+   Tab Bar
+   -------------------------------------------------------------------------- */
+
+.swipeable-tab-bar {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  background: var(--tab-bar-bg, #ffffff);
+  border-bottom: 1px solid var(--tab-bar-border, #e5e7eb);
+  /* Slight shadow for visual separation */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  z-index: 2;
+}
+
+.swipeable-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 8px;
+  border: none;
+  background: transparent;
+  color: var(--tab-color-inactive, #6b7280);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.2;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 200ms ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  position: relative;
+}
+
+.swipeable-tab:active {
+  opacity: 0.7;
+}
+
+.swipeable-tab--active {
+  color: var(--tab-color-active, #2563eb);
+  font-weight: 600;
+}
+
+/* Focus visible for keyboard navigation */
+.swipeable-tab:focus-visible {
+  outline: 2px solid var(--tab-color-active, #2563eb);
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   Tab Indicator Bar
+   -------------------------------------------------------------------------- */
+
+.swipeable-tab-indicator {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  background: var(--tab-indicator-color, #2563eb);
+  border-radius: 3px 3px 0 0;
+  /* Transition is controlled inline for swipe-tracking;
+     this is the fallback for non-swiping state changes */
+  transition: left 320ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: left;
+}
+
+/* --------------------------------------------------------------------------
+   Panel Viewport & Track
+   -------------------------------------------------------------------------- */
+
+.swipeable-panel-viewport {
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.swipeable-panel-track {
+  display: flex;
+  height: 100%;
+  will-change: transform;
+  /* Default transition — overridden inline during drag */
+  transition: transform 320ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.swipeable-panel {
+  flex-shrink: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* iOS momentum scrolling within each panel */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hidden panels should not receive pointer events or be focusable */
+.swipeable-panel[aria-hidden='true'] {
+  pointer-events: none;
+}
+
+/* --------------------------------------------------------------------------
+   Reduced Motion
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .swipeable-tab-indicator,
+  .swipeable-panel-track {
+    transition: none !important;
+  }
+}
+
+.swipeable-tab-view[data-reduced-motion] .swipeable-panel-track,
+.swipeable-tab-view[data-reduced-motion] .swipeable-tab-indicator {
+  transition: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   Dark Mode Support
+   -------------------------------------------------------------------------- */
+
+@media (prefers-color-scheme: dark) {
+  .swipeable-tab-bar {
+    --tab-bar-bg: #1f2937;
+    --tab-bar-border: #374151;
+    --tab-color-inactive: #9ca3af;
+    --tab-color-active: #60a5fa;
+    --tab-indicator-color: #60a5fa;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Safe Area Insets (iOS notch / home indicator)
+   -------------------------------------------------------------------------- */
+
+@supports (padding-top: env(safe-area-inset-top)) {
+  .swipeable-tab-bar {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}

@@ -133,7 +133,7 @@ function SmartDocsBankAnalysis() {
   }
 
   return (
-    <div className="sd-bank">
+    <div className="sd-bank" aria-busy={searching}>
       {/* Page Header */}
       <div className="sd-bank__header">
         <h1 className="sd-bank__title">Bank Statement Analysis</h1>
@@ -190,6 +190,7 @@ function SmartDocsBankAnalysis() {
           onClick={handleAnalyzeClick}
           disabled={searching}
           type="button"
+          aria-label="Analyze bank statements for entered loan ID"
         >
           {searching ? 'Analyzing...' : 'Analyze'}
         </button>
@@ -204,7 +205,7 @@ function SmartDocsBankAnalysis() {
 
       {/* Loading state */}
       {searching && (
-        <div className="sd-bank__loading">
+        <div className="sd-bank__loading" role="alert" aria-live="polite">
           Loading bank analysis...
         </div>
       )}

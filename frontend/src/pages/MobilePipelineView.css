@@ -1,0 +1,697 @@
+/* ============================================================================
+   MobilePipelineView — card-based mobile pipeline for Perennia AI
+   ============================================================================ */
+
+/* ---------- Layout ---------- */
+
+.mp-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  background: #f1f5f9;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- Header ---------- */
+
+.mp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 16px 8px;
+  background: #fff;
+}
+
+.mp-header__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.3px;
+}
+
+.mp-header__refresh {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: #f1f5f9;
+  color: #475569;
+  cursor: pointer;
+  transition: background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mp-header__refresh:active {
+  background: #e2e8f0;
+}
+
+.mp-header__refresh:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mp-header__refresh-icon {
+  display: block;
+}
+
+/* ---------- Search ---------- */
+
+.mp-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: 0 16px 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.mp-search:focus-within {
+  border-color: #218D8D;
+  box-shadow: 0 0 0 3px rgba(33, 141, 141, 0.12);
+}
+
+.mp-search__icon {
+  flex-shrink: 0;
+  margin-left: 14px;
+  color: #94a3b8;
+}
+
+.mp-search__input {
+  flex: 1;
+  border: none;
+  outline: none;
+  padding: 14px 12px;
+  font-size: 15px;
+  color: #0f172a;
+  background: transparent;
+  min-height: 44px;
+}
+
+.mp-search__input::placeholder {
+  color: #94a3b8;
+}
+
+.mp-search__clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mp-search__clear:active {
+  color: #475569;
+}
+
+/* ---------- Stage Tabs ---------- */
+
+.mp-tabs {
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  overflow: hidden;
+}
+
+.mp-tabs__track {
+  display: flex;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 0 12px;
+  gap: 4px;
+}
+
+.mp-tabs__track::-webkit-scrollbar {
+  display: none;
+}
+
+.mp-tabs__tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 10px 14px;
+  min-height: 44px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mp-tabs__tab--active {
+  color: #218D8D;
+  border-bottom-color: #218D8D;
+}
+
+.mp-tabs__tab:active:not(.mp-tabs__tab--active) {
+  color: #334155;
+}
+
+.mp-tabs__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mp-tabs__tab--active .mp-tabs__badge {
+  background: #218D8D;
+  color: #fff;
+}
+
+/* Stage-color overrides when active */
+.mp-tabs__tab--active.mp-tabs__tab--blue {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+.mp-tabs__tab--active.mp-tabs__tab--blue .mp-tabs__badge {
+  background: #2563eb;
+}
+
+.mp-tabs__tab--active.mp-tabs__tab--purple {
+  color: #7c3aed;
+  border-bottom-color: #7c3aed;
+}
+.mp-tabs__tab--active.mp-tabs__tab--purple .mp-tabs__badge {
+  background: #7c3aed;
+}
+
+.mp-tabs__tab--active.mp-tabs__tab--green {
+  color: #16a34a;
+  border-bottom-color: #16a34a;
+}
+.mp-tabs__tab--active.mp-tabs__tab--green .mp-tabs__badge {
+  background: #16a34a;
+}
+
+.mp-tabs__tab--active.mp-tabs__tab--amber {
+  color: #d97706;
+  border-bottom-color: #d97706;
+}
+.mp-tabs__tab--active.mp-tabs__tab--amber .mp-tabs__badge {
+  background: #d97706;
+}
+
+.mp-tabs__tab--active.mp-tabs__tab--teal {
+  color: #0d9488;
+  border-bottom-color: #0d9488;
+}
+.mp-tabs__tab--active.mp-tabs__tab--teal .mp-tabs__badge {
+  background: #0d9488;
+}
+
+.mp-tabs__tab--active.mp-tabs__tab--indigo {
+  color: #4f46e5;
+  border-bottom-color: #4f46e5;
+}
+.mp-tabs__tab--active.mp-tabs__tab--indigo .mp-tabs__badge {
+  background: #4f46e5;
+}
+
+/* Suspended tab always shows amber hint even when inactive */
+.mp-tabs__tab--amber .mp-tabs__label {
+  color: inherit;
+}
+.mp-tabs__tab--amber:not(.mp-tabs__tab--active) .mp-tabs__badge {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+/* ---------- Summary Bar ---------- */
+
+.mp-summary {
+  display: flex;
+  align-items: center;
+  padding: 10px 16px;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 8px;
+}
+
+.mp-summary__count {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.mp-summary__sep {
+  width: 1px;
+  height: 14px;
+  background: #cbd5e1;
+}
+
+.mp-summary__volume {
+  font-size: 13px;
+  font-weight: 700;
+  color: #218D8D;
+}
+
+/* ---------- Sort ---------- */
+
+.mp-sort {
+  position: relative;
+  margin-left: auto;
+}
+
+.mp-sort__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 36px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mp-sort__btn:active {
+  background: #f1f5f9;
+}
+
+.mp-sort__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+.mp-sort__dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 100;
+  min-width: 220px;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.mp-sort__option {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  font-size: 14px;
+  color: #334155;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mp-sort__option:active {
+  background: #f1f5f9;
+}
+
+.mp-sort__option--active {
+  color: #218D8D;
+  font-weight: 600;
+}
+
+/* ---------- Pull-to-refresh indicator ---------- */
+
+.mp-pull-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.mp-pull-indicator__icon {
+  display: block;
+}
+
+/* ---------- Card List ---------- */
+
+.mp-cards {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 16px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ---------- Loan Card ---------- */
+
+.mp-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mp-card:active {
+  border-color: #218D8D;
+  box-shadow: 0 0 0 2px rgba(33, 141, 141, 0.15);
+}
+
+.mp-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.mp-card__borrower {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-card__days {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.mp-card__days--green {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.mp-card__days--amber {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.mp-card__days--red {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.mp-card__amount {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+  color: #218D8D;
+  margin-bottom: 4px;
+}
+
+.mp-card__address {
+  display: block;
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.4;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-card__loan-number {
+  display: block;
+  font-size: 12px;
+  color: #94a3b8;
+  margin-bottom: 8px;
+}
+
+.mp-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.mp-card__action {
+  flex: 1;
+  font-size: 13px;
+  color: #218D8D;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-card__chevron {
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+/* ---------- Aria insight row on card ---------- */
+
+.mp-card-wrap {
+  position: relative;
+}
+
+.mp-card__aria-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px dashed #e0e7ff;
+}
+
+.mp-card__aria-icon {
+  flex-shrink: 0;
+  color: #8b5cf6;
+}
+
+.mp-card__aria-insight {
+  font-size: 12px;
+  color: #5b21b6;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.mp-card__ask-aria {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 4px 16px 10px;
+  padding: 5px 12px;
+  background: linear-gradient(135deg, #eff6ff 0%, #f5f3ff 100%);
+  border: 1px solid #ddd6fe;
+  border-radius: 16px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #7c3aed;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  align-self: flex-start;
+}
+
+.mp-card__ask-aria:active {
+  opacity: 0.75;
+}
+
+/* ---------- Skeleton cards ---------- */
+
+.mp-card--skeleton {
+  pointer-events: none;
+  padding: 16px;
+}
+
+.mp-skel {
+  border-radius: 6px;
+  background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+  background-size: 200% 100%;
+  animation: mp-shimmer 1.5s ease-in-out infinite;
+}
+
+.mp-skel--name {
+  width: 60%;
+  height: 18px;
+  margin-bottom: 10px;
+}
+
+.mp-skel--amount {
+  width: 40%;
+  height: 22px;
+  margin-bottom: 10px;
+}
+
+.mp-skel--address {
+  width: 80%;
+  height: 14px;
+  margin-bottom: 16px;
+}
+
+.mp-skel--footer {
+  width: 50%;
+  height: 14px;
+}
+
+@keyframes mp-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ---------- Empty state ---------- */
+
+.mp-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.mp-empty__icon {
+  margin-bottom: 16px;
+}
+
+.mp-empty__text {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.mp-empty__sub {
+  margin: 0;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+/* ---------- Error state ---------- */
+
+.mp-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.mp-error__text {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.mp-error__detail {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.mp-error__retry {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 10px;
+  background: #218D8D;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mp-error__retry:active {
+  background: #1a7070;
+}
+
+/* ---------- Spin animation ---------- */
+
+.mp-spin {
+  animation: mp-spin 0.8s linear infinite;
+}
+
+@keyframes mp-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Safe area insets for iOS ---------- */
+
+@supports (padding-top: env(safe-area-inset-top)) {
+  .mp-header {
+    padding-top: calc(16px + env(safe-area-inset-top));
+  }
+
+  .mp-cards {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ---------- Tablet breakpoint (optional) ---------- */
+
+@media (min-width: 600px) {
+  .mp-cards {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .mp-empty,
+  .mp-error {
+    grid-column: 1 / -1;
+  }
+
+  .mp-card--skeleton {
+    /* skeletons still full-width look fine in grid */
+  }
+}
+
+@media (min-width: 900px) {
+  .mp-view {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+}

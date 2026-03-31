@@ -2,6 +2,56 @@
   padding: 1.5rem;
 }
 
+/* Error Banner */
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  margin-bottom: 1rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  color: #dc2626;
+  font-size: 0.9rem;
+}
+
+.error-banner svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  stroke: #dc2626;
+}
+
+.error-banner span {
+  flex: 1;
+}
+
+.error-banner .retry-btn {
+  padding: 0.375rem 0.875rem;
+  background: #dc2626;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.error-banner .retry-btn:hover {
+  background: #b91c1c;
+}
+
+/* Resend action button */
+.action-btn.resend {
+  color: #3b82f6;
+}
+
+.action-btn.resend:hover {
+  background: #eff6ff;
+}
+
 /* Stats Row */
 .stats-row {
   display: grid;
@@ -305,6 +355,7 @@
 }
 
 .role-admin { background: #fce7f3; color: #be185d; }
+.role-site-admin { background: #fce7f3; color: #9d174d; }
 .role-leadership { background: #ede9fe; color: #7c3aed; }
 .role-management { background: #dbeafe; color: #2563eb; }
 .role-sales { background: #d1fae5; color: #059669; }

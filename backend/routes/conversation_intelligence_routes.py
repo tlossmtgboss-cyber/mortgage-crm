@@ -338,8 +338,22 @@ async def create_lead_from_conversation(
             existing_lead.last_contact = datetime.utcnow()
             existing_lead.ai_score = min(100, (existing_lead.ai_score or 50) + 10)
 
+            # Detect if stage changed for workflow trigger
+            _stage_changed_to_pq = lead_data.get("qualification_complete") and existing_lead.stage == LeadStage.PRE_QUALIFIED
+
             db.commit()
             db.refresh(existing_lead)
+
+            # Event-driven workflow enrollment if stage changed (eliminates 60s polling delay)
+            if _stage_changed_to_pq:
+                try:
+                    from services.workflow_scheduler import trigger_workflow_evaluation_for_lead
+                    trigger_workflow_evaluation_for_lead(
+                        db, existing_lead.id, 'Pre-Qualified',
+                        lead_source=getattr(existing_lead, 'source', None),
+                    )
+                except Exception as wf_err:
+                    logger.warning(f"Workflow evaluation trigger failed for conversation lead {existing_lead.id}: {wf_err}")
 
             logger.info(f"Updated existing lead {existing_lead.id} from conversation {conversation_id}")
 

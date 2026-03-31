@@ -35,26 +35,11 @@ logger = logging.getLogger(__name__)
 # CONSTANTS
 # =============================================================================
 
-TERMINAL_STAGES = (
-    "FUNDED", "CANCELLED", "DENIED", "DEAD", "WITHDRAWN", "DOES_NOT_QUALIFY"
+from services.workflow_constants import (
+    TERMINAL_LOAN_STAGES as TERMINAL_STAGES,
+    SLA_TARGETS,
+    STAGE_SLA_DAYS,
 )
-
-# SLA targets in days for stage-to-stage transitions
-SLA_TARGETS = {
-    "APPLICATION_to_DISCLOSED": 3,
-    "DISCLOSED_to_SUBMITTED": 7,
-    "SUBMITTED_to_UW_RECEIVED": 2,
-    "UW_RECEIVED_to_APPROVED": 5,
-    "APPROVED_to_CLEAR_TO_CLOSE": 3,
-    "CLEAR_TO_CLOSE_to_DOCS_OUT": 3,
-    "DOCS_OUT_to_FUNDED": 5,
-}
-
-# Map each active stage to its SLA target (days allowed in that stage)
-STAGE_SLA_DAYS = {}
-for _key, _days in SLA_TARGETS.items():
-    _from_stage = _key.split("_to_")[0]
-    STAGE_SLA_DAYS[_from_stage] = _days
 
 # C6: US state to primary timezone mapping for TCPA contact-hours enforcement
 STATE_TIMEZONE_MAP = {

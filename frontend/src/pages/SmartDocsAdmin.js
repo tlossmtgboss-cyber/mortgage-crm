@@ -26,7 +26,7 @@ function AutoReviewTab({ autoReview, setAutoReview, onSave }) {
   }
 
   return (
-    <div className="sd-admin__card">
+    <div className="sd-admin__card" role="form" aria-label="Auto-Review Configuration">
       <h3 className="sd-admin__card-title">Auto-Review Configuration</h3>
       <div className="sd-admin__form">
         <div className="sd-admin__field">
@@ -38,6 +38,7 @@ function AutoReviewTab({ autoReview, setAutoReview, onSave }) {
             className="sd-admin__checkbox"
             checked={!!autoReview.enabled}
             onChange={handleChange}
+            aria-label="Enable or disable automatic document review"
           />
         </div>
         <div className="sd-admin__field">
@@ -51,6 +52,7 @@ function AutoReviewTab({ autoReview, setAutoReview, onSave }) {
             max={100}
             value={autoReview.confidence_threshold ?? 80}
             onChange={handleChange}
+            aria-label="Confidence threshold percentage (50–100) required to auto-approve a document"
           />
         </div>
         <div className="sd-admin__field">
@@ -64,6 +66,7 @@ function AutoReviewTab({ autoReview, setAutoReview, onSave }) {
             max={100}
             value={autoReview.quality_threshold ?? 75}
             onChange={handleChange}
+            aria-label="Quality threshold percentage (50–100) required to auto-approve a document"
           />
         </div>
         <div className="sd-admin__field">
@@ -77,11 +80,16 @@ function AutoReviewTab({ autoReview, setAutoReview, onSave }) {
             max={1000}
             value={autoReview.max_auto_approvals_per_day ?? 50}
             onChange={handleChange}
+            aria-label="Maximum number of documents that can be automatically approved per day"
           />
         </div>
       </div>
       <div className="sd-admin__form-actions">
-        <button className="sd-admin__btn sd-admin__btn--primary" onClick={onSave}>
+        <button
+          className="sd-admin__btn sd-admin__btn--primary"
+          onClick={onSave}
+          aria-label="Save auto-review configuration settings"
+        >
           Save Settings
         </button>
       </div>
@@ -97,7 +105,11 @@ function RetentionPoliciesTab({ policies, onAdd }) {
     <div>
       <div className="sd-admin__section-header">
         <h3 className="sd-admin__section-title">Retention Policies</h3>
-        <button className="sd-admin__btn sd-admin__btn--primary" onClick={onAdd}>
+        <button
+          className="sd-admin__btn sd-admin__btn--primary"
+          onClick={onAdd}
+          aria-label="Add new retention policy"
+        >
           Add Policy
         </button>
       </div>
@@ -224,11 +236,13 @@ export default function SmartDocsAdmin() {
         </p>
       </div>
 
-      <div className="sd-admin__tabs">
+      <div className="sd-admin__tabs" role="tablist" aria-label="Admin configuration sections">
         {TABS.map(tab => (
           <button
             key={tab.key}
+            role="tab"
             className={`sd-admin__tab${activeTab === tab.key ? ' active' : ''}`}
+            aria-selected={activeTab === tab.key}
             onClick={() => setActiveTab(tab.key)}
           >
             {tab.label}
@@ -236,9 +250,9 @@ export default function SmartDocsAdmin() {
         ))}
       </div>
 
-      <div className="sd-admin__content">
+      <div className="sd-admin__content" aria-busy={loading}>
         {loading ? (
-          <div className="sd-admin__loading">Loading configuration...</div>
+          <div className="sd-admin__loading" role="alert" aria-live="polite">Loading configuration...</div>
         ) : (
           <>
             {activeTab === 'auto-review' && (

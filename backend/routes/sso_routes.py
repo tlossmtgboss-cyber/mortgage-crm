@@ -211,6 +211,139 @@ def _create_sso_tokens(user, auth_funcs: dict) -> dict:
 
 
 # =============================================================================
+# SSO DISCOVERY (for mobile app and login flow)
+# =============================================================================
+
+
+class SSODiscoverResponse(BaseModel):
+    """Response for SSO discovery check."""
+    has_sso: bool = False
+    provider_type: Optional[str] = None  # 'saml', 'oidc', 'both'
+    provider_name: Optional[str] = None  # 'okta', 'azure_ad', 'google', 'generic'
+    auth_url: Optional[str] = None       # Direct URL to initiate SSO
+    organization_name: Optional[str] = None
+
+
+@router.get("/api/v1/auth/sso/discover", response_model=SSODiscoverResponse)
+async def sso_discover(
+    domain: Optional[str] = None,
+    email: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Check if an email domain has SSO configured.
+
+    Used by the login form to detect enterprise SSO before the user
+    enters a password. Provide either `domain` or `email`.
+
+    This endpoint is unauthenticated so the login page can call it.
+    """
+    if email and "@" in email:
+        domain = email.split("@")[1].lower()
+    elif domain:
+        domain = domain.lower()
+    else:
+        return SSODiscoverResponse(has_sso=False)
+
+    org, sso_config = _get_sso_config_by_domain(db, domain)
+
+    if not org or not sso_config:
+        return SSODiscoverResponse(has_sso=False)
+
+    # Determine provider name from IdP URLs for display purposes
+    provider_name = "generic"
+    idp_url = (sso_config.idp_sso_url or sso_config.oidc_discovery_url or "").lower()
+    if "okta" in idp_url:
+        provider_name = "okta"
+    elif "microsoftonline" in idp_url or "login.microsoft" in idp_url:
+        provider_name = "azure_ad"
+    elif "accounts.google" in idp_url:
+        provider_name = "google"
+    elif "auth0" in idp_url:
+        provider_name = "auth0"
+    elif "onelogin" in idp_url:
+        provider_name = "onelogin"
+    elif "ping" in idp_url:
+        provider_name = "ping_identity"
+
+    # Build the auth URL based on provider type
+    base_api = os.getenv("API_BASE_URL", "https://api.perenniaai.com")
+    if sso_config.provider_type in ("oidc", "both"):
+        auth_url = f"{base_api}/api/v1/auth/sso/oidc/login?org_id={org.id}"
+    else:
+        auth_url = f"{base_api}/api/v1/auth/sso/saml/login?org_id={org.id}"
+
+    return SSODiscoverResponse(
+        has_sso=True,
+        provider_type=sso_config.provider_type,
+        provider_name=provider_name,
+        auth_url=auth_url,
+        organization_name=org.name,
+    )
+
+
+@router.post("/api/v1/auth/sso/exchange")
+async def sso_exchange_token(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Exchange an SSO callback token for a full session.
+
+    Used by the mobile app after capturing the SSO redirect.
+    The mobile app receives the access_token and refresh_token from the
+    callback URL and sends them here to validate and get user info.
+    """
+    body = await request.json()
+    access_token = body.get("access_token")
+    refresh_token = body.get("refresh_token")
+
+    if not access_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing access_token",
+        )
+
+    # Validate the token by loading the user
+    try:
+        import main
+        payload = main._verify_secure_token(access_token)
+        email = payload.get("sub")
+        if not email:
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        from database.models.core import User
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "user": {
+                "id": user.id,
+                "user_id": user.id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "full_name": f"{user.first_name or ''} {user.last_name or ''}".strip(),
+                "role": user.role,
+                "permission_role": user.permission_role,
+                "organization_id": user.organization_id,
+            },
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SSO token exchange failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired SSO token",
+        )
+
+
+# =============================================================================
 # SAML ENDPOINTS
 # =============================================================================
 

@@ -39,14 +39,15 @@ class EmployeeInvite(Base):
     last_name = Column(String(100), nullable=False)
     job_title = Column(String(100))
     permission_role = Column(String(50), nullable=False, default="sales")
-    invite_token = Column(String(64), unique=True, nullable=False, index=True)
-    status = Column(SQLEnum(InviteStatus), default=InviteStatus.PENDING, nullable=False)
+    invite_token = Column(String(64), unique=True, nullable=True, index=True)
+    status = Column(String(20), default="pending", nullable=False)
     created_at = Column(DateTime, server_default=func.now())
     expires_at = Column(DateTime, nullable=False)
     accepted_at = Column(DateTime)
     invited_by_user_id = Column(Integer, ForeignKey("users.id"))
     user_id = Column(Integer, ForeignKey("users.id"))
     branch_id = Column(Integer, ForeignKey("branches.id"))
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True)
     initial_config = Column(JSON, default=dict)
 
 

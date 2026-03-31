@@ -1407,9 +1407,6 @@ const API_BASE_URL = isProduction
       const fullName = `${newUser.first_name} ${newUser.last_name}`.trim();
       const permissionRole = roleMapping[newUser.role] || 'sales';
 
-      console.log('Inviting user to:', `${API_BASE_URL}/api/v1/invitations`);
-      console.log('Request payload:', { email: newUser.email, full_name: fullName, role: permissionRole, send_email: true });
-
       const response = await fetch(`${API_BASE_URL}/api/v1/invitations`, {
         method: 'POST',
         headers: {
@@ -1424,11 +1421,8 @@ const API_BASE_URL = isProduction
         })
       });
 
-      console.log('Response status:', response.status, response.statusText);
-
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Error response:', errorText);
         let errorDetail = `Failed to invite user (${response.status})`;
         try {
           const errorData = JSON.parse(errorText);

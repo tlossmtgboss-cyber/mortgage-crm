@@ -20,6 +20,8 @@ import json
 import math
 import random  # For demo; production would use ML models
 
+from services.workflow_constants import STAGE_SLA_DAYS as _CANONICAL_SLA_DAYS
+
 logger = logging.getLogger(__name__)
 
 
@@ -751,7 +753,8 @@ class PredictiveAIService:
         # Check stage duration
         days_in_stage = loan_data.get("days_in_stage", 0)
         stage = loan_data.get("stage", "")
-        stage_sla = {"processing": 5, "underwriting": 4, "approved": 3}
+        # Canonical SLA days with lowercase keys for compatibility
+        stage_sla = {k.lower(): v for k, v in _CANONICAL_SLA_DAYS.items()}
 
         if stage in stage_sla and days_in_stage > stage_sla[stage]:
             recommendations.append(Recommendation(

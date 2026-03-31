@@ -1,0 +1,194 @@
+# .github/workflows/mobile-ios-build.yml
+# iOS Build Validation — runs on PRs that touch frontend/mobile code
+#
+# Validates that the iOS project compiles successfully after web asset changes.
+# Does NOT archive or sign — just confirms the build is not broken.
+#
+# Required secrets: none (uses automatic code signing for build-only)
+name: iOS Build Validation
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/src/**'
+      - 'frontend/ios/**'
+      - 'frontend/capacitor.config.*'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+
+concurrency:
+  group: ios-build-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  validate:
+    name: iOS Build Check
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      # -----------------------------------------------------------------
+      # Select Xcode — try newest first, fall back gracefully
+      # -----------------------------------------------------------------
+      - name: Select Xcode version
+        run: |
+          # List available Xcode versions for debugging
+          ls /Applications/ | grep Xcode | sort -V
+          # Prefer Xcode 16.x on macos-14, fall back to default
+          sudo xcode-select -s /Applications/Xcode_16.2.app/Contents/Developer 2>/dev/null \
+            || sudo xcode-select -s /Applications/Xcode_16.1.app/Contents/Developer 2>/dev/null \
+            || sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer 2>/dev/null \
+            || sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer 2>/dev/null \
+            || sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+          echo "Selected Xcode:"
+          xcodebuild -version
+
+      # -----------------------------------------------------------------
+      # Cache: SPM packages (Capacitor + plugins resolved by Xcode)
+      # -----------------------------------------------------------------
+      - name: Cache SPM packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            frontend/ios/App/DerivedData/SourcePackages
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          key: spm-${{ runner.os }}-${{ hashFiles('frontend/ios/App/CapApp-SPM/Package.swift') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      # -----------------------------------------------------------------
+      # Install frontend dependencies
+      # -----------------------------------------------------------------
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      # -----------------------------------------------------------------
+      # Lint (non-blocking — report but don't fail the build)
+      # -----------------------------------------------------------------
+      - name: Run linting
+        working-directory: frontend
+        run: npm run lint --if-present
+        continue-on-error: true
+
+      # -----------------------------------------------------------------
+      # Unit tests
+      # -----------------------------------------------------------------
+      - name: Run unit tests
+        working-directory: frontend
+        run: npx vitest run --passWithNoTests
+        continue-on-error: true
+
+      # -----------------------------------------------------------------
+      # Build production web assets
+      # -----------------------------------------------------------------
+      - name: Build web assets
+        working-directory: frontend
+        run: npm run build
+        env:
+          CI: false
+          REACT_APP_API_URL: https://api.perenniaai.com
+          REACT_APP_ENVIRONMENT: production
+
+      # -----------------------------------------------------------------
+      # Capacitor sync — copies web build into ios/App/App/public
+      # -----------------------------------------------------------------
+      - name: Sync Capacitor
+        working-directory: frontend
+        run: |
+          # Clear stale SPM resolution so Xcode re-resolves
+          rm -f ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          npx cap sync ios
+
+      # -----------------------------------------------------------------
+      # Pre-flight validation script
+      # -----------------------------------------------------------------
+      - name: Run ios-validate.sh
+        working-directory: frontend
+        run: |
+          if [ -f scripts/ios-validate.sh ]; then
+            chmod +x scripts/ios-validate.sh
+            bash scripts/ios-validate.sh
+          else
+            echo "ios-validate.sh not found — skipping"
+          fi
+        continue-on-error: true
+
+      # -----------------------------------------------------------------
+      # Compile iOS project (build only — no archive, no signing export)
+      # Uses CODE_SIGNING_ALLOWED=NO so CI doesn't need certs/profiles
+      # -----------------------------------------------------------------
+      - name: Build iOS project
+        working-directory: frontend/ios/App
+        run: |
+          set -euo pipefail
+
+          xcodebuild clean build \
+            -project App.xcodeproj \
+            -scheme App \
+            -sdk iphoneos \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "${{ runner.temp }}/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="-" \
+            2>&1 | tee "${{ runner.temp }}/xcodebuild.log" \
+            || BUILD_FAILED=true
+
+          # Count warnings for the summary
+          WARNING_COUNT=$(grep -c "warning:" "${{ runner.temp }}/xcodebuild.log" || echo "0")
+          ERROR_COUNT=$(grep -c "error:" "${{ runner.temp }}/xcodebuild.log" || echo "0")
+
+          echo "### iOS Build Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${BUILD_FAILED:-}" = "true" ]; then
+            echo "- **Result:** FAILED" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- **Result:** SUCCESS" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "- **Warnings:** $WARNING_COUNT" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Errors:** $ERROR_COUNT" >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${BUILD_FAILED:-}" = "true" ]; then
+            echo ""
+            echo "========================================="
+            echo "  BUILD ERRORS (last 50 lines):"
+            echo "========================================="
+            grep -A2 "error:" "${{ runner.temp }}/xcodebuild.log" | tail -50
+            exit 1
+          fi
+
+      # -----------------------------------------------------------------
+      # Report status
+      # -----------------------------------------------------------------
+      - name: Report build status
+        if: always()
+        run: |
+          echo "iOS build validation complete."
+          echo "Node: $(node --version)"
+          echo "Xcode: $(xcodebuild -version | head -1)"
+
+      # -----------------------------------------------------------------
+      # Upload build log on failure for debugging
+      # -----------------------------------------------------------------
+      - name: Upload build log (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ${{ runner.temp }}/xcodebuild.log
+          retention-days: 7

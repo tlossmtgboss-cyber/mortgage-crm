@@ -38,6 +38,7 @@ class CalculatorShareService:
         expires_in_days: int = 7,
         title_override: Optional[str] = None,
         description_override: Optional[str] = None,
+        organization_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Create a shareable link for an artifact.
@@ -48,18 +49,26 @@ class CalculatorShareService:
             expires_in_days: Days until link expires (default 7)
             title_override: Optional custom title for shared view
             description_override: Optional custom description
+            organization_id: Tenant org ID for isolation (returns 404 if artifact belongs to different org)
 
         Returns:
             Dict with share_token, share_url, and expiration info
         """
-        # Verify artifact exists and is a calculator result
+        # Verify artifact exists and belongs to the user's organization
+        artifact_query = """
+            SELECT id, artifact_type, content, session_id
+            FROM call_artifacts
+            WHERE id = :artifact_id
+        """
+        artifact_params = {"artifact_id": artifact_id}
+
+        if organization_id:
+            artifact_query += " AND organization_id = :org_id"
+            artifact_params["org_id"] = organization_id
+
         artifact = self.db.execute(
-            text("""
-                SELECT id, artifact_type, content, session_id
-                FROM call_artifacts
-                WHERE id = :artifact_id
-            """),
-            {"artifact_id": artifact_id}
+            text(artifact_query),
+            artifact_params
         ).fetchone()
 
         if not artifact:
@@ -204,42 +213,62 @@ class CalculatorShareService:
             "loan_id": artifact.loan_id,
         }
 
-    def deactivate_share(self, share_token: str, user_id: int) -> bool:
+    def deactivate_share(self, share_token: str, user_id: int, organization_id: Optional[int] = None) -> bool:
         """
         Deactivate a share link.
 
         Args:
             share_token: The token to deactivate
             user_id: User requesting deactivation (must be creator)
+            organization_id: Tenant org ID for isolation
 
         Returns:
             True if deactivated, False if not found or unauthorized
         """
-        result = self.db.execute(
-            text("""
-                UPDATE artifact_shares
-                SET is_active = false
-                WHERE share_token = :share_token
-                    AND (created_by = :user_id OR :user_id IN (
-                        SELECT id FROM users WHERE role IN ('admin', 'super_admin')
-                    ))
-            """),
-            {"share_token": share_token, "user_id": user_id}
-        )
+        # Build query with org isolation via the parent artifact
+        query = """
+            UPDATE artifact_shares
+            SET is_active = false
+            WHERE share_token = :share_token
+                AND (created_by = :user_id OR :user_id IN (
+                    SELECT id FROM users WHERE role IN ('admin', 'super_admin')
+                ))
+        """
+        params = {"share_token": share_token, "user_id": user_id}
+
+        if organization_id:
+            query += """
+                AND artifact_id IN (
+                    SELECT id FROM call_artifacts WHERE organization_id = :org_id
+                )
+            """
+            params["org_id"] = organization_id
+
+        result = self.db.execute(text(query), params)
         self.db.commit()
 
         return result.rowcount > 0
 
-    def get_shares_for_artifact(self, artifact_id: str) -> List[Dict[str, Any]]:
+    def get_shares_for_artifact(self, artifact_id: str, organization_id: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         Get all share links for an artifact.
 
         Args:
             artifact_id: The artifact UUID
+            organization_id: Tenant org ID for isolation (returns empty if artifact belongs to different org)
 
         Returns:
             List of share link records
         """
+        # Verify artifact belongs to the caller's organization
+        if organization_id:
+            artifact_check = self.db.execute(
+                text("SELECT id FROM call_artifacts WHERE id = :artifact_id AND organization_id = :org_id"),
+                {"artifact_id": artifact_id, "org_id": organization_id}
+            ).fetchone()
+            if not artifact_check:
+                return []
+
         shares = self.db.execute(
             text("""
                 SELECT

@@ -20,7 +20,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -28,6 +28,20 @@ from db import get_db
 from utils.pii_mask import mask_email, mask_phone
 
 logger = logging.getLogger(__name__)
+
+try:
+    from middleware.rate_limiter import rate_limit, ip_key
+except ImportError:
+    logger.warning("Rate limiter unavailable for onboarding routes")
+
+    def rate_limit(**kwargs):
+        """No-op fallback when rate limiter is unavailable."""
+        def decorator(func):
+            return func
+        return decorator
+
+    def ip_key(request):
+        return "unknown"
 
 
 def _extract_token(request) -> str:
@@ -57,11 +71,11 @@ ai_router = APIRouter(prefix="/api/v1/ai", tags=["AI Quick Actions"])
 # =============================================================================
 
 class EmployeeInviteCreate(BaseModel):
-    email: str
-    first_name: str
-    last_name: str
-    job_title: Optional[str] = None
-    permission_role: str = "sales"
+    email: EmailStr
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+    job_title: Optional[str] = Field(None, max_length=100)
+    permission_role: str = Field(default="sales", max_length=50)
     branch_id: Optional[int] = None
     page_permissions: Optional[List[dict]] = None
     responsibilities: Optional[List[str]] = None
@@ -1154,11 +1168,26 @@ async def check_email_availability(
     import main
     current_user = await main.get_current_user_flexible(request, db)
 
-    existing_user = db.query(User).filter(User.email == email).first()
-    existing_invite = db.query(EmployeeInvite).filter(
+    _role = (getattr(current_user, 'permission_role', '') or '').lower().strip()
+    if _role not in ('admin', 'site_admin', 'leadership', 'management') and current_user.id != 1:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    _org_id = getattr(current_user, 'organization_id', None)
+
+    # For User check - scope to org
+    user_query = db.query(User).filter(User.email == email)
+    if _org_id:
+        user_query = user_query.filter(User.organization_id == _org_id)
+    existing_user = user_query.first()
+
+    # For EmployeeInvite check - scope to org
+    invite_query = db.query(EmployeeInvite).filter(
         EmployeeInvite.email == email,
         EmployeeInvite.status == InviteStatus.PENDING
-    ).first()
+    )
+    if _org_id:
+        invite_query = invite_query.filter(EmployeeInvite.organization_id == _org_id)
+    existing_invite = invite_query.first()
 
     return {
         "available": existing_user is None and existing_invite is None,
@@ -1179,6 +1208,10 @@ async def get_onboarding_options(
 
     import main
     current_user = await main.get_current_user_flexible(request, db)
+
+    _role = (getattr(current_user, 'permission_role', '') or '').lower().strip()
+    if _role not in ('admin', 'site_admin', 'leadership', 'management') and current_user.id != 1:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     roles = [
         {"value": "admin", "label": "Administrator", "description": "Full system access"},
@@ -1210,6 +1243,10 @@ async def get_role_permissions_preview(
     import main
     current_user = await main.get_current_user_flexible(request, db)
 
+    _role = (getattr(current_user, 'permission_role', '') or '').lower().strip()
+    if _role not in ('admin', 'site_admin', 'leadership', 'management') and current_user.id != 1:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
     role_perms = db.query(RolePagePermission).filter(RolePagePermission.role == role).all()
     role_resps = db.query(RoleResponsibility).filter(RoleResponsibility.role == role).all()
 
@@ -1235,15 +1272,36 @@ async def create_employee_invite(
     import main
     current_user = await main.get_current_user_flexible(request, db)
 
-    # Check email availability
-    if db.query(User).filter(User.email == invite_data.email).first():
+    # Permission check - only admin, site_admin, leadership, management can manage invites
+    _role = (getattr(current_user, 'permission_role', '') or '').lower().strip()
+    if _role not in ('admin', 'site_admin', 'leadership', 'management') and current_user.id != 1:
+        raise HTTPException(status_code=403, detail="Insufficient permissions to manage invites")
+
+    from utils.roles import ALLOWED_ROLES, ADMIN_ROLES
+    _requested_role = (invite_data.permission_role or '').lower().strip()
+    if _requested_role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=400, detail=f"Invalid role: {invite_data.permission_role}. Allowed: {', '.join(sorted(ALLOWED_ROLES))}")
+
+    if _requested_role in ADMIN_ROLES and _role not in ADMIN_ROLES and current_user.id != 1:
+        raise HTTPException(status_code=403, detail="Only admins can create admin invites")
+
+    # Check email availability (scoped to current org for tenant isolation)
+    _org_id = getattr(current_user, 'organization_id', None)
+    email_query = db.query(User).filter(User.email == invite_data.email)
+    if _org_id:
+        email_query = email_query.filter(User.organization_id == _org_id)
+    if email_query.first():
         raise HTTPException(status_code=400, detail="Email already in use")
 
-    if db.query(EmployeeInvite).filter(EmployeeInvite.email == invite_data.email, EmployeeInvite.status == InviteStatus.PENDING).first():
+    invite_query = db.query(EmployeeInvite).filter(EmployeeInvite.email == invite_data.email, EmployeeInvite.status == InviteStatus.PENDING)
+    if _org_id:
+        invite_query = invite_query.filter(EmployeeInvite.organization_id == _org_id)
+    if invite_query.first():
         raise HTTPException(status_code=400, detail="Pending invite already exists for this email")
 
     # Generate invite token
-    invite_token = secrets.token_urlsafe(32)
+    from utils.token_security import generate_invite_token
+    invite_token = generate_invite_token()
 
     # Create invite
     invite = EmployeeInvite(
@@ -1253,6 +1311,7 @@ async def create_employee_invite(
         job_title=invite_data.job_title,
         permission_role=invite_data.permission_role,
         branch_id=invite_data.branch_id,
+        organization_id=getattr(current_user, 'organization_id', None),
         invite_token=invite_token,
         invited_by_user_id=current_user.id,
         expires_at=datetime.now(timezone.utc) + timedelta(days=7),
@@ -1262,6 +1321,18 @@ async def create_employee_invite(
         }
     )
     db.add(invite)
+    db.flush()  # Get invite.id before commit
+
+    # Audit log in same transaction
+    try:
+        from utils.invitation_audit import log_invite_event
+        log_invite_event(db, "invite_created", invite_id=invite.id, actor_id=current_user.id,
+                         org_id=getattr(current_user, 'organization_id', None),
+                         target_email=invite_data.email,
+                         details={"role": invite_data.permission_role})
+    except Exception:
+        pass
+
     db.commit()
     db.refresh(invite)
 
@@ -1377,15 +1448,21 @@ If you didn't expect this invitation, please contact your administrator.
 
 
 @admin_router.get("/api/invite/{token}")
-async def get_invite_details(token: str, db: Session = Depends(get_db)):
-    """Get invite details (public endpoint for invite acceptance page)."""
+@rate_limit(limit=10, window=300, key_func=ip_key)
+async def get_invite_details(token: str, request: Request, db: Session = Depends(get_db)):
+    """Get invite details (public endpoint for invite acceptance page).
+    Rate limited: 10 requests per 5 minutes per IP.
+    """
     models = get_models()
     EmployeeInvite = models['EmployeeInvite']
     InviteStatus = models['InviteStatus']
 
+    from utils.token_security import safe_token_compare
+
     invite = db.query(EmployeeInvite).filter(EmployeeInvite.invite_token == token).first()
 
-    if not invite:
+    # Defense-in-depth: constant-time comparison even though SQL found the row
+    if not invite or not safe_token_compare(invite.invite_token, token):
         raise HTTPException(status_code=404, detail="Invite not found")
 
     if invite.status != InviteStatus.PENDING:
@@ -1407,8 +1484,11 @@ async def get_invite_details(token: str, db: Session = Depends(get_db)):
 
 
 @admin_router.post("/api/invite/accept")
-async def accept_invite(request: InviteAcceptRequest, db: Session = Depends(get_db)):
-    """Accept an invite and create user account."""
+@rate_limit(limit=5, window=300, key_func=ip_key)
+async def accept_invite(request: Request, body: InviteAcceptRequest, db: Session = Depends(get_db)):
+    """Accept an invite and create user account.
+    Rate limited: 5 requests per 5 minutes per IP.
+    """
     models = get_models()
     auth = get_auth_deps()
     User = models['User']
@@ -1422,28 +1502,89 @@ async def accept_invite(request: InviteAcceptRequest, db: Session = Depends(get_
     pwd_context = auth['pwd_context']
     create_access_token = auth['create_access_token']
 
-    invite = db.query(EmployeeInvite).filter(EmployeeInvite.invite_token == request.token).first()
+    from utils.token_security import safe_token_compare
+    from utils.password_policy import validate_password
 
-    if not invite:
+    _client_ip = request.client.host if request.client else None
+
+    invite = db.query(EmployeeInvite).filter(EmployeeInvite.invite_token == body.token).first()
+
+    # Defense-in-depth: constant-time comparison even though SQL found the row
+    if not invite or not safe_token_compare(invite.invite_token, body.token):
+        try:
+            from utils.invitation_audit import log_invite_event
+            log_invite_event(db, "invite_accept_failed", details={"reason": "invalid_token"}, ip_address=_client_ip)
+        except Exception:
+            pass
         raise HTTPException(status_code=404, detail="Invite not found")
 
     if invite.status != InviteStatus.PENDING:
+        try:
+            from utils.invitation_audit import log_invite_event
+            log_invite_event(db, "invite_accept_failed", invite_id=invite.id,
+                             target_email=invite.email, details={"reason": f"status_{invite.status.value}"},
+                             ip_address=_client_ip)
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail=f"Invite has been {invite.status.value}")
 
     if invite.expires_at < datetime.now(timezone.utc):
         invite.status = InviteStatus.EXPIRED
         db.commit()
+        try:
+            from utils.invitation_audit import log_invite_event
+            log_invite_event(db, "invite_accept_failed", invite_id=invite.id,
+                             target_email=invite.email, details={"reason": "expired"},
+                             ip_address=_client_ip)
+        except Exception:
+            pass
         raise HTTPException(status_code=400, detail="Invite has expired")
 
+    # Validate password strength (unified policy)
+    validate_password(body.password)
+
+    # --- Seat limit enforcement (LIC-003) ---
+    _org_id = invite.organization_id
+    if not _org_id and invite.invited_by_user_id:
+        _inviter = db.query(User).filter(User.id == invite.invited_by_user_id).first()
+        if _inviter:
+            _org_id = getattr(_inviter, 'organization_id', None)
+
+    if _org_id:
+        from sqlalchemy import func as _fn
+        # FOR UPDATE lock prevents race condition where two concurrent accepts
+        # both read the same count and both succeed past the seat limit
+        _sub_row = db.execute(
+            text(
+                "SELECT max_users FROM organization_subscriptions "
+                "WHERE organization_id = :org_id AND status = 'active' LIMIT 1 "
+                "FOR UPDATE"
+            ),
+            {"org_id": _org_id}
+        ).fetchone()
+
+        if _sub_row and _sub_row[0] is not None and _sub_row[0] > 0:
+            _active_count = db.query(_fn.count(User.id)).filter(
+                User.organization_id == _org_id,
+                User.is_active == True
+            ).scalar() or 0
+            if _active_count >= _sub_row[0]:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Seat limit reached. Contact your administrator to upgrade."
+                )
+
     # Create user
-    hashed_password = pwd_context.hash(request.password)
+    hashed_password = pwd_context.hash(body.password)
     user = User(
         email=invite.email,
         hashed_password=hashed_password,
         first_name=invite.first_name,
         last_name=invite.last_name,
         permission_role=invite.permission_role,
+        role=invite.permission_role,
         branch_id=invite.branch_id,
+        organization_id=_org_id,
         is_active=True
     )
     db.add(user)
@@ -1467,8 +1608,20 @@ async def accept_invite(request: InviteAcceptRequest, db: Session = Depends(get_
     invite.status = InviteStatus.ACCEPTED
     invite.accepted_at = datetime.now(timezone.utc)
     invite.user_id = user.id
+    invite.invite_token = None  # Clear token after use
 
     db.commit()
+
+    # Audit log
+    try:
+        from utils.invitation_audit import log_invite_event
+        _client_ip = request.client.host if request.client else None
+        log_invite_event(db, "invite_accepted", invite_id=invite.id,
+                         org_id=_org_id, target_email=invite.email,
+                         details={"user_id": user.id, "role": invite.permission_role},
+                         ip_address=_client_ip)
+    except Exception:
+        pass
 
     # Generate JWT token for immediate login
     access_token = create_access_token(data={"sub": user.email})
@@ -1495,12 +1648,31 @@ async def list_invites(
     import main
     current_user = await main.get_current_user_flexible(request, db)
 
+    # Permission check - only admin, site_admin, leadership, management can manage invites
+    _role = (getattr(current_user, 'permission_role', '') or '').lower().strip()
+    if _role not in ('admin', 'site_admin', 'leadership', 'management') and current_user.id != 1:
+        raise HTTPException(status_code=403, detail="Insufficient permissions to manage invites")
+
     query = db.query(EmployeeInvite).order_by(EmployeeInvite.created_at.desc())
+
+    # Tenant isolation - mandatory org enforcement
+    _org_id = getattr(current_user, 'organization_id', None)
+    if not _org_id and current_user.id != 1:
+        raise HTTPException(status_code=403, detail="User not assigned to an organization")
+    if _org_id:
+        query = query.filter(EmployeeInvite.organization_id == _org_id)
 
     if status:
         query = query.filter(EmployeeInvite.status == InviteStatus(status))
 
     invites = query.all()
+
+    def _effective_status(inv):
+        """Return 'expired' if a pending invite has passed its expires_at."""
+        raw = inv.status.value if hasattr(inv.status, 'value') else str(inv.status)
+        if raw == 'pending' and inv.expires_at and inv.expires_at < datetime.now(timezone.utc):
+            return 'expired'
+        return raw
 
     return {
         "invites": [{
@@ -1510,7 +1682,8 @@ async def list_invites(
             "last_name": inv.last_name,
             "job_title": inv.job_title,
             "permission_role": inv.permission_role,
-            "status": inv.status.value,
+            "status": _effective_status(inv),
+            "invite_token": inv.invite_token if inv.status == InviteStatus.PENDING and not (inv.expires_at and inv.expires_at < datetime.now(timezone.utc)) else None,
             "created_at": inv.created_at.isoformat() if inv.created_at else None,
             "expires_at": inv.expires_at.isoformat() if inv.expires_at else None,
             "accepted_at": inv.accepted_at.isoformat() if inv.accepted_at else None
@@ -1532,18 +1705,141 @@ async def revoke_invite(
     import main
     current_user = await main.get_current_user_flexible(request, db)
 
+    # Permission check - only admin, site_admin, leadership, management can manage invites
+    _role = (getattr(current_user, 'permission_role', '') or '').lower().strip()
+    if _role not in ('admin', 'site_admin', 'leadership', 'management') and current_user.id != 1:
+        raise HTTPException(status_code=403, detail="Insufficient permissions to manage invites")
+
     invite = db.query(EmployeeInvite).filter(EmployeeInvite.id == invite_id).first()
 
     if not invite:
         raise HTTPException(status_code=404, detail="Invite not found")
 
-    if invite.status != InviteStatus.PENDING:
-        raise HTTPException(status_code=400, detail="Can only revoke pending invites")
+    # Tenant isolation - mandatory org enforcement
+    _org_id = getattr(current_user, 'organization_id', None)
+    if not _org_id and current_user.id != 1:
+        raise HTTPException(status_code=403, detail="User not assigned to an organization")
+    if _org_id and invite.organization_id != _org_id:
+        raise HTTPException(status_code=404, detail="Invite not found")
+
+    if invite.status not in (InviteStatus.PENDING, InviteStatus.EXPIRED):
+        raise HTTPException(status_code=400, detail="Can only revoke pending or expired invites")
 
     invite.status = InviteStatus.REVOKED
+    invite.invite_token = None  # Clear token on revoke
     db.commit()
 
+    try:
+        from utils.invitation_audit import log_invite_event
+        log_invite_event(db, "invite_revoked", invite_id=invite.id, actor_id=current_user.id,
+                         org_id=_org_id, target_email=invite.email)
+    except Exception:
+        pass
+
     return {"success": True, "message": "Invite revoked"}
+
+
+@admin_router.post("/api/admin/invites/{invite_id}/resend")
+@rate_limit(limit=5, window=300, key_func=ip_key)
+async def resend_invite(
+    invite_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Resend a pending invite with a fresh token and extended expiry."""
+    models = get_models()
+    EmployeeInvite = models['EmployeeInvite']
+    InviteStatus = models['InviteStatus']
+
+    import main
+    current_user = await main.get_current_user_flexible(request, db)
+
+    # Permission check
+    _role = (getattr(current_user, 'permission_role', '') or '').lower().strip()
+    if _role not in ('admin', 'site_admin', 'leadership', 'management') and current_user.id != 1:
+        raise HTTPException(status_code=403, detail="Insufficient permissions to manage invites")
+
+    invite = db.query(EmployeeInvite).filter(EmployeeInvite.id == invite_id).first()
+    if not invite:
+        raise HTTPException(status_code=404, detail="Invite not found")
+
+    # Tenant isolation
+    _org_id = getattr(current_user, 'organization_id', None)
+    if not _org_id and current_user.id != 1:
+        raise HTTPException(status_code=403, detail="User not assigned to an organization")
+    if _org_id and invite.organization_id != _org_id:
+        raise HTTPException(status_code=404, detail="Invite not found")
+
+    if invite.status not in (InviteStatus.PENDING, InviteStatus.EXPIRED):
+        raise HTTPException(status_code=400, detail="Can only resend pending or expired invites")
+
+    # Generate fresh token and extend expiry
+    from utils.token_security import generate_invite_token
+    invite.invite_token = generate_invite_token()
+    invite.expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    invite.status = InviteStatus.PENDING  # Reset expired back to pending
+
+    db.commit()
+
+    # Send invite email
+    invite_url = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/accept-invite?token={invite.invite_token}"
+
+    email_sent = False
+    try:
+        from email_service import email_service
+
+        inviter_name = current_user.full_name or current_user.email.split('@')[0]
+
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f6f9fc;">
+            <div style="max-width: 600px; margin: 0 auto; padding: 40px 20px;">
+                <div style="background: white; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 40px;">
+                    <div style="text-align: center; margin-bottom: 32px;">
+                        <h1 style="color: #3b82f6; font-size: 28px; margin: 0;">Perennia AI</h1>
+                    </div>
+                    <h2 style="color: #111827; margin: 0 0 16px; font-size: 22px;">Reminder: You're Invited, {invite.first_name}!</h2>
+                    <p style="color: #374151; font-size: 16px; line-height: 1.6;">
+                        {inviter_name} has resent your invitation to join Perennia AI as a <strong>{invite.permission_role.title()}</strong>.
+                    </p>
+                    <div style="text-align: center; margin: 32px 0;">
+                        <a href="{invite_url}" style="display: inline-block; background: #3b82f6; color: white; text-decoration: none; padding: 14px 32px; border-radius: 8px; font-weight: 600; font-size: 16px;">
+                            Accept Invite &amp; Set Password
+                        </a>
+                    </div>
+                    <p style="color: #f59e0b; font-size: 14px; text-align: center; background: #fef3c7; padding: 12px 16px; border-radius: 8px;">
+                        This invite expires in <strong>7 days</strong>
+                    </p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+
+        email_sent = email_service.send_html_email(
+            to_email=invite.email,
+            subject=f"Reminder: You're Invited to Join Perennia AI",
+            html_body=html_content,
+            plain_text_body=f"Hi {invite.first_name}, your invitation to join Perennia AI has been resent. Visit {invite_url} to accept."
+        )
+    except Exception as email_err:
+        logger.error(f"Error sending resend email: {email_err}")
+
+    try:
+        from utils.invitation_audit import log_invite_event
+        log_invite_event(db, "invite_resent", invite_id=invite.id, actor_id=current_user.id,
+                         org_id=_org_id, target_email=invite.email)
+    except Exception:
+        pass
+
+    return {
+        "success": True,
+        "message": "Invite resent",
+        "email_sent": email_sent,
+        "expires_at": invite.expires_at.isoformat()
+    }
 
 
 # =============================================================================

@@ -33,16 +33,23 @@ function BatchReminderModal({ isOpen, onClose, loanIds, loanCount }) {
   useEffect(() => {
     if (!isOpen) return;
 
+    const modal = modalRef.current;
+    if (!modal) return;
+
+    const focusable = modal.querySelectorAll(
+      'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+
+    // Focus the first focusable element when modal opens
+    if (focusable.length > 0) focusable[0].focus();
+
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
         onClose();
         return;
       }
 
-      if (e.key === 'Tab' && modalRef.current) {
-        const focusable = modalRef.current.querySelectorAll(
-          'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
-        );
+      if (e.key === 'Tab') {
         if (focusable.length === 0) return;
 
         const first = focusable[0];
@@ -58,8 +65,8 @@ function BatchReminderModal({ isOpen, onClose, loanIds, loanCount }) {
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    modal.addEventListener('keydown', handleKeyDown);
+    return () => modal.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
   const toggleChannel = useCallback((channel) => {
@@ -112,15 +119,15 @@ function BatchReminderModal({ isOpen, onClose, loanIds, loanCount }) {
       }}
       role="dialog"
       aria-modal="true"
-      aria-label="Send Batch Reminders"
+      aria-labelledby="br-modal-title"
     >
       <div className="batch-reminder-modal" ref={modalRef}>
         <div className="br-header">
-          <h2>Send Batch Reminders</h2>
+          <h2 id="br-modal-title">Send Batch Reminders</h2>
           <button
             className="br-close-btn"
             onClick={onClose}
-            aria-label="Close modal"
+            aria-label="Close dialog"
           >
             &times;
           </button>
@@ -150,6 +157,7 @@ function BatchReminderModal({ isOpen, onClose, loanIds, loanCount }) {
                     type="checkbox"
                     checked={channels.email}
                     onChange={() => toggleChannel('email')}
+                    aria-label="Send via email"
                   />
                   <span className="br-channel-icon">&#9993;</span>
                   <span>Email</span>
@@ -159,6 +167,7 @@ function BatchReminderModal({ isOpen, onClose, loanIds, loanCount }) {
                     type="checkbox"
                     checked={channels.sms}
                     onChange={() => toggleChannel('sms')}
+                    aria-label="Send via SMS"
                   />
                   <span className="br-channel-icon">&#128241;</span>
                   <span>SMS</span>
@@ -179,6 +188,7 @@ function BatchReminderModal({ isOpen, onClose, loanIds, loanCount }) {
               className="br-btn br-btn-cancel"
               onClick={onClose}
               disabled={sending}
+              aria-label="Close dialog"
             >
               Cancel
             </button>
@@ -186,6 +196,7 @@ function BatchReminderModal({ isOpen, onClose, loanIds, loanCount }) {
               type="submit"
               className="br-btn br-btn-send"
               disabled={sending || !hasSelectedChannel || count === 0}
+              aria-label={`Send batch reminders to ${count} borrower${count !== 1 ? 's' : ''}`}
             >
               {sending
                 ? 'Sending...'

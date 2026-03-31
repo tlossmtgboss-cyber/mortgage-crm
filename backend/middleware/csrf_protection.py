@@ -58,7 +58,9 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/admin/unlock-account",  # Admin unlock - uses admin key auth
         "/api/v1/admin-onboarding",  # Subscription onboarding - uses invite token auth, no session
         "/api/v1/invitations/activate",  # Public account activation from invite
+        "/api/invite",  # Public invite acceptance (no auth context)
         "/api/integrations",  # New integration routes
+        "/api/v1/app",  # Mobile app compatibility/health (unauthenticated, pre-login)
         "/health",
         "/api/health",
         "/docs",

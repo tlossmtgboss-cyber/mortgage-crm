@@ -1,0 +1,306 @@
+/* MobileLeadCard — touch-first lead card for mobile pipeline */
+
+.mlc {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #fff;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: pan-y;
+}
+
+/* ── Swipe action tracks ── */
+.mlc__swipe-track {
+  position: relative;
+  z-index: 1;
+}
+
+.mlc__action-left,
+.mlc__action-right {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #fff;
+  z-index: 0;
+}
+
+.mlc__action-left {
+  left: 0;
+  background: #4caf50;
+  border-radius: 12px 0 0 12px;
+}
+
+.mlc__action-right {
+  right: 0;
+  background: #7c3aed;
+  border-radius: 0 12px 12px 0;
+}
+
+.mlc__action-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Inner card body (this is what moves on swipe) ── */
+.mlc__body {
+  position: relative;
+  z-index: 2;
+  background: #fff;
+  padding: 14px 16px 12px;
+  border-radius: 12px;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+
+.mlc__body.mlc__body--swiping {
+  transition: none;
+}
+
+/* ── Header row: name + badges ── */
+.mlc__header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.mlc__name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.mlc__source {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.mlc__source--referral { background: #fef3c7; color: #92400e; }
+.mlc__source--website { background: #dbeafe; color: #1e40af; }
+.mlc__source--zillow { background: #d1fae5; color: #065f46; }
+.mlc__source--realtor { background: #ede9fe; color: #5b21b6; }
+.mlc__source--social { background: #fce7f3; color: #9d174d; }
+.mlc__source--default { background: #f3f4f6; color: #4b5563; }
+
+.mlc__score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+.mlc__score--A { background: #dcfce7; color: #15803d; }
+.mlc__score--B { background: #fef9c3; color: #a16207; }
+.mlc__score--C { background: #ffedd5; color: #c2410c; }
+.mlc__score--D { background: #fee2e2; color: #b91c1c; }
+
+/* ── Contact row ── */
+.mlc__contact {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+  font-size: 13px;
+  color: #6b7280;
+  overflow: hidden;
+}
+
+.mlc__contact a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #1a73e8;
+  text-decoration: none;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mlc__contact a:active {
+  opacity: 0.6;
+}
+
+.mlc__contact-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+/* ── Meta row: last contact + loan interest ── */
+.mlc__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.mlc__last-contact {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.mlc__loan-interest {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+  color: #6b7280;
+  font-weight: 500;
+}
+
+/* ── Quick action buttons ── */
+.mlc__actions {
+  display: flex;
+  gap: 0;
+  border-top: 1px solid #f3f4f6;
+  margin: 0 -16px -12px;
+  padding: 0;
+}
+
+.mlc__action-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 44px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease;
+}
+
+.mlc__action-btn:active {
+  background: #f3f4f6;
+}
+
+.mlc__action-btn + .mlc__action-btn {
+  border-left: 1px solid #f3f4f6;
+}
+
+.mlc__action-btn svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.mlc__action-btn--call { color: #16a34a; }
+.mlc__action-btn--text { color: #7c3aed; }
+.mlc__action-btn--email { color: #1a73e8; }
+.mlc__action-btn--note { color: #f59e0b; }
+.mlc__action-btn--aria { color: #8b5cf6; }
+
+/* ── AI hint for high-score leads ── */
+.mlc__ai-hint {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: #7c3aed;
+  background: #f5f3ff;
+  border-radius: 6px;
+  padding: 4px 8px;
+  margin-bottom: 8px;
+}
+
+.mlc__ai-hint-icon {
+  flex-shrink: 0;
+  color: #8b5cf6;
+}
+
+/* ── Skeleton loader ── */
+.mlc-skeleton {
+  border-radius: 12px;
+  background: #fff;
+  padding: 14px 16px 12px;
+  margin-bottom: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.mlc-skeleton__bar {
+  height: 14px;
+  border-radius: 6px;
+  background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+  background-size: 200% 100%;
+  animation: mlc-shimmer 1.5s infinite ease-in-out;
+}
+
+.mlc-skeleton__bar--name { width: 55%; height: 18px; margin-bottom: 10px; }
+.mlc-skeleton__bar--contact { width: 70%; margin-bottom: 8px; }
+.mlc-skeleton__bar--meta { width: 40%; margin-bottom: 10px; }
+.mlc-skeleton__bar--actions { width: 100%; height: 44px; border-radius: 0 0 12px 12px; margin: 0 -16px; width: calc(100% + 32px); }
+
+@keyframes mlc-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Accessibility ── */
+@media (prefers-reduced-motion: reduce) {
+  .mlc__body {
+    transition: none;
+  }
+  .mlc-skeleton__bar {
+    animation: none;
+    background: #f3f4f6;
+  }
+}
+
+/* ── Stage pill (shown on card if provided) ── */
+.mlc__stage {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  background: #f3f4f6;
+  color: #4b5563;
+  flex-shrink: 0;
+}

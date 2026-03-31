@@ -1057,14 +1057,26 @@ async def submit_application(
     db.add(event)
 
     # Update lead if linked
+    _lead_stage_changed = False
+    _lead_id_for_wf = None
     if application.lead_id:
         lead = db.query(Lead).filter(Lead.id == application.lead_id).first()
         if lead:
             lead.application_completed_date = datetime.now(timezone.utc)
             if lead.stage == LeadStage.NEW:
                 lead.stage = LeadStage.APPLICATION
+                _lead_stage_changed = True
+                _lead_id_for_wf = lead.id
 
     db.commit()
+
+    # Event-driven workflow enrollment if lead stage changed (eliminates 60s polling delay)
+    if _lead_stage_changed and _lead_id_for_wf:
+        try:
+            from services.workflow_scheduler import trigger_workflow_evaluation_for_lead
+            trigger_workflow_evaluation_for_lead(db, _lead_id_for_wf, 'Application')
+        except Exception as wf_err:
+            logger.warning(f"Workflow evaluation trigger failed for borrower app lead {_lead_id_for_wf}: {wf_err}")
 
     # Send notifications in background
     try:

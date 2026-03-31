@@ -69,9 +69,17 @@ function IncomeWorksheet({ income, onApprove, onReject, onOverrideSource }) {
       <div className="iw__header">
         <div className="iw__header-left">
           <h2 className="iw__title">Income Calculation</h2>
-          <span className={getStatusBadgeClass(status)}>{status}</span>
+          <span
+            className={getStatusBadgeClass(status)}
+            aria-label={`Income worksheet status: ${status}`}
+          >
+            {status}
+          </span>
         </div>
-        <div className="iw__header-right">
+        <div
+          className="iw__header-right"
+          aria-label={`Total monthly income: ${formatCurrency(totalMonthly)}`}
+        >
           <span className="iw__total-label">Total Monthly Income</span>
           <span className="iw__total-value">{formatCurrency(totalMonthly)}</span>
         </div>
@@ -82,15 +90,15 @@ function IncomeWorksheet({ income, onApprove, onReject, onOverrideSource }) {
         {sources.length === 0 ? (
           <div className="iw__empty-table">No income sources found.</div>
         ) : (
-          <table className="iw__table">
+          <table className="iw__table" aria-label="Income sources breakdown">
             <thead>
               <tr>
-                <th>Source Name</th>
-                <th>Type</th>
-                <th>Monthly Amount</th>
-                <th>Confidence</th>
-                <th>Verified</th>
-                <th>Override</th>
+                <th scope="col">Source Name</th>
+                <th scope="col">Type</th>
+                <th scope="col">Monthly Amount</th>
+                <th scope="col">Confidence</th>
+                <th scope="col">Verified</th>
+                <th scope="col">Override</th>
               </tr>
             </thead>
             <tbody>
@@ -124,6 +132,7 @@ function IncomeWorksheet({ income, onApprove, onReject, onOverrideSource }) {
                         className="iw__override-btn"
                         onClick={() => onOverrideSource && onOverrideSource(sourceId)}
                         type="button"
+                        aria-label={`Override income source: ${src.name || src.source_name || sourceId}`}
                       >
                         Override
                       </button>
@@ -143,6 +152,7 @@ function IncomeWorksheet({ income, onApprove, onReject, onOverrideSource }) {
             className="iw__btn iw__btn--primary"
             onClick={onApprove}
             type="button"
+            aria-label="Approve income calculation"
           >
             Approve Income
           </button>
@@ -150,6 +160,7 @@ function IncomeWorksheet({ income, onApprove, onReject, onOverrideSource }) {
             className="iw__btn iw__btn--secondary"
             onClick={onReject}
             type="button"
+            aria-label="Reject income calculation"
           >
             Reject
           </button>

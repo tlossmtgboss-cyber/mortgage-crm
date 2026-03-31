@@ -31,7 +31,8 @@ LEAD_TO_LOAN_MUM_MAP = {
 }
 
 # Loans in these stages should never be changed (don't regress)
-TERMINAL_LOAN_STAGES = {"FUNDED", "CANCELLED", "DENIED", "DEAD"}
+# NOTE: Previously only 4 values (missing WITHDRAWN, DOES_NOT_QUALIFY) — drift fixed 2026-03-31
+from services.workflow_constants import TERMINAL_LOAN_STAGES_SET as TERMINAL_LOAN_STAGES
 
 
 def cascade_lead_status(

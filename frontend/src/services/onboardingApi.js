@@ -131,44 +131,73 @@ export const completeOnboarding = async (inviteToken = null) => {
 // ============== INVITE MANAGEMENT ==============
 
 /**
- * Validate an invite token (public endpoint)
+ * Validate an invite token (public endpoint).
+ * Uses canonical Path B (employee_invites table via /api/invite/{token}).
+ * Returns normalized shape: { valid, invite: { email, first_name, last_name, permission_role, job_title }, status?, error? }
  * @param {string} token - The invite token
  */
 export const validateInviteToken = async (token) => {
-  const response = await fetch(`${API_BASE}/api/v1/invitations/validate/${token}`);
-  if (response.status === 404) {
-    return { valid: false, error: 'Invite not found' };
+  const response = await fetch(`${API_BASE}/api/invite/${token}`);
+
+  if (response.ok) {
+    const data = await response.json();
+    return {
+      valid: true,
+      invite: {
+        email: data.email,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        permission_role: data.permission_role,
+        job_title: data.job_title || null,
+      },
+    };
   }
 
   if (response.status === 400) {
-    const data = await response.json();
-    return { valid: false, error: data.detail || 'Invalid invite' };
+    const errData = await response.json();
+    const detail = (errData.detail || '').toLowerCase();
+    if (detail.includes('expired')) {
+      return { valid: false, status: 'expired', error: errData.detail };
+    }
+    if (detail.includes('accepted')) {
+      return { valid: false, status: 'already_accepted', error: errData.detail };
+    }
+    return { valid: false, status: 'invalid', error: errData.detail };
   }
 
-  if (!response.ok) {
-    throw new Error('Failed to validate invite');
+  if (response.status === 404) {
+    return { valid: false, status: 'invalid', error: 'Invite not found' };
   }
 
-  const data = await response.json();
-  return { valid: true, ...data };
+  throw new Error('Failed to validate invite');
 };
 
 /**
- * Accept an invite and create user account
+ * Accept an invite and create user account.
+ * Uses canonical Path B (employee_invites table via /api/invite/accept).
+ * Returns normalized shape: { success, access_token, user_id }
  * @param {string} token - The invite token
  * @param {Object} data - Object containing password
  */
 export const acceptInvite = async (token, data) => {
-  const response = await fetch(`${API_BASE}/api/v1/invitations/activate`, {    method: 'POST',
+  const response = await fetch(`${API_BASE}/api/invite/accept`, {
+    method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token: token, password: data.password, confirm_password: data.password })  });
+    body: JSON.stringify({ token, password: data.password }),
+  });
 
   if (!response.ok) {
-    const error = await response.json();
+    const error = await response.json().catch(() => ({}));
     throw new Error(error.detail || 'Failed to accept invite');
   }
 
-  return response.json();
+  const result = await response.json();
+  return {
+    success: true,
+    access_token: result.access_token,
+    user_id: result.user?.id,
+    onboarding_id: result.onboarding_id || null,
+  };
 };
 
 /**
@@ -407,13 +436,9 @@ export const startAdminOnboarding = async (data) => {
  * @param {Object} profile - Company profile data
  */
 export const saveCompanyProfile = async (profile) => {
-  const token = localStorage.getItem('token');
   const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/company-profile`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify(profile)
   });
 
@@ -430,13 +455,9 @@ export const saveCompanyProfile = async (profile) => {
  * @param {Object} profile - User profile data
  */
 export const saveAdminProfile = async (profile) => {
-  const token = localStorage.getItem('token');
   const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/user-profile`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify(profile)
   });
 
@@ -453,13 +474,9 @@ export const saveAdminProfile = async (profile) => {
  * @param {Object} data - Team invite data
  */
 export const queueTeamInvites = async (data) => {
-  const token = localStorage.getItem('token');
   const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/invite-team`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify(data)
   });
 
@@ -476,13 +493,9 @@ export const queueTeamInvites = async (data) => {
  * @param {Object} paymentData - Payment data including payment_method_id
  */
 export const createAdminSubscription = async (paymentData) => {
-  const token = localStorage.getItem('token');
   const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/create-subscription`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
+    headers: getAuthHeaders(),
     body: JSON.stringify(paymentData)
   });
 
@@ -498,13 +511,9 @@ export const createAdminSubscription = async (paymentData) => {
  * Complete admin onboarding (finalize and send team invites)
  */
 export const completeAdminOnboarding = async () => {
-  const token = localStorage.getItem('token');
   const response = await fetch(`${API_BASE}/api/v1/admin-onboarding/complete`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    }
+    headers: getAuthHeaders()
   });
 
   if (!response.ok) {

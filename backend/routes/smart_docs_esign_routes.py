@@ -2233,3 +2233,345 @@ async def get_esign_stats(
     except SQLAlchemyError as e:
         logger.exception("Error fetching e-sign stats: %s", e)
         raise HTTPException(status_code=500, detail="Failed to fetch statistics")
+
+
+# =============================================================================
+# INDIVIDUAL SIGNER AND FIELD MANAGEMENT (Enterprise Features)
+# =============================================================================
+
+@router.post("/envelopes/{envelope_uuid}/signers")
+async def add_signer(
+    envelope_uuid: str,
+    signer_data: EnvelopeRecipientInput,
+    request: Request,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Add a single signer to an existing envelope.
+    
+    Enterprise feature for dynamic signer management.
+    """
+    try:
+        # Get envelope
+        envelope = (
+            db.query(ESignatureEnvelope)
+            .filter(
+                ESignatureEnvelope.envelope_uuid == envelope_uuid,
+                ESignatureEnvelope.organization_id == current_user.organization_id,
+            )
+            .first()
+        )
+        
+        if not envelope:
+            raise HTTPException(status_code=404, detail="Envelope not found")
+            
+        # Check if envelope is in draft status
+        if envelope.status != EnvelopeStatus.DRAFT.value:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot add signers to non-draft envelope"
+            )
+        
+        # Create new recipient
+        access_code_hash = None
+        if signer_data.access_code:
+            crypto = get_esignature_crypto_service()
+            access_code_hash = crypto.hash_access_code(signer_data.access_code)
+
+        recipient = ESignatureRecipient(
+            envelope_id=envelope.id,
+            name=signer_data.name,
+            email=signer_data.email,
+            type=signer_data.type,
+            status=RecipientStatus.PENDING.value,
+            signing_order=signer_data.signing_order,
+            auth_method=signer_data.auth_method,
+            phone=signer_data.phone,
+            access_code_hash=access_code_hash,
+        )
+        db.add(recipient)
+        
+        # Update envelope recipient count if it's a signer
+        if signer_data.type == RecipientType.SIGNER.value:
+            envelope.total_recipients += 1
+            
+        # Create audit event
+        audit = ESignatureAuditEvent(
+            envelope_id=envelope.id,
+            event_type=AuditEventType.CREATED.value,
+            description=f"Signer added: {signer_data.name} ({signer_data.email})",
+            ip_address=_get_client_ip(request),
+            user_agent=request.headers.get("user-agent", "unknown"),
+        )
+        db.add(audit)
+        
+        db.commit()
+        db.refresh(recipient)
+        
+        return {
+            "id": recipient.id,
+            "name": recipient.name,
+            "email": recipient.email,
+            "type": recipient.type,
+            "status": recipient.status,
+            "signing_order": recipient.signing_order,
+            "auth_method": recipient.auth_method,
+        }
+        
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("Error adding signer: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to add signer")
+
+
+@router.post("/envelopes/{envelope_uuid}/fields")
+async def add_field(
+    envelope_uuid: str,
+    field_data: EnvelopeFieldInput,
+    request: Request,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Add a single field to an existing envelope.
+    
+    Enterprise feature for dynamic field management.
+    """
+    try:
+        # Get envelope and recipients
+        envelope = (
+            db.query(ESignatureEnvelope)
+            .filter(
+                ESignatureEnvelope.envelope_uuid == envelope_uuid,
+                ESignatureEnvelope.organization_id == current_user.organization_id,
+            )
+            .first()
+        )
+        
+        if not envelope:
+            raise HTTPException(status_code=404, detail="Envelope not found")
+            
+        # Check if envelope is in draft status
+        if envelope.status != EnvelopeStatus.DRAFT.value:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot add fields to non-draft envelope"
+            )
+        
+        # Get recipients to validate recipient_index
+        recipients = (
+            db.query(ESignatureRecipient)
+            .filter(ESignatureRecipient.envelope_id == envelope.id)
+            .order_by(ESignatureRecipient.signing_order)
+            .all()
+        )
+        
+        if field_data.recipient_index >= len(recipients):
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid recipient_index {field_data.recipient_index}"
+            )
+            
+        assigned_recipient = recipients[field_data.recipient_index]
+        
+        # Validate regex if provided
+        if field_data.validation_regex:
+            validate_regex_safe(field_data.validation_regex)
+
+        # Create new field
+        field = ESignatureField(
+            envelope_id=envelope.id,
+            recipient_id=assigned_recipient.id,
+            type=field_data.type,
+            page=field_data.page,
+            x=field_data.x,
+            y=field_data.y,
+            w=field_data.w,
+            h=field_data.h,
+            required=field_data.required,
+            placeholder=field_data.placeholder,
+            default_value=field_data.default_value,
+            group_name=field_data.group_name,
+            dropdown_options=field_data.dropdown_options,
+            validation_regex=field_data.validation_regex,
+        )
+        db.add(field)
+        
+        # Create audit event
+        audit = ESignatureAuditEvent(
+            envelope_id=envelope.id,
+            event_type=AuditEventType.CREATED.value,
+            description=f"Field added: {field_data.type} on page {field_data.page}",
+            ip_address=_get_client_ip(request),
+            user_agent=request.headers.get("user-agent", "unknown"),
+        )
+        db.add(audit)
+        
+        db.commit()
+        db.refresh(field)
+        
+        return {
+            "id": field.id,
+            "type": field.type,
+            "page": field.page,
+            "x": field.x,
+            "y": field.y,
+            "w": field.w,
+            "h": field.h,
+            "required": field.required,
+            "recipient_id": field.recipient_id,
+            "placeholder": field.placeholder,
+        }
+        
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("Error adding field: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to add field")
+
+
+@router.delete("/envelopes/{envelope_uuid}/signers/{signer_id}")
+async def remove_signer(
+    envelope_uuid: str,
+    signer_id: int,
+    request: Request,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Remove a signer from an envelope.
+    
+    Enterprise feature for dynamic signer management.
+    """
+    try:
+        # Get envelope
+        envelope = (
+            db.query(ESignatureEnvelope)
+            .filter(
+                ESignatureEnvelope.envelope_uuid == envelope_uuid,
+                ESignatureEnvelope.organization_id == current_user.organization_id,
+            )
+            .first()
+        )
+        
+        if not envelope:
+            raise HTTPException(status_code=404, detail="Envelope not found")
+            
+        # Check if envelope is in draft status
+        if envelope.status != EnvelopeStatus.DRAFT.value:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot remove signers from non-draft envelope"
+            )
+        
+        # Get signer
+        signer = (
+            db.query(ESignatureRecipient)
+            .filter(
+                ESignatureRecipient.id == signer_id,
+                ESignatureRecipient.envelope_id == envelope.id,
+            )
+            .first()
+        )
+        
+        if not signer:
+            raise HTTPException(status_code=404, detail="Signer not found")
+            
+        # Remove associated fields first
+        db.query(ESignatureField).filter(
+            ESignatureField.recipient_id == signer_id
+        ).delete()
+        
+        # Update envelope recipient count if it's a signer
+        if signer.type == RecipientType.SIGNER.value:
+            envelope.total_recipients = max(0, envelope.total_recipients - 1)
+            
+        # Create audit event before deletion
+        audit = ESignatureAuditEvent(
+            envelope_id=envelope.id,
+            event_type=AuditEventType.CREATED.value,
+            description=f"Signer removed: {signer.name} ({signer.email})",
+            ip_address=_get_client_ip(request),
+            user_agent=request.headers.get("user-agent", "unknown"),
+        )
+        db.add(audit)
+        
+        # Remove signer
+        db.delete(signer)
+        db.commit()
+        
+        return {"message": "Signer removed successfully"}
+        
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("Error removing signer: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to remove signer")
+
+
+@router.delete("/envelopes/{envelope_uuid}/fields/{field_id}")
+async def remove_field(
+    envelope_uuid: str,
+    field_id: int,
+    request: Request,
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Remove a field from an envelope.
+    
+    Enterprise feature for dynamic field management.
+    """
+    try:
+        # Get envelope
+        envelope = (
+            db.query(ESignatureEnvelope)
+            .filter(
+                ESignatureEnvelope.envelope_uuid == envelope_uuid,
+                ESignatureEnvelope.organization_id == current_user.organization_id,
+            )
+            .first()
+        )
+        
+        if not envelope:
+            raise HTTPException(status_code=404, detail="Envelope not found")
+            
+        # Check if envelope is in draft status
+        if envelope.status != EnvelopeStatus.DRAFT.value:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot remove fields from non-draft envelope"
+            )
+        
+        # Get field
+        field = (
+            db.query(ESignatureField)
+            .filter(
+                ESignatureField.id == field_id,
+                ESignatureField.envelope_id == envelope.id,
+            )
+            .first()
+        )
+        
+        if not field:
+            raise HTTPException(status_code=404, detail="Field not found")
+            
+        # Create audit event before deletion
+        audit = ESignatureAuditEvent(
+            envelope_id=envelope.id,
+            event_type=AuditEventType.CREATED.value,
+            description=f"Field removed: {field.type} on page {field.page}",
+            ip_address=_get_client_ip(request),
+            user_agent=request.headers.get("user-agent", "unknown"),
+        )
+        db.add(audit)
+        
+        # Remove field
+        db.delete(field)
+        db.commit()
+        
+        return {"message": "Field removed successfully"}
+        
+    except SQLAlchemyError as e:
+        db.rollback()
+        logger.exception("Error removing field: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to remove field")

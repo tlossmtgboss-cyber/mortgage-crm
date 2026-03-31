@@ -1,0 +1,128 @@
+/**
+ * Reduced Motion Styles
+ *
+ * Respects the prefers-reduced-motion OS/browser setting for users with
+ * vestibular disorders or motion sensitivity. When enabled, all CSS
+ * animations and transitions are suppressed or replaced with instant
+ * state changes.
+ *
+ * WCAG 2.1 Success Criterion 2.3.3 (Animation from Interactions)
+ */
+
+@media (prefers-reduced-motion: reduce) {
+  /* ------------------------------------------------------------------ */
+  /* Global: disable all animations and transitions                     */
+  /* ------------------------------------------------------------------ */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Skeleton loading: static gray instead of shimmer                   */
+  /* ------------------------------------------------------------------ */
+  .skeleton-shimmer {
+    animation: none !important;
+    background: #e5e7eb !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Page transitions: instant instead of slide/fade                    */
+  /* ------------------------------------------------------------------ */
+  .page-transition-enter,
+  .page-transition-exit {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Modal / bottom sheet: instant appear instead of slide-up           */
+  /* ------------------------------------------------------------------ */
+  .modal-overlay {
+    animation: none !important;
+  }
+
+  .bottom-sheet {
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Pull-to-refresh: no rubber-band effect                             */
+  /* ------------------------------------------------------------------ */
+  .pull-indicator {
+    transition: none !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Tab switching: instant instead of slide                            */
+  /* ------------------------------------------------------------------ */
+  .swipeable-panel {
+    transition: none !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* FAB speed dial: instant appear                                     */
+  /* ------------------------------------------------------------------ */
+  .speed-dial-item {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Toast notifications (react-toastify): instant appear/disappear     */
+  /* ------------------------------------------------------------------ */
+  .Toastify__toast {
+    animation: none !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Carousel / slider: instant transition                              */
+  /* ------------------------------------------------------------------ */
+  .alert-carousel {
+    transition: none !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Loading spinners: still visible but static                         */
+  /* ------------------------------------------------------------------ */
+  .spinner {
+    animation: none !important;
+    border-color: #3b82f6 !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Recharts: disable entrance animations on chart elements            */
+  /* ------------------------------------------------------------------ */
+  .recharts-wrapper * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Mobile bottom nav: instant highlight shifts                        */
+  /* ------------------------------------------------------------------ */
+  .mobile-bottom-nav .tab-indicator {
+    transition: none !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Collapse / accordion panels                                        */
+  /* ------------------------------------------------------------------ */
+  .collapse-panel,
+  .accordion-body {
+    transition: none !important;
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Focus ring transitions                                             */
+  /* Focus rings remain visible; only their transitions are removed.    */
+  /* ------------------------------------------------------------------ */
+  :focus-visible {
+    transition: none !important;
+  }
+}

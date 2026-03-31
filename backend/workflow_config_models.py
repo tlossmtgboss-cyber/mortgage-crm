@@ -221,10 +221,17 @@ def create_workflow_config_models(Base):
         completed_at = Column(DateTime)
 
         # Status
-        status = Column(String(50), default="pending")  # pending, in_progress, completed, skipped, failed
+        status = Column(String(50), default="pending")  # pending, in_progress, completed, skipped, failed, dead_letter
         health_status = Column(SQLEnum(TaskHealthStatus), default=TaskHealthStatus.HEALTHY)
         error_message = Column(Text)
         escalation_level = Column(Integer, default=0)
+
+        # Dead letter / retry tracking
+        # NOTE: These columns need migration — run:
+        #   ALTER TABLE workflow_task_instances ADD COLUMN IF NOT EXISTS retry_count INTEGER DEFAULT 0;
+        #   ALTER TABLE workflow_task_instances ADD COLUMN IF NOT EXISTS last_failed_at TIMESTAMP;
+        retry_count = Column(Integer, default=0, nullable=False, server_default="0")
+        last_failed_at = Column(DateTime, nullable=True)
 
         created_at = Column(DateTime, default=datetime.utcnow)
         updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

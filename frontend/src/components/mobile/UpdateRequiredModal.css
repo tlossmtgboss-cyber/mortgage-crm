@@ -1,0 +1,188 @@
+/* ==========================================================================
+   UpdateRequiredModal — Force update, optional banner, and maintenance
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   Full-screen overlay (force update + maintenance)
+   -------------------------------------------------------------------------- */
+.update-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999; /* Above everything including splash screens */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  padding: 24px;
+  padding-top: env(safe-area-inset-top, 24px);
+  padding-bottom: env(safe-area-inset-bottom, 24px);
+}
+
+.update-modal-overlay--maintenance {
+  background: rgba(120, 53, 15, 0.12);
+}
+
+/* Card */
+.update-modal-card {
+  width: 100%;
+  max-width: 380px;
+  background: #ffffff;
+  border-radius: 20px;
+  padding: 40px 28px 32px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+  animation: update-modal-slide-up 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes update-modal-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Icon container */
+.update-modal-icon {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+/* Title */
+.update-modal-title {
+  margin: 0 0 12px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #111827;
+  letter-spacing: -0.02em;
+}
+
+/* Body text */
+.update-modal-body {
+  margin: 0 0 8px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: #4b5563;
+}
+
+/* Changelog */
+.update-modal-changelog {
+  margin: 8px 0 24px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #6b7280;
+  padding: 10px 14px;
+  background: #f9fafb;
+  border-radius: 10px;
+}
+
+/* Primary button */
+.update-modal-button {
+  display: block;
+  width: 100%;
+  padding: 14px 24px;
+  margin-top: 20px;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.update-modal-button:active {
+  transform: scale(0.97);
+}
+
+.update-modal-button--primary {
+  background: #4F46E5;
+  color: #ffffff;
+}
+
+.update-modal-button--primary:hover {
+  background: #4338CA;
+}
+
+/* --------------------------------------------------------------------------
+   Optional update banner (top strip)
+   -------------------------------------------------------------------------- */
+.update-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 16px;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 10px);
+  background: #EEF2FF;
+  border-bottom: 1px solid #C7D2FE;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.1);
+  animation: update-banner-slide-down 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+@keyframes update-banner-slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.update-banner-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #3730A3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.update-banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.update-banner-btn {
+  padding: 6px 14px;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease;
+}
+
+.update-banner-btn--update {
+  background: #4F46E5;
+  color: #ffffff;
+}
+
+.update-banner-btn--update:hover {
+  background: #4338CA;
+}
+
+.update-banner-btn--later {
+  background: transparent;
+  color: #6366F1;
+}
+
+.update-banner-btn--later:hover {
+  background: rgba(99, 102, 241, 0.08);
+}

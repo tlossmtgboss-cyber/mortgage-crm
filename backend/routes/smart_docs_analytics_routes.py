@@ -11,18 +11,20 @@ All queries are scoped by organization_id from the authenticated user
 for multi-tenant isolation.
 
 Endpoints:
-    GET /doc-analytics/dashboard                    — Main document dashboard
-    GET /doc-analytics/pipeline-completeness        — Per-loan document completeness
-    GET /doc-analytics/sla-compliance               — Document SLA compliance metrics
-    GET /doc-analytics/ai-performance               — AI classification performance
-    GET /doc-analytics/followup-effectiveness       — Follow-up campaign effectiveness
-    GET /doc-analytics/income-summary               — Income calculation summary
-    GET /doc-analytics/bank-analysis-summary        — Bank analysis summary
-    GET /doc-analytics/esign-metrics                — E-signature metrics
-    GET /doc-analytics/processor-productivity       — Per-processor review productivity
-    GET /doc-analytics/loan/{loan_id}/timeline      — Document timeline for a loan
-    GET /doc-analytics/trends                       — Document trends over time
-    GET /doc-analytics/bottlenecks                  — Identify document bottlenecks
+    GET  /doc-analytics/dashboard                    — Main document dashboard
+    GET  /doc-analytics/pipeline-completeness        — Per-loan document completeness
+    GET  /doc-analytics/sla-compliance               — Document SLA compliance metrics
+    POST /doc-analytics/check-sla-breaches           — Mark new SLA breaches and warnings
+    GET  /doc-analytics/sla-alerts                   — Active SLA breaches/warnings grouped by loan
+    GET  /doc-analytics/ai-performance               — AI classification performance
+    GET  /doc-analytics/followup-effectiveness       — Follow-up campaign effectiveness
+    GET  /doc-analytics/income-summary               — Income calculation summary
+    GET  /doc-analytics/bank-analysis-summary        — Bank analysis summary
+    GET  /doc-analytics/esign-metrics                — E-signature metrics
+    GET  /doc-analytics/processor-productivity       — Per-processor review productivity
+    GET  /doc-analytics/loan/{loan_id}/timeline      — Document timeline for a loan
+    GET  /doc-analytics/trends                       — Document trends over time
+    GET  /doc-analytics/bottlenecks                  — Identify document bottlenecks
 """
 
 import logging
@@ -329,17 +331,275 @@ async def sla_compliance(
             for row in overdue_rows
         ]
 
+        # -- SLA tracking breach / at-risk counts (from smart_docs_sla_tracking) --
+        sla_tracking_stats = db.execute(sa_text("""
+            SELECT
+                COUNT(CASE WHEN sst.breached = true THEN 1 END)                        AS breach_count,
+                COUNT(CASE WHEN sst.breached = false
+                            AND sst.status = 'ACTIVE'
+                            AND sst.warning_at IS NOT NULL
+                            AND sst.warning_at <= NOW() THEN 1 END)                    AS at_risk_count
+            FROM smart_docs_sla_tracking sst
+            WHERE sst.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)
+              AND sst.status IN ('ACTIVE', 'BREACHED')
+        """), {"org_id": org_id}).first()
+
+        breach_count = sla_tracking_stats[0] if sla_tracking_stats else 0
+        at_risk_count = sla_tracking_stats[1] if sla_tracking_stats else 0
+
         return {
             "requests_within_sla": within_sla,
             "requests_overdue": overdue,
             "total_open_requests": total_open,
             "average_days_open": avg_days_open,
             "sla_compliance_rate": compliance_rate,
+            "breach_count": breach_count,
+            "at_risk_count": at_risk_count,
             "overdue_by_loan": overdue_by_loan,
         }
 
     except SQLAlchemyError as e:
         logger.exception("SLA compliance query failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =============================================================================
+# 3a. POST /doc-analytics/check-sla-breaches
+# =============================================================================
+
+@router.post("/doc-analytics/check-sla-breaches")
+async def check_sla_breaches(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Detect and mark new SLA breaches and warnings.
+
+    - Finds ACTIVE SLA timers where target_at < NOW() and breached = false,
+      marks them as breached (breached=true, status='BREACHED').
+    - Finds ACTIVE timers where warning_at <= NOW() but not yet breached.
+    - Returns a summary of new breaches and current warnings.
+
+    Requires admin or manager role.
+    """
+    org_id = _get_org_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Organization context required")
+
+    role = getattr(current_user, "role", None)
+    if role not in ("admin", "manager", "platform_admin", "site_admin"):
+        raise HTTPException(status_code=403, detail="Admin or manager role required")
+
+    try:
+        # -- Find timers that have breached but are not yet marked --
+        newly_breached_rows = db.execute(sa_text("""
+            SELECT
+                sst.id,
+                sst.loan_id,
+                sst.sla_name,
+                sst.doc_type,
+                sst.target_at,
+                sst.assigned_to,
+                l.loan_number
+            FROM smart_docs_sla_tracking sst
+            JOIN loans l ON l.id = sst.loan_id
+            WHERE l.organization_id = :org_id
+              AND sst.status = 'ACTIVE'
+              AND sst.breached = false
+              AND sst.target_at < NOW()
+        """), {"org_id": org_id}).fetchall()
+
+        new_breach_ids = [row[0] for row in newly_breached_rows]
+
+        if new_breach_ids:
+            db.execute(sa_text("""
+                UPDATE smart_docs_sla_tracking
+                SET breached = true,
+                    status = 'BREACHED'
+                WHERE id = ANY(:ids)
+            """), {"ids": new_breach_ids})
+            db.commit()
+
+        # -- Find timers currently in warning zone (past warning_at, not yet breached) --
+        warning_rows = db.execute(sa_text("""
+            SELECT
+                sst.id,
+                sst.loan_id,
+                sst.sla_name,
+                sst.doc_type,
+                sst.target_at,
+                sst.warning_at,
+                sst.assigned_to,
+                l.loan_number,
+                EXTRACT(EPOCH FROM (NOW() - sst.target_at)) / 3600.0 AS elapsed_hours
+            FROM smart_docs_sla_tracking sst
+            JOIN loans l ON l.id = sst.loan_id
+            WHERE l.organization_id = :org_id
+              AND sst.status = 'ACTIVE'
+              AND sst.breached = false
+              AND sst.warning_at IS NOT NULL
+              AND sst.warning_at <= NOW()
+        """), {"org_id": org_id}).fetchall()
+
+        breach_details = [
+            {
+                "sla_id": row[0],
+                "loan_id": row[1],
+                "loan_number": row[6],
+                "sla_name": row[2],
+                "doc_type": row[3],
+                "target_at": row[4].isoformat() if row[4] else None,
+                "assigned_to": row[5],
+            }
+            for row in newly_breached_rows
+        ]
+
+        warning_details = [
+            {
+                "sla_id": row[0],
+                "loan_id": row[1],
+                "loan_number": row[7],
+                "sla_name": row[2],
+                "doc_type": row[3],
+                "target_at": row[4].isoformat() if row[4] else None,
+                "warning_at": row[5].isoformat() if row[5] else None,
+                "assigned_to": row[6],
+                "elapsed_hours": round(float(row[8] or 0), 1),
+            }
+            for row in warning_rows
+        ]
+
+        return {
+            "new_breaches": len(new_breach_ids),
+            "warnings": len(warning_rows),
+            "details": {
+                "breaches": breach_details,
+                "warnings": warning_details,
+            },
+        }
+
+    except SQLAlchemyError as e:
+        logger.exception("SLA breach check failed: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =============================================================================
+# 3b. GET /doc-analytics/sla-alerts
+# =============================================================================
+
+@router.get("/doc-analytics/sla-alerts")
+async def sla_alerts(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    Return all active SLA breaches and warnings for the org, grouped by loan.
+
+    Includes: loan_number, document type, SLA name, target_at, elapsed hours,
+    and assigned_to. Results are filtered by organization_id for tenant isolation.
+    """
+    org_id = _get_org_id(current_user)
+    if not org_id:
+        raise HTTPException(status_code=400, detail="Organization context required")
+
+    try:
+        # -- Active breaches --
+        breach_rows = db.execute(sa_text("""
+            SELECT
+                sst.id,
+                sst.loan_id,
+                l.loan_number,
+                sst.sla_name,
+                sst.doc_type,
+                sst.target_at,
+                sst.assigned_to,
+                EXTRACT(EPOCH FROM (NOW() - sst.target_at)) / 3600.0  AS elapsed_hours
+            FROM smart_docs_sla_tracking sst
+            JOIN loans l ON l.id = sst.loan_id
+            WHERE l.organization_id = :org_id
+              AND sst.status = 'BREACHED'
+              AND sst.breached = true
+            ORDER BY sst.target_at ASC
+        """), {"org_id": org_id}).fetchall()
+
+        # -- Active warnings (past warning_at, not yet breached) --
+        warning_rows = db.execute(sa_text("""
+            SELECT
+                sst.id,
+                sst.loan_id,
+                l.loan_number,
+                sst.sla_name,
+                sst.doc_type,
+                sst.target_at,
+                sst.warning_at,
+                sst.assigned_to,
+                EXTRACT(EPOCH FROM (NOW() - sst.warning_at)) / 3600.0 AS hours_past_warning
+            FROM smart_docs_sla_tracking sst
+            JOIN loans l ON l.id = sst.loan_id
+            WHERE l.organization_id = :org_id
+              AND sst.status = 'ACTIVE'
+              AND sst.breached = false
+              AND sst.warning_at IS NOT NULL
+              AND sst.warning_at <= NOW()
+            ORDER BY sst.target_at ASC
+        """), {"org_id": org_id}).fetchall()
+
+        # -- Group breaches by loan --
+        loans_map: dict = {}
+
+        for row in breach_rows:
+            loan_id = row[1]
+            if loan_id not in loans_map:
+                loans_map[loan_id] = {
+                    "loan_id": loan_id,
+                    "loan_number": row[2],
+                    "breaches": [],
+                    "warnings": [],
+                }
+            loans_map[loan_id]["breaches"].append({
+                "sla_id": row[0],
+                "sla_name": row[3],
+                "doc_type": row[4],
+                "target_at": row[5].isoformat() if row[5] else None,
+                "assigned_to": row[6],
+                "elapsed_hours": round(float(row[7] or 0), 1),
+            })
+
+        for row in warning_rows:
+            loan_id = row[1]
+            if loan_id not in loans_map:
+                loans_map[loan_id] = {
+                    "loan_id": loan_id,
+                    "loan_number": row[2],
+                    "breaches": [],
+                    "warnings": [],
+                }
+            loans_map[loan_id]["warnings"].append({
+                "sla_id": row[0],
+                "sla_name": row[3],
+                "doc_type": row[4],
+                "target_at": row[5].isoformat() if row[5] else None,
+                "warning_at": row[6].isoformat() if row[6] else None,
+                "assigned_to": row[7],
+                "hours_past_warning": round(float(row[8] or 0), 1),
+            })
+
+        # Sort loans: most breaches first, then most warnings
+        grouped = sorted(
+            loans_map.values(),
+            key=lambda x: (len(x["breaches"]), len(x["warnings"])),
+            reverse=True,
+        )
+
+        return {
+            "total_breach_count": len(breach_rows),
+            "total_warning_count": len(warning_rows),
+            "loans_affected": len(grouped),
+            "by_loan": grouped,
+        }
+
+    except SQLAlchemyError as e:
+        logger.exception("SLA alerts query failed: %s", e)
         raise HTTPException(status_code=500, detail="Internal server error")
 
 

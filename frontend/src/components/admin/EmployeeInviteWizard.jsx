@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { getAuthHeaders } from '../../utils/auth';
+import api from '../../services/api';
+import { toast } from '../../utils/toast';
 import './EmployeeInviteWizard.css';
 
 const EmployeeInviteWizard = ({ onComplete, onCancel }) => {
@@ -30,8 +31,6 @@ const EmployeeInviteWizard = ({ onComplete, onCancel }) => {
 
   const [errors, setErrors] = useState({});
 
-  const API_BASE = (process.env.REACT_APP_API_URL || 'https://api.perenniaai.com') + '/api';
-
   // Load options on mount
   useEffect(() => {
     loadOptions();
@@ -46,13 +45,8 @@ const EmployeeInviteWizard = ({ onComplete, onCancel }) => {
 
   const loadOptions = async () => {
     try {
-      const response = await fetch(`${API_BASE}/user-onboarding/options`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setOptions(data);
-      }
+      const response = await api.get('/api/user-onboarding/options');
+      setOptions(response.data);
     } catch (error) {
       console.error('Error loading options:', error);
     }
@@ -60,13 +54,8 @@ const EmployeeInviteWizard = ({ onComplete, onCancel }) => {
 
   const loadRolePermissions = async (role) => {
     try {
-      const response = await fetch(`${API_BASE}/user-onboarding/permissions-preview/${role}`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setRolePermissions(data);
-      }
+      const response = await api.get(`/api/user-onboarding/permissions-preview/${role}`);
+      setRolePermissions(response.data);
     } catch (error) {
       console.error('Error loading role permissions:', error);
     }
@@ -74,17 +63,13 @@ const EmployeeInviteWizard = ({ onComplete, onCancel }) => {
 
   const checkEmailAvailability = async (email) => {
     try {
-      const response = await fetch(`${API_BASE}/admin/users/check-email?email=${encodeURIComponent(email)}`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        return data;
-      }
+      const response = await api.get(`/api/admin/users/check-email?email=${encodeURIComponent(email)}`);
+      return response.data;
     } catch (error) {
       console.error('Error checking email:', error);
+      toast.warning('Could not verify email availability — you may proceed, but the invite may fail if the email is already in use.');
+      return { available: true, reason: null };
     }
-    return { available: false, reason: 'Unable to verify' };
   };
 
   const handleChange = (field, value) => {
@@ -166,32 +151,22 @@ const EmployeeInviteWizard = ({ onComplete, onCancel }) => {
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE}/admin/users/onboarding`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          email: formData.email,
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          job_title: formData.job_title,
-          permission_role: formData.permission_role,
-          branch_id: formData.branch_id,
-          page_permissions: formData.page_permissions,
-          responsibilities: formData.responsibilities
-        })
+      const response = await api.post('/api/admin/users/onboarding', {
+        email: formData.email,
+        first_name: formData.first_name,
+        last_name: formData.last_name,
+        job_title: formData.job_title,
+        permission_role: formData.permission_role,
+        branch_id: formData.branch_id,
+        page_permissions: formData.page_permissions,
+        responsibilities: formData.responsibilities
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        setInviteResult(data);
-        setCurrentStep(6); // Success step
-      } else {
-        const errorData = await response.json();
-        setError(errorData.detail || 'Failed to create invite');
-      }
+      setInviteResult(response.data);
+      setCurrentStep(6); // Success step
     } catch (error) {
       console.error('Error creating invite:', error);
-      setError('Failed to create invite. Please try again.');
+      setError(error.response?.data?.detail || 'Failed to create invite. Please try again.');
     } finally {
       setIsLoading(false);
     }

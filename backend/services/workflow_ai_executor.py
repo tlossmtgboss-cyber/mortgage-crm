@@ -19,6 +19,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
+# Circuit breaker: maximum number of tool calls per batch/autonomous execution cycle.
+# Prevents runaway LLM tool-calling loops from consuming unbounded resources.
+MAX_TOOL_CALLS = 10
+
 
 class WorkflowAIExecutor:
     """
@@ -176,10 +180,34 @@ class WorkflowAIExecutor:
             "executed": [],
             "skipped": [],
             "failed": [],
-            "total": len(task_instance_ids)
+            "total": len(task_instance_ids),
+            "circuit_breaker_tripped": False
         }
 
+        tool_call_count = 0
         for task_id in task_instance_ids:
+            tool_call_count += 1
+            if tool_call_count > MAX_TOOL_CALLS:
+                logger.warning(
+                    f"Circuit breaker: max tool calls ({MAX_TOOL_CALLS}) reached "
+                    f"during batch execution. {len(task_instance_ids) - tool_call_count + 1} "
+                    f"remaining tasks flagged for manual review."
+                )
+                results["circuit_breaker_tripped"] = True
+                # Flag all remaining tasks for manual review instead of executing
+                remaining_ids = task_instance_ids[tool_call_count - 1:]
+                for remaining_id in remaining_ids:
+                    self._mark_task_needs_review(
+                        remaining_id,
+                        f"Circuit breaker tripped: max tool calls ({MAX_TOOL_CALLS}) "
+                        f"reached in batch execution"
+                    )
+                    results["skipped"].append({
+                        "task_instance_id": remaining_id,
+                        "reason": "Circuit breaker: max tool calls reached, flagged for manual review"
+                    })
+                break
+
             try:
                 result = self.execute_task(
                     task_instance_id=task_id,
@@ -215,10 +243,16 @@ class WorkflowAIExecutor:
         results["skipped_count"] = len(results["skipped"])
         results["failed_count"] = len(results["failed"])
 
-        logger.info(
-            f"Batch execution: {results['executed_count']} executed, "
-            f"{results['skipped_count']} skipped, {results['failed_count']} failed"
-        )
+        if results["circuit_breaker_tripped"]:
+            logger.warning(
+                f"Batch execution (CIRCUIT BREAKER TRIPPED): {results['executed_count']} executed, "
+                f"{results['skipped_count']} skipped/needs-review, {results['failed_count']} failed"
+            )
+        else:
+            logger.info(
+                f"Batch execution: {results['executed_count']} executed, "
+                f"{results['skipped_count']} skipped, {results['failed_count']} failed"
+            )
 
         return results
 
@@ -415,15 +449,28 @@ class WorkflowAIExecutor:
                 return {"success": False, "error": "Failed to generate message content"}
 
             # Send via SMS service
-            from services.sms_service import send_sms
+            from integrations.sms_service import get_sms_client
+            import asyncio
+            import concurrent.futures
 
-            result = send_sms(
+            sms_client = get_sms_client(db=None, user_id=task.get("assigned_user_id"))
+            coro = sms_client.send_sms(
                 to_phone=task["phone"],
                 message=message_content,
                 lead_id=task.get("lead_id"),
-                loan_id=task.get("loan_id"),
                 user_id=task.get("assigned_user_id")
             )
+
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop and loop.is_running():
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    result = pool.submit(asyncio.run, coro).result()
+            else:
+                result = asyncio.run(coro)
 
             if result.get("success"):
                 return {
@@ -505,15 +552,33 @@ class WorkflowAIExecutor:
             # Build prompt for AI
             prompt = self._build_task_prompt(task, context)
 
-            # Run through orchestrator
+            # Run through orchestrator — safely handle both sync and async contexts.
+            # This method is sync but may be called from an async FastAPI handler,
+            # so asyncio.run() would crash with "cannot be called from a running event loop".
             import asyncio
-            result = asyncio.run(run_orchestrator(
+            import concurrent.futures
+
+            coro = run_orchestrator(
                 message=prompt,
                 user_id=str(task.get("assigned_user_id", "system")),
                 user_email="ai-executor@system.local",
                 user_role="ai_agent",
                 autonomous_mode=True
-            ))
+            )
+
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop and loop.is_running():
+                # Already inside an async event loop (e.g. FastAPI handler) —
+                # run the coroutine in a separate thread with its own event loop.
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    result = pool.submit(asyncio.run, coro).result()
+            else:
+                # No running loop — safe to use asyncio.run() directly.
+                result = asyncio.run(coro)
 
             return {
                 "success": True,
@@ -619,20 +684,112 @@ Please complete this task appropriately."""
         })
         self.db.commit()
 
+    # Maximum retries before a task is moved to dead letter
+    MAX_TASK_RETRIES = 5
+
     def _mark_task_failed(self, task_instance_id: int, error: str):
-        """Mark task as failed."""
-        self.db.execute(text("""
+        """
+        Mark task as failed with retry tracking.
+
+        Increments retry_count on each failure. When retry_count reaches
+        MAX_TASK_RETRIES, the task is moved to 'dead_letter' status and
+        will no longer be retried by the scheduler.
+        """
+        # Atomically increment retry_count and fetch the new value
+        result = self.db.execute(text("""
             UPDATE workflow_task_instances
-            SET status = 'failed',
+            SET retry_count = COALESCE(retry_count, 0) + 1,
                 error_message = :error,
-                health_status = 'broken',
+                last_failed_at = NOW(),
                 updated_at = NOW()
             WHERE id = :id
+            RETURNING retry_count
         """), {
             "id": task_instance_id,
-            "error": error[:500]
+            "error": error[:500],
         })
+        row = result.fetchone()
+        retry_count = row[0] if row else 1
+
+        if retry_count >= self.MAX_TASK_RETRIES:
+            # Move to dead letter -- permanently failed
+            self.db.execute(text("""
+                UPDATE workflow_task_instances
+                SET status = 'dead_letter',
+                    health_status = 'broken',
+                    error_message = :error,
+                    updated_at = NOW()
+                WHERE id = :id
+            """), {
+                "id": task_instance_id,
+                "error": f"Dead letter after {retry_count} retries. Last error: {error[:400]}",
+            })
+            logger.error(
+                f"Task {task_instance_id} moved to dead letter after "
+                f"{retry_count} retries. Last error: {error}"
+            )
+
+            # Create a broken task alert for admin visibility
+            try:
+                self.db.execute(text("""
+                    INSERT INTO broken_task_alerts (
+                        workflow_id, task_instance_id, alert_type,
+                        alert_message, severity, created_at
+                    )
+                    SELECT
+                        wti.workflow_id, wti.id, 'dead_letter',
+                        :message, 'critical', NOW()
+                    FROM workflow_task_instances wti
+                    WHERE wti.id = :id
+                """), {
+                    "id": task_instance_id,
+                    "message": (
+                        f"Task permanently failed after {retry_count} retries. "
+                        f"Last error: {error[:300]}"
+                    ),
+                })
+            except Exception as alert_err:
+                logger.warning(
+                    f"Failed to create dead letter alert for task "
+                    f"{task_instance_id}: {alert_err}"
+                )
+        else:
+            # Keep as failed -- scheduler will retry on next cycle
+            self.db.execute(text("""
+                UPDATE workflow_task_instances
+                SET status = 'failed',
+                    health_status = 'broken',
+                    updated_at = NOW()
+                WHERE id = :id
+            """), {
+                "id": task_instance_id,
+            })
+            logger.warning(
+                f"Task {task_instance_id} failed (attempt "
+                f"{retry_count}/{self.MAX_TASK_RETRIES}): {error}"
+            )
+
         self.db.commit()
+
+    def _mark_task_needs_review(self, task_instance_id: int, reason: str):
+        """Mark task as needing manual review (circuit breaker or other safety stop)."""
+        try:
+            self.db.execute(text("""
+                UPDATE workflow_task_instances
+                SET status = 'pending',
+                    error_message = :reason,
+                    health_status = 'needs_review',
+                    route = 'manual',
+                    updated_at = NOW()
+                WHERE id = :id
+            """), {
+                "id": task_instance_id,
+                "reason": reason[:500]
+            })
+            self.db.commit()
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to mark task {task_instance_id} for review: {e}")
+            self.db.rollback()
 
 
 # =============================================================================

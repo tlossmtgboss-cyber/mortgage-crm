@@ -29,8 +29,6 @@ class VoiceCIBridgeService:
         context: Optional[str] = None,
         client_name: Optional[str] = None,
         client_phone: Optional[str] = None,
-        telephony_call_id: Optional[str] = None,
-        call_provider: Optional[str] = None,
     ) -> str:
         """Create a new CI session and return session_id."""
         session_id = str(uuid.uuid4())
@@ -41,10 +39,6 @@ class VoiceCIBridgeService:
             metadata["client_name"] = client_name
         if client_phone:
             metadata["client_phone"] = client_phone
-        if telephony_call_id:
-            metadata["telephony_call_id"] = telephony_call_id
-        if call_provider:
-            metadata["call_provider"] = call_provider
         metadata["source"] = "aria_voice_app"
 
         import json
@@ -97,128 +91,7 @@ class VoiceCIBridgeService:
             "CI session stopped from voice",
             extra={"session_id": session_id, "run_agents": run_agents},
         )
-
-        agents_triggered = False
-        trigger_method = None
-
-        if run_agents:
-            agents_triggered, trigger_method = await self._trigger_agent_pipeline(
-                session_id
-            )
-
-        return {
-            "success": True,
-            "session_id": session_id,
-            "agents_triggered": agents_triggered,
-            "trigger_method": trigger_method,
-        }
-
-    async def _trigger_agent_pipeline(
-        self, session_id: str
-    ) -> tuple:
-        """
-        Trigger the AI agent pipeline for a completed session.
-
-        Preferred: Celery task (non-blocking, survives process restarts).
-        Fallback: asyncio.create_task with orchestrator (in-process async).
-
-        Returns:
-            (triggered: bool, method: str|None)
-        """
-        # --- Attempt 1: Celery task (preferred, non-blocking) ---
-        try:
-            from tasks.call_intelligence_tasks import process_transcript_task
-
-            # Fetch transcript from DB so the Celery worker has it
-            row = self.db.execute(text("""
-                SELECT full_transcript
-                FROM call_sessions
-                WHERE id = :session_id AND organization_id = :org_id
-            """), {
-                "session_id": session_id,
-                "org_id": self.organization_id,
-            }).fetchone()
-
-            transcript = row.full_transcript if row else None
-
-            if transcript:
-                process_transcript_task.delay({
-                    "call_id": session_id,
-                    "organization_id": self.organization_id,
-                    "transcript": transcript,
-                })
-                logger.info(
-                    "Agent pipeline triggered via Celery task",
-                    extra={"session_id": session_id},
-                )
-                return True, "celery"
-            else:
-                logger.warning(
-                    "No transcript available for Celery task, falling back to orchestrator",
-                    extra={"session_id": session_id},
-                )
-        except Exception as e:
-            logger.warning(
-                "Celery task dispatch failed, falling back to orchestrator: %s",
-                e,
-                extra={"session_id": session_id},
-            )
-
-        # --- Attempt 2: asyncio.create_task with orchestrator (fallback) ---
-        try:
-            import asyncio
-
-            asyncio.create_task(
-                self._run_agents_async(session_id, self.organization_id)
-            )
-            logger.info(
-                "Agent pipeline triggered via asyncio orchestrator",
-                extra={"session_id": session_id},
-            )
-            return True, "asyncio_orchestrator"
-        except Exception as e:
-            logger.error(
-                "Failed to trigger agent pipeline: %s",
-                e,
-                extra={"session_id": session_id},
-            )
-            return False, None
-
-    @staticmethod
-    async def _run_agents_async(
-        session_id: str, organization_id: int
-    ) -> None:
-        """
-        Run the CallMonitoringOrchestrator agents in a background coroutine.
-
-        Creates a fresh DB session so the caller's session isn't held open.
-        """
-        try:
-            from db import SessionLocal
-            from services.call_monitoring.orchestrator_service import (
-                CallMonitoringOrchestrator,
-            )
-
-            db = SessionLocal()
-            try:
-                orchestrator = CallMonitoringOrchestrator(
-                    db, organization_id=organization_id
-                )
-                await orchestrator.run_agents(
-                    session_id=session_id,
-                    trigger="voice_ci_bridge",
-                )
-                logger.info(
-                    "Orchestrator agents completed for session %s", session_id
-                )
-            finally:
-                db.close()
-        except Exception as e:
-            logger.error(
-                "Orchestrator background processing failed for session %s: %s",
-                session_id,
-                e,
-            )
+        return {"success": True, "session_id": session_id}
 
     async def get_latest_session(self) -> Optional[Dict[str, Any]]:
         """Get most recent CI session for this user/org."""
@@ -437,7 +310,7 @@ class VoiceCIBridgeService:
 
         for artifact in artifacts:
             try:
-                result = await self._execute_single_artifact(artifact, session_id=session_id)
+                result = await self._execute_single_artifact(artifact)
                 results.append(result)
 
                 self.db.execute(text("""
@@ -497,88 +370,6 @@ class VoiceCIBridgeService:
             "count": len(documents),
         }
 
-    async def update_session_transcript(
-        self, session_id: str, transcript_text: str
-    ) -> Dict[str, Any]:
-        """Append or update the full transcript for a CI session.
-
-        Overwrites full_transcript with the provided text and updates
-        transcript_word_count.  Intended to be called with the complete
-        accumulated transcript (not a delta).
-        """
-        if not session_id or not transcript_text:
-            return {"success": False, "error": "session_id and transcript_text required"}
-
-        word_count = len(transcript_text.split())
-
-        result = self.db.execute(text("""
-            UPDATE call_sessions
-            SET full_transcript = :transcript,
-                transcript_word_count = :word_count,
-                updated_at = NOW()
-            WHERE id = :session_id
-                AND organization_id = :org_id
-            RETURNING id
-        """), {
-            "transcript": transcript_text,
-            "word_count": word_count,
-            "session_id": session_id,
-            "org_id": self.organization_id,
-        }).fetchone()
-        self.db.flush()
-
-        if not result:
-            return {"success": False, "error": f"Session {session_id} not found"}
-
-        logger.info(
-            "CI session transcript updated",
-            extra={
-                "session_id": session_id,
-                "word_count": word_count,
-            },
-        )
-        return {"success": True, "session_id": session_id, "word_count": word_count}
-
-    async def append_transcript_chunk(
-        self, session_id: str, chunk_text: str
-    ) -> Dict[str, Any]:
-        """Append a transcript chunk to an active CI session (P2: periodic flush).
-
-        Unlike update_session_transcript which overwrites, this APPENDS to the
-        existing full_transcript and updates word count incrementally.
-        """
-        if not session_id or not chunk_text or not chunk_text.strip():
-            return {"success": False, "error": "session_id and non-empty chunk required"}
-
-        chunk_words = len(chunk_text.split())
-
-        result = self.db.execute(text("""
-            UPDATE call_sessions
-            SET full_transcript = COALESCE(full_transcript, '') || :chunk,
-                transcript_word_count = COALESCE(transcript_word_count, 0) + :chunk_words,
-                last_flush_at = NOW(),
-                updated_at = NOW()
-            WHERE id = :session_id
-                AND organization_id = :org_id
-                AND status = 'active'
-            RETURNING id
-        """), {
-            "chunk": "\n" + chunk_text if chunk_text else "",
-            "chunk_words": chunk_words,
-            "session_id": session_id,
-            "org_id": self.organization_id,
-        }).fetchone()
-        self.db.flush()
-
-        if not result:
-            return {"success": False, "error": f"Active session {session_id} not found"}
-
-        logger.info(
-            "CI transcript chunk appended",
-            extra={"session_id": session_id, "chunk_words": chunk_words},
-        )
-        return {"success": True, "session_id": session_id, "chunk_words": chunk_words}
-
     # -------------------------------------------------------------------------
     # Private helpers
     # -------------------------------------------------------------------------
@@ -596,57 +387,39 @@ class VoiceCIBridgeService:
         }).fetchone()
         return str(row.id) if row else None
 
-    async def _execute_single_artifact(
-        self, artifact, session_id: Optional[str] = None
-    ) -> Dict[str, Any]:
-        """Execute a single artifact using SmartTaskExecutor (P5) with fallback."""
-        artifact_type = artifact.artifact_type
-
-        # P3: Intake fields use the IntakeFieldApplier
-        if artifact_type == "intake_field":
-            try:
-                from services.call_monitoring.intake_field_applier import IntakeFieldApplier
-                applier = IntakeFieldApplier(self.db, self.organization_id)
-                sid = session_id or await self._get_latest_session_id()
-                return await applier.apply_intake_fields(
-                    session_id=sid or "",
-                    user_id=self.user_id,
-                )
-            except Exception as e:
-                logger.error(f"IntakeFieldApplier failed: {e}")
-                return {"type": "intake_field_error", "title": artifact.title, "error": str(e)}
-
-        # P5: Use SmartTaskExecutor for tasks and appointments
-        try:
-            from services.call_monitoring.smart_task_executor import SmartTaskExecutor
-            executor = SmartTaskExecutor(self.db, self.organization_id, self.user_id)
-            sid = session_id or await self._get_latest_session_id()
-            return await executor.execute_artifact(artifact, sid or "")
-        except Exception as e:
-            logger.warning(f"SmartTaskExecutor failed, using fallback: {e}")
-            return await self._execute_single_artifact_fallback(artifact)
-
-    async def _execute_single_artifact_fallback(self, artifact) -> Dict[str, Any]:
-        """Fallback execution when SmartTaskExecutor is unavailable."""
+    async def _execute_single_artifact(self, artifact) -> Dict[str, Any]:
+        """Execute a single artifact based on its type."""
         artifact_type = artifact.artifact_type
         content = artifact.content if isinstance(artifact.content, dict) else {}
 
-        if artifact_type in ("action_item", "document_request", "task", "risk_flag"):
-            title = artifact.title
-            if artifact_type == "document_request":
-                title = f"Request: {title}"
+        if artifact_type == "action_item":
+            # Create a CRM task
+            import uuid as uuid_mod
             self.db.execute(text("""
                 INSERT INTO tasks (id, title, description, priority, status, created_at, organization_id)
                 VALUES (gen_random_uuid(), :title, :description, :priority, 'pending', NOW(), :org_id)
             """), {
-                "title": title,
+                "title": artifact.title,
                 "description": content.get("details", str(artifact.content or "")),
                 "priority": artifact.priority or "medium",
                 "org_id": self.organization_id,
             })
             return {"type": "task_created", "title": artifact.title}
 
+        elif artifact_type == "document_request":
+            # Create a task for the document request
+            self.db.execute(text("""
+                INSERT INTO tasks (id, title, description, priority, status, created_at, organization_id)
+                VALUES (gen_random_uuid(), :title, :description, 'high', 'pending', NOW(), :org_id)
+            """), {
+                "title": f"Request: {artifact.title}",
+                "description": f"Document needed: {content.get('details', artifact.title)}",
+                "org_id": self.organization_id,
+            })
+            return {"type": "doc_request_task_created", "title": artifact.title}
+
         elif artifact_type in ("scheduled_appointment", "follow_up_call"):
+            # Create an appointment
             self.db.execute(text("""
                 INSERT INTO appointments (id, caller_name, reason, status, created_at, organization_id, notes)
                 VALUES (gen_random_uuid(), :name, :reason, 'scheduled', NOW(), :org_id, :notes)
@@ -657,5 +430,7 @@ class VoiceCIBridgeService:
                 "notes": f"Created from Call Intelligence artifact: {artifact.title}",
             })
             return {"type": "appointment_created", "title": artifact.title}
+
         else:
+            # For other types, just mark as executed (no CRM action)
             return {"type": "marked_complete", "title": artifact.title}

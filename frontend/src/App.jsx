@@ -19,6 +19,8 @@ import UnifiedTaskSidebar from './components/UnifiedTaskSidebar';
 import GlobalLayoutFix from './components/GlobalLayoutFix';
 import GlobalSearch from './components/GlobalSearch';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import UpdateRequiredModal from './components/mobile/UpdateRequiredModal';
+import { checkForUpdate, clearVersionCache } from './services/appVersionCheck';
 import './App.css';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
@@ -392,9 +394,30 @@ function LazyPage({ children }) {
 }
 
 function App() {
+  // --- App version check state ---
+  const [versionStatus, setVersionStatus] = useState(null);
+  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
+
   // Hide Capacitor splash screen on mount
   useEffect(() => {
     SplashScreen.hide().catch(() => {});
+  }, []);
+
+  // Check app version on launch (native only)
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+
+    checkForUpdate().then(setVersionStatus).catch(() => {});
+
+    // Re-check when the app returns to the foreground
+    const listener = CapApp.addListener('appStateChange', ({ isActive }) => {
+      if (isActive) {
+        clearVersionCache();
+        checkForUpdate({ force: true }).then(setVersionStatus).catch(() => {});
+      }
+    });
+
+    return () => { listener.then(l => l.remove()); };
   }, []);
 
   // Handle deep links when app is opened via universal link
@@ -547,10 +570,33 @@ function App() {
     };
   }, []);
 
+  // Block the entire app when a forced update or maintenance is required
+  if (versionStatus?.needsForceUpdate || versionStatus?.maintenanceMode) {
+    return (
+      <UpdateRequiredModal
+        forceUpdate={versionStatus.needsForceUpdate}
+        maintenanceMode={versionStatus.maintenanceMode}
+        maintenanceMessage={versionStatus.maintenanceMessage}
+        updateUrl={versionStatus.updateUrl}
+        recommendedVersion={versionStatus.recommendedVersion}
+        changelog={versionStatus.changelog}
+      />
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <ErrorBoundary>
         <OfflineIndicator />
+        {/* Optional update banner (dismissible) */}
+        {versionStatus?.updateAvailable && !updateBannerDismissed && (
+          <UpdateRequiredModal
+            updateAvailable
+            updateUrl={versionStatus.updateUrl}
+            recommendedVersion={versionStatus.recommendedVersion}
+            onDismiss={() => setUpdateBannerDismissed(true)}
+          />
+        )}
         <ImpersonationProvider>
         <PermissionProvider>
         <ModuleProvider>

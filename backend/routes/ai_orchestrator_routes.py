@@ -80,23 +80,27 @@ MAX_MESSAGE_LENGTH = int(os.getenv("AI_MAX_MESSAGE_LENGTH", "10000"))
 def _sanitize_message(message: str) -> str:
     """
     Sanitize user message before sending to LLM.
-    Strips HTML, limits length, and adds basic prompt injection guardrails.
+    Strips HTML, neutralizes prompt injection patterns, and limits length.
     """
     if not message:
         return message
 
-    # Strip HTML tags using nh3 if available, otherwise basic strip
+    try:
+        from input_validation import sanitize_chat_input
+        return sanitize_chat_input(message, max_length=MAX_MESSAGE_LENGTH)
+    except ImportError:
+        logger.warning("input_validation.sanitize_chat_input not available, using basic sanitization")
+
+    # Fallback: basic HTML strip + length cap
     try:
         import nh3
-        message = nh3.clean(message, tags=set())  # Remove all HTML tags
+        message = nh3.clean(message, tags=set())
     except ImportError:
         import re
         message = re.sub(r'<[^>]+>', '', message)
 
-    # Enforce max length
     if len(message) > MAX_MESSAGE_LENGTH:
         message = message[:MAX_MESSAGE_LENGTH]
-        logger.warning(f"Message truncated to {MAX_MESSAGE_LENGTH} chars")
 
     return message.strip()
 
@@ -118,17 +122,22 @@ def _sanitize_document_context(context: Optional[str]) -> Optional[str]:
         import re
         context = re.sub(r'<[^>]+>', '', context)
 
-    # Filter common prompt injection patterns from document content
-    import re
-    injection_patterns = [
-        r"(?i)ignore\s+(previous|all|above|prior)\s+instructions",
-        r"(?i)you\s+are\s+now\s+a",
-        r"(?i)system\s*prompt\s*:",
-        r"(?i)new\s+instructions?\s*:",
-        r"<\|.*?\|>",
-    ]
-    for pattern in injection_patterns:
-        context = re.sub(pattern, "[FILTERED]", context)
+    # Filter prompt injection patterns from document content
+    try:
+        from input_validation import _INJECTION_REGEXES
+        for pattern in _INJECTION_REGEXES:
+            context = pattern.sub("[FILTERED]", context)
+    except ImportError:
+        import re
+        injection_patterns = [
+            r"(?i)ignore\s+(previous|all|above|prior)\s+instructions",
+            r"(?i)you\s+are\s+now\s+a",
+            r"(?i)system\s*prompt\s*:",
+            r"(?i)new\s+instructions?\s*:",
+            r"<\|.*?\|>",
+        ]
+        for pattern in injection_patterns:
+            context = re.sub(pattern, "[FILTERED]", context)
 
     # Truncate if too long
     max_doc_length = 50000

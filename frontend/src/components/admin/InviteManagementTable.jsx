@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { getAuthHeaders } from '../../utils/auth';
+import api from '../../services/api';
+import { ROLES } from '../../constants/roles';
 import './InviteManagementTable.css';
 import { toast } from '../../utils/toast';
 
 const InviteManagementTable = ({ onInviteNew }) => {
   const [invites, setInvites] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
-
-  const API_BASE = (process.env.REACT_APP_API_URL || 'https://api.perenniaai.com') + '/api';
 
   useEffect(() => {
     loadInvites();
@@ -18,51 +18,60 @@ const InviteManagementTable = ({ onInviteNew }) => {
 
   const loadInvites = async () => {
     setIsLoading(true);
+    setError(null);
     try {
       const url = filter === 'all'
-        ? `${API_BASE}/admin/invites`
-        : `${API_BASE}/admin/invites?status=${filter}`;
+        ? '/api/admin/invites'
+        : `/api/admin/invites?status=${filter}`;
 
-      const response = await fetch(url, {
-        headers: getAuthHeaders()
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setInvites(data.invites || []);
-      }
-    } catch (error) {
-      console.error('Error loading invites:', error);
+      const response = await api.get(url);
+      setInvites(response.data.invites || []);
+    } catch (err) {
+      console.error('Error loading invites:', err);
+      setError(err.response?.data?.detail || err.message || 'Failed to load invites. Please try again.');
+      setInvites([]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleRevoke = async (inviteId) => {
-    setActionLoading(inviteId);
+  const handleRevoke = async (invite) => {
+    setActionLoading(invite.id);
     try {
-      const response = await fetch(`${API_BASE}/admin/invites/${inviteId}/revoke`, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
+      await api.post(`/api/admin/invites/${invite.id}/revoke`);
+      toast.success('Invite revoked');
+      loadInvites();
+    } catch (err) {
+      console.error('Error revoking invite:', err);
+      toast.error(err.response?.data?.detail || 'Failed to revoke invite');
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
-      if (response.ok) {
-        loadInvites();
-      } else {
-        toast.error('Failed to revoke invite');
-      }
-    } catch (error) {
-      console.error('Error revoking invite:', error);
-      toast.error('Failed to revoke invite');
+  const handleResend = async (invite) => {
+    setActionLoading(invite.id);
+    try {
+      await api.post(`/api/admin/invites/${invite.id}/resend`);
+      toast.success('Invite resent');
+      loadInvites();
+    } catch (err) {
+      console.error('Error resending invite:', err);
+      toast.error(err.response?.data?.detail || 'Failed to resend invite');
     } finally {
       setActionLoading(null);
     }
   };
 
   const copyInviteLink = (token) => {
+    if (!token) {
+      toast.error('Invite link not available for this invite');
+      return;
+    }
     const frontendUrl = window.location.origin;
     const inviteUrl = `${frontendUrl}/accept-invite?token=${token}`;
     navigator.clipboard.writeText(inviteUrl);
+    toast.success('Invite link copied to clipboard');
   };
 
   const getStatusBadge = (status) => {
@@ -77,15 +86,7 @@ const InviteManagementTable = ({ onInviteNew }) => {
   };
 
   const getRoleBadge = (role) => {
-    const roleConfig = {
-      admin: { label: 'Admin', className: 'role-admin' },
-      leadership: { label: 'Leadership', className: 'role-leadership' },
-      management: { label: 'Management', className: 'role-management' },
-      sales: { label: 'Sales', className: 'role-sales' },
-      processing: { label: 'Processing', className: 'role-processing' },
-      operations: { label: 'Operations', className: 'role-operations' }
-    };
-    const config = roleConfig[role] || { label: role, className: '' };
+    const config = ROLES[role] || { label: role, className: '' };
     return <span className={`role-badge ${config.className}`}>{config.label}</span>;
   };
 
@@ -140,6 +141,20 @@ const InviteManagementTable = ({ onInviteNew }) => {
         </div>
       </div>
 
+      {/* Error Banner */}
+      {error && (
+        <div className="error-banner" role="alert">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 8v4M12 16h.01" />
+          </svg>
+          <span>{error}</span>
+          <button onClick={() => { setError(null); loadInvites(); }} className="retry-btn">
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Controls */}
       <div className="table-controls">
         <div className="search-box">
@@ -152,6 +167,7 @@ const InviteManagementTable = ({ onInviteNew }) => {
             placeholder="Search by name, email, or title..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            aria-label="Search invites"
           />
         </div>
 
@@ -182,7 +198,7 @@ const InviteManagementTable = ({ onInviteNew }) => {
             <div className="spinner"></div>
             <p>Loading invites...</p>
           </div>
-        ) : filteredInvites.length === 0 ? (
+        ) : filteredInvites.length === 0 && !error ? (
           <div className="empty-state">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -239,6 +255,7 @@ const InviteManagementTable = ({ onInviteNew }) => {
                           className="action-btn copy"
                           onClick={() => copyInviteLink(invite.invite_token)}
                           title="Copy invite link"
+                          aria-label="Copy invite link"
                         >
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
@@ -246,10 +263,63 @@ const InviteManagementTable = ({ onInviteNew }) => {
                           </svg>
                         </button>
                         <button
+                          className="action-btn resend"
+                          onClick={() => handleResend(invite)}
+                          disabled={actionLoading === invite.id}
+                          title="Resend invite"
+                          aria-label="Resend invite"
+                        >
+                          {actionLoading === invite.id ? (
+                            <div className="btn-spinner"></div>
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M1 4v6h6M23 20v-6h-6" />
+                              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
+                            </svg>
+                          )}
+                        </button>
+                        <button
                           className="action-btn revoke"
-                          onClick={() => handleRevoke(invite.id)}
+                          onClick={() => handleRevoke(invite)}
                           disabled={actionLoading === invite.id}
                           title="Revoke invite"
+                          aria-label="Revoke invite"
+                        >
+                          {actionLoading === invite.id ? (
+                            <div className="btn-spinner"></div>
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="10" />
+                              <path d="M15 9l-6 6M9 9l6 6" />
+                            </svg>
+                          )}
+                        </button>
+                      </>
+                    )}
+                    {invite.status === 'expired' && (
+                      <>
+                        <button
+                          className="action-btn resend"
+                          onClick={() => handleResend(invite)}
+                          disabled={actionLoading === invite.id}
+                          title="Resend expired invite"
+                          aria-label="Resend expired invite"
+                        >
+                          {actionLoading === invite.id ? (
+                            <div className="btn-spinner"></div>
+                          ) : (
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M1 4v6h6M23 20v-6h-6" />
+                              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15" />
+                            </svg>
+                          )}
+                        </button>
+                        <button
+                          className="action-btn revoke"
+                          onClick={() => handleRevoke(invite)}
+                          disabled={actionLoading === invite.id}
+                          title="Revoke expired invite"
+                          aria-label="Revoke expired invite"
                         >
                           {actionLoading === invite.id ? (
                             <div className="btn-spinner"></div>
@@ -265,8 +335,8 @@ const InviteManagementTable = ({ onInviteNew }) => {
                     {invite.status === 'accepted' && (
                       <span className="accepted-label">Completed</span>
                     )}
-                    {(invite.status === 'expired' || invite.status === 'revoked') && (
-                      <span className="inactive-label">{invite.status}</span>
+                    {invite.status === 'revoked' && (
+                      <span className="inactive-label">Revoked</span>
                     )}
                   </td>
                 </tr>

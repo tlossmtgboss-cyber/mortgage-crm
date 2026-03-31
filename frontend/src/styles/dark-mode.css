@@ -1,0 +1,990 @@
+/**
+ * dark-mode.css -- Comprehensive Dark Mode System for Perennia AI
+ *
+ * This stylesheet provides:
+ *   1. Design tokens as CSS custom properties (--dm-*) on :root
+ *   2. Dark overrides via [data-theme="dark"] selector
+ *   3. Component-specific dark mode overrides for mobile components
+ *   4. Safe area and status bar handling
+ *   5. Image/icon adjustments for dark backgrounds
+ *
+ * Token naming follows the themeTokens.js system:
+ *   --dm-bg-primary, --dm-text-primary, --dm-brand-primary, etc.
+ *
+ * WCAG AA compliance:
+ *   Normal text: >= 4.5:1 contrast ratio
+ *   Large text (18px+): >= 3:1 contrast ratio
+ *   UI components: >= 3:1 contrast ratio
+ *
+ * Import order: This file should be imported AFTER index.css so it can
+ * override any base custom properties and add dark mode rules.
+ */
+
+
+/* =========================================================================
+   SECTION 1: LIGHT THEME TOKENS (:root defaults)
+   These extend the existing index.css variables with additional tokens
+   needed for comprehensive dark mode support.
+   ========================================================================= */
+
+:root {
+  /* ---- Design Tokens (light) ---- */
+  --dm-bg-primary: #ffffff;
+  --dm-bg-secondary: #f5f7fa;
+  --dm-bg-tertiary: #f0f2f5;
+  --dm-bg-card: #ffffff;
+  --dm-bg-modal: #ffffff;
+  --dm-bg-input: #f0f2f5;
+  --dm-bg-overlay: rgba(0, 0, 0, 0.5);
+  --dm-bg-hover: rgba(139, 92, 68, 0.08);
+  --dm-bg-selected: rgba(33, 141, 141, 0.08);
+  --dm-bg-skeleton: #f0f0f0;
+  --dm-bg-skeleton-shimmer: #f8f8f8;
+
+  --dm-text-primary: #1a1a2e;
+  --dm-text-secondary: #6b7280;
+  --dm-text-muted: #9ca3af;
+  --dm-text-inverse: #ffffff;
+  --dm-text-on-brand: #ffffff;
+  --dm-text-link: #1a73e8;
+
+  --dm-border-light: #e5e7eb;
+  --dm-border-medium: #d1d5db;
+  --dm-border-focus: #218d8d;
+
+  --dm-brand-primary: #218d8d;
+  --dm-brand-primary-hover: #1a7070;
+  --dm-brand-secondary: #7c3aed;
+  --dm-brand-accent: #059669;
+
+  --dm-status-success: #16a34a;
+  --dm-status-success-bg: rgba(22, 163, 74, 0.1);
+  --dm-status-warning: #f59e0b;
+  --dm-status-warning-bg: rgba(245, 158, 11, 0.1);
+  --dm-status-error: #dc2626;
+  --dm-status-error-bg: rgba(220, 38, 38, 0.1);
+  --dm-status-info: #2563eb;
+  --dm-status-info-bg: rgba(37, 99, 235, 0.1);
+
+  --dm-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.02);
+  --dm-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+  --dm-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07);
+  --dm-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --dm-shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.12);
+
+  --dm-nav-bg: #ffffff;
+  --dm-nav-border: #e5e7eb;
+  --dm-bottom-nav-bg: #ffffff;
+  --dm-bottom-nav-border: #e5e7eb;
+  --dm-bottom-nav-active: #1a73e8;
+  --dm-fab-gradient-start: #1a73e8;
+  --dm-fab-gradient-end: #4f8ff7;
+  --dm-fab-shadow: rgba(26, 115, 232, 0.35);
+
+  --dm-spinner-track: #e5e7eb;
+  --dm-spinner-active: #218d8d;
+
+  --dm-scrollbar-thumb: rgba(0, 0, 0, 0.2);
+  --dm-scrollbar-track: transparent;
+
+  /* Focus ring for dark mode awareness */
+  --dm-focus-ring: 0 0 0 3px rgba(33, 141, 141, 0.2);
+}
+
+
+/* =========================================================================
+   SECTION 2: DARK THEME TOKEN OVERRIDES
+   Applied when ThemeContext sets data-theme="dark" on <html>
+   ========================================================================= */
+
+[data-theme="dark"] {
+  /* ---- Design Tokens (dark) ----
+     bg-primary and bg-secondary align with index.css existing dark values
+     (#111214, #1a1c1f) for consistency with components already styled. */
+  --dm-bg-primary: #111214;
+  --dm-bg-secondary: #1a1c1f;
+  --dm-bg-tertiary: #22223a;
+  --dm-bg-card: #1e1e32;
+  --dm-bg-modal: #252540;
+  --dm-bg-input: #2a2a45;
+  --dm-bg-overlay: rgba(0, 0, 0, 0.7);
+  --dm-bg-hover: rgba(255, 255, 255, 0.08);
+  --dm-bg-selected: rgba(74, 158, 255, 0.12);
+  --dm-bg-skeleton: #2a2a45;
+  --dm-bg-skeleton-shimmer: #33334f;
+
+  --dm-text-primary: #e5e7eb;
+  --dm-text-secondary: #9ca3af;
+  --dm-text-muted: #6b7280;
+  --dm-text-inverse: #1a1a2e;
+  --dm-text-on-brand: #ffffff;
+  --dm-text-link: #4a9eff;
+
+  --dm-border-light: #2d2d4a;
+  --dm-border-medium: #3d3d5c;
+  --dm-border-focus: #4a9eff;
+
+  --dm-brand-primary: #2cb8b8;
+  --dm-brand-primary-hover: #38d4d4;
+  --dm-brand-secondary: #a78bfa;
+  --dm-brand-accent: #34d399;
+
+  --dm-status-success: #22c55e;
+  --dm-status-success-bg: rgba(34, 197, 94, 0.15);
+  --dm-status-warning: #fbbf24;
+  --dm-status-warning-bg: rgba(251, 191, 36, 0.15);
+  --dm-status-error: #ef4444;
+  --dm-status-error-bg: rgba(239, 68, 68, 0.15);
+  --dm-status-info: #3b82f6;
+  --dm-status-info-bg: rgba(59, 130, 246, 0.15);
+
+  --dm-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.25);
+  --dm-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --dm-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --dm-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --dm-shadow-xl: 0 20px 25px rgba(0, 0, 0, 0.6);
+
+  --dm-nav-bg: #16171a;
+  --dm-nav-border: #2d2d4a;
+  --dm-bottom-nav-bg: #16171a;
+  --dm-bottom-nav-border: #2d2d4a;
+  --dm-bottom-nav-active: #4a9eff;
+  --dm-fab-gradient-start: #3b82f6;
+  --dm-fab-gradient-end: #60a5fa;
+  --dm-fab-shadow: rgba(59, 130, 246, 0.4);
+
+  --dm-spinner-track: #2d2d4a;
+  --dm-spinner-active: #2cb8b8;
+
+  --dm-scrollbar-thumb: rgba(255, 255, 255, 0.2);
+  --dm-scrollbar-track: transparent;
+
+  --dm-focus-ring: 0 0 0 3px rgba(74, 158, 255, 0.3);
+
+  /* ---- Bridge: extend existing index.css --color-* variables ----
+     index.css already defines --color-bg-base, --color-bg-surface, etc.
+     for [data-theme="dark"]. We add the ADDITIONAL variables that index.css
+     does not cover. The core --color-* values from index.css are preserved. */
+  --color-bg-muted: #2a2a45;
+
+  --color-primary: #2cb8b8;
+  --color-primary-hover: #38d4d4;
+  --color-success: #22c55e;
+  --color-error: #ef4444;
+  --color-warning: #fbbf24;
+  --color-info: #3b82f6;
+
+  --brand-primary: #2cb8b8;
+
+  color-scheme: dark;
+}
+
+
+/* =========================================================================
+   SECTION 3: BASE ELEMENT OVERRIDES
+   Override common elements that have hardcoded light colors
+   ========================================================================= */
+
+/* Body inherits from index.css dark vars; reinforce with dm tokens */
+[data-theme="dark"] body {
+  background: var(--color-bg-base, var(--dm-bg-primary));
+  color: var(--color-text-primary, var(--dm-text-primary));
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: var(--dm-bg-input);
+  color: var(--dm-text-primary);
+  border-color: var(--dm-border-medium);
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] select::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: var(--dm-text-muted);
+}
+
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] textarea:focus {
+  border-color: var(--dm-border-focus);
+  box-shadow: var(--dm-focus-ring);
+}
+
+/* Option elements inside selects */
+[data-theme="dark"] option {
+  background: var(--dm-bg-modal);
+  color: var(--dm-text-primary);
+}
+
+/* Tables */
+[data-theme="dark"] table {
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] th {
+  background: var(--dm-bg-secondary);
+  color: var(--dm-text-secondary);
+  border-color: var(--dm-border-light);
+}
+
+[data-theme="dark"] td {
+  border-color: var(--dm-border-light);
+}
+
+[data-theme="dark"] tr:hover {
+  background: var(--dm-bg-hover);
+}
+
+/* Horizontal rules */
+[data-theme="dark"] hr {
+  border-color: var(--dm-border-light);
+}
+
+/* Code blocks */
+[data-theme="dark"] code,
+[data-theme="dark"] pre {
+  background: var(--dm-bg-secondary);
+  color: var(--dm-text-primary);
+}
+
+/* Links */
+[data-theme="dark"] a {
+  color: var(--dm-text-link);
+}
+
+/* Buttons -- override hardcoded brand colors */
+[data-theme="dark"] .btn-primary {
+  background: var(--dm-brand-primary);
+  color: var(--dm-text-on-brand);
+}
+
+[data-theme="dark"] .btn-primary:hover {
+  background: var(--dm-brand-primary-hover);
+}
+
+[data-theme="dark"] .btn-secondary {
+  background: var(--dm-bg-secondary);
+  color: var(--dm-text-primary);
+  border-color: var(--dm-border-medium);
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  background: var(--dm-bg-hover);
+}
+
+/* Cards */
+[data-theme="dark"] .card {
+  background: var(--dm-bg-card);
+  border-color: var(--dm-border-light);
+  box-shadow: var(--dm-shadow-sm);
+}
+
+[data-theme="dark"] .card:hover {
+  box-shadow: var(--dm-shadow-md);
+}
+
+/* Badges */
+[data-theme="dark"] .badge-success {
+  background: var(--dm-status-success-bg);
+  color: var(--dm-status-success);
+}
+
+[data-theme="dark"] .badge-warning {
+  background: var(--dm-status-warning-bg);
+  color: var(--dm-status-warning);
+}
+
+[data-theme="dark"] .badge-error {
+  background: var(--dm-status-error-bg);
+  color: var(--dm-status-error);
+}
+
+/* Error messages */
+[data-theme="dark"] .error {
+  background: var(--dm-status-error-bg);
+  color: var(--dm-status-error);
+  border-color: var(--dm-status-error);
+}
+
+/* Loading spinner */
+[data-theme="dark"] .loading-spinner {
+  border-color: var(--dm-spinner-track);
+  border-top-color: var(--dm-spinner-active);
+}
+
+/* Skeleton shimmer */
+[data-theme="dark"] .skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--dm-bg-skeleton) 0px,
+    var(--dm-bg-skeleton-shimmer) 40px,
+    var(--dm-bg-skeleton) 80px
+  );
+  background-size: 200px 100%;
+}
+
+
+/* =========================================================================
+   SECTION 4: NAVIGATION & LAYOUT OVERRIDES
+   ========================================================================= */
+
+/* Top navigation bar */
+[data-theme="dark"] .navigation {
+  background: var(--dm-nav-bg);
+  border-bottom-color: var(--dm-nav-border);
+  box-shadow: var(--dm-shadow-sm);
+}
+
+[data-theme="dark"] .nav-link {
+  color: var(--dm-text-secondary);
+}
+
+[data-theme="dark"] .nav-link:hover,
+[data-theme="dark"] .nav-link.active {
+  color: var(--dm-text-primary);
+  background: var(--dm-bg-hover);
+}
+
+[data-theme="dark"] .nav-brand-text {
+  color: var(--dm-text-primary);
+}
+
+/* Dropdown menus */
+[data-theme="dark"] .nav-dropdown {
+  background: var(--dm-bg-modal);
+  border-color: var(--dm-border-light);
+  box-shadow: var(--dm-shadow-lg);
+}
+
+[data-theme="dark"] .nav-dropdown-item:hover {
+  background: var(--dm-bg-hover);
+}
+
+/* App layout */
+[data-theme="dark"] .app {
+  background: var(--dm-bg-primary);
+}
+
+[data-theme="dark"] .app-main {
+  background: var(--dm-bg-primary);
+}
+
+
+/* =========================================================================
+   SECTION 5: MOBILE BOTTOM NAVIGATION
+   Override hardcoded colors in MobileBottomNav.css
+   ========================================================================= */
+
+[data-theme="dark"] .mobile-bottom-nav {
+  background: var(--dm-bottom-nav-bg);
+  border-top-color: var(--dm-bottom-nav-border);
+  box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .mobile-bottom-nav__tab svg {
+  stroke: var(--dm-text-muted);
+}
+
+[data-theme="dark"] .mobile-bottom-nav__tab--active svg {
+  stroke: var(--dm-bottom-nav-active);
+}
+
+[data-theme="dark"] .mobile-bottom-nav__fab-circle {
+  background: linear-gradient(135deg, var(--dm-fab-gradient-start) 0%, var(--dm-fab-gradient-end) 100%);
+  box-shadow: 0 4px 12px var(--dm-fab-shadow);
+}
+
+[data-theme="dark"] .mobile-bottom-nav__tab:focus-visible {
+  outline-color: var(--dm-bottom-nav-active);
+}
+
+
+/* =========================================================================
+   SECTION 6: COMMON PAGE BACKGROUND OVERRIDES
+   Override hardcoded #f8f9fa, #ffffff, #f8fafc, etc. page backgrounds
+   ========================================================================= */
+
+[data-theme="dark"] .lo-dashboard,
+[data-theme="dark"] .dashboard-page,
+[data-theme="dark"] .leads-page,
+[data-theme="dark"] .loan-detail-page,
+[data-theme="dark"] .admin-panel,
+[data-theme="dark"] .settings-page,
+[data-theme="dark"] .lead-detail-page,
+[data-theme="dark"] .tasks-page,
+[data-theme="dark"] .pipeline-page,
+[data-theme="dark"] .calendar-page,
+[data-theme="dark"] .smart-docs-page,
+[data-theme="dark"] .workflow-dashboard,
+[data-theme="dark"] .agent-dashboard,
+[data-theme="dark"] .scorecard-page,
+[data-theme="dark"] .capacity-dashboard,
+[data-theme="dark"] .review-queue-page,
+[data-theme="dark"] .analytics-page,
+[data-theme="dark"] .power-dialer-page,
+[data-theme="dark"] .recruit-portal,
+[data-theme="dark"] .partner-recruiting {
+  background: var(--dm-bg-primary);
+  color: var(--dm-text-primary);
+}
+
+/* Card/panel backgrounds commonly hardcoded as #fff or #ffffff */
+[data-theme="dark"] .dashboard-card,
+[data-theme="dark"] .stat-card,
+[data-theme="dark"] .metric-card,
+[data-theme="dark"] .detail-card,
+[data-theme="dark"] .info-card,
+[data-theme="dark"] .action-card,
+[data-theme="dark"] .overview-card,
+[data-theme="dark"] .summary-card,
+[data-theme="dark"] .chart-card,
+[data-theme="dark"] .pipeline-card,
+[data-theme="dark"] .lead-card,
+[data-theme="dark"] .loan-card,
+[data-theme="dark"] .task-card,
+[data-theme="dark"] .activity-card {
+  background: var(--dm-bg-card);
+  border-color: var(--dm-border-light);
+  color: var(--dm-text-primary);
+}
+
+/* Section headers and sub-headers with hardcoded text colors */
+[data-theme="dark"] .section-title,
+[data-theme="dark"] .section-header,
+[data-theme="dark"] .page-title,
+[data-theme="dark"] .page-header {
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] .section-subtitle,
+[data-theme="dark"] .page-subtitle {
+  color: var(--dm-text-secondary);
+}
+
+/* Headings commonly with hardcoded dark colors */
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] h4,
+[data-theme="dark"] h5,
+[data-theme="dark"] h6 {
+  color: var(--dm-text-primary);
+}
+
+/* Paragraphs / descriptions with hardcoded #666, #555, #999 */
+[data-theme="dark"] p,
+[data-theme="dark"] .description,
+[data-theme="dark"] .subtitle,
+[data-theme="dark"] .helper-text,
+[data-theme="dark"] .hint,
+[data-theme="dark"] label {
+  color: var(--dm-text-secondary);
+}
+
+
+/* =========================================================================
+   SECTION 7: MODAL & OVERLAY OVERRIDES
+   ========================================================================= */
+
+[data-theme="dark"] .modal-overlay,
+[data-theme="dark"] .overlay,
+[data-theme="dark"] .backdrop {
+  background: var(--dm-bg-overlay);
+}
+
+[data-theme="dark"] .modal,
+[data-theme="dark"] .modal-content,
+[data-theme="dark"] .dialog,
+[data-theme="dark"] .popup,
+[data-theme="dark"] .panel {
+  background: var(--dm-bg-modal);
+  border-color: var(--dm-border-light);
+  color: var(--dm-text-primary);
+  box-shadow: var(--dm-shadow-xl);
+}
+
+[data-theme="dark"] .modal-header,
+[data-theme="dark"] .dialog-header {
+  border-bottom-color: var(--dm-border-light);
+}
+
+[data-theme="dark"] .modal-footer,
+[data-theme="dark"] .dialog-footer {
+  border-top-color: var(--dm-border-light);
+}
+
+
+/* =========================================================================
+   SECTION 8: SIDEBAR & ACTION PANEL OVERRIDES
+   ========================================================================= */
+
+[data-theme="dark"] .sidebar,
+[data-theme="dark"] .action-sidebar,
+[data-theme="dark"] .task-sidebar,
+[data-theme="dark"] .unified-task-sidebar,
+[data-theme="dark"] .filter-sidebar {
+  background: var(--dm-bg-card);
+  border-color: var(--dm-border-light);
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] .sidebar-header {
+  border-bottom-color: var(--dm-border-light);
+}
+
+[data-theme="dark"] .sidebar-item:hover {
+  background: var(--dm-bg-hover);
+}
+
+
+/* =========================================================================
+   SECTION 9: TABS & FILTER OVERRIDES
+   ========================================================================= */
+
+[data-theme="dark"] .tab,
+[data-theme="dark"] .filter-tab,
+[data-theme="dark"] .tab-button {
+  color: var(--dm-text-secondary);
+  background: transparent;
+  border-color: var(--dm-border-light);
+}
+
+[data-theme="dark"] .tab.active,
+[data-theme="dark"] .filter-tab.active,
+[data-theme="dark"] .tab-button.active {
+  color: var(--dm-brand-primary);
+  border-color: var(--dm-brand-primary);
+  background: var(--dm-bg-selected);
+}
+
+[data-theme="dark"] .tab:hover,
+[data-theme="dark"] .filter-tab:hover,
+[data-theme="dark"] .tab-button:hover {
+  background: var(--dm-bg-hover);
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] .tabs-container,
+[data-theme="dark"] .filter-bar {
+  border-bottom-color: var(--dm-border-light);
+}
+
+
+/* =========================================================================
+   SECTION 10: TOOLTIP & POPOVER OVERRIDES
+   ========================================================================= */
+
+[data-theme="dark"] .tooltip,
+[data-theme="dark"] [role="tooltip"] {
+  background: var(--dm-bg-modal);
+  color: var(--dm-text-primary);
+  border-color: var(--dm-border-medium);
+  box-shadow: var(--dm-shadow-lg);
+}
+
+
+/* =========================================================================
+   SECTION 11: NOTIFICATION & TOAST OVERRIDES
+   ========================================================================= */
+
+[data-theme="dark"] .notification-bell .notification-count {
+  background: var(--dm-status-error);
+}
+
+/* Toast notifications -- typically from react-hot-toast */
+[data-theme="dark"] [data-sonner-toast],
+[data-theme="dark"] .toast,
+[data-theme="dark"] .Toastify__toast {
+  background: var(--dm-bg-modal) !important;
+  color: var(--dm-text-primary) !important;
+  border: 1px solid var(--dm-border-light) !important;
+  box-shadow: var(--dm-shadow-lg) !important;
+}
+
+
+/* =========================================================================
+   SECTION 12: AI ASSISTANT & CHAT OVERRIDES
+   ========================================================================= */
+
+[data-theme="dark"] .ai-assistant,
+[data-theme="dark"] .ai-chat,
+[data-theme="dark"] .embedded-ai-chat {
+  background: var(--dm-bg-card);
+  border-color: var(--dm-border-light);
+}
+
+[data-theme="dark"] .ai-message,
+[data-theme="dark"] .chat-message {
+  background: var(--dm-bg-secondary);
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] .ai-message--user,
+[data-theme="dark"] .chat-message--user {
+  background: var(--dm-brand-primary);
+  color: var(--dm-text-on-brand);
+}
+
+[data-theme="dark"] .ai-input,
+[data-theme="dark"] .chat-input {
+  background: var(--dm-bg-input);
+  color: var(--dm-text-primary);
+  border-color: var(--dm-border-medium);
+}
+
+
+/* =========================================================================
+   SECTION 13: SMART DOCS & REVIEW QUEUE OVERRIDES
+   ========================================================================= */
+
+[data-theme="dark"] .smart-docs-container,
+[data-theme="dark"] .review-queue-container,
+[data-theme="dark"] .bank-analysis-container,
+[data-theme="dark"] .income-worksheet,
+[data-theme="dark"] .analytics-container {
+  background: var(--dm-bg-primary);
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] .doc-card,
+[data-theme="dark"] .review-item,
+[data-theme="dark"] .analysis-card {
+  background: var(--dm-bg-card);
+  border-color: var(--dm-border-light);
+}
+
+[data-theme="dark"] .doc-status-badge {
+  border-color: var(--dm-border-medium);
+}
+
+
+/* =========================================================================
+   SECTION 14: CALENDAR OVERRIDES
+   ========================================================================= */
+
+[data-theme="dark"] .calendar-container,
+[data-theme="dark"] .calendar-view {
+  background: var(--dm-bg-primary);
+}
+
+[data-theme="dark"] .calendar-day,
+[data-theme="dark"] .calendar-cell {
+  background: var(--dm-bg-card);
+  border-color: var(--dm-border-light);
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] .calendar-day:hover,
+[data-theme="dark"] .calendar-cell:hover {
+  background: var(--dm-bg-hover);
+}
+
+[data-theme="dark"] .calendar-today {
+  border-color: var(--dm-brand-primary);
+}
+
+[data-theme="dark"] .calendar-event {
+  border-color: var(--dm-border-medium);
+}
+
+[data-theme="dark"] .calendar-header {
+  border-bottom-color: var(--dm-border-light);
+}
+
+
+/* =========================================================================
+   SECTION 15: PORTAL COMPONENT OVERRIDES
+   ========================================================================= */
+
+[data-theme="dark"] .portal-container,
+[data-theme="dark"] .client-portal,
+[data-theme="dark"] .borrower-portal {
+  background: var(--dm-bg-primary);
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] .milestone-timeline {
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] .milestone-step {
+  background: var(--dm-bg-card);
+  border-color: var(--dm-border-light);
+}
+
+[data-theme="dark"] .portal-card {
+  background: var(--dm-bg-card);
+  border-color: var(--dm-border-light);
+}
+
+
+/* =========================================================================
+   SECTION 16: POWER DIALER & CALL INTELLIGENCE
+   ========================================================================= */
+
+[data-theme="dark"] .dialer-container,
+[data-theme="dark"] .power-dialer {
+  background: var(--dm-bg-primary);
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] .dialer-card,
+[data-theme="dark"] .call-card {
+  background: var(--dm-bg-card);
+  border-color: var(--dm-border-light);
+}
+
+[data-theme="dark"] .call-controls {
+  background: var(--dm-bg-secondary);
+  border-color: var(--dm-border-light);
+}
+
+/* The mobile call intelligence panel is already dark-themed;
+   ensure it stays consistent in both modes */
+[data-theme="dark"] .mcip {
+  background: #0f0f1a;
+}
+
+[data-theme="dark"] .mcip-header {
+  background: var(--dm-bg-secondary);
+  border-bottom-color: var(--dm-border-light);
+}
+
+
+/* =========================================================================
+   SECTION 17: IMAGE, ICON, AND MEDIA ADJUSTMENTS
+   ========================================================================= */
+
+/* Reduce brightness of images slightly in dark mode to avoid glare */
+[data-theme="dark"] img:not([data-no-dim]) {
+  filter: brightness(0.92);
+}
+
+/* SVG icons should inherit text color in dark mode */
+[data-theme="dark"] svg:not(.theme-toggle__icon):not([data-no-dim]) {
+  color: inherit;
+}
+
+/* Avatar images -- keep full brightness */
+[data-theme="dark"] .avatar img,
+[data-theme="dark"] .user-avatar img,
+[data-theme="dark"] .profile-image img {
+  filter: brightness(1);
+}
+
+/* Logo images -- keep full brightness */
+[data-theme="dark"] .nav-brand-logo,
+[data-theme="dark"] .logo img {
+  filter: brightness(1);
+}
+
+/* Illustrations and decorative images -- reduce brightness more */
+[data-theme="dark"] .illustration img,
+[data-theme="dark"] .empty-state img,
+[data-theme="dark"] .onboarding-image img {
+  filter: brightness(0.85);
+}
+
+
+/* =========================================================================
+   SECTION 18: SAFE AREA & STATUS BAR
+   iOS safe areas with theme-appropriate colors
+   ========================================================================= */
+
+/* Ensure safe area background matches theme */
+[data-theme="dark"] .mobile-bottom-nav {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--dm-bottom-nav-bg);
+}
+
+/* Top safe area for fullscreen modals / panels */
+[data-theme="dark"] .fullscreen-modal,
+[data-theme="dark"] .fullscreen-panel {
+  padding-top: env(safe-area-inset-top, 0px);
+  background: var(--dm-bg-primary);
+}
+
+/* iOS rubber-band overscroll background */
+[data-theme="dark"] html {
+  background: var(--dm-bg-primary);
+}
+
+
+/* =========================================================================
+   SECTION 19: FORM & SETTINGS PAGE OVERRIDES
+   ========================================================================= */
+
+[data-theme="dark"] .form-group label {
+  color: var(--dm-text-secondary);
+}
+
+[data-theme="dark"] .form-group input,
+[data-theme="dark"] .form-group select,
+[data-theme="dark"] .form-group textarea {
+  background: var(--dm-bg-input);
+  color: var(--dm-text-primary);
+  border-color: var(--dm-border-medium);
+}
+
+[data-theme="dark"] .form-help-text,
+[data-theme="dark"] .form-description {
+  color: var(--dm-text-muted);
+}
+
+[data-theme="dark"] .settings-section {
+  background: var(--dm-bg-card);
+  border-color: var(--dm-border-light);
+}
+
+[data-theme="dark"] .settings-section-title {
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] .settings-item {
+  border-bottom-color: var(--dm-border-light);
+}
+
+[data-theme="dark"] .settings-item:hover {
+  background: var(--dm-bg-hover);
+}
+
+/* Toggle switches */
+[data-theme="dark"] .toggle-switch {
+  background: var(--dm-bg-tertiary);
+}
+
+[data-theme="dark"] .toggle-switch.active {
+  background: var(--dm-brand-primary);
+}
+
+
+/* =========================================================================
+   SECTION 20: EMPTY STATES & LOADING SCREENS
+   ========================================================================= */
+
+[data-theme="dark"] .empty-state,
+[data-theme="dark"] .no-data,
+[data-theme="dark"] .placeholder {
+  color: var(--dm-text-muted);
+}
+
+[data-theme="dark"] .empty-state-title {
+  color: var(--dm-text-primary);
+}
+
+[data-theme="dark"] .empty-state-description {
+  color: var(--dm-text-secondary);
+}
+
+
+/* =========================================================================
+   SECTION 21: HARDCODED COLOR CATCH-ALL OVERRIDES
+   These target the most common hardcoded colors found across the codebase:
+     #f8f9fa, #f8fafc (light page backgrounds)
+     #218D8D, #218d8d (brand primary)
+     #1a7070 (brand hover)
+     #ffffff, #fff (white backgrounds)
+     #1a1a1a, #111827 (dark text)
+     #666, #666666, #555 (secondary text)
+     #999, #999999, #9ca3af (muted text)
+     #e5e7eb, #e2e8f0 (borders)
+     #f0fafa, #e8f5f5 (brand tint backgrounds)
+   ========================================================================= */
+
+/* Override common standalone color classes that pages define */
+[data-theme="dark"] [style*="background: #f8f9fa"],
+[data-theme="dark"] [style*="background: #f8fafc"],
+[data-theme="dark"] [style*="background:#f8f9fa"],
+[data-theme="dark"] [style*="background:#f8fafc"],
+[data-theme="dark"] [style*="background-color: #f8f9fa"],
+[data-theme="dark"] [style*="background-color: #f8fafc"] {
+  background: var(--dm-bg-primary) !important;
+}
+
+[data-theme="dark"] [style*="background: #ffffff"],
+[data-theme="dark"] [style*="background: #fff"],
+[data-theme="dark"] [style*="background:#ffffff"],
+[data-theme="dark"] [style*="background:#fff"],
+[data-theme="dark"] [style*="background-color: #ffffff"],
+[data-theme="dark"] [style*="background-color: #fff"] {
+  background: var(--dm-bg-card) !important;
+}
+
+[data-theme="dark"] [style*="color: #1a1a1a"],
+[data-theme="dark"] [style*="color:#1a1a1a"],
+[data-theme="dark"] [style*="color: #111827"],
+[data-theme="dark"] [style*="color:#111827"] {
+  color: var(--dm-text-primary) !important;
+}
+
+[data-theme="dark"] [style*="color: #666"],
+[data-theme="dark"] [style*="color:#666"],
+[data-theme="dark"] [style*="color: #555"],
+[data-theme="dark"] [style*="color:#555"] {
+  color: var(--dm-text-secondary) !important;
+}
+
+[data-theme="dark"] [style*="border-color: #e5e7eb"],
+[data-theme="dark"] [style*="border-color:#e5e7eb"],
+[data-theme="dark"] [style*="border: 1px solid #e5e7eb"] {
+  border-color: var(--dm-border-light) !important;
+}
+
+
+/* =========================================================================
+   SECTION 22: TRANSITION SMOOTHING
+   Smooth transition when toggling between light and dark modes
+   ========================================================================= */
+
+html[data-theme] body,
+html[data-theme] .navigation,
+html[data-theme] .mobile-bottom-nav,
+html[data-theme] .app,
+html[data-theme] .app-main {
+  transition:
+    background-color 300ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
+}
+
+/* Opt out of transitions for elements that should change instantly */
+html[data-theme] .theme-toggle,
+html[data-theme] .skeleton-shimmer,
+html[data-theme] img {
+  transition: none;
+}
+
+/* Reduced motion: disable all theme transitions */
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] * {
+    transition-duration: 0ms !important;
+  }
+}
+
+
+/* =========================================================================
+   SECTION 23: PRINT STYLES
+   Ensure print output uses light theme regardless of user preference
+   ========================================================================= */
+
+@media print {
+  :root,
+  [data-theme="dark"] {
+    --dm-bg-primary: #ffffff;
+    --dm-bg-card: #ffffff;
+    --dm-text-primary: #000000;
+    --dm-text-secondary: #333333;
+    --dm-border-light: #cccccc;
+
+    --color-bg-base: #ffffff;
+    --color-bg-surface: #ffffff;
+    --color-text-primary: #000000;
+    --color-text-secondary: #333333;
+  }
+
+  [data-theme="dark"] img {
+    filter: none;
+  }
+}

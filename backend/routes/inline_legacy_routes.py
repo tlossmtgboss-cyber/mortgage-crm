@@ -2007,6 +2007,52 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ User Invitation routes not loaded: {e}")
 
+    # Ensure employee_invites table exists with organization_id column
+    try:
+        from migrations.ensure_employee_invites_table import run_migration as run_employee_invites_migration
+        run_employee_invites_migration()
+    except Exception as e:
+        logger.warning(f"Employee invites migration: {e}")
+
+    # Add enterprise constraints (FK cascades, partial unique index, CHECK constraints)
+    try:
+        from migrations.add_employee_invite_constraints import run_migration as run_invite_constraints
+        run_invite_constraints(engine)
+    except Exception as e:
+        logger.warning(f"Employee invite constraints migration: {e}")
+
+    # Include Employee Invite Admin routes (onboarding_extended_routes admin_router)
+    try:
+        from routes.onboarding_extended_routes import admin_router as employee_invite_admin_router
+        app.include_router(employee_invite_admin_router, tags=["Employee Invite Admin"])
+        logger.info("✅ Employee Invite Admin routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Employee Invite Admin routes not loaded: {e}")
+
+    # Include Onboarding Extended routes (onboarding_extended_routes main router)
+    try:
+        from routes.onboarding_extended_routes import router as onboarding_extended_router
+        app.include_router(onboarding_extended_router, tags=["Onboarding Extended"])
+        logger.info("✅ Onboarding Extended routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Onboarding Extended routes not loaded: {e}")
+
+    # Include Workflow Stages routes (onboarding_extended_routes workflow_router)
+    try:
+        from routes.onboarding_extended_routes import workflow_router as workflow_stages_router
+        app.include_router(workflow_stages_router, tags=["Workflow Stages"])
+        logger.info("✅ Workflow Stages routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Workflow Stages routes not loaded: {e}")
+
+    # Include AI Quick Actions routes (onboarding_extended_routes ai_router)
+    try:
+        from routes.onboarding_extended_routes import ai_router as ai_quick_actions_router
+        app.include_router(ai_quick_actions_router, tags=["AI Quick Actions"])
+        logger.info("✅ AI Quick Actions routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ AI Quick Actions routes not loaded: {e}")
+
     # Include User Creation/Onboarding routes
     # NOTE: Table names now use "onboarding_" prefix to avoid conflicts with main app models
     try:

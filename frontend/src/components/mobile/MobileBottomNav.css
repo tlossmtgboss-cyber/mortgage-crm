@@ -1,77 +1,357 @@
-/* Mobile Bottom Tab Navigation */
+/* ============================================================================
+   MobileBottomNav — Primary native app navigation
+   ============================================================================ */
 
-.mobile-bottom-nav {
+/* ---- Brand accent ---- */
+:root {
+  --mbn-accent: #218D8D;
+  --mbn-accent-light: rgba(33, 141, 141, 0.10);
+  --mbn-inactive: #6b7280;
+  --mbn-bg: #ffffff;
+  --mbn-border: #e5e7eb;
+  --mbn-height: 56px;
+  --mbn-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --mbn-bg: #1a1a2e;
+    --mbn-border: #2d2d44;
+    --mbn-inactive: #9ca3af;
+  }
+}
+
+/* ============================================================================
+   Bottom nav bar
+   ============================================================================ */
+
+.mbn {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 1000;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-around;
-  height: 56px;
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-  background: #fff;
-  border-top: 1px solid #e5e7eb;
-  box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.06);
+  height: calc(var(--mbn-height) + var(--mbn-safe-bottom));
+  padding-bottom: var(--mbn-safe-bottom);
+  background: var(--mbn-bg);
+  border-top: 1px solid var(--mbn-border);
+  box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
 }
 
-.mobile-bottom-nav__tab {
+.mbn--hidden {
+  transform: translateY(calc(100% + 2px));
+}
+
+/* ============================================================================
+   Individual tabs
+   ============================================================================ */
+
+.mbn__tab {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 56px;
-  padding: 0;
+  height: var(--mbn-height);
+  padding: 6px 0 2px;
   border: none;
   background: transparent;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: opacity 0.15s ease;
+  position: relative;
+  transition: opacity 120ms ease;
+  outline: none;
 }
 
-.mobile-bottom-nav__tab:active {
+.mbn__tab:active {
   opacity: 0.6;
 }
 
-.mobile-bottom-nav__tab--active svg {
-  stroke: #1a73e8;
-}
-
-/* Center FAB button */
-.mobile-bottom-nav__fab {
-  flex: 1;
+/* Icon container (holds icon + badge) */
+.mbn__tab-icon {
   position: relative;
-}
-
-.mobile-bottom-nav__fab-circle {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #1a73e8 0%, #4f8ff7 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 12px rgba(26, 115, 232, 0.35);
-  transform: translateY(-8px);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  width: 28px;
+  height: 28px;
 }
 
-.mobile-bottom-nav__fab:active .mobile-bottom-nav__fab-circle {
-  transform: translateY(-6px);
-  box-shadow: 0 2px 8px rgba(26, 115, 232, 0.3);
+/* Label text — only visible for active tab */
+.mbn__tab-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--mbn-accent);
+  margin-top: 2px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  animation: mbn-label-in 200ms ease forwards;
 }
 
-/* Accessibility: reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .mobile-bottom-nav__tab,
-  .mobile-bottom-nav__fab-circle {
-    transition: none;
+@keyframes mbn-label-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-/* Focus visible outlines */
-.mobile-bottom-nav__tab:focus-visible {
-  outline: 2px solid #1a73e8;
+/* Active indicator dot above label */
+.mbn__tab--active::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--mbn-accent);
+  animation: mbn-dot-in 200ms ease forwards;
+}
+
+@keyframes mbn-dot-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+}
+
+/* ============================================================================
+   Badge (red dot/count)
+   ============================================================================ */
+
+.mbn-badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.4);
+  pointer-events: none;
+  animation: mbn-badge-pop 300ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes mbn-badge-pop {
+  0% {
+    transform: scale(0);
+  }
+  60% {
+    transform: scale(1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* ============================================================================
+   FAB — Center raised button
+   ============================================================================ */
+
+.mbn__fab {
+  flex: 1;
+  position: relative;
+  z-index: 2;
+}
+
+.mbn__fab-circle {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--mbn-accent) 0%, #2aa3a3 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 4px 14px rgba(33, 141, 141, 0.35),
+    0 1px 4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-14px);
+  transition:
+    transform 250ms cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 250ms ease,
+    background 250ms ease;
+  will-change: transform;
+}
+
+.mbn__fab:active .mbn__fab-circle {
+  transform: translateY(-10px) scale(0.95);
+  box-shadow:
+    0 2px 8px rgba(33, 141, 141, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Aria center button — blue-to-purple gradient */
+.mbn__fab-circle--aria {
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  box-shadow:
+    0 4px 16px rgba(139, 92, 246, 0.4),
+    0 1px 4px rgba(0, 0, 0, 0.12);
+}
+
+.mbn__fab:active .mbn__fab-circle--aria {
+  box-shadow:
+    0 2px 8px rgba(139, 92, 246, 0.3),
+    0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* FAB open state (rotated X) */
+.mbn__fab-circle--open {
+  background: linear-gradient(135deg, #374151 0%, #4b5563 100%);
+  box-shadow:
+    0 4px 14px rgba(55, 65, 81, 0.35),
+    0 1px 4px rgba(0, 0, 0, 0.1);
+  transform: translateY(-14px) rotate(0deg);
+}
+
+/* ============================================================================
+   Speed dial overlay
+   ============================================================================ */
+
+.mbn-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation: mbn-overlay-in 200ms ease forwards;
+}
+
+@keyframes mbn-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ============================================================================
+   Speed dial — fan-out action buttons
+   ============================================================================ */
+
+.mbn-speed-dial {
+  position: fixed;
+  bottom: calc(var(--mbn-height) + var(--mbn-safe-bottom) + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+  opacity: 0;
+}
+
+.mbn-speed-dial--open {
+  pointer-events: auto;
+  opacity: 1;
+}
+
+/* Individual action */
+.mbn-speed-dial__action {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  padding: 0;
+  opacity: 0;
+  transform: translateY(20px) scale(0.6);
+  transition:
+    opacity 200ms ease,
+    transform 200ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  outline: none;
+}
+
+.mbn-speed-dial--open .mbn-speed-dial__action {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  /* Stagger via --dial-index custom property */
+  transition-delay: calc(var(--dial-index) * 50ms);
+}
+
+.mbn-speed-dial__action:active .mbn-speed-dial__action-circle {
+  transform: scale(0.9);
+}
+
+/* Action circle */
+.mbn-speed-dial__action-circle {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--dial-color, #218D8D);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 3px 10px rgba(0, 0, 0, 0.2),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 150ms ease;
+  flex-shrink: 0;
+}
+
+/* Action label */
+.mbn-speed-dial__action-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  background: rgba(0, 0, 0, 0.7);
+  padding: 5px 12px;
+  border-radius: 6px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* ============================================================================
+   Focus visible (accessibility)
+   ============================================================================ */
+
+.mbn__tab:focus-visible {
+  outline: 2px solid var(--mbn-accent);
   outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.mbn-speed-dial__action:focus-visible .mbn-speed-dial__action-circle {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* ============================================================================
+   Reduced motion
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .mbn,
+  .mbn__fab-circle,
+  .mbn-speed-dial__action,
+  .mbn__tab-label,
+  .mbn__tab--active::before,
+  .mbn-badge {
+    animation: none !important;
+    transition: none !important;
+  }
 }

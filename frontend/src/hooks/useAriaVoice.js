@@ -1,0 +1,151 @@
+/**
+ * useAriaVoice — Speech recognition hook for mobile Aria voice input.
+ *
+ * Uses native Capacitor speech recognition on iOS/Android,
+ * falls back to Web Speech API on browsers.
+ *
+ * Usage:
+ *   const { isRecording, isSupported, transcript, startRecording, stopRecording, toggleRecording }
+ *     = useAriaVoice({ onTranscript, onFinalTranscript });
+ */
+
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { isAvailable, startListening } from '../services/speechService';
+
+export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-US' } = {}) {
+  const [isRecording, setIsRecording] = useState(false);
+  const [isSupported, setIsSupported] = useState(false);
+  const [transcript, setTranscript] = useState('');
+
+  const controllerRef = useRef(null);
+  const shouldBeRecordingRef = useRef(false);
+  const onTranscriptRef = useRef(onTranscript);
+  const onFinalTranscriptRef = useRef(onFinalTranscript);
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef(null);
+
+  const MAX_RETRIES = 3;
+
+  useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
+  useEffect(() => { onFinalTranscriptRef.current = onFinalTranscript; }, [onFinalTranscript]);
+
+  // Check availability on mount
+  useEffect(() => {
+    let cancelled = false;
+    isAvailable().then((available) => {
+      if (!cancelled) setIsSupported(available);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  const doStart = useCallback(async () => {
+    if (!isSupported) return;
+
+    try {
+      const controller = await startListening({
+        language,
+        partialResults: true,
+        onPartialResult: (text) => {
+          setTranscript(text);
+          onTranscriptRef.current?.(text);
+        },
+        onResult: (text) => {
+          setTranscript(text);
+          onTranscriptRef.current?.(text);
+          onFinalTranscriptRef.current?.(text);
+          // Reset retry count on successful result
+          retryCountRef.current = 0;
+        },
+        onError: (error) => {
+          console.error('[useAriaVoice] Speech error:', error);
+          if (error === 'not-allowed' || error === 'permission-denied') {
+            shouldBeRecordingRef.current = false;
+            setIsRecording(false);
+            setTranscript('');
+          }
+        },
+        onEnd: () => {
+          // Auto-restart with backoff if user still intends to record
+          if (shouldBeRecordingRef.current && retryCountRef.current < MAX_RETRIES) {
+            const delay = Math.pow(2, retryCountRef.current) * 1000; // 1s, 2s, 4s
+            retryCountRef.current++;
+            retryTimerRef.current = setTimeout(() => {
+              if (shouldBeRecordingRef.current) {
+                doStart();
+              }
+            }, delay);
+          } else if (retryCountRef.current >= MAX_RETRIES) {
+            // Circuit breaker: stop after max retries
+            shouldBeRecordingRef.current = false;
+            setIsRecording(false);
+          }
+        },
+      });
+
+      controllerRef.current = controller;
+    } catch (err) {
+      console.error('[useAriaVoice] Failed to start:', err);
+      shouldBeRecordingRef.current = false;
+      setIsRecording(false);
+      controllerRef.current = null;
+    }
+  }, [isSupported, language]);
+
+  const startRecording = useCallback(() => {
+    if (!isSupported || shouldBeRecordingRef.current) return;
+
+    setTranscript('');
+    shouldBeRecordingRef.current = true;
+    retryCountRef.current = 0;
+    setIsRecording(true);
+    doStart();
+  }, [isSupported, doStart]);
+
+  const stopRecording = useCallback(async () => {
+    shouldBeRecordingRef.current = false;
+    clearTimeout(retryTimerRef.current);
+
+    if (controllerRef.current) {
+      try {
+        await controllerRef.current.stop();
+      } catch {
+        // stop() can throw if already ended
+      }
+      controllerRef.current = null;
+    }
+
+    setIsRecording(false);
+    setTranscript('');
+  }, []);
+
+  const toggleRecording = useCallback(() => {
+    if (shouldBeRecordingRef.current) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  }, [startRecording, stopRecording]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      shouldBeRecordingRef.current = false;
+      clearTimeout(retryTimerRef.current);
+      if (controllerRef.current) {
+        try { controllerRef.current.stop(); } catch {}
+        controllerRef.current = null;
+      }
+    };
+  }, []);
+
+  return {
+    isRecording,
+    isSupported,
+    transcript,
+    startRecording,
+    stopRecording,
+    toggleRecording,
+  };
+}
+
+export default useAriaVoice;

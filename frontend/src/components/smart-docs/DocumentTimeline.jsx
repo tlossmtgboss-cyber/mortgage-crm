@@ -105,6 +105,12 @@ const DocumentTimeline = ({ loanId }) => {
         const colorClass = EVENT_COLOR_CLASS[type] ?? 'dt-marker--primary';
         const isLast = index === events.length - 1;
 
+        const rawTimestamp = event.timestamp || event.created_at;
+        // Produce an ISO string for the dateTime attribute when possible
+        const isoDateTime = rawTimestamp
+          ? (() => { try { return new Date(rawTimestamp).toISOString(); } catch { return undefined; } })()
+          : undefined;
+
         return (
           <div
             key={event.id ?? index}
@@ -113,8 +119,11 @@ const DocumentTimeline = ({ loanId }) => {
           >
             {/* Left column: marker + connector line */}
             <div className="dt-event__track">
-              <div className={`dt-marker ${colorClass}`} aria-hidden="true">
-                {icon}
+              <div
+                className={`dt-marker ${colorClass}`}
+                aria-label={`${type} event marker`}
+              >
+                <span aria-hidden="true">{icon}</span>
               </div>
               {!isLast && <div className="dt-connector" aria-hidden="true" />}
             </div>
@@ -125,10 +134,13 @@ const DocumentTimeline = ({ loanId }) => {
                 <span className="dt-event__type">
                   {type.toUpperCase()}
                 </span>
-                {(event.timestamp || event.created_at) && (
-                  <span className="dt-event__timestamp">
-                    {formatTimestamp(event.timestamp || event.created_at)}
-                  </span>
+                {rawTimestamp && (
+                  <time
+                    className="dt-event__timestamp"
+                    dateTime={isoDateTime}
+                  >
+                    {formatTimestamp(rawTimestamp)}
+                  </time>
                 )}
               </div>
 

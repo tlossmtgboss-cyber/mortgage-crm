@@ -142,3 +142,66 @@ class SMSClient:
 async def send_quick_sms(to: str, msg: str, db: Session, user_id: Optional[int] = None):
     client = SMSClient(db, user_id=user_id)
     return await client.send_sms(to, msg)
+
+
+def get_sms_client(db: Session = None, user_id: Optional[int] = None) -> SMSClient:
+    """Factory function to create SMS client with proper configuration."""
+    return SMSClient(db=db, user_id=user_id)
+
+
+def check_sms_configuration() -> Dict[str, Any]:
+    """Check SMS configuration and return diagnostic information."""
+    api_key = os.getenv("TELNYX_API_KEY", "")
+    phone_number = os.getenv("TELNYX_PHONE_NUMBER", "")
+    messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
+    
+    issues = []
+    if not api_key:
+        issues.append("TELNYX_API_KEY environment variable not set")
+    if not phone_number:
+        issues.append("TELNYX_PHONE_NUMBER environment variable not set")
+    if not messaging_profile_id:
+        issues.append("TELNYX_MESSAGING_PROFILE_ID environment variable not set")
+    
+    return {
+        "enabled": len(issues) == 0,
+        "api_key_set": bool(api_key),
+        "phone_number": phone_number if phone_number else "Not set",
+        "messaging_profile_set": bool(messaging_profile_id),
+        "issues": issues,
+        "setup_instructions": [
+            "1. Sign up at https://telnyx.com/sign-up",
+            "2. Get API key from https://portal.telnyx.com/#/app/api-keys",
+            "3. Purchase a phone number in your Telnyx portal",
+            "4. Create a messaging profile in https://portal.telnyx.com/#/app/messaging",
+            "5. Update your .env file with the credentials"
+        ] if issues else []
+    }
+
+
+class SMSTemplates:
+    """Common SMS message templates for mortgage CRM workflows."""
+    
+    @staticmethod
+    def welcome_message(client_name: str, loan_officer_name: str) -> str:
+        return f"Hi {client_name}! Welcome to our mortgage process. I'm {loan_officer_name} and I'll be helping you every step of the way. Feel free to reply with any questions!"
+    
+    @staticmethod
+    def document_request(client_name: str, documents: str) -> str:
+        return f"Hi {client_name}, we need the following documents for your loan: {documents}. Please upload them to your secure portal or reply to this message. Thanks!"
+    
+    @staticmethod
+    def status_update(client_name: str, status: str) -> str:
+        return f"Hi {client_name}, your loan status has been updated to: {status}. We'll keep you informed of any changes. Contact us with questions!"
+    
+    @staticmethod
+    def appointment_reminder(client_name: str, appointment_time: str) -> str:
+        return f"Hi {client_name}, reminder: You have an appointment scheduled for {appointment_time}. Reply CONFIRM to confirm or RESCHEDULE if you need to change it."
+    
+    @staticmethod
+    def task_created(client_name: str, task_description: str) -> str:
+        return f"Hi {client_name}, we've created a new task for you: {task_description}. Check your portal for details or reply with questions."
+    
+    @staticmethod
+    def closing_congratulations(client_name: str) -> str:
+        return f"Congratulations {client_name}! Your loan has been funded and you're now a homeowner! Thank you for choosing us for your mortgage needs."

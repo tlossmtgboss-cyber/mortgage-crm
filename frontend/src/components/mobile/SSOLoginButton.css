@@ -1,0 +1,453 @@
+/* =============================================================================
+   SSOLoginButton — Enterprise SSO login component
+   Consistent with Perennia AI mobile design language (12px radius, #1a73e8 brand)
+   ============================================================================= */
+
+.sso-login {
+  width: 100%;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.sso-login--compact {
+  max-width: 360px;
+}
+
+/* ── Form ── */
+.sso-login__form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Input group ── */
+.sso-login__input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sso-login__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  letter-spacing: 0.01em;
+}
+
+.sso-login__input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.sso-login__input-icon {
+  position: absolute;
+  left: 12px;
+  width: 18px;
+  height: 18px;
+  color: #9ca3af;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.sso-login__input {
+  width: 100%;
+  height: 48px;
+  padding: 0 40px 0 40px;
+  border: 1.5px solid #d1d5db;
+  border-radius: 12px;
+  font-size: 16px; /* 16px prevents iOS zoom on focus */
+  color: #111827;
+  background: #fff;
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.sso-login__input::placeholder {
+  color: #9ca3af;
+}
+
+.sso-login__input:focus {
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.12);
+}
+
+.sso-login__input:disabled {
+  background: #f9fafb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+/* Inline spinner in input */
+.sso-login__spinner {
+  position: absolute;
+  right: 12px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #e5e7eb;
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: sso-spin 0.6s linear infinite;
+}
+
+/* ── Continue button ── */
+.sso-login__continue-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 48px;
+  border: none;
+  border-radius: 12px;
+  background: #1a73e8;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.sso-login__continue-btn:hover {
+  background: #1557b0;
+}
+
+.sso-login__continue-btn:active {
+  background: #13478f;
+}
+
+.sso-login__continue-btn:disabled {
+  background: #93c5fd;
+  cursor: not-allowed;
+}
+
+/* ── SSO found section ── */
+.sso-login__sso-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+  animation: sso-fade-in 0.2s ease;
+}
+
+.sso-login__org-name {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* ── SSO provider button ── */
+.sso-login__sso-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  height: 52px;
+  border: 2px solid var(--sso-brand-color, #1a73e8);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--sso-brand-color, #1a73e8);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+
+.sso-login__sso-btn:hover {
+  background: color-mix(in srgb, var(--sso-brand-color, #1a73e8) 6%, #fff);
+}
+
+.sso-login__sso-btn:active {
+  background: color-mix(in srgb, var(--sso-brand-color, #1a73e8) 12%, #fff);
+  transform: scale(0.985);
+}
+
+/* ── Alternative login link ── */
+.sso-login__alt-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.sso-login__alt-link:hover {
+  color: #374151;
+  background: #f3f4f6;
+}
+
+.sso-login__alt-link:active {
+  background: #e5e7eb;
+}
+
+/* ── No SSO message ── */
+.sso-login__no-sso {
+  margin-top: 8px;
+  animation: sso-fade-in 0.2s ease;
+}
+
+.sso-login__no-sso-msg {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* ── Authenticating state ── */
+.sso-login__authenticating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 24px 16px;
+  border-radius: 12px;
+  background: #f9fafb;
+  animation: sso-fade-in 0.2s ease;
+}
+
+.sso-login__auth-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #1a73e8;
+  border-radius: 50%;
+  animation: sso-spin 0.7s linear infinite;
+}
+
+.sso-login__auth-msg {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #111827;
+  text-align: center;
+}
+
+.sso-login__auth-sub {
+  margin: 0;
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* ── Error section ── */
+.sso-login__error-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  animation: sso-fade-in 0.2s ease;
+}
+
+.sso-login__error-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.sso-login__error-msg {
+  margin: 0;
+  font-size: 13px;
+  color: #991b1b;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.sso-login__error-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sso-login__retry-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 8px;
+  background: #dc2626;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease;
+}
+
+.sso-login__retry-btn:hover {
+  background: #b91c1c;
+}
+
+.sso-login__retry-btn:active {
+  background: #991b1b;
+}
+
+/* ── Animations ── */
+@keyframes sso-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sso-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Accessibility: reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .sso-login__spinner,
+  .sso-login__auth-spinner {
+    animation: none;
+    border-top-color: #1a73e8;
+  }
+
+  .sso-login__sso-section,
+  .sso-login__no-sso,
+  .sso-login__authenticating,
+  .sso-login__error-section {
+    animation: none;
+  }
+
+  .sso-login__sso-btn:active {
+    transform: none;
+  }
+}
+
+/* ── Dark mode support (if system prefers) ── */
+@media (prefers-color-scheme: dark) {
+  .sso-login__label {
+    color: #d1d5db;
+  }
+
+  .sso-login__input {
+    background: #1f2937;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+
+  .sso-login__input::placeholder {
+    color: #6b7280;
+  }
+
+  .sso-login__input:focus {
+    border-color: #60a5fa;
+    box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
+  }
+
+  .sso-login__input:disabled {
+    background: #111827;
+    color: #6b7280;
+  }
+
+  .sso-login__input-icon {
+    color: #6b7280;
+  }
+
+  .sso-login__sso-section {
+    border-top-color: #374151;
+  }
+
+  .sso-login__org-name {
+    color: #9ca3af;
+  }
+
+  .sso-login__sso-btn {
+    background: #1f2937;
+  }
+
+  .sso-login__sso-btn:hover {
+    background: #374151;
+  }
+
+  .sso-login__alt-link {
+    color: #9ca3af;
+  }
+
+  .sso-login__alt-link:hover {
+    color: #d1d5db;
+    background: #374151;
+  }
+
+  .sso-login__no-sso-msg {
+    color: #9ca3af;
+  }
+
+  .sso-login__authenticating {
+    background: #1f2937;
+  }
+
+  .sso-login__auth-msg {
+    color: #f9fafb;
+  }
+
+  .sso-login__auth-sub {
+    color: #9ca3af;
+  }
+
+  .sso-login__error-section {
+    background: #450a0a;
+    border-color: #7f1d1d;
+  }
+
+  .sso-login__error-icon {
+    background: #7f1d1d;
+    color: #fca5a5;
+  }
+
+  .sso-login__error-msg {
+    color: #fca5a5;
+  }
+
+  .sso-login__spinner {
+    border-color: #374151;
+    border-top-color: #60a5fa;
+  }
+
+  .sso-login__auth-spinner {
+    border-color: #374151;
+    border-top-color: #60a5fa;
+  }
+}
+
+/* ── Safe area insets for mobile ── */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .sso-login {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+  }
+}

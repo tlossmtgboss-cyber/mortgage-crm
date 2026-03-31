@@ -488,6 +488,13 @@ async def _handle_lead_status_changed(payload: Dict, db: Session) -> Dict:
     """), {"lead_id": lead_id, "status": new_status})
     db.commit()
 
+    # Event-driven workflow enrollment (eliminates 60s polling delay)
+    try:
+        from services.workflow_scheduler import trigger_workflow_evaluation_for_lead
+        trigger_workflow_evaluation_for_lead(db, lead_id, new_status)
+    except Exception as e:
+        logger.warning(f"Workflow evaluation trigger failed for lead {lead_id}: {e}")
+
     logger.info(f"Webhook: lead {lead_id} status updated to {new_status}")
     return {"lead_id": lead_id, "new_status": new_status}
 
@@ -506,6 +513,13 @@ async def _handle_loan_stage_changed(payload: Dict, db: Session) -> Dict:
         WHERE id = :loan_id
     """), {"loan_id": loan_id, "stage": new_stage})
     db.commit()
+
+    # Event-driven workflow enrollment (eliminates 60s polling delay)
+    try:
+        from services.workflow_scheduler import trigger_workflow_evaluation_for_loan
+        trigger_workflow_evaluation_for_loan(db, loan_id, new_stage)
+    except Exception as e:
+        logger.warning(f"Workflow evaluation trigger failed for loan {loan_id}: {e}")
 
     logger.info(f"Webhook: loan {loan_id} stage updated to {new_stage}")
     return {"loan_id": loan_id, "new_stage": new_stage}

@@ -173,6 +173,17 @@ async def execute_ai_function(
             db.add(activity)
             db.commit()
 
+            # Event-driven workflow enrollment (eliminates 60s polling delay)
+            try:
+                from services.workflow_scheduler import trigger_workflow_evaluation_for_lead
+                trigger_workflow_evaluation_for_lead(
+                    db, lead_id, new_stage_str,
+                    lead_source=getattr(lead, 'source', None),
+                    user_id=current_user.id,
+                )
+            except Exception as e:
+                logger.warning(f"Workflow evaluation trigger failed for lead {lead_id}: {e}")
+
             return {
                 "success": True,
                 "lead_id": lead_id,

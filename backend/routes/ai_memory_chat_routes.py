@@ -154,13 +154,20 @@ async def smart_chat_with_memory(
 
     try:
         data = await request.json()
-        message = data.get("message", "")
+        raw_message = data.get("message", "")
         lead_id = data.get("lead_id")
         loan_id = data.get("loan_id")
         include_context = data.get("include_context", True)
         coaching_mode = data.get("coaching_mode")
         context_type = data.get("context_type")
         user_context = data.get("user_context", {})
+
+        # Sanitize user message to mitigate prompt injection
+        try:
+            from input_validation import sanitize_chat_input
+            message = sanitize_chat_input(raw_message)
+        except ImportError:
+            message = raw_message.strip()[:4000] if raw_message else ""
 
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")

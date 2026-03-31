@@ -330,6 +330,13 @@ export const NAVIGATION_ITEMS = {
     matchPaths: ['/admin'],
     module: 'base',
     adminOnly: true  // Flag for admin-only items
+  },
+  enterpriseDocs: {
+    path: '/enterprise-docs',
+    label: 'Enterprise Docs',
+    matchPaths: ['/enterprise-docs'],
+    module: 'base',
+    adminOnly: true  // Enterprise documentation portal for admins
   }
 };
 
@@ -342,6 +349,7 @@ export const ROLE_NAVIGATION = {
   // Includes ALL features for full visibility and testing
   admin: [
     'adminPanel',           // Admin Panel link - admin only
+    'enterpriseDocs',       // Enterprise Documentation Portal - admin only
     'dashboard',
     'leads',
     'activeLoans',
@@ -375,6 +383,7 @@ export const ROLE_NAVIGATION = {
   // Has access to admin panel (org-scoped) + LO features, but NOT platform-level features
   site_admin: [
     'adminPanel',           // Admin Panel link - manages their org users only
+    'enterpriseDocs',       // Enterprise Documentation Portal - admin access
     'dashboard',
     'leads',
     'activeLoans',

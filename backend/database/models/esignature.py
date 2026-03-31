@@ -39,6 +39,7 @@ from sqlalchemy import (
     String,
     Text,
 )
+from sqlalchemy.orm import relationship
 
 from db import Base
 
@@ -211,6 +212,11 @@ class ESignatureEnvelope(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
+    # Relationships
+    recipients = relationship("ESignatureRecipient", back_populates="envelope", cascade="all, delete-orphan")
+    fields = relationship("ESignatureField", back_populates="envelope", cascade="all, delete-orphan")
+    audit_events = relationship("ESignatureAuditEvent", back_populates="envelope", cascade="all, delete-orphan")
+
 
 # ============================================================================
 # ESIGNATURE RECIPIENT
@@ -282,6 +288,10 @@ class ESignatureRecipient(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
 
+    # Relationships
+    envelope = relationship("ESignatureEnvelope", back_populates="recipients")
+    fields = relationship("ESignatureField", back_populates="recipient", cascade="all, delete-orphan")
+
 
 # ============================================================================
 # ESIGNATURE FIELD
@@ -339,6 +349,10 @@ class ESignatureField(Base):
     # Audit
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
+    # Relationships
+    envelope = relationship("ESignatureEnvelope", back_populates="fields")
+    recipient = relationship("ESignatureRecipient", back_populates="fields")
+
 
 # ============================================================================
 # ESIGNATURE AUDIT EVENT
@@ -384,6 +398,9 @@ class ESignatureAuditEvent(Base):
 
     # Timestamp (immutable)
     timestamp = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    envelope = relationship("ESignatureEnvelope", back_populates="audit_events")
 
 
 # ============================================================================

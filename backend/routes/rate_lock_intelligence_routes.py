@@ -14,9 +14,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from sqlalchemy.orm import Session
 import logging
 
 from routes.auth_deps import require_auth
+from auth.dependencies import get_current_user
+from database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -369,3 +372,94 @@ async def health_check():
         "integrated": True,
         "timestamp": datetime.now().isoformat()
     }
+
+
+# ============================================================================
+# RATE LOCK EXPIRATION ALERT ENDPOINTS
+# ============================================================================
+
+@router.get("/alerts")
+async def get_rate_lock_alerts(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Get rate lock expiration alerts for the current user's loans.
+
+    Returns alerts grouped by urgency:
+    - expired: lock_expiration_date already past
+    - critical: expiring within 24 hours
+    - warning: expiring within 24-48 hours
+
+    Used by the mobile RateLockAlert banner component.
+    """
+    try:
+        from services.rate_lock_monitor import check_expiring_locks
+
+        user_id = current_user.id if hasattr(current_user, "id") else current_user.get("id")
+        org_id = current_user.organization_id if hasattr(current_user, "organization_id") else current_user.get("organization_id")
+
+        result = check_expiring_locks(
+            db=db,
+            user_id=user_id,
+            organization_id=org_id,
+        )
+        return result
+
+    except Exception as e:
+        logger.exception("Failed to fetch rate lock alerts: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/alerts/send")
+async def send_rate_lock_push_alerts(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Trigger push notifications for expiring rate locks.
+
+    Sends push alerts to the current user's registered devices for any
+    locks that are expired or expiring within 48 hours.
+    """
+    try:
+        from services.rate_lock_monitor import send_lock_alerts
+
+        user_id = current_user.id if hasattr(current_user, "id") else current_user.get("id")
+        org_id = current_user.organization_id if hasattr(current_user, "organization_id") else current_user.get("organization_id")
+
+        result = send_lock_alerts(
+            db=db,
+            user_id=user_id,
+            organization_id=org_id,
+        )
+        return result
+
+    except Exception as e:
+        logger.exception("Failed to send rate lock alerts: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.get("/alerts/summary")
+async def get_rate_lock_summary(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """Lightweight summary for dashboard polling.
+
+    Returns counts and the single most urgent alert. Designed to be
+    called frequently (every 5 minutes) without heavy payload.
+    """
+    try:
+        from services.rate_lock_monitor import get_lock_summary_for_dashboard
+
+        user_id = current_user.id if hasattr(current_user, "id") else current_user.get("id")
+        org_id = current_user.organization_id if hasattr(current_user, "organization_id") else current_user.get("organization_id")
+
+        return get_lock_summary_for_dashboard(
+            db=db,
+            user_id=user_id,
+            organization_id=org_id,
+        )
+
+    except Exception as e:
+        logger.exception("Failed to fetch rate lock summary: %s", e)
+        raise HTTPException(status_code=500, detail="Internal server error")

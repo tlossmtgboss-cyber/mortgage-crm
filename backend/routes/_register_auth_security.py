@@ -74,21 +74,26 @@ def register_auth_security_routes(app, get_db, get_current_user, get_current_use
     try:
         from routes.auth_routes import router as auth_routes_router, setup_auth_routes
         app.include_router(auth_routes_router, tags=["Authentication"])
-        try:
-            from database.models.device_token import DeviceToken
-        except ImportError:
-            DeviceToken = None
-        setup_auth_routes(app, oauth2_scheme, get_current_user, DeviceToken=DeviceToken)
+        # DeviceToken=None: push token register/unregister now handled by
+        # push_notification_routes.py (full service with preferences & tenant isolation)
+        setup_auth_routes(app, oauth2_scheme, get_current_user, DeviceToken=None)
         logger.info("Authentication routes loaded (/token, password reset, registration)")
     except Exception as e:
         logger.warning(f"Authentication routes not loaded: {e}")
 
-    # Include push notification trigger routes
+    # Include push notification routes (register, unregister, preferences, send, test)
     try:
-        from routes.push_notification_routes import router as push_router, setup_push_routes
-        app.include_router(push_router)
+        from routes.push_notification_routes import setup_push_routes
         setup_push_routes(app, get_current_user)
-        logger.info("Push notification routes loaded")
+        # Create tables for push notification models
+        try:
+            from database.models.device_token import DeviceToken, PushNotificationPreference
+            from database import engine
+            DeviceToken.__table__.create(engine, checkfirst=True)
+            PushNotificationPreference.__table__.create(engine, checkfirst=True)
+        except Exception as _tbl_err:
+            logger.debug(f"Push notification tables creation skipped (may already exist): {_tbl_err}")
+        logger.info("Push notification routes loaded (register, unregister, preferences, test, send)")
     except Exception as e:
         logger.warning(f"Push notification routes not loaded: {e}")
 

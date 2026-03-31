@@ -22,6 +22,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+from services.workflow_constants import STAGE_PROBABILITY_WEIGHTS, STAGE_SLA_DAYS
+
 logger = logging.getLogger(__name__)
 
 
@@ -146,28 +148,12 @@ class PipelineProbabilitySummary:
 class PipelineProbabilityService:
     """Service for calculating and managing pipeline probability scores."""
 
-    # Stage progression weights (higher = closer to closing)
-    STAGE_WEIGHTS = {
-        "lead": 0.05,
-        "application": 0.15,
-        "processing": 0.30,
-        "submitted": 0.45,
-        "underwriting": 0.55,
-        "conditional_approval": 0.70,
-        "approved": 0.80,
-        "clear_to_close": 0.90,
-        "docs_out": 0.95,
-        "docs_back": 0.98,
-    }
+    # Imported from workflow_constants (canonical source of truth)
+    STAGE_WEIGHTS = STAGE_PROBABILITY_WEIGHTS
 
-    # SLA targets in days
-    SLA_TARGETS = {
-        "application_to_disclosure": 3,
-        "disclosure_to_submission": 7,
-        "submission_to_approval": 5,
-        "approval_to_ctc": 3,
-        "ctc_to_funding": 5,
-    }
+    # SLA targets derived from canonical STAGE_SLA_DAYS
+    # (Previously used lowercase transition-style keys; now uses the flat lookup)
+    SLA_TARGETS = STAGE_SLA_DAYS
 
     def __init__(self, db: Session):
         self.db = db

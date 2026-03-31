@@ -665,8 +665,8 @@ function SmartDocsClientDetail() {
   if (loading) {
     return (
       <div className="client-detail-page">
-        <div className="loading-container">
-          <div className="spinner" />
+        <div className="loading-container" role="alert" aria-live="polite">
+          <div className="spinner" aria-hidden="true" />
           <p>Loading client documents...</p>
         </div>
       </div>
@@ -677,7 +677,7 @@ function SmartDocsClientDetail() {
     <div className="client-detail-page">
       {/* Header */}
       <header className="client-header">
-        <button className="back-btn" onClick={() => navigate('/smart-docs')}>
+        <button className="back-btn" onClick={() => navigate('/smart-docs')} aria-label="Back to Smart Docs queue">
           ← Back to Queue
         </button>
         <div className="client-info-header">
@@ -689,6 +689,8 @@ function SmartDocsClientDetail() {
             className="request-doc-btn"
             onClick={() => setRequestDocModalOpen(true)}
             title="Request Document from Borrower"
+            aria-label="Request a document from the borrower"
+            aria-haspopup="dialog"
           >
             📝 Request Document
           </button>
@@ -697,7 +699,9 @@ function SmartDocsClientDetail() {
               <button
                 className="send-needs-btn"
                 onClick={() => setNeedsListModalOpen(true)}
+                aria-haspopup="dialog"
                 title="Send needs list to borrower"
+                aria-label="Send Needs List to borrower"
               >
                 📨 Send Needs List
               </button>
@@ -705,6 +709,8 @@ function SmartDocsClientDetail() {
                 className="send-reminder-btn"
                 onClick={() => setReminderModalOpen(true)}
                 title="Send reminder for outstanding documents"
+                aria-label="Send Reminder for outstanding documents"
+                aria-haspopup="dialog"
               >
                 🔔 Send Reminder
               </button>
@@ -716,6 +722,9 @@ function SmartDocsClientDetail() {
               onClick={() => setPortalLinkDropdownOpen(!portalLinkDropdownOpen)}
               disabled={portalLinkSending}
               title="Resend borrower portal link"
+              aria-label="Portal Link — resend borrower portal link"
+              aria-expanded={portalLinkDropdownOpen}
+              aria-haspopup="menu"
             >
               {portalLinkSending ? '...' : '🔗 Portal Link'}
             </button>
@@ -740,6 +749,8 @@ function SmartDocsClientDetail() {
             className="income-calc-btn"
             onClick={() => setShowIncomeModal(true)}
             title="Income Calculator"
+            aria-label="Open Income Calculator"
+            aria-haspopup="dialog"
           >
             📊 Income
           </button>
@@ -754,7 +765,7 @@ function SmartDocsClientDetail() {
         </div>
       </header>
 
-      <div className="client-content">
+      <div className="client-content" aria-busy={actionLoading}>
         {/* Left Sidebar - Document List */}
         <aside className="document-sidebar">
           <div className="sidebar-header">
@@ -806,11 +817,12 @@ function SmartDocsClientDetail() {
           {/* Bulk Actions */}
           {selectedDocs.size > 0 && (
             <div className="bulk-actions">
-              <span className="selected-count">{selectedDocs.size} selected</span>
+              <span className="selected-count" aria-live="polite">{selectedDocs.size} selected</span>
               <button
                 className="action-btn primary"
                 onClick={handleMergeDownload}
                 disabled={actionLoading}
+                aria-label={`Merge and download ${selectedDocs.size} selected document${selectedDocs.size !== 1 ? 's' : ''}`}
               >
                 Merge & Download
               </button>
@@ -818,6 +830,7 @@ function SmartDocsClientDetail() {
                 className="action-btn secondary"
                 onClick={handleMergeEmail}
                 disabled={actionLoading}
+                aria-label={`Merge and email ${selectedDocs.size} selected document${selectedDocs.size !== 1 ? 's' : ''}`}
               >
                 Merge & Email
               </button>
@@ -852,6 +865,7 @@ function SmartDocsClientDetail() {
                         onClick={handleUpdateDocType}
                         disabled={actionLoading}
                         title="Save"
+                        aria-label="Save document type change"
                       >
                         ✓
                       </button>
@@ -860,6 +874,7 @@ function SmartDocsClientDetail() {
                         onClick={cancelEditDocType}
                         disabled={actionLoading}
                         title="Cancel"
+                        aria-label="Cancel document type edit"
                       >
                         ✗
                       </button>
@@ -872,6 +887,7 @@ function SmartDocsClientDetail() {
                           className="edit-type-btn"
                           onClick={startEditDocType}
                           title="Change document type"
+                          aria-label="Change document type"
                         >
                           ✏️
                         </button>
@@ -892,7 +908,10 @@ function SmartDocsClientDetail() {
                 </div>
                 <div className="info-group">
                   <label>Status</label>
-                  <span className={`status-value ${getStatusClass(selectedDoc)}`}>
+                  <span
+                    className={`status-value ${getStatusClass(selectedDoc)}`}
+                    aria-live="polite"
+                  >
                     {selectedDoc.status?.replace(/_/g, ' ')}
                   </span>
                 </div>
@@ -904,6 +923,7 @@ function SmartDocsClientDetail() {
                         className="icon-btn"
                         onClick={() => handleDownloadSingle(selectedDoc)}
                         title="Download"
+                        aria-label={`Download ${getDocTypeName(selectedDoc.doc_type)}`}
                       >
                         ⬇️
                       </button>
@@ -911,6 +931,7 @@ function SmartDocsClientDetail() {
                         className="icon-btn"
                         onClick={() => handleEmailSingle(selectedDoc)}
                         title="Email"
+                        aria-label={`Email ${getDocTypeName(selectedDoc.doc_type)}`}
                       >
                         ✉️
                       </button>
@@ -919,6 +940,8 @@ function SmartDocsClientDetail() {
                           className="esign-btn"
                           onClick={() => handleOpenEsign(selectedDoc)}
                           title="Send for E-Signature"
+                          aria-label={`Send ${getDocTypeName(selectedDoc.doc_type)} for E-Signature`}
+                          aria-haspopup="dialog"
                         >
                           ✍️ E-Sign
                         </button>
@@ -938,6 +961,7 @@ function SmartDocsClientDetail() {
                       onClick={() => handleApprove(selectedDoc)}
                       disabled={actionLoading}
                       title="Approve this document"
+                      aria-label={`Approve ${getDocTypeName(selectedDoc.doc_type)}`}
                     >
                       ✓ Approve
                     </button>
@@ -946,6 +970,7 @@ function SmartDocsClientDetail() {
                       onClick={() => handleReject(selectedDoc)}
                       disabled={actionLoading}
                       title="Reject this document"
+                      aria-label={`Reject ${getDocTypeName(selectedDoc.doc_type)}`}
                     >
                       ✗ Reject
                     </button>
@@ -954,6 +979,7 @@ function SmartDocsClientDetail() {
                       onClick={() => handleDelete(selectedDoc)}
                       disabled={actionLoading}
                       title="Delete this document"
+                      aria-label={`Delete ${getDocTypeName(selectedDoc.doc_type)}`}
                     >
                       🗑️ Delete
                     </button>
@@ -962,6 +988,7 @@ function SmartDocsClientDetail() {
                       onClick={() => handleReRequest(selectedDoc)}
                       disabled={actionLoading}
                       title="Request a new upload"
+                      aria-label={`Re-request ${getDocTypeName(selectedDoc.doc_type)}`}
                     >
                       🔄 Re-request
                     </button>
@@ -979,6 +1006,7 @@ function SmartDocsClientDetail() {
                       onClick={() => handleReRequest(selectedDoc)}
                       disabled={actionLoading}
                       title="Send reminder to borrower"
+                      aria-label={`Send Reminder to borrower for ${getDocTypeName(selectedDoc.doc_type)}`}
                     >
                       🔄 Send Reminder
                     </button>
@@ -1018,6 +1046,7 @@ function SmartDocsClientDetail() {
                     <button
                       className="download-btn"
                       onClick={() => handleDownloadSingle(selectedDoc)}
+                      aria-label={`Download ${selectedDoc.filename || getDocTypeName(selectedDoc.doc_type)}`}
                     >
                       Download {selectedDoc.filename}
                     </button>

@@ -2,12 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CAPACITOR_DEBUG</key>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.perenniaai.crm.background-refresh</string>
+	</array>
+	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Perennia AI</string>
+	<string>PerenniaAI CRM Platform</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -19,18 +23,66 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>$(MARKETING_VERSION)</string>
+	<string>1.0.2</string>
 	<key>CFBundleVersion</key>
-	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<string>22</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>tel</string>
+		<string>mailto</string>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSExceptionDomains</key>
+		<dict>
+			<key>api.perenniaai.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+			<key>app.perenniaai.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Perennia AI needs camera access to capture documents and photos for your loan applications.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Perennia AI uses Face ID for secure, quick login to your account.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Perennia AI uses location to find nearby properties and mortgage rates in your area.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Perennia AI uses the microphone to record and transcribe calls for AI-powered analysis, generating summaries, action items, and compliance checks.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Perennia AI needs to save photos to your library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Perennia AI needs photo library access to upload documents for your loan applications.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Perennia AI uses speech recognition for voice commands and hands-free note dictation while managing your loan pipeline.</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+		<string>remote-notification</string>
+		<string>audio</string>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
 	<string>Main</string>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
-		<string>armv7</string>
+		<string>arm64</string>
 	</array>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
@@ -47,44 +99,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<key>NSCameraUsageDescription</key>
-	<string>Perennia AI needs camera access to capture documents and photos for your loan applications.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Perennia AI needs photo library access to upload documents for your loan applications.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Perennia AI needs to save photos to your library.</string>
-	<key>NSFaceIDUsageDescription</key>
-	<string>Perennia AI uses Face ID for secure, quick login to your account.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Perennia AI uses the microphone to record and transcribe calls for AI-powered analysis, generating summaries, action items, and compliance checks.</string>
-	<key>UIBackgroundModes</key>
-	<array>
-		<string>fetch</string>
-		<string>remote-notification</string>
-		<string>audio</string>
-	</array>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-		<key>NSExceptionDomains</key>
-		<dict>
-			<key>app.perenniaai.com</key>
-			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<false/>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-			</dict>
-		</dict>
-	</dict>
-	<!-- App Store Compliance -->
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	<key>LSApplicationQueriesSchemes</key>
-	<array>
-		<string>tel</string>
-		<string>mailto</string>
-	</array>
 </dict>
 </plist>

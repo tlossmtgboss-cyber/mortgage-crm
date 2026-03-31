@@ -81,14 +81,14 @@ function AuditLogTab({ entries }) {
 
   return (
     <div className="sd-security__table-container">
-      <table className="sd-security__table">
+      <table className="sd-security__table" aria-label="Audit log entries">
         <thead>
           <tr>
-            <th>Timestamp</th>
-            <th>User</th>
-            <th>Action</th>
-            <th>Document</th>
-            <th>Details</th>
+            <th scope="col">Timestamp</th>
+            <th scope="col">User</th>
+            <th scope="col">Action</th>
+            <th scope="col">Document</th>
+            <th scope="col">Details</th>
           </tr>
         </thead>
         <tbody>
@@ -251,14 +251,14 @@ function RetentionPoliciesTab({ policies }) {
 
   return (
     <div className="sd-security__table-container">
-      <table className="sd-security__table">
+      <table className="sd-security__table" aria-label="Retention policies">
         <thead>
           <tr>
-            <th>Policy Name</th>
-            <th>Document Type</th>
-            <th>Retention Days</th>
-            <th>Action</th>
-            <th>Status</th>
+            <th scope="col">Policy Name</th>
+            <th scope="col">Document Type</th>
+            <th scope="col">Retention Days</th>
+            <th scope="col">Action</th>
+            <th scope="col">Status</th>
           </tr>
         </thead>
         <tbody>
@@ -303,6 +303,35 @@ export default function SmartDocsSecurity() {
   const [compliance, setCompliance] = useState(null);
   const [suspicious, setSuspicious] = useState([]);
   const [retentionPolicies, setRetentionPolicies] = useState([]);
+
+  const handleTabKeyDown = useCallback((e) => {
+    const tabKeys = TABS.map(t => t.key);
+    const currentIndex = tabKeys.indexOf(activeTab);
+    let newIndex;
+    switch (e.key) {
+      case 'ArrowRight':
+      case 'ArrowDown':
+        e.preventDefault();
+        newIndex = (currentIndex + 1) % tabKeys.length;
+        setActiveTab(tabKeys[newIndex]);
+        break;
+      case 'ArrowLeft':
+      case 'ArrowUp':
+        e.preventDefault();
+        newIndex = (currentIndex - 1 + tabKeys.length) % tabKeys.length;
+        setActiveTab(tabKeys[newIndex]);
+        break;
+      case 'Home':
+        e.preventDefault();
+        setActiveTab(tabKeys[0]);
+        break;
+      case 'End':
+        e.preventDefault();
+        setActiveTab(tabKeys[tabKeys.length - 1]);
+        break;
+      default: break;
+    }
+  }, [activeTab]);
 
   const loadData = useCallback(async (selectedDays) => {
     setLoading(true);
@@ -377,21 +406,26 @@ export default function SmartDocsSecurity() {
         </div>
       </div>
 
-      <div className="sd-security__tabs">
+      <div className="sd-security__tabs" role="tablist" aria-label="Security sections">
         {TABS.map(tab => (
           <button
             key={tab.key}
+            role="tab"
+            aria-selected={activeTab === tab.key}
+            tabIndex={activeTab === tab.key ? 0 : -1}
             className={`sd-security__tab${activeTab === tab.key ? ' active' : ''}`}
             onClick={() => setActiveTab(tab.key)}
+            onKeyDown={handleTabKeyDown}
+            aria-label={tab.label}
           >
             {tab.label}
           </button>
         ))}
       </div>
 
-      <div className="sd-security__content">
+      <div className="sd-security__content" aria-busy={loading}>
         {loading ? (
-          <div className="sd-security__loading">Loading security data...</div>
+          <div className="sd-security__loading" role="alert" aria-live="polite">Loading security data...</div>
         ) : (
           <>
             {activeTab === 'audit' && <AuditLogTab entries={auditLog} />}

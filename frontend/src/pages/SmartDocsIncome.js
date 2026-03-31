@@ -182,7 +182,7 @@ function SmartDocsIncome() {
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="sd-income">
+    <div className="sd-income" aria-busy={worksheetLoading}>
       {/* Page header */}
       <div className="sd-income__header">
         <div>
@@ -246,6 +246,7 @@ function SmartDocsIncome() {
           className="sd-income__btn sd-income__btn--secondary"
           onClick={handleLoad}
           type="button"
+          aria-label="Load income sources for entered loan ID"
         >
           Load
         </button>
@@ -253,6 +254,7 @@ function SmartDocsIncome() {
           className="sd-income__btn sd-income__btn--primary"
           onClick={handleCalculate}
           type="button"
+          aria-label="Calculate income for entered loan ID"
         >
           Calculate Income
         </button>
@@ -260,7 +262,7 @@ function SmartDocsIncome() {
 
       {/* Worksheet */}
       {worksheetLoading ? (
-        <div className="sd-income__loading">
+        <div className="sd-income__loading" role="alert" aria-live="polite">
           <div className="sd-income__spinner" />
           <span>Loading income data...</span>
         </div>

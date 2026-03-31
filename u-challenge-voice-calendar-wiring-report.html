@@ -1,0 +1,958 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perennia AI — Smart Calendar Voice Command Wiring Challenge</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2129;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --red: #f85149;
+    --orange: #d29922;
+    --purple: #bc8cff;
+    --pink: #f778ba;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: 0 0 80px;
+  }
+  .hero {
+    background: linear-gradient(135deg, #0d1117 0%, #161b22 40%, #1a1040 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 60px 40px 50px;
+    text-align: center;
+  }
+  .hero h1 {
+    font-size: 42px;
+    font-weight: 800;
+    background: linear-gradient(135deg, #58a6ff, #bc8cff, #f778ba);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+  }
+  .hero .subtitle {
+    font-size: 18px;
+    color: var(--text-dim);
+    max-width: 700px;
+    margin: 0 auto;
+  }
+  .hero .date {
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--text-dim);
+    opacity: 0.6;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  .verdict-box {
+    margin: 40px auto;
+    max-width: 800px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+  }
+  .verdict-box h2 {
+    font-size: 20px;
+    color: var(--orange);
+    margin-bottom: 12px;
+  }
+  .verdict-box p {
+    font-size: 15px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  .section {
+    margin-top: 48px;
+  }
+  .section h2 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    margin: 24px 0 12px;
+  }
+  .section p, .section li {
+    font-size: 15px;
+    color: var(--text);
+    line-height: 1.7;
+  }
+  .section ul, .section ol {
+    padding-left: 24px;
+    margin: 8px 0 16px;
+  }
+  .section li { margin-bottom: 6px; }
+
+  .finding {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 16px 0;
+    border-left: 4px solid var(--border);
+  }
+  .finding.critical { border-left-color: var(--red); }
+  .finding.high { border-left-color: var(--orange); }
+  .finding.medium { border-left-color: #d29922; }
+  .finding.good { border-left-color: var(--green); }
+  .finding.info { border-left-color: var(--accent); }
+
+  .finding .tag {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-right: 8px;
+    margin-bottom: 8px;
+  }
+  .tag-critical { background: rgba(248,81,73,0.15); color: var(--red); }
+  .tag-high { background: rgba(210,153,34,0.15); color: var(--orange); }
+  .tag-medium { background: rgba(210,153,34,0.1); color: #d29922; }
+  .tag-exists { background: rgba(63,185,80,0.15); color: var(--green); }
+  .tag-missing { background: rgba(248,81,73,0.15); color: var(--red); }
+  .tag-partial { background: rgba(210,153,34,0.15); color: var(--orange); }
+
+  .finding h4 {
+    font-size: 16px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .finding p {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .finding code {
+    background: var(--surface2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--purple);
+  }
+
+  .flow-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin: 20px 0;
+    font-family: 'SF Mono', Menlo, Monaco, monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    color: var(--text-dim);
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .flow-diagram .exists { color: var(--green); }
+  .flow-diagram .missing { color: var(--red); }
+  .flow-diagram .partial { color: var(--orange); }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--surface);
+    color: var(--text-dim);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  td { color: var(--text); }
+  tr:hover td { background: var(--surface); }
+
+  .score-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .score-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+  }
+  .score-card .number {
+    font-size: 36px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .score-card .label {
+    font-size: 13px;
+    color: var(--text-dim);
+  }
+  .score-card.green .number { color: var(--green); }
+  .score-card.orange .number { color: var(--orange); }
+  .score-card.red .number { color: var(--red); }
+  .score-card.blue .number { color: var(--accent); }
+
+  .question-block {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin: 10px 0;
+  }
+  .question-block .q-cat {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--purple);
+    margin-bottom: 6px;
+  }
+  .question-block .q-text {
+    font-size: 15px;
+    font-style: italic;
+    color: var(--text);
+    line-height: 1.5;
+  }
+
+  .prompt-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    margin: 12px 0;
+    font-family: 'SF Mono', Menlo, Monaco, monospace;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-dim);
+    overflow-x: auto;
+    white-space: pre-wrap;
+  }
+
+  .rec-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 12px 0;
+  }
+  .rec-card h4 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .rec-card p {
+    font-size: 14px;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+  .rec-card .effort {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-top: 8px;
+  }
+  .effort-small { background: rgba(63,185,80,0.15); color: var(--green); }
+  .effort-medium { background: rgba(210,153,34,0.15); color: var(--orange); }
+  .effort-large { background: rgba(248,81,73,0.15); color: var(--red); }
+
+  .competitive-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin: 12px 0;
+  }
+  .competitive-card h4 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--pink);
+    margin-bottom: 6px;
+  }
+  .competitive-card .what-they-do {
+    font-size: 14px;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .competitive-card .gap {
+    font-size: 13px;
+    color: var(--text-dim);
+    padding-left: 12px;
+    border-left: 2px solid var(--border);
+  }
+
+  hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <h1>Smart Calendar + Voice Command Wiring</h1>
+  <div class="subtitle">
+    Critical analysis of Aria's voice-to-action pipeline for autonomous scheduling via conversational SMS — what exists, what's broken, and what needs to be built.
+  </div>
+  <div class="date">Challenge Report — March 25, 2026 — Perennia AI</div>
+</div>
+
+<div class="container">
+
+<!-- ═══════════════════════════════════════ -->
+<!-- EXECUTIVE SUMMARY -->
+<!-- ═══════════════════════════════════════ -->
+<div class="verdict-box">
+  <h2>Executive Summary</h2>
+  <p>
+    Perennia AI has <strong>extraordinary infrastructure depth</strong> — a 22,800-line Smart Calendar with 180+ endpoints, a LangGraph orchestrator with 215 tools, real-time voice streaming via OpenAI Realtime and Deepgram, conversational SMS via Telnyx, and a multi-channel notification stack (email, SMS, push, SSE). The individual pieces are enterprise-grade. <strong>But they are not wired together for the target workflow.</strong>
+  </p>
+  <p style="margin-top:12px;">
+    The command <em>"Aria, send a text message to Phil George and schedule a time to speak on my calendar"</em> requires an <strong>async, event-driven, multi-step workflow</strong> that crosses 4 subsystems (voice → SMS → calendar → notifications) over a span of minutes to hours. Today, the voice app proxies audio to OpenAI Realtime with <strong>zero CRM tool bindings</strong>, the conversational SMS engine handles re-engagement but not availability negotiation, and no service bridges "Phil confirmed 2pm Tuesday" to "book appointment on my calendar." The gap is not engineering capacity — it's <strong>integration architecture</strong>.
+  </p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- SCORECARD -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <h2>Workflow Readiness Scorecard</h2>
+  <div class="score-grid">
+    <div class="score-card green">
+      <div class="number">92%</div>
+      <div class="label">Infrastructure Exists</div>
+    </div>
+    <div class="score-card red">
+      <div class="number">15%</div>
+      <div class="label">End-to-End Wired</div>
+    </div>
+    <div class="score-card orange">
+      <div class="number">7</div>
+      <div class="label">Critical Gaps</div>
+    </div>
+    <div class="score-card blue">
+      <div class="number">4</div>
+      <div class="label">New Services Needed</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- TARGET WORKFLOW FLOW DIAGRAM -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <h2>Target Workflow: What Must Happen</h2>
+  <p>The user says: <em>"Aria, send a text message to Phil George and schedule a time to speak on my calendar."</em></p>
+  <div class="flow-diagram"><span class="exists">LO speaks command</span>
+    │
+    ▼
+<span class="exists">Voice capture → PCM16 → WebSocket → Backend</span>  ✅ EXISTS (AriaVoiceApp.js)
+    │
+    ▼
+<span class="exists">STT transcription</span>  ✅ EXISTS (OpenAI Whisper-1)
+    │
+    ▼
+<span class="missing">Entity extraction: "Phil George" + "text message" + "schedule"</span>  ❌ MISSING
+    │                                                                    (OpenAI Realtime has no
+    │                                                                     CRM tool definitions)
+    ▼
+<span class="missing">Compound intent → async workflow creation</span>  ❌ MISSING
+    │                                               (orchestrator is single-pass,
+    │                                                not event-driven)
+    ▼
+<span class="exists">Contact lookup: find "Phil George" in leads</span>  ✅ EXISTS (ILIKE search)
+    │
+    ▼
+<span class="exists">Get LO's available slots from Smart Calendar</span>  ✅ EXISTS (_generate_available_slots)
+    │
+    ▼
+<span class="partial">Compose SMS with available times</span>  ⚠️ PARTIAL
+    │                                       (SMS sending exists,
+    │                                        but no slot-formatting
+    │                                        template)
+    ▼
+<span class="exists">Send SMS to Phil via Telnyx</span>  ✅ EXISTS (compliance gates, TCPA)
+    │
+    ▼
+<span class="missing">ASYNC WAIT: Phil replies</span>  ❌ MISSING
+    │                          (no workflow state machine
+    │                           that bridges SMS reply →
+    │                           scheduling action)
+    ▼
+<span class="partial">AI processes Phil's reply</span>  ⚠️ PARTIAL
+    │                             (prospect_reengagement handles
+    │                              replies, but not for scheduling)
+    ▼
+<span class="missing">AI negotiates availability over SMS conversation</span>  ❌ MISSING
+    │                                                       (no availability-aware
+    │                                                        conversation template)
+    ▼
+<span class="missing">Phil confirms a time → trigger appointment booking</span>  ❌ MISSING
+    │                                                        (no bridge from
+    │                                                         SMS confirmation →
+    │                                                         create_appointment)
+    ▼
+<span class="exists">Create appointment via unified service</span>  ✅ EXISTS (appointment_creation_service)
+    │
+    ▼
+<span class="exists">Send confirmation email with ICS + calendar invite</span>  ✅ EXISTS (scheduler_email_service)
+    │
+    ▼
+<span class="exists">Send confirmation SMS to Phil</span>  ✅ EXISTS (scheduler_sms_sender)
+    │
+    ▼
+<span class="partial">Push notification to LO: "Meeting with Phil booked"</span>  ⚠️ PARTIAL
+    │                                                           (push infra exists,
+    │                                                            no event trigger
+    │                                                            from workflow)
+    ▼
+<span class="exists">Schedule reminders (24h, 1h before)</span>  ✅ EXISTS (Celery + templates)
+    │
+    ▼
+<span class="exists">Update CRM: log activity, create follow-up task</span>  ✅ EXISTS (_crm_integration)</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- COMPETITIVE LANDSCAPE -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <h2>Competitive Landscape</h2>
+  <p>No mortgage CRM offers the full voice→SMS→schedule workflow end-to-end today. But several players have pieces of it:</p>
+
+  <div class="competitive-card">
+    <h4>SchedulerAI</h4>
+    <div class="what-they-do">Fully autonomous SMS/email meeting negotiation. AI proposes times, handles declines, coordinates across team members and time zones. Books meeting, inserts video link, sends reminders.</div>
+    <div class="gap">Gap: Not triggered by voice command. Not mortgage-aware. Standalone tool, not embedded in CRM workflow.</div>
+  </div>
+
+  <div class="competitive-card">
+    <h4>Meera.ai</h4>
+    <div class="what-they-do">SMS-first scheduling for financial services. Texts new leads, asks them to schedule, follows up with non-responders. Checks availability across up to 100 reps. Explicitly targets loan application conversion.</div>
+    <div class="gap">Gap: No voice trigger. No LangGraph-style orchestration. Bolt-on integration, not native CRM.</div>
+  </div>
+
+  <div class="competitive-card">
+    <h4>Lindy AI</h4>
+    <div class="what-they-do">No-code AI agent builder with voice (Gaia). Action chaining: one event triggers sequential agents — summarize, follow up, update CRM. Autonomous appointment scheduling built in.</div>
+    <div class="gap">Gap: Generic, not mortgage-specific. No TCPA/DNC/RESPA compliance. No pipeline integration.</div>
+  </div>
+
+  <div class="competitive-card">
+    <h4>Salesforce Agentforce</h4>
+    <div class="what-they-do">Natural language commands trigger multi-step plans: detect risk → generate offer → send via preferred channel. Library of composable "actions."</div>
+    <div class="gap">Gap: Still primarily text/chat, not true voice-conversation agent. No autonomous SMS negotiation. Enterprise pricing.</div>
+  </div>
+
+  <div class="competitive-card">
+    <h4>Aithena by Insellerate</h4>
+    <div class="what-they-do">Mortgage-native AI. Cross-channel orchestration: texts agents, emails processors, updates calendars from one trigger. Mortgage-aware scheduling (rate lock, contingency deadlines).</div>
+    <div class="gap">Gap: Analytics/coaching layer, not a direct voice-command-to-action system. Not available as standalone CRM.</div>
+  </div>
+
+  <p style="margin-top:20px; padding:16px; background:var(--surface); border-radius:10px; border-left:4px solid var(--purple);">
+    <strong>Market opportunity:</strong> The specific combination — <em>LO speaks a voice command → system sends SMS to contact → AI negotiates availability → books calendar event → updates pipeline</em> — represents clear whitespace. No current product fills this end-to-end in mortgage origination.
+  </p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CRITICAL FINDINGS -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <h2>Critical Findings</h2>
+
+  <div class="finding critical">
+    <span class="tag tag-critical">Critical</span> <span class="tag tag-missing">Missing</span>
+    <h4>GAP-1: OpenAI Realtime WebSocket Has Zero CRM Tool Bindings</h4>
+    <p>
+      The browser-voice WebSocket handler (<code>voice_routes.py:585-799</code>) proxies audio directly to OpenAI Realtime API. The <code>session.update</code> message configures modalities, voice, audio format, and VAD — but <strong>no function/tool definitions</strong>. OpenAI Realtime supports function calling, but no tools are registered. When the user says "send a text to Phil George", OpenAI can understand and respond verbally but <strong>cannot execute any CRM action</strong>.
+    </p>
+    <p style="margin-top:8px;">
+      The frontend <code>AriaVoiceApp.js:241-286</code> has an action handler that processes <code>{"type":"action"}</code> messages for send_sms, schedule_appointment, etc. But the backend <strong>never generates these messages</strong> because OpenAI doesn't know the tools exist.
+    </p>
+    <p style="margin-top:8px;">
+      <strong>Fix:</strong> Add tool definitions to the <code>session.update</code> sent to OpenAI Realtime. Define tools for: <code>search_contact</code>, <code>send_sms</code>, <code>get_availability</code>, <code>book_appointment</code>, <code>create_task</code>. When OpenAI calls a tool, intercept the <code>response.function_call_arguments.done</code> event, execute against the CRM backend, return the result, and forward an <code>{"type":"action"}</code> message to the frontend for visual confirmation.
+    </p>
+  </div>
+
+  <div class="finding critical">
+    <span class="tag tag-critical">Critical</span> <span class="tag tag-missing">Missing</span>
+    <h4>GAP-2: No Async Workflow State Machine for Multi-Step Voice Commands</h4>
+    <p>
+      The LangGraph orchestrator (<code>orchestrator.py</code>) runs a single-pass pipeline: analyze → gather → reason → execute. Each pass completes in 1-8 seconds. But the target workflow spans <strong>minutes to hours</strong>: send SMS → wait for reply → negotiate → book. This requires a persistent, event-driven workflow that survives beyond a single request cycle.
+    </p>
+    <p style="margin-top:8px;">
+      Today, when the user says "send a text and schedule a meeting", the orchestrator would send the SMS and immediately try to schedule — without waiting for Phil's response. There is no mechanism to:
+    </p>
+    <ul style="margin-top:8px;">
+      <li>Create a workflow instance that persists across multiple events</li>
+      <li>Suspend after sending SMS and resume when the reply arrives</li>
+      <li>Track workflow state (waiting_for_reply → negotiating → confirmed → booked)</li>
+      <li>Timeout and notify the LO if Phil doesn't respond</li>
+    </ul>
+    <p style="margin-top:8px;">
+      <strong>Fix:</strong> Build a <code>VoiceWorkflowService</code> with a state machine backed by a <code>voice_workflows</code> database table. States: <code>initiated → sms_sent → awaiting_reply → negotiating → time_confirmed → appointment_booked → completed</code>. The Telnyx inbound webhook handler checks for active workflows and routes replies to the workflow engine instead of the generic SMS intelligence queue.
+    </p>
+  </div>
+
+  <div class="finding critical">
+    <span class="tag tag-critical">Critical</span> <span class="tag tag-missing">Missing</span>
+    <h4>GAP-3: No Availability Negotiation Conversation Engine</h4>
+    <p>
+      The <code>prospect_reengagement_service.py</code> handles AI-driven SMS conversations, but exclusively for re-engaging stale leads. It does not:
+    </p>
+    <ul>
+      <li>Query the LO's calendar for available slots via <code>_generate_available_slots()</code></li>
+      <li>Format slots into human-readable SMS text ("I have openings Tuesday 2-3pm or Wednesday 10-11am")</li>
+      <li>Parse Phil's time preference from natural language replies ("Tuesday works" or "How about 3pm instead?")</li>
+      <li>Handle counter-proposals by checking additional dates</li>
+      <li>Confirm the agreed time and trigger appointment creation</li>
+    </ul>
+    <p style="margin-top:8px;">
+      The Smart Calendar availability engine is mature (cross-source conflict detection, circuit breakers, batch loading). The SMS infrastructure is production-ready. But no service connects them for conversational availability negotiation.
+    </p>
+    <p style="margin-top:8px;">
+      <strong>Fix:</strong> Build an <code>AvailabilityNegotiationService</code> that extends the existing conversation engine pattern. It should: (1) fetch slots from <code>_generate_available_slots()</code>, (2) format them into SMS-friendly text, (3) use Claude to parse replies into structured time preferences, (4) re-check availability for requested times, (5) confirm and trigger booking. Max 6 turns, 48-hour expiry.
+    </p>
+  </div>
+
+  <div class="finding critical">
+    <span class="tag tag-critical">Critical</span> <span class="tag tag-missing">Missing</span>
+    <h4>GAP-4: No Bridge Between SMS Confirmation and Calendar Booking</h4>
+    <p>
+      The SMS conversation system and the Smart Calendar appointment creation system are completely separate codebases with no connector. When Phil texts back "Tuesday 2pm works", there is no service that:
+    </p>
+    <ul>
+      <li>Parses the confirmed datetime</li>
+      <li>Calls <code>appointment_creation_service.create_appointment()</code></li>
+      <li>Generates the video meeting link (Zoom/Google Meet)</li>
+      <li>Sends confirmation emails with ICS attachments to both parties</li>
+      <li>Sends confirmation SMS to Phil</li>
+      <li>Notifies the LO via push notification</li>
+      <li>Creates the CRM activity log and follow-up task</li>
+      <li>Marks the workflow as completed</li>
+    </ul>
+    <p style="margin-top:8px;">
+      <strong>Fix:</strong> This is the final step in the <code>AvailabilityNegotiationService</code>. When the conversation reaches the <code>time_confirmed</code> state, it delegates to the existing <code>appointment_creation_service.create_appointment()</code> and <code>confirmation.py</code> routes. Then fires a push notification to the LO's device via the existing push infrastructure.
+    </p>
+  </div>
+
+  <div class="finding high">
+    <span class="tag tag-high">High</span> <span class="tag tag-missing">Missing</span>
+    <h4>GAP-5: No Compound Entity Extraction for Voice Commands</h4>
+    <p>
+      The <code>intent_router.py</code> pattern-matches single intents: "pipeline", "leads", "schedule". It maps each to one agent role. But "send a text message to Phil George and schedule a time to speak" contains:
+    </p>
+    <ul>
+      <li><strong>Action 1:</strong> send_sms (with recipient = "Phil George")</li>
+      <li><strong>Action 2:</strong> schedule_appointment (with participant = "Phil George", type = phone/video)</li>
+      <li><strong>Relationship:</strong> Action 2 depends on the outcome of Action 1</li>
+    </ul>
+    <p style="margin-top:8px;">
+      The intent router would classify this as either "email" (for SMS) or "schedule" — not both. And even if both were detected, the INTENT_TO_AGENTS mapping doesn't support compound intents with dependency ordering.
+    </p>
+    <p style="margin-top:8px;">
+      <strong>Fix:</strong> Add a <code>compound_intent</code> classification in the LLM fallback path. When the fast pattern matcher fails, the LLM should return a structured plan: <code>[{action: "send_sms", entity: "Phil George", depends_on: null}, {action: "schedule", entity: "Phil George", depends_on: "send_sms"}]</code>. This feeds into the VoiceWorkflowService rather than the single-pass orchestrator.
+    </p>
+  </div>
+
+  <div class="finding high">
+    <span class="tag tag-high">High</span> <span class="tag tag-partial">Partial</span>
+    <h4>GAP-6: Deepgram Voice Agent Claims Capabilities Without Tool Binding</h4>
+    <p>
+      The Deepgram Voice Agent (<code>deepgram_voice_agent.py</code>) system prompt tells the LLM it can "schedule appointments", "send text messages", and "create tasks." But the Deepgram agent configuration has <strong>no function calling definitions</strong>. The LLM will verbally confirm "I'll send that text" without actually sending anything.
+    </p>
+    <p style="margin-top:8px;">
+      This creates a <strong>trust gap</strong>: the LO believes Aria took action, but nothing happened. Over time, this trains the user to not trust the voice interface.
+    </p>
+    <p style="margin-top:8px;">
+      <strong>Fix:</strong> Either add function definitions to the Deepgram agent config, or update the system prompt to accurately describe what the agent can and cannot do. The honest approach: the agent can query information and create action items, but actions requiring side effects should be routed through the authenticated orchestrator pipeline.
+    </p>
+  </div>
+
+  <div class="finding high">
+    <span class="tag tag-high">High</span> <span class="tag tag-partial">Partial</span>
+    <h4>GAP-7: Frontend Action Handler is One-Shot, Not Workflow-Aware</h4>
+    <p>
+      The <code>AriaVoiceApp.js</code> action handler (lines 241-286) executes API calls and shows success/failure action cards. This works for atomic actions ("task created", "SMS sent") but fails for multi-step workflows:
+    </p>
+    <ul>
+      <li>No sequential execution where action 2 depends on action 1</li>
+      <li>No async workflow tracking ("Phil hasn't replied yet — 30 min ago")</li>
+      <li>No workflow status updates pushed from backend to voice UI</li>
+      <li>No way to show "workflow in progress" state that persists across app sessions</li>
+    </ul>
+    <p style="margin-top:8px;">
+      <strong>Fix:</strong> Add a <code>workflow_status</code> message type to the WebSocket protocol. The backend pushes status updates as the workflow progresses. The frontend shows a persistent workflow card: "Scheduling with Phil George — Waiting for reply (sent 5 min ago)". When the meeting is booked, push a completion notification even if the voice session is closed.
+    </p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- WHAT'S WORKING WELL -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <h2>What You're Doing Right</h2>
+
+  <div class="finding good">
+    <span class="tag tag-exists">Solid</span>
+    <h4>Smart Calendar is Enterprise-Grade</h4>
+    <p>
+      22,800 lines across 23 route modules. Cross-source availability (Google Calendar, Outlook, CRM events) with circuit breakers. Unified appointment creation service that handles all 3 booking paths. Fail-closed conflict detection. Rate-limited public booking with CAPTCHA and prompt injection prevention. This is not a toy — it's production infrastructure.
+    </p>
+  </div>
+
+  <div class="finding good">
+    <span class="tag tag-exists">Solid</span>
+    <h4>Conversational SMS Pattern Already Exists</h4>
+    <p>
+      <code>prospect_reengagement_service.py</code> proves you can build AI-driven multi-turn SMS conversations. It has conversation state tracking, intent classification of replies, configurable turn limits, and expiry windows. The <strong>pattern</strong> is right — it just needs to be adapted from "re-engagement" to "availability negotiation."
+    </p>
+  </div>
+
+  <div class="finding good">
+    <span class="tag tag-exists">Solid</span>
+    <h4>Voice Infrastructure Has Two Mature Paths</h4>
+    <p>
+      OpenAI Realtime (via WebSocket proxy) for high-fidelity conversational voice, and Deepgram Nova-2 + Claude Haiku for lower-latency responses. Audio capture at 16kHz mono with echo cancellation and noise suppression. Server-side VAD with configurable silence detection. Both paths work — they just need tool bindings.
+    </p>
+  </div>
+
+  <div class="finding good">
+    <span class="tag tag-exists">Solid</span>
+    <h4>LangGraph Orchestrator with Intent-Scoped Tool Loading</h4>
+    <p>
+      The 4-node graph (analyze → gather → reason → execute) with dynamic tool loading cuts context from 215 tools to 8-16 per request. Two-stage intent classification (fast pattern match + LLM fallback) handles 80%+ of queries in under 5ms. Risk-based action execution with audit logging. This architecture is sound for synchronous workflows.
+    </p>
+  </div>
+
+  <div class="finding good">
+    <span class="tag tag-exists">Solid</span>
+    <h4>Compliance Gates Are Production-Ready</h4>
+    <p>
+      Every SMS path checks TCPA consent, DNC lists, contact hours (8am-9pm local), and channel preferences before sending. Fail-closed design — if consent check fails, the message is blocked, not sent. This is critical for mortgage — you can't have an AI voice assistant sending texts that violate TCPA.
+    </p>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- DEVIL'S ADVOCATE QUESTIONS -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <h2>Devil's Advocate Questions</h2>
+
+  <div class="question-block">
+    <div class="q-cat">Technical — Voice Pipeline</div>
+    <div class="q-text">"Why are you proxying raw audio to OpenAI Realtime without CRM tools when you have a 215-tool orchestrator sitting right there? You built the world's most sophisticated mortgage AI backend and then connected the voice interface to a generic ChatGPT session."</div>
+  </div>
+
+  <div class="question-block">
+    <div class="q-cat">Architecture — Async Workflows</div>
+    <div class="q-text">"Your orchestrator is a single-pass pipeline that completes in 8 seconds. But this workflow takes 8 hours. Where does the state live between 'SMS sent' and 'Phil replied'? A database table? A Celery task? Redis? You have no persistent workflow engine — aren't you going to lose workflows on every deployment?"</div>
+  </div>
+
+  <div class="question-block">
+    <div class="q-cat">UX — Trust</div>
+    <div class="q-text">"The Deepgram agent's system prompt says it can schedule appointments and send texts. But it can't. What happens when an LO says 'Aria, text Phil George' and Aria says 'I've sent that text' but Phil never received anything? How many false confirmations before the LO stops trusting Aria entirely?"</div>
+  </div>
+
+  <div class="question-block">
+    <div class="q-cat">Product — Scope</div>
+    <div class="q-text">"You're building voice → SMS → AI conversation → calendar booking. That's 4 async systems crossing 4 service boundaries. Wouldn't it be faster and more reliable to just let the LO tap a button that sends a booking link to Phil? The booking link infrastructure already exists with public_booking.py."</div>
+  </div>
+
+  <div class="question-block">
+    <div class="q-cat">Technical — Failure Modes</div>
+    <div class="q-text">"What happens when the AI misinterprets Phil's reply? Phil texts 'Not Tuesday, maybe next week' and the AI books Tuesday. Or Phil sends '2pm' meaning a different timezone. What's your disambiguation strategy? What's the undo flow?"</div>
+  </div>
+
+  <div class="question-block">
+    <div class="q-cat">Technical — Conversation Handoff</div>
+    <div class="q-text">"If Phil replies with something unrelated to scheduling — 'Hey, can you also send me the rate sheet?' — does the AI handle it or does it derail the scheduling conversation? What are the conversation boundaries?"</div>
+  </div>
+
+  <div class="question-block">
+    <div class="q-cat">Compliance</div>
+    <div class="q-text">"Does Phil know he's texting with an AI? TCPA consent exists, but does the initial SMS identify itself as automated? If Phil thinks he's texting the LO directly and discovers it's AI, does that create a RESPA or UDAP issue?"</div>
+  </div>
+
+  <div class="question-block">
+    <div class="q-cat">Strategic — MVP vs. Full Vision</div>
+    <div class="q-text">"The full vision is autonomous multi-turn SMS scheduling. But could you ship a simpler V1 in 1 week: voice command → Aria sends Phil a booking link with the LO's available slots → Phil self-schedules → appointment created? You already have booking links, public booking UI, and SMS sending. The AI conversation piece can be V2."</div>
+  </div>
+
+  <div class="question-block">
+    <div class="q-cat">UX — Feedback Loop</div>
+    <div class="q-text">"After the LO says the command and the SMS is sent, what does the LO see? A spinner for 3 hours? How does the voice UI give meaningful feedback for a workflow that takes hours? Push notifications exist but aren't wired. The UX for async voice commands is an unsolved design problem."</div>
+  </div>
+
+  <div class="question-block">
+    <div class="q-cat">Technical — Dual Voice Agent Confusion</div>
+    <div class="q-text">"You have two separate voice backends: OpenAI Realtime (via browser WebSocket) and Deepgram (via mobile_voice_routes). They have different capabilities, different system prompts, and different tool access. Which one does Aria actually use? Does the user get a different Aria depending on which code path fires?"</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- PRIORITIZED RECOMMENDATIONS -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <h2>Prioritized Recommendations</h2>
+
+  <h3 style="color:var(--red);">Critical — Build These First</h3>
+
+  <div class="rec-card">
+    <h4>1. Wire CRM Tools into OpenAI Realtime Session</h4>
+    <p>
+      Add tool definitions to the <code>session.update</code> message in <code>voice_routes.py</code>. Define 6-8 tools: <code>search_contact</code>, <code>send_sms</code>, <code>get_my_availability</code>, <code>book_appointment</code>, <code>create_task</code>, <code>get_pipeline_summary</code>. When OpenAI returns a <code>response.function_call_arguments.done</code> event, execute the tool against the CRM backend, return the result to OpenAI as a <code>conversation.item.create</code> with role <code>tool</code>, and send an <code>{"type":"action"}</code> message to the frontend for visual feedback. This is the single highest-impact change — it turns Aria from a voice chatbot into a voice-driven CRM controller.
+    </p>
+    <span class="effort effort-medium">Medium Effort — ~3-5 days</span>
+  </div>
+
+  <div class="rec-card">
+    <h4>2. Build the Voice Workflow State Machine</h4>
+    <p>
+      Create <code>voice_workflows</code> table with: <code>id, user_id, org_id, workflow_type, state, context (JSONB), contact_id, created_at, updated_at, expires_at</code>. Build <code>VoiceWorkflowService</code> with state transitions. Hook into the Telnyx inbound SMS webhook: before routing to SMS intelligence, check for active workflows matching the sender phone. On state transitions, push updates via WebSocket and/or push notification.
+    </p>
+    <span class="effort effort-medium">Medium Effort — ~3-5 days</span>
+  </div>
+
+  <div class="rec-card">
+    <h4>3. Build the Availability Negotiation Conversation Engine</h4>
+    <p>
+      Extend the <code>prospect_reengagement_service.py</code> pattern with a new <code>SchedulingConversationService</code>. States: <code>slots_sent → awaiting_preference → confirming → booked</code>. On <code>slots_sent</code>: query <code>_generate_available_slots()</code>, format as "I have openings: [list]", send via Telnyx. On inbound reply: use Claude to parse time preference (structured output with Pydantic). On <code>confirming</code>: "Just to confirm, [day] at [time]? Reply YES." On <code>booked</code>: call <code>appointment_creation_service.create_appointment()</code>, trigger confirmations, push notify LO.
+    </p>
+    <span class="effort effort-large">Large Effort — ~5-8 days</span>
+  </div>
+
+  <h3 style="color:var(--orange);">Important — Address Soon</h3>
+
+  <div class="rec-card">
+    <h4>4. Fix the Deepgram System Prompt Honesty</h4>
+    <p>
+      Either add tool definitions to the Deepgram agent config or update the system prompt to say: "I can help you compose messages and plan actions. When you confirm, I'll queue them for execution." Never let the AI claim it performed an action it didn't.
+    </p>
+    <span class="effort effort-small">Small Effort — ~2 hours</span>
+  </div>
+
+  <div class="rec-card">
+    <h4>5. Add Compound Intent Detection to Intent Router</h4>
+    <p>
+      In the LLM fallback path of <code>intent_router.py</code>, add structured output parsing that returns an array of intents with dependency ordering. Cache compound patterns in Redis (24h TTL). Route compound intents to VoiceWorkflowService instead of single-pass orchestrator.
+    </p>
+    <span class="effort effort-medium">Medium Effort — ~2-3 days</span>
+  </div>
+
+  <div class="rec-card">
+    <h4>6. Add Workflow Status to Frontend Voice UI</h4>
+    <p>
+      Add a <code>workflow_status</code> WebSocket message type. Show persistent workflow cards in the voice UI with real-time status: "Scheduling with Phil George — Waiting for reply (12 min ago)". When voice session is closed, status moves to push notifications. Add a "Active Workflows" section to the Aria dashboard fallback view.
+    </p>
+    <span class="effort effort-medium">Medium Effort — ~2-3 days</span>
+  </div>
+
+  <h3 style="color:var(--accent);">Consider — Strategic Shortcut</h3>
+
+  <div class="rec-card">
+    <h4>7. Ship a Booking Link V1 While Building Full Negotiation</h4>
+    <p>
+      While the full conversational negotiation engine is being built, ship an immediate V1: voice command → Aria sends Phil a booking link (<code>public_booking.py</code> slug) via SMS → Phil self-schedules from the LO's available slots → appointment created automatically. This uses 100% existing infrastructure (booking links + SMS sending + public booking flow) and can ship in 1-2 days. The conversational negotiation becomes V2.
+    </p>
+    <span class="effort effort-small">Small Effort — ~1-2 days</span>
+  </div>
+
+  <div class="rec-card">
+    <h4>8. Consolidate Voice Agent Backends</h4>
+    <p>
+      Two voice backends (OpenAI Realtime + Deepgram) with different capabilities create inconsistent user experience. Pick one as primary (likely OpenAI Realtime for tool calling support) and make the other a fallback. Unify system prompts and tool definitions. One Aria, one set of capabilities.
+    </p>
+    <span class="effort effort-medium">Medium Effort — ~3-4 days</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- ARCHITECTURE: WHAT TO BUILD -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <h2>Architecture: The 4 New Services</h2>
+
+  <h3>Service 1: Voice Tool Bridge (<code>voice_tool_bridge.py</code>)</h3>
+  <p>Intercepts OpenAI Realtime function calls, executes against CRM backend, returns results.</p>
+  <div class="prompt-box">OpenAI Realtime WS ←→ Voice Tool Bridge ←→ CRM Backend
+                                    │
+                          ┌─────────┼─────────┐
+                          │         │         │
+                    search_contact  send_sms  get_availability
+                    book_appointment  create_task  get_pipeline</div>
+
+  <h3>Service 2: Voice Workflow Engine (<code>voice_workflow_service.py</code>)</h3>
+  <p>Persistent state machine for multi-step, async voice command workflows.</p>
+  <div class="prompt-box">voice_workflows table
+┌──────────────────────────────────────────────────┐
+│ id │ user_id │ state │ context (JSONB) │ expires │
+├──────────────────────────────────────────────────┤
+│ States: initiated → sms_sent → awaiting_reply    │
+│         → negotiating → confirmed → booked       │
+│         → completed / expired / cancelled        │
+└──────────────────────────────────────────────────┘
+
+Triggers:
+  - Voice command creates workflow
+  - Inbound SMS advances state
+  - Timeout (48h) expires workflow
+  - Booking confirmation completes workflow</div>
+
+  <h3>Service 3: Scheduling Conversation Engine (<code>scheduling_conversation_service.py</code>)</h3>
+  <p>AI-driven SMS conversation for availability negotiation, extending the existing prospect_reengagement_service pattern.</p>
+  <div class="prompt-box">LO: "Aria, schedule a call with Phil George"
+  │
+  ▼ Query _generate_available_slots(lo_id, next_5_days)
+  │
+  ▼ AI formats: "Hi Phil, this is [LO name]'s assistant.
+  │  [LO] would like to schedule a call. Available times:
+  │  • Tue Mar 26, 2:00-3:00 PM
+  │  • Wed Mar 27, 10:00-11:00 AM
+  │  • Thu Mar 28, 1:00-2:00 PM
+  │  Which works for you? Or suggest another time."
+  │
+  ▼ Phil: "Wednesday works"
+  │
+  ▼ AI parses → Wed Mar 27 10:00 AM
+  │
+  ▼ AI: "Great! I've scheduled you with [LO] on
+  │  Wednesday March 27 at 10:00 AM. You'll receive
+  │  a calendar invite shortly. See you then!"
+  │
+  ▼ appointment_creation_service.create_appointment()
+  ▼ Send confirmation email + SMS + push to LO</div>
+
+  <h3>Service 4: Workflow Notification Bridge (<code>workflow_notification_bridge.py</code>)</h3>
+  <p>Bridges workflow state changes to the multi-channel notification system.</p>
+  <div class="prompt-box">Workflow state change
+  │
+  ├─ If voice session active → WebSocket {"type":"workflow_status"}
+  │
+  ├─ If voice session closed → Push notification (APNs via Capacitor)
+  │
+  ├─ Always → In-app notification (notifications table + SSE)
+  │
+  └─ On completion → Activity log + follow-up task creation</div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- IMPLEMENTATION EFFORT -->
+<!-- ═══════════════════════════════════════ -->
+<div class="section">
+  <h2>Implementation Effort Estimate</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th>Effort</th>
+        <th>Dependencies</th>
+        <th>Risk</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>V1: Booking Link via Voice</strong> (strategic shortcut)</td>
+        <td style="color:var(--green);">1-2 days</td>
+        <td>None — all infrastructure exists</td>
+        <td style="color:var(--green);">Low</td>
+      </tr>
+      <tr>
+        <td><strong>Voice Tool Bridge</strong> (OpenAI Realtime + CRM tools)</td>
+        <td style="color:var(--orange);">3-5 days</td>
+        <td>OpenAI Realtime function calling docs</td>
+        <td style="color:var(--orange);">Medium — latency tuning</td>
+      </tr>
+      <tr>
+        <td><strong>Voice Workflow State Machine</strong></td>
+        <td style="color:var(--orange);">3-5 days</td>
+        <td>Database migration, Telnyx webhook modification</td>
+        <td style="color:var(--orange);">Medium — state management complexity</td>
+      </tr>
+      <tr>
+        <td><strong>Scheduling Conversation Engine</strong></td>
+        <td style="color:var(--red);">5-8 days</td>
+        <td>Workflow engine, availability engine, Claude structured output</td>
+        <td style="color:var(--red);">High — NLP parsing of freeform times</td>
+      </tr>
+      <tr>
+        <td><strong>Compound Intent Detection</strong></td>
+        <td style="color:var(--orange);">2-3 days</td>
+        <td>Intent router modification</td>
+        <td style="color:var(--green);">Low</td>
+      </tr>
+      <tr>
+        <td><strong>Frontend Workflow UI</strong></td>
+        <td style="color:var(--orange);">2-3 days</td>
+        <td>WebSocket protocol extension</td>
+        <td style="color:var(--green);">Low</td>
+      </tr>
+      <tr>
+        <td><strong>Notification Bridge</strong></td>
+        <td style="color:var(--green);">1-2 days</td>
+        <td>Workflow engine, push infrastructure</td>
+        <td style="color:var(--green);">Low</td>
+      </tr>
+      <tr style="border-top: 2px solid var(--border);">
+        <td><strong>Total (V1 booking link + full V2)</strong></td>
+        <td style="color:var(--orange);"><strong>~18-28 days</strong></td>
+        <td></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p style="margin-top:12px; color:var(--text-dim); font-size:14px;">
+    Recommended phasing: Ship V1 (booking link) in week 1. Build voice tool bridge + workflow engine in weeks 2-3. Add scheduling conversation engine in weeks 3-4. Polish with compound intent + workflow UI in week 4-5.
+  </p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- BOTTOM LINE -->
+<!-- ═══════════════════════════════════════ -->
+<hr>
+<div class="section" style="margin-top:32px;">
+  <h2>Bottom Line</h2>
+  <p style="font-size:16px; line-height:1.8;">
+    Perennia AI has <strong>92% of the infrastructure</strong> needed for voice-commanded autonomous scheduling. The Smart Calendar is enterprise-grade. The voice pipeline works. The SMS system is production-ready with compliance gates. The AI orchestrator is sophisticated. But these systems are <strong>islands connected by system prompts that claim capabilities they don't have</strong>.
+  </p>
+  <p style="font-size:16px; line-height:1.8; margin-top:12px;">
+    The critical missing piece is not any single component — it's the <strong>async workflow glue</strong> that turns "Aria, schedule a call with Phil" into a multi-hour, event-driven process that crosses voice → SMS → calendar → notification boundaries.
+  </p>
+  <p style="font-size:16px; line-height:1.8; margin-top:12px;">
+    <strong>Ship the booking link V1 immediately</strong> — it's 1-2 days of work using 100% existing infrastructure and gives LOs the core workflow today. Then build the full conversational negotiation as V2 over 3-4 weeks. This is a genuine whitespace opportunity in mortgage tech — no competitor offers this end-to-end.
+  </p>
+  <p style="font-size:16px; line-height:1.8; margin-top:12px; padding: 16px; background:var(--surface); border-radius:10px; border-left:4px solid var(--green);">
+    <strong>The verdict:</strong> You're not missing engineering capability. You're missing 4 service connectors that bridge what you already built. The infrastructure is the hard part, and it's done. The wiring is the fast part, and it's next.
+  </p>
+</div>
+
+</div>
+</body>
+</html>

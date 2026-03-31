@@ -316,6 +316,27 @@ function SmartDocs() {
     setPagination({ page: 1, limit: 20 });
   };
 
+  // Keyboard navigation for tab list
+  const TAB_KEYS = ['documents-owed', 'documents-uploaded', 'completed', 'queue'];
+  const handleTabKeyDown = (e, currentTab) => {
+    const currentIdx = TAB_KEYS.indexOf(currentTab);
+    let nextIdx = currentIdx;
+    if (e.key === 'ArrowRight') {
+      nextIdx = (currentIdx + 1) % TAB_KEYS.length;
+    } else if (e.key === 'ArrowLeft') {
+      nextIdx = (currentIdx - 1 + TAB_KEYS.length) % TAB_KEYS.length;
+    } else if (e.key === 'Home') {
+      nextIdx = 0;
+    } else if (e.key === 'End') {
+      nextIdx = TAB_KEYS.length - 1;
+    } else {
+      return;
+    }
+    e.preventDefault();
+    handleTabChange(TAB_KEYS[nextIdx]);
+    document.querySelector(`[data-tab="${TAB_KEYS[nextIdx]}"]`)?.focus();
+  };
+
   // Filter applicants by search query
   const filterBySearch = (applicants) => {
     if (!searchQuery.trim()) return applicants;
@@ -477,6 +498,8 @@ function SmartDocs() {
               className="btn-batch-reminder"
               onClick={() => setBatchReminderOpen(true)}
               title="Send reminders to all borrowers with outstanding documents"
+              aria-label={`Send Batch Reminder to ${outstandingDocs.applicants.length} borrower${outstandingDocs.applicants.length !== 1 ? 's' : ''} with outstanding documents`}
+              aria-haspopup="dialog"
             >
               📨 Send Batch Reminder ({outstandingDocs.applicants.length})
             </button>
@@ -541,11 +564,12 @@ function SmartDocs() {
         </div>
 
         <div className="search-input-wrapper">
-          <span className="search-icon">🔍</span>
+          <span className="search-icon" aria-hidden="true">🔍</span>
           <input
             type="text"
             className="search-input"
             placeholder="Search by borrower or loan..."
+            aria-label="Search documents by borrower name or loan number"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -553,6 +577,7 @@ function SmartDocs() {
             <button
               className="search-clear"
               onClick={() => setSearchQuery('')}
+              aria-label="Clear search"
             >
               ×
             </button>
@@ -593,62 +618,87 @@ function SmartDocs() {
       )}
 
       {error && (
-        <div className="error-banner">
+        <div className="error-banner" role="alert">
           <span>{error}</span>
-          <button onClick={() => setError(null)}>×</button>
+          <button onClick={() => setError(null)} aria-label="Dismiss error">×</button>
         </div>
       )}
 
       {/* Tabs */}
-      <div className="smart-docs-tabs">
+      <div className="smart-docs-tabs" role="tablist" aria-label="Smart Docs views">
         <button
+          role="tab"
+          data-tab="documents-owed"
           className={`tab-btn ${activeTab === 'documents-owed' ? 'active' : ''}`}
+          aria-selected={activeTab === 'documents-owed'}
+          aria-controls="tab-panel-documents-owed"
           onClick={() => handleTabChange('documents-owed')}
+          onKeyDown={(e) => handleTabKeyDown(e, 'documents-owed')}
         >
           Documents Owed
           {outstandingDocs.total > 0 && (
-            <span className="tab-badge outstanding">{outstandingDocs.total}</span>
+            <span className="tab-badge outstanding" aria-live="polite">{outstandingDocs.total}</span>
           )}
         </button>
         <button
+          role="tab"
+          data-tab="documents-uploaded"
           className={`tab-btn ${activeTab === 'documents-uploaded' ? 'active' : ''}`}
+          aria-selected={activeTab === 'documents-uploaded'}
+          aria-controls="tab-panel-documents-uploaded"
           onClick={() => handleTabChange('documents-uploaded')}
+          onKeyDown={(e) => handleTabKeyDown(e, 'documents-uploaded')}
         >
           Documents Uploaded
           {pendingReview.total > 0 && (
-            <span className="tab-badge pending">{pendingReview.total}</span>
+            <span className="tab-badge pending" aria-live="polite">{pendingReview.total}</span>
           )}
         </button>
         <button
+          role="tab"
+          data-tab="completed"
           className={`tab-btn ${activeTab === 'completed' ? 'active' : ''}`}
+          aria-selected={activeTab === 'completed'}
+          aria-controls="tab-panel-completed"
           onClick={() => handleTabChange('completed')}
+          onKeyDown={(e) => handleTabKeyDown(e, 'completed')}
         >
           Completed
           {completedClients.total > 0 && (
-            <span className="tab-badge completed">{completedClients.total}</span>
+            <span className="tab-badge completed" aria-live="polite">{completedClients.total}</span>
           )}
         </button>
         <button
+          role="tab"
+          data-tab="queue"
           className={`tab-btn ${activeTab === 'queue' ? 'active' : ''}`}
+          aria-selected={activeTab === 'queue'}
+          aria-controls="tab-panel-queue"
           onClick={() => handleTabChange('queue')}
+          onKeyDown={(e) => handleTabKeyDown(e, 'queue')}
         >
           Queue View
           {queueSummary?.by_sla_status?.breached > 0 && (
-            <span className="tab-badge breached">{queueSummary.by_sla_status.breached}</span>
+            <span className="tab-badge breached" aria-live="polite">{queueSummary.by_sla_status.breached}</span>
           )}
         </button>
       </div>
 
       {/* Tab Content */}
-      <div className="smart-docs-content">
+      <div className="smart-docs-content" aria-busy={loading}>
         {loading ? (
-          <div className="loading-state">
-            <div className="spinner" />
+          <div className="loading-state" role="alert" aria-live="polite">
+            <div className="spinner" aria-hidden="true" />
             <p>Loading...</p>
           </div>
         ) : activeTab === 'documents-owed' ? (
           /* Documents Owed Tab */
-          <div className="applicants-list">
+          <div
+            id="tab-panel-documents-owed"
+            role="tabpanel"
+            aria-label="Documents Owed"
+            className="applicants-list"
+          >
             <div className="list-filters">
               <label className="filter-checkbox">
                 <input
@@ -751,7 +801,11 @@ function SmartDocs() {
                           </span>
                         </td>
                         <td>
-                          <button className="btn-view-sm" onClick={(e) => { e.stopPropagation(); navigate(`/smart-docs/client/${applicant.loan_id}`); }}>
+                          <button
+                            className="btn-view-sm"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/smart-docs/client/${applicant.loan_id}`); }}
+                            aria-label={`View documents for ${applicant.borrower_name}`}
+                          >
                             View
                           </button>
                         </td>
@@ -765,7 +819,12 @@ function SmartDocs() {
           </div>
         ) : activeTab === 'documents-uploaded' ? (
           /* Documents Uploaded Tab */
-          <div className="applicants-list">
+          <div
+            id="tab-panel-documents-uploaded"
+            role="tabpanel"
+            aria-label="Documents Uploaded"
+            className="applicants-list"
+          >
             {filteredData.length === 0 ? (
               <div className="empty-state">
                 <span className="empty-icon">✓</span>
@@ -801,7 +860,11 @@ function SmartDocs() {
                         </td>
                         <td className="date-cell">{formatDate(applicant.oldest_upload)}</td>
                         <td>
-                          <button className="btn-review-sm" onClick={(e) => { e.stopPropagation(); navigate(`/smart-docs/client/${applicant.loan_id}`); }}>
+                          <button
+                            className="btn-review-sm"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/smart-docs/client/${applicant.loan_id}`); }}
+                            aria-label={`Review documents for ${applicant.borrower_name}`}
+                          >
                             Review
                           </button>
                         </td>
@@ -814,7 +877,12 @@ function SmartDocs() {
           </div>
         ) : activeTab === 'completed' ? (
           /* Completed Tab */
-          <div className="applicants-list">
+          <div
+            id="tab-panel-completed"
+            role="tabpanel"
+            aria-label="Completed"
+            className="applicants-list"
+          >
             {filteredData.length === 0 ? (
               <div className="empty-state">
                 <span className="empty-icon">🎉</span>
@@ -853,7 +921,11 @@ function SmartDocs() {
                           <span className="completed-badge">Completed</span>
                         </td>
                         <td>
-                          <button className="btn-view-sm" onClick={(e) => { e.stopPropagation(); navigate(`/smart-docs/client/${applicant.loan_id}`); }}>
+                          <button
+                            className="btn-view-sm"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/smart-docs/client/${applicant.loan_id}`); }}
+                            aria-label={`View archived documents for ${applicant.borrower_name}`}
+                          >
                             Archive
                           </button>
                         </td>
@@ -866,7 +938,12 @@ function SmartDocs() {
           </div>
         ) : (
           /* Queue View Tab */
-          <div className="queue-view">
+          <div
+            id="tab-panel-queue"
+            role="tabpanel"
+            aria-label="Queue View"
+            className="queue-view"
+          >
             {/* SLA Filter */}
             <div className="queue-filters">
               <select
@@ -966,6 +1043,7 @@ function SmartDocs() {
                         <td>
                           <button
                             className="btn-send-reminder"
+                            aria-label={`Send Reminder to ${item.borrower_name}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               handleSendReminder(item.loan_id);
@@ -993,6 +1071,7 @@ function SmartDocs() {
           <button
             disabled={pagination.page === 1}
             onClick={() => setPagination((prev) => ({ ...prev, page: prev.page - 1 }))}
+            aria-label="Previous page"
           >
             Previous
           </button>
@@ -1018,6 +1097,7 @@ function SmartDocs() {
                     : completedClients.total_pages)
             }
             onClick={() => setPagination((prev) => ({ ...prev, page: prev.page + 1 }))}
+            aria-label="Next page"
           >
             Next
           </button>

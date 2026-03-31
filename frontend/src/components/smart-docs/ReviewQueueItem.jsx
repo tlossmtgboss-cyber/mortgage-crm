@@ -87,10 +87,15 @@ export default function ReviewQueueItem({
     .filter(Boolean)
     .join(' ');
 
+  const docLabel = doc_type || id || 'document';
+
   // ---- Col 1: Priority badge -----------------------------------------------
   const priorityBadge = (
     <div className="rqi__col rqi__col--priority">
-      <span className={`rqi__priority ${getPriorityMod(priority)}`}>
+      <span
+        className={`rqi__priority ${getPriorityMod(priority)}`}
+        aria-label={`Priority: ${(priority || 'NORMAL').toUpperCase()}`}
+      >
         {(priority || 'NORMAL').toUpperCase()}
       </span>
     </div>
@@ -127,15 +132,28 @@ export default function ReviewQueueItem({
   const claimStatus = (
     <div className="rqi__col rqi__col--claim">
       {isClaimedByMe && (
-        <span className="rqi__claim-tag rqi__claim-tag--mine">Claimed by you</span>
+        <span
+          className="rqi__claim-tag rqi__claim-tag--mine"
+          aria-label="Status: Claimed by you"
+        >
+          Claimed by you
+        </span>
       )}
       {isClaimedByOther && (
-        <span className="rqi__claim-tag rqi__claim-tag--other">
+        <span
+          className="rqi__claim-tag rqi__claim-tag--other"
+          aria-label={`Status: Claimed by ${claimed_by_name || 'reviewer'}`}
+        >
           Claimed by {claimed_by_name || 'reviewer'}
         </span>
       )}
       {!isClaimed && (
-        <span className="rqi__claim-tag rqi__claim-tag--open">Unclaimed</span>
+        <span
+          className="rqi__claim-tag rqi__claim-tag--open"
+          aria-label="Status: Unclaimed"
+        >
+          Unclaimed
+        </span>
       )}
     </div>
   );
@@ -148,6 +166,7 @@ export default function ReviewQueueItem({
         className="rqi__btn rqi__btn--ghost"
         onClick={() => onViewDetail && onViewDetail(id)}
         title="View detail"
+        aria-label={`View detail for ${docLabel}`}
       >
         View
       </button>
@@ -159,6 +178,7 @@ export default function ReviewQueueItem({
             className="rqi__btn rqi__btn--primary"
             onClick={() => onClaim && onClaim(id)}
             title="Claim this document for review"
+            aria-label={`Claim document ${docLabel}`}
           >
             Claim
           </button>
@@ -166,6 +186,7 @@ export default function ReviewQueueItem({
             className="rqi__btn rqi__btn--secondary"
             onClick={() => onAiReview && onAiReview(id)}
             title="Run AI review"
+            aria-label={`Run AI review for ${docLabel}`}
           >
             AI Review
           </button>
@@ -179,6 +200,7 @@ export default function ReviewQueueItem({
             className="rqi__btn rqi__btn--primary"
             onClick={() => onViewDetail && onViewDetail(id)}
             title="Review this document"
+            aria-label={`Review document ${docLabel}`}
           >
             Review
           </button>
@@ -186,6 +208,7 @@ export default function ReviewQueueItem({
             className="rqi__btn rqi__btn--danger"
             onClick={() => onRelease && onRelease(id)}
             title="Release back to queue"
+            aria-label={`Release document ${docLabel} back to queue`}
           >
             Release
           </button>
@@ -195,7 +218,7 @@ export default function ReviewQueueItem({
   );
 
   return (
-    <div className={rowClass}>
+    <div className={rowClass} role="article" aria-label={`Review queue item: ${docLabel}`}>
       {priorityBadge}
       {docInfo}
       {meta}

@@ -40,6 +40,28 @@ router = APIRouter(
     tags=["Smart Documents"],
 )
 
+# Roles allowed to perform document approval actions
+APPROVAL_ROLES = {'admin', 'site_admin', 'processor', 'underwriter', 'closer', 'manager'}
+
+
+def _require_approval_role(current_user) -> None:
+    """Verify the user has a role that permits document approval actions.
+    Raises 403 if the user lacks an appropriate role.
+    """
+    user_role = getattr(current_user, 'permission_role', '') or ''
+    user_role_lower = user_role.lower().strip()
+
+    # Platform admins always have access
+    if user_role_lower == 'admin':
+        return
+
+    # Check against allowed roles
+    if user_role_lower not in APPROVAL_ROLES:
+        raise HTTPException(
+            status_code=403,
+            detail="You do not have permission to perform approval actions. Required role: processor, underwriter, or manager."
+        )
+
 
 # =============================================================================
 # Manual Review & Reprocess
@@ -53,6 +75,7 @@ async def manual_review_document(
     current_user = Depends(get_current_user),
 ):
     """Submit a manual review decision for a document."""
+    _require_approval_role(current_user)
     _verify_document_tenant(db, document_id, current_user)
     pipeline = DocumentReviewPipeline(db)
     try:
@@ -84,6 +107,7 @@ async def reprocess_document(
     Returns:
         Updated processing result with new decision
     """
+    _require_approval_role(current_user)
     _verify_document_tenant(db, document_id, current_user)
     pipeline = DocumentReviewPipeline(db)
     try:
@@ -113,6 +137,8 @@ async def delete_document(
     Sets the document status to DELETED and optionally deletes from S3.
     The document can be restored later if needed.
     """
+    _require_approval_role(current_user)
+
     document = db.query(SmartDocument).filter(
         SmartDocument.id == document_id
     ).first()
@@ -167,6 +193,8 @@ async def reject_document(
     Sets the document status to REJECTED and stores the rejection reason.
     Updates the linked request to allow re-upload.
     """
+    _require_approval_role(current_user)
+
     from models.smart_docs_models import RejectionCategory
 
     document = db.query(SmartDocument).filter(
@@ -230,6 +258,8 @@ async def approve_document(
 
     Sets the document status to APPROVED and updates the linked request.
     """
+    _require_approval_role(current_user)
+
     document = db.query(SmartDocument).filter(
         SmartDocument.id == document_id
     ).first()
@@ -304,8 +334,8 @@ async def re_request_document(
     if body.new_due_date:
         try:
             request.due_date = datetime.fromisoformat(body.new_due_date.replace('Z', '+00:00'))
-        except ValueError:
-            pass
+        except (ValueError, AttributeError) as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date format: {body.new_due_date}")
     elif not request.due_date or request.due_date < datetime.utcnow():
         # Default to 7 days from now
         request.due_date = datetime.utcnow() + timedelta(days=7)
@@ -664,6 +694,7 @@ async def apply_extracted_fields(
 
     Creates audit trail via DataConflict records.
     """
+    _require_approval_role(current_user)
     _verify_document_tenant(db, document_id, current_user)
     from models.document_extraction import SmartDocumentExtraction, FIELD_TO_LEAD_MAPPING, FIELD_TO_LOAN_MAPPING, ReviewStatus
     from sqlalchemy import text

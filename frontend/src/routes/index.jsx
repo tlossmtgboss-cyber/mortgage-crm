@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { isAuthenticatedSync as isAuthenticated } from '../utils/auth';
 import { getUserEffectiveRole, getDefaultRouteForRole } from '../config/roleConfig';
 import MainLayout from '../layouts/MainLayout';
+import MobileErrorBoundary from '../components/mobile/MobileErrorBoundary';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
 import LandingPage from '../pages/LandingPage';
@@ -165,7 +166,14 @@ const ProcessTemplates = lazyRetry(() => import('../pages/ProcessTemplates'));
 const ApplicationPreview = lazyRetry(() => import('../pages/ApplicationPreview'));
 const VerizonTest = lazyRetry(() => import('../pages/VerizonTest'));
 
+// Mobile-first pages
+const MobileHomeDashboard = lazyRetry(() => import('../pages/MobileHomeDashboard'));
+const MobileAriaChat = lazyRetry(() => import('../pages/MobileAriaChat'));
+const MobileLeadsList = lazyRetry(() => import('../pages/MobileLeadsList'));
+const MobileNotificationCenter = lazyRetry(() => import('../pages/MobileNotificationCenter'));
+
 // Efficiency & Pipeline pages
+const MobilePipelineView = lazyRetry(() => import('../pages/MobilePipelineView'));
 const PipelineEfficiency = lazyRetry(() => import('../pages/PipelineEfficiency'));
 const StageEmployees = lazyRetry(() => import('../pages/StageEmployees'));
 const EmployeeLoans = lazyRetry(() => import('../pages/EmployeeLoans'));
@@ -188,6 +196,7 @@ const VoiceTalkToAgentPage = lazyRetry(() => import('../components/voice/TalkToA
 const VoiceCallAnalyticsDashboard = lazyRetry(() => import('../components/voice/CallAnalyticsDashboard'));
 const CallIntelligencePage = lazyRetry(() => import('../pages/CallIntelligencePage'));
 const MobileCallIntelligencePage = lazyRetry(() => import('../pages/MobileCallIntelligencePage'));
+const MobileCallIntelligence = lazyRetry(() => import('../pages/MobileCallIntelligence'));
 const AILandingPage = lazyRetry(() => import('../pages/AILandingPage'));
 
 // Workflow & Analytics pages
@@ -225,6 +234,7 @@ const SmartDocs = lazyRetry(() => import('../pages/SmartDocs'));
 const SmartDocsClientDetail = lazyRetry(() => import('../pages/SmartDocsClientDetail'));
 const SmartDocsDashboard = lazyRetry(() => import('../pages/SmartDocsDashboard'));
 const SmartDocsCadence = lazyRetry(() => import('../pages/SmartDocsCadence'));
+const EnterpriseDocumentationPortal = lazyRetry(() => import('../pages/EnterpriseDocumentationPortal'));
 const AppCompletionScoring = lazyRetry(() => import('../pages/AppCompletionScoring'));
 const AIDailyBlog = lazyRetry(() => import('../pages/AIDailyBlog'));
 // DEPRECATED: Experimental feature deregistered
@@ -401,13 +411,13 @@ export function getRoutes(layoutProps) {
     // PUBLIC ROUTES
     // =============================================================================
 
-    // Landing page (redirects to Aria on mobile)
+    // Landing page (redirects to mobile home on native, landing page on web)
     <Route
       key="/"
       path="/"
       element={
         (Capacitor.isNativePlatform() || window.location.hostname.startsWith('192.168.'))
-          ? <Navigate to="/aria" />
+          ? <Navigate to="/mobile-home" />
           : <LandingPage />
       }
     />,
@@ -433,6 +443,7 @@ export function getRoutes(layoutProps) {
     <Route key="/aria" path="/aria" element={<LazyPage><AriaVoiceApp /></LazyPage>} />,
     <Route key="/privacy-policy" path="/privacy-policy" element={<LazyPage><PrivacyPolicy /></LazyPage>} />,
     <Route key="/terms-of-service" path="/terms-of-service" element={<LazyPage><TermsOfService /></LazyPage>} />,
+    <Route key="/terms" path="/terms" element={<LazyPage><TermsOfService /></LazyPage>} />,
 
     // Public portals
     <Route key="/realtor-portal" path="/realtor-portal" element={<LazyPage><RealtorPortal /></LazyPage>} />,
@@ -509,6 +520,7 @@ export function getRoutes(layoutProps) {
     // Dashboard & Command Center
     <Route key="/dashboard" path="/dashboard" element={withMainLayout(Dashboard)} />,
     <Route key="/command-center" path="/command-center" element={withMainLayout(CommandCenter)} />,
+    <Route key="/mobile/pipeline" path="/mobile/pipeline" element={<MobileErrorBoundary>{privateOnly(MobilePipelineView)}</MobileErrorBoundary>} />,
     <Route key="/dashboard/efficiency" path="/dashboard/efficiency" element={withMainLayout(PipelineEfficiency)} />,
     <Route key="/efficiency" path="/efficiency" element={withMainLayout(PipelineEfficiency)} />,
     <Route key="/efficiency/stage/:stageSlug" path="/efficiency/stage/:stageSlug" element={withMainLayout(StageEmployees)} />,
@@ -655,7 +667,12 @@ export function getRoutes(layoutProps) {
     // <Route key="/avatar-studio" path="/avatar-studio" element={withMainLayout(AvatarStudio)} />,
     <Route key="/conversation-intelligence" path="/conversation-intelligence" element={withMainLayout(ConversationIntelligence)} />,
     <Route key="/call-intelligence" path="/call-intelligence" element={withMainLayout(CallIntelligencePage)} />,
-    <Route key="/mobile/call-intelligence" path="/mobile/call-intelligence" element={privateOnly(MobileCallIntelligencePage)} />,
+    <Route key="/mobile/call-intelligence" path="/mobile/call-intelligence" element={<MobileErrorBoundary>{privateOnly(MobileCallIntelligencePage)}</MobileErrorBoundary>} />,
+    <Route key="/mobile/call-intelligence-full" path="/mobile/call-intelligence-full" element={<MobileErrorBoundary>{privateOnly(MobileCallIntelligence)}</MobileErrorBoundary>} />,
+    <Route key="/mobile-home" path="/mobile-home" element={<MobileErrorBoundary>{privateOnly(MobileHomeDashboard)}</MobileErrorBoundary>} />,
+    <Route key="/mobile-aria" path="/mobile-aria" element={<MobileErrorBoundary>{privateOnly(MobileAriaChat)}</MobileErrorBoundary>} />,
+    <Route key="/mobile/leads" path="/mobile/leads" element={<MobileErrorBoundary>{privateOnly(MobileLeadsList)}</MobileErrorBoundary>} />,
+    <Route key="/aria/notifications" path="/aria/notifications" element={<MobileErrorBoundary>{privateOnly(MobileNotificationCenter)}</MobileErrorBoundary>} />,
     <Route key="/live-call-whisper" path="/live-call-whisper" element={withMainLayout(LiveCallWhisper)} />,
     <Route key="/production-predictor" path="/production-predictor" element={withMainLayout(ProductionPredictor)} />,
     <Route key="/production-predictor/detail" path="/production-predictor/detail" element={withMainLayout(ProductionPredictorDetail)} />,
@@ -668,6 +685,9 @@ export function getRoutes(layoutProps) {
     <Route key="/smart-docs/cadence" path="/smart-docs/cadence" element={withMainLayout(SmartDocsCadence)} />,
     <Route key="/smart-docs/app-scoring" path="/smart-docs/app-scoring" element={withMainLayout(AppCompletionScoring)} />,
     <Route key="/smart-docs/app-scoring/:loanId" path="/smart-docs/app-scoring/:loanId" element={withMainLayout(AppCompletionScoring)} />,
+
+    // Enterprise Documentation Portal
+    <Route key="/enterprise-docs" path="/enterprise-docs" element={withMainLayout(EnterpriseDocumentationPortal)} />,
 
     // E-Signature
     <Route key="/esign/envelope/:envelopeId" path="/esign/envelope/:envelopeId" element={withMainLayout(FieldPlacementBuilder)} />,

@@ -340,3 +340,21 @@ input:focus, select:focus, textarea:focus {
     width: calc(100% - 32px) !important;
   }
 }
+
+/* =============================================
+   iOS SAFE AREA INSETS (landscape + notch)
+   Requires viewport-fit=cover in index.html.
+   ============================================= */
+
+@supports (padding-left: env(safe-area-inset-left)) {
+  /* Left/right insets for landscape orientation on notch devices */
+  .mhd,
+  .mll,
+  .mp-view,
+  .mac,
+  .mnc,
+  .mci-root {
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+}

@@ -1,0 +1,380 @@
+/**
+ * WCAG 2.1 AA Color Contrast Fixes
+ * =================================
+ * Overrides existing colors that fail WCAG AA contrast requirements.
+ *
+ * AA thresholds:
+ *   Normal text (< 18pt / < 14pt bold): >= 4.5:1
+ *   Large text  (>= 18pt / >= 14pt bold): >= 3:1
+ *
+ * All replacement values sourced from ACCESSIBLE_PALETTE in
+ * frontend/src/utils/colorContrast.js.
+ *
+ * Load this stylesheet AFTER component-level CSS to ensure overrides apply.
+ */
+
+/* =========================================================================
+   1. MUTED / SECONDARY TEXT
+   =========================================================================
+   Common failures: #9ca3af (gray-400, 2.8:1 on white),
+                    #94a3b8 (slate-400, 3.0:1 on white),
+                    #d1d5db (gray-300, 1.8:1 on white).
+   Fix: Use #4b5563 (gray-600, 7.2:1 on white) or #6b7280 (gray-500, 4.6:1).
+   ========================================================================= */
+
+/* --- Text that uses gray-400 / slate-400 as a muted color on light bg --- */
+.text-gray-400,
+.text-slate-400 {
+  color: #4b5563 !important; /* gray-600 — 7.2:1 on white */
+}
+
+/* --- text-gray-300 used as readable text (not decorative borders) --- */
+.text-gray-300 {
+  color: #6b7280 !important; /* gray-500 — 4.6:1 on white */
+}
+
+/* Generic muted text class used across components */
+.text-muted,
+.muted-text,
+.secondary-text,
+.meta-text,
+.helper-text,
+.caption-text {
+  color: #4b5563 !important; /* gray-600 — 7.2:1 on white */
+}
+
+
+/* =========================================================================
+   2. STATUS / SEMANTIC TEXT COLORS ON LIGHT BACKGROUNDS
+   =========================================================================
+   Failures:
+     #f59e0b (amber-500, 2.1:1 on white) — warning/pending
+     #eab308 (yellow-500, 1.9:1 on white)
+     #10b981 (emerald-500, 2.9:1 on white) — success
+     #22c55e (green-500, 2.4:1 on white) — success
+     #ef4444 (red-500, 3.9:1 on white, fails normal text)
+   ========================================================================= */
+
+/* --- Warning / amber text on light backgrounds --- */
+.text-amber-500,
+.text-yellow-500,
+.status-warning,
+.status-pending {
+  color: #92400e !important; /* amber-800 — 5.1:1 on white */
+}
+
+/* --- Success / green text on light backgrounds --- */
+.text-emerald-500,
+.text-green-500,
+.status-success,
+.status-active,
+.status-complete {
+  color: #15803d !important; /* green-700 — 4.8:1 on white */
+}
+
+/* --- Error / red text on light backgrounds --- */
+.text-red-500,
+.status-error,
+.status-failed,
+.status-overdue {
+  color: #b91c1c !important; /* red-700 — 5.5:1 on white */
+}
+
+/* --- Info / blue text on light backgrounds --- */
+.text-blue-500,
+.status-info,
+.status-in-progress {
+  color: #1d4ed8 !important; /* blue-700 — 5.2:1 on white */
+}
+
+
+/* =========================================================================
+   3. BADGE / TAG TEXT COLORS
+   =========================================================================
+   Many badges use vivid mid-range colors as text on near-white backgrounds.
+   Fix: Use the dark-shade variant of each hue.
+   ========================================================================= */
+
+/* Red badges */
+.badge-red,
+.badge-error,
+.badge-danger,
+.tag-red {
+  background-color: #fef2f2 !important; /* red-50 */
+  color: #991b1b !important;            /* red-800 — 7.1:1 */
+}
+
+/* Green badges */
+.badge-green,
+.badge-success,
+.tag-green {
+  background-color: #f0fdf4 !important; /* green-50 */
+  color: #166534 !important;            /* green-800 — 6.2:1 */
+}
+
+/* Amber / yellow badges */
+.badge-amber,
+.badge-warning,
+.badge-yellow,
+.tag-amber,
+.tag-yellow {
+  background-color: #fffbeb !important; /* amber-50 */
+  color: #92400e !important;            /* amber-800 — 5.1:1 */
+}
+
+/* Blue badges */
+.badge-blue,
+.badge-info,
+.tag-blue {
+  background-color: #eff6ff !important; /* blue-50 */
+  color: #1e40af !important;            /* blue-800 — 6.0:1 */
+}
+
+
+/* =========================================================================
+   4. PLACEHOLDER TEXT
+   =========================================================================
+   Browser defaults for ::placeholder are often too light.
+   Fix: #6b7280 (gray-500, 4.6:1 on white). This is the minimum acceptable
+   contrast for placeholder text per WCAG 1.4.3.
+   ========================================================================= */
+
+::placeholder {
+  color: #6b7280 !important; /* gray-500 — 4.6:1 on white */
+  opacity: 1;
+}
+
+/* Webkit / Blink */
+::-webkit-input-placeholder {
+  color: #6b7280 !important;
+  opacity: 1;
+}
+
+/* Firefox */
+::-moz-placeholder {
+  color: #6b7280 !important;
+  opacity: 1;
+}
+
+/* Edge (legacy) */
+:-ms-input-placeholder {
+  color: #6b7280 !important;
+}
+
+
+/* =========================================================================
+   5. DISABLED STATE
+   =========================================================================
+   Disabled elements are exempt from WCAG 1.4.3, but should still be readable
+   so users understand what the control is. Target >= 3:1 minimum.
+   Fix: #6b7280 (gray-500, 4.6:1 on white) instead of ultra-light grays.
+   ========================================================================= */
+
+input:disabled,
+select:disabled,
+textarea:disabled,
+button:disabled,
+[disabled] {
+  color: #6b7280 !important; /* gray-500 — 4.6:1 on white */
+  -webkit-text-fill-color: #6b7280 !important; /* Safari override */
+}
+
+/* Disabled button backgrounds should have enough contrast with text too */
+button:disabled,
+.btn:disabled,
+.btn-disabled {
+  background-color: #e5e7eb !important; /* gray-200 */
+  color: #6b7280 !important;           /* gray-500 — 3.6:1 on gray-200 */
+  border-color: #d1d5db !important;
+  cursor: not-allowed;
+}
+
+
+/* =========================================================================
+   6. LINK COLORS
+   =========================================================================
+   Default browser blue (#0000EE) passes at 6.6:1. But many apps override
+   links with lighter blues that fail.
+   ========================================================================= */
+
+a,
+.link,
+[role="link"] {
+  color: #1d4ed8; /* blue-700 — 5.2:1 on white */
+}
+
+a:visited,
+.link:visited {
+  color: #6d28d9; /* violet-700 — 5.4:1 on white */
+}
+
+a:hover,
+.link:hover {
+  color: #1e40af; /* blue-800 — 7.0:1 on white */
+}
+
+/* Links on dark backgrounds */
+.dark a,
+.dark .link,
+.bg-dark a,
+[data-theme="dark"] a {
+  color: #60a5fa; /* blue-400 — 4.7:1 on #1a1a2e */
+}
+
+.dark a:visited,
+[data-theme="dark"] a:visited {
+  color: #a78bfa; /* violet-400 — 4.5:1 on #1a1a2e */
+}
+
+
+/* =========================================================================
+   7. FOCUS-VISIBLE OUTLINES
+   =========================================================================
+   WCAG 2.4.7 requires a visible focus indicator. The outline must have
+   >= 3:1 contrast against the background AND adjacent colors.
+   ========================================================================= */
+
+:focus-visible {
+  outline: 2px solid #1d4ed8 !important; /* blue-700 — 5.2:1 on white */
+  outline-offset: 2px !important;
+  border-radius: 2px;
+}
+
+/* On dark backgrounds, use a lighter focus ring */
+.dark :focus-visible,
+.bg-dark :focus-visible,
+[data-theme="dark"] :focus-visible {
+  outline-color: #60a5fa !important; /* blue-400 — 4.7:1 on #1a1a2e */
+}
+
+/* Ensure focus ring is not clipped by overflow:hidden containers */
+:focus-visible {
+  box-shadow: none; /* Remove competing box-shadows that might obscure the ring */
+}
+
+
+/* =========================================================================
+   8. COMPONENT-SPECIFIC OVERRIDES
+   =========================================================================
+   Targeted fixes for known contrast failures in existing component CSS.
+   ========================================================================= */
+
+/* --- CallIntelligencePanel: #94a3b8 (slate-400) on dark panel bg --- */
+.call-intelligence-panel .call-meta,
+.call-intelligence-panel .stat-label,
+.call-intelligence-panel .time-label,
+.call-intelligence-panel .section-meta,
+.call-intelligence-panel .detail-label {
+  color: #cbd5e1; /* slate-300 — 5.8:1 on #1e293b */
+}
+
+/* --- Accounting pages: #22c55e / #ef4444 used as text on white --- */
+.journal-entry .amount-positive,
+.journal-entry .credit-amount {
+  color: #15803d !important; /* green-700 — 4.8:1 */
+}
+
+.journal-entry .amount-negative,
+.journal-entry .debit-amount {
+  color: #b91c1c !important; /* red-700 — 5.5:1 */
+}
+
+/* --- Warning text in calendar/booking: #f59e0b (2.1:1) / #fbbf24 (1.8:1) --- */
+.conflict-warning,
+.booking-warning,
+.availability-warning {
+  color: #92400e !important; /* amber-800 — 5.1:1 */
+}
+
+/* --- Portal action icons that use mid-range greens/yellows as text --- */
+.action-icon-review,
+.action-icon-shield {
+  color: #15803d !important; /* green-700 */
+}
+
+.action-icon-star {
+  color: #92400e !important; /* amber-800 */
+}
+
+.action-icon-alert {
+  color: #b91c1c !important; /* red-700 */
+}
+
+/* --- SmartDocs dashboard green text --- */
+.smart-docs-stat .stat-positive,
+.smart-docs-stat .stat-success {
+  color: #15803d !important; /* green-700 */
+}
+
+/* --- MicrositeWizard: multiple #9ca3af and #6b7280 on white --- */
+.microsite-wizard .step-description,
+.microsite-wizard .field-hint,
+.microsite-wizard .section-subtitle {
+  color: #4b5563 !important; /* gray-600 — 7.2:1 */
+}
+
+/* --- Recording rules / settings pages: #6b7280 is acceptable (4.6:1)
+       but #9ca3af (2.8:1) is not --- */
+.settings-panel .hint-text,
+.settings-panel .description-text,
+.settings-panel .sublabel {
+  color: #4b5563 !important; /* gray-600 — 7.2:1 */
+}
+
+
+/* =========================================================================
+   9. DARK MODE STATUS COLORS
+   =========================================================================
+   On dark backgrounds (#1a1a2e and similar), mid-range status colors
+   generally pass, but ensure consistency.
+   ========================================================================= */
+
+.dark .status-success,
+.dark .text-green-400,
+[data-theme="dark"] .status-success {
+  color: #4ade80 !important; /* green-400 — 5.2:1 on #1a1a2e */
+}
+
+.dark .status-warning,
+.dark .text-amber-400,
+[data-theme="dark"] .status-warning {
+  color: #fbbf24 !important; /* amber-400 — 5.4:1 on #1a1a2e */
+}
+
+.dark .status-error,
+.dark .text-red-400,
+[data-theme="dark"] .status-error {
+  color: #f87171 !important; /* red-400 — 4.6:1 on #1a1a2e */
+}
+
+.dark .status-info,
+.dark .text-blue-400,
+[data-theme="dark"] .status-info {
+  color: #60a5fa !important; /* blue-400 — 4.7:1 on #1a1a2e */
+}
+
+.dark .text-muted,
+.dark .muted-text,
+.dark .secondary-text,
+[data-theme="dark"] .text-muted {
+  color: #9ca3af !important; /* gray-400 — 4.6:1 on #1a1a2e */
+}
+
+
+/* =========================================================================
+   10. UTILITY CLASSES
+   =========================================================================
+   Drop-in classes for components that need accessible colors.
+   ========================================================================= */
+
+.a11y-success { color: #15803d !important; }
+.a11y-warning { color: #92400e !important; }
+.a11y-error   { color: #b91c1c !important; }
+.a11y-info    { color: #1d4ed8 !important; }
+.a11y-muted   { color: #4b5563 !important; }
+
+.a11y-success-dark { color: #4ade80 !important; }
+.a11y-warning-dark { color: #fbbf24 !important; }
+.a11y-error-dark   { color: #f87171 !important; }
+.a11y-info-dark    { color: #60a5fa !important; }
+.a11y-muted-dark   { color: #9ca3af !important; }

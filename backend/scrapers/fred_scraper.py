@@ -347,9 +347,23 @@ class FREDScraper:
 
 # Convenience function for sync contexts
 def get_mortgage_rates_sync() -> Dict[str, float]:
-    """Synchronous wrapper for getting mortgage rates."""
+    """Synchronous wrapper for getting mortgage rates.
+
+    Safe to call from both sync and async contexts.
+    """
+    import concurrent.futures
+
     scraper = FREDScraper()
-    return asyncio.run(scraper.get_mortgage_rates())
+    coro = scraper.get_mortgage_rates()
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+    return asyncio.run(coro)
 
 
 if __name__ == '__main__':

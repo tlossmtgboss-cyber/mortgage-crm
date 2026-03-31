@@ -9,10 +9,13 @@ These endpoints allow borrowers to:
 """
 
 import logging
+import re
+import time
+from collections import defaultdict
 from typing import Optional
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -27,6 +30,115 @@ from sqlalchemy.exc import SQLAlchemyError
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/portal/smart-docs", tags=["Portal Smart Docs"])
+
+
+# =============================================================================
+# SECURITY CONSTANTS
+# =============================================================================
+
+# Minimum slug length — short slugs are trivially enumerable
+MIN_SLUG_LENGTH = 8
+
+# Per-IP rate limit window (seconds) and maximum requests within that window
+RATE_LIMIT_WINDOW_SECONDS = 60
+RATE_LIMIT_MAX_REQUESTS = 30
+
+# Allowed MIME types for borrower uploads
+ALLOWED_MIME_TYPES = {
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/tiff",
+    "image/gif",
+}
+
+# Filename characters that are never acceptable
+_UNSAFE_FILENAME_RE = re.compile(r'[/\\:\*\?"<>\|\x00]')
+
+
+# =============================================================================
+# IN-MEMORY RATE LIMITER
+# =============================================================================
+
+# Structure: { ip: [(window_start, request_count), ...] }
+# Each entry is a (window_start_epoch, count) pair for a 1-minute window.
+_rate_limit_store: dict = defaultdict(list)
+
+
+def _get_client_ip(request: Request) -> str:
+    """Extract the real client IP, respecting common proxy headers."""
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        # Take the leftmost (originating) IP
+        return forwarded_for.split(",")[0].strip()
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
+def _check_rate_limit(ip: str) -> tuple[bool, int]:
+    """Check whether *ip* has exceeded the rate limit.
+
+    Returns:
+        (allowed: bool, remaining: int) — remaining requests left in window.
+    """
+    now = time.monotonic()
+    window_start = now - RATE_LIMIT_WINDOW_SECONDS
+
+    # Purge expired windows for this IP
+    _rate_limit_store[ip] = [
+        (ts, cnt) for ts, cnt in _rate_limit_store[ip] if ts > window_start
+    ]
+
+    total_in_window = sum(cnt for _, cnt in _rate_limit_store[ip])
+
+    if total_in_window >= RATE_LIMIT_MAX_REQUESTS:
+        return False, 0
+
+    # Record this request
+    _rate_limit_store[ip].append((now, 1))
+    remaining = RATE_LIMIT_MAX_REQUESTS - total_in_window - 1
+    return True, max(0, remaining)
+
+
+# =============================================================================
+# PORTAL ACCESS VERIFICATION
+# =============================================================================
+
+def verify_portal_access(workspace_slug: str, request: Request, response: Response) -> None:
+    """Enforce rate limiting and slug entropy on every portal request.
+
+    Adds ``X-RateLimit-Remaining`` and ``X-Robots-Tag`` to *response*.
+
+    Raises:
+        HTTPException 400  — slug is too short / obviously guessable
+        HTTPException 429  — caller has exceeded the per-IP rate limit
+    """
+    # Always prevent search-engine indexing of portal URLs
+    response.headers["X-Robots-Tag"] = "noindex, nofollow"
+
+    # Reject obviously guessable (too short) slugs immediately — no DB hit
+    if len(workspace_slug) < MIN_SLUG_LENGTH:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid workspace identifier.",
+        )
+
+    # Rate-limit by IP
+    client_ip = _get_client_ip(request)
+    allowed, remaining = _check_rate_limit(client_ip)
+    response.headers["X-RateLimit-Remaining"] = str(remaining)
+
+    if not allowed:
+        logger.warning("Portal rate limit exceeded for IP %s (slug prefix: %s...)", client_ip, workspace_slug[:4])
+        raise HTTPException(
+            status_code=429,
+            detail="Too many requests. Please wait before trying again.",
+            headers={"Retry-After": str(RATE_LIMIT_WINDOW_SECONDS)},
+        )
 
 
 # =============================================================================
@@ -93,6 +205,22 @@ def get_workspace_loan(db: Session, workspace_slug: str) -> tuple:
     return workspace, loan, main_loan_id
 
 
+def sanitize_filename(filename: str) -> str:
+    """Remove path separators, null bytes, and other unsafe characters from a filename.
+
+    Returns a safe, non-empty filename string.
+    """
+    if not filename:
+        return "upload"
+    # Strip path components
+    basename = filename.replace("\\", "/").split("/")[-1]
+    # Remove null bytes and unsafe shell/filesystem characters
+    safe = _UNSAFE_FILENAME_RE.sub("_", basename)
+    # Collapse runs of underscores/spaces and strip leading/trailing whitespace
+    safe = re.sub(r"[_\s]{2,}", "_", safe).strip("_ ")
+    return safe or "upload"
+
+
 def format_requirement(request: DocumentRequest, documents: list) -> dict:
     """Format a document request for portal display."""
     now = datetime.utcnow()
@@ -137,6 +265,8 @@ def format_requirement(request: DocumentRequest, documents: list) -> dict:
 @router.get("/{workspace_slug}/requirements")
 async def get_portal_requirements(
     workspace_slug: str,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
@@ -144,6 +274,8 @@ async def get_portal_requirements(
 
     Returns the needs list with status, due dates, and uploaded documents.
     """
+    verify_portal_access(workspace_slug, request, response)
+
     workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 
     # Get all document requests for this loan (using main_loan_id for Smart Docs)
@@ -186,29 +318,36 @@ async def get_portal_requirements(
 async def get_requirement_detail(
     workspace_slug: str,
     request_id: int,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """Get detailed information about a specific document requirement."""
+    verify_portal_access(workspace_slug, request, response)
+
     workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 
-    request = db.query(DocumentRequest).filter(
+    doc_request = db.query(DocumentRequest).filter(
         DocumentRequest.id == request_id,
         DocumentRequest.loan_id == main_loan_id
     ).first()
 
-    if not request:
+    if not doc_request:
         raise HTTPException(status_code=404, detail="Requirement not found")
 
     documents = db.query(SmartDocument).filter(
-        SmartDocument.request_id == request_id
+        SmartDocument.request_id == request_id,
+        SmartDocument.loan_id == main_loan_id  # Belt-and-suspenders: confirm loan ownership
     ).all()
 
-    return format_requirement(request, documents)
+    return format_requirement(doc_request, documents)
 
 
 @router.post("/{workspace_slug}/upload")
 async def upload_document_for_requirement(
     workspace_slug: str,
+    request: Request,
+    response: Response,
     file: UploadFile = File(...),
     request_id: int = Form(...),
     db: Session = Depends(get_db)
@@ -218,23 +357,39 @@ async def upload_document_for_requirement(
 
     The document will be validated and linked to the specific requirement.
     """
+    verify_portal_access(workspace_slug, request, response)
+
     workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 
-    # Verify the request belongs to this loan
-    request = db.query(DocumentRequest).filter(
+    # Validate MIME type against whitelist before reading the full file
+    submitted_mime = file.content_type or ""
+    if submitted_mime not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail=(
+                f"Unsupported file type '{submitted_mime}'. "
+                "Allowed types: PDF, JPEG, PNG, TIFF, GIF."
+            ),
+        )
+
+    # Sanitize the uploaded filename
+    safe_filename = sanitize_filename(file.filename or "")
+
+    # Verify the request belongs to this loan (explicit ownership check)
+    doc_request = db.query(DocumentRequest).filter(
         DocumentRequest.id == request_id,
         DocumentRequest.loan_id == main_loan_id
     ).first()
 
-    if not request:
+    if not doc_request:
         raise HTTPException(status_code=404, detail="Requirement not found")
 
-    if request.status in [RequestStatus.ACCEPTED, RequestStatus.WAIVED]:
+    if doc_request.status in [RequestStatus.ACCEPTED, RequestStatus.WAIVED]:
         raise HTTPException(status_code=400, detail="This requirement has already been fulfilled")
 
     # Read file content
     content = await file.read()
-    mime_type = file.content_type or "application/octet-stream"
+    mime_type = submitted_mime
     file_size = len(content)
 
     # Validate file size (max 20MB)
@@ -242,8 +397,8 @@ async def upload_document_for_requirement(
         raise HTTPException(status_code=413, detail="File too large (max 20MB)")
 
     # Use request.borrower_id if available, otherwise default to primary borrower
-    borrower_id = request.borrower_id if request.borrower_id else 1
-    if not request.borrower_id:
+    borrower_id = doc_request.borrower_id if doc_request.borrower_id else 1
+    if not doc_request.borrower_id:
         logger.info(f"Document request {request_id} has no borrower_id, defaulting to primary borrower (1)")
 
     # Get S3 service - must verify availability and upload BEFORE creating DB record
@@ -257,11 +412,11 @@ async def upload_document_for_requirement(
             detail="Document storage is temporarily unavailable. Please try again later."
         )
 
-    # Generate storage key with org isolation
+    # Generate storage key with org isolation (use sanitized filename)
     storage_key = s3_service.generate_storage_key(
         loan_id=main_loan_id,
         borrower_id=borrower_id,
-        file_name=file.filename,
+        file_name=safe_filename,
         organization_id=getattr(workspace, 'organization_id', None),
     )
 
@@ -274,7 +429,7 @@ async def upload_document_for_requirement(
             "loan_id": str(main_loan_id),
             "borrower_id": str(borrower_id),
             "request_id": str(request_id),
-            "original_filename": file.filename
+            "original_filename": safe_filename
         }
     )
 
@@ -290,11 +445,11 @@ async def upload_document_for_requirement(
         request_id=request_id,
         loan_id=main_loan_id,
         borrower_id=borrower_id,
-        file_name=file.filename,
+        file_name=safe_filename,
         mime_type=mime_type,
         file_size=file_size,
         storage_key=storage_key,
-        doc_type=request.doc_type,
+        doc_type=doc_request.doc_type,
         status="UPLOADED",
     )
     db.add(document)
@@ -310,20 +465,20 @@ async def upload_document_for_requirement(
             document_id=document.id,
             file_content=content,
             mime_type=mime_type,
-            filename=file.filename,
-            doc_type=request.doc_type,
+            filename=safe_filename,
+            doc_type=doc_request.doc_type,
             request_id=request_id,
         )
 
         # Update request status based on result
         if result.decision and result.decision.value == "ACCEPT":
-            request.status = RequestStatus.ACCEPTED
-            request.completed_at = datetime.utcnow()
-            request.fulfilled_at = datetime.utcnow()
+            doc_request.status = RequestStatus.ACCEPTED
+            doc_request.completed_at = datetime.utcnow()
+            doc_request.fulfilled_at = datetime.utcnow()
         elif result.decision and result.decision.value == "REJECT":
-            request.status = RequestStatus.REJECTED
-        elif request.status == RequestStatus.OPEN:
-            request.status = RequestStatus.PENDING_REVIEW
+            doc_request.status = RequestStatus.REJECTED
+        elif doc_request.status == RequestStatus.OPEN:
+            doc_request.status = RequestStatus.PENDING_REVIEW
         db.commit()
 
     except SQLAlchemyError as e:
@@ -332,8 +487,8 @@ async def upload_document_for_requirement(
         logger.error(f"Error processing upload (non-fatal): {e}")
         logger.error(traceback.format_exc())
         # Still mark as pending review so document isn't lost
-        if request.status == RequestStatus.OPEN:
-            request.status = RequestStatus.PENDING_REVIEW
+        if doc_request.status == RequestStatus.OPEN:
+            doc_request.status = RequestStatus.PENDING_REVIEW
             db.commit()
 
     return {
@@ -347,7 +502,7 @@ async def upload_document_for_requirement(
             "rejection_reason": result.rejection_reason if result else None,
             "fix_instructions": result.fix_instructions if result else None,
         } if result else None,
-        "requirement_status": request.status.value,
+        "requirement_status": doc_request.status.value,
         "processing_error": processing_error
     }
 
@@ -355,11 +510,15 @@ async def upload_document_for_requirement(
 @router.get("/{workspace_slug}/summary")
 async def get_document_summary(
     workspace_slug: str,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db)
 ):
     """
     Get a summary of document collection progress for the portal dashboard.
     """
+    verify_portal_access(workspace_slug, request, response)
+
     workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 
     # Get request counts by status

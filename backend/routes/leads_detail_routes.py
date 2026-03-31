@@ -301,6 +301,20 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         try:
             db.commit()
             logger.info(f"[bulk-update-status] Successfully committed. Updated {updated_count}, errors: {len(errors)}")
+
+            # Event-driven workflow enrollment for all updated leads (post-commit)
+            try:
+                from services.workflow_scheduler import trigger_workflow_evaluation_for_lead
+                for lead_id in lead_ids[:updated_count]:
+                    try:
+                        trigger_workflow_evaluation_for_lead(
+                            db, lead_id, new_status,
+                            user_id=current_user.id,
+                        )
+                    except Exception as wf_err:
+                        logger.warning(f"Workflow trigger failed for lead {lead_id} in bulk update: {wf_err}")
+            except Exception as wf_import_err:
+                logger.warning(f"Workflow trigger import failed in bulk update: {wf_import_err}")
         except Exception as e:
             db.rollback()
             logger.error(f"[bulk-update-status] Failed to commit: {e}")
@@ -647,6 +661,17 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 logger.info(f"SLA milestone tracked for lead {lead.id} stage change: {old_status} -> {new_status}")
             except Exception as e:
                 logger.warning(f"Failed to track SLA milestone for lead {lead.id}: {e}")
+
+            # Event-driven workflow enrollment (eliminates 60s polling delay)
+            try:
+                from services.workflow_scheduler import trigger_workflow_evaluation_for_lead
+                trigger_workflow_evaluation_for_lead(
+                    db, lead.id, new_status,
+                    lead_source=getattr(lead, 'source', None),
+                    user_id=current_user.id,
+                )
+            except Exception as e:
+                logger.warning(f"Workflow evaluation trigger failed for lead {lead.id}: {e}")
 
             # Fire lead status change triggers for automated outreach (nurture, etc.)
             try:

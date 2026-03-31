@@ -1,0 +1,14 @@
+# Matchfile - Code Signing Configuration
+# https://docs.fastlane.tools/actions/match/
+#
+# Match manages provisioning profiles and certificates via a shared Git repo.
+# Run `fastlane match init` to set up the Git repo the first time.
+# Run `fastlane match appstore` to generate App Store distribution certs.
+# Run `fastlane match development` to generate development certs.
+
+git_url(ENV["MATCH_GIT_URL"])
+storage_mode("git")
+type("appstore")
+app_identifier(["com.perenniaai.crm"])
+username(ENV["APPLE_ID"] || "tloss@cmghomeloans.com")
+team_id("V5ZA5FZ2J8")

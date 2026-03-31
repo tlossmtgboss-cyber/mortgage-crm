@@ -24,12 +24,7 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Terminal loan stages (same constant used across the platform)
-# ---------------------------------------------------------------------------
-TERMINAL_STAGES = (
-    "FUNDED", "CANCELLED", "DENIED", "DEAD", "WITHDRAWN", "DOES_NOT_QUALIFY"
-)
+from services.workflow_constants import TERMINAL_LOAN_STAGES as TERMINAL_STAGES
 
 APPLICATION_STAGES = (
     "APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING",

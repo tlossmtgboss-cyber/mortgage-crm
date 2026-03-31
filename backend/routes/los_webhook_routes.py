@@ -200,6 +200,13 @@ def register_los_webhook_routes(app, get_db, **kwargs):
             except Exception as e:
                 logger.warning(f"SLA tracking hook failed for LOS loan {loan.id}: {e}")
 
+            # Event-driven workflow enrollment (eliminates 60s polling delay)
+            try:
+                from services.workflow_scheduler import trigger_workflow_evaluation_for_loan
+                trigger_workflow_evaluation_for_loan(db, loan.id, crm_stage)
+            except Exception as e:
+                logger.warning(f"Workflow evaluation trigger failed for LOS loan {loan.id}: {e}")
+
     async def _handle_loan_update(db: Session, los_loan_id: str, payload: dict):
         """Handle general loan update from LOS.
 

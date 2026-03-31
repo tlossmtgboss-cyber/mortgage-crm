@@ -1,375 +1,339 @@
 {
   "audit_metadata": {
-    "timestamp": "2026-02-22T00:50:00Z",
-    "environment": "production",
-    "skill_version": "1.0.0",
-    "scope": "workflow_logic_routing",
-    "title": "CRM Workflow Audit Report"
+    "timestamp": "2026-03-31T14:00:00Z",
+    "environment": "local",
+    "skill_version": "1.1.0",
+    "method": "static_analysis",
+    "scope": "employees_and_team_members",
+    "previous_audit": "2026-03-31T12:00:00Z",
+    "previous_health_score": 40
   },
   "summary": {
-    "total_checks": 30,
-    "critical": 5,
-    "warning": 7,
-    "pass": 15,
-    "skipped": 3,
-    "info": 0,
-    "health_score": 0
+    "total_checks": 38,
+    "critical": 0,
+    "warning": 0,
+    "pass": 33,
+    "skipped": 0,
+    "info": 5,
+    "health_score": 100
   },
   "findings": [
     {
-      "check_id": "SEC-001",
-      "category": "security",
-      "name": "Unauthenticated SLA Endpoints",
-      "severity": "critical",
-      "finding": "/api/v1/sla/alerts and /api/v1/sla/milestones/active return full data without authentication, exposing lead IDs, user IDs, and operational data to the public internet.",
-      "impact": "Data leak of internal CRM operational state. External actors can enumerate lead and user IDs.",
-      "recommendation": "Add Depends(get_current_user) to both endpoints in backend/routes/sla_tracking_routes.py.",
-      "evidence": {"alerts_count": 50, "milestones_count": 58, "http_status": 200, "auth_required": false},
-      "timestamp": "2026-02-22T00:49:00Z"
-    },
-    {
-      "check_id": "SLA-004",
-      "category": "sla_configuration",
-      "name": "Disconnected SLA Systems",
-      "severity": "critical",
-      "finding": "sla_milestones_canonical.json defines 27 milestones but is NOT consumed by runtime code. workflow_sla_service.py uses database tables exclusively. CLAUDE.md SLA_TARGETS defines a third set of 7 transitions.",
-      "impact": "Three SLA truth sources with no bridge. Config changes to canonical JSON have zero runtime effect.",
-      "recommendation": "Choose one source of truth: load canonical JSON at startup to seed DB, or deprecate the JSON file.",
-      "evidence": {"canonical_milestones": 27, "sla_targets_transitions": 7, "runtime_references_to_json": 0},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "RL-004",
-      "category": "routing_logic",
-      "name": "No Loan-Side SLA Auto-Enrollment on Handoff",
-      "severity": "critical",
-      "finding": "Lead-to-Disclosed transition creates a task and starts drip campaigns but does NOT call WorkflowSLAService.enroll_loan(). Loan-phase SLA milestones never fire automatically.",
-      "impact": "All 19 loan-phase SLA milestones are effectively dead. LOs must manually enroll each loan.",
-      "recommendation": "Add enroll_loan() call in lead_workflow_engine.py _handle_to_disclosed() after loan file creation.",
-      "evidence": {"handler": "_handle_to_disclosed", "file": "lead_workflow_engine.py", "enroll_loan_called": false},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "SLA-003",
-      "category": "sla_configuration",
-      "name": "Self-Referential Trigger Conditions",
-      "severity": "critical",
-      "finding": "clear_to_close milestone triggers from 'Clear To Close' (itself). documents_received triggers from 'Documents Requested' which is inactive.",
-      "impact": "clear_to_close SLA can never trigger automatically. documents_received deadline depends on inactive milestone.",
-      "recommendation": "Fix clear_to_close.trigger_from to 'conditions_cleared'. Reactivate documents_requested or change trigger source.",
-      "evidence": {"clear_to_close_trigger": "Clear To Close", "documents_requested_active": false},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "WF-005",
-      "category": "workflow_integrity",
-      "name": "Disclosed State Dead-End",
-      "severity": "critical",
-      "finding": "VALID_TRANSITIONS['Disclosed'] = ['Closed'] only. No recovery path back to Pre-Approved, Long-Term Nurture, or Withdrawn.",
-      "impact": "Leads stuck in Disclosed with failed deals have no legitimate recovery path without manual DB edits.",
-      "recommendation": "Add recovery transitions: Disclosed -> [Closed, Long-Term Nurture, Withdrawn, Does Not Qualify].",
-      "evidence": {"current_transitions": ["Closed"], "missing_recovery": ["Long-Term Nurture", "Withdrawn", "Does Not Qualify"]},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
       "check_id": "WF-001",
       "category": "workflow_integrity",
-      "name": "Inconsistent Lead Stage Definitions",
-      "severity": "warning",
-      "finding": "database/enums.py, lead_workflow_engine.py LEAD_STAGES, and VALID_TRANSITIONS define different stage sets. Application Started/Complete handlers are dead code.",
-      "impact": "Maintenance confusion. Dead handlers give false sense of coverage.",
-      "recommendation": "Align all three sources. Remove dead handler code.",
-      "evidence": {"enum_stages": 15, "workflow_stages": 15, "mismatched": ["Application Started", "Application Complete", "Document Fulfillment"]},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "WF-004",
-      "category": "workflow_integrity",
-      "name": "DNQ Re-Entry Gap",
-      "severity": "warning",
-      "finding": "Does Not Qualify -> Prospect/Application is valid but no workflow re-enrollment triggers on re-entry.",
-      "impact": "Re-entering leads miss intake workflow and first-contact SLAs.",
-      "recommendation": "Add re-enrollment hook in Prospect handler for previously-DNQ leads.",
-      "evidence": {"dnq_transitions": ["Prospect", "Application"], "re_enrollment_trigger": false},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "WF-006",
-      "category": "workflow_integrity",
-      "name": "Dead Code Handlers",
-      "severity": "warning",
-      "finding": "Handlers for Application Started and Application Complete (lines 157-168) reference stages not in VALID_TRANSITIONS. Never execute.",
-      "impact": "False sense of coverage. Maintenance burden.",
-      "recommendation": "Remove dead handlers or add stages to VALID_TRANSITIONS.",
-      "evidence": {"dead_handlers": ["Application Started", "Application Complete"], "file": "lead_workflow_engine.py", "lines": "157-168"},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "WF-007",
-      "category": "workflow_integrity",
-      "name": "Bidirectional Loop Risk",
-      "severity": "warning",
-      "finding": "Attempted Contact <-> Prospect <-> Application creates bidirectional loops. No guard prevents rapid cycling.",
-      "impact": "Potential flood of duplicate tasks from rapid stage cycling.",
-      "recommendation": "Add cooldown mechanism or max-transition counter.",
-      "evidence": {"loops": ["Attempted Contact <-> Prospect", "Prospect <-> Application", "Application -> Prospect"]},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "AT-004",
-      "category": "automation_triggers",
-      "name": "Invisible Unassigned Tasks",
-      "severity": "warning",
-      "finding": "When role resolution fails and lead.owner_id is NULL, linked task in tasks table is never created. Workflow task instance exists but is invisible in UI.",
-      "impact": "Tasks silently dropped. No visibility into assignment failures.",
-      "recommendation": "Always create linked task even if unassigned. Add Unassigned filter to task dashboard.",
-      "evidence": {"fallback_chain": ["role_responsibilities", "legacy_fields", "owner_id"], "null_behavior": "task skipped"},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "RL-003",
-      "category": "routing_logic",
-      "name": "No Backpressure on Task Generation",
-      "severity": "warning",
-      "finding": "MAX_PENDING_TASKS_PER_USER=50. Over-capacity assigns to first user anyway with no alert or redistribution.",
-      "impact": "Overloaded LOs. No manager visibility into capacity issues.",
-      "recommendation": "Add alert when users exceed 40 pending tasks. Consider pausing generation for overloaded roles.",
-      "evidence": {"max_pending": 50, "overflow_behavior": "assign_to_first"},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "RL-006",
-      "category": "routing_logic",
-      "name": "Partial Time-Based Rules",
-      "severity": "warning",
-      "finding": "application_incomplete checks for 'Application Started' (wrong stage). preapproval_expiring (30 days) has no handler implementation.",
-      "impact": "Two time-based automations non-functional. Leads may go unattended.",
-      "recommendation": "Fix stage name. Implement preapproval_expiring handler.",
-      "evidence": {"broken_rule": "application_incomplete", "wrong_stage": "Application Started", "missing_handler": "preapproval_expiring"},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "name": "Invite workflow has defined start state",
+      "severity": "pass",
+      "finding": "EmployeeInvite lifecycle starts at InviteStatus.PENDING",
+      "evidence": {"enum": "InviteStatus", "values": ["PENDING", "ACCEPTED", "EXPIRED", "REVOKED"]}
     },
     {
       "check_id": "WF-002",
       "category": "workflow_integrity",
-      "name": "Loan Stages Consistent",
+      "name": "Invite workflow has terminal states",
       "severity": "pass",
-      "finding": "LoanStage enum (21 stages) matches across database/enums.py and CLAUDE.md. TERMINAL_STAGES correctly identified.",
-      "recommendation": "",
-      "evidence": {"stages": 21, "terminal": 6},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "finding": "Terminal states: ACCEPTED, REVOKED. Semi-terminal: EXPIRED (can resend back to PENDING)."
     },
     {
       "check_id": "WF-003",
       "category": "workflow_integrity",
-      "name": "Start States Defined",
+      "name": "No unreachable invite states",
       "severity": "pass",
-      "finding": "Lead workflow: VALID_TRANSITIONS[None] = ['New']. Workflow instance: created as 'active'. Both correctly defined.",
-      "recommendation": "",
-      "evidence": {"lead_start": "New", "workflow_start": "active"},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "finding": "All 4 states reachable from PENDING through valid transitions."
     },
     {
-      "check_id": "SLA-001",
-      "category": "sla_configuration",
-      "name": "Milestone Registry Complete",
+      "check_id": "WF-004",
+      "category": "workflow_integrity",
+      "name": "No dead-end non-terminal states",
       "severity": "pass",
-      "finding": "27 milestones defined across 5 phases. 25 active, 2 inactive (documents_requested, closing_date).",
-      "recommendation": "",
-      "evidence": {"total": 27, "active": 25, "inactive": 2},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "finding": "PENDING has 3 outbound transitions. EXPIRED has 2 (resend, revoke). No dead ends."
     },
     {
-      "check_id": "SLA-005",
-      "category": "sla_configuration",
-      "name": "Instance State Machine Clean",
+      "check_id": "WF-005",
+      "category": "workflow_integrity",
+      "name": "No duplicate transition rules",
       "severity": "pass",
-      "finding": "States: active, paused, completed, cancelled. All transitions guarded with status checks. No invalid paths.",
-      "recommendation": "",
-      "evidence": {"states": 4, "terminal": ["completed", "cancelled"]},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "finding": "Transition rules consistent across both paths after consolidation."
     },
     {
-      "check_id": "SLA-006",
-      "category": "sla_configuration",
-      "name": "Alert Lifecycle Complete",
+      "check_id": "WF-006",
+      "category": "workflow_integrity",
+      "name": "Consolidated invitation storage",
       "severity": "pass",
-      "finding": "Alert states: active -> acknowledged -> resolved (with snooze/escalate side operations). Complete lifecycle.",
-      "recommendation": "",
-      "evidence": {"states": ["active", "acknowledged", "resolved"]},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "finding": "All invitation storage uses employee_invites table. No more user_metadata JSON."
+    },
+    {
+      "check_id": "WF-007",
+      "category": "workflow_integrity",
+      "name": "No duplicate route registration",
+      "severity": "pass",
+      "finding": "Previously shadowed /api/invite/{token} removed from onboarding_routes.py."
     },
     {
       "check_id": "AT-001",
       "category": "automation_triggers",
-      "name": "Task Type Routing Complete",
+      "name": "Invite creation triggers email",
       "severity": "pass",
-      "finding": "11 task types mapped to 5 routes (task_list, sms_automation, email_automation, dialer_queue, ai_autonomous).",
-      "recommendation": "",
-      "evidence": {"task_types": 11, "routes": 5},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "finding": "Both paths trigger email_service.send_activation_email(). Error caught, invite succeeds even if email fails."
     },
     {
       "check_id": "AT-002",
       "category": "automation_triggers",
-      "name": "AI-Eligible Types Properly Gated",
+      "name": "Invite acceptance triggers user creation",
       "severity": "pass",
-      "finding": "AI_ELIGIBLE_TYPES = {email, text, text_am, text_pm}. Gated by day_config ai_responsible flag. Thresholds: 95% auto-execute, 70% review.",
-      "recommendation": "",
-      "evidence": {"ai_eligible": ["email", "text", "text_am", "text_pm"], "auto_threshold": 0.95, "review_threshold": 0.70},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "finding": "Both activation endpoints create User from EmployeeInvite data with role, org, and access token."
     },
     {
       "check_id": "AT-003",
       "category": "automation_triggers",
-      "name": "Task Deduplication Working",
+      "name": "Expiration auto-detected on validation",
       "severity": "pass",
-      "finding": "Dedup checks at both workflow_task_instances and tasks levels. Returns existing ID if duplicate found.",
-      "recommendation": "",
-      "evidence": {"dedup_layers": 2},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "finding": "Token validation lazy-checks expires_at and auto-transitions to EXPIRED. List endpoints also compute effective status via _effective_status()."
     },
     {
-      "check_id": "AT-006",
+      "check_id": "AT-004",
       "category": "automation_triggers",
-      "name": "SLA Hook Tasks Well-Structured",
-      "severity": "pass",
-      "finding": "5 score bands + 6 flag hooks. All have valid assignee roles, unique codes, reasonable SLA targets. No circular deps.",
-      "recommendation": "",
-      "evidence": {"score_bands": 5, "flag_hooks": 6, "total_tasks": 12},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "name": "No proactive expiration sweep",
+      "severity": "info",
+      "finding": "No scheduled job to sweep expired invites. The _effective_status() fix handles display correctly but doesn't transition the DB record.",
+      "recommendation": "Consider a periodic sweep or pre-expiration admin notification."
     },
     {
-      "check_id": "AT-007",
-      "category": "automation_triggers",
-      "name": "Sibling Cancellation Correct",
+      "check_id": "SLA-001",
+      "category": "sla_configuration",
+      "name": "Invite expiration SLA defined",
       "severity": "pass",
-      "finding": "Sibling tasks share task_group_key. Cancellation triggers on contact_made=True. Also cancels SLA warning tasks.",
-      "recommendation": "",
-      "evidence": {"cancel_trigger": "contact_made", "group_key": true},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "RL-001",
-      "category": "routing_logic",
-      "name": "Enrollment Validation Working",
-      "severity": "pass",
-      "finding": "Both enroll_lead and enroll_loan validate entity existence, config existence, and prevent duplicate active enrollments.",
-      "recommendation": "",
-      "evidence": {"validations": ["entity_exists", "config_exists", "no_duplicate"]},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "RL-002",
-      "category": "routing_logic",
-      "name": "Config Inheritance Working",
-      "severity": "pass",
-      "finding": "Two-tier lookup: org-specific config first, then system template fallback. Correctly supports per-org customization.",
-      "recommendation": "",
-      "evidence": {"tiers": ["organization_specific", "system_template"]},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "RL-005",
-      "category": "routing_logic",
-      "name": "Legacy/SLA Coordination Correct",
-      "severity": "pass",
-      "finding": "Lead workflow engine checks _check_active_sla_workflow before executing legacy actions. Prevents duplicate actions.",
-      "recommendation": "",
-      "evidence": {"handlers_with_check": ["under_contract", "long_term_nurture", "does_not_qualify", "disclosed"]},
-      "timestamp": "2026-02-22T00:50:00Z"
-    },
-    {
-      "check_id": "AT-005",
-      "category": "automation_triggers",
-      "name": "Task Statuses Functional",
-      "severity": "pass",
-      "finding": "Task instance statuses (scheduled, pending, in_progress, completed, skipped, failed, cancelled) all handled correctly. Minor inconsistency: task_generator uses 'scheduled', sla_service uses 'pending' for initial status.",
-      "recommendation": "Consider standardizing initial status to one value.",
-      "evidence": {"initial_statuses": ["scheduled", "pending"], "all_statuses": 7},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "finding": "7-day expiration consistent across both paths."
     },
     {
       "check_id": "SLA-002",
       "category": "sla_configuration",
-      "name": "Duration Types Documented",
+      "name": "No invite expiration escalation",
+      "severity": "info",
+      "finding": "No notification to admin when invite approaches expiration.",
+      "recommendation": "Consider adding 1-2 day pre-expiration notification."
+    },
+    {
+      "check_id": "RL-001",
+      "category": "routing_logic",
+      "name": "Role-based invite permissions",
       "severity": "pass",
-      "finding": "Four target types: hours (3), business_days (20), business_days_before (2), calendar_days (2). All milestones have defined durations.",
-      "recommendation": "",
-      "evidence": {"hours": 3, "business_days": 20, "business_days_before": 2, "calendar_days": 2},
-      "timestamp": "2026-02-22T00:50:00Z"
+      "finding": "Restricted to INVITE_GRANTING_ROLES: {admin, site_admin, leadership, management}."
     },
     {
-      "check_id": "API-001",
-      "category": "runtime",
-      "name": "API Health Check",
+      "check_id": "RL-002",
+      "category": "routing_logic",
+      "name": "Role escalation prevention",
       "severity": "pass",
-      "finding": "GET /api/v1/health returned 200 in 103ms. Database connected. Version 2026.01.22.1.",
-      "recommendation": "",
-      "evidence": {"status": 200, "response_time_ms": 103, "db": "connected"},
-      "timestamp": "2026-02-22T00:49:00Z"
+      "finding": "Non-admin users cannot create admin-level invites."
     },
     {
-      "check_id": "TH-ALL",
-      "category": "runtime",
-      "name": "Task Health Checks",
-      "severity": "skipped",
-      "finding": "Workflow dashboard endpoint requires JWT authentication. Could not retrieve task distribution data.",
-      "recommendation": "Configure API_TOKEN for future audits to enable live checks.",
-      "evidence": {"endpoint": "/api/v1/workflow/dashboard/summary", "status": 401},
-      "timestamp": "2026-02-22T00:49:00Z"
+      "check_id": "RL-003",
+      "category": "routing_logic",
+      "name": "Seat limit enforcement with FOR UPDATE lock",
+      "severity": "pass",
+      "finding": "Pessimistic locking prevents race condition on concurrent accepts."
     },
     {
-      "check_id": "SR-ALL",
-      "category": "runtime",
-      "name": "SLA Compliance Rates",
-      "severity": "skipped",
-      "finding": "SLA dashboard summary endpoint requires authentication. However, unauthenticated alerts endpoint shows 50 active overdue alerts (38 preapproval, 12 lead_response).",
-      "recommendation": "50 overdue alerts with 0 acknowledgments suggests SLA monitoring may not be active.",
-      "evidence": {"alerts_active": 50, "alerts_acknowledged": 0, "oldest_overdue_days": 72},
-      "timestamp": "2026-02-22T00:49:00Z"
+      "check_id": "RL-004",
+      "category": "routing_logic",
+      "name": "Tenant isolation on all invite operations",
+      "severity": "pass",
+      "finding": "All CRUD enforces organization_id. Master admin (id=1) bypasses."
     },
     {
-      "check_id": "RD-ALL",
-      "category": "runtime",
-      "name": "Routing Distribution Checks",
-      "severity": "skipped",
-      "finding": "Task distribution data requires authenticated access.",
-      "recommendation": "Configure API_TOKEN for future audits.",
-      "evidence": {"endpoint": "/api/v1/workflow/tasks", "status": 401},
-      "timestamp": "2026-02-22T00:49:00Z"
+      "check_id": "SEC-001",
+      "category": "security",
+      "name": "Constant-time token comparison",
+      "severity": "pass",
+      "finding": "hmac.compare_digest() used after indexed lookup in all token paths."
+    },
+    {
+      "check_id": "SEC-002",
+      "category": "security",
+      "name": "Unified password policy on backend",
+      "severity": "pass",
+      "finding": "validate_password() enforced on all activation paths."
+    },
+    {
+      "check_id": "SEC-003",
+      "category": "security",
+      "name": "Frontend password validation aligned with backend constant",
+      "severity": "pass",
+      "finding": "AcceptInvite.jsx imports PASSWORD_REQUIREMENTS from constants/roles.js and builds validation dynamically. Matches backend password_policy.py (min_length=8, require_uppercase=True, require_lowercase=True, require_digit=True).",
+      "previous_severity": "critical",
+      "resolution": "Replaced hardcoded regex with constant-driven validation."
+    },
+    {
+      "check_id": "SEC-004",
+      "category": "security",
+      "name": "PII masking in audit logs",
+      "severity": "pass",
+      "finding": "All logs use mask_email_for_audit()."
+    },
+    {
+      "check_id": "SEC-005",
+      "category": "security",
+      "name": "Rate limiting on public endpoints",
+      "severity": "pass",
+      "finding": "Validate (10/5min), activate (5/5min), resend (5/5min) all rate-limited."
+    },
+    {
+      "check_id": "SEC-006",
+      "category": "security",
+      "name": "No debug logging leak in TeamMembers.js",
+      "severity": "pass",
+      "finding": "All 6 DEBUG console.log statements removed. No module-level console.log. Only legitimate console.error() calls remain in error handlers.",
+      "previous_severity": "critical",
+      "resolution": "Removed lines 10, 90, 97, 101, 115, 118."
+    },
+    {
+      "check_id": "SEC-007",
+      "category": "security",
+      "name": "CSRF protection on invite management components",
+      "severity": "pass",
+      "finding": "InviteManagementTable.jsx and EmployeeInviteWizard.jsx now use the api axios instance from services/api.js. All POST operations (create, revoke, resend) go through axios interceptors with automatic CSRF token injection. Zero remaining raw fetch() calls.",
+      "previous_severity": "critical",
+      "resolution": "Replaced all fetch() calls with api.get()/api.post() from services/api.js."
+    },
+    {
+      "check_id": "TH-001",
+      "category": "task_health",
+      "name": "Audit log transaction ordering",
+      "severity": "pass",
+      "finding": "Fixed: flush() before audit, commit after."
+    },
+    {
+      "check_id": "TH-002",
+      "category": "task_health",
+      "name": "Invite token cleared after use",
+      "severity": "pass",
+      "finding": "Tokens set to None after acceptance and revocation."
+    },
+    {
+      "check_id": "TH-003",
+      "category": "task_health",
+      "name": "Response shape consistency",
+      "severity": "pass",
+      "finding": "Both paths return same field names: id, email, first_name, last_name, job_title, permission_role, status, invite_token, created_at, expires_at, accepted_at."
+    },
+    {
+      "check_id": "TH-004",
+      "category": "task_health",
+      "name": "Revoke behavior consistency",
+      "severity": "pass",
+      "finding": "Both paths allow revoking PENDING or EXPIRED invites."
+    },
+    {
+      "check_id": "TH-005",
+      "category": "task_health",
+      "name": "AcceptInvite role display uses ROLES constant",
+      "severity": "pass",
+      "finding": "Line 258 uses ROLES[inviteData?.permission_role]?.label for display text and ?.className for styling, with fallback to raw role string.",
+      "previous_severity": "warning",
+      "resolution": "Imported ROLES from constants/roles.js."
+    },
+    {
+      "check_id": "TH-006",
+      "category": "task_health",
+      "name": "AcceptInvite error handling uses structured error codes",
+      "severity": "pass",
+      "finding": "Lines 44-52 check error.error_code first (TOKEN_EXPIRED, TOKEN_USED), falling back to string matching only when no structured code is present.",
+      "previous_severity": "warning",
+      "resolution": "Added error_code check before string matching fallback."
+    },
+    {
+      "check_id": "TH-007",
+      "category": "task_health",
+      "name": "onboardingApi.js auth pattern consistent",
+      "severity": "pass",
+      "finding": "All 5 admin-onboarding functions (saveCompanyProfile, saveAdminProfile, queueTeamInvites, createAdminSubscription, completeAdminOnboarding) now use getAuthHeaders() instead of raw localStorage.getItem('token').",
+      "previous_severity": "warning",
+      "resolution": "Replaced localStorage.getItem('token') with getAuthHeaders() on lines 441, 460, 479, 498, 516."
+    },
+    {
+      "check_id": "TH-008",
+      "category": "task_health",
+      "name": "Centralized API base URL",
+      "severity": "pass",
+      "finding": "InviteManagementTable.jsx and EmployeeInviteWizard.jsx no longer define their own API_BASE. They use the api axios instance which has API_BASE_URL built into its baseURL config.",
+      "previous_severity": "warning",
+      "resolution": "Removed hardcoded API_BASE declarations, using api instance instead."
+    },
+    {
+      "check_id": "TH-009",
+      "category": "task_health",
+      "name": "EmployeeInviteWizard email check shows feedback on failure",
+      "severity": "pass",
+      "finding": "checkEmailAvailability() now shows toast.warning() on network error explaining the check could not be performed, and allows admin to proceed (returns {available: true}).",
+      "previous_severity": "warning",
+      "resolution": "Added toast notification and permissive fallback on check failure."
+    },
+    {
+      "check_id": "TH-010",
+      "category": "task_health",
+      "name": "Invite list shows correct status for expired invites",
+      "severity": "pass",
+      "finding": "Both list endpoints (user_invitation_routes.py and onboarding_extended_routes.py) include _effective_status() that checks expires_at < now() for pending invites and returns 'expired'. Token exposure also gated — expired pending invites no longer leak invite_token.",
+      "previous_severity": "warning",
+      "resolution": "Added _effective_status() function to both list endpoints."
+    },
+    {
+      "check_id": "TH-011",
+      "category": "task_health",
+      "name": "No module-level DEBUG log in TeamMembers.js",
+      "severity": "pass",
+      "finding": "Module-level console.log removed. No DEBUG-prefixed logging anywhere in file.",
+      "previous_severity": "warning",
+      "resolution": "Removed as part of SEC-006 fix."
+    },
+    {
+      "check_id": "INFO-001",
+      "category": "optimization",
+      "name": "21 workflow roles seeded from frontend",
+      "severity": "info",
+      "finding": "Workflow roles seeded via API call from TeamMembers.js rather than migration."
+    },
+    {
+      "check_id": "INFO-002",
+      "category": "optimization",
+      "name": "SCIM 2.0 provisioning has no UI",
+      "severity": "info",
+      "finding": "Backend has full RFC 7644 SCIM (1274 lines) but no admin UI for IdP configuration."
+    },
+    {
+      "check_id": "INFO-003",
+      "category": "optimization",
+      "name": "Bulk CSV import bypasses invitation flow",
+      "severity": "info",
+      "finding": "Bulk-imported users are created directly, skipping invite lifecycle."
     }
   ],
-  "sla_compliance": {
-    "overall_7d": 0.0,
-    "overall_30d": 0.0,
-    "by_task_type": [
-      {"task_type": "preapproval", "compliance_rate": 0, "total": 38, "on_time": 0, "breached": 38},
-      {"task_type": "lead_response", "compliance_rate": 0, "total": 12, "on_time": 0, "breached": 12}
-    ]
-  },
-  "task_distribution": {
-    "by_type": [
-      {"type": "phone", "count": 3, "route": "task_list"},
-      {"type": "phone_am", "count": 3, "route": "task_list"},
-      {"type": "phone_pm", "count": 3, "route": "task_list"},
-      {"type": "text", "count": 3, "route": "sms_automation"},
-      {"type": "text_am", "count": 3, "route": "sms_automation"},
-      {"type": "text_pm", "count": 3, "route": "sms_automation"},
-      {"type": "email", "count": 3, "route": "email_automation"},
-      {"type": "referral_partner", "count": 1, "route": "task_list"},
-      {"type": "dialer", "count": 1, "route": "dialer_queue"},
-      {"type": "manual", "count": 1, "route": "task_list"}
-    ],
-    "unassigned_count": 0,
-    "stuck_count": 0
-  },
-  "trigger_health": {
-    "total_registered": 11,
-    "ai_eligible": 4,
-    "auto_execute_threshold": 0.95,
-    "review_threshold": 0.70,
-    "error_rate_24h": 0.0,
-    "avg_latency_ms": 0,
-    "backlog_size": 0
-  }
+  "files_analyzed": [
+    "backend/routes/user_invitation_routes.py",
+    "backend/routes/onboarding_routes.py",
+    "backend/routes/onboarding_extended_routes.py",
+    "backend/routes/admin_onboarding_routes.py",
+    "backend/routes/user_creation_routes.py",
+    "backend/routes/scim_provisioning_routes.py",
+    "backend/routes/organization_routes.py",
+    "backend/routes/workflow_role_routes.py",
+    "backend/routes/workflow_sla_routes.py",
+    "backend/routes/permission_system_routes.py",
+    "backend/database/enums.py",
+    "backend/database/models/permission.py",
+    "backend/utils/roles.py",
+    "backend/utils/password_policy.py",
+    "backend/utils/token_security.py",
+    "backend/utils/invitation_audit.py",
+    "backend/services/workflow_role_assignment.py",
+    "backend/services/workflow_scheduler.py",
+    "backend/services/workflow_task_generator.py",
+    "frontend/src/components/admin/InviteManagementTable.jsx",
+    "frontend/src/components/admin/EmployeeInviteWizard.jsx",
+    "frontend/src/pages/AcceptInvite.jsx",
+    "frontend/src/pages/TeamMembers.js",
+    "frontend/src/pages/Settings.js",
+    "frontend/src/services/onboardingApi.js",
+    "frontend/src/constants/roles.js"
+  ]
 }

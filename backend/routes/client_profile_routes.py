@@ -1290,6 +1290,16 @@ async def apply_disposition_task(
 
         db.commit()
 
+        # Event-driven workflow enrollment (eliminates 60s polling delay)
+        try:
+            from services.workflow_scheduler import trigger_workflow_evaluation_for_loan
+            trigger_workflow_evaluation_for_loan(
+                db, loan.id, task.sf_proposed_stage,
+                user_id=current_user.id,
+            )
+        except Exception as e:
+            logger.warning(f"Workflow evaluation trigger failed for loan {loan.id} disposition: {e}")
+
         # Invalidate unified-tasks cache
         try:
             from performance_cache import cache_key, invalidate_cache

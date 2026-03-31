@@ -228,9 +228,23 @@ class TreasuryScraper:
 
 # Convenience function for sync contexts
 def get_treasury_yields_sync() -> Dict[str, float]:
-    """Synchronous wrapper for getting Treasury yields."""
+    """Synchronous wrapper for getting Treasury yields.
+
+    Safe to call from both sync and async contexts.
+    """
+    import concurrent.futures
+
     scraper = TreasuryScraper()
-    return asyncio.run(scraper.get_current_yields())
+    coro = scraper.get_current_yields()
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+    return asyncio.run(coro)
 
 
 if __name__ == '__main__':

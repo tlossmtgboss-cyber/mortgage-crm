@@ -21,6 +21,8 @@ from sqlalchemy.orm import Session
 import uuid
 from sqlalchemy.exc import SQLAlchemyError
 
+from services.workflow_constants import TASK_TYPE_ROUTES, AI_ELIGIBLE_TASK_TYPES
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,22 +34,9 @@ class TaskGeneratorService:
     handling routing, role assignment, and scheduling.
     """
 
-    # Task type to route mapping
-    TASK_TYPE_ROUTES = {
-        'phone': 'task_list',
-        'phone_am': 'task_list',
-        'phone_pm': 'task_list',
-        'text': 'sms_automation',
-        'text_am': 'sms_automation',
-        'text_pm': 'sms_automation',
-        'email': 'email_automation',
-        'referral_partner': 'task_list',
-        'dialer': 'dialer_queue',
-        'manual': 'task_list',
-    }
-
-    # AI-eligible task types
-    AI_ELIGIBLE_TYPES = {'email', 'text', 'text_am', 'text_pm'}
+    # Imported from workflow_constants (canonical source of truth)
+    TASK_TYPE_ROUTES = TASK_TYPE_ROUTES
+    AI_ELIGIBLE_TYPES = AI_ELIGIBLE_TASK_TYPES
 
     def __init__(self, db: Session):
         self.db = db

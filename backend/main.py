@@ -1177,6 +1177,18 @@ async def update_ai_action_outcome(
         return False
 
 # ============================================================================
+# APP VERSION CHECK ROUTES - Mobile forced update & maintenance mode
+# ============================================================================
+try:
+    from routes.app_version_routes import register_app_version_routes
+    register_app_version_routes(app=app)
+    logger.info("✅ App version check routes loaded (no-auth version gate)")
+except Exception as e:
+    logger.error(f"❌ App version check routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # API GATEWAY ROUTES - Enterprise Domain 11
 # ============================================================================
 try:
@@ -1382,6 +1394,35 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================================================================
+# ENTERPRISE DOCUMENTATION PORTAL ROUTES
+# ============================================================================
+try:
+    from routes.enterprise_documentation_routes import register_enterprise_documentation_routes
+    register_enterprise_documentation_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Enterprise Documentation Portal routes loaded (content, search, analytics)")
+except Exception as e:
+    logger.error(f"❌ Enterprise Documentation Portal routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+try:
+    from routes.enterprise_documentation_admin_routes import register_content_management_routes
+    register_content_management_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Enterprise Documentation Admin routes loaded (content management)")
+except Exception as e:
+    logger.error(f"❌ Enterprise Documentation Admin routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # SOC 2 TYPE II COMPLIANCE ROUTES
 # ============================================================================
 try:
@@ -1539,6 +1580,36 @@ try:
     logger.info("Pipeline appointment trigger routes loaded")
 except Exception as e:
     logger.warning(f"Pipeline appointment trigger routes skipped: {e}")
+
+# ============================================================================
+# PIPELINE ALERTS ROUTES — Mobile dashboard urgent alerts
+# ============================================================================
+try:
+    from routes.pipeline_alerts_routes import router as pipeline_alerts_router
+    app.include_router(pipeline_alerts_router, tags=["Pipeline Alerts"])
+    logger.info("Pipeline alerts routes loaded")
+except Exception as e:
+    logger.warning(f"Pipeline alerts routes skipped: {e}")
+
+# ============================================================================
+# MOBILE TASKS ROUTES — Real tasks table for mobile dashboard
+# ============================================================================
+try:
+    from routes.mobile_tasks_routes import router as mobile_tasks_router
+    app.include_router(mobile_tasks_router, tags=["Mobile Tasks"])
+    logger.info("Mobile tasks routes loaded")
+except Exception as e:
+    logger.warning(f"Mobile tasks routes not loaded: {e}")
+
+# ============================================================================
+# MOBILE ANALYTICS ROUTES — Log-sink for frontend mobileAnalytics.js
+# ============================================================================
+try:
+    from routes.mobile_analytics_routes import router as mobile_analytics_router
+    app.include_router(mobile_analytics_router, tags=["Mobile Analytics"])
+    logger.info("Mobile analytics routes loaded")
+except Exception as e:
+    logger.warning(f"Mobile analytics routes not loaded: {e}")
 
 # ============================================================================
 # SCHEDULER ENHANCEMENT ROUTES (March 2026 sprint)
@@ -1744,6 +1815,16 @@ try:
     logger.info("✅ Voice Workflow Monitoring routes loaded")
 except Exception as e:
     logger.warning(f"⚠️ Voice Workflow Monitoring routes not loaded: {e}")
+
+# ============================================================================
+# APP VERSION COMPATIBILITY ROUTES (unauthenticated — mobile pre-login)
+# ============================================================================
+try:
+    from routes.app_compatibility_routes import router as app_compatibility_router
+    app.include_router(app_compatibility_router, tags=["App Compatibility"])
+    logger.info("✅ App Compatibility routes loaded")
+except Exception as e:
+    logger.warning(f"⚠️ App Compatibility routes not loaded: {e}")
 
 # ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py
@@ -2491,6 +2572,22 @@ def _run_critical_schema_migrations():
         logger.info("✅ Critical schema migrations complete")
     finally:
         db.close()
+
+# ============================================================================
+# MOBILE API ROUTES - Lightweight endpoints for mobile clients
+# ============================================================================
+try:
+    from routes.mobile_api_routes import register_mobile_api_routes
+    register_mobile_api_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user
+    )
+    logger.info("✅ Mobile API routes loaded (dashboard, pipeline, leads, notifications, quick-lead, rate-lock-alerts)")
+except Exception as e:
+    logger.error(f"❌ Mobile API routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
 
 # ============================================================================
 # TEMPORARY: One-time seed endpoint for App Store demo account

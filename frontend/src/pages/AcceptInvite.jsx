@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import onboardingApi from '../services/onboardingApi';
+import { ROLES, PASSWORD_REQUIREMENTS } from '../constants/roles';
 import './AcceptInvite.css';
 
 const AcceptInvite = () => {
@@ -40,9 +41,11 @@ const AcceptInvite = () => {
       }
     } catch (error) {
       console.error('Token validation error:', error);
-      if (error.message?.includes('expired')) {
+      const code = error.error_code || '';
+      const msg = (error.message || '').toLowerCase();
+      if (code === 'TOKEN_EXPIRED' || msg.includes('expired')) {
         setValidationState('expired');
-      } else if (error.message?.includes('accepted') || error.message?.includes('used')) {
+      } else if (code === 'TOKEN_USED' || msg.includes('accepted') || msg.includes('used')) {
         setValidationState('already_accepted');
       } else {
         setValidationState('invalid');
@@ -55,10 +58,16 @@ const AcceptInvite = () => {
 
     if (!formData.password) {
       newErrors.password = 'Password is required';
-    } else if (formData.password.length < 8) {
-      newErrors.password = 'Password must be at least 8 characters';
-    } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(formData.password)) {
-      newErrors.password = 'Password must include uppercase, lowercase, and number';
+    } else if (formData.password.length < PASSWORD_REQUIREMENTS.minLength) {
+      newErrors.password = `Password must be at least ${PASSWORD_REQUIREMENTS.minLength} characters`;
+    } else {
+      const checks = [];
+      if (PASSWORD_REQUIREMENTS.requireUppercase && !/[A-Z]/.test(formData.password)) checks.push('uppercase letter');
+      if (PASSWORD_REQUIREMENTS.requireLowercase && !/[a-z]/.test(formData.password)) checks.push('lowercase letter');
+      if (PASSWORD_REQUIREMENTS.requireDigit && !/\d/.test(formData.password)) checks.push('number');
+      if (checks.length > 0) {
+        newErrors.password = `Password must include: ${checks.join(', ')}`;
+      }
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -246,7 +255,7 @@ const AcceptInvite = () => {
             </div>
             <div className="detail-content">
               <span className="detail-label">Role</span>
-              <span className="detail-value role-badge">{inviteData?.permission_role}</span>
+              <span className={`detail-value role-badge ${ROLES[inviteData?.permission_role]?.className || ''}`}>{ROLES[inviteData?.permission_role]?.label || inviteData?.permission_role}</span>
             </div>
           </div>
 
@@ -326,10 +335,10 @@ const AcceptInvite = () => {
           <div className="password-requirements">
             <span className="requirements-title">Password must contain:</span>
             <ul>
-              <li className={formData.password.length >= 8 ? 'met' : ''}>At least 8 characters</li>
-              <li className={/[A-Z]/.test(formData.password) ? 'met' : ''}>One uppercase letter</li>
-              <li className={/[a-z]/.test(formData.password) ? 'met' : ''}>One lowercase letter</li>
-              <li className={/\d/.test(formData.password) ? 'met' : ''}>One number</li>
+              <li className={formData.password.length >= PASSWORD_REQUIREMENTS.minLength ? 'met' : ''}>At least {PASSWORD_REQUIREMENTS.minLength} characters</li>
+              {PASSWORD_REQUIREMENTS.requireUppercase && <li className={/[A-Z]/.test(formData.password) ? 'met' : ''}>One uppercase letter</li>}
+              {PASSWORD_REQUIREMENTS.requireLowercase && <li className={/[a-z]/.test(formData.password) ? 'met' : ''}>One lowercase letter</li>}
+              {PASSWORD_REQUIREMENTS.requireDigit && <li className={/\d/.test(formData.password) ? 'met' : ''}>One number</li>}
             </ul>
           </div>
 

@@ -1,0 +1,309 @@
+# Fastfile - Perennia AI iOS Build Automation
+# https://docs.fastlane.tools
+#
+# Usage:
+#   fastlane beta              - Build and upload to TestFlight
+#   fastlane release           - Build and submit to App Store
+#   fastlane test              - Run unit tests
+#   fastlane bump_version      - Increment version number
+#   fastlane certificates      - Sync signing certificates
+#
+# Run from: frontend/ios/
+# Requires: Xcode, Node.js, npm, Capacitor CLI
+
+default_platform(:ios)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+XCODEPROJ     = "App/App.xcodeproj"
+SCHEME        = "App"
+APP_ID        = "com.perenniaai.crm"
+TEAM_ID       = "V5ZA5FZ2J8"
+FRONTEND_DIR  = File.expand_path("../../", __dir__)  # frontend/
+IOS_DIR       = File.expand_path("../", __dir__)      # frontend/ios/
+PROJECT_DIR   = File.join(IOS_DIR, "App")              # frontend/ios/App/
+INFO_PLIST    = File.join(PROJECT_DIR, "App", "Info.plist")
+
+platform :ios do
+
+  before_all do
+    setup_circle_ci if ENV["CIRCLECI"]
+  end
+
+  # -------------------------------------------------------------------------
+  # Beta (TestFlight)
+  # -------------------------------------------------------------------------
+  desc "Build the app and upload to TestFlight for beta testing"
+  lane :beta do
+    ensure_git_status_clean unless ENV["SKIP_GIT_CHECK"]
+
+    increment_build
+    build_web_assets
+    sync_capacitor
+
+    match(type: "appstore", readonly: is_ci) if ENV["MATCH_GIT_URL"]
+
+    build_app(
+      project: File.join(PROJECT_DIR, "App.xcodeproj"),
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: {
+        teamID: TEAM_ID,
+        signingStyle: "automatic",
+        uploadSymbols: true,
+        compileBitcode: false,
+      },
+      output_directory: File.join(IOS_DIR, "build"),
+      output_name: "PerenniaAI.ipa",
+      clean: true,
+      xcargs: "DEVELOPMENT_TEAM='#{TEAM_ID}' PRODUCT_BUNDLE_IDENTIFIER='#{APP_ID}'",
+    )
+
+    upload_to_testflight(
+      skip_waiting_for_build_processing: true,
+      apple_id: ENV["APPLE_ID"] || "tloss@cmghomeloans.com",
+      team_id: TEAM_ID,
+    )
+
+    version = get_version_number(xcodeproj: File.join(PROJECT_DIR, "App.xcodeproj"), target: SCHEME)
+    build = get_build_number(xcodeproj: File.join(PROJECT_DIR, "App.xcodeproj"))
+
+    notify_slack(
+      message: "Perennia AI v#{version} (#{build}) uploaded to TestFlight",
+      success: true,
+    )
+
+    UI.success("Beta build v#{version} (#{build}) uploaded to TestFlight")
+  end
+
+  # -------------------------------------------------------------------------
+  # Release (App Store)
+  # -------------------------------------------------------------------------
+  desc "Build the app and submit to the App Store for review"
+  lane :release do |options|
+    ensure_git_status_clean unless ENV["SKIP_GIT_CHECK"]
+
+    increment_build
+    build_web_assets
+    sync_capacitor
+
+    match(type: "appstore", readonly: is_ci) if ENV["MATCH_GIT_URL"]
+
+    build_app(
+      project: File.join(PROJECT_DIR, "App.xcodeproj"),
+      scheme: SCHEME,
+      configuration: "Release",
+      export_method: "app-store",
+      export_options: {
+        teamID: TEAM_ID,
+        signingStyle: "automatic",
+        uploadSymbols: true,
+        compileBitcode: false,
+      },
+      output_directory: File.join(IOS_DIR, "build"),
+      output_name: "PerenniaAI.ipa",
+      clean: true,
+      include_symbols: true,
+      xcargs: "DEVELOPMENT_TEAM='#{TEAM_ID}' PRODUCT_BUNDLE_IDENTIFIER='#{APP_ID}'",
+    )
+
+    submit_for_review = options[:submit_for_review] != false
+
+    upload_to_app_store(
+      force: true,
+      skip_metadata: options[:skip_metadata] || false,
+      skip_screenshots: options[:skip_screenshots] || true,
+      metadata_path: File.join(IOS_DIR, "fastlane", "metadata"),
+      screenshots_path: File.join(IOS_DIR, "fastlane", "screenshots"),
+      submit_for_review: submit_for_review,
+      automatic_release: options[:automatic_release] || false,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+      },
+      precheck_include_in_app_purchases: false,
+    )
+
+    version = get_version_number(xcodeproj: File.join(PROJECT_DIR, "App.xcodeproj"), target: SCHEME)
+    build = get_build_number(xcodeproj: File.join(PROJECT_DIR, "App.xcodeproj"))
+
+    action = submit_for_review ? "submitted for review" : "uploaded"
+
+    notify_slack(
+      message: "Perennia AI v#{version} (#{build}) #{action} on App Store",
+      success: true,
+    )
+
+    UI.success("Release build v#{version} (#{build}) #{action}")
+  end
+
+  # -------------------------------------------------------------------------
+  # Test
+  # -------------------------------------------------------------------------
+  desc "Run unit tests and generate a test report"
+  lane :test do
+    scan(
+      project: File.join(PROJECT_DIR, "App.xcodeproj"),
+      scheme: SCHEME,
+      devices: ["iPhone 16"],
+      clean: true,
+      code_coverage: true,
+      output_directory: File.join(IOS_DIR, "build", "test-results"),
+      output_types: "html,junit",
+      fail_build: true,
+    )
+
+    UI.success("Tests completed. Report at: ios/build/test-results/")
+  end
+
+  # -------------------------------------------------------------------------
+  # Bump Version
+  # -------------------------------------------------------------------------
+  desc "Increment the version number (type: major | minor | patch)"
+  lane :bump_version do |options|
+    bump_type = (options[:type] || "patch").to_s
+
+    unless %w[major minor patch].include?(bump_type)
+      UI.user_error!("Invalid bump type '#{bump_type}'. Use: major, minor, or patch")
+    end
+
+    new_version = increment_version_number(
+      xcodeproj: File.join(PROJECT_DIR, "App.xcodeproj"),
+      bump_type: bump_type,
+    )
+
+    # Also update the frontend package.json to keep versions in sync
+    package_json_path = File.join(FRONTEND_DIR, "package.json")
+    if File.exist?(package_json_path)
+      package_json = File.read(package_json_path)
+      updated = package_json.gsub(/"version"\s*:\s*"[^"]*"/, "\"version\": \"#{new_version}\"")
+      File.write(package_json_path, updated)
+      UI.message("Updated package.json version to #{new_version}")
+    end
+
+    # Update Info.plist to stay consistent
+    set_info_plist_value(
+      path: INFO_PLIST,
+      key: "CFBundleShortVersionString",
+      value: new_version,
+    )
+
+    commit_version_bump(
+      xcodeproj: File.join(PROJECT_DIR, "App.xcodeproj"),
+      message: "chore(ios): bump version to #{new_version}",
+      include: [
+        File.join(PROJECT_DIR, "App", "Info.plist"),
+        package_json_path,
+      ].select { |f| File.exist?(f) },
+      force: true,
+    )
+
+    UI.success("Version bumped to #{new_version} (#{bump_type})")
+  end
+
+  # -------------------------------------------------------------------------
+  # Certificates
+  # -------------------------------------------------------------------------
+  desc "Sync code signing certificates and provisioning profiles via match"
+  lane :certificates do
+    if ENV["MATCH_GIT_URL"].nil? || ENV["MATCH_GIT_URL"].empty?
+      UI.user_error!(
+        "MATCH_GIT_URL is not set. " \
+        "Set it in .env or fastlane/.env.default to your certificates Git repo URL.\n" \
+        "Example: git@github.com:your-org/ios-certificates.git"
+      )
+    end
+
+    match(
+      type: "development",
+      app_identifier: APP_ID,
+      team_id: TEAM_ID,
+      readonly: is_ci,
+    )
+
+    match(
+      type: "appstore",
+      app_identifier: APP_ID,
+      team_id: TEAM_ID,
+      readonly: is_ci,
+    )
+
+    UI.success("Certificates and profiles synced for development and App Store distribution")
+  end
+
+  # -------------------------------------------------------------------------
+  # Private Helpers
+  # -------------------------------------------------------------------------
+
+  desc "Build frontend web assets (npm run build)"
+  private_lane :build_web_assets do
+    UI.message("Building web assets...")
+    Dir.chdir(FRONTEND_DIR) do
+      sh("npm ci --prefer-offline") unless ENV["SKIP_NPM_INSTALL"]
+      sh("npm run build")
+    end
+    UI.success("Web assets built")
+  end
+
+  desc "Sync Capacitor native project with web build"
+  private_lane :sync_capacitor do
+    UI.message("Syncing Capacitor...")
+    Dir.chdir(FRONTEND_DIR) do
+      sh("npx cap sync ios")
+    end
+    UI.success("Capacitor synced")
+  end
+
+  desc "Increment the build number based on current Info.plist value"
+  private_lane :increment_build do
+    current_build = get_info_plist_value(
+      path: INFO_PLIST,
+      key: "CFBundleVersion",
+    ).to_i
+
+    new_build = current_build + 1
+
+    # Update both Info.plist and project.pbxproj
+    increment_build_number(
+      xcodeproj: File.join(PROJECT_DIR, "App.xcodeproj"),
+      build_number: new_build.to_s,
+    )
+
+    set_info_plist_value(
+      path: INFO_PLIST,
+      key: "CFBundleVersion",
+      value: new_build.to_s,
+    )
+
+    UI.message("Build number incremented: #{current_build} -> #{new_build}")
+  end
+
+  desc "Post a notification to Slack if SLACK_URL is configured"
+  private_lane :notify_slack do |options|
+    return unless ENV["SLACK_URL"] && !ENV["SLACK_URL"].empty?
+
+    slack(
+      message: options[:message] || "Perennia AI iOS build complete",
+      slack_url: ENV["SLACK_URL"],
+      success: options[:success] != false,
+      default_payloads: [:git_branch, :git_author, :last_git_commit_hash],
+      payload: {
+        "App" => "Perennia AI (#{APP_ID})",
+        "Environment" => is_ci ? "CI" : "Local",
+      },
+    )
+  end
+
+  # -------------------------------------------------------------------------
+  # Error Handling
+  # -------------------------------------------------------------------------
+
+  error do |lane, exception|
+    notify_slack(
+      message: "Perennia AI build failed in lane '#{lane}': #{exception.message}",
+      success: false,
+    )
+  end
+
+end

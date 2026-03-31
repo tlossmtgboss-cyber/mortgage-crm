@@ -367,6 +367,17 @@ def handle_stage_changed(
 
                 sync_service.db.commit()
 
+                # Event-driven workflow enrollment (eliminates 60s polling delay)
+                try:
+                    from services.workflow_scheduler import trigger_workflow_evaluation_for_lead
+                    trigger_workflow_evaluation_for_lead(
+                        sync_service.db, mapping.lead_id,
+                        stage_mapping.crm_stage,
+                        lead_source=getattr(lead, 'source', None),
+                    )
+                except Exception as wf_err:
+                    logger.warning(f"Workflow evaluation trigger failed for FUB lead {mapping.lead_id}: {wf_err}")
+
                 return {
                     "entity_type": "lead",
                     "entity_id": mapping.lead_id,

@@ -1,0 +1,7 @@
+# Appfile - Perennia AI iOS App Store Configuration
+# https://docs.fastlane.tools/advanced/Appfile/
+
+app_identifier("com.perenniaai.crm")
+apple_id(ENV["APPLE_ID"] || "tloss@cmghomeloans.com")
+team_id("V5ZA5FZ2J8")
+itc_team_id(ENV["ITC_TEAM_ID"])
