@@ -21,8 +21,18 @@ from typing import Optional, Callable
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
-from jose import JWTError, jwt
 from sqlalchemy.orm import Session
+
+# Import auth.tokens for algorithm-agnostic JWT verification (RS256/HS256)
+try:
+    from auth.tokens import verify_token as _verify_secure_token
+    _SECURE_AUTH_AVAILABLE = True
+except ImportError:
+    _SECURE_AUTH_AVAILABLE = False
+    _verify_secure_token = None
+
+# Fallback: raw jose decode for environments without auth.tokens
+from jose import JWTError, jwt
 
 # Import structured logging context setters
 try:
@@ -145,24 +155,50 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                 except Exception as e:
                     logger.debug(f"API key tenant context extraction failed: {e}")
             else:
-                # JWT authentication
+                # JWT authentication — use auth.tokens.verify_token for correct
+                # algorithm (RS256 in production, HS256 in dev) and blacklist checks
                 try:
-                    # Decode JWT
-                    payload = jwt.decode(
-                        token,
-                        self.secret_key,
-                        algorithms=[self.algorithm],
-                        options={"verify_aud": False}
-                    )
-                    user_id = payload.get("sub")
+                    user_id = None
 
-                    if user_id and self.get_db and self.user_model:
-                        # Get user from database
+                    if _SECURE_AUTH_AVAILABLE:
+                        token_data = _verify_secure_token(token, check_blacklist=True)
+                        if token_data:
+                            sub = token_data.sub
+                            # sub may be user_id (int) or email (str)
+                            user_id = token_data.user_id
+                            if not user_id:
+                                try:
+                                    user_id = int(sub)
+                                except (ValueError, TypeError):
+                                    # sub is an email — resolve to user_id via DB lookup
+                                    pass
+                    else:
+                        # Fallback to raw jwt.decode (dev environments without auth module)
+                        payload = jwt.decode(
+                            token,
+                            self.secret_key,
+                            algorithms=[self.algorithm],
+                            options={"verify_aud": False}
+                        )
+                        sub = payload.get("sub")
+                        try:
+                            user_id = int(sub)
+                        except (ValueError, TypeError):
+                            pass
+
+                    if self.get_db and self.user_model:
                         db = next(self.get_db())
                         try:
-                            user = db.query(self.user_model).filter(
-                                self.user_model.id == int(user_id)
-                            ).first()
+                            user = None
+                            if user_id:
+                                user = db.query(self.user_model).filter(
+                                    self.user_model.id == user_id
+                                ).first()
+                            elif sub:
+                                # Email-based sub: look up user by email
+                                user = db.query(self.user_model).filter(
+                                    self.user_model.email == sub
+                                ).first()
 
                             if user:
                                 self._set_tenant_state(request, user)

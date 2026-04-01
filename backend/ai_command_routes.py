@@ -25,6 +25,7 @@ import os
 import json
 import uuid
 import time
+import threading
 import anthropic
 
 from database import get_db
@@ -68,6 +69,75 @@ from ai_command_email_routes import email_router
 from ai_command_screenshot_routes import screenshot_router
 
 logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# Per-User Rate Limiter (in-memory, defense-in-depth)
+# ============================================================================
+
+class AIRateLimiter:
+    """Simple in-memory per-user rate limiter for AI endpoints.
+
+    Tracks request timestamps per user and enforces a sliding window limit.
+    Periodically cleans up stale entries to prevent unbounded memory growth.
+    """
+
+    def __init__(self, max_requests: int = 30, window_seconds: int = 60):
+        self._max_requests = max_requests
+        self._window_seconds = window_seconds
+        self._requests: Dict[int, List[float]] = {}  # user_id -> list of timestamps
+        self._lock = threading.Lock()
+        self._last_cleanup = time.monotonic()
+        self._cleanup_interval = 300  # clean up stale entries every 5 minutes
+
+    def check(self, user_id: int) -> None:
+        """Check if user is within rate limit. Raises HTTPException 429 if exceeded."""
+        now = time.monotonic()
+
+        with self._lock:
+            # Periodic cleanup of stale user entries
+            if now - self._last_cleanup > self._cleanup_interval:
+                self._cleanup(now)
+                self._last_cleanup = now
+
+            # Get or create timestamp list for this user
+            timestamps = self._requests.get(user_id, [])
+
+            # Remove timestamps outside the sliding window
+            cutoff = now - self._window_seconds
+            timestamps = [t for t in timestamps if t > cutoff]
+
+            if len(timestamps) >= self._max_requests:
+                # Calculate when the oldest request in the window will expire
+                retry_after = int(timestamps[0] - cutoff) + 1
+                logger.warning(
+                    f"Rate limit exceeded for user {user_id}: "
+                    f"{len(timestamps)} requests in {self._window_seconds}s window"
+                )
+                raise HTTPException(
+                    status_code=429,
+                    detail="Rate limit exceeded. Please wait before making more AI requests.",
+                    headers={"Retry-After": str(retry_after)},
+                )
+
+            # Record this request
+            timestamps.append(now)
+            self._requests[user_id] = timestamps
+
+    def _cleanup(self, now: float) -> None:
+        """Remove entries for users with no recent requests. Must be called under lock."""
+        cutoff = now - self._window_seconds
+        stale_users = [
+            uid for uid, timestamps in self._requests.items()
+            if not timestamps or timestamps[-1] <= cutoff
+        ]
+        for uid in stale_users:
+            del self._requests[uid]
+
+
+# 30 requests per minute per user
+ai_rate_limiter = AIRateLimiter(max_requests=30, window_seconds=60)
+
 
 router = APIRouter(prefix="/api/v1/ai")
 
@@ -1571,6 +1641,9 @@ async def process_command(
         raise HTTPException(status_code=401, detail="Authentication required")
     current_user_id = current_user.id
 
+    # Per-user rate limiting (30 req/min) — defense-in-depth for LLM API quota protection
+    ai_rate_limiter.check(current_user_id)
+
     # Get or create session ID for permanent memory
     session_id = request.session_id or str(uuid.uuid4())
 
@@ -1680,6 +1753,9 @@ async def execute_action(
     if not current_user or not hasattr(current_user, 'id'):
         raise HTTPException(status_code=401, detail="Authentication required")
     current_user_id = current_user.id
+
+    # Per-user rate limiting — shares the same limiter as process-command
+    ai_rate_limiter.check(current_user_id)
 
     try:
         # Get cached action

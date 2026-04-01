@@ -3539,6 +3539,7 @@ export const callMonitoringAPI = {
   getAudioStreamUrl: (sessionId) => {
     const wsBase = API_BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://');
     const token = localStorage.getItem('token');
+    // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
     return `${wsBase}/api/v1/call-monitoring/sessions/${sessionId}/audio-stream?token=${token}`;
   },
 };

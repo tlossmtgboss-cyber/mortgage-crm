@@ -14,5 +14,6 @@ class PerenniaViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         // Register custom native plugins
         bridge?.registerPluginInstance(DeviceIntegrityPlugin())
+        bridge?.registerPluginInstance(MDMConfigPlugin())
     }
 }

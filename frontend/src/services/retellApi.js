@@ -4,34 +4,11 @@
  * Frontend API client for Retell AI voice platform.
  */
 
-import axios from 'axios';
+// Use shared api instance for CSRF, auth, and impersonation support
+import api from './api';
 
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const BASE_URL = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
-
-const API_BASE = `${BASE_URL}/api/v1/retell`;
-
-// Create axios instance
-const apiClient = axios.create({
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add auth token interceptor
-apiClient.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
+const API_BASE = '/api/v1/retell';
+const apiClient = api;
 
 // ============ Connection ============
 

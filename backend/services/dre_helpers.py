@@ -191,7 +191,7 @@ def classify_email_content(content: str, subject: str) -> Dict[str, Any]:
                 },
                 {
                     "role": "user",
-                    "content": f"Subject: {subject}\n\nContent: {content[:1000]}"
+                    "content": f"<email_subject>{subject}</email_subject>\n\n<email_content>{content[:1000]}</email_content>"
                 }
             ],
             response_format={"type": "json_object"},

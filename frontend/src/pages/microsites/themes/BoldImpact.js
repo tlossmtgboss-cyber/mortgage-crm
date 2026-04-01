@@ -20,16 +20,32 @@ const BoldImpact = ({ user, profile, themeConfig = {} }) => {
 
   // Listen for messages from embedded iframes (application submissions)
   useEffect(() => {
+    // Only accept postMessages from trusted origins
+    const ALLOWED_ORIGINS = [
+      window.location.origin,
+      'https://app.perenniaai.com',
+      'https://api.perenniaai.com',
+    ];
+
     const handleMessage = (event) => {
+      if (!ALLOWED_ORIGINS.includes(event.origin)) return;
+
       if (event.data?.type === 'APPLICATION_SUBMITTED') {
         // Close all modals when application is submitted
         setShowRefinanceModal(false);
         setShowPurchaseModal(false);
         setShowCompareModal(false);
 
-        // Open the portal URL in a new tab if provided
+        // Open the portal URL in a new tab if provided — validate URL safety
         if (event.data.portalUrl) {
-          window.open(event.data.portalUrl, '_blank');
+          try {
+            const url = new URL(event.data.portalUrl);
+            if (['https:', 'http:'].includes(url.protocol)) {
+              window.open(event.data.portalUrl, '_blank');
+            }
+          } catch {
+            // Invalid URL — ignore
+          }
         }
       }
     };

@@ -7,48 +7,14 @@
  * Updated: 2025-12-29 - Added test endpoint fallbacks
  */
 
-import axios from 'axios';
+// Use shared api instance for CSRF, auth, and impersonation support
+import api from './api';
 
-// Use production URL in production, localhost for development
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const BASE_URL = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+const API_BASE = '/api/v1/video-os/avatars';
 
-const API_BASE = `${BASE_URL}/api/v1/video-os/avatars`;
-
-// Create axios instance with timeout
-const apiClient = axios.create({
-  timeout: 60000, // 1 minute timeout
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Longer timeout for generation requests
-const generationClient = axios.create({
-  timeout: 300000, // 5 minute timeout for video generation
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add auth token interceptor
-const addAuthInterceptor = (client) => {
-  client.interceptors.request.use(
-    (config) => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    },
-    (error) => Promise.reject(error)
-  );
-};
-
-addAuthInterceptor(apiClient);
-addAuthInterceptor(generationClient);
+// Both clients use the shared api; generation requests override timeout per-request
+const apiClient = api;
+const generationClient = api;
 
 // ============ Avatar Profile Management ============
 

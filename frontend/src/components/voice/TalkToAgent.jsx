@@ -109,6 +109,7 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
 
     try {
       const token = localStorage.getItem('token');
+      // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
       const wsUrl = `${API_BASE_URL}${WS_ENDPOINT}?token=${token}`;
 
       console.log('[TalkToAgent] Connecting to:', wsUrl);

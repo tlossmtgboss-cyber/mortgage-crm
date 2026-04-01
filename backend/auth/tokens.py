@@ -19,6 +19,8 @@ Security Best Practices:
 import uuid
 import logging
 import os
+import threading
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Literal, Tuple
 from dataclasses import dataclass
@@ -377,8 +379,61 @@ def get_token_jti(token: str) -> Optional[str]:
 
 
 # =============================================================================
-# Token Blacklist (Phase 4 - Redis-backed)
+# Token Blacklist (Phase 4 - Redis-backed with in-memory fallback)
 # =============================================================================
+
+class _InMemoryBlacklist:
+    """
+    Process-local fallback blacklist used when Redis is unavailable.
+
+    Stores entries in a dict with TTL-based expiry. This is a degraded-mode
+    safety net: it is not shared across processes and does not survive restarts.
+    Entries are lazily evicted on read to avoid unbounded memory growth.
+    """
+
+    def __init__(self):
+        self._store: Dict[str, Tuple[str, float]] = {}  # key -> (value, expire_timestamp)
+        self._lock = threading.Lock()
+
+    def _evict_expired(self):
+        """Remove expired entries. Must be called with _lock held."""
+        now = time.time()
+        expired_keys = [k for k, (_, exp) in self._store.items() if exp <= now]
+        for k in expired_keys:
+            del self._store[k]
+
+    def setex(self, key: str, ttl_seconds: int, value: str):
+        """Set a key with TTL (seconds)."""
+        with self._lock:
+            self._evict_expired()
+            self._store[key] = (value, time.time() + ttl_seconds)
+
+    def set(self, key: str, value: str):
+        """Set a key with no expiry (defaults to 24h to avoid leaks)."""
+        self.setex(key, 86400, value)
+
+    def get(self, key: str) -> Optional[bytes]:
+        """Get a value by key, returning None if missing or expired. Returns bytes for Redis compat."""
+        with self._lock:
+            self._evict_expired()
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            value, exp = entry
+            if time.time() >= exp:
+                del self._store[key]
+                return None
+            return value.encode("utf-8")
+
+    def exists(self, key: str) -> int:
+        """Check if key exists (returns 1 or 0 for Redis compat)."""
+        return 1 if self.get(key) is not None else 0
+
+    def delete(self, key: str):
+        """Delete a key."""
+        with self._lock:
+            self._store.pop(key, None)
+
 
 class TokenBlacklist:
     """
@@ -396,6 +451,17 @@ class TokenBlacklist:
     def __init__(self):
         self._redis = None
         self._enabled = False
+        self._fallback = _InMemoryBlacklist()
+        self._using_fallback = False
+
+    def _activate_fallback(self, operation: str, error: Exception):
+        """Log and switch to in-memory fallback on Redis failure."""
+        if not self._using_fallback:
+            logger.warning(
+                f"Redis unavailable during {operation}: {error}. "
+                "Falling back to in-memory token blacklist (degraded mode)."
+            )
+            self._using_fallback = True
 
     def initialize(self, redis_url: str):
         """Initialize Redis connection for blacklist."""
@@ -403,10 +469,12 @@ class TokenBlacklist:
             import redis
             self._redis = redis.from_url(redis_url)
             self._enabled = True
+            self._using_fallback = False
             logger.info("Token blacklist initialized with Redis")
         except Exception as e:
-            logger.warning(f"Token blacklist disabled: {e}")
-            self._enabled = False
+            logger.warning(f"Redis connection failed: {e}. Using in-memory token blacklist.")
+            self._enabled = True  # Enable with fallback
+            self._using_fallback = True
 
     def add(self, token: str, reason: str = "logout") -> bool:
         """
@@ -426,21 +494,27 @@ class TokenBlacklist:
         if not jti:
             return False
 
-        # Get token expiration to set Redis TTL
+        # Get token expiration to set TTL
         payload = decode_token(token, verify_exp=False)
         if not payload:
             return False
 
         exp_timestamp = payload.get("exp")
-        if exp_timestamp:
-            # TTL = time until token expires
-            ttl = max(0, exp_timestamp - datetime.now(timezone.utc).timestamp())
-            self._redis.setex(f"blacklist:{jti}", int(ttl), reason)
-        else:
-            # No expiration, use default 24 hours
-            self._redis.setex(f"blacklist:{jti}", 86400, reason)
+        ttl = int(max(0, exp_timestamp - datetime.now(timezone.utc).timestamp())) if exp_timestamp else 86400
 
-        logger.info(f"Token {jti[:8]}... blacklisted: {reason}")
+        key = f"blacklist:{jti}"
+
+        if self._redis and not self._using_fallback:
+            try:
+                self._redis.setex(key, ttl, reason)
+                logger.info(f"Token {jti[:8]}... blacklisted: {reason}")
+                return True
+            except Exception as e:
+                self._activate_fallback("add", e)
+
+        # Fallback: in-memory blacklist
+        self._fallback.setex(key, ttl, reason)
+        logger.info(f"Token {jti[:8]}... blacklisted (in-memory): {reason}")
         return True
 
     def is_blacklisted(self, token: str) -> bool:
@@ -452,7 +526,15 @@ class TokenBlacklist:
         if not jti:
             return False
 
-        return self._redis.exists(f"blacklist:{jti}") > 0
+        key = f"blacklist:{jti}"
+
+        if self._redis and not self._using_fallback:
+            try:
+                return self._redis.exists(key) > 0
+            except Exception as e:
+                self._activate_fallback("is_blacklisted", e)
+
+        return self._fallback.exists(key) > 0
 
     def revoke_all_for_user(self, user_id: int) -> int:
         """
@@ -463,10 +545,19 @@ class TokenBlacklist:
         if not self._enabled:
             return 0
 
-        # Store user revocation timestamp
         key = f"user_revoked:{user_id}"
-        self._redis.set(key, datetime.now(timezone.utc).isoformat())
-        logger.info(f"All tokens revoked for user {user_id}")
+        value = datetime.now(timezone.utc).isoformat()
+
+        if self._redis and not self._using_fallback:
+            try:
+                self._redis.set(key, value)
+                logger.info(f"All tokens revoked for user {user_id}")
+                return 1
+            except Exception as e:
+                self._activate_fallback("revoke_all_for_user", e)
+
+        self._fallback.set(key, value)
+        logger.info(f"All tokens revoked for user {user_id} (in-memory)")
         return 1
 
     def is_user_revoked(self, user_id: int, token_iat: Optional[int] = None) -> bool:
@@ -484,7 +575,16 @@ class TokenBlacklist:
             return False
 
         key = f"user_revoked:{user_id}"
-        revoked_at = self._redis.get(key)
+        revoked_at = None
+
+        if self._redis and not self._using_fallback:
+            try:
+                revoked_at = self._redis.get(key)
+            except Exception as e:
+                self._activate_fallback("is_user_revoked", e)
+                revoked_at = self._fallback.get(key)
+        else:
+            revoked_at = self._fallback.get(key)
 
         if not revoked_at:
             return False
@@ -509,8 +609,17 @@ class TokenBlacklist:
             return False
 
         key = f"user_revoked:{user_id}"
-        self._redis.delete(key)
-        logger.info(f"Revocation cleared for user {user_id}")
+
+        if self._redis and not self._using_fallback:
+            try:
+                self._redis.delete(key)
+                logger.info(f"Revocation cleared for user {user_id}")
+                return True
+            except Exception as e:
+                self._activate_fallback("clear_user_revocation", e)
+
+        self._fallback.delete(key)
+        logger.info(f"Revocation cleared for user {user_id} (in-memory)")
         return True
 
 

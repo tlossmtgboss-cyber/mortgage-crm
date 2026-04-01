@@ -140,9 +140,9 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         if auth_header.startswith("Bearer ") and self._is_jwt_token(auth_header[7:]):
             return await call_next(request)
 
-        # Skip if request has valid API key (machine-to-machine)
-        api_key = request.headers.get("X-API-Key") or auth_header.replace("Bearer ", "")
-        if api_key and self._is_api_key_auth(api_key):
+        # Skip if request uses X-API-Key header (machine-to-machine auth).
+        # X-API-Key is not auto-sent by browsers, so it is inherently CSRF-safe.
+        if request.headers.get("X-API-Key"):
             return await call_next(request)
 
         # Validate CSRF token
@@ -181,18 +181,6 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         """Check if token is a JWT (three base64 segments separated by dots)."""
         return len(token) >= 50 and token.count(".") == 2
 
-    def _is_api_key_auth(self, token: str) -> bool:
-        """Check if token looks like an API key (not a user JWT)."""
-        # API keys are typically shorter and have a specific format
-        # JWTs are longer and have three base64 parts
-        if len(token) < 50:
-            return True  # Likely an API key
-
-        # Check for JWT format (xxx.xxx.xxx)
-        if token.count(".") == 2:
-            return False  # Likely a JWT
-
-        return True
 
 
 def get_csrf_token(request: Request) -> str:

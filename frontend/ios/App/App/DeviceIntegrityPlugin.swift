@@ -18,6 +18,7 @@
 
 import Foundation
 import Capacitor
+import MachO
 
 @objc(DeviceIntegrityPlugin)
 public class DeviceIntegrityPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -187,10 +188,8 @@ public class DeviceIntegrityPlugin: CAPPlugin, CAPBridgedPlugin {
     private func checkURLSchemes() -> [String] {
         var found: [String] = []
 
-        // Must run on main thread for UIApplication
-        let semaphore = DispatchSemaphore(value: 0)
-
-        DispatchQueue.main.async {
+        if Thread.isMainThread {
+            // Already on main thread — check directly (avoids deadlock)
             for scheme in self.suspiciousURLSchemes {
                 if let url = URL(string: scheme) {
                     if UIApplication.shared.canOpenURL(url) {
@@ -198,29 +197,46 @@ public class DeviceIntegrityPlugin: CAPPlugin, CAPBridgedPlugin {
                     }
                 }
             }
-            semaphore.signal()
-        }
+        } else {
+            // Dispatch to main thread and wait
+            let semaphore = DispatchSemaphore(value: 0)
 
-        _ = semaphore.wait(timeout: .now() + 2.0)
+            DispatchQueue.main.async {
+                for scheme in self.suspiciousURLSchemes {
+                    if let url = URL(string: scheme) {
+                        if UIApplication.shared.canOpenURL(url) {
+                            found.append("url_scheme:\(scheme)")
+                        }
+                    }
+                }
+                semaphore.signal()
+            }
+
+            _ = semaphore.wait(timeout: .now() + 2.0)
+        }
 
         return found
     }
 
-    /// On a non-jailbroken device, fork() should fail inside the sandbox.
-    /// If fork succeeds, the sandbox has been compromised.
+    /// Check if the app can access restricted system directories.
+    /// On a non-jailbroken device, these should not be readable.
+    /// NOTE: fork() was previously used here but is unsafe — it creates a child process
+    /// that can crash the app on some iOS versions. File-based checks are equally effective.
     private func checkForkAvailability() -> [String] {
         var results: [String] = []
 
-        let pid = fork()
-        if pid >= 0 {
-            // fork succeeded - this should not happen in a proper sandbox
-            if pid == 0 {
-                // Child process - exit immediately
-                exit(0)
+        // Check if we can read from system paths that should be restricted
+        let restrictedPaths = [
+            "/private/var/lib/apt",
+            "/private/var/stash",
+            "/usr/libexec/sftp-server",
+        ]
+
+        for path in restrictedPaths {
+            if FileManager.default.isReadableFile(atPath: path) {
+                results.append("restricted_path_readable:\(path)")
             }
-            results.append("fork_succeeded")
         }
-        // pid < 0 means fork failed, which is expected on non-jailbroken
 
         return results
     }

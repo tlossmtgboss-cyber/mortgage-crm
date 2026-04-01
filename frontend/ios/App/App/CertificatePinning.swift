@@ -91,32 +91,20 @@ struct CertificatePinningConfig {
     static let pinnedDomains: [String: PinnedDomainConfig] = [
         "api.perenniaai.com": PinnedDomainConfig(
             spkiHashes: [
-                // Primary cert pin — current production certificate
-                // Replace with actual SPKI hash from:
-                //   openssl s_client -connect api.perenniaai.com:443 \
-                //     -servername api.perenniaai.com < /dev/null 2>/dev/null \
-                //     | openssl x509 -pubkey -noout \
-                //     | openssl pkey -pubin -outform der \
-                //     | openssl dgst -sha256 -binary \
-                //     | openssl enc -base64
-                "PLACEHOLDER_PRIMARY_PIN_HASH_API",
+                // Primary cert pin — current production certificate (retrieved 2026-04-01)
+                "STrmUQMdkvmuC5EJ/5StR+WXmwAq6RLFCIPe3rMVgPA=",
                 // Backup cert pin — pre-generated backup key pair
+                // TODO: Generate a backup key pair and pin its hash here for rotation
                 "PLACEHOLDER_BACKUP_PIN_HASH_API"
             ],
             includeSubdomains: true
         ),
         "app.perenniaai.com": PinnedDomainConfig(
             spkiHashes: [
-                // Primary cert pin — current production certificate
-                // Replace with actual SPKI hash from:
-                //   openssl s_client -connect app.perenniaai.com:443 \
-                //     -servername app.perenniaai.com < /dev/null 2>/dev/null \
-                //     | openssl x509 -pubkey -noout \
-                //     | openssl pkey -pubin -outform der \
-                //     | openssl dgst -sha256 -binary \
-                //     | openssl enc -base64
-                "PLACEHOLDER_PRIMARY_PIN_HASH_APP",
+                // Primary cert pin — current production certificate (retrieved 2026-04-01)
+                "R5ekDjTy4aandy7hssjUE5P7a2loTg3iSpEA4bjNkQw=",
                 // Backup cert pin — pre-generated backup key pair
+                // TODO: Generate a backup key pair and pin its hash here for rotation
                 "PLACEHOLDER_BACKUP_PIN_HASH_APP"
             ],
             includeSubdomains: true

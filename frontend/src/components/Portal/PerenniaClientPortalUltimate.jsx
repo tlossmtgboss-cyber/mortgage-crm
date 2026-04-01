@@ -223,6 +223,7 @@ export default function PerenniaClientPortalUltimate() {
 
     try {
       setWsStatus(WS_STATUS.CONNECTING);
+      // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
       const wsEndpoint = `${wsUrl}/ws/loan/${resolvedLoanId}${token ? `?token=${token}` : ''}`;
       wsRef.current = new WebSocket(wsEndpoint);
 

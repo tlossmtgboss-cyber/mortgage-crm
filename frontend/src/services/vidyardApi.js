@@ -6,46 +6,16 @@
  * - Avatar management (list, create, get, delete)
  * - Video generation from scripts
  * - Video status tracking
+ *
+ * Uses shared api instance from ./api for consistent auth, CSRF, and error handling.
  */
 
-import axios from 'axios';
+import api from './api';
 
-const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+const VIDYARD_PREFIX = '/api/v1/vidyard';
 
-// Create axios instance with auth
-const api = axios.create({
-  baseURL: `${API_BASE}/api/v1/vidyard`,
-  timeout: 60000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add auth token to requests
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
-
-// Longer timeout for video generation
-const generationApi = axios.create({
-  baseURL: `${API_BASE}/api/v1/vidyard`,
-  timeout: 300000, // 5 minutes
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-generationApi.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Timeout for video generation requests (5 minutes)
+const GENERATION_TIMEOUT = 300000;
 
 // =============================================================================
 // Constants
@@ -90,7 +60,7 @@ export const MAX_SCRIPT_LENGTH = 1000;
 // =============================================================================
 
 export const checkHealth = async () => {
-  const response = await api.get('/health');
+  const response = await api.get(`${VIDYARD_PREFIX}/health`);
   return response.data;
 };
 
@@ -99,22 +69,22 @@ export const checkHealth = async () => {
 // =============================================================================
 
 export const listAvatars = async () => {
-  const response = await api.get('/avatars');
+  const response = await api.get(`${VIDYARD_PREFIX}/avatars`);
   return response.data;
 };
 
 export const getAvatar = async (avatarId) => {
-  const response = await api.get(`/avatars/${avatarId}`);
+  const response = await api.get(`${VIDYARD_PREFIX}/avatars/${avatarId}`);
   return response.data;
 };
 
 export const createAvatar = async (data) => {
-  const response = await api.post('/avatars', data);
+  const response = await api.post(`${VIDYARD_PREFIX}/avatars`, data);
   return response.data;
 };
 
 export const deleteAvatar = async (avatarId) => {
-  const response = await api.delete(`/avatars/${avatarId}`);
+  const response = await api.delete(`${VIDYARD_PREFIX}/avatars/${avatarId}`);
   return response.data;
 };
 
@@ -123,22 +93,24 @@ export const deleteAvatar = async (avatarId) => {
 // =============================================================================
 
 export const generateVideo = async (data) => {
-  const response = await generationApi.post('/videos/generate', data);
+  const response = await api.post(`${VIDYARD_PREFIX}/videos/generate`, data, {
+    timeout: GENERATION_TIMEOUT,
+  });
   return response.data;
 };
 
 export const getVideoStatus = async (jobId) => {
-  const response = await api.get(`/videos/${jobId}/status`);
+  const response = await api.get(`${VIDYARD_PREFIX}/videos/${jobId}/status`);
   return response.data;
 };
 
 export const listVideos = async (params = {}) => {
-  const response = await api.get('/videos', { params });
+  const response = await api.get(`${VIDYARD_PREFIX}/videos`, { params });
   return response.data;
 };
 
 export const getVideo = async (videoId) => {
-  const response = await api.get(`/videos/${videoId}`);
+  const response = await api.get(`${VIDYARD_PREFIX}/videos/${videoId}`);
   return response.data;
 };
 
@@ -147,12 +119,12 @@ export const getVideo = async (videoId) => {
 // =============================================================================
 
 export const validateScript = async (script) => {
-  const response = await api.post('/scripts/validate', { script });
+  const response = await api.post(`${VIDYARD_PREFIX}/scripts/validate`, { script });
   return response.data;
 };
 
 export const getLanguages = async () => {
-  const response = await api.get('/languages');
+  const response = await api.get(`${VIDYARD_PREFIX}/languages`);
   return response.data;
 };
 
@@ -207,7 +179,7 @@ export const pollVideoStatus = async (
 // =============================================================================
 
 export const uploadVideo = async (data) => {
-  const response = await api.post('/videos/upload', data);
+  const response = await api.post(`${VIDYARD_PREFIX}/videos/upload`, data);
   return response.data;
 };
 

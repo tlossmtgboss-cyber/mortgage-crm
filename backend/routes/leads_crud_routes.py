@@ -150,7 +150,18 @@ async def create_lead(
             except Exception as e:
                 logger.debug(f"Failed to track lead metric: {e}")
 
-        return db_lead
+        return {
+            "id": db_lead.id,
+            "name": getattr(db_lead, 'name', None),
+            "email": db_lead.email,
+            "phone": db_lead.phone,
+            "stage": str(db_lead.stage) if db_lead.stage else None,
+            "source": db_lead.source,
+            "ai_score": getattr(db_lead, 'ai_score', None),
+            "organization_id": db_lead.organization_id,
+            "owner_id": db_lead.owner_id,
+            "created_at": db_lead.created_at.isoformat() if db_lead.created_at else None,
+        }
 
     except Exception as e:
         logger.error(f"Error creating lead: {e}", exc_info=True)
@@ -181,7 +192,7 @@ ACTIVE_LOAN_ENTRY_STAGES = [
 @router.get("/")
 async def get_leads(
     skip: int = 0,
-    limit: int = 5000,
+    limit: int = 100,
     stage: Optional[str] = None,
     pipeline: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -319,11 +330,9 @@ async def search_leads(
 
     search_term = q.strip().lower()
 
-    # Build query with org scoping for multi-tenant isolation
+    # Build query with permission-based scoping for multi-tenant isolation
     query = db.query(Lead)
-    org_id = getattr(current_user, 'organization_id', None)
-    if org_id:
-        query = query.filter(Lead.organization_id == org_id)
+    query = filter_leads_by_permissions(query, current_user, db)
 
     # Search by name (case-insensitive)
     query = query.filter(

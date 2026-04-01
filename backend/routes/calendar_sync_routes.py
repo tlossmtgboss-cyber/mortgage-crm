@@ -1510,6 +1510,40 @@ async def google_calendar_auth(
     return RedirectResponse(url=auth_url)
 
 
+@google_calendar_router.get("/auth-url")
+async def google_calendar_auth_url(
+    request: Request,
+    current_user=Depends(_google_get_current_user_dep)
+):
+    """Return Google Calendar OAuth URL as JSON (avoids putting JWT in URL query params).
+
+    The frontend calls this via fetch() with an Authorization header, then navigates
+    the popup to the returned auth_url. This keeps the JWT out of browser history,
+    server logs, and Referer headers.
+    """
+    from integrations.google_calendar_service import google_calendar_client
+    import hashlib
+    import hmac
+
+    if not google_calendar_client.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google Calendar integration not configured"
+        )
+
+    user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+    frontend_url = os.getenv("FRONTEND_URL", "https://www.perenniaai.com")
+    redirect_url = f"{frontend_url}/settings/integrations"
+
+    secret_key = os.getenv("SECRET_KEY", "")
+    state_data = f"{user_id}:{redirect_url}"
+    state_sig = hmac.new(secret_key.encode(), state_data.encode(), hashlib.sha256).hexdigest()[:16]
+    state = f"{user_id}:{state_sig}:{redirect_url}"
+
+    auth_url = google_calendar_client.get_authorization_url(state=state)
+    return {"auth_url": auth_url}
+
+
 @google_calendar_router.get("/callback")
 async def google_calendar_callback(
     code: str = Query(..., description="Authorization code from Google"),

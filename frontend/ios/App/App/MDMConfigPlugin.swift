@@ -171,14 +171,14 @@ public class MDMConfigPlugin: CAPPlugin, CAPBridgedPlugin {
 
     /// Return basic device information for compliance checks.
     ///
-    /// Returns: `{ osVersion: "17.4.1", model: "iPhone", deviceName: "..." }`
+    /// Returns: `{ osVersion: "17.4.1", model: "iPhone", deviceModel: "iPhone" }`
     @objc func getDeviceInfo(_ call: CAPPluginCall) {
         let device = UIDevice.current
 
         call.resolve([
             "osVersion": device.systemVersion,
             "model": device.model,
-            "deviceName": device.name,
+            "deviceModel": device.model,
             "systemName": device.systemName,
             "identifierForVendor": device.identifierForVendor?.uuidString ?? ""
         ])

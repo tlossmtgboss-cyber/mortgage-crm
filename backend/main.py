@@ -1939,6 +1939,23 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"⚠️ Event bus subscribers skipped: {e}")
 
+    # Register agent-specific event subscribers (inter-agent messaging via EventBus)
+    try:
+        from services.agent_event_subscribers import register_agent_subscribers
+        register_agent_subscribers()
+        logger.info("✅ Agent event subscribers registered")
+    except Exception as e:
+        logger.warning(f"⚠️ Agent event subscribers skipped: {e}")
+
+    # Register agent message processor background job (polls ai_agent_messages every 5 min)
+    try:
+        from services.agent_message_processor import register_message_processor_job
+        from services.scheduler_service import scheduler_service
+        register_message_processor_job(scheduler_service.scheduler)
+        logger.info("✅ Agent message processor job registered")
+    except Exception as e:
+        logger.warning(f"⚠️ Agent message processor skipped: {e}")
+
     # Register SOC 2 compliance scheduled jobs
     try:
         from soc2_compliance.scheduler import register_soc2_jobs
@@ -2592,15 +2609,22 @@ except Exception as e:
 # ============================================================================
 # TEMPORARY: One-time seed endpoint for App Store demo account
 # Remove after demo account is created
+# Gated to non-production environments only.
 # ============================================================================
 
 @app.post("/api/v1/management/seed-demo")
 async def seed_demo_account(request: Request):
     """One-time endpoint to create App Store review demo account. Protected by SECRET_KEY."""
+    import secrets as _secrets_mod
+    _env_name = os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "development")).lower()
+    if _env_name == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+
     body = await request.json()
-    auth = body.get("key", "")
-    # Strip whitespace from both to handle SECRET_KEY with embedded newlines
-    if auth.strip() != SECRET_KEY.strip() or not auth.strip():
+    auth = (body.get("key", "") or "").strip()
+    expected = SECRET_KEY.strip()
+    # Constant-time comparison to prevent timing attacks
+    if not auth or not _secrets_mod.compare_digest(auth, expected):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:

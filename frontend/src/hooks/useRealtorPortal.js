@@ -24,18 +24,20 @@ const REALTOR_API = `${API_BASE}/api/v1/realtor-portal`;
 
 async function realtorApi(endpoint, options = {}) {
   const token = localStorage.getItem('realtor_token');
-  const url = new URL(`${REALTOR_API}${endpoint}`);
+  const url = `${REALTOR_API}${endpoint}`;
+
+  const headers = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
 
   if (token) {
-    url.searchParams.append('token', token);
+    headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url.toString(), {
+  const response = await fetch(url, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {
@@ -91,6 +93,7 @@ export function useLoanSync(options = {}) {
     }
 
     try {
+      // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
       const ws = new WebSocket(`${WS_BASE}/api/v1/realtor-portal/ws/${token}`);
 
       ws.onopen = () => {
@@ -330,7 +333,10 @@ export function useRealtorAuth() {
     const token = localStorage.getItem('realtor_token');
     if (token) {
       try {
-        await fetch(`${REALTOR_API}/auth/logout?token=${token}`, { method: 'POST' });
+        await fetch(`${REALTOR_API}/auth/logout`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
       } catch (err) {
         console.error('Logout error:', err);
       }

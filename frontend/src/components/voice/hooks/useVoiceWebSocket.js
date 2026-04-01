@@ -36,6 +36,7 @@ const useVoiceWebSocket = ({ onTranscript, onAudio, onStatusChange, onError, onS
 
     try {
       const token = localStorage.getItem('token');
+      // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
       const wsUrl = `${WS_BASE_URL}${WS_ENDPOINT}?token=${token}`;
 
       console.log('[useVoiceWebSocket] Connecting to:', wsUrl);

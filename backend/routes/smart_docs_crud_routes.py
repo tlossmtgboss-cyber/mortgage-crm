@@ -484,8 +484,14 @@ async def upload_document(
     )
 
     if not upload_result.get("success"):
-        logger.warning(f"S3 upload failed for document {document.id}: {upload_result.get('error')}")
-        # Continue processing even if S3 fails (for development/testing without S3)
+        logger.error(f"S3 upload failed for document {document.id}: {upload_result.get('error')}")
+        # Mark document as upload failed so it's not served with a missing file
+        document.status = "UPLOAD_FAILED"
+        db.commit()
+        raise HTTPException(
+            status_code=502,
+            detail="Document storage is temporarily unavailable. Please try uploading again."
+        )
     else:
         # Record storage usage for quota tracking (MTR-004)
         try:

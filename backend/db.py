@@ -279,9 +279,16 @@ def get_db_with_tenant(org_id: int):
                 set_tenant_context(db, org_id)
                 logger.debug(f"Background worker: RLS tenant context set to org_id={org_id}")
             except Exception as e:
+                env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
+                if env in ("production", "staging"):
+                    logger.error(
+                        f"CRITICAL: Background worker RLS tenant context failed for org_id={org_id}: {e}. "
+                        "Refusing to yield unscoped session in production/staging."
+                    )
+                    raise
                 logger.warning(
                     f"Background worker: Failed to set RLS tenant context for org_id={org_id}: {e}. "
-                    "Queries will run WITHOUT tenant isolation -- audit trail logged."
+                    "Queries will run WITHOUT tenant isolation (dev mode only)."
                 )
         else:
             logger.debug(

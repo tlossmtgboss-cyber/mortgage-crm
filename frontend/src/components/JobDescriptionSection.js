@@ -84,19 +84,20 @@ function JobDescriptionSection({ userId }) {
     }
   };
 
+  // Safe HTML-to-text extraction using DOMParser (avoids innerHTML XSS risk)
+  const stripHtmlTags = (html) => {
+    const doc = new DOMParser().parseFromString(html || '', 'text/html');
+    return doc.body.textContent || '';
+  };
+
   const updateCharacterCount = (text) => {
-    // Strip HTML tags for character count
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = text;
-    const plainText = tempDiv.textContent || tempDiv.innerText || '';
+    const plainText = stripHtmlTags(text);
     setCharacterCount(plainText.length);
   };
 
   const handleDescriptionChange = (value) => {
     // Check character limit
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = value;
-    const plainText = tempDiv.textContent || tempDiv.innerText || '';
+    const plainText = stripHtmlTags(value);
 
     if (plainText.length <= CHARACTER_LIMIT) {
       setDescription(value);

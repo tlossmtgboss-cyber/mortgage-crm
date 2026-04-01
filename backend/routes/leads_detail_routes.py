@@ -71,7 +71,17 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         except Exception as e:
             raise HTTPException(status_code=400, detail="Invalid request body")
 
-        # Anyone can delete leads - no permission check needed
+        # Permission check: require leads.delete or leads.update permission
+        is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+        if not is_platform_admin:
+            has_delete_permission = (
+                has_permission(current_user.id, 'leads.delete', db)
+                or has_permission(current_user.id, 'leads.delete_all', db)
+                or has_permission(current_user.id, 'leads.update', db)
+                or has_permission(current_user.id, 'leads.update_all', db)
+            )
+            if not has_delete_permission:
+                raise HTTPException(status_code=403, detail="Permission denied: leads.delete")
 
         if not lead_ids:
             raise HTTPException(status_code=400, detail="No lead IDs provided")
@@ -211,9 +221,9 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         if not new_status:
             raise HTTPException(status_code=400, detail="No status provided")
 
-        # PHASE 3: Check update permission (master users bypass)
-        is_master = current_user.id == 1 or current_user.email == 'admin@perenniaai.com'
-        if not is_master:
+        # Check update permission (platform admins bypass)
+        is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+        if not is_platform_admin:
             has_update_permission = has_permission(current_user.id, 'leads.update', db) or has_permission(current_user.id, 'leads.update_all', db)
             if not has_update_permission:
                 raise HTTPException(status_code=403, detail="Permission denied: leads.update")

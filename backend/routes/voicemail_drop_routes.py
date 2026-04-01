@@ -352,11 +352,12 @@ def check_dnc_status(phone_number: str, db: Session, organization_id: Optional[i
         return True, f"Phone number is on Do Not Call list (reason: {dnc[1] or 'N/A'})"
 
     # Check National DNC Registry scrub freshness (TCPA requires scrub every 31 days)
-    # Advisory warning — logged but does not block individual voicemail drops.
-    # Enterprise deployments should set NATIONAL_DNC_LAST_SCRUB env var.
+    # BLOCKING — TCPA mandates scrubbing against the National DNC Registry at least
+    # every 31 days. A stale scrub means we cannot confirm the number is safe to call.
     is_stale, stale_msg = _check_national_dnc_scrub_freshness()
     if is_stale:
-        logger.warning(f"DNC scrub advisory for {phone_number}: {stale_msg}")
+        logger.warning(f"DNC scrub stale — blocking call to {mask_phone(phone_number)}: {stale_msg}")
+        return True, stale_msg  # Block the call
 
     return False, ""
 
@@ -436,7 +437,7 @@ def run_compliance_checks(
     # 1. DNC check (scoped to organization)
     is_blocked, dnc_msg = check_dnc_status(phone_number, db, organization_id=organization_id)
     if is_blocked:
-        logger.warning(f"Voicemail blocked by DNC: {phone_number}")
+        logger.warning(f"Voicemail blocked by DNC: {mask_phone(phone_number)}")
         return False, dnc_msg
 
     # 2. Consent check
@@ -448,7 +449,7 @@ def run_compliance_checks(
     # 3. Calling hours check
     is_allowed, hours_msg = check_calling_hours(phone_number)
     if not is_allowed:
-        logger.warning(f"Voicemail blocked by calling hours: {phone_number}")
+        logger.warning(f"Voicemail blocked by calling hours: {mask_phone(phone_number)}")
         return False, hours_msg
 
     return True, None

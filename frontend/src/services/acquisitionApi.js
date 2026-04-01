@@ -3,53 +3,8 @@
  * Handles all API calls for the Client Acquisition Engine
  */
 
-import axios from 'axios';
-import { Capacitor } from '@capacitor/core';
-
-// Use same URL logic as main api.js
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const isNativeApp = Capacitor.isNativePlatform();
-const API_BASE_URL = (isProduction || isNativeApp)
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
-
-// Create axios instance
-const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-    ...(isNativeApp && { 'X-Mobile-App': 'capacitor-ios' }),
-  },
-});
-
-// Add auth token to requests
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error) => Promise.reject(error)
-);
-
-// Handle errors
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      const isLoginPage = window.location.pathname === '/login';
-      if (!isLoginPage) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-      }
-    }
-    return Promise.reject(error);
-  }
-);
+// Use shared api instance for CSRF, auth, and impersonation support
+import api from './api';
 
 /**
  * Acquisition Engine API

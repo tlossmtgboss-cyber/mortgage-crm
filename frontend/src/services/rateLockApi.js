@@ -1,18 +1,10 @@
-import axios from 'axios';
+// Use shared api instance for CSRF, auth, and impersonation support
+import api from './api';
 import { generateMockRecommendation } from './mockRateLockLogic';
 
-// Rate Lock Intelligence - Now integrated into main CRM backend
-// Uses the same backend as the rest of the app instead of a separate microservice
-const RATE_LOCK_API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
-
-// Create axios instance for rate lock service (now points to main CRM backend)
-const rateLockApi = axios.create({
-  baseURL: `${RATE_LOCK_API_URL}/api/v1/rate-lock-intelligence`,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 10000,
-});
+// Rate Lock Intelligence - integrated into main CRM backend
+const RATE_LOCK_BASE = '/api/v1/rate-lock-intelligence';
+const rateLockApi = api;
 
 export const rateLockAPI = {
   // Get quick recommendation with intelligent fallback
@@ -79,7 +71,7 @@ export const rateLockAPI = {
         certainty_preference: loanData.certaintyPreference || 'high',
       };
 
-      const response = await rateLockApi.post('/v1/recommendations/quick', { scenario });
+      const response = await rateLockApi.post(`${RATE_LOCK_BASE}/v1/recommendations/quick`, { scenario });
       return response.data;
     } catch (error) {
       console.warn('Rate Lock API unavailable, using intelligent mock:', error.message);
@@ -91,7 +83,7 @@ export const rateLockAPI = {
   // Get current market conditions
   getMarketSnapshot: async () => {
     try {
-      const response = await rateLockApi.get('/v1/market/snapshot');
+      const response = await rateLockApi.get(`${RATE_LOCK_BASE}/v1/market/snapshot`);
       return response.data;
     } catch (error) {
       console.warn('Market snapshot failed:', error.message);
@@ -110,7 +102,7 @@ export const rateLockAPI = {
   // Check service health
   checkHealth: async () => {
     try {
-      const response = await rateLockApi.get('/health');
+      const response = await rateLockApi.get(`${RATE_LOCK_BASE}/health`);
       return response.data;
     } catch (error) {
       return { status: 'unavailable', error: error.message };

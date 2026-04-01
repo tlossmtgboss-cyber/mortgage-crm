@@ -36,11 +36,12 @@ const PortalVideoMessages = ({
         url = `${API_URL}/api/v1/portal-video/realtor/${identifier}/videos`;
       }
 
+      const headers = {};
       if (token) {
-        url += `?token=${token}`;
+        headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(url);
+      const response = await fetch(url, { headers });
       if (response.ok) {
         const data = await response.json();
         setVideos(data.videos || []);

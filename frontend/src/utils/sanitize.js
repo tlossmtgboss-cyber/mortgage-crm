@@ -24,6 +24,18 @@ import DOMPurify from 'dompurify';
 const ALLOWED_TAGS = ['p', 'br', 'strong', 'em', 'b', 'i', 'ul', 'ol', 'li', 'a', 'span'];
 const ALLOWED_ATTR = ['href', 'title', 'class'];
 
+// Register DOMPurify hooks at module level to avoid race conditions
+// (previously registered inside sanitizeHTML, which could interfere if called concurrently)
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A') {
+    node.setAttribute('rel', 'noopener noreferrer');
+    const href = node.getAttribute('href');
+    if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+      node.setAttribute('target', '_blank');
+    }
+  }
+});
+
 /**
  * Sanitize HTML content - allows basic formatting tags
  * Use for rich text descriptions, comments with formatting
@@ -42,24 +54,8 @@ export const sanitizeHTML = (dirty, options = {}) => {
     ...options
   };
 
-  // Add safety attributes to links
-  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
-    if (node.tagName === 'A') {
-      node.setAttribute('rel', 'noopener noreferrer');
-      // Only add target="_blank" for external links
-      const href = node.getAttribute('href');
-      if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
-        node.setAttribute('target', '_blank');
-      }
-    }
-  });
-
-  const clean = DOMPurify.sanitize(dirty, config);
-
-  // Remove the hook to avoid side effects
-  DOMPurify.removeHook('afterSanitizeAttributes');
-
-  return clean;
+  // Hook for link safety attributes is registered at module level above
+  return DOMPurify.sanitize(dirty, config);
 };
 
 /**

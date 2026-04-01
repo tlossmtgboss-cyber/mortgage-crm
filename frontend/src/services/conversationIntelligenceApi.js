@@ -216,8 +216,15 @@ export const realTimeApi = {
   createWebSocket: (sessionId) => {
     const url = realTimeApi.getWebSocketUrl(sessionId);
     const token = localStorage.getItem('token');
-    // Include token as query param for WebSocket auth
-    return new WebSocket(token ? `${url}?token=${token}` : url);
+    // Security: Token in URL is a browser WebSocket API limitation.
+    // Backend should accept token via first message post-connection.
+    const ws = new WebSocket(url);
+    if (token) {
+      ws.addEventListener('open', () => {
+        ws.send(JSON.stringify({ type: 'auth', token }));
+      });
+    }
+    return ws;
   },
 };
 

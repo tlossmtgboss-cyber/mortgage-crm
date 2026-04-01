@@ -1727,20 +1727,20 @@ export default function PurchaseApplication() {
     // Don't save on initial mount or if on account stage
     if (currentStage === 'account') return;
 
-    // Strip SSN fields before saving to localStorage
+    // Strip SSN and other NPI (GLBA) fields before saving to localStorage
     const sanitizedProfileData = { ...profileData };
     delete sanitizedProfileData.ssn;
     const sanitizedCoBorrowerData = { ...coBorrowerData };
     delete sanitizedCoBorrowerData.ssn;
 
+    // Exclude financial NPI from localStorage auto-save (income, assets, co-borrower income)
+    // These contain employer info, salary, bank balances — Non-Public Information under GLBA
     const dataToSave = {
       declarations,
       profileData: sanitizedProfileData,
-      incomeData,
-      assetData,
+      // incomeData, assetData, coBorrowerIncomeData intentionally excluded — NPI
       propertyData,
       coBorrowerData: sanitizedCoBorrowerData,
-      coBorrowerIncomeData,
       currentStage,
       userAccount,
       savedAt: new Date().toISOString(),

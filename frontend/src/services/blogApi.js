@@ -4,48 +4,14 @@
  * Handles all API interactions for the blog content factory.
  */
 
-import axios from 'axios';
+// Use shared api instance for CSRF, auth, and impersonation support
+import api from './api';
 
-// Use production URL in production, localhost for development
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const BASE_URL = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+const API_BASE = '/api/v1/blog';
 
-const API_BASE = `${BASE_URL}/api/v1/blog`;
-
-// Create axios instance with timeout and default headers
-const apiClient = axios.create({
-  timeout: 120000, // 2 minute timeout for AI generation
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add shorter timeout for non-generation requests
-const quickClient = axios.create({
-  timeout: 30000, // 30 second timeout
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
-
-// Add auth token interceptor to both clients
-const addAuthInterceptor = (client) => {
-  client.interceptors.request.use(
-    (config) => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    },
-    (error) => Promise.reject(error)
-  );
-};
-
-addAuthInterceptor(apiClient);
-addAuthInterceptor(quickClient);
+// Both clients use the shared api; AI generation requests override timeout per-request
+const apiClient = api;
+const quickClient = api;
 
 // ============ Voice Profiles ============
 
