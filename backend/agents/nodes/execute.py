@@ -308,6 +308,12 @@ async def execute_actions(
 
         logger.info(f"Actions: {len(executed)} executed, {len(pending)} pending confirmation")
 
+        # Fire cross-agent events for successful actions (fire-and-forget)
+        if executed:
+            asyncio.ensure_future(
+                _emit_cross_agent_events(executed, state)
+            )
+
         return state
 
     except Exception as e:
@@ -318,6 +324,234 @@ async def execute_actions(
             "actions_executed": [],
             "actions_pending": []
         })
+
+
+async def _emit_cross_agent_events(
+    executed: List[ActionResult],
+    state: AgentState,
+) -> None:
+    """Inspect executed action results and emit inter-agent events.
+
+    This is fire-and-forget: any failure is logged and swallowed so it
+    never blocks the user-facing response.
+
+    Also sends push notifications via AgentNotificationService for
+    document, SLA, and compliance findings so loan officers get
+    real-time mobile alerts.
+    """
+    try:
+        from services.agent_event_bridge import agent_event_bridge
+    except ImportError:
+        return  # Bridge not available -- skip silently
+
+    org_id = str(state.get("organization_id")) if state.get("organization_id") else None
+
+    # Lazily acquire push notification service and DB session.
+    # Both are optional: if unavailable, events still fire normally.
+    push_svc = None
+    push_db = None
+    try:
+        from services.agent_notification_service import get_agent_notification_service
+        from db import SessionLocal
+        push_svc = get_agent_notification_service()
+        push_db = SessionLocal()
+    except Exception:
+        pass  # Push notifications unavailable -- degrade gracefully
+
+    try:
+        for result in executed:
+            if not result.success or not result.data:
+                continue
+
+            data = result.data
+            action_type = result.action_type
+
+            try:
+                # Lead scoring -> hot lead detection
+                if action_type == "score_lead" and data.get("new_score", 0) >= 60:
+                    await agent_event_bridge.on_hot_lead_detected(
+                        lead_id=data.get("lead_id"),
+                        score=data.get("new_score", 0),
+                        lo_id=data.get("lo_id"),
+                        org_id=org_id,
+                    )
+
+                # Document expiration check -> expired documents
+                if action_type == "check_document_expiration" and data.get("expired"):
+                    expired_types = [
+                        doc.get("document_type", "unknown")
+                        for doc in data.get("expired", [])
+                    ]
+                    loan_ids_seen = set()
+                    for doc in data.get("expired", []):
+                        lid = doc.get("loan_id")
+                        if lid and lid not in loan_ids_seen:
+                            loan_ids_seen.add(lid)
+                            await agent_event_bridge.on_documents_expired(
+                                loan_id=lid,
+                                doc_types=expired_types,
+                                org_id=org_id,
+                            )
+                            # Push notification: doc expiring/expired
+                            if push_svc and push_db:
+                                try:
+                                    for exp_doc in data.get("expired", []):
+                                        if exp_doc.get("loan_id") == lid:
+                                            push_svc.notify_doc_expiring(
+                                                db=push_db,
+                                                loan_id=lid,
+                                                doc_type=exp_doc.get("document_type", "Document"),
+                                                expire_date=exp_doc.get("expires_at", ""),
+                                                borrower_name=exp_doc.get("borrower", ""),
+                                                loan_number=exp_doc.get("loan_number", ""),
+                                            )
+                                            break  # One push per loan, not per doc type
+                                except Exception as push_err:
+                                    logger.debug(
+                                        "[EXECUTE] Push notify_doc_expiring failed for loan %s: %s",
+                                        lid, push_err,
+                                    )
+
+                    # Also push for expiring-soon docs
+                    if push_svc and push_db and data.get("expiring_soon"):
+                        expiring_loan_ids = set()
+                        for exp_doc in data.get("expiring_soon", []):
+                            lid = exp_doc.get("loan_id")
+                            if lid and lid not in expiring_loan_ids:
+                                expiring_loan_ids.add(lid)
+                                try:
+                                    push_svc.notify_doc_expiring(
+                                        db=push_db,
+                                        loan_id=lid,
+                                        doc_type=exp_doc.get("document_type", "Document"),
+                                        expire_date=exp_doc.get("expires_at", ""),
+                                        borrower_name=exp_doc.get("borrower", ""),
+                                        loan_number=exp_doc.get("loan_number", ""),
+                                    )
+                                except Exception as push_err:
+                                    logger.debug(
+                                        "[EXECUTE] Push notify_doc_expiring (soon) failed for loan %s: %s",
+                                        lid, push_err,
+                                    )
+
+                # Missing documents check -> notify LO about needed docs
+                if action_type == "get_missing_documents" and data.get("missing"):
+                    missing_required = [
+                        m.get("type", "unknown")
+                        for m in data.get("missing", [])
+                        if m.get("required")
+                    ]
+                    loan_id = data.get("loan_id")
+                    if push_svc and push_db and loan_id and missing_required:
+                        try:
+                            push_svc.notify_document_needed(
+                                db=push_db,
+                                loan_id=loan_id,
+                                doc_types=missing_required,
+                                borrower_name="",
+                                loan_number=data.get("loan_number", ""),
+                            )
+                        except Exception as push_err:
+                            logger.debug(
+                                "[EXECUTE] Push notify_document_needed failed for loan %s: %s",
+                                loan_id, push_err,
+                            )
+
+                # Compliance audit -> violations
+                if action_type in ("check_trid_compliance", "check_tolerance_violations", "audit_loan_file"):
+                    issues = data.get("issues", [])
+                    violations = data.get("violations", [])
+                    failed_checks = data.get("results", {}).get("failed", [])
+                    all_issues = issues + violations + failed_checks
+                    compliance_push_sent = False
+                    for issue in all_issues:
+                        severity = issue.get("severity", "medium")
+                        if severity in ("high", "critical"):
+                            await agent_event_bridge.on_compliance_violation(
+                                loan_id=data.get("loan_id"),
+                                violation_type=issue.get("type", action_type),
+                                severity=severity,
+                                description=issue.get("message", ""),
+                                org_id=org_id,
+                            )
+                            # Push notification: compliance alert (one per loan per tool invocation)
+                            if push_svc and push_db and data.get("loan_id") and not compliance_push_sent:
+                                try:
+                                    push_svc.notify_compliance_alert(
+                                        db=push_db,
+                                        loan_id=data.get("loan_id"),
+                                        alert_title=issue.get("message", issue.get("type", action_type)),
+                                        severity=severity,
+                                        borrower_name="",
+                                        loan_number=data.get("loan_number", ""),
+                                    )
+                                    compliance_push_sent = True
+                                except Exception as push_err:
+                                    logger.debug(
+                                        "[EXECUTE] Push notify_compliance_alert failed for loan %s: %s",
+                                        data.get("loan_id"), push_err,
+                                    )
+
+                # Pipeline bottleneck -> stalled loans
+                if action_type == "get_bottleneck_analysis":
+                    for bottleneck in data.get("bottlenecks", []):
+                        if bottleneck.get("severity") == "critical":
+                            # We don't have individual loan IDs from the aggregation,
+                            # but we can signal the stage-level stall to ops
+                            await agent_event_bridge.on_loan_stalled(
+                                loan_id=0,  # Aggregate signal, not a specific loan
+                                days_stale=int(bottleneck.get("avg_days", 0)),
+                                stage=bottleneck.get("stage", "UNKNOWN"),
+                                org_id=org_id,
+                            )
+
+                # Loan aging report -> SLA breach notifications for over-threshold loans
+                if action_type == "get_loan_aging_report" and data.get("total_over_threshold", 0) > 0:
+                    for stage_info in data.get("by_stage", []):
+                        if stage_info.get("over_threshold", 0) > 0 and stage_info.get("avg_days", 0) > stage_info.get("target_days", 999):
+                            # Aggregate signal: we don't have individual loan IDs
+                            await agent_event_bridge.on_loan_stalled(
+                                loan_id=0,
+                                days_stale=int(stage_info.get("avg_days", 0)),
+                                stage=stage_info.get("stage", "UNKNOWN"),
+                                org_id=org_id,
+                            )
+
+                # SLA breach from loan conditions (past-due conditions)
+                if action_type == "get_loan_conditions" and data.get("past_due", 0) > 0:
+                    loan_id = data.get("loan_id")
+                    if push_svc and push_db and loan_id:
+                        past_due_conditions = [
+                            c for c in data.get("conditions", [])
+                            if c.get("is_past_due")
+                        ]
+                        for condition in past_due_conditions[:1]:  # One push per invocation
+                            try:
+                                push_svc.notify_sla_breach(
+                                    db=push_db,
+                                    loan_id=loan_id,
+                                    sla_name=condition.get("title", condition.get("type", "Condition")),
+                                    days_over=0,  # Exact days not available from conditions
+                                    loan_number="",
+                                )
+                            except Exception as push_err:
+                                logger.debug(
+                                    "[EXECUTE] Push notify_sla_breach failed for loan %s: %s",
+                                    loan_id, push_err,
+                                )
+
+            except Exception as e:
+                logger.warning(
+                    "[EXECUTE] Cross-agent event emission failed for %s: %s",
+                    action_type, e,
+                )
+    finally:
+        # Always close the push DB session if we opened one
+        if push_db is not None:
+            try:
+                push_db.close()
+            except Exception:
+                pass
 
 
 def format_action_confirmation_request(pending_actions: List[dict]) -> str:

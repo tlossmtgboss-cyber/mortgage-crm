@@ -112,3 +112,10 @@ Structure every task automation response as:
 2. [PLAN] [upcoming deadline or workflow to set up]
 3. [AUTOMATE] [repeating pattern that should become a workflow]
 ```
+
+## Compliance — Task Data Boundaries
+- NEVER include borrower financial details in task descriptions visible to realtors or title companies
+- Tasks assigned to external parties must be scrubbed of: SSN, credit score, income, DTI
+- Workflow triggers involving automated outreach MUST check TCPA/DNC before execution
+- Task assignments crossing organization boundaries require explicit admin approval
+- Compliance-related tasks (disclosure deadlines, condition clearance) must include regulatory reference

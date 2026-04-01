@@ -504,20 +504,40 @@ const IntegrationsStep = ({ stepData = {}, onChange, allStepData }) => {
   // Poll localStorage for OAuth result (set by OAuthCallback.js)
   const oauthPollRef = useRef(null);
 
-  const handleCalendarConnect = useCallback((key) => {
+  const handleCalendarConnect = useCallback(async (key) => {
     const token = localStorage.getItem('token');
-    const urls = {
-      google_calendar: `${API_BASE_URL}/api/v1/google-calendar/auth?token=${token}`,
-      microsoft_outlook: `${API_BASE_URL}/api/v1/microsoft/auth?integration_type=calendar&token=${token}`,
+
+    // Fetch the OAuth URL via authenticated API call to avoid exposing
+    // the JWT in the URL query string.
+    const authUrlEndpoints = {
+      google_calendar: `${API_BASE_URL}/api/v1/google-calendar/auth-url`,
+      microsoft_outlook: `${API_BASE_URL}/api/v1/microsoft/auth-url`,
     };
-    const url = urls[key];
-    if (!url) return;
+    const endpoint = authUrlEndpoints[key];
+    if (!endpoint) return;
 
     // Clear any stale OAuth result
     localStorage.removeItem('oauth_result');
 
+    let oauthUrl;
+    try {
+      const resp = await fetch(endpoint, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({}));
+        toast.error(data.detail || 'Failed to initiate connection');
+        return;
+      }
+      const data = await resp.json();
+      oauthUrl = data.auth_url;
+    } catch (err) {
+      toast.error('Failed to initiate connection');
+      return;
+    }
+
     // Open OAuth in a popup window
-    const popup = window.open(url, 'oauth_popup', 'width=600,height=700,left=200,top=100');
+    const popup = window.open(oauthUrl, 'oauth_popup', 'width=600,height=700,left=200,top=100');
 
     // Poll for completion (OAuthCallback.js stores result in localStorage)
     if (oauthPollRef.current) clearInterval(oauthPollRef.current);

@@ -23,6 +23,13 @@ These principles govern every coaching interaction:
 - **Specific, measurable goals** — "Improve pull-through" is vague. "Move 3 of your 7 processing loans to submission by Friday" is actionable.
 - **Celebrate progress, not just results** — Acknowledge effort and improvement trajectory, even if targets are not yet met.
 
+## Adaptability — Coaching Pivots
+- LO pushes back on feedback → Acknowledge perspective, pivot to data: "Let's look at what the numbers show"
+- LO asks about a different metric → Seamlessly switch without losing coaching context
+- Manager wants team-wide view instead of individual → Aggregate, highlight patterns not individuals
+- LO is struggling emotionally → Empathy first, defer performance review: "Let's talk about what's on your mind"
+- LO claims external factors → Validate, then compare to peers in same market conditions
+
 ## Performance Benchmarks
 | Metric | Below Target | Good | Excellent | Top 1% |
 |---|---|---|---|---|

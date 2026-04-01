@@ -36,7 +36,14 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class AgentToolConfig:
-    """Configuration for an agent's tool access."""
+    """Configuration for an agent's tool access.
+
+    Attributes:
+        recommended_model: Advisory model tier for this agent.
+            "haiku" = fast/cheap model sufficient (tool-heavy, formatting tasks)
+            "sonnet" = full model needed (complex reasoning, analysis, compliance)
+            This is advisory metadata for future per-agent model routing.
+    """
     role: str
     name: str
     description: str
@@ -44,6 +51,7 @@ class AgentToolConfig:
     max_concurrent_tools: int = 3
     tool_timeout_seconds: int = 30
     requires_approval_for: List[str] = field(default_factory=list)
+    recommended_model: str = "sonnet"  # Default to Sonnet; override to "haiku" for simpler agents
 
 
 AGENT_CONFIGS = {
@@ -69,6 +77,7 @@ AGENT_CONFIGS = {
             "get_data_availability",
         ],
         max_concurrent_tools=5,
+        recommended_model="sonnet",  # Complex analytical reasoning
     ),
     "compliance_checker": AgentToolConfig(
         role="compliance_checker",
@@ -85,6 +94,7 @@ AGENT_CONFIGS = {
             "get_compliance_history",
         ],
         requires_approval_for=["override_compliance_flag"],
+        recommended_model="sonnet",  # Regulatory compliance needs precise reasoning
     ),
     "lead_nurturer": AgentToolConfig(
         role="lead_nurturer",
@@ -103,6 +113,7 @@ AGENT_CONFIGS = {
             "get_top_leads",
         ],
         requires_approval_for=["send_email", "send_sms", "make_call"],
+        recommended_model="sonnet",  # Lead recommendations need contextual analysis
     ),
     "document_tracker": AgentToolConfig(
         role="document_tracker",
@@ -119,6 +130,7 @@ AGENT_CONFIGS = {
             "get_third_party_status",
         ],
         requires_approval_for=["send_document_reminder"],
+        recommended_model="haiku",  # Checklist/status lookups, tool-heavy
     ),
     "profitability_analyst": AgentToolConfig(
         role="profitability_analyst",
@@ -134,6 +146,7 @@ AGENT_CONFIGS = {
             "calculate_pull_through_impact",
             "get_profitability_trends",
         ],
+        recommended_model="sonnet",  # Financial analysis needs deep reasoning
     ),
     "rate_advisor": AgentToolConfig(
         role="rate_advisor",
@@ -150,6 +163,7 @@ AGENT_CONFIGS = {
             "get_market_events",
         ],
         requires_approval_for=["lock_rate"],
+        recommended_model="sonnet",  # Rate advisory needs analytical reasoning for lock/float decisions
     ),
     "team_coach": AgentToolConfig(
         role="team_coach",
@@ -169,6 +183,7 @@ AGENT_CONFIGS = {
             "compare_periods",
             "get_data_availability",
         ],
+        recommended_model="sonnet",  # Coaching advice requires nuanced analysis
     ),
     "customer_intelligence": AgentToolConfig(
         role="customer_intelligence",
@@ -184,6 +199,7 @@ AGENT_CONFIGS = {
             "get_referral_network",
             "get_market_comparison",
         ],
+        recommended_model="haiku",  # Database-driven lookups, tool-heavy
     ),
     # =========================================================================
     # Communication Agents (4)
@@ -203,6 +219,7 @@ AGENT_CONFIGS = {
             "get_call_metrics",
         ],
         requires_approval_for=["initiate_outbound_call"],
+        recommended_model="haiku",  # Call routing is tool-driven
     ),
     "uvip": AgentToolConfig(
         role="uvip",
@@ -218,6 +235,7 @@ AGENT_CONFIGS = {
             "generate_meeting_summary",
             "get_participant_insights",
         ],
+        recommended_model="haiku",  # Video management is tool-driven
     ),
     "email_intelligence": AgentToolConfig(
         role="email_intelligence",
@@ -234,6 +252,7 @@ AGENT_CONFIGS = {
             "analyze_email_engagement",
         ],
         requires_approval_for=["send_email"],
+        recommended_model="sonnet",  # Email drafting/analysis needs quality
     ),
     "ai_receptionist": AgentToolConfig(
         role="ai_receptionist",
@@ -249,6 +268,7 @@ AGENT_CONFIGS = {
             "handle_inbound_call",
             "log_call_interaction",
         ],
+        recommended_model="haiku",  # Routing/scripting is deterministic
     ),
     # =========================================================================
     # Operations Agents (4)
@@ -267,6 +287,7 @@ AGENT_CONFIGS = {
             "sync_external_calendar",
             "optimize_schedule",
         ],
+        recommended_model="haiku",  # Calendar CRUD is tool-driven
     ),
     "task_automation": AgentToolConfig(
         role="task_automation",
@@ -283,6 +304,7 @@ AGENT_CONFIGS = {
             "get_workflow_status",
             "get_daily_call_list",
         ],
+        recommended_model="haiku",  # Task CRUD is deterministic
     ),
     "sla_tracker": AgentToolConfig(
         role="sla_tracker",
@@ -298,6 +320,7 @@ AGENT_CONFIGS = {
             "project_sla_breach",
             "escalate_sla_breach",
         ],
+        recommended_model="haiku",  # SLA tracking is metric/deadline lookup
     ),
     "integrations": AgentToolConfig(
         role="integrations",
@@ -314,6 +337,7 @@ AGENT_CONFIGS = {
             "send_for_esign",
         ],
         requires_approval_for=["trigger_credit_pull", "submit_to_aus"],
+        recommended_model="haiku",  # Integration status/sync is tool-driven
     ),
     # =========================================================================
     # Business Agents (4)
@@ -336,6 +360,7 @@ AGENT_CONFIGS = {
             "compare_periods",
             "get_data_availability",
         ],
+        recommended_model="haiku",  # Reports are tool-aggregated, LLM formats
     ),
     "notification_center": AgentToolConfig(
         role="notification_center",
@@ -352,6 +377,7 @@ AGENT_CONFIGS = {
             "batch_send",
         ],
         requires_approval_for=["batch_send"],
+        recommended_model="haiku",  # Notification CRUD is deterministic
     ),
     "subscription_manager": AgentToolConfig(
         role="subscription_manager",
@@ -368,6 +394,7 @@ AGENT_CONFIGS = {
             "pause_subscription",
         ],
         requires_approval_for=["change_plan", "update_payment_method"],
+        recommended_model="haiku",  # Billing queries are deterministic lookups
     ),
     "onboarding_assistant": AgentToolConfig(
         role="onboarding_assistant",
@@ -383,6 +410,27 @@ AGENT_CONFIGS = {
             "request_support",
             "track_progress",
         ],
+        recommended_model="haiku",  # Onboarding checklists are deterministic
+    ),
+    # =========================================================================
+    # Cross-Agent Coordination
+    # =========================================================================
+    "ops_manager": AgentToolConfig(
+        role="ops_manager",
+        name="Operations Manager",
+        description="Operations Manager — Handles escalations, SLA oversight, pipeline sweep, cross-agent coordination",
+        tool_names=[
+            "get_pipeline_metrics",
+            "get_loan_aging_report",
+            "get_bottleneck_analysis",
+            "check_sla_status",
+            "get_sla_dashboard",
+            "escalate_sla_breach",
+            "get_lo_pipeline_breakdown",
+            "get_compliance_history",
+        ],
+        max_concurrent_tools=5,
+        recommended_model="sonnet",  # Cross-agent coordination requires analytical reasoning
     ),
 }
 

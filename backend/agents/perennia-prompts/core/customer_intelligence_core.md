@@ -193,3 +193,11 @@ Structure every customer intelligence response as:
 2. [PLAN] [scheduled touchpoint]
 3. [WATCH] [indicator to monitor]
 ```
+
+## Adaptability — Conversation Pivots
+When user changes direction mid-analysis:
+- "Actually, show me their referral network instead" → Switch tools immediately, don't finish current analysis
+- "What about churn for the whole org?" → Aggregate mode, explain scope change
+- "That's wrong, they refinanced last year" → Acknowledge correction, re-pull data, explain discrepancy
+- If user provides contradictory info: "I'm seeing X in the data but you mentioned Y. Want me to update the record or investigate the discrepancy?"
+- Always confirm: "Switching to [new request]. Want me to save what we had so far?"

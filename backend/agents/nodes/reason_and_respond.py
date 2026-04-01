@@ -23,7 +23,7 @@ from ..state import (
     add_error,
     update_state
 )
-from ..intent_router import HAIKU_INTENTS
+from ..intent_router import HAIKU_INTENTS, is_haiku_intent
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +173,7 @@ def _get_role_context(role: str) -> str:
 
 # PII patterns for masking before LLM context injection (GLBA compliance)
 _SSN_PATTERN = re.compile(r'\b\d{3}-\d{2}-\d{4}\b')
-_FULL_PHONE_PATTERN = re.compile(r'\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b')
+_FULL_PHONE_PATTERN = re.compile(r'\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?(\d{4})\b')
 
 # Keys whose values should be fully redacted (case-insensitive match)
 _REDACT_KEYS = frozenset({
@@ -217,6 +217,10 @@ def _mask_pii_value(key: str, value: Any) -> Any:
 
     # Pattern-based masking for values (SSNs embedded in text)
     value = _SSN_PATTERN.sub("[REDACTED-SSN]", value)
+
+    # Also mask phone numbers found in any string value (GLBA compliance)
+    if _FULL_PHONE_PATTERN.search(value):
+        value = _FULL_PHONE_PATTERN.sub(r"***-***-\1", value)
 
     return value
 
@@ -415,6 +419,11 @@ DO NOT use a canned/scripted response. Be natural and human."""
         # Build the system prompt
         system_prompt = UNIFIED_SYSTEM_PROMPT.format(intent_guidance=intent_guidance)
 
+        # Inject user memories into system prompt for personalization
+        memory_context = state.get("memory_context", "")
+        if memory_context:
+            system_prompt += "\n\n## User Context & Preferences\nThe following are remembered facts and preferences about this user. Use them to personalize your response where relevant:\n" + memory_context
+
         # Build user context (wrap user input with markers to prevent prompt injection)
         context_parts = [
             f"USER QUESTION: [USER_INPUT_START]\n{user_message}\n[USER_INPUT_END]",
@@ -466,8 +475,15 @@ DO NOT use a canned/scripted response. Be natural and human."""
         use_haiku_flag = state.get("use_haiku", False)
         intent_str_override = state.get("intent_str", "")
 
-        # Use Haiku if: explicit flag set, intent in HAIKU_INTENTS, data not needed (greeting), or data insufficient
-        use_haiku = use_haiku_flag or intent_str in HAIKU_INTENTS or intent_str_override in HAIKU_INTENTS or data_quality in ("insufficient", "not_needed")
+        # Use is_haiku_intent() for centralized model selection logic.
+        # Haiku is used when: explicit flag set by analyze node, intent classified
+        # as Haiku-eligible, or data quality indicates no complex reasoning needed.
+        use_haiku = (
+            use_haiku_flag
+            or is_haiku_intent(intent_str)
+            or is_haiku_intent(intent_str_override)
+            or data_quality in ("insufficient", "not_needed")
+        )
         model = _model_haiku() if use_haiku else _model_sonnet()
 
         # Token budget: data-heavy intents (priorities, pipeline, leads) need room to list names
@@ -496,7 +512,12 @@ DO NOT use a canned/scripted response. Be natural and human."""
         if use_haiku and intent_str not in ("greeting", "simple") and intent_str_override not in ("greeting", "simple"):
             system_prompt = LEAN_SYSTEM_PROMPT
 
-        logger.info(f"[REASON_AND_RESPOND] Model selection: {model} (intent={intent_str}, intent_str_override={intent_str_override}, use_haiku_flag={use_haiku_flag})")
+        logger.info(
+            f"[REASON_AND_RESPOND] Model: {model} | intent={intent_str} "
+            f"intent_override={intent_str_override} | use_haiku_flag={use_haiku_flag} "
+            f"is_haiku_intent={is_haiku_intent(intent_str_override or intent_str)} | "
+            f"max_tokens={max_tokens}"
+        )
 
         # Single LLM call for both reasoning AND response generation
         # Use prompt caching on the system prompt to reduce cost on repeated calls

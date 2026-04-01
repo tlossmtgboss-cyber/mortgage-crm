@@ -25,6 +25,7 @@ class EmploymentExtractionAgent(BaseExtractionAgent):
     AGENT_NAME = "employment"
     AGENT_VERSION = "2.0"  # LLM-first extraction
     EXTRACTION_SCHEMA_KEY = "employment"
+    RECOMMENDED_MODEL = "haiku"  # Simple structured data extraction (employer, title, income)
 
     def extract_with_regex(
         self,

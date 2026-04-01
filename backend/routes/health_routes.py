@@ -1063,16 +1063,15 @@ def register_health_routes(app, get_db, **kwargs):
         so production 500s can be diagnosed without needing Railway log access.
         """
         import os
-        # Require admin API key in production
-        is_prod = bool(os.getenv("RAILWAY_ENVIRONMENT") or os.getenv("ENVIRONMENT") == "production")
-        if is_prod:
-            api_key = request.headers.get("X-API-Key", "")
-            admin_key = os.getenv("ADMIN_API_KEY", "")
-            if not admin_key or api_key != admin_key:
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": "Admin API key required"}
-                )
+        import secrets
+        # Always require admin API key — endpoint exposes stack traces
+        api_key = request.headers.get("X-API-Key", "")
+        admin_key = os.getenv("ADMIN_API_KEY", "")
+        if not admin_key or not secrets.compare_digest(api_key, admin_key):
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Admin API key required"}
+            )
 
         try:
             from utils.error_handling import get_recent_errors
@@ -1087,7 +1086,8 @@ def register_health_routes(app, get_db, **kwargs):
     @app.get("/health/diag-errors", tags=["Health"])
     async def diag_errors(request: Request, secret: str = ""):
         """Temporary diagnostic endpoint for recent errors. Remove after debugging."""
-        if secret != "perennia-diag-2026-03":
+        import secrets as _secrets
+        if not _secrets.compare_digest(secret, "perennia-diag-2026-03"):
             return JSONResponse(status_code=403, content={"detail": "Invalid secret"})
         try:
             from utils.error_handling import get_recent_errors

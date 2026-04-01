@@ -2693,6 +2693,55 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
     tools["create_referral_partner"] = execute_create_referral_partner
 
+    # -----------------------------------------------------------------
+    # sendPushNotification — Push notification to user's mobile device
+    # -----------------------------------------------------------------
+
+    async def execute_send_push_notification(
+        user_id: int,
+        title: str,
+        body: str,
+        notification_type: str = "general",
+        priority: str = "normal",
+        loan_id: int = None,
+    ) -> Dict[str, Any]:
+        """Send a push notification to a user's registered mobile devices.
+
+        Respects rate limits (max 5/user/hour), quiet hours, and user preferences.
+        """
+        try:
+            from services.agent_notification_service import get_agent_notification_service
+            push_svc = get_agent_notification_service()
+
+            data_payload = {"type": notification_type}
+            if loan_id:
+                data_payload["entity_id"] = str(loan_id)
+                data_payload["entity_type"] = "loan"
+                data_payload["route"] = f"/loans/{loan_id}"
+
+            result = push_svc.notify_user(
+                db=db,
+                user_id=user_id,
+                title=title,
+                body=body,
+                notification_type=notification_type,
+                data=data_payload,
+                priority=priority,
+            )
+
+            return {
+                "status": "success",
+                "sent": result.get("sent", 0),
+                "failed": result.get("failed", 0),
+                "skipped": result.get("skipped", 0),
+                "reason": result.get("reason"),
+            }
+        except Exception as e:
+            logger.error(f"Error in sendPushNotification: {e}")
+            return {"status": "error", "error": str(e), "sent": 0}
+
+    tools["sendPushNotification"] = execute_send_push_notification
+
     return tools
 
 

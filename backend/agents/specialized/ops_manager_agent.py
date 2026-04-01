@@ -852,7 +852,12 @@ class OpsManagerAgent(SpecializedAgent):
     # ========================================================================
 
     def _send_high_priority_notifications(self, db, org_id, lead_data, loan_data, mum_data, team_data, stalled_data):
-        """Send in-app notifications for high-priority impediments created during sweep."""
+        """Send in-app AND push notifications for high-priority impediments created during sweep.
+
+        In-app notifications go to the notifications table (existing behavior).
+        Push notifications go to APNs/FCM via AgentNotificationService (new behavior).
+        Push delivery is fire-and-forget: failures are logged but never block the sweep.
+        """
         from sqlalchemy import text
 
         # Collect all high-priority impediments that were newly created
@@ -885,6 +890,7 @@ class OpsManagerAgent(SpecializedAgent):
             LIMIT 50
         """), params).fetchall()
 
+        # --- In-app notifications (existing behavior) ---
         for task in recent_tasks:
             try:
                 db.execute(text("""
@@ -898,7 +904,7 @@ class OpsManagerAgent(SpecializedAgent):
                     "link": f"/tasks?task_id={task.id}",
                 })
             except Exception as e:
-                logger.debug(f"Failed to create notification for task {task.id}: {e}")
+                logger.debug(f"Failed to create in-app notification for task {task.id}: {e}")
                 continue
 
         try:
@@ -908,6 +914,85 @@ class OpsManagerAgent(SpecializedAgent):
                 db.rollback()
             except Exception:
                 pass
+
+        # --- Push notifications (new: send to mobile devices) ---
+        try:
+            from services.agent_notification_service import get_agent_notification_service
+            push_service = get_agent_notification_service()
+
+            push_sent = 0
+            push_skipped = 0
+            for task in recent_tasks:
+                try:
+                    category = task.category or "OPS_TASK"
+                    task_title = task.title or "High-priority ops task requires attention"
+
+                    # Use category-specific push methods when possible
+                    if category == OPS_CATEGORIES["SLA_BREACH"] and task.loan_id:
+                        result = push_service.notify_task_created(
+                            db=db,
+                            user_id=task.assigned_to_id,
+                            task_title=task_title[:200],
+                            task_priority="high",
+                            task_id=task.id,
+                            loan_id=task.loan_id,
+                        )
+                    elif category == OPS_CATEGORIES["LOCK_EXPIRING"] and task.loan_id:
+                        result = push_service.notify_task_created(
+                            db=db,
+                            user_id=task.assigned_to_id,
+                            task_title=task_title[:200],
+                            task_priority="high",
+                            task_id=task.id,
+                            loan_id=task.loan_id,
+                        )
+                    elif category in (OPS_CATEGORIES["DOC_EXPIRING"], OPS_CATEGORIES["DOC_MISSING"]) and task.loan_id:
+                        result = push_service.notify_task_created(
+                            db=db,
+                            user_id=task.assigned_to_id,
+                            task_title=task_title[:200],
+                            task_priority="high",
+                            task_id=task.id,
+                            loan_id=task.loan_id,
+                        )
+                    elif category == OPS_CATEGORIES["COMPLIANCE_OPEN"] and task.loan_id:
+                        result = push_service.notify_task_created(
+                            db=db,
+                            user_id=task.assigned_to_id,
+                            task_title=task_title[:200],
+                            task_priority="high",
+                            task_id=task.id,
+                            loan_id=task.loan_id,
+                        )
+                    else:
+                        # Generic push for other categories (TEAM_GAP, STALLED, etc.)
+                        result = push_service.notify_task_created(
+                            db=db,
+                            user_id=task.assigned_to_id,
+                            task_title=task_title[:200],
+                            task_priority="high",
+                            task_id=task.id,
+                            loan_id=task.loan_id,
+                        )
+
+                    if result.get("sent", 0) > 0:
+                        push_sent += 1
+                    else:
+                        push_skipped += 1
+
+                except Exception as e:
+                    logger.debug(f"Push notification failed for task {task.id}: {e}")
+                    push_skipped += 1
+                    continue
+
+            if push_sent > 0 or push_skipped > 0:
+                logger.info(
+                    "Sweep push notifications: %d sent, %d skipped (of %d tasks)",
+                    push_sent, push_skipped, len(recent_tasks),
+                )
+
+        except Exception as e:
+            logger.warning(f"Push notification batch failed (non-blocking): {e}")
 
     # ========================================================================
     # TOOL 2: LEAD PIPELINE SWEEP
@@ -1235,6 +1320,66 @@ class OpsManagerAgent(SpecializedAgent):
 
             if not dry_run:
                 db.commit()
+
+            # --- Push notifications for critical loan sweep findings ---
+            # Fire-and-forget: failures never block the sweep result
+            if not dry_run and tasks_created > 0:
+                try:
+                    from services.agent_notification_service import get_agent_notification_service
+                    push_svc = get_agent_notification_service()
+
+                    # SLA breaches: push to each affected LO
+                    for loan in sla_loans:
+                        if loan.loan_officer_id:
+                            try:
+                                days = int(loan.days_in_stage)
+                                push_svc.notify_stale_loan(
+                                    db=db,
+                                    loan_id=loan.id,
+                                    days_stale=days,
+                                    stage=loan.stage,
+                                    borrower_name=loan.borrower_name or "",
+                                    loan_number=loan.loan_number or "",
+                                )
+                            except Exception:
+                                pass
+
+                    # Lock expirations: push to each affected LO
+                    for loan in lock_loans:
+                        if loan.loan_officer_id:
+                            try:
+                                days_left = int(loan.days_until_expiry) if loan.days_until_expiry and loan.days_until_expiry > 0 else 0
+                                push_svc.notify_lock_expiring(
+                                    db=db,
+                                    loan_id=loan.id,
+                                    days_until_expiry=days_left,
+                                    borrower_name=loan.borrower_name or "",
+                                    loan_number=loan.loan_number or "",
+                                )
+                            except Exception:
+                                pass
+
+                    # Doc expirations: push to each affected LO
+                    for loan in doc_loans:
+                        if loan.loan_officer_id:
+                            for doc_type_label, col in [("Credit docs", loan.credit_docs_expire_date),
+                                                        ("Appraisal docs", loan.appraisal_docs_expire_date)]:
+                                if col and col <= datetime.utcnow() + timedelta(days=doc_days):
+                                    try:
+                                        exp_str = col.strftime("%m/%d/%Y") if hasattr(col, 'strftime') else str(col)
+                                        push_svc.notify_doc_expiring(
+                                            db=db,
+                                            loan_id=loan.id,
+                                            doc_type=doc_type_label,
+                                            expire_date=exp_str,
+                                            borrower_name=loan.borrower_name or "",
+                                            loan_number=loan.loan_number or "",
+                                        )
+                                    except Exception:
+                                        pass
+
+                except Exception as push_err:
+                    logger.debug(f"Loan sweep push notifications failed (non-blocking): {push_err}")
 
             scanned_row = db.execute(text(f"""
                 SELECT COUNT(*) as cnt FROM loans l

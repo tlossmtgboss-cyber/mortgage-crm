@@ -17,7 +17,12 @@ function Login() {
   const [pendingCredentials, setPendingCredentials] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get('redirect') || null;
+  const rawRedirect = searchParams.get('redirect') || null;
+  const isValidRedirect = (path) => {
+    if (!path) return false;
+    return path.startsWith('/') && !path.startsWith('//') && !path.includes('://');
+  };
+  const redirectTo = isValidRedirect(rawRedirect) ? rawRedirect : null;
 
   const {
     isAvailable: biometricAvailable,
@@ -57,7 +62,7 @@ function Login() {
 
   const performLogin = async (loginEmail, loginPassword) => {
     const data = await authAPI.login(loginEmail, loginPassword);
-    console.log('Login successful:', data);
+    // Login successful
 
     if (!data.access_token) {
       throw new Error('No token received from server');
@@ -72,7 +77,6 @@ function Login() {
 
     // Check for redirect parameter first, then use role-based default route
     if (redirectTo) {
-      console.log('Redirecting to:', redirectTo);
       navigate(redirectTo);
       return;
     }
@@ -91,7 +95,7 @@ function Login() {
     setError('');
     setLoading(true);
 
-    console.log('Attempting login with:', email);
+    // Attempting login
 
     try {
       await performLogin(email, password);

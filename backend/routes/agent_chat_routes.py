@@ -443,10 +443,11 @@ async def send_message_stream(
 @router.delete("/sessions/{session_id}")
 async def close_chat_session(
     session_id: int,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user=Depends(_get_current_user()),
 ):
-    """Close a chat session."""
+    """Close a chat session and trigger post-session AI learning analysis."""
     session = db.query(AgentChatSession).filter(
         AgentChatSession.id == session_id,
         AgentChatSession.user_id == current_user.id,
@@ -456,7 +457,34 @@ async def close_chat_session(
 
     session.is_active = False
     session.ended_at = datetime.utcnow()
+
+    # Collect session messages before committing, so we can pass them to the
+    # background learning task without needing the DB session later.
+    session_messages = []
+    try:
+        messages = db.query(AgentChatMessage).filter(
+            AgentChatMessage.session_id == session_id
+        ).order_by(AgentChatMessage.created_at.asc()).all()
+
+        session_messages = [
+            {"role": m.role, "content": m.content or ""}
+            for m in messages
+        ]
+    except Exception as e:
+        logger.warning(f"Failed to collect session messages for learning: {e}")
+
     db.commit()
+
+    # Schedule post-session AI learning analysis in background.
+    # This never blocks the response; failures are logged and swallowed.
+    if session_messages:
+        conversation_id = str(session.session_id)
+        background_tasks.add_task(
+            _run_post_session_analysis,
+            conversation_id=conversation_id,
+            messages=session_messages,
+            session_id_int=session_id,
+        )
 
     return {
         "status": "success",
@@ -765,3 +793,88 @@ async def generate_streaming_response(
     # Break into chunks for streaming effect
     chunk_size = 20
     return [full_response[i:i + chunk_size] for i in range(0, len(full_response), chunk_size)]
+
+
+# ============================================================================
+# Post-Session AI Learning Hook
+# ============================================================================
+
+def _run_post_session_analysis(
+    conversation_id: str,
+    messages: List[Dict[str, Any]],
+    session_id_int: int,
+) -> None:
+    """
+    Background task that feeds a completed chat session into the
+    ConversationAILearningService for analysis and continuous improvement.
+
+    This function is designed to be called via BackgroundTasks.add_task()
+    so it never blocks the HTTP response. All exceptions are caught and logged.
+    """
+    try:
+        from services.conversation_ai_learning_service import (
+            ConversationAILearningService,
+            ConversationOutcome,
+        )
+
+        learning_service = ConversationAILearningService()
+
+        # Determine outcome heuristically from messages
+        outcome = _infer_conversation_outcome(messages)
+
+        analysis = learning_service.analyze_conversation(
+            conversation_id=conversation_id,
+            messages=messages,
+            outcome=outcome,
+            caller_satisfaction=None,  # No explicit satisfaction score from chat sessions
+            metadata={"session_id_int": session_id_int, "message_count": len(messages)},
+        )
+
+        logger.info(
+            f"Post-session analysis complete for session {session_id_int}: "
+            f"outcome={analysis.outcome.value}, quality={analysis.quality_score:.2f}, "
+            f"gaps={len(analysis.knowledge_gaps_identified)}, "
+            f"recommendations={len(analysis.recommendations)}"
+        )
+    except Exception as e:
+        logger.warning(
+            f"Post-session analysis failed for session {session_id_int}: {e}",
+            exc_info=True,
+        )
+
+
+def _infer_conversation_outcome(messages: List[Dict[str, Any]]) -> "ConversationOutcome":
+    """
+    Heuristically infer conversation outcome from message content.
+    Lazy-imports ConversationOutcome to avoid circular deps at module load.
+    """
+    from services.conversation_ai_learning_service import ConversationOutcome
+
+    if not messages:
+        return ConversationOutcome.UNKNOWN
+
+    # Look at the last few user messages for signals
+    user_messages = [m for m in messages if m.get("role") == "user"]
+    ai_messages = [m for m in messages if m.get("role") == "assistant"]
+
+    if not user_messages:
+        return ConversationOutcome.UNKNOWN
+
+    last_user = user_messages[-1].get("content", "").lower() if user_messages else ""
+
+    # Positive signals
+    positive_signals = ["thank", "thanks", "great", "perfect", "that helps", "awesome", "got it"]
+    if any(signal in last_user for signal in positive_signals):
+        return ConversationOutcome.SUCCESS
+
+    # Negative signals
+    negative_signals = ["not helpful", "wrong", "doesn't help", "useless", "frustrated"]
+    if any(signal in last_user for signal in negative_signals):
+        return ConversationOutcome.FAILURE
+
+    # If conversation is very short (1-2 exchanges), may be abandoned
+    if len(user_messages) <= 1 and len(ai_messages) <= 1:
+        return ConversationOutcome.ABANDONED
+
+    # Default: partial success for multi-turn conversations
+    return ConversationOutcome.PARTIAL_SUCCESS

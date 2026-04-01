@@ -35,8 +35,12 @@ try:
     _HAS_ENCRYPTION = True
 except ImportError:
     _HAS_ENCRYPTION = False
-    if os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production":
-        raise RuntimeError("Encryption service required in production for secret storage")
+    is_production = any([
+        os.getenv("RAILWAY_ENVIRONMENT", "").lower() in ("production", "staging"),
+        os.getenv("ENVIRONMENT", "").lower() in ("production", "staging"),
+    ])
+    if is_production:
+        raise RuntimeError("Encryption service required in production/staging for credential storage")
     logger.warning("EncryptedString unavailable; secrets stored as plaintext in dev mode")
 
 

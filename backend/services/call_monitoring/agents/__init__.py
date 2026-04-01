@@ -10,7 +10,7 @@ Six specialized agents for processing call transcripts:
 - CallSchedulingAgent: Calendar scheduling and appointment coordination
 """
 
-from .base_agent import BaseCallAgent, AgentResult, AGENT_MODEL
+from .base_agent import BaseCallAgent, AgentResult, AGENT_MODEL, AGENT_MODEL_FAST, AGENT_MODEL_MAP
 from .scribe_agent import ScribeAgent
 from .junior_lo_agent import JuniorLOAgent
 from .underwriter_agent import UnderwriterAgent
@@ -25,6 +25,8 @@ __all__ = [
     'BaseCallAgent',
     'AgentResult',
     'AGENT_MODEL',
+    'AGENT_MODEL_FAST',
+    'AGENT_MODEL_MAP',
     'ScribeAgent',
     'JuniorLOAgent',
     'UnderwriterAgent',

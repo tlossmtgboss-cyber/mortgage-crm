@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 class EventType(str, Enum):
-    """Lifecycle events emitted by the scheduler subsystem."""
+    """Lifecycle events emitted by the scheduler and agent subsystems."""
 
     # Appointment lifecycle
     APPOINTMENT_CREATED = "appointment.created"
@@ -56,6 +56,26 @@ class EventType(str, Enum):
     # Booking operations
     BOOKING_CONFLICT = "booking.conflict"
     WAITLIST_NOTIFIED = "waitlist.notified"
+
+    # =========================================================================
+    # Inter-agent events — emitted by AgentEventBridge
+    # =========================================================================
+
+    # Loan pipeline events
+    LOAN_STALLED = "agent.loan_stalled"
+    LOAN_STAGE_CHANGED = "agent.loan_stage_changed"
+
+    # Lead events
+    HOT_LEAD_DETECTED = "agent.hot_lead_detected"
+
+    # Document events
+    DOCUMENTS_EXPIRED = "agent.documents_expired"
+
+    # Compliance events
+    COMPLIANCE_VIOLATION = "agent.compliance_violation"
+
+    # Email / inbound data events
+    EMAIL_DATA_EXTRACTED = "agent.email_data_extracted"
 
 
 # =============================================================================

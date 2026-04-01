@@ -25,6 +25,7 @@ class IntentExtractionAgent(BaseExtractionAgent):
     AGENT_NAME = "intent"
     AGENT_VERSION = "2.0"  # LLM-first extraction
     EXTRACTION_SCHEMA_KEY = "intent"
+    RECOMMENDED_MODEL = "haiku"  # Intent/preference extraction is structured
 
     def extract_with_regex(
         self,

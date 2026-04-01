@@ -80,7 +80,8 @@ PIPELINE_MOVEMENT_AGENT = AgentConfig(
         "createTask",
         "sendMessage",
         "calculateVelocityMetrics",
-        "escalateToHuman"
+        "escalateToHuman",
+        "sendPushNotification"
     ],
     triggers=[
         "DailyPipelineSweep",
@@ -264,7 +265,8 @@ OPERATIONS_AGENT = AgentConfig(
         "adjustWorkerConfig",
         "createIncident",
         "sendAlert",
-        "generateOpsReport"
+        "generateOpsReport",
+        "sendPushNotification"
     ],
     triggers=[
         "HourlyHealthCheck",
@@ -837,5 +839,36 @@ TOOL_DEFINITIONS = [
         handler_endpoint="/api/ai/tools/send-agent-message",
         allowed_agents=[agent.id for agent in ALL_AGENTS],  # All agents can message each other
         risk_level=RiskLevel.LOW
-    )
+    ),
+    # Push notification to user's mobile device
+    ToolDefinition(
+        name="sendPushNotification",
+        description="Send a push notification to a user's mobile device(s) via APNs/FCM. Respects rate limits, quiet hours, and user preferences.",
+        category=ToolCategory.COMMUNICATION,
+        input_schema={
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "integer", "description": "Target user ID"},
+                "title": {"type": "string", "description": "Notification title (short)"},
+                "body": {"type": "string", "description": "Notification body text"},
+                "notification_type": {
+                    "type": "string",
+                    "description": "Category: sla_alert, compliance_alert, task_assigned, loan_update, document_received, general",
+                    "default": "general"
+                },
+                "priority": {
+                    "type": "string",
+                    "description": "normal or critical (critical bypasses quiet hours)",
+                    "default": "normal"
+                },
+                "loan_id": {"type": "integer", "description": "Optional loan ID for deep linking"},
+            },
+            "required": ["user_id", "title", "body"]
+        },
+        output_schema={"type": "object"},
+        handler_endpoint="/api/ai/tools/send-push-notification",
+        allowed_agents=["pipeline_manager", "operations_agent", "underwriting_assistant", "customer_engagement"],
+        risk_level=RiskLevel.MEDIUM,
+        requires_approval=False  # Rate-limited by the service; no human approval needed
+    ),
 ]

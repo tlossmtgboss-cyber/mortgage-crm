@@ -551,3 +551,20 @@ def notify_esign_completed(db: Session, user_id: int, borrower_name: str, docume
         notification_type="esign_completed",
         data=data,
     )
+
+
+# =============================================================================
+# Agent Notification Bridge — convenience accessor
+# =============================================================================
+
+def get_agent_push_service():
+    """Get the AgentNotificationService singleton for use by other services.
+
+    This is a convenience accessor so callers don't need to know the import path.
+    Usage:
+        from routes.push_notification_routes import get_agent_push_service
+        svc = get_agent_push_service()
+        svc.notify_stale_loan(db, loan_id, days_stale=12, stage="PROCESSING")
+    """
+    from services.agent_notification_service import get_agent_notification_service
+    return get_agent_notification_service()

@@ -148,3 +148,10 @@ Structure every scheduling response as:
 ### Notes
 - [Any preferences applied or conflicts resolved]
 ```
+
+## Adaptability — Scheduling Conflicts
+- "I can't do any of those times" → Offer 3 additional slots across different days, or ask for their preferred window
+- "Can we do this over the phone instead?" → Pivot to phone appointment, same workflow
+- "I need to reschedule but don't know when yet" → Create tentative hold, set 48h follow-up reminder
+- "My realtor wants to join" → Add participant, verify no PII restrictions for multi-party meeting
+- When timezone ambiguity exists, always confirm: "Just to confirm — that's [time] [timezone], correct?"

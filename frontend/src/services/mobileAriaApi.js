@@ -14,6 +14,38 @@
 import api from './api';
 
 // =============================================================================
+// FEEDBACK
+// =============================================================================
+
+/**
+ * Submit feedback (thumbs up/down) on an AI message.
+ *
+ * POST /api/v1/ai-feedback/
+ *
+ * @param {string} sessionId - Chat session ID
+ * @param {string} messageId - The message ID being rated
+ * @param {string} rating - "positive" or "negative"
+ * @param {string} feedbackText - Optional text feedback (max 200 chars)
+ * @returns {Promise<Object>} Feedback submission result
+ */
+export async function submitMessageFeedback(sessionId, messageId, rating, feedbackText = '') {
+  try {
+    const response = await api.post('/api/v1/ai-feedback/', {
+      session_id: sessionId,
+      message_id: messageId,
+      rating,
+      feedback_text: feedbackText,
+      source: 'mobile_aria_chat',
+    });
+    return response.data;
+  } catch (error) {
+    console.error('[mobileAriaApi] submitMessageFeedback error:', error);
+    const errMsg = error.response?.data?.detail || error.message || 'Failed to submit feedback';
+    return { success: false, error: errMsg };
+  }
+}
+
+// =============================================================================
 // CHAT & ORCHESTRATION
 // =============================================================================
 

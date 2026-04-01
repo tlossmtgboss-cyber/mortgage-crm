@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { API_BASE_URL } from '../services/api';
 
 /**
  * ApplyVerify - Handles magic link verification
@@ -15,8 +16,7 @@ export default function ApplyVerify() {
 
     if (token) {
       // Redirect to backend API for verification
-      // HARDCODED to ensure correct URL - the env var may have old Railway URL
-      window.location.href = `https://api.perenniaai.com/api/v1/borrower-auth/email/verify?token=${token}`;
+      window.location.href = `${API_BASE_URL}/api/v1/borrower-auth/email/verify?token=${token}`;
     } else {
       // No token, redirect to login page
       window.location.href = '/apply/login';

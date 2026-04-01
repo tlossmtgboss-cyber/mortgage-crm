@@ -25,6 +25,7 @@ class PropertyExtractionAgent(BaseExtractionAgent):
     AGENT_NAME = "property"
     AGENT_VERSION = "2.0"  # LLM-first extraction
     EXTRACTION_SCHEMA_KEY = "property"
+    RECOMMENDED_MODEL = "haiku"  # Address/property type extraction is straightforward
 
     # US States
     STATES = {

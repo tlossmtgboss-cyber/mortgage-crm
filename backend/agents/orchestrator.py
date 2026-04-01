@@ -50,6 +50,149 @@ def _is_retryable(error: Exception) -> bool:
     ])
 
 
+# =============================================================================
+# POST-RESPONSE MEMORY EXTRACTION
+# =============================================================================
+
+import re as _re
+
+# Patterns for detecting user preferences and facts (lightweight, no LLM call)
+_PREFERENCE_PATTERNS = [
+    # Explicit preferences
+    (_re.compile(r"(?:i\s+)?prefer\s+(.{5,80})", _re.IGNORECASE), "preference"),
+    (_re.compile(r"(?:please\s+)?always\s+(.{5,80})", _re.IGNORECASE), "directive"),
+    (_re.compile(r"(?:please\s+)?never\s+(.{5,80})", _re.IGNORECASE), "directive"),
+    (_re.compile(r"don'?t\s+(?:ever\s+)?(?:send|show|give|email|text|call)\s+me\s+(.{5,80})", _re.IGNORECASE), "directive"),
+    (_re.compile(r"(?:i\s+)?(?:only\s+)?want\s+(?:to\s+see|to\s+get|to\s+receive)\s+(.{5,80})", _re.IGNORECASE), "preference"),
+    (_re.compile(r"(?:i\s+)?(?:like|love)\s+(?:when|it\s+when|seeing)\s+(.{5,80})", _re.IGNORECASE), "preference"),
+    # Key facts
+    (_re.compile(r"my\s+credit\s+score\s+is\s+(\d{3})", _re.IGNORECASE), "fact"),
+    (_re.compile(r"i(?:'m|\s+am)\s+looking\s+(?:at|for|to\s+buy)\s+(.{5,80})", _re.IGNORECASE), "fact"),
+    (_re.compile(r"my\s+(?:target|goal)\s+(?:is|:)\s+(.{5,80})", _re.IGNORECASE), "fact"),
+    (_re.compile(r"i\s+(?:work|specialize)\s+(?:in|with|on)\s+(.{5,80})", _re.IGNORECASE), "fact"),
+    (_re.compile(r"my\s+(?:average|typical)\s+(?:loan|deal)\s+(?:size|amount)\s+is\s+(.{5,80})", _re.IGNORECASE), "fact"),
+    (_re.compile(r"i\s+(?:mainly|mostly|primarily)\s+(?:do|handle|work\s+on)\s+(.{5,80})", _re.IGNORECASE), "fact"),
+]
+
+# Confidence levels by extraction type
+_MEMORY_CONFIDENCE = {
+    "directive": 0.9,   # Explicit user instruction
+    "preference": 0.7,  # Auto-extracted preference
+    "fact": 0.7,        # Auto-extracted fact
+    "context": 0.6,     # Situational context
+}
+
+# TTL in days by memory type (None = no expiry)
+_MEMORY_TTL_DAYS = {
+    "preference": None,  # Preferences don't expire
+    "directive": None,   # Directives don't expire
+    "fact": 90,          # Facts expire in 90 days
+    "context": 30,       # Context expires in 30 days
+}
+
+
+def _extract_and_save_memories(
+    final_state: dict,
+    db_session=None,
+) -> None:
+    """
+    Extract user preferences and facts from the conversation and save
+    to the AgentMemory table. Uses lightweight regex/pattern matching,
+    NOT an LLM call.
+
+    Gracefully degrades: logs and continues on any failure.
+
+    Args:
+        final_state: The completed orchestrator state
+        db_session: SQLAlchemy session (if None, creates its own)
+    """
+    try:
+        user_message = final_state.get("user_message", "")
+        user_id = final_state.get("user_id", "")
+        organization_id = final_state.get("organization_id")
+
+        if not user_message or not user_id:
+            return
+
+        # Scan user message for preference/fact patterns
+        extracted = []
+        for pattern, mem_type in _PREFERENCE_PATTERNS:
+            match = pattern.search(user_message)
+            if match:
+                captured = match.group(1).strip().rstrip(".,!?")
+                if len(captured) >= 5:  # Skip trivially short matches
+                    extracted.append({
+                        "type": mem_type,
+                        "key": f"auto_{mem_type}_{len(extracted)}",
+                        "value": captured[:255],
+                        "confidence": _MEMORY_CONFIDENCE.get(mem_type, 0.6),
+                    })
+
+        if not extracted:
+            return
+
+        # Lazy imports to avoid circular dependencies
+        from datetime import datetime, timezone, timedelta
+        from database.models.agent_memory import AgentMemory, MemoryType
+
+        _type_map = {
+            "preference": MemoryType.PREFERENCE,
+            "directive": MemoryType.DIRECTIVE,
+            "fact": MemoryType.FACT,
+            "context": MemoryType.CONTEXT,
+        }
+
+        # Use provided session or create a new one
+        own_session = False
+        session = db_session
+        if session is None:
+            from db import SessionLocal
+            session = SessionLocal()
+            own_session = True
+
+        try:
+            now = datetime.now(timezone.utc)
+            saved_count = 0
+
+            for item in extracted:
+                ttl_days = _MEMORY_TTL_DAYS.get(item["type"])
+                expires_at = (now + timedelta(days=ttl_days)) if ttl_days else None
+
+                memory = AgentMemory(
+                    user_id=int(user_id) if str(user_id).isdigit() else user_id,
+                    organization_id=organization_id,
+                    memory_type=_type_map.get(item["type"], MemoryType.FACT),
+                    key=item["key"],
+                    value=item["value"],
+                    confidence=item["confidence"],
+                    agent_role="orchestrator",
+                    created_at=now,
+                    updated_at=now,
+                    expires_at=expires_at,
+                )
+                session.add(memory)
+                saved_count += 1
+
+            session.commit()
+            logger.info(
+                f"[ORCHESTRATOR] Saved {saved_count} memories for user {user_id}: "
+                f"{[e['type'] + ':' + e['value'][:30] for e in extracted]}"
+            )
+
+        except Exception as e:
+            logger.warning(f"[ORCHESTRATOR] Memory save failed (graceful degradation): {e}")
+            try:
+                session.rollback()
+            except Exception:
+                pass
+        finally:
+            if own_session:
+                session.close()
+
+    except Exception as e:
+        logger.warning(f"[ORCHESTRATOR] Memory extraction failed (graceful degradation): {e}")
+
+
 # Intent to scoped tools mapping (matches analyze.py)
 INTENT_TO_SCOPED_TOOLS = {
     # Fast response intents (use Haiku, minimal tools)
@@ -59,19 +202,28 @@ INTENT_TO_SCOPED_TOOLS = {
     "priorities": ["get_daily_priorities", "get_tasks", "get_pipeline"],
     "tasks": ["get_tasks", "create_task", "get_daily_priorities"],
     "leads": ["lead_status_insights", "get_leads_by_status", "get_top_leads", "get_stale_leads", "search_leads"],
-    "top_leads": ["get_top_leads"],  # Specific entry for "call my top leads" queries
+    "top_leads": ["get_top_leads", "score_lead", "suggest_followup", "get_lead_details"],
     "pipeline": ["get_pipeline", "get_pipeline_metrics", "search_loans"],
     "historical": ["get_performance_by_period", "compare_periods", "get_data_availability"],  # Q3 vs Q4, period comparisons
-    "rates": ["get_rate_lock_advisory", "get_pipeline"],
+    "rates": ["get_current_rates", "recommend_lock_strategy", "compare_rate_scenarios", "monitor_float_position", "get_market_events", "calculate_lock_cost", "get_extension_pricing", "analyze_rate_trends", "get_rate_lock_advisory", "get_pipeline"],
     "calls": ["click_to_dial", "make_call", "call_contact", "get_top_leads", "search_leads"],
     "email": ["get_emails_needing_response", "send_email", "search_email_inbox", "search_leads", "search_loans", "create_referral_partner"],
     "schedule": ["get_tasks", "get_daily_priorities"],
-    "documents": ["search_loans", "get_pipeline"],
+    "documents": ["get_missing_documents", "get_loan_conditions", "track_document_request", "send_document_reminder", "check_document_expiration", "get_third_party_status", "get_document_timeline", "escalate_issue", "search_loans"],
     "compliance": ["search_loans", "get_pipeline"],
-    "sla": ["get_pipeline", "get_pipeline_metrics"],
-    "reports": ["get_pipeline_metrics", "get_pipeline"],
+    "sla": ["check_sla_status", "get_sla_dashboard", "get_sla_alerts", "calculate_stage_sla", "get_sla_report", "project_sla_breach", "escalate_sla_breach", "get_pipeline", "get_pipeline_metrics"],
+    "reports": ["generate_pipeline_report", "generate_production_report", "get_report_templates", "schedule_report", "export_report", "get_dashboard_metrics", "get_performance_by_period", "compare_periods", "get_pipeline_metrics", "get_pipeline"],
     "coaching": ["get_pipeline_metrics", "get_pipeline", "lead_status_insights"],
-    "customer": ["search_leads", "search_loans"],
+    "customer": ["get_customer_360", "map_relationships", "calculate_ltv", "assess_churn_risk", "find_opportunities", "get_interaction_history", "get_referral_network", "search_leads", "search_loans"],
+    "video": ["schedule_video_meeting", "get_meeting_recordings", "analyze_meeting", "send_async_video", "get_video_analytics", "extract_meeting_action_items"],
+    "integrations": ["sync_los_data", "check_integration_status", "trigger_credit_pull", "submit_to_aus", "order_appraisal", "order_title", "get_pricing_engine_quote"],
+    "billing": ["get_subscription_status", "get_plans", "change_plan", "get_billing_history", "get_usage_metrics", "manage_addons"],
+    "onboarding": ["get_onboarding_status", "get_checklist", "complete_step", "start_guided_tour", "get_training_resources", "track_progress"],
+    "notifications": ["send_notification", "get_pending_notifications", "get_notification_templates", "schedule_notification", "update_preferences", "get_preferences"],
+    "profit": ["calculate_loan_profitability", "analyze_margins_by_segment", "forecast_revenue", "compare_lo_profitability", "optimize_pricing", "get_cost_breakdown", "calculate_pull_through_impact", "get_profitability_trends"],
+    "operations": ["get_pipeline_metrics", "get_loan_aging_report", "get_bottleneck_analysis", "check_sla_status", "get_sla_dashboard", "escalate_sla_breach"],
+    "compound": ["get_pipeline_metrics", "search_loans", "search_leads", "get_tasks", "create_task", "send_email", "schedule_followup"],
+    "content_marketing": ["get_pipeline_metrics", "search_leads", "draft_message"],
     "general": ["get_daily_priorities", "get_pipeline", "get_tasks"],
 }
 
@@ -503,6 +655,14 @@ async def run_orchestrator(
             response["warnings"] = errors
 
         # ================================================================
+        # MEMORY EXTRACTION — save user preferences/facts from conversation
+        # ================================================================
+        try:
+            _extract_and_save_memories(final_state, db_session)
+        except Exception as mem_err:
+            logger.warning(f"[ORCHESTRATOR] Post-response memory extraction failed: {mem_err}")
+
+        # ================================================================
         # AUDIT LOGGING — structured compliance trail with token tracking
         # ================================================================
         total_tokens_used = 0
@@ -801,13 +961,12 @@ async def _verify_response_hallucinations(
     user_id: str,
     db_session = None,
     use_llm: bool = True
-) -> None:
+) -> Optional[Any]:
     """
     Verify an AI response for hallucinations and record metrics.
 
-    This function runs in the background after the response is sent to the user.
-    It extracts claims from the response, verifies them against source data,
-    and records the results to the metrics database.
+    Returns the HallucinationReport so callers (especially blocking mode for
+    compliance-sensitive intents) can inspect faithfulness_score and act on it.
 
     Args:
         session_id: Session/conversation identifier
@@ -818,6 +977,9 @@ async def _verify_response_hallucinations(
         user_id: User ID for metrics recording
         db_session: Database session for recording metrics (optional)
         use_llm: Whether to use LLM for extraction/verification (default True)
+
+    Returns:
+        HallucinationReport with faithfulness_score, or None on failure
     """
     try:
         logger.info(f"[HALLUCINATION] Starting verification for message {message_id}")
@@ -875,5 +1037,8 @@ async def _verify_response_hallucinations(
             except Exception as metrics_error:
                 logger.warning(f"[HALLUCINATION] Failed to record metrics: {metrics_error}")
 
+        return report
+
     except Exception as e:
         logger.error(f"[HALLUCINATION] Verification failed for message {message_id}: {e}")
+        return None

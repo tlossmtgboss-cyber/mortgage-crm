@@ -558,6 +558,14 @@ async def gather_data(
             elif isinstance(val, list):
                 logger.debug(f"[GATHER] {key}: {len(val)} items")
 
+        # Fire cross-agent events based on gathered tool results (fire-and-forget).
+        # This catches compliance checks, doc expiration, lead scoring, etc. that
+        # run as data-gathering (read) operations, not as write actions in execute.
+        if gathered_data:
+            asyncio.ensure_future(
+                _emit_gather_cross_agent_events(gathered_data, state)
+            )
+
         return state
 
     except Exception as e:
@@ -622,3 +630,97 @@ def format_gathered_data_for_llm(state: AgentState) -> str:
         sections.append(section)
 
     return "\n\n".join(sections)
+
+
+# =============================================================================
+# Cross-agent event emission from gather results
+# =============================================================================
+
+async def _emit_gather_cross_agent_events(
+    gathered_data: Dict[str, Any],
+    state: AgentState,
+) -> None:
+    """Inspect gathered tool results and emit inter-agent events.
+
+    Runs as a fire-and-forget coroutine after the gather node completes.
+    Any failure is logged and swallowed -- it never blocks the response.
+    """
+    try:
+        from services.agent_event_bridge import agent_event_bridge
+    except ImportError:
+        return  # Bridge not available
+
+    org_id = str(state.get("organization_id")) if state.get("organization_id") else None
+
+    for tool_name, result in gathered_data.items():
+        if not isinstance(result, dict):
+            continue
+
+        try:
+            # check_document_expiration -> expired documents
+            if tool_name == "check_document_expiration" and result.get("expired"):
+                expired_docs = result.get("expired", [])
+                loan_ids_seen = set()
+                for doc in expired_docs:
+                    lid = doc.get("loan_id")
+                    if lid and lid not in loan_ids_seen:
+                        loan_ids_seen.add(lid)
+                        types = [d.get("document_type", "unknown") for d in expired_docs if d.get("loan_id") == lid]
+                        await agent_event_bridge.on_documents_expired(
+                            loan_id=lid,
+                            doc_types=types,
+                            org_id=org_id,
+                        )
+
+            # score_lead -> hot lead detection
+            if tool_name == "score_lead" and result.get("new_score", 0) >= 60:
+                await agent_event_bridge.on_hot_lead_detected(
+                    lead_id=result.get("lead_id"),
+                    score=result.get("new_score", 0),
+                    lo_id=result.get("lo_id"),
+                    org_id=org_id,
+                )
+
+            # check_trid_compliance -> compliance violation
+            if tool_name in ("check_trid_compliance", "check_tolerance_violations", "audit_loan_file"):
+                issues = result.get("issues", [])
+                violations = result.get("violations", [])
+                failed_checks = result.get("results", {}).get("failed", []) if isinstance(result.get("results"), dict) else []
+                for issue in issues + violations + failed_checks:
+                    severity = issue.get("severity", "medium")
+                    if severity in ("high", "critical"):
+                        await agent_event_bridge.on_compliance_violation(
+                            loan_id=result.get("loan_id"),
+                            violation_type=issue.get("type", tool_name),
+                            severity=severity,
+                            description=issue.get("message", ""),
+                            org_id=org_id,
+                        )
+
+            # get_bottleneck_analysis -> stalled stages
+            if tool_name == "get_bottleneck_analysis":
+                for bottleneck in result.get("bottlenecks", []):
+                    if bottleneck.get("severity") == "critical":
+                        await agent_event_bridge.on_loan_stalled(
+                            loan_id=0,  # Aggregate signal
+                            days_stale=int(bottleneck.get("avg_days", 0)),
+                            stage=bottleneck.get("stage", "UNKNOWN"),
+                            org_id=org_id,
+                        )
+
+            # get_loan_aging_report -> stalled loans by stage
+            if tool_name == "get_loan_aging_report":
+                for stage_info in result.get("by_stage", []):
+                    if stage_info.get("over_threshold", 0) > 0 and stage_info.get("avg_days", 0) > 14:
+                        await agent_event_bridge.on_loan_stalled(
+                            loan_id=0,
+                            days_stale=int(stage_info.get("avg_days", 0)),
+                            stage=stage_info.get("stage", "UNKNOWN"),
+                            org_id=org_id,
+                        )
+
+        except Exception as e:
+            logger.warning(
+                "[GATHER] Cross-agent event emission failed for %s: %s",
+                tool_name, e,
+            )

@@ -10,6 +10,7 @@ Provides:
 - calendar_sync_tasks: CRM ↔ Salesforce calendar synchronization
 - salesforce_sync_tasks: Salesforce email, calendar, and data sync
 - data_retention_tasks: Data retention enforcement (CRM + SOC 2)
+- learning_tasks: Continuous AI learning cycle, conversation analysis, memory maintenance
 
 Redis is REQUIRED in production for:
 - Celery task broker and result backend
@@ -87,6 +88,13 @@ from .data_retention_tasks import (
     verify_backup_integrity,
 )
 
+from .learning_tasks import (
+    run_learning_cycle,
+    analyze_recent_conversations,
+    refresh_agent_memory_scores,
+    agent_learning_health_check,
+)
+
 __all__ = [
     # Celery app
     "celery_app",
@@ -137,4 +145,9 @@ __all__ = [
     "enforce_soc2_retention",
     "generate_retention_report",
     "verify_backup_integrity",
+    # Continuous learning
+    "run_learning_cycle",
+    "analyze_recent_conversations",
+    "refresh_agent_memory_scores",
+    "agent_learning_health_check",
 ]

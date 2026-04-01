@@ -6,6 +6,7 @@ This node analyzes the user's query to determine:
 - Entity extraction
 - Required tools (scoped to 1-2 relevant agents, not all 160)
 - Urgency and complexity assessment
+- User memory retrieval (preferences, directives, context)
 
 OPTIMIZATION v3: Intent-based agent routing
 - Ultra-fast pattern matching: ~1-5ms for 80%+ of queries
@@ -22,6 +23,7 @@ import json
 import logging
 import re
 import time
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from anthropic import Anthropic
 
@@ -35,7 +37,9 @@ from ..state import (
 from ..intent_router import (
     classify_intent,
     get_tools_for_intent,
-    INTENT_TO_AGENTS
+    INTENT_TO_AGENTS,
+    HAIKU_INTENTS,
+    is_haiku_intent,
 )
 
 try:
@@ -79,26 +83,196 @@ BASE_TOOLS = [
 
 # Map intents to the base tools that support them
 INTENT_TO_BASE_TOOLS: Dict[str, List[str]] = {
+    # Fast response intents (use Haiku, minimal tools)
+    "greeting": [],  # No tools needed for greetings
+    "simple": ["get_daily_priorities"],  # Minimal tools for simple queries
+    # Standard intents (use Sonnet, appropriate tools)
     "priorities": ["get_daily_priorities", "get_tasks", "get_pipeline"],
     "tasks": ["get_tasks", "create_task", "get_daily_priorities"],
     "leads": ["lead_status_insights", "get_leads_by_status", "get_top_leads", "get_stale_leads", "search_leads"],
+    "top_leads": ["get_top_leads", "score_lead", "suggest_followup", "get_lead_details"],
     "pipeline": ["get_pipeline", "get_pipeline_metrics", "search_loans"],
-    "historical": ["get_performance_by_period", "compare_periods", "get_data_availability"],  # Historical comparisons
-    "rates": ["get_rate_lock_advisory", "get_pipeline"],
-    "calls": ["click_to_dial", "make_call", "get_top_leads", "search_leads"],
-    "email": ["send_email", "search_email_inbox", "search_leads", "search_loans", "create_referral_partner"],  # Email sending, search, contact lookup, referral partners
-    "schedule": ["get_tasks", "get_daily_priorities"],  # Basic for now
-    "documents": ["search_loans", "get_pipeline"],  # Basic for now
-    "compliance": ["search_loans", "get_pipeline"],  # Basic for now
-    "sla": ["get_pipeline", "get_pipeline_metrics"],  # Basic for now
-    "reports": ["get_pipeline_metrics", "get_pipeline"],
-    "coaching": ["get_pipeline_metrics", "get_pipeline"],
-    "customer": ["search_leads", "search_loans"],
+    "historical": ["get_performance_by_period", "compare_periods", "get_data_availability"],  # Q3 vs Q4, period comparisons
+    "rates": ["get_current_rates", "recommend_lock_strategy", "compare_rate_scenarios", "monitor_float_position", "get_market_events", "calculate_lock_cost", "get_extension_pricing", "analyze_rate_trends", "get_rate_lock_advisory", "get_pipeline"],
+    "calls": ["click_to_dial", "make_call", "call_contact", "get_top_leads", "search_leads"],
+    "email": ["get_emails_needing_response", "send_email", "search_email_inbox", "search_leads", "search_loans", "create_referral_partner"],
+    "schedule": ["get_tasks", "get_daily_priorities"],
+    "documents": ["get_missing_documents", "get_loan_conditions", "track_document_request", "send_document_reminder", "check_document_expiration", "get_third_party_status", "get_document_timeline", "escalate_issue", "search_loans"],
+    "compliance": ["search_loans", "get_pipeline"],
+    "sla": ["check_sla_status", "get_sla_dashboard", "get_sla_alerts", "calculate_stage_sla", "get_sla_report", "project_sla_breach", "escalate_sla_breach", "get_pipeline", "get_pipeline_metrics"],
+    "reports": ["generate_pipeline_report", "generate_production_report", "get_report_templates", "schedule_report", "export_report", "get_dashboard_metrics", "get_performance_by_period", "compare_periods", "get_pipeline_metrics", "get_pipeline"],
+    "coaching": ["get_pipeline_metrics", "get_pipeline", "lead_status_insights"],
+    "customer": ["get_customer_360", "map_relationships", "calculate_ltv", "assess_churn_risk", "find_opportunities", "get_interaction_history", "get_referral_network", "search_leads", "search_loans"],
+    "video": ["schedule_video_meeting", "get_meeting_recordings", "analyze_meeting", "send_async_video", "get_video_analytics", "extract_meeting_action_items"],
+    "integrations": ["sync_los_data", "check_integration_status", "trigger_credit_pull", "submit_to_aus", "order_appraisal", "order_title", "get_pricing_engine_quote"],
+    "billing": ["get_subscription_status", "get_plans", "change_plan", "get_billing_history", "get_usage_metrics", "manage_addons"],
+    "onboarding": ["get_onboarding_status", "get_checklist", "complete_step", "start_guided_tour", "get_training_resources", "track_progress"],
+    "notifications": ["send_notification", "get_pending_notifications", "get_notification_templates", "schedule_notification", "update_preferences", "get_preferences"],
+    "profit": ["calculate_loan_profitability", "analyze_margins_by_segment", "forecast_revenue", "compare_lo_profitability", "optimize_pricing", "get_cost_breakdown", "calculate_pull_through_impact", "get_profitability_trends"],
+    "operations": ["get_pipeline_metrics", "get_loan_aging_report", "get_bottleneck_analysis", "check_sla_status", "get_sla_dashboard", "escalate_sla_breach"],
+    "compound": ["get_pipeline_metrics", "search_loans", "search_leads", "get_tasks", "create_task", "send_email", "schedule_followup"],
+    "content_marketing": ["get_pipeline_metrics", "search_leads", "draft_message"],
     "general": ["get_daily_priorities", "get_pipeline", "get_tasks"],
 }
 
 # Legacy: Keep AVAILABLE_TOOLS for backwards compatibility
 AVAILABLE_TOOLS = BASE_TOOLS
+
+
+# =============================================================================
+# MEMORY RETRIEVAL (query AgentMemory for user preferences/context)
+# =============================================================================
+
+def _retrieve_user_memories(user_id: str, organization_id: Optional[int]) -> tuple:
+    """
+    Query AgentMemory table for the current user's stored memories.
+
+    Returns:
+        Tuple of (memories_list, formatted_memory_context_string).
+        On failure, returns ([], "").
+    """
+    try:
+        # Lazy imports to avoid circular dependencies
+        from db import SessionLocal
+        from database.models.agent_memory import AgentMemory, MemoryType
+
+        db = SessionLocal()
+        try:
+            now = datetime.now(timezone.utc)
+
+            # Query PREFERENCE, DIRECTIVE, and recent CONTEXT memories
+            # Not expired, ordered by confidence descending, limit 10
+            query = (
+                db.query(AgentMemory)
+                .filter(
+                    AgentMemory.user_id == int(user_id) if str(user_id).isdigit() else AgentMemory.user_id == user_id,
+                    AgentMemory.memory_type.in_([
+                        MemoryType.PREFERENCE,
+                        MemoryType.DIRECTIVE,
+                        MemoryType.CONTEXT,
+                        MemoryType.FACT,
+                    ]),
+                )
+            )
+
+            # Tenant isolation
+            if organization_id is not None:
+                query = query.filter(AgentMemory.organization_id == organization_id)
+
+            # Exclude expired memories
+            query = query.filter(
+                (AgentMemory.expires_at.is_(None)) | (AgentMemory.expires_at > now)
+            )
+
+            memories_rows = (
+                query
+                .order_by(AgentMemory.confidence.desc())
+                .limit(10)
+                .all()
+            )
+
+            if not memories_rows:
+                return [], ""
+
+            memories_list = []
+            for mem in memories_rows:
+                memories_list.append({
+                    "id": mem.id,
+                    "type": mem.memory_type.value if hasattr(mem.memory_type, 'value') else str(mem.memory_type),
+                    "key": mem.key,
+                    "value": mem.value,
+                    "confidence": mem.confidence,
+                })
+
+            # Format for prompt injection
+            lines = []
+            for m in memories_list:
+                lines.append(f"[{m['type'].upper()}] {m['value']} (confidence: {m['confidence']:.1f})")
+            formatted = "\n".join(lines)
+
+            logger.info(f"[ANALYZE] Retrieved {len(memories_list)} memories for user {user_id}")
+            return memories_list, formatted
+
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.warning(f"[ANALYZE] Memory retrieval failed (graceful degradation): {e}")
+        return [], ""
+
+
+async def _retrieve_vector_context(user_id: str, user_message: str) -> str:
+    """
+    If Pinecone/ai_memory_service is available, retrieve semantically
+    relevant context for the current message.
+
+    Returns formatted context string, or "" on failure.
+
+    This is an async function because it is always called from the async
+    analyze_query node within the LangGraph workflow. The Pinecone service's
+    retrieve_relevant_context is declared async but performs synchronous I/O
+    internally, so we run it in a thread executor when needed to avoid
+    blocking the event loop.
+    """
+    try:
+        from integrations.pinecone_service import vector_memory
+
+        if not vector_memory or not vector_memory.enabled:
+            return ""
+
+        import asyncio
+
+        def _sync_fetch():
+            """Run the Pinecone query synchronously in a thread."""
+            # The vector_memory.retrieve_relevant_context is async but uses
+            # sync Pinecone client internally. Create a fresh event loop in
+            # the thread to await it.
+            loop = asyncio.new_event_loop()
+            try:
+                return loop.run_until_complete(
+                    vector_memory.retrieve_relevant_context(
+                        user_id=int(user_id) if str(user_id).isdigit() else user_id,
+                        current_query=user_message,
+                        top_k=3,
+                    )
+                )
+            finally:
+                loop.close()
+
+        # Always run in a thread executor so we never block the event loop
+        # and don't conflict with the already-running loop
+        try:
+            loop = asyncio.get_running_loop()
+            results = await loop.run_in_executor(None, _sync_fetch)
+        except RuntimeError:
+            # No running loop (unexpected, but handle gracefully)
+            results = asyncio.run(
+                vector_memory.retrieve_relevant_context(
+                    user_id=int(user_id) if str(user_id).isdigit() else user_id,
+                    current_query=user_message,
+                    top_k=3,
+                )
+            )
+
+        if not results:
+            return ""
+
+        parts = []
+        for ctx in results[:3]:
+            text = ctx.get("metadata", {}).get("text", ctx.get("text", ""))
+            if text:
+                parts.append(text[:200])
+
+        if parts:
+            formatted = "\n".join(f"- {p}" for p in parts)
+            logger.info(f"[ANALYZE] Retrieved {len(parts)} vector context items for user {user_id}")
+            return formatted
+
+        return ""
+
+    except Exception as e:
+        logger.debug(f"[ANALYZE] Vector context retrieval skipped: {e}")
+        return ""
 
 
 # =============================================================================
@@ -674,7 +848,7 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             # Empty list [] means "no tools needed" which is different from None/missing
             final_tools = pattern_result["tools"] if pattern_result.get("tools") is not None else scoped_tools
 
-            state = update_state(state, {
+            state_updates = {
                 "query_intent": pattern_result["intent"],
                 "query_entities": entities,
                 "extracted_entities": pattern_result.get("extracted_entities", {}),
@@ -687,13 +861,35 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
                 # Pass use_haiku flag for model selection in reason_and_respond
                 "use_haiku": pattern_result.get("use_haiku", False),
                 "intent_str": pattern_result.get("intent_str", intent_str),
-            })
+            }
+
+            # For greeting/simple intents with no tools, set data_quality early
+            # so downstream nodes don't treat it as "unknown" if gather is skipped
+            if not final_tools:
+                state_updates["data_quality"] = "not_needed"
+
+            state = update_state(state, state_updates)
+
+            # =============================================================
+            # MEMORY RETRIEVAL (after intent classification, before return)
+            # =============================================================
+            mem_start = time.time()
+            user_memories, memory_context = _retrieve_user_memories(
+                state.get("user_id", ""), state.get("organization_id")
+            )
+            timing["memory_retrieve"] = (time.time() - mem_start) * 1000
+            if user_memories or memory_context:
+                state = update_state(state, {
+                    "user_memories": user_memories,
+                    "memory_context": memory_context,
+                })
 
             node_time = (time.time() - node_start) * 1000
             use_haiku = pattern_result.get("use_haiku", False)
             logger.info(
                 f"[ANALYZE] ⚡ FAST PATH complete in {node_time:.1f}ms | "
                 f"pattern_match={timing['pattern_match']:.1f}ms | "
+                f"memory={timing.get('memory_retrieve', 0):.1f}ms | "
                 f"intent={pattern_result['intent'].value}, use_haiku={use_haiku}, tools={final_tools}"
             )
             logger.info(f"[ANALYZE] ========== END (pattern_match) ==========")
@@ -772,6 +968,11 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             "billing": QueryIntent.GENERAL_QUERY,
             "customer": QueryIntent.LEAD_MANAGEMENT,
             "integrations": QueryIntent.GENERAL_QUERY,
+            "profit": QueryIntent.FINANCIAL_ANALYSIS,
+            "operations": QueryIntent.PIPELINE_STATUS,
+            "compound": QueryIntent.GENERAL_QUERY,
+            "content_marketing": QueryIntent.COMMUNICATION,
+            "top_leads": QueryIntent.LEAD_MANAGEMENT,
             "general": QueryIntent.GENERAL_QUERY,
         }
 
@@ -794,8 +995,8 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
         }
 
         # Update state with analysis results
-        # Check if this is a Haiku-eligible intent (greeting, simple)
-        use_haiku = intent_str in ["greeting", "simple"]
+        # Check if this intent should use the fast Haiku model
+        use_haiku = is_haiku_intent(intent_str)
 
         state = update_state(state, {
             "query_intent": query_intent,
@@ -812,6 +1013,20 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             "intent_str": intent_str,  # String intent for model selection
         })
 
+        # =================================================================
+        # MEMORY RETRIEVAL (after intent classification, before return)
+        # =================================================================
+        mem_start = time.time()
+        user_memories, memory_context = _retrieve_user_memories(
+            state.get("user_id", ""), state.get("organization_id")
+        )
+        timing["memory_retrieve"] = (time.time() - mem_start) * 1000
+        if user_memories or memory_context:
+            state = update_state(state, {
+                "user_memories": user_memories,
+                "memory_context": memory_context,
+            })
+
         node_time = (time.time() - node_start) * 1000
         logger.info(
             f"[ANALYZE] ⏱️ TIMING BREAKDOWN:\n"
@@ -819,6 +1034,7 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             f"  - intent_classify: {timing.get('intent_classify', 0):.1f}ms\n"
             f"  - tool_scope: {timing.get('tool_scope', 0):.1f}ms\n"
             f"  - entity_extract: {timing.get('entity_extract', 0):.1f}ms\n"
+            f"  - memory_retrieve: {timing.get('memory_retrieve', 0):.1f}ms\n"
             f"  - TOTAL: {node_time:.1f}ms"
         )
         model_hint = "HAIKU (fast)" if use_haiku else "SONNET (full)"

@@ -134,6 +134,16 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
             )
         return org_id
 
+    def _require_admin(user) -> None:
+        """Verify the user has an admin role. Raises 403 if not."""
+        user_role = getattr(user, 'role', '') or getattr(user, 'permission_role', '')
+        is_admin = getattr(user, 'is_platform_admin', False) or user_role in ('admin', 'platform_admin', 'site_admin')
+        if not is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin role required for LOS integration management",
+            )
+
     # -----------------------------------------------------------------
     # POST /api/v1/encompass/connect
     # -----------------------------------------------------------------
@@ -153,6 +163,7 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
         Tests the provided credentials and stores them if valid.
         Requires admin or platform admin role.
         """
+        _require_admin(user)
         org_id = _get_org_id(user)
 
         try:

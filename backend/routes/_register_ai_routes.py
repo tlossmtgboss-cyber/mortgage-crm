@@ -274,6 +274,14 @@ def register_ai_routes(app, get_db, get_current_user, get_current_user_flexible,
     except Exception as e:
         logger.warning(f"Agent Chat routes not loaded: {e}")
 
+    # AI Feedback Collection routes (inline thumbs-up/down on AI responses)
+    try:
+        from routes.ai_feedback_collection_routes import router as ai_feedback_collection_router
+        app.include_router(ai_feedback_collection_router, tags=["AI Feedback Collection"])
+        logger.info("AI Feedback Collection routes loaded")
+    except Exception as e:
+        logger.warning(f"AI Feedback Collection routes not loaded: {e}")
+
     # Agent WebSocket routes
     try:
         from routes.agent_websocket import router as agent_websocket_router

@@ -2135,8 +2135,10 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     # Include SMS Intelligence routes
     try:
         from routes.sms_intelligence_routes import router as sms_intelligence_router
+        from routes.sms_intelligence_routes import webhook_router as sms_webhook_router
         app.include_router(sms_intelligence_router, tags=["SMS Intelligence"])
-        logger.info("✅ SMS Intelligence routes loaded")
+        app.include_router(sms_webhook_router, tags=["SMS Intelligence Webhooks"])
+        logger.info("SMS Intelligence routes loaded")
     except Exception as e:
         logger.warning(f"⚠️ SMS Intelligence routes not loaded: {e}")
 

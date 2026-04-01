@@ -165,6 +165,12 @@ class BaseExtractionAgent(ABC):
     # Override in subclasses to specify which schema to use
     EXTRACTION_SCHEMA_KEY: str = None
 
+    # Override in subclasses to request a specific model tier.
+    # "haiku" = fast/cheap model for simpler extraction (identity, employment)
+    # "sonnet" = full model for complex extraction (financial, compliance)
+    # None = use the default from LLMConfig/environment (currently claude-3-haiku)
+    RECOMMENDED_MODEL: Optional[str] = None
+
     def __init__(self, llm_client: BaseLLMClient = None):
         """
         Initialize agent with LLM client.
@@ -269,7 +275,13 @@ class BaseExtractionAgent(ABC):
         transcript = self._format_transcript_for_llm(segments)
 
         try:
-            logger.debug(f"Running LLM extraction for {self.AGENT_NAME}")
+            # Log model info for observability
+            model_info = getattr(self.llm_client, 'config', None)
+            model_name = model_info.model if model_info else "unknown"
+            logger.debug(
+                f"Running LLM extraction for {self.AGENT_NAME} "
+                f"(model={model_name}, recommended={self.RECOMMENDED_MODEL})"
+            )
 
             # Call LLM extraction
             llm_response = await self.llm_client.extract(
@@ -284,7 +296,8 @@ class BaseExtractionAgent(ABC):
             if result and result.extractions:
                 logger.info(
                     f"LLM extraction for {self.AGENT_NAME}: "
-                    f"{len(result.extractions)} fields extracted"
+                    f"{len(result.extractions)} fields extracted "
+                    f"(model={model_name})"
                 )
                 return result
 

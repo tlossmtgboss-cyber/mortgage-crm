@@ -462,6 +462,156 @@
 }
 
 /* ==========================================================================
+   MESSAGE FEEDBACK (thumbs up/down)
+   ========================================================================== */
+
+.mac__feedback {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.mac__feedback-buttons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mac__feedback-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.mac__feedback-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #6b7280;
+}
+
+.mac__feedback-btn:active {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+.mac__feedback-btn--active-positive {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.mac__feedback-btn--active-positive:hover {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+}
+
+.mac__feedback-btn--active-negative {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.mac__feedback-btn--active-negative:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.mac__feedback-btn--muted {
+  opacity: 0.35;
+}
+
+.mac__feedback-btn--muted:hover {
+  opacity: 0.5;
+}
+
+.mac__feedback-btn:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.mac__feedback-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.mac__feedback-input {
+  flex: 1;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  outline: none;
+  min-width: 0;
+  transition: border-color 0.15s ease;
+}
+
+.mac__feedback-input::placeholder {
+  color: #9ca3af;
+}
+
+.mac__feedback-input:focus {
+  border-color: var(--mac-blue);
+}
+
+.mac__feedback-submit {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--mac-blue);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease;
+}
+
+.mac__feedback-submit:hover {
+  background: var(--mac-blue-dark);
+}
+
+.mac__feedback-submit:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mac__feedback-dismiss {
+  flex-shrink: 0;
+  height: 32px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #9ca3af;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease;
+}
+
+.mac__feedback-dismiss:hover {
+  color: #6b7280;
+}
+
+/* ==========================================================================
    QUICK COMMAND CHIPS
    ========================================================================== */
 
@@ -797,6 +947,25 @@
 
   .mac__typing-dots span {
     background: #6b7280;
+  }
+
+  .mac__feedback-btn {
+    color: #6b7280;
+  }
+
+  .mac__feedback-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #9ca3af;
+  }
+
+  .mac__feedback-input {
+    background: #1e2024;
+    color: #e5e7eb;
+    border-color: #2d2f36;
+  }
+
+  .mac__feedback-input:focus {
+    border-color: var(--mac-blue);
   }
 
   .mac__skeleton-avatar {

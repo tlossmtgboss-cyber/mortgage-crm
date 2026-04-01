@@ -58,9 +58,13 @@ TELNYX_PUBLIC_KEY = os.getenv("TELNYX_PUBLIC_KEY")
 
 
 async def _validate_telnyx_signature(request: Request) -> bool:
-    """Validate Telnyx webhook signature. Fail-open if key not configured (dev mode)."""
+    """Validate Telnyx webhook signature. Fail-closed in production/staging."""
     if not TELNYX_PUBLIC_KEY:
-        logger.debug("TELNYX_PUBLIC_KEY not configured — skipping signature validation")
+        env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
+        if env in ("production", "staging"):
+            logger.error("TELNYX_PUBLIC_KEY required in production/staging — rejecting webhook")
+            return False
+        logger.debug("TELNYX_PUBLIC_KEY not configured — skipping signature validation in dev")
         return True
 
     signature = request.headers.get("telnyx-signature-ed25519", "")
@@ -76,7 +80,11 @@ async def _validate_telnyx_signature(request: Request) -> bool:
         body = await request.body()
         return validate_telnyx_webhook(body, signature, timestamp, TELNYX_PUBLIC_KEY)
     except ImportError:
-        logger.debug("Telnyx webhook validation module not available")
+        env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
+        if env in ("production", "staging"):
+            logger.error("Telnyx webhook validation module missing in production — rejecting")
+            return False
+        logger.debug("Telnyx webhook validation module not available — skipping in dev")
         return True
     except Exception as e:
         logger.error(f"Telnyx signature validation error: {e}")

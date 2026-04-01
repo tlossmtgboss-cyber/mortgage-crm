@@ -103,21 +103,47 @@ export default function IntegrationsSection({
     }
   };
 
-  const handleConnectIntegration = (service) => {
+  const handleConnectIntegration = async (service) => {
     const token = localStorage.getItem('token');
-    const urls = {
-      google: `${API_BASE_URL}/api/v1/google-calendar/auth?token=${token}`,
-      outlook: `${API_BASE_URL}/api/v1/microsoft/auth?integration_type=calendar&token=${token}`,
-      zoom: `${API_BASE_URL}/api/v1/zoom/connect`,
-      google_meet: `${API_BASE_URL}/api/v1/google-meet/connect`,
+
+    // For Google and Outlook, fetch the OAuth URL via authenticated API call
+    // to avoid exposing the JWT in the URL query string.
+    const authUrlEndpoints = {
+      google: `${API_BASE_URL}/api/v1/google-calendar/auth-url`,
+      outlook: `${API_BASE_URL}/api/v1/microsoft/auth-url`,
     };
-    if (!urls[service]) return;
 
     // Clear any stale OAuth result
     localStorage.removeItem('oauth_result');
 
+    let oauthUrl;
+    if (authUrlEndpoints[service]) {
+      try {
+        const resp = await fetch(authUrlEndpoints[service], {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          toast.error(data.detail || `Failed to initiate ${service} connection`);
+          return;
+        }
+        const data = await resp.json();
+        oauthUrl = data.auth_url;
+      } catch (err) {
+        toast.error(`Failed to initiate ${service} connection`);
+        return;
+      }
+    } else {
+      const directUrls = {
+        zoom: `${API_BASE_URL}/api/v1/zoom/connect`,
+        google_meet: `${API_BASE_URL}/api/v1/google-meet/connect`,
+      };
+      oauthUrl = directUrls[service];
+    }
+    if (!oauthUrl) return;
+
     // Open OAuth in a popup so the settings page isn't navigated away
-    const popup = window.open(urls[service], 'oauth_popup', 'width=600,height=700,left=200,top=100');
+    const popup = window.open(oauthUrl, 'oauth_popup', 'width=600,height=700,left=200,top=100');
 
     // Poll localStorage for OAuth result (set by OAuthCallback.js)
     const poll = setInterval(() => {

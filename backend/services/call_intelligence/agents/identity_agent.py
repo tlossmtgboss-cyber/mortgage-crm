@@ -38,6 +38,7 @@ class IdentityExtractionAgent(BaseExtractionAgent):
 
     AGENT_NAME = "identity"
     AGENT_VERSION = "2.0"  # LLM-first extraction
+    RECOMMENDED_MODEL = "haiku"  # Simple structured data extraction (name, DOB, contact)
     EXTRACTION_SCHEMA_KEY = "identity"
 
     def extract_with_regex(

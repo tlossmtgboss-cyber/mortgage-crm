@@ -735,6 +735,23 @@ class AdvancedWorkflowOrchestrationService:
         # Mark workflow as waiting
         instance.status = WorkflowStatus.WAITING
 
+        # Push-notify the assignee for high/critical priority tasks
+        task_priority = step.config.get("priority", "medium")
+        assignee_id = step.config.get("assignee")
+        if assignee_id and task_priority in ("high", "critical"):
+            try:
+                from services.agent_notification_service import get_agent_notification_service
+                push_svc = get_agent_notification_service()
+                if self.db:
+                    push_svc.notify_task_created(
+                        db=self.db,
+                        user_id=int(assignee_id) if isinstance(assignee_id, str) and assignee_id.isdigit() else assignee_id,
+                        task_title=task["title"],
+                        task_priority=task_priority,
+                    )
+            except Exception as e:
+                logger.debug(f"Push notification for human task failed (non-blocking): {e}")
+
         return {"task_id": task_id, "waiting_for_human": True}
 
     async def _execute_ai_decision(

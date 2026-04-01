@@ -112,6 +112,8 @@ class AgentState(TypedDict, total=False):
     user_context: dict                   # User preferences and context
     cached_data: dict                    # Data cached for reuse
     document_context: Optional[str]      # Text from user-uploaded document
+    user_memories: list                  # Retrieved AgentMemory rows for this user
+    memory_context: str                  # Formatted memory string for prompt injection
 
     # === Token Tracking & Observability ===
     tokens_input: int                    # Input tokens from LLM API response
@@ -191,7 +193,11 @@ def create_initial_state(
         # Context
         conversation_history=conversation_history or [],
         user_context={},
-        cached_data={}
+        cached_data={},
+
+        # Memory
+        user_memories=[],
+        memory_context=""
     )
 
 

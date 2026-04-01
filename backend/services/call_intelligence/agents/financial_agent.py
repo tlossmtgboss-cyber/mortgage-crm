@@ -25,6 +25,7 @@ class FinancialExtractionAgent(BaseExtractionAgent):
     AGENT_NAME = "financial"
     AGENT_VERSION = "2.0"  # LLM-first extraction
     EXTRACTION_SCHEMA_KEY = "financial"
+    RECOMMENDED_MODEL = "sonnet"  # Complex financial reasoning (income calc, asset validation)
 
     def extract_with_regex(
         self,

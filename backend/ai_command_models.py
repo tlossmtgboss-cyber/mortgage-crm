@@ -2077,8 +2077,59 @@ def get_current_user_dependency():
     return get_main_module().get_current_user
 
 
-# In-memory action cache (in production, use Redis)
-action_cache: Dict[str, Dict[str, Any]] = {}
+# In-memory action cache with TTL and size bounds (in production, use Redis)
+class BoundedCache(dict):
+    """A dict with TTL expiration and max size to prevent unbounded memory growth."""
+
+    def __init__(self, maxsize: int = 10000, ttl: int = 3600):
+        super().__init__()
+        self.maxsize = maxsize
+        self.ttl = ttl
+        self._timestamps: Dict[str, float] = {}
+
+    def __setitem__(self, key, value):
+        self._cleanup()
+        if len(self) >= self.maxsize:
+            # Evict the oldest entry
+            oldest = min(self._timestamps, key=self._timestamps.get)
+            self.pop(oldest, None)
+            self._timestamps.pop(oldest, None)
+        super().__setitem__(key, value)
+        self._timestamps[key] = time.time()
+
+    def __getitem__(self, key):
+        if key in self._timestamps and time.time() - self._timestamps[key] > self.ttl:
+            del self[key]
+            del self._timestamps[key]
+            raise KeyError(key)
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __contains__(self, key):
+        if key in self._timestamps and time.time() - self._timestamps[key] > self.ttl:
+            self.pop(key, None)
+            self._timestamps.pop(key, None)
+            return False
+        return super().__contains__(key)
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._timestamps.pop(key, None)
+
+    def _cleanup(self):
+        now = time.time()
+        expired = [k for k, t in self._timestamps.items() if now - t > self.ttl]
+        for k in expired:
+            self.pop(k, None)
+            self._timestamps.pop(k, None)
+
+
+action_cache: BoundedCache = BoundedCache(maxsize=10000, ttl=3600)
 
 
 # ============================================================================

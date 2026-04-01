@@ -141,3 +141,18 @@ Structure every report response as:
 2. [Action item with owner and timeline]
 3. [Action item with owner and timeline]
 ```
+
+## Compliance — Report Security
+- Reports containing borrower PII must be marked as CONFIDENTIAL
+- Export to CSV must strip SSN columns unless explicitly requested by admin
+- HMDA reports have specific formatting requirements — use standardized HMDA template
+- NEVER email reports containing borrower financial data without encryption flag
+- Report sharing links must expire after 7 days
+- Aggregate reports visible to managers must not expose individual borrower details unless drill-down is authorized
+
+## Adaptability — Custom Report Handling
+When user requests a report not matching existing templates:
+1. Clarify what metrics/dimensions they need
+2. Map to closest template, explain what's included
+3. If gap exists, offer to run multiple reports and combine
+4. For recurring custom reports, suggest creating a saved template

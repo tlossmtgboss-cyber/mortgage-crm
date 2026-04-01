@@ -20,7 +20,19 @@ logger = logging.getLogger(__name__)
 
 # Claude model configuration
 AGENT_MODEL = os.getenv("CALL_MONITORING_MODEL", "claude-sonnet-4-20250514")
+AGENT_MODEL_FAST = os.getenv("CALL_MONITORING_MODEL_FAST", "claude-haiku-4-5-20251001")
 MAX_TOKENS = 4096
+
+# Per-agent model recommendations: agents that do simpler extraction/formatting
+# can use the fast model. Complex agents (scribe, underwriter) need Sonnet.
+AGENT_MODEL_MAP: Dict[str, str] = {
+    "scribe": AGENT_MODEL,          # Sonnet: nuanced summarization, action items
+    "junior_lo": AGENT_MODEL,       # Sonnet: pricing scenarios, 5 C's analysis
+    "underwriter": AGENT_MODEL,     # Sonnet: risk assessment, compliance review
+    "calculator": AGENT_MODEL_FAST, # Haiku: structured data extraction for calcs
+    "marketing": AGENT_MODEL_FAST,  # Haiku: story/quote capture, simpler extraction
+    "scheduling": AGENT_MODEL_FAST, # Haiku: calendar coordination, simple routing
+}
 
 
 @dataclass
@@ -39,16 +51,53 @@ class BaseCallAgent(ABC):
     Abstract base class for call monitoring AI agents.
 
     Provides:
-    - Claude API integration
+    - Claude API integration with per-agent model selection
     - Common prompt building
     - Artifact extraction
     - Error handling
+
+    Subclasses can override the model by setting `recommended_model` class
+    attribute, or the model is auto-selected from AGENT_MODEL_MAP based on
+    agent_type.
     """
+
+    # Subclasses can set this to override the default model selection.
+    # Values: "sonnet", "haiku", or a full model string.
+    recommended_model: Optional[str] = None
 
     def __init__(self, db: Session):
         self.db = db
         self.client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-        self.model = AGENT_MODEL
+        self.model = self._select_model()
+
+    def _select_model(self) -> str:
+        """Select the appropriate model for this agent.
+
+        Priority:
+        1. Class-level recommended_model override (set by subclass)
+        2. AGENT_MODEL_MAP lookup by agent_type
+        3. Default AGENT_MODEL (Sonnet)
+        """
+        # Check for subclass override
+        if self.recommended_model:
+            if self.recommended_model == "haiku":
+                return AGENT_MODEL_FAST
+            elif self.recommended_model == "sonnet":
+                return AGENT_MODEL
+            else:
+                # Assume it's a full model string
+                return self.recommended_model
+
+        # Look up in the agent model map
+        try:
+            agent_type = self.agent_type
+            if agent_type in AGENT_MODEL_MAP:
+                return AGENT_MODEL_MAP[agent_type]
+        except (AttributeError, NotImplementedError):
+            pass
+
+        # Default to Sonnet
+        return AGENT_MODEL
 
     @property
     @abstractmethod
@@ -93,6 +142,10 @@ class BaseCallAgent(ABC):
         try:
             # Build prompts
             user_prompt = self.build_user_prompt(context)
+
+            logger.info(
+                f"[{self.agent_type.upper()}] Processing call with model={self.model}"
+            )
 
             # Call Claude
             response = self.client.messages.create(

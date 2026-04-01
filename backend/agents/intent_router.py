@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 # Cache version — increment on any change to intent mappings, patterns, or LLM prompt.
 # This prefix is added to all cache keys so stale entries from previous deployments
 # are automatically bypassed without waiting for TTL expiration.
-INTENT_CACHE_VERSION = "v4"
+INTENT_CACHE_VERSION = "v6"
 
 
 # =============================================================================
@@ -76,6 +76,7 @@ class Intent(str, Enum):
     CUSTOMER = "customer"          # Customer intelligence
     INTEGRATIONS = "integrations"  # LOS/vendor integrations
     COMPOUND = "compound"          # Multi-action commands (e.g., "text X and schedule Y")
+    PROFIT = "profit"              # Profitability, margins, revenue analysis
     GENERAL = "general"            # Default fallback
 
 
@@ -84,18 +85,52 @@ class Intent(str, Enum):
 # =============================================================================
 
 HAIKU_INTENTS = {
-    "greeting",      # Greetings - no data needed
-    "simple",        # Simple lookups, yes/no, thanks
-    "schedule",      # Calendar scheduling - tools do the work
-    "billing",       # Subscription/billing queries - deterministic logic
-    "coaching",      # Team coaching - database-driven metrics
-    "integrations",  # LOS/vendor integration status - tool-based
-    "video",         # Video meeting management - tool-based
-    "calls",         # Phone call management - tool-based routing
-    "sla",           # SLA tracking - deadline/metric lookup
-    "documents",     # Document tracking - checklist/status lookup
-    "reports",       # Report generation - tools aggregate, LLM formats
+    "greeting",          # Greetings - no data needed
+    "simple",            # Simple lookups, yes/no, thanks
+    "schedule",          # Calendar scheduling - tools do the work
+    "billing",           # Subscription/billing queries - deterministic logic
+    "coaching",          # Team coaching - database-driven metrics
+    "integrations",      # LOS/vendor integration status - tool-based
+    "video",             # Video meeting management - tool-based
+    "calls",             # Phone call management - tool-based routing
+    "sla",               # SLA tracking - deadline/metric lookup
+    "documents",         # Document tracking - checklist/status lookup
+    "reports",           # Report generation - tools aggregate, LLM formats
+    "notifications",     # Notification management - tool-based CRUD
+    "onboarding",        # Onboarding steps/checklists - deterministic
+    "content_marketing", # Content marketing queries - tool-based
+    "customer",          # Customer 360 - database-driven lookups
+    "tasks",             # Task management - deterministic tool output
 }
+
+# Intents that require Sonnet for complex reasoning/analysis
+SONNET_INTENTS = {
+    "pipeline",          # Pipeline analytics require nuanced analysis
+    "leads",             # Lead management needs contextual recommendations
+    "compliance",        # Regulatory compliance needs precise reasoning
+    "compound",          # Multi-action commands need careful orchestration
+    "rates",             # Rate advisory needs analytical reasoning for lock/float decisions
+    "historical",        # Historical comparisons need analytical depth
+    "priorities",        # Daily priorities combine multiple data sources
+    "profit",            # Profitability analysis needs financial reasoning
+}
+
+
+def is_haiku_intent(intent: str) -> bool:
+    """Check if an intent should use the fast Haiku model.
+
+    Returns True for intents where tools do the heavy lifting and the LLM
+    only needs to format/summarize the result. Returns False for intents
+    requiring complex reasoning, analysis, or multi-step orchestration.
+    """
+    # Explicit Sonnet intents always use Sonnet
+    if intent in SONNET_INTENTS:
+        return False
+    # Explicit Haiku intents use Haiku
+    if intent in HAIKU_INTENTS:
+        return True
+    # Default: use Sonnet for unknown intents (safer)
+    return False
 
 
 # =============================================================================
@@ -125,6 +160,7 @@ INTENT_TO_AGENTS: Dict[str, List[str]] = {
     "customer": ["customer_intelligence"],
     "integrations": ["integrations"],
     "operations": ["ops_manager"],
+    "profit": ["profitability_analyst"],
     "compound": ["pipeline_analyst", "lead_nurturer", "smart_scheduler", "email_intelligence", "voice_os", "task_automation"],
     "general": ["pipeline_analyst", "task_automation"],  # Default
 }
@@ -350,6 +386,13 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"(unassigned|missing) (lo|loan officer|processor|closer)",
         r"run (a )?sweep",
     ],
+    "profit": [
+        r"\bprofit\w*\b",
+        r"\bmargin[s]?\b",
+        r"\brevenue\b",
+        r"\bcost.per.loan\b",
+        r"\bpricing\s+optim",
+    ],
 }
 
 
@@ -397,6 +440,7 @@ Categories:
 - coaching: Team performance, training, metrics
 - customer: Customer 360, relationships, referrals
 - integrations: LOS sync, credit pulls, AUS
+- profit: Profitability analysis, margins, revenue, cost per loan, pricing optimization
 - compound: Multiple actions in one request (e.g., "text John and schedule a call")
 - general: Unclear or single ambiguous category
 
@@ -669,6 +713,8 @@ __all__ = [
     "INTENT_TO_AGENTS",
     "INTENT_CACHE_VERSION",
     "HAIKU_INTENTS",
+    "SONNET_INTENTS",
+    "is_haiku_intent",
     "classify_intent",
     "classify_intent_fast",
     "classify_intent_llm",

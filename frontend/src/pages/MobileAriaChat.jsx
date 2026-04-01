@@ -22,7 +22,7 @@ import React, {
   useRef,
 } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { sendMessage as sendAriaMessage, executeTask } from '../services/mobileAriaApi';
+import { sendMessage as sendAriaMessage, executeTask, submitMessageFeedback } from '../services/mobileAriaApi';
 import api from '../services/api';
 import { useAriaVoice } from '../hooks/useAriaVoice';
 import { auditLog, AUDIT_EVENTS } from '../services/mobileAuditLogger';
@@ -33,6 +33,7 @@ import './MobileAriaChat.css';
 
 const SESSION_KEY = 'aria_chat_session';
 const MESSAGES_KEY = 'aria_chat_messages';
+const FEEDBACK_KEY = 'aria_chat_feedback';
 const MAX_STORED_MESSAGES = 50;
 
 const QUICK_COMMANDS = [
@@ -221,8 +222,158 @@ function SuggestionChips({ suggestions, onSelect }) {
   );
 }
 
+// ── Feedback helpers ─────────────────────────────────────────────────────────
+
+function loadFeedbackState() {
+  try {
+    const stored = localStorage.getItem(FEEDBACK_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveFeedbackState(state) {
+  try {
+    localStorage.setItem(FEEDBACK_KEY, JSON.stringify(state));
+  } catch (_) {
+    // Storage quota exceeded — no-op
+  }
+}
+
+// Inline SVG thumbs icons (small, 14x14)
+function ThumbUpIcon({ filled }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z" />
+      <path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+    </svg>
+  );
+}
+
+function ThumbDownIcon({ filled }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z" />
+      <path d="M17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17" />
+    </svg>
+  );
+}
+
+function MessageFeedback({ messageId, sessionId, feedbackState, onFeedback }) {
+  const [showInput, setShowInput] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const currentRating = feedbackState[messageId] || null;
+
+  const handleThumbClick = async (rating) => {
+    if (submitting) return;
+
+    // If already rated with the same rating, ignore
+    if (currentRating === rating) return;
+
+    // If thumbs down, show text input before submitting
+    if (rating === 'negative' && !showInput) {
+      // Immediately record the rating visually
+      onFeedback(messageId, 'negative');
+      setShowInput(true);
+      triggerHaptic('light');
+      return;
+    }
+
+    setSubmitting(true);
+    onFeedback(messageId, rating);
+    triggerHaptic('light');
+
+    // Fire and forget — don't block UI on API response
+    submitMessageFeedback(sessionId, messageId, rating, '').catch(() => {});
+    setSubmitting(false);
+  };
+
+  const handleNegativeFeedbackSubmit = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+
+    submitMessageFeedback(sessionId, messageId, 'negative', feedbackText.trim()).catch(() => {});
+
+    setShowInput(false);
+    setFeedbackText('');
+    setSubmitting(false);
+    triggerHaptic('light');
+  };
+
+  const handleDismissInput = () => {
+    // Already saved as negative, just close the input
+    setShowInput(false);
+    setFeedbackText('');
+    // Still submit the negative feedback without text
+    submitMessageFeedback(sessionId, messageId, 'negative', '').catch(() => {});
+  };
+
+  return (
+    <div className="mac__feedback">
+      <div className="mac__feedback-buttons">
+        <button
+          className={`mac__feedback-btn ${currentRating === 'positive' ? 'mac__feedback-btn--active-positive' : ''} ${currentRating && currentRating !== 'positive' ? 'mac__feedback-btn--muted' : ''}`}
+          onClick={() => handleThumbClick('positive')}
+          disabled={submitting}
+          aria-label="Good response"
+          type="button"
+        >
+          <ThumbUpIcon filled={currentRating === 'positive'} />
+        </button>
+        <button
+          className={`mac__feedback-btn ${currentRating === 'negative' ? 'mac__feedback-btn--active-negative' : ''} ${currentRating && currentRating !== 'negative' ? 'mac__feedback-btn--muted' : ''}`}
+          onClick={() => handleThumbClick('negative')}
+          disabled={submitting}
+          aria-label="Bad response"
+          type="button"
+        >
+          <ThumbDownIcon filled={currentRating === 'negative'} />
+        </button>
+      </div>
+      {showInput && (
+        <div className="mac__feedback-input-wrap">
+          <input
+            className="mac__feedback-input"
+            type="text"
+            value={feedbackText}
+            onChange={(e) => setFeedbackText(e.target.value.slice(0, 200))}
+            placeholder="What went wrong? (optional)"
+            maxLength={200}
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleNegativeFeedbackSubmit();
+              }
+            }}
+          />
+          <button
+            className="mac__feedback-submit"
+            onClick={handleNegativeFeedbackSubmit}
+            disabled={submitting}
+            type="button"
+          >
+            Send
+          </button>
+          <button
+            className="mac__feedback-dismiss"
+            onClick={handleDismissInput}
+            type="button"
+            aria-label="Skip feedback"
+          >
+            Skip
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Message bubble with parent-wired handlers
-function MessageBubbleWithHandlers({ msg, onNavigate, onRetry, onSuggestionSelect }) {
+function MessageBubbleWithHandlers({ msg, onNavigate, onRetry, onSuggestionSelect, sessionId, feedbackState, onFeedback }) {
   const isUser = msg.role === 'user';
 
   return (
@@ -265,6 +416,16 @@ function MessageBubbleWithHandlers({ msg, onNavigate, onRetry, onSuggestionSelec
         <time className="mac__timestamp" dateTime={msg.timestamp}>
           {formatTime(msg.timestamp)}
         </time>
+
+        {/* Feedback buttons for non-error AI messages */}
+        {!isUser && !msg.isError && sessionId && (
+          <MessageFeedback
+            messageId={msg.id}
+            sessionId={sessionId}
+            feedbackState={feedbackState}
+            onFeedback={onFeedback}
+          />
+        )}
       </div>
     </div>
   );
@@ -316,6 +477,9 @@ export default function MobileAriaChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(null);
   const [initialLoad, setInitialLoad] = useState(true);
+
+  // Feedback state — keyed by message ID, value is "positive" or "negative"
+  const [feedbackState, setFeedbackState] = useState(() => loadFeedbackState());
 
   // Workflow context for the linked entity
   const [workflowContext, setWorkflowContext] = useState(null);
@@ -586,13 +750,25 @@ export default function MobileAriaChat() {
 
   const handleClearChat = useCallback(() => {
     setMessages([]);
+    setFeedbackState({});
     const newSession = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
     setSessionId(newSession);
     try {
       localStorage.setItem(SESSION_KEY, newSession);
       localStorage.removeItem(MESSAGES_KEY);
+      localStorage.removeItem(FEEDBACK_KEY);
     } catch (_) {}
     triggerHaptic('light');
+  }, []);
+
+  // ── Feedback handler ──────────────────────────────────────────────────────
+
+  const handleFeedback = useCallback((messageId, rating) => {
+    setFeedbackState(prev => {
+      const next = { ...prev, [messageId]: rating };
+      saveFeedbackState(next);
+      return next;
+    });
   }, []);
 
   // ── Voice input ────────────────────────────────────────────────────────────
@@ -718,6 +894,9 @@ export default function MobileAriaChat() {
                 onNavigate={handleActionNavigate}
                 onRetry={handleRetry}
                 onSuggestionSelect={handleSuggestionSelect}
+                sessionId={sessionId}
+                feedbackState={feedbackState}
+                onFeedback={handleFeedback}
               />
             ))}
 

@@ -75,6 +75,7 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.app_completion_tasks",
             "tasks.morning_briefing_tasks",
             "tasks.data_retention_tasks",
+            "tasks.learning_tasks",
         ],
     )
 
@@ -138,6 +139,10 @@ def create_celery_app(app_name: str = "perennia") -> Celery:
             "tasks.app_completion_tasks.send_pending_reminders_task": {"queue": "default"},
             "tasks.morning_briefing_tasks.*": {"queue": "ai_tasks"},
             "tasks.data_retention_tasks.*": {"queue": "low_priority"},
+            "tasks.learning_tasks.run_learning_cycle": {"queue": "ai_tasks"},
+            "tasks.learning_tasks.analyze_recent_conversations": {"queue": "ai_tasks"},
+            "tasks.learning_tasks.refresh_agent_memory_scores": {"queue": "low_priority"},
+            "tasks.learning_tasks.agent_learning_health_check": {"queue": "default"},
         },
     )
 
@@ -304,6 +309,32 @@ celery_app.conf.beat_schedule = {
         "task": "tasks.morning_briefing_tasks.cleanup_old_briefings",
         "schedule": crontab(hour="3", minute="0", day_of_week="sunday"),
         "options": {"queue": "default"},
+    },
+
+    # Continuous Learning System
+    "weekly-learning-cycle": {
+        "task": "tasks.learning_tasks.run_learning_cycle",
+        "schedule": crontab(hour="2", minute="0", day_of_week="sunday"),  # Sunday 2 AM UTC
+        "options": {"queue": "ai_tasks"},
+        "kwargs": {"period_hours": 168},  # 1 week
+    },
+    "daily-conversation-analysis": {
+        "task": "tasks.learning_tasks.analyze_recent_conversations",
+        "schedule": crontab(hour="3", minute="15"),  # Daily 3:15 AM UTC (staggered from calendar reconcile)
+        "options": {"queue": "ai_tasks"},
+        "kwargs": {"hours": 24},
+    },
+    "daily-memory-maintenance": {
+        "task": "tasks.learning_tasks.refresh_agent_memory_scores",
+        "schedule": crontab(hour="4", minute="15"),  # Daily 4:15 AM UTC (staggered from reprocess-failed)
+        "options": {"queue": "low_priority"},
+        "kwargs": {"decay_rate": 0.02, "min_confidence": 0.1},
+    },
+    "agent-learning-health-check": {
+        "task": "tasks.learning_tasks.agent_learning_health_check",
+        "schedule": crontab(minute="0", hour="*/6"),  # Every 6 hours
+        "options": {"queue": "default"},
+        "kwargs": {"success_rate_threshold": 75.0},
     },
 }
 

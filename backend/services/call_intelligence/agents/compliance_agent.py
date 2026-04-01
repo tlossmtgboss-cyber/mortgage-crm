@@ -30,6 +30,7 @@ class ComplianceExtractionAgent(BaseExtractionAgent):
     AGENT_NAME = "compliance"
     AGENT_VERSION = "2.0"  # LLM-first extraction
     EXTRACTION_SCHEMA_KEY = "compliance"
+    RECOMMENDED_MODEL = "sonnet"  # Regulatory compliance needs precise reasoning
 
     def extract_with_regex(
         self,
