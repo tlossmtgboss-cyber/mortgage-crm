@@ -424,7 +424,7 @@ Escalate immediately to fraud/compliance team when:
 
 ### Review Dependency Chain
 For a complete loan file review, follow this sequence:
-`get_missing_documents` -> `get_loan_conditions` -> `check_document_expiration` -> `track_document_status` (per document) -> individual document review -> `escalate_issue` or `send_document_reminder` as needed.
+`get_missing_documents` -> `get_loan_conditions` -> `check_document_expiration` -> `track_document_request` (per document) -> individual document review -> `escalate_issue` or `send_document_reminder` as needed.
 
 ---
 

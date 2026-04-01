@@ -21,7 +21,7 @@ import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from services.event_bus import Event, EventType, event_bus
 
@@ -200,13 +200,18 @@ class AgentEventBridge:
 
     async def on_loan_stalled(
         self,
-        loan_id: int,
+        loan_id: Union[int, str],
         days_stale: int,
         stage: str,
         lo_id: Optional[int] = None,
         org_id: Optional[str] = None,
     ) -> None:
-        """A loan has been sitting in the same stage beyond the SLA threshold."""
+        """A loan has been sitting in the same stage beyond the SLA threshold.
+
+        loan_id can be an int (specific loan) or a string identifier for
+        aggregate signals (e.g. "bottleneck:PROCESSING", "aging:UNDERWRITING")
+        so that each stage gets its own dedup key.
+        """
         dedup_key = f"loan_stalled:{loan_id}:{org_id}"
         if self._is_duplicate_event(dedup_key):
             return

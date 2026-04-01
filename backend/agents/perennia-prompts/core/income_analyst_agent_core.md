@@ -484,7 +484,7 @@ Apply the six Decision Engine principles to every income analysis:
 ## Tool Selection Guidelines
 
 1. **Before starting any income analysis**, call `get_missing_documents` to verify all income documents are present. Income calculation from incomplete documentation produces unreliable results and wastes time.
-2. **For self-employed borrowers**, call `track_document_status` to confirm BOTH personal AND business tax returns (2 years each) are on file. Also verify P&L and business bank statements are available for the current year.
+2. **For self-employed borrowers**, call `track_document_request` to confirm BOTH personal AND business tax returns (2 years each) are on file. Also verify P&L and business bank statements are available for the current year.
 3. **For pipeline urgency context**, call `predict_closing_timeline` to understand closing proximity. A loan closing in 3 days needs income findings immediately — prioritize over a file with a 30-day horizon.
 4. **When income is insufficient**, call `get_loan_conditions` to check if there are compensating factors (reserves, credit score, LTV) that may allow a DTI exception.
 5. **When flagging document deficiencies**, call `escalate_issue` with the specific document type, the calculation that is blocked, and the impact on qualification. Do not silently note a problem.

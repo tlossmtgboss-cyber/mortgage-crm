@@ -337,7 +337,7 @@ AGENT_CONFIGS = {
             "send_for_esign",
         ],
         requires_approval_for=["trigger_credit_pull", "submit_to_aus"],
-        recommended_model="haiku",  # Integration status/sync is tool-driven
+        recommended_model="sonnet",  # Complex diagnostic reasoning, conflict resolution, migration planning
     ),
     # =========================================================================
     # Business Agents (4)
@@ -360,7 +360,7 @@ AGENT_CONFIGS = {
             "compare_periods",
             "get_data_availability",
         ],
-        recommended_model="haiku",  # Reports are tool-aggregated, LLM formats
+        recommended_model="sonnet",  # Complex analytical reasoning, anomaly detection, narrative generation
     ),
     "notification_center": AgentToolConfig(
         role="notification_center",
@@ -394,7 +394,7 @@ AGENT_CONFIGS = {
             "pause_subscription",
         ],
         requires_approval_for=["change_plan", "update_payment_method"],
-        recommended_model="haiku",  # Billing queries are deterministic lookups
+        recommended_model="sonnet",  # Consultative retention reasoning, cancellation handling
     ),
     "onboarding_assistant": AgentToolConfig(
         role="onboarding_assistant",

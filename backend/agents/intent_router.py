@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 # Cache version — increment on any change to intent mappings, patterns, or LLM prompt.
 # This prefix is added to all cache keys so stale entries from previous deployments
 # are automatically bypassed without waiting for TTL expiration.
-INTENT_CACHE_VERSION = "v6"
+INTENT_CACHE_VERSION = "v7"
 
 
 # =============================================================================
@@ -77,6 +77,8 @@ class Intent(str, Enum):
     INTEGRATIONS = "integrations"  # LOS/vendor integrations
     COMPOUND = "compound"          # Multi-action commands (e.g., "text X and schedule Y")
     PROFIT = "profit"              # Profitability, margins, revenue analysis
+    NOTIFICATIONS = "notifications"  # Notification management, alert preferences
+    ONBOARDING = "onboarding"      # Setup, guided tours, training, checklists
     GENERAL = "general"            # Default fallback
 
 
@@ -88,14 +90,11 @@ HAIKU_INTENTS = {
     "greeting",          # Greetings - no data needed
     "simple",            # Simple lookups, yes/no, thanks
     "schedule",          # Calendar scheduling - tools do the work
-    "billing",           # Subscription/billing queries - deterministic logic
     "coaching",          # Team coaching - database-driven metrics
-    "integrations",      # LOS/vendor integration status - tool-based
     "video",             # Video meeting management - tool-based
     "calls",             # Phone call management - tool-based routing
     "sla",               # SLA tracking - deadline/metric lookup
     "documents",         # Document tracking - checklist/status lookup
-    "reports",           # Report generation - tools aggregate, LLM formats
     "notifications",     # Notification management - tool-based CRUD
     "onboarding",        # Onboarding steps/checklists - deterministic
     "content_marketing", # Content marketing queries - tool-based
@@ -113,6 +112,9 @@ SONNET_INTENTS = {
     "historical",        # Historical comparisons need analytical depth
     "priorities",        # Daily priorities combine multiple data sources
     "profit",            # Profitability analysis needs financial reasoning
+    "reports",           # Complex analytical reasoning, anomaly detection, narrative generation
+    "billing",           # Consultative retention reasoning, cancellation handling
+    "integrations",      # Complex diagnostic reasoning, conflict resolution, migration planning
 }
 
 
@@ -161,6 +163,8 @@ INTENT_TO_AGENTS: Dict[str, List[str]] = {
     "integrations": ["integrations"],
     "operations": ["ops_manager"],
     "profit": ["profitability_analyst"],
+    "notifications": ["notification_center"],
+    "onboarding": ["onboarding_assistant"],
     "compound": ["pipeline_analyst", "lead_nurturer", "smart_scheduler", "email_intelligence", "voice_os", "task_automation"],
     "general": ["pipeline_analyst", "task_automation"],  # Default
 }
@@ -393,6 +397,25 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
         r"\bcost.per.loan\b",
         r"\bpricing\s+optim",
     ],
+    "notifications": [
+        r"\bnotif",
+        r"alert (settings?|preferences?|config)",
+        r"quiet hours?",
+        r"notification (preferences?|settings?|center)",
+        r"send (an? )?alert",
+        r"(mute|unmute|silence) (notifications?|alerts?)",
+        r"(push|email|sms) (notifications?|alerts?)",
+    ],
+    "onboarding": [
+        r"\bonboard",
+        r"\bsetup (wizard|guide|process)\b",
+        r"getting started",
+        r"first time",
+        r"guided tour",
+        r"\btraining (resource|module|video|guide)",
+        r"(onboarding|setup) checklist",
+        r"new user (setup|guide)",
+    ],
 }
 
 
@@ -441,6 +464,8 @@ Categories:
 - customer: Customer 360, relationships, referrals
 - integrations: LOS sync, credit pulls, AUS
 - profit: Profitability analysis, margins, revenue, cost per loan, pricing optimization
+- notifications: Notification management, alert preferences, quiet hours, delivery status
+- onboarding: Setup wizard, getting started, guided tour, training resources, checklists
 - compound: Multiple actions in one request (e.g., "text John and schedule a call")
 - general: Unclear or single ambiguous category
 

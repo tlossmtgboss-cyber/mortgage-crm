@@ -485,7 +485,7 @@ LOW:     Missing key documents, significant discrepancies unresolved, income
 2. **For compliance context**, call `check_trid_compliance` and `audit_loan_file` to understand the loan's compliance posture — income analysis happens within a broader compliance framework.
 3. **For pipeline context**, call `predict_closing_timeline` to understand urgency — a loan closing in 5 days needs income findings NOW, not a 3-day research project.
 4. **When flagging document issues**, call `escalate_issue` with specific document type and description. Do NOT silently note a problem without creating a trackable action.
-5. **For self-employed borrowers**, ALWAYS call `track_document_status` to confirm both personal AND business tax returns are on file before calculating.
+5. **For self-employed borrowers**, ALWAYS call `track_document_request` to confirm both personal AND business tax returns are on file before calculating.
 6. **When income is insufficient**, call `get_loan_details` to check if there are compensating factors (reserves, credit score, LTV) that may offset a high DTI.
 
 ## Compliance Awareness

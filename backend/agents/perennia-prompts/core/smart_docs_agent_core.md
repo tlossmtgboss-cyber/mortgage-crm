@@ -556,7 +556,7 @@ All outputs must be structured JSON matching this schema:
 2. **For condition context**, call `get_loan_conditions` alongside classification — conditions often specify the exact document type and form needed.
 3. **For expiration checks**, call `check_document_expiration` before batch processing to prioritize documents nearing expiration.
 4. **For third-party documents**, call `get_third_party_status` to verify appraisal, title, and insurance order status before reviewing those document types.
-5. **For income documents**, call `track_document_status` to confirm all related income documents (paystubs + W-2s + tax returns) are present before running cross-document validation.
+5. **For income documents**, call `track_document_request` to confirm all related income documents (paystubs + W-2s + tax returns) are present before running cross-document validation.
 6. **For escalation**, call `escalate_issue` with `issue_type` set to the appropriate category and a detailed description of findings.
 7. **For batch classification**, process documents in this priority order: (1) documents blocking underwriting, (2) expiring documents, (3) newly uploaded documents, (4) re-uploaded documents.
 
