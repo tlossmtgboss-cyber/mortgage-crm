@@ -71,6 +71,14 @@ Follow all rules defined in `compliance_rules.md`:
 - Revenue forecasts must include confidence intervals or ranges
 - NEVER share individual LO compensation data with other LOs
 
+## Todd Duncan Methodology — Profitability Communication
+- **Lead with impact, not spreadsheets**: "You're leaving $2,400 per loan on the table — here's where" NOT "Here is your margin breakdown"
+- **80/20 for profitability coaching**: Lead with what the numbers MEAN for the LO's business (emotion) before the raw financials (economics)
+- **Word efficiency**: Profitability insights should be digestible in one screen. Use tables, not paragraphs.
+- **Game-changing profitability question**: "If we recovered that margin, what would it mean for your annual income?" — connects data to personal goals
+- **Never just report, always recommend**: Every profitability finding must include a specific, actionable recommendation with estimated dollar impact
+- **Decision Engine**: Clarify the financial goal → prioritize by dollar impact → recommend the single highest-ROI change first
+
 ## Communication Rules
 - **Speak in basis points** when addressing management. Convert to dollars when addressing LOs.
 - **Always provide context.** "Cost-per-loan is $9,200" means nothing without "vs. $8,500 target and $8,800 company average."

@@ -100,6 +100,11 @@ Follow all rules defined in `compliance_rules.md`:
 - ALWAYS verify contact consent before post-close outreach campaigns
 - ALWAYS include opt-out options in all marketing touchpoints
 - ALWAYS log all customer interactions to the audit trail
+- TRID awareness: When identifying refi opportunities, note that new TRID timelines apply (LE within 3 business days of new application)
+- RESPA: Cross-sell recommendations must not create prohibited referral fee arrangements
+- ECOA: Retention outreach must not use discriminatory targeting criteria (age, race, national origin, marital status, public assistance)
+- NEVER use demographic data for churn prediction or customer segmentation — use behavioral and financial data only
+- ALWAYS pass organization_id to every tool call — tenant isolation is mandatory for all customer data access
 
 ## Communication Rules
 - **Lead with value, not asks.** Every touchpoint should offer something before asking for something. Market insight before referral ask. Rate alert before review request.

@@ -7,6 +7,7 @@ updating records, etc. It manages action confirmation and execution.
 
 import asyncio
 import logging
+import re
 from typing import Any, Callable, Dict, List, Set
 from datetime import datetime
 
@@ -171,10 +172,13 @@ def extract_actions_from_analysis(state: AgentState) -> List[dict]:
     recommendations = state.get("recommendations", [])
 
     # Detect email sending requests
-    if any(phrase in user_message for phrase in [
-        "send me", "email me", "send email", "send an email",
-        "email that", "send a summary", "send my"
-    ]):
+    _email_patterns = [
+        r"send me\b", r"email me\b", r"send email", r"send an email",
+        r"email that", r"send a summary", r"send my",
+        r"\bcompose\b", r"write\s+\w*\s*email", r"reply to\b",
+        r"respond to\s+\w*\s*email",
+    ]
+    if any(re.search(pat, user_message) for pat in _email_patterns):
         # Determine email type from context
         content_type = "custom"
         if "task" in user_message or "priorities" in user_message:
@@ -194,10 +198,12 @@ def extract_actions_from_analysis(state: AgentState) -> List[dict]:
         })
 
     # Detect task creation requests
-    if any(phrase in user_message for phrase in [
-        "create a task", "add a task", "remind me", "schedule",
-        "create task", "new task", "add task"
-    ]):
+    _task_patterns = [
+        r"create\s+a?\s*task", r"add\s+a?\s*task", r"remind me\b",
+        r"\bschedule\b", r"new task", r"make\s+a?\s*task",
+        r"set\s+a?\s*reminder",
+    ]
+    if any(re.search(pat, user_message) for pat in _task_patterns):
         # Extract task details from context
         actions.append({
             "type": "create_task",
@@ -210,10 +216,13 @@ def extract_actions_from_analysis(state: AgentState) -> List[dict]:
         })
 
     # Detect follow-up scheduling
-    if any(phrase in user_message for phrase in [
-        "follow up", "schedule a call", "reach out to",
-        "contact", "call back"
-    ]):
+    _followup_patterns = [
+        r"follow\s*up", r"schedule\s+a?\s*call", r"reach out to\b",
+        r"\bcontact\b", r"call back", r"book\s+a?\s*appointment",
+        r"set\s+a?\s*meeting", r"arrange\s+a?\s*call",
+        r"reach out\b",
+    ]
+    if any(re.search(pat, user_message) for pat in _followup_patterns):
         actions.append({
             "type": "schedule_followup",
             "params": {
@@ -224,9 +233,12 @@ def extract_actions_from_analysis(state: AgentState) -> List[dict]:
         })
 
     # Detect lead/loan update requests
-    if any(phrase in user_message for phrase in [
-        "update", "change status", "move to", "mark as"
-    ]):
+    _update_patterns = [
+        r"\bupdate\b", r"change\s+\w*\s*status", r"move\s+\w*\s*to\b",
+        r"mark\s+\w*\s*as\b", r"change\s+\w*\s*stage",
+        r"set\s+\w*\s*status",
+    ]
+    if any(re.search(pat, user_message) for pat in _update_patterns):
         actions.append({
             "type": "update_lead",
             "params": {},
@@ -492,16 +504,18 @@ async def _emit_cross_agent_events(
                                         data.get("loan_id"), push_err,
                                     )
 
-                # Pipeline bottleneck -> stalled loans
+                # Pipeline bottleneck -> stalled loans (one event per stage)
                 if action_type == "get_bottleneck_analysis":
                     for bottleneck in data.get("bottlenecks", []):
                         if bottleneck.get("severity") == "critical":
-                            # We don't have individual loan IDs from the aggregation,
-                            # but we can signal the stage-level stall to ops
+                            stage_name = bottleneck.get("stage", "UNKNOWN")
+                            # Use stage-specific identifier so each bottleneck
+                            # stage gets its own dedup key instead of all
+                            # collapsing into loan_stalled:0:<org_id>.
                             await agent_event_bridge.on_loan_stalled(
-                                loan_id=0,  # Aggregate signal, not a specific loan
+                                loan_id=f"bottleneck:{stage_name}",
                                 days_stale=int(bottleneck.get("avg_days", 0)),
-                                stage=bottleneck.get("stage", "UNKNOWN"),
+                                stage=stage_name,
                                 org_id=org_id,
                             )
 
@@ -509,11 +523,14 @@ async def _emit_cross_agent_events(
                 if action_type == "get_loan_aging_report" and data.get("total_over_threshold", 0) > 0:
                     for stage_info in data.get("by_stage", []):
                         if stage_info.get("over_threshold", 0) > 0 and stage_info.get("avg_days", 0) > stage_info.get("target_days", 999):
-                            # Aggregate signal: we don't have individual loan IDs
+                            stage_name = stage_info.get("stage", "UNKNOWN")
+                            # Use stage-specific identifier so each aging
+                            # stage gets its own dedup key instead of all
+                            # collapsing into loan_stalled:0:<org_id>.
                             await agent_event_bridge.on_loan_stalled(
-                                loan_id=0,
+                                loan_id=f"aging:{stage_name}",
                                 days_stale=int(stage_info.get("avg_days", 0)),
-                                stage=stage_info.get("stage", "UNKNOWN"),
+                                stage=stage_name,
                                 org_id=org_id,
                             )
 

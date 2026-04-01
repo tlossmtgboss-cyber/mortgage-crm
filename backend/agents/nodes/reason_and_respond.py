@@ -436,7 +436,9 @@ DO NOT use a canned/scripted response. Be natural and human."""
         if doc_context:
             context_parts.append("")
             context_parts.append("=== UPLOADED DOCUMENT ===")
-            context_parts.append(doc_context[:50_000])
+            if len(doc_context) > 50_000:
+                doc_context = doc_context[:50_000].rsplit(' ', 1)[0]
+            context_parts.append(doc_context)
             context_parts.append("=== END DOCUMENT ===")
 
         context_parts.extend([
@@ -604,11 +606,35 @@ DO NOT use a canned/scripted response. Be natural and human."""
         if len(response_text) > 500:
             confidence = min(confidence + 0.1, 0.95)
 
+        # Extract insights from response
+        insights = []
+        recommendations = []
+        response_lower = response_text.lower()
+
+        # Simple keyword extraction for insights
+        if any(word in response_lower for word in ["bottleneck", "stalled", "stuck", "delayed"]):
+            insights.append("Pipeline bottleneck detected")
+        if any(word in response_lower for word in ["breach", "overdue", "past due", "sla"]):
+            insights.append("SLA concern identified")
+        if any(word in response_lower for word in ["at risk", "expiring", "urgent"]):
+            insights.append("Time-sensitive issue flagged")
+
+        # Extract recommendations (lines starting with action verbs)
+        for line in response_text.split('\n'):
+            line_stripped = line.strip().lstrip('- •*0123456789.)')
+            if line_stripped and any(line_stripped.lower().startswith(verb) for verb in [
+                "contact", "call", "email", "send", "schedule", "review", "follow up",
+                "escalate", "update", "check", "submit", "prepare", "request"
+            ]):
+                recommendations.append(line_stripped[:200])
+                if len(recommendations) >= 5:
+                    break
+
         # Update state with all results
         state = update_state(state, {
             "analysis": first_paragraph,
-            "insights": [],  # Not separately extracted in unified mode
-            "recommendations": [],  # Embedded in response
+            "insights": insights,
+            "recommendations": recommendations,
             "confidence_score": confidence,
             "reasoning_chain": ["Unified analysis and response generation"],
             "response": response_text,
