@@ -318,6 +318,86 @@ def register_ai_routes(app, get_db, get_current_user, get_current_user_flexible,
     except Exception as e:
         logger.warning(f"Phase 6 routes not loaded: {e}")
 
+    # Email Tracking routes (open pixel, click redirect, stats)
+    try:
+        from routes.email_tracking_routes import router as email_tracking_router
+        app.include_router(email_tracking_router, tags=["Email Tracking"])
+        logger.info("Email Tracking routes loaded")
+    except Exception as e:
+        logger.warning(f"Email Tracking routes not loaded: {e}")
+
+    # Deal Breaker Radar routes
+    try:
+        from routes.deal_breaker_routes import router as deal_breaker_router
+        app.include_router(deal_breaker_router, tags=["Deal Breaker Radar"])
+        logger.info("Deal Breaker routes loaded")
+    except Exception as e:
+        logger.warning(f"Deal Breaker routes not loaded: {e}")
+
+    # Mortgage Qualification routes
+    try:
+        from routes.qualification_routes import router as qualification_router
+        app.include_router(qualification_router, tags=["Mortgage Qualification"])
+        logger.info("Qualification routes loaded")
+    except Exception as e:
+        logger.warning(f"Qualification routes not loaded: {e}")
+
+    # AI Email Compose & Send routes
+    try:
+        from routes.ai_email_routes import router as ai_email_compose_router
+        app.include_router(ai_email_compose_router, tags=["AI Email Compose"])
+        logger.info("AI Email Compose routes loaded")
+    except Exception as e:
+        logger.warning(f"AI Email Compose routes not loaded: {e}")
+
+    # Borrower Prep Sequence routes
+    try:
+        from routes.borrower_prep_routes import router as borrower_prep_router
+        app.include_router(borrower_prep_router, tags=["Borrower Prep"])
+        logger.info("Borrower Prep routes loaded")
+    except Exception as e:
+        logger.warning(f"Borrower Prep routes not loaded: {e}")
+
+    # Drip Sequence Management routes
+    try:
+        from routes.drip_sequence_routes import router as drip_sequence_router
+        app.include_router(drip_sequence_router, tags=["Drip Sequences"])
+        logger.info("Drip Sequence routes loaded")
+    except Exception as e:
+        logger.warning(f"Drip Sequence routes not loaded: {e}")
+
+    # Engagement Dashboard routes
+    try:
+        from routes.engagement_dashboard_routes import router as engagement_dashboard_router
+        app.include_router(engagement_dashboard_router, tags=["Engagement Dashboard"])
+        logger.info("Engagement Dashboard routes loaded")
+    except Exception as e:
+        logger.warning(f"Engagement Dashboard routes not loaded: {e}")
+
+    # Call Disposition Reporting routes
+    try:
+        from routes.disposition_routes import router as disposition_router
+        app.include_router(disposition_router, tags=["Call Dispositions"])
+        logger.info("Disposition routes loaded")
+    except Exception as e:
+        logger.warning(f"Disposition routes not loaded: {e}")
+
+    # A/B Testing routes
+    try:
+        from routes.ab_test_routes import router as ab_test_router
+        app.include_router(ab_test_router, tags=["A/B Testing"])
+        logger.info("A/B Testing routes loaded")
+    except Exception as e:
+        logger.warning(f"A/B Testing routes not loaded: {e}")
+
+    # Script Customization routes (per-tenant AI config)
+    try:
+        from routes.script_customization_routes import router as script_config_router
+        app.include_router(script_config_router, tags=["Script Customization"])
+        logger.info("Script Customization routes loaded")
+    except Exception as e:
+        logger.warning(f"Script Customization routes not loaded: {e}")
+
     # Debug endpoint for tools registry loading
     @app.get("/api/v1/debug/tools-registry-status")
     async def debug_tools_registry_status(current_user=Depends(get_current_user)):

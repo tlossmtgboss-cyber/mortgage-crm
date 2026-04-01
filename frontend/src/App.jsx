@@ -209,6 +209,7 @@ const AdminPanel = lazyRetry(() => import('./pages/AdminPanel'));
 const AgentDashboard = lazyRetry(() => import('./pages/AgentDashboard'));
 const AgentProfile = lazyRetry(() => import('./pages/AgentProfile'));
 const AcquisitionDashboard = lazyRetry(() => import('./pages/AcquisitionDashboard'));
+const EngagementDashboard = lazyRetry(() => import('./pages/EngagementDashboard'));
 const Marketing = lazyRetry(() => import('./pages/Marketing'));
 const CarouselBuilder = lazyRetry(() => import('./pages/CarouselBuilder/CarouselBuilderPage'));
 const MasterManagerCapacity = lazyRetry(() => import('./pages/MasterManager/CapacityCommandCenter'));
@@ -2141,6 +2142,29 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><AcquisitionDashboard /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          {/* Engagement Dashboard */}
+          <Route
+            path="/engagement"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><EngagementDashboard /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

@@ -640,6 +640,21 @@ from .demo_data import DemoDataRecord
 # Security Training Records (SOC 2 CC1.4 training evidence)
 from .security_training import SecurityTrainingRecord
 
+# Email Tracking (open/click tracking for AI-composed emails)
+from .email_tracking import EmailTrackingEvent, TrackingLinkMap
+
+# SMS Conversation Threading (AI two-way SMS with intent detection)
+from .sms_conversation import (
+    SMSConversation as SMSAIConversation,
+    SMSConversationMessage as SMSAIConversationMessage,
+)
+
+# Borrower Prep Sequences (pre-appointment document & reminder flows)
+from .borrower_prep import BorrowerPrepSequence, BorrowerPrepStep
+
+# Call Disposition (structured call outcome logging)
+from .call_disposition import CallDisposition
+
 
 __all__ = [
     # =====================
@@ -1311,4 +1326,27 @@ __all__ = [
     # Security Training (SOC 2 CC1.4)
     # =====================
     "SecurityTrainingRecord",
+
+    # =====================
+    # Email Tracking
+    # =====================
+    "EmailTrackingEvent",
+    "TrackingLinkMap",
+
+    # =====================
+    # SMS Conversation Threading
+    # =====================
+    "SMSAIConversation",
+    "SMSAIConversationMessage",
+
+    # =====================
+    # Borrower Prep Sequences
+    # =====================
+    "BorrowerPrepSequence",
+    "BorrowerPrepStep",
+
+    # =====================
+    # Call Disposition
+    # =====================
+    "CallDisposition",
 ]
