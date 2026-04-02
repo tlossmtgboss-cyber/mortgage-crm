@@ -68,7 +68,7 @@ class PortalConnectionManager:
                 "type": "borrower",
                 "loan_id": loan_id,
                 "access_token": access_token,
-                "connected_at": datetime.utcnow().isoformat(),
+                "connected_at": datetime.now(timezone.utc).isoformat(),
             }
 
             if access_token:
@@ -80,7 +80,7 @@ class PortalConnectionManager:
         await websocket.send_json({
             "type": "CONNECTION_ESTABLISHED",
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
     async def connect_partner(
@@ -106,7 +106,7 @@ class PortalConnectionManager:
                 "type": "partner",
                 "loan_id": loan_id,
                 "partner_token": partner_token,
-                "connected_at": datetime.utcnow().isoformat(),
+                "connected_at": datetime.now(timezone.utc).isoformat(),
             }
 
             self.token_to_loan[partner_token] = loan_id
@@ -118,7 +118,7 @@ class PortalConnectionManager:
             "type": "CONNECTION_ESTABLISHED",
             "loan_id": loan_id,
             "view_type": "partner",
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
     async def disconnect(self, websocket: WebSocket):
@@ -210,7 +210,7 @@ class PortalConnectionManager:
                 "status": status,
                 "completed_at": completed_at,
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
         await self.broadcast_to_loan(loan_id, message)
@@ -231,7 +231,7 @@ class PortalConnectionManager:
                 "new_stage": new_stage,
                 "changed_by": changed_by,
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
         await self.broadcast_to_loan(loan_id, message)
@@ -254,7 +254,7 @@ class PortalConnectionManager:
                 "status": status,
                 "file_name": file_name,
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
         await self.broadcast_to_loan(loan_id, message)
@@ -275,7 +275,7 @@ class PortalConnectionManager:
                 "is_completed": is_completed,
                 "business_days_remaining": business_days_remaining,
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
         await self.broadcast_to_loan(loan_id, message)
@@ -298,7 +298,7 @@ class PortalConnectionManager:
                 "notification_type": notification_type,
                 "action_url": action_url,
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
         await self.broadcast_to_loan(loan_id, message)
@@ -334,7 +334,7 @@ class PortalConnectionManager:
 
         for conn in all_connections:
             try:
-                await conn.send_json({"type": "PING", "timestamp": datetime.utcnow().isoformat()})
+                await conn.send_json({"type": "PING", "timestamp": datetime.now(timezone.utc).isoformat()})
             except Exception as e:
                 logger.exception(f"Failed to send ping to WebSocket connection: {e}")
                 disconnected.append(conn)

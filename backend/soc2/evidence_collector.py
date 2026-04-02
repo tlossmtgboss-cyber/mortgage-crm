@@ -211,7 +211,7 @@ def collect_endpoints() -> EvidenceSection:
         section_id="endpoints",
         title="API Endpoint Authentication Inventory",
         soc2_criteria=["CC6.1", "CC6.3", "CC6.6"],
-        collected_at=datetime.utcnow().isoformat() + "Z",
+        collected_at=datetime.now(timezone.utc).isoformat() + "Z",
         source="codebase",
         data={
             "total_authenticated": total_auth,
@@ -272,7 +272,7 @@ def collect_security_headers() -> EvidenceSection:
         section_id="security_headers",
         title="Security Header Configuration",
         soc2_criteria=["CC6.7", "CC5.6"],
-        collected_at=datetime.utcnow().isoformat() + "Z",
+        collected_at=datetime.now(timezone.utc).isoformat() + "Z",
         source="codebase",
         data={
             "configured_headers": headers,
@@ -328,7 +328,7 @@ def collect_rbac_roles() -> EvidenceSection:
         section_id="rbac_roles",
         title="RBAC Role Definitions",
         soc2_criteria=["CC6.1", "CC6.2", "CC6.3"],
-        collected_at=datetime.utcnow().isoformat() + "Z",
+        collected_at=datetime.now(timezone.utc).isoformat() + "Z",
         source="codebase" if not db_roles else "database",
         data={
             "roles_in_code": roles_found,
@@ -391,7 +391,7 @@ def collect_audit_log_sample() -> EvidenceSection:
         section_id="audit_log_sample",
         title="Audit Log Sample (Most Recent 25 Events)",
         soc2_criteria=["CC4.1", "CC2.2", "PI1.1"],
-        collected_at=datetime.utcnow().isoformat() + "Z",
+        collected_at=datetime.now(timezone.utc).isoformat() + "Z",
         source="database",
         data={
             "total_audit_log_entries": total,
@@ -479,7 +479,7 @@ def collect_encryption_inventory() -> EvidenceSection:
         section_id="encryption_inventory",
         title="Encryption Configuration Inventory",
         soc2_criteria=["CC6.7", "C1.1", "C1.2"],
-        collected_at=datetime.utcnow().isoformat() + "Z",
+        collected_at=datetime.now(timezone.utc).isoformat() + "Z",
         source="codebase",
         data={
             "encryption_components": findings,
@@ -576,7 +576,7 @@ def collect_access_matrix() -> EvidenceSection:
         section_id="access_matrix",
         title="Access Control Matrix by Role",
         soc2_criteria=["CC6.1", "CC6.2", "CC6.3", "CC6.6"],
-        collected_at=datetime.utcnow().isoformat() + "Z",
+        collected_at=datetime.now(timezone.utc).isoformat() + "Z",
         source="codebase",
         data=matrix,
         notes=(
@@ -620,7 +620,7 @@ def collect_vendor_registry() -> EvidenceSection:
         section_id="vendor_registry",
         title="Third-Party Vendor Risk Registry",
         soc2_criteria=["CC9.1", "CC9.2"],
-        collected_at=datetime.utcnow().isoformat() + "Z",
+        collected_at=datetime.now(timezone.utc).isoformat() + "Z",
         source=source,
         data={
             "vendor_count": len(vendors),
@@ -661,7 +661,7 @@ def collect_retention_policies() -> EvidenceSection:
         section_id="retention_policies",
         title="Data Retention Policies",
         soc2_criteria=["C1.1", "P4.1", "P4.2"],
-        collected_at=datetime.utcnow().isoformat() + "Z",
+        collected_at=datetime.now(timezone.utc).isoformat() + "Z",
         source="codebase",
         data={
             "retention_periods_days": retention_periods,
@@ -761,7 +761,7 @@ def collect_mfa_config() -> EvidenceSection:
         section_id="mfa_config",
         title="Multi-Factor Authentication Configuration",
         soc2_criteria=["CC6.1", "CC6.8"],
-        collected_at=datetime.utcnow().isoformat() + "Z",
+        collected_at=datetime.now(timezone.utc).isoformat() + "Z",
         source="codebase" if not _db_session else "database",
         data=mfa_details,
         notes=(
@@ -824,7 +824,7 @@ def collect_incident_summary() -> EvidenceSection:
         section_id="incident_summary",
         title="Security Incident Summary (Last 90 Days)",
         soc2_criteria=["CC7.1", "CC7.2", "CC7.3", "CC7.4", "CC7.5"],
-        collected_at=datetime.utcnow().isoformat() + "Z",
+        collected_at=datetime.now(timezone.utc).isoformat() + "Z",
         source="database",
         data={
             "open_incidents": [sanitize_row(r) for r in open_incidents],
@@ -886,7 +886,7 @@ def collect_evidence(
                     section_id=section_id,
                     title=section_id,
                     soc2_criteria=[],
-                    collected_at=datetime.utcnow().isoformat() + "Z",
+                    collected_at=datetime.now(timezone.utc).isoformat() + "Z",
                     source="error",
                     data={"error": str(exc)},
                     notes="Collection failed.",
@@ -894,7 +894,7 @@ def collect_evidence(
             )
 
     return EvidencePackage(
-        generated_at=datetime.utcnow().isoformat() + "Z",
+        generated_at=datetime.now(timezone.utc).isoformat() + "Z",
         backend_root=str(_BACKEND_ROOT),
         collector_version="1.0.0",
         db_connected=db_connected,

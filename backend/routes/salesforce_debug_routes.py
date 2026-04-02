@@ -451,7 +451,7 @@ async def debug_import_closed_loans_from_sf(
                     'loan_type': record.get('MtgPlanner_CRM__Loan_Type__c'),
                     'stage': 'FUNDED',  # Closed = Funded
                     'salesforce_sync_status': 'synced',
-                    'salesforce_last_synced_at': datetime.utcnow(),
+                    'salesforce_last_synced_at': datetime.now(timezone.utc),
                 }
 
                 # Set organization_id for tenant isolation

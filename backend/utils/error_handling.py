@@ -49,7 +49,7 @@ _error_lock = threading.Lock()
 def _record_error(method: str, path: str, error_type: str, error_msg: str, tb: str = ""):
     """Record an error to the ring buffer (thread-safe)."""
     entry = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "method": method,
         "path": path,
         "error_type": error_type,
@@ -328,7 +328,7 @@ def success_response(
     response = {
         "success": True,
         "message": message,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
     if data is not None:

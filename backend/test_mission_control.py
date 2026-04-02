@@ -198,7 +198,7 @@ def create_sample_data():
                 "status": "completed",
                 "outcome": "success",
                 "reasoning": "Test action for Mission Control systems check",
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc)
             })
             conn.commit()
 
@@ -221,8 +221,8 @@ def test_health_score_function():
 
         with engine.connect() as conn:
             # Call the health score calculation function
-            period_start = datetime.utcnow() - timedelta(days=7)
-            period_end = datetime.utcnow()
+            period_start = datetime.now(timezone.utc) - timedelta(days=7)
+            period_end = datetime.now(timezone.utc)
 
             health_query = text("""
                 SELECT * FROM calculate_ai_health_score(

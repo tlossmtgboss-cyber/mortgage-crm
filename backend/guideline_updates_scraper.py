@@ -127,7 +127,7 @@ class GuidelineUpdateScraper:
                         'section_code': self._extract_bulletin_number(title),
                         'description': 'Fannie Mae Selling Guide update',
                         'url': url,
-                        'published_date': datetime.utcnow(),
+                        'published_date': datetime.now(timezone.utc),
                         'content_hash': content_hash
                     })
 
@@ -170,7 +170,7 @@ class GuidelineUpdateScraper:
                         'section_code': self._extract_bulletin_number(title),
                         'description': 'Freddie Mac Guide Bulletin',
                         'url': url,
-                        'published_date': datetime.utcnow(),
+                        'published_date': datetime.now(timezone.utc),
                         'content_hash': content_hash
                     })
 
@@ -213,7 +213,7 @@ class GuidelineUpdateScraper:
                         'section_code': self._extract_ml_number(title),
                         'description': 'FHA Mortgagee Letter',
                         'url': url,
-                        'published_date': datetime.utcnow(),
+                        'published_date': datetime.now(timezone.utc),
                         'content_hash': content_hash
                     })
 
@@ -256,7 +256,7 @@ class GuidelineUpdateScraper:
                         'section_code': self._extract_circular_number(title),
                         'description': 'VA Circular',
                         'url': url,
-                        'published_date': datetime.utcnow(),
+                        'published_date': datetime.now(timezone.utc),
                         'content_hash': content_hash
                     })
 
@@ -301,7 +301,7 @@ class GuidelineUpdateScraper:
                             'section_code': None,
                             'description': 'USDA Notice',
                             'url': url,
-                            'published_date': datetime.utcnow(),
+                            'published_date': datetime.now(timezone.utc),
                             'content_hash': content_hash
                         })
 

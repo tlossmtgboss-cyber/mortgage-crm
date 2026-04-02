@@ -495,7 +495,7 @@ class DNSVerificationService:
             "dns_configured": dns_result.success,
             "txt_verification": txt_result.to_dict(),
             "dns_verification": dns_result.to_dict(),
-            "verified_at": datetime.utcnow().isoformat() if is_fully_verified else None,
+            "verified_at": datetime.now(timezone.utc).isoformat() if is_fully_verified else None,
             "next_steps": []
         }
 

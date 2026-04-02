@@ -514,7 +514,7 @@ def generate_hmda_lar(
                            f"in year {year} with terminal stages."
             }],
             "skipped_loans": 0,
-            "export_timestamp": datetime.utcnow().isoformat(),
+            "export_timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     # Validate all loans (including demographic fields via db lookup)
@@ -558,7 +558,7 @@ def generate_hmda_lar(
             "validation_errors": all_errors,
             "validation_warnings": all_warnings,
             "skipped_loans": len(loans) - len(valid_loans),
-            "export_timestamp": datetime.utcnow().isoformat(),
+            "export_timestamp": datetime.now(timezone.utc).isoformat(),
             "reporting_year": year,
             "organization_id": organization_id,
             "lei": lei,
@@ -590,7 +590,7 @@ def generate_hmda_lar(
         "validation_errors": all_errors,
         "validation_warnings": all_warnings,
         "skipped_loans": len(loans) - len(valid_loans),
-        "export_timestamp": datetime.utcnow().isoformat(),
+        "export_timestamp": datetime.now(timezone.utc).isoformat(),
         "reporting_year": year,
         "organization_id": organization_id,
         "lei": lei,

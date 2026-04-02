@@ -64,7 +64,7 @@ class AIProspectConversation(Base):
 
     # State machine
     state = Column(String(30), nullable=False, default=ConversationState.PENDING_OUTREACH.value)
-    state_changed_at = Column(DateTime, default=datetime.utcnow)
+    state_changed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Conversation data (JSONB)
     context = Column(JSON, default=dict)       # lo_name, lead info, cached slots
@@ -86,7 +86,7 @@ class AIProspectConversation(Base):
     first_outreach_at = Column(DateTime, nullable=True)
     last_message_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         # Partial unique index: only one active conversation per phone number
@@ -120,8 +120,8 @@ class AIReengagementConfig(Base):
     expiry_days = Column(Integer, default=7)
     initial_message_template = Column(Text, nullable=True)
     eligible_stages = Column(JSON, default=list)  # ["Prospect", "Long-Term Nurture", ...]
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
         return f"<AIReengagementConfig org={self.organization_id} enabled={self.enabled}>"

@@ -81,7 +81,7 @@ class DocumentChecklist:
     optional_documents: List[DocumentRequirement] = field(default_factory=list)
 
     # Metadata
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     notes: List[str] = field(default_factory=list)
 
     @property

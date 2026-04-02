@@ -155,7 +155,7 @@ class SalesforceSyncService:
         batch_size: int = 200
     ) -> SyncResult:
         """Execute sync for a user's integration"""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         result = SyncResult()
 
         try:
@@ -174,7 +174,7 @@ class SalesforceSyncService:
                 # Check if cooldown has elapsed
                 if last_failure_at:
                     cooldown_until = datetime.fromisoformat(last_failure_at) + timedelta(minutes=self.CIRCUIT_COOLDOWN_MINUTES)
-                    if datetime.utcnow() < cooldown_until:
+                    if datetime.now(timezone.utc) < cooldown_until:
                         logger.warning(
                             f"Circuit breaker OPEN for profile {integration_profile_id}: "
                             f"{consecutive_failures} consecutive failures, cooldown until {cooldown_until.isoformat()}"
@@ -250,7 +250,7 @@ class SalesforceSyncService:
                 result.errors.extend(object_result.errors)
 
             # Update profile — reset circuit breaker on success
-            profile.last_sync_at = datetime.utcnow()
+            profile.last_sync_at = datetime.now(timezone.utc)
             profile.last_error = None
             metadata = profile.sync_metadata or {}
             metadata['consecutive_failures'] = 0
@@ -273,7 +273,7 @@ class SalesforceSyncService:
                 logger.warning(f"Post-sync org backfill failed (non-fatal): {backfill_err}")
 
             result.success = True
-            result.duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            result.duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             # Log success event
             event = IntegrationEvent(
@@ -294,7 +294,7 @@ class SalesforceSyncService:
             db.commit()
 
         except Exception as e:
-            result.duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            result.duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             # Log failure event
             event = IntegrationEvent(
@@ -314,7 +314,7 @@ class SalesforceSyncService:
                 profile.last_error = str(e)
                 metadata = profile.sync_metadata or {}
                 metadata['consecutive_failures'] = metadata.get('consecutive_failures', 0) + 1
-                metadata['last_failure_at'] = datetime.utcnow().isoformat()
+                metadata['last_failure_at'] = datetime.now(timezone.utc).isoformat()
                 profile.sync_metadata = metadata
                 if metadata['consecutive_failures'] >= self.MAX_CONSECUTIVE_FAILURES:
                     logger.error(
@@ -679,7 +679,7 @@ class SalesforceSyncService:
             "source_record_id": source_record_id,
             "target_entity": target_entity,
             "target_record_id": str(target_record_id) if target_record_id else None,
-            "synced_at": datetime.utcnow(),
+            "synced_at": datetime.now(timezone.utc),
             "hash": sync_hash,
         })
 
@@ -1359,7 +1359,7 @@ class SalesforceSyncService:
 
         for item in items:
             item.status = 'processing'
-            item.started_at = datetime.utcnow()
+            item.started_at = datetime.now(timezone.utc)
             item.attempts += 1
             db.commit()
 
@@ -1379,7 +1379,7 @@ class SalesforceSyncService:
                     pass
 
                 item.status = 'completed'
-                item.completed_at = datetime.utcnow()
+                item.completed_at = datetime.now(timezone.utc)
                 item.result = {'success': True}
 
             except Exception as e:
@@ -3070,7 +3070,7 @@ class SalesforceSyncService:
             "Name": loan.borrower_name or f"Loan {loan.loan_number}",
             "Amount": float(loan.amount or 0),
             "StageName": self._map_crm_stage_to_salesforce(loan.stage),
-            "CloseDate": str(loan.closing_date or loan.expected_close_date or datetime.utcnow().date()),
+            "CloseDate": str(loan.closing_date or loan.expected_close_date or datetime.now(timezone.utc).date()),
             "Description": f"Loan #{loan.loan_number}\nProperty: {loan.property_address or 'N/A'}",
         }
 
@@ -3485,7 +3485,7 @@ class SalesforceSyncService:
                         meta_data = COALESCE(meta_data, '{}'::jsonb) ||
                             jsonb_build_object('salesforce_synced_at', :synced_at, 'salesforce_type', :sf_type)
                     WHERE id = :lead_id
-                """), {"lead_id": lead_id, "synced_at": datetime.utcnow().isoformat(), "sf_type": sf_object_type})
+                """), {"lead_id": lead_id, "synced_at": datetime.now(timezone.utc).isoformat(), "sf_type": sf_object_type})
                 db.commit()
 
                 return {
@@ -3547,7 +3547,7 @@ class SalesforceSyncService:
                         meta_data = COALESCE(meta_data, '{}'::jsonb) ||
                             jsonb_build_object('salesforce_synced_at', :synced_at, 'salesforce_type', 'Lead')
                     WHERE id = :lead_id
-                """), {"sf_id": salesforce_id, "lead_id": lead_id, "synced_at": datetime.utcnow().isoformat()})
+                """), {"sf_id": salesforce_id, "lead_id": lead_id, "synced_at": datetime.now(timezone.utc).isoformat()})
                 db.commit()
 
                 return {
@@ -3603,7 +3603,7 @@ class SalesforceSyncService:
             "TaskSubtype": "Email",
             "Status": "Completed",
             "Priority": "Normal",
-            "ActivityDate": email.created_at.strftime("%Y-%m-%d") if email.created_at else datetime.utcnow().strftime("%Y-%m-%d"),
+            "ActivityDate": email.created_at.strftime("%Y-%m-%d") if email.created_at else datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         }
 
         # Link to Lead or Opportunity
@@ -3640,7 +3640,7 @@ class SalesforceSyncService:
                     WHERE id = :email_id
                 """), {
                     "sf_id": salesforce_id,
-                    "pushed_at": datetime.utcnow().isoformat(),
+                    "pushed_at": datetime.now(timezone.utc).isoformat(),
                     "email_id": email_id
                 })
                 db.commit()
@@ -3697,8 +3697,8 @@ class SalesforceSyncService:
         event_data = {
             "Subject": event.title or "CRM Event",
             "Description": event.description or "",
-            "StartDateTime": event.start_time.isoformat() if event.start_time else datetime.utcnow().isoformat(),
-            "EndDateTime": event.end_time.isoformat() if event.end_time else (event.start_time + timedelta(hours=1)).isoformat() if event.start_time else datetime.utcnow().isoformat(),
+            "StartDateTime": event.start_time.isoformat() if event.start_time else datetime.now(timezone.utc).isoformat(),
+            "EndDateTime": event.end_time.isoformat() if event.end_time else (event.start_time + timedelta(hours=1)).isoformat() if event.start_time else datetime.now(timezone.utc).isoformat(),
             "Location": event.location if hasattr(event, 'location') and event.location else None,
             "IsAllDayEvent": event.all_day if hasattr(event, 'all_day') else False,
         }
@@ -3770,7 +3770,7 @@ class SalesforceSyncService:
                         WHERE id = :event_id
                     """), {
                         "sf_id": salesforce_id,
-                        "pushed_at": datetime.utcnow().isoformat(),
+                        "pushed_at": datetime.now(timezone.utc).isoformat(),
                         "event_id": event_id
                     })
                     db.commit()
@@ -3820,7 +3820,7 @@ class SalesforceSyncService:
             raise ValueError("Integration profile not found")
 
         user_id = profile.user_id
-        since = datetime.utcnow() - timedelta(hours=since_hours)
+        since = datetime.now(timezone.utc) - timedelta(hours=since_hours)
 
         results = {
             "success": True,

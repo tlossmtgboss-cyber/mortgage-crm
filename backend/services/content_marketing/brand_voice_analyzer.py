@@ -259,7 +259,7 @@ Provide accurate analysis based solely on the content provided. Be specific abou
             response_text = await self._call_llm(prompt)
             analysis = self._parse_voice_analysis(response_text)
             analysis["source_url"] = source_url
-            analysis["analyzed_at"] = datetime.utcnow().isoformat()
+            analysis["analyzed_at"] = datetime.now(timezone.utc).isoformat()
             analysis["content_length"] = len(content)
             return analysis
 
@@ -601,7 +601,7 @@ AVOID:
             "target_audience": profile.target_audience,
             "industry_context": profile.industry_context,
             "system_prompt": profile.system_prompt,
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def get_voice_profile_for_llm(self, profile_id: str) -> Dict[str, Any]:

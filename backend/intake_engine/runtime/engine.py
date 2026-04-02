@@ -234,7 +234,7 @@ class IntakeEngine:
             self.storage.create_event(
                 session_id=session_id,
                 event_type=EventType.SESSION_RESUMED,
-                payload={"resumed_at": datetime.utcnow().isoformat()},
+                payload={"resumed_at": datetime.now(timezone.utc).isoformat()},
             )
 
         return session
@@ -591,7 +591,7 @@ class IntakeEngine:
 
         # Update session status
         session.status = SessionStatus.COMPLETE
-        session.completed_at = datetime.utcnow()
+        session.completed_at = datetime.now(timezone.utc)
         self.storage.save_session(session)
 
         # Log completion event

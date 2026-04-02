@@ -264,7 +264,7 @@ def _log_delivery(
                 "loan_id": loan_id,
                 "event_type": "EXPIRATION_REMINDER_SENT",  # Re-use existing enum value for delivery audit
                 "payload": json.dumps(payload),
-                "now": datetime.utcnow(),
+                "now": datetime.now(timezone.utc),
             },
         )
         db.commit()

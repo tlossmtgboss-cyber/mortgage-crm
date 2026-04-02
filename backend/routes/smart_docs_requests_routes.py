@@ -157,7 +157,7 @@ async def update_document_type(
 
     old_doc_type = document.doc_type
     document.doc_type = new_doc_type
-    document.updated_at = datetime.utcnow()
+    document.updated_at = datetime.now(timezone.utc)
 
     db.commit()
 
@@ -267,7 +267,7 @@ async def send_to_portal_for_signature(
                 'type': body.type,
                 'loe_subject': body.loe_subject,
                 'loe_instructions': body.loe_instructions,
-                'sent_at': datetime.utcnow().isoformat(),
+                'sent_at': datetime.now(timezone.utc).isoformat(),
             }
             db.commit()
             logger.info(f"Updated existing request {request.id} for portal DocuSign")
@@ -994,7 +994,7 @@ async def cleanup_orphan_documents(
         old_status = doc.status
         doc.status = "DELETED"
         doc.rejection_reason = "File not found in storage - cleaned up"
-        doc.reviewed_at = datetime.utcnow()
+        doc.reviewed_at = datetime.now(timezone.utc)
         doc.reviewed_by = "SYSTEM_CLEANUP"
 
         # Reset linked request to OPEN (always, since document is being deleted)
@@ -1136,7 +1136,7 @@ async def cleanup_all_orphan_documents(
         old_status = doc.status
         doc.status = "DELETED"
         doc.rejection_reason = "File not found in storage - cleaned up"
-        doc.reviewed_at = datetime.utcnow()
+        doc.reviewed_at = datetime.now(timezone.utc)
         doc.reviewed_by = "SYSTEM_CLEANUP"
 
         # Reset linked request to OPEN

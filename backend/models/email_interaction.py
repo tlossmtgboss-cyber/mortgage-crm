@@ -66,7 +66,7 @@ class EmailInteraction(Base):
     next_best_action = Column(Text)  # Primary recommendation
 
     # ==================== PROCESSING METADATA ====================
-    processed_at = Column(DateTime, default=datetime.utcnow, index=True)
+    processed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     parser_version = Column(String(20))  # Claude parser version
     parser_model = Column(String(50))  # Model used (e.g., "claude-sonnet-4-20250514")
     sync_status = Column(String(50), default='pending')  # 'pending', 'processed', 'applied', 'conflict', 'error'
@@ -78,8 +78,8 @@ class EmailInteraction(Base):
     user_id = Column(Integer, index=True)  # FK to users table in main.py
 
     # ==================== METADATA ====================
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Error tracking
     error_message = Column(Text)

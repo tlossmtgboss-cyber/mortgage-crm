@@ -380,7 +380,7 @@ async def create_journal_entry(
     if auto_post:
         check_period_open(db, org_id, data.entry_date)
         entry.status = 'posted'
-        entry.posted_at = datetime.utcnow()
+        entry.posted_at = datetime.now(timezone.utc)
         entry.posted_by = user_id
 
         log_audit(
@@ -514,7 +514,7 @@ async def post_journal_entry(
 
     # Post the entry
     entry.status = 'posted'
-    entry.posted_at = datetime.utcnow()
+    entry.posted_at = datetime.now(timezone.utc)
     entry.posted_by = user_id
 
     log_audit(
@@ -566,7 +566,7 @@ async def void_journal_entry(
 
     # Void the entry
     entry.status = 'void'
-    entry.voided_at = datetime.utcnow()
+    entry.voided_at = datetime.now(timezone.utc)
     entry.voided_by = user_id
     entry.void_reason = data.reason
 
@@ -631,7 +631,7 @@ async def reverse_journal_entry(
         entry_type='reversing',
         reverses_entry_id=original.id,
         status='posted',
-        posted_at=datetime.utcnow(),
+        posted_at=datetime.now(timezone.utc),
         posted_by=user_id,
         total_debits=original.total_credits,  # Swap
         total_credits=original.total_debits,

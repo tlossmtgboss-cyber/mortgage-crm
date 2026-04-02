@@ -590,7 +590,7 @@ async def test_webhook_endpoint(
             payload={
                 "test": True,
                 "message": "This is a test webhook delivery",
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         )
 

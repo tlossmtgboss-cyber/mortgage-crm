@@ -133,7 +133,7 @@ class WebhookEndpoint:
     secret: str = None
     status: WebhookStatus = WebhookStatus.ACTIVE
     headers: Dict[str, str] = field(default_factory=dict)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_triggered_at: datetime = None
     success_count: int = 0
     failure_count: int = 0
@@ -165,7 +165,7 @@ class WebhookDelivery:
     response_code: int = None
     response_body: str = None
     error_message: str = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     delivered_at: datetime = None
 
     def to_dict(self) -> Dict:
@@ -408,7 +408,7 @@ class WebhookAutomationService:
         # Build full payload
         full_payload = {
             "event": event.value,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "data": payload
         }
 
@@ -454,7 +454,7 @@ class WebhookAutomationService:
             "User-Agent": "Perennia-Webhook/1.0",
             "X-Webhook-Event": delivery.event.value,
             "X-Webhook-Delivery": delivery.id,
-            "X-Webhook-Timestamp": datetime.utcnow().isoformat(),
+            "X-Webhook-Timestamp": datetime.now(timezone.utc).isoformat(),
             **endpoint.headers
         }
 
@@ -493,9 +493,9 @@ class WebhookAutomationService:
 
             if 200 <= delivery.response_code < 300:
                 delivery.status = "success"
-                delivery.delivered_at = datetime.utcnow()
+                delivery.delivered_at = datetime.now(timezone.utc)
                 endpoint.success_count += 1
-                endpoint.last_triggered_at = datetime.utcnow()
+                endpoint.last_triggered_at = datetime.now(timezone.utc)
                 logger.debug(f"Webhook delivered: {endpoint.name} ({delivery.event.value})")
             else:
                 raise Exception(f"HTTP {delivery.response_code}: {delivery.response_body}")

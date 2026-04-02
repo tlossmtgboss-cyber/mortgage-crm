@@ -72,8 +72,8 @@ class TeamMemberProfile(Base):
     tags = Column(ARRAY(String))
 
     # ==================== METADATA ====================
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     last_email_sync = Column(DateTime)
     last_performance_review = Column(DateTime)
     data_sources = Column(ARRAY(String))

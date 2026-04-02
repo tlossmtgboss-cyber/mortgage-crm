@@ -108,8 +108,8 @@ class ActiveLoanProfile(Base):
     tags = Column(ARRAY(String))
 
     # ==================== METADATA ====================
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     last_email_sync = Column(DateTime)
     last_milestone_update = Column(DateTime)
     data_sources = Column(ARRAY(String))
@@ -129,7 +129,7 @@ class ActiveLoanProfile(Base):
     def calculate_days_to_closing(self):
         """Calculate days until closing"""
         if self.closing_scheduled_date:
-            delta = self.closing_scheduled_date - datetime.utcnow().date()
+            delta = self.closing_scheduled_date - datetime.now(timezone.utc).date()
             self.days_to_closing = delta.days
         return self.days_to_closing
 

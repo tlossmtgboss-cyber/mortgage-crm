@@ -46,8 +46,8 @@ class SalesforceSyncLog(Base):
     payload_summary = Column(JSON, nullable=True)
 
     # Timing
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    started_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime, nullable=True)
     duration_seconds = Column(Integer, nullable=True)
 
@@ -85,7 +85,7 @@ class SalesforceSyncLog(Base):
     def mark_completed(self, status: str = "success", error_message: Optional[str] = None):
         """Mark the sync as completed."""
         self.status = status
-        self.completed_at = datetime.utcnow()
+        self.completed_at = datetime.now(timezone.utc)
         if self.started_at:
             self.duration_seconds = int((self.completed_at - self.started_at).total_seconds())
         if error_message:
@@ -118,8 +118,8 @@ class SalesforceFieldMapping(Base):
     is_active = Column(Integer, default=1)  # Using Integer for SQLite compatibility
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
         return f"<SalesforceFieldMapping {self.crm_entity}.{self.crm_field} -> {self.salesforce_object}.{self.salesforce_field}>"

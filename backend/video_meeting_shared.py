@@ -256,7 +256,7 @@ Transcript:
                             analysis_type="summary",
                             status="completed",
                             result={"summary": analysis_text},
-                            completed_at=datetime.utcnow()
+                            completed_at=datetime.now(timezone.utc)
                         )
                         db.add(analysis)
                         db.commit()
@@ -459,7 +459,7 @@ async def process_recording_ai(recording_id: int, meeting_id: int, transcription
                     transcription_provider="whisper",
                     language=transcription_result.get("language", "en"),
                     word_count=len(transcription_result["transcript"].split()),
-                    processing_completed_at=datetime.utcnow()
+                    processing_completed_at=datetime.now(timezone.utc)
                 )
                 db.add(transcript)
                 db.commit()
@@ -498,7 +498,7 @@ async def process_recording_ai(recording_id: int, meeting_id: int, transcription
 
         # Mark recording as ready
         recording.status = "ready"
-        recording.processing_completed_at = datetime.utcnow()
+        recording.processing_completed_at = datetime.now(timezone.utc)
         db.commit()
 
         logger.info(f"Recording {recording_id} processed successfully")

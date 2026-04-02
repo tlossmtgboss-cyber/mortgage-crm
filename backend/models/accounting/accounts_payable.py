@@ -39,8 +39,8 @@ class APVendor(Base):
     bank_account_info = Column(JSONB, default=dict)
     is_active = Column(Boolean, default=True)
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -103,8 +103,8 @@ class APBill(Base):
     voided_at = Column(DateTime)
     voided_by = Column(Integer)
     void_reason = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -191,7 +191,7 @@ class APBillLine(Base):
     project_id = Column(UUID(as_uuid=True))
     billable = Column(Boolean, default=False)
     billable_customer_id = Column(UUID(as_uuid=True), ForeignKey("ar_customers.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     bill = relationship("APBill", back_populates="lines")
@@ -239,8 +239,8 @@ class APPayment(Base):
     voided_at = Column(DateTime)
     voided_by = Column(Integer)
     void_reason = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -285,7 +285,7 @@ class APPaymentApplication(Base):
     payment_id = Column(UUID(as_uuid=True), ForeignKey("ap_payments.id", ondelete="CASCADE"), nullable=False)
     bill_id = Column(UUID(as_uuid=True), ForeignKey("ap_bills.id"), nullable=False)
     amount_applied = Column(Numeric(12, 2), nullable=False)
-    applied_at = Column(DateTime, default=datetime.utcnow)
+    applied_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships

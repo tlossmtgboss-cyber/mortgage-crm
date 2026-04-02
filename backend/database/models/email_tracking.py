@@ -21,7 +21,7 @@ class EmailTrackingEvent(Base):
     ip_address = Column(String, nullable=True)
     user_agent = Column(String, nullable=True)
     organization_id = Column(String, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("ix_tracking_event_tracking_type", "tracking_id", "event_type"),
@@ -35,7 +35,7 @@ class TrackingLinkMap(Base):
     tracking_id = Column(String, nullable=False, index=True)
     link_hash = Column(String, nullable=False)
     original_url = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("ix_link_map_tracking_hash", "tracking_id", "link_hash"),

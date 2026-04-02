@@ -437,7 +437,7 @@ def run_migration():
             'permissions': json.dumps(management_perms),
             'is_system': True,
             'category': 'management',
-            'created_at': datetime.utcnow()
+            'created_at': datetime.now(timezone.utc)
         })
 
         # Insert Sales Template
@@ -454,7 +454,7 @@ def run_migration():
             'permissions': json.dumps(sales_perms),
             'is_system': True,
             'category': 'sales',
-            'created_at': datetime.utcnow()
+            'created_at': datetime.now(timezone.utc)
         })
 
         # Insert Operations Template
@@ -471,7 +471,7 @@ def run_migration():
             'permissions': json.dumps(operations_perms),
             'is_system': True,
             'category': 'operations',
-            'created_at': datetime.utcnow()
+            'created_at': datetime.now(timezone.utc)
         })
 
         # Commit the transaction

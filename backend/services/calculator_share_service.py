@@ -78,7 +78,7 @@ class CalculatorShareService:
         share_token = secrets.token_urlsafe(32)
 
         # Calculate expiration
-        expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
 
         # Insert share record
         self.db.execute(
@@ -95,7 +95,7 @@ class CalculatorShareService:
                 "artifact_id": artifact_id,
                 "share_token": share_token,
                 "created_by": user_id,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
                 "expires_at": expires_at,
                 "title_override": title_override,
                 "description_override": description_override,
@@ -109,7 +109,7 @@ class CalculatorShareService:
             "expires_at": expires_at.isoformat(),
             "expires_in_days": expires_in_days,
             "share_url": f"/shared/calculator/{share_token}",
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def get_shared_artifact(
@@ -151,7 +151,7 @@ class CalculatorShareService:
             return None
 
         # Check expiration
-        if share.expires_at and share.expires_at < datetime.utcnow():
+        if share.expires_at and share.expires_at < datetime.now(timezone.utc):
             logger.info(f"Share link expired: {share_token[:8]}...")
             return None
 
@@ -186,7 +186,7 @@ class CalculatorShareService:
             """),
             {
                 "share_token": share_token,
-                "now": datetime.utcnow(),
+                "now": datetime.now(timezone.utc),
                 "viewer_ip": viewer_ip,
                 "viewer_user_agent": viewer_user_agent[:500] if viewer_user_agent else None,
             }
@@ -291,7 +291,7 @@ class CalculatorShareService:
                 "view_count": s.view_count,
                 "last_viewed_at": s.last_viewed_at.isoformat() if s.last_viewed_at else None,
                 "is_active": s.is_active,
-                "is_expired": s.expires_at and s.expires_at < datetime.utcnow(),
+                "is_expired": s.expires_at and s.expires_at < datetime.now(timezone.utc),
             }
             for s in shares
         ]
@@ -330,7 +330,7 @@ class CalculatorShareService:
 
         params = {
             "user_id": user_id,
-            "now": datetime.utcnow(),
+            "now": datetime.now(timezone.utc),
             "limit": limit,
         }
 
@@ -403,7 +403,7 @@ class CalculatorShareService:
         Returns:
             Number of records deleted
         """
-        cutoff = datetime.utcnow() - timedelta(days=days_past_expiry)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days_past_expiry)
 
         result = self.db.execute(
             text("""

@@ -13,6 +13,7 @@ Usage:
 import os
 import re
 import json
+import asyncio
 import base64
 import logging
 import secrets
@@ -1155,7 +1156,7 @@ def detect_scheduling_intent(title: str, description: str = "") -> bool:
     return any(keyword in text_combined for keyword in scheduling_keywords)
 
 
-def get_calendly_time_slots_for_user(user_id: int, db: Session, num_slots: int = 5) -> dict:
+async def get_calendly_time_slots_for_user(user_id: int, db: Session, num_slots: int = 5) -> dict:
     """Fetch available Calendly time slots for a user."""
     _ensure_models()
 
@@ -1181,7 +1182,8 @@ def get_calendly_time_slots_for_user(user_id: int, db: Session, num_slots: int =
             "Content-Type": "application/json"
         }
 
-        user_response = requests.get(
+        user_response = await asyncio.to_thread(
+            requests.get,
             "https://api.calendly.com/users/me",
             headers=headers,
             timeout=10
@@ -1193,7 +1195,8 @@ def get_calendly_time_slots_for_user(user_id: int, db: Session, num_slots: int =
 
         user_uri = user_response.json().get("resource", {}).get("uri")
 
-        event_types_response = requests.get(
+        event_types_response = await asyncio.to_thread(
+            requests.get,
             "https://api.calendly.com/event_types",
             headers=headers,
             params={"user": user_uri, "active": "true"},
@@ -1218,7 +1221,8 @@ def get_calendly_time_slots_for_user(user_id: int, db: Session, num_slots: int =
         start_time = datetime.now(timezone.utc).isoformat()
         end_time = (datetime.now(timezone.utc) + timedelta(days=7)).isoformat()
 
-        availability_response = requests.get(
+        availability_response = await asyncio.to_thread(
+            requests.get,
             "https://api.calendly.com/event_type_available_times",
             headers=headers,
             params={
@@ -2001,7 +2005,8 @@ async def validate_microsoft_token(oauth_record, db: Session) -> dict:
 
     try:
         # Lightweight validation: call /me endpoint (minimal data, fast response)
-        verify_response = requests.get(
+        verify_response = await asyncio.to_thread(
+            requests.get,
             "https://graph.microsoft.com/v1.0/me?$select=id",
             headers={"Authorization": f"Bearer {access_token}"},
             timeout=10,
@@ -2107,7 +2112,7 @@ async def refresh_microsoft_token(oauth_record, db: Session) -> dict:
             "scope": "https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.Send https://graph.microsoft.com/Calendars.Read offline_access"
         }
 
-        response = requests.post(token_url, data=data)
+        response = await asyncio.to_thread(requests.post, token_url, data=data)
 
         if response.status_code == 200:
             token_data = response.json()
@@ -2165,7 +2170,7 @@ async def fetch_microsoft_emails(oauth_record, db: Session, limit: int = 50):
             "Content-Type": "application/json"
         }
 
-        response = requests.get(graph_url, headers=headers)
+        response = await asyncio.to_thread(requests.get, graph_url, headers=headers)
 
         if response.status_code == 401:
             logger.info("Got 401 from Microsoft API, attempting token refresh...")
@@ -2178,7 +2183,7 @@ async def fetch_microsoft_emails(oauth_record, db: Session, limit: int = 50):
             db.refresh(oauth_record)
             access_token = decrypt_token(oauth_record.access_token)
             headers["Authorization"] = f"Bearer {access_token}"
-            response = requests.get(graph_url, headers=headers)
+            response = await asyncio.to_thread(requests.get, graph_url, headers=headers)
 
         if response.status_code == 200:
             emails_data = response.json()
@@ -2231,7 +2236,7 @@ async def delete_microsoft_email(oauth_record, message_id: str, db: Session):
 
         body = {"destinationId": "deleteditems"}
 
-        response = requests.post(graph_url, headers=headers, json=body)
+        response = await asyncio.to_thread(requests.post, graph_url, headers=headers, json=body)
 
         if response.status_code == 401:
             logger.info("Got 401 from Microsoft API on delete, attempting token refresh...")
@@ -2245,7 +2250,7 @@ async def delete_microsoft_email(oauth_record, message_id: str, db: Session):
             db.refresh(oauth_record)
             access_token = decrypt_token(oauth_record.access_token)
             headers["Authorization"] = f"Bearer {access_token}"
-            response = requests.post(graph_url, headers=headers, json=body)
+            response = await asyncio.to_thread(requests.post, graph_url, headers=headers, json=body)
 
         if response.status_code == 200 or response.status_code == 201:
             logger.info(f"Successfully moved email {message_id} to trash for user {oauth_record.user_id}")

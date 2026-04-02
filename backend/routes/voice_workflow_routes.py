@@ -59,7 +59,7 @@ async def get_current_user_id(
     Note: The WebSocket endpoint (/ws) passes the token via query parameter
     directly because WebSocket connections cannot reliably use HTTP headers.
     """
-    import jwt
+    from auth.tokens import verify_access_token
 
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
@@ -67,12 +67,9 @@ async def get_current_user_id(
 
     token = auth_header[7:]  # Strip "Bearer " prefix
 
-    SECRET_KEY = os.getenv("SECRET_KEY", "")
-    ALGORITHM = "HS256"
-
-    # First try JWT token
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
+    # Verify token with blacklist check
+    payload = verify_access_token(token)
+    if payload:
         email = payload.get("sub")
         if email:
             result = db.execute(text("""
@@ -80,8 +77,6 @@ async def get_current_user_id(
             """), {"email": email}).fetchone()
             if result:
                 return result[0]
-    except jwt.PyJWTError:
-        pass  # Not a valid JWT, try session token
 
     # Fall back to session token
     result = db.execute(text("""

@@ -272,7 +272,7 @@ class ComplianceChecker:
             Tuple of (is_allowed, reason_message)
         """
         contact_tz = self._get_timezone_for_phone(phone_number)
-        now_utc = datetime.utcnow()
+        now_utc = datetime.now(timezone.utc)
 
         if HAS_PYTZ:
             now_local = pytz.utc.localize(now_utc).astimezone(contact_tz)
@@ -381,7 +381,7 @@ class ComplianceChecker:
             return True, None
 
         max_calls = settings.max_calls_per_day or 100
-        today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
         rate_query = self.db.query(func.count(CallLog.id)).filter(
             and_(
@@ -447,7 +447,7 @@ class ComplianceChecker:
         lock_query = self.db.query(ActiveCall).filter(
             and_(
                 ActiveCall.contact_phone == digits,
-                ActiveCall.expires_at > datetime.utcnow(),
+                ActiveCall.expires_at > datetime.now(timezone.utc),
                 ActiveCall.agent_id != agent_id
             )
         )
@@ -521,7 +521,7 @@ class ComplianceChecker:
             delete_query.delete()
 
             # Create new lock
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             lock = ActiveCall(
                 contact_phone=digits,
                 agent_id=agent_id,
@@ -605,7 +605,7 @@ class ComplianceChecker:
 
         try:
             cleanup_q = self.db.query(ActiveCall).filter(
-                ActiveCall.expires_at <= datetime.utcnow()
+                ActiveCall.expires_at <= datetime.now(timezone.utc)
             )
             if self.organization_id:
                 cleanup_q = cleanup_q.filter(ActiveCall.organization_id == self.organization_id)

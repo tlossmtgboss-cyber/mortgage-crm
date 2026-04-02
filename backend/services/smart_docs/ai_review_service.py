@@ -746,7 +746,7 @@ class AIDocumentReviewService:
             Dict with auto-approved %, rejected %, needs review %,
             average review time, common rejection reasons
         """
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         stats = self.db.execute(text("""
             SELECT
@@ -1663,7 +1663,7 @@ class AIDocumentReviewService:
             "review_priority": decision.review_priority,
             "confidence": decision.confidence,
         }
-        document.reviewed_at = datetime.utcnow()
+        document.reviewed_at = datetime.now(timezone.utc)
         document.reviewed_by = "SYSTEM"
 
         if decision_enum == DocumentDecision.ACCEPT:
@@ -1694,7 +1694,7 @@ class AIDocumentReviewService:
                     request.status = RequestStatus.REJECTED
                 else:
                     request.status = RequestStatus.PENDING_REVIEW
-                request.updated_at = datetime.utcnow()
+                request.updated_at = datetime.now(timezone.utc)
 
         self.db.flush()
 

@@ -157,8 +157,8 @@ def create_video_meeting_models(Base):
 
         # Metadata
         settings = Column(JSON, default={})  # Additional configurable settings
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
         created_by = Column(Integer, ForeignKey("users.id"))
 
         # AI-generated content
@@ -194,7 +194,7 @@ def create_video_meeting_models(Base):
         status = Column(String(20), default="invited")  # invited, waiting, joined, left, removed
 
         # Timing
-        invited_at = Column(DateTime, default=datetime.utcnow)
+        invited_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         joined_at = Column(DateTime)
         left_at = Column(DateTime)
         total_duration_seconds = Column(Integer, default=0)
@@ -232,8 +232,8 @@ def create_video_meeting_models(Base):
         lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
         contact_id = Column(Integer, nullable=True)
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     class MeetingRecording(Base):
         """
@@ -304,8 +304,8 @@ def create_video_meeting_models(Base):
         download_count = Column(Integer, default=0)
         last_downloaded_at = Column(DateTime)
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
         created_by = Column(Integer, ForeignKey("users.id"))
 
     class RecordingTranscript(Base):
@@ -344,8 +344,8 @@ def create_video_meeting_models(Base):
         processing_started_at = Column(DateTime)
         processing_completed_at = Column(DateTime)
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     class MeetingAIAnalysis(Base):
         """
@@ -387,8 +387,8 @@ def create_video_meeting_models(Base):
         user_rating = Column(Integer)  # 1-5
         user_feedback = Column(Text)
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
         created_by = Column(Integer, ForeignKey("users.id"))
 
     class MeetingChat(Base):
@@ -421,7 +421,7 @@ def create_video_meeting_models(Base):
         is_question = Column(Boolean, default=False)
         is_action_item = Column(Boolean, default=False)
 
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         is_deleted = Column(Boolean, default=False)
         deleted_at = Column(DateTime)
 
@@ -467,8 +467,8 @@ def create_video_meeting_models(Base):
         icon = Column(String(50), default="video")
 
         is_active = Column(Boolean, default=True)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
         created_by = Column(Integer, ForeignKey("users.id"))
 
     class ParticipantAnalytics(Base):
@@ -503,8 +503,8 @@ def create_video_meeting_models(Base):
         # Overall score (0-1)
         engagement_score = Column(Float)
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     class CoachingRecommendation(Base):
         """
@@ -527,7 +527,7 @@ def create_video_meeting_models(Base):
         is_acknowledged = Column(Boolean, default=False)
         acknowledged_at = Column(DateTime)
 
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     class MortgageIntelligence(Base):
         """
@@ -565,8 +565,8 @@ def create_video_meeting_models(Base):
         overall_risk_score = Column(Float)  # 0-1, higher = more risk
         priority_flags = Column(JSON)  # High priority items for review
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     class OrganizationVideoSettings(Base):
         """
@@ -591,8 +591,8 @@ def create_video_meeting_models(Base):
         # Provider restrictions
         allowed_providers = Column(JSON, default=["internal", "zoom", "teams"])
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     class BreakoutRoom(Base):
         """
@@ -614,15 +614,15 @@ def create_video_meeting_models(Base):
         max_participants = Column(Integer, default=10)
 
         # Timing
-        opened_at = Column(DateTime, default=datetime.utcnow)
+        opened_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         closed_at = Column(DateTime)
         duration_limit_minutes = Column(Integer)  # auto-close after N minutes
 
         # Participants (JSON list of participant IDs currently in the room)
         participant_ids = Column(JSON, default=[])
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
         created_by = Column(Integer, ForeignKey("users.id"))
 
     # Return all models as a dictionary

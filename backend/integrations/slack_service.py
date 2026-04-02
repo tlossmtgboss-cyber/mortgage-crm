@@ -97,7 +97,7 @@ class SlackClient:
             logger.info("Successfully exchanged code for Slack access token")
 
             # Slack tokens don't expire by default, but we set a long expiry
-            expires_at = datetime.utcnow() + timedelta(days=365)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=365)
 
             # Get user token if available
             authed_user = token_data.get("authed_user", {})

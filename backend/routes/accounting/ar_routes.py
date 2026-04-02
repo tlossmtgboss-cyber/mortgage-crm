@@ -582,7 +582,7 @@ async def send_invoice(
         raise HTTPException(status_code=400, detail=f"Cannot send invoice with status '{invoice.status}'")
 
     invoice.status = 'sent'
-    invoice.sent_at = datetime.utcnow()
+    invoice.sent_at = datetime.now(timezone.utc)
 
     # Create journal entry for AR
     # Debit AR, Credit Revenue
@@ -603,7 +603,7 @@ async def send_invoice(
             source='ar_invoice',
             source_id=invoice.id,
             status='posted',
-            posted_at=datetime.utcnow(),
+            posted_at=datetime.now(timezone.utc),
             posted_by=1,
         )
         db.add(je)
@@ -681,7 +681,7 @@ async def void_invoice(
 
     old_status = invoice.status
     invoice.status = 'void'
-    invoice.voided_at = datetime.utcnow()
+    invoice.voided_at = datetime.now(timezone.utc)
     invoice.voided_by = 1
 
     # Reverse journal entry if exists
@@ -689,7 +689,7 @@ async def void_invoice(
         je = db.query(JournalEntry).filter(JournalEntry.id == invoice.journal_entry_id).first()
         if je and je.status == 'posted':
             je.status = 'voided'
-            je.voided_at = datetime.utcnow()
+            je.voided_at = datetime.now(timezone.utc)
             je.voided_by = 1
 
     # Update customer balance
@@ -818,7 +818,7 @@ async def create_payment(
             payment_id=payment.id,
             invoice_id=invoice.id,
             amount_applied=apply_amount,
-            applied_at=datetime.utcnow(),
+            applied_at=datetime.now(timezone.utc),
             applied_by=1,
         )
         db.add(application)
@@ -829,7 +829,7 @@ async def create_payment(
 
         if invoice.balance_due <= 0:
             invoice.status = 'paid'
-            invoice.paid_at = datetime.utcnow()
+            invoice.paid_at = datetime.now(timezone.utc)
         else:
             invoice.status = 'partial'
 
@@ -862,7 +862,7 @@ async def create_payment(
             source='ar_payment',
             source_id=payment.id,
             status='posted',
-            posted_at=datetime.utcnow(),
+            posted_at=datetime.now(timezone.utc),
             posted_by=1,
         )
         db.add(je)

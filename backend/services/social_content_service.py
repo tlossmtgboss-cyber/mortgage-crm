@@ -191,7 +191,7 @@ HASHTAGS:
                     "text": post_text[:spec["max_chars"]],
                     "hashtags": hashtags,
                     "content_type": content_type,
-                    "generated_at": datetime.utcnow().isoformat(),
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
                 })
 
             except Exception as e:
@@ -202,7 +202,7 @@ HASHTAGS:
                     "text": self._get_fallback_content(content_type, plat),
                     "hashtags": "#mortgage #homebuying #realestate",
                     "content_type": content_type,
-                    "generated_at": datetime.utcnow().isoformat(),
+                    "generated_at": datetime.now(timezone.utc).isoformat(),
                     "is_fallback": True,
                 })
 

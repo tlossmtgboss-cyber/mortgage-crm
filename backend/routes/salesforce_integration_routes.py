@@ -1571,7 +1571,7 @@ async def toggle_object_enabled(
         raise HTTPException(status_code=404, detail=f"Object {object_name} not found")
 
     schema_obj.enabled = body.enabled
-    schema_obj.updated_at = datetime.utcnow()
+    schema_obj.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {

@@ -417,7 +417,7 @@ Begin extraction now.
         extracted['extraction_metadata'] = {
             'parser_version': '1.0',
             'model': self.model,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'email_id': email_data.get('message_id', email_data.get('id', '')),
             'processing_time_ms': int(processing_time_ms)
         }

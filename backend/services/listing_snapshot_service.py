@@ -103,7 +103,7 @@ class ListingSnapshotService:
                     "total": total_count
                 },
                 "recent_activity": recent_activity,
-                "snapshot_at": datetime.utcnow().isoformat()
+                "snapshot_at": datetime.now(timezone.utc).isoformat()
             }
 
             # Validate no PII slipped through
@@ -195,7 +195,7 @@ class ListingSnapshotService:
                 activity.append({
                     "type": "messages",
                     "description": f"{msg_count.cnt} new message(s) this week",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
 
         except SQLAlchemyError as e:
@@ -313,7 +313,7 @@ class ListingSnapshotService:
                 "unsubscribe_token": unsubscribe_token,
                 "unsubscribe_url": f"{frontend_url}/listing-portal/unsubscribe?token={unsubscribe_token}",
                 "portal_url": frontend_url + "/listing-portal",
-                "generated_at": datetime.utcnow().isoformat()
+                "generated_at": datetime.now(timezone.utc).isoformat()
             }
 
         except Exception as e:

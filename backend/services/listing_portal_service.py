@@ -337,7 +337,7 @@ class ListingPortalService:
         """Create a portal invite with magic link"""
         try:
             token = self.generate_magic_link_token()
-            expires_at = datetime.utcnow() + timedelta(hours=self.magic_link_expiry_hours)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=self.magic_link_expiry_hours)
 
             result = db.execute(text("""
                 INSERT INTO listing_portal_invites (
@@ -407,7 +407,7 @@ class ListingPortalService:
             if row.revoked_at:
                 return None, "Token has been revoked"
 
-            if row.expires_at < datetime.utcnow():
+            if row.expires_at < datetime.now(timezone.utc):
                 return None, "Token has expired"
 
             if not row.party_active:
@@ -422,7 +422,7 @@ class ListingPortalService:
 
             # Create or refresh session
             session_token = secrets.token_urlsafe(32)
-            session_expires = datetime.utcnow() + timedelta(hours=self.session_expiry_hours)
+            session_expires = datetime.now(timezone.utc) + timedelta(hours=self.session_expiry_hours)
 
             db.execute(text("""
                 UPDATE listing_portal_invites
@@ -473,7 +473,7 @@ class ListingPortalService:
             if not row:
                 return None
 
-            if row.session_expires_at < datetime.utcnow():
+            if row.session_expires_at < datetime.now(timezone.utc):
                 return None
 
             if not row.is_active:
@@ -542,7 +542,7 @@ class ListingPortalService:
         try:
             # Auto-set completed_at if status is completed
             if status == "completed" and not completed_at:
-                completed_at = datetime.utcnow()
+                completed_at = datetime.now(timezone.utc)
 
             db.execute(text("""
                 UPDATE listing_milestones
@@ -777,7 +777,7 @@ class ListingPortalService:
         """Create an unsubscribe token for a party"""
         try:
             token = secrets.token_urlsafe(32)
-            expires_at = datetime.utcnow() + timedelta(days=365)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=365)
 
             db.execute(text("""
                 INSERT INTO listing_unsubscribe_tokens (
@@ -820,7 +820,7 @@ class ListingPortalService:
             if row.used_at:
                 return False, "This unsubscribe link has already been used"
 
-            if row.expires_at and row.expires_at < datetime.utcnow():
+            if row.expires_at and row.expires_at < datetime.now(timezone.utc):
                 return False, "This unsubscribe link has expired"
 
             # Mark token as used

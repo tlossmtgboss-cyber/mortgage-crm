@@ -97,7 +97,7 @@ class ScheduledFollowup:
     reminder_hours_before: int = 24
 
     # Metadata
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     priority: FollowupPriority = FollowupPriority.NORMAL
 
     def to_dict(self) -> Dict[str, Any]:
@@ -417,7 +417,7 @@ class SchedulingService:
         Returns:
             List of upcoming ScheduledFollowups
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         cutoff = now + timedelta(days=days)
 
         upcoming = []

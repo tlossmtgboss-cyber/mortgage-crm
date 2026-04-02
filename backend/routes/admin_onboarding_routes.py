@@ -445,7 +445,7 @@ async def start_onboarding(
                 token = session_id  # Fallback to session_id if no secret
             else:
                 token = jwt.encode(
-                    {'sub': request.email, 'exp': datetime.utcnow() + timedelta(hours=24)},
+                    {'sub': request.email, 'exp': datetime.now(timezone.utc) + timedelta(hours=24)},
                     jwt_secret,
                     algorithm='HS256'
                 )
@@ -491,9 +491,10 @@ async def save_company_profile(
 
         # Decode token to get user
         try:
-            import jwt
-            jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
-            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
+            from auth.tokens import verify_access_token
+            payload = verify_access_token(token)
+            if not payload:
+                raise HTTPException(status_code=401, detail="Invalid or revoked token")
             email = payload.get('sub')
         except Exception as e:
             logger.error(f"Error in save_company_profile (JWT decode): {e}")
@@ -557,9 +558,10 @@ async def save_user_profile(
         token = auth.split(' ')[1]
 
         try:
-            import jwt
-            jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
-            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
+            from auth.tokens import verify_access_token
+            payload = verify_access_token(token)
+            if not payload:
+                raise HTTPException(status_code=401, detail="Invalid or revoked token")
             email = payload.get('sub')
         except Exception as e:
             logger.error(f"Error in save_user_profile (JWT decode): {e}")
@@ -619,9 +621,10 @@ async def queue_team_invites(
         token = auth.split(' ')[1]
 
         try:
-            import jwt
-            jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
-            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
+            from auth.tokens import verify_access_token
+            payload = verify_access_token(token)
+            if not payload:
+                raise HTTPException(status_code=401, detail="Invalid or revoked token")
             email = payload.get('sub')
         except Exception as e:
             logger.error(f"Error in queue_team_invites (JWT decode): {e}")
@@ -706,9 +709,10 @@ async def create_subscription(
         token = auth.split(' ')[1]
 
         try:
-            import jwt
-            jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
-            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
+            from auth.tokens import verify_access_token
+            payload = verify_access_token(token)
+            if not payload:
+                raise HTTPException(status_code=401, detail="Invalid or revoked token")
             email = payload.get('sub')
         except Exception as e:
             logger.error(f"Error in create_subscription (JWT decode): {e}")
@@ -917,9 +921,10 @@ async def complete_onboarding(
         token = auth.split(' ')[1]
 
         try:
-            import jwt
-            jwt_secret = (os.getenv('JWT_SECRET') or os.getenv('SECRET_KEY') or '').strip()
-            payload = jwt.decode(token, jwt_secret, algorithms=['HS256'], options={"verify_aud": False})
+            from auth.tokens import verify_access_token
+            payload = verify_access_token(token)
+            if not payload:
+                raise HTTPException(status_code=401, detail="Invalid or revoked token")
             email = payload.get('sub')
         except Exception as e:
             logger.error(f"Error in complete_onboarding (JWT decode): {e}")

@@ -212,7 +212,7 @@ class CallMonitoringOrchestrator:
     ) -> Dict[str, Any]:
         """Create a new call session."""
         session_id = str(uuid.uuid4())
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         self.db.execute(text("""
             INSERT INTO call_sessions (
@@ -612,7 +612,7 @@ class CallMonitoringOrchestrator:
     ) -> ProcessingResult:
         """Run a single agent and track the run."""
         run_id = str(uuid.uuid4())
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         # Create agent run record
         self.db.execute(text("""
@@ -642,7 +642,7 @@ class CallMonitoringOrchestrator:
             agent = self._agents[agent_type]
             result = await agent.process(context)
 
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             processing_time_ms = int((end_time - start_time).total_seconds() * 1000)
 
             # Update run record
@@ -1355,7 +1355,7 @@ class CallMonitoringOrchestrator:
         rejection_reason: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Approve or reject artifacts."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         if action == 'approve':
             approve_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
@@ -2160,7 +2160,7 @@ class CallMonitoringOrchestrator:
     ) -> Dict[str, Any]:
         """Add a participant to a call session."""
         participant_id = str(uuid.uuid4())
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         self.db.execute(text("""
             INSERT INTO call_participants (

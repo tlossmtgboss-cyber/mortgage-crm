@@ -364,7 +364,7 @@ class RealtorPermissionService:
         """Get permissions from cache if not expired."""
         if key in self._permission_cache:
             permissions, cached_at = self._permission_cache[key]
-            if datetime.utcnow() - cached_at < self._cache_ttl:
+            if datetime.now(timezone.utc) - cached_at < self._cache_ttl:
                 return permissions
             else:
                 del self._permission_cache[key]
@@ -372,7 +372,7 @@ class RealtorPermissionService:
 
     def _set_cached(self, key: str, permissions: RealtorPermissions):
         """Cache permissions."""
-        self._permission_cache[key] = (permissions, datetime.utcnow())
+        self._permission_cache[key] = (permissions, datetime.now(timezone.utc))
 
     def clear_cache(self, organization_id: Optional[int] = None):
         """Clear permission cache, optionally for specific org."""

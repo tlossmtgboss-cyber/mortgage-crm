@@ -115,8 +115,8 @@ class AIAgent:
 
     # State
     context: Dict[str, Any] = field(default_factory=dict)
-    last_active: datetime = field(default_factory=datetime.utcnow)
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    last_active: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -138,7 +138,7 @@ class AgentTask:
     preferred_agent_type: Optional[AgentType] = None
 
     # Timing
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     assigned_at: Optional[datetime] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -177,7 +177,7 @@ class AgentMessage:
 
     # Status
     is_read: bool = False
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     read_at: Optional[datetime] = None
 
 
@@ -197,7 +197,7 @@ class CollaborationSession:
 
     # Status
     status: str = "active"
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
 
 
@@ -414,7 +414,7 @@ class AIAgentCoordinationService:
         agent = self._agents.get(agent_id)
         if agent:
             agent.status = status
-            agent.last_active = datetime.utcnow()
+            agent.last_active = datetime.now(timezone.utc)
             return True
         return False
 
@@ -452,7 +452,7 @@ class AIAgentCoordinationService:
         if agent:
             task.assigned_agent_id = agent.id
             task.status = TaskStatus.ASSIGNED
-            task.assigned_at = datetime.utcnow()
+            task.assigned_at = datetime.now(timezone.utc)
             agent.current_load += 1
 
             # Execute task
@@ -529,7 +529,7 @@ class AIAgentCoordinationService:
     async def _execute_task(self, task: AgentTask, agent: AIAgent):
         """Execute a task using an agent."""
         task.status = TaskStatus.IN_PROGRESS
-        task.started_at = datetime.utcnow()
+        task.started_at = datetime.now(timezone.utc)
 
         try:
             # Get handler for task type
@@ -549,7 +549,7 @@ class AIAgentCoordinationService:
 
             task.output_data = result
             task.status = TaskStatus.COMPLETED
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
 
             # Update agent metrics
             agent.total_tasks_completed += 1
@@ -577,7 +577,7 @@ class AIAgentCoordinationService:
 
         finally:
             agent.current_load = max(0, agent.current_load - 1)
-            agent.last_active = datetime.utcnow()
+            agent.last_active = datetime.now(timezone.utc)
 
             # Move to completed
             if task.status in [TaskStatus.COMPLETED, TaskStatus.FAILED]:
@@ -711,7 +711,7 @@ class AIAgentCoordinationService:
         for message in messages:
             if message.id == message_id:
                 message.is_read = True
-                message.read_at = datetime.utcnow()
+                message.read_at = datetime.now(timezone.utc)
                 return True
         return False
 
@@ -733,13 +733,13 @@ class AIAgentCoordinationService:
             subject="Request",
             payload=request_payload,
             requires_response=True,
-            response_deadline=datetime.utcnow() + timedelta(seconds=timeout_seconds),
+            response_deadline=datetime.now(timezone.utc) + timedelta(seconds=timeout_seconds),
             correlation_id=correlation_id
         )
 
         # Wait for response
-        start_time = datetime.utcnow()
-        while (datetime.utcnow() - start_time).total_seconds() < timeout_seconds:
+        start_time = datetime.now(timezone.utc)
+        while (datetime.now(timezone.utc) - start_time).total_seconds() < timeout_seconds:
             messages = self.get_messages(from_agent_id)
             for msg in messages:
                 if (msg.message_type == CommunicationType.RESPONSE and
@@ -843,7 +843,7 @@ class AIAgentCoordinationService:
             "decided_by": decided_by,
             "reasoning": reasoning,
             "votes": votes or {},
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
         return True
@@ -881,9 +881,9 @@ class AIAgentCoordinationService:
 
         # Collect votes
         votes = {}
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
-        while (datetime.utcnow() - start_time).total_seconds() < timeout_seconds:
+        while (datetime.now(timezone.utc) - start_time).total_seconds() < timeout_seconds:
             for agent_id in session.participating_agents:
                 if agent_id in votes:
                     continue
@@ -930,7 +930,7 @@ class AIAgentCoordinationService:
             return False
 
         session.status = "completed"
-        session.completed_at = datetime.utcnow()
+        session.completed_at = datetime.now(timezone.utc)
         session.shared_context["outcome"] = outcome
 
         # Notify participants
@@ -1035,7 +1035,7 @@ class AIAgentCoordinationService:
                 "active": len([c for c in self._collaborations.values() if c.status == "active"]),
                 "completed": len([c for c in self._collaborations.values() if c.status == "completed"])
             },
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     def get_agent_performance(self, agent_id: str) -> Dict[str, Any]:

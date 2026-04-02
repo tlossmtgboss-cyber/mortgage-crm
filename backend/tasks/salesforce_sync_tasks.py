@@ -253,7 +253,7 @@ async def sync_all_users_salesforce(
             'duplicates_skipped': 0,
         },
         'errors': [],
-        'started_at': datetime.utcnow().isoformat(),
+        'started_at': datetime.now(timezone.utc).isoformat(),
         'completed_at': None
     }
 
@@ -287,7 +287,7 @@ async def sync_all_users_salesforce(
             # Table might not exist or other DB error
             logger.warning(f"Could not query integration profiles: {e}")
             results['errors'].append(f"Could not query profiles: {str(e)[:100]}")
-            results['completed_at'] = datetime.utcnow().isoformat()
+            results['completed_at'] = datetime.now(timezone.utc).isoformat()
             return results
 
     finally:
@@ -425,7 +425,7 @@ async def sync_all_users_salesforce(
                             from salesforce_integration_models import IntegrationProfile as IP
                             fresh_profile = db.query(IP).filter(IP.id == profile.id).first()
                             if fresh_profile:
-                                fresh_profile.last_sync_at = datetime.utcnow()
+                                fresh_profile.last_sync_at = datetime.now(timezone.utc)
                                 db.commit()
                                 logger.info(f"Updated last_sync_at for profile {profile.id}")
                         except Exception as commit_err:
@@ -447,7 +447,7 @@ async def sync_all_users_salesforce(
             logger.error(f"Salesforce sync failed for org_id={org_id}: {e}")
             results['errors'].append(f"Org {org_id}: {str(e)[:100]}")
 
-    results['completed_at'] = datetime.utcnow().isoformat()
+    results['completed_at'] = datetime.now(timezone.utc).isoformat()
 
     logger.info(
         f"Salesforce INBOUND sync complete: {results['users_processed']} users | "
@@ -551,7 +551,7 @@ async def check_salesforce_sync_health() -> Dict[str, Any]:
                     f"{error_profiles} profiles in error state" if error_profiles else None,
                 ] if alert
             ],
-            'checked_at': datetime.utcnow().isoformat()
+            'checked_at': datetime.now(timezone.utc).isoformat()
         }
 
     finally:
@@ -741,7 +741,7 @@ async def trigger_user_sync(
             from salesforce_integration_models import IntegrationProfile as IP
             fresh_profile = db.query(IP).filter(IP.id == profile.id).first()
             if fresh_profile:
-                fresh_profile.last_sync_at = datetime.utcnow()
+                fresh_profile.last_sync_at = datetime.now(timezone.utc)
                 db.commit()
                 logger.info(f"Updated last_sync_at for profile {profile.id}")
         except Exception as commit_err:

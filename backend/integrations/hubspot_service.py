@@ -84,7 +84,7 @@ class HubSpotClient:
 
             # Calculate expiration time
             expires_in = token_data.get("expires_in", 21600)  # Default 6 hours
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
             return {
                 "access_token": token_data.get("access_token"),
@@ -125,7 +125,7 @@ class HubSpotClient:
             logger.info("Successfully refreshed HubSpot access token")
 
             expires_in = token_data.get("expires_in", 21600)
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
             return {
                 "access_token": token_data.get("access_token"),

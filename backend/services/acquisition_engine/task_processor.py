@@ -110,7 +110,7 @@ class TaskProcessor:
     def add_task(self, task: ScheduledTask):
         """Add a task to the queue"""
         if task.scheduled_at is None:
-            task.scheduled_at = datetime.utcnow()
+            task.scheduled_at = datetime.now(timezone.utc)
         self._task_queue.append(task)
         # Sort by priority and scheduled time
         self._task_queue.sort(key=lambda t: (t.priority, t.scheduled_at))
@@ -118,7 +118,7 @@ class TaskProcessor:
 
     async def _process_queue(self):
         """Process pending tasks in the queue"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         tasks_to_process = [
             t for t in self._task_queue
             if t.scheduled_at <= now
@@ -181,7 +181,7 @@ class TaskProcessor:
                 AND ae.processed_at IS NULL
                 LIMIT 50
             """), {
-                "since": datetime.utcnow() - timedelta(minutes=10),
+                "since": datetime.now(timezone.utc) - timedelta(minutes=10),
                 "hot_types": tuple([
                     EventType.MEETING_BOOKED.value,
                     EventType.APPLICATION_STARTED.value,
@@ -214,7 +214,7 @@ class TaskProcessor:
                 AND ss.executed_at IS NULL
                 AND ss.status = 'scheduled'
                 LIMIT 100
-            """), {"now": datetime.utcnow()}).fetchall()
+            """), {"now": datetime.now(timezone.utc)}).fetchall()
 
             for step in scheduled:
                 self.add_task(ScheduledTask(
@@ -256,8 +256,8 @@ class TaskProcessor:
                 AND ae.event_type IN :hot_types
                 AND contact.id IS NULL
             """).bindparams(sla=sla_seconds), {
-                "since": datetime.utcnow() - timedelta(hours=1),
-                "before": datetime.utcnow() - timedelta(seconds=sla_seconds),
+                "since": datetime.now(timezone.utc) - timedelta(hours=1),
+                "before": datetime.now(timezone.utc) - timedelta(seconds=sla_seconds),
                 "hot_types": tuple([
                     EventType.MEETING_BOOKED.value,
                     EventType.FORM_SUBMITTED.value,
@@ -374,7 +374,7 @@ class TaskProcessor:
                 UPDATE sequence_steps
                 SET executed_at = :now, status = 'completed'
                 WHERE id = :step_id
-            """), {"now": datetime.utcnow(), "step_id": step_id})
+            """), {"now": datetime.now(timezone.utc), "step_id": step_id})
             self.db.commit()
 
         except Exception as e:
@@ -536,7 +536,7 @@ class TaskProcessor:
                 last_calculated_at = :now
             WHERE days_since_last_activity >= :decay_days
             AND score > 0
-        """), {"now": datetime.utcnow(), "decay_days": decay_days})
+        """), {"now": datetime.now(timezone.utc), "decay_days": decay_days})
         self.db.commit()
 
         logger.info("Applied temperature decay to stale leads")
@@ -607,7 +607,7 @@ def schedule_retry(
         task_type=TaskType.RETRY_ACTION,
         lead_id=lead_id,
         payload={"action_type": action_type, **payload},
-        scheduled_at=datetime.utcnow() + timedelta(seconds=delay_seconds),
+        scheduled_at=datetime.now(timezone.utc) + timedelta(seconds=delay_seconds),
         priority=2,
     ))
 

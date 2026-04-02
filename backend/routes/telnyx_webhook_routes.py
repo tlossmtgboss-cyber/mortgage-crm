@@ -770,7 +770,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     "preview": message_body[:100] if message_body else "",
                     "provider": "telnyx",
                     "queue_id": intelligence_queue_id,
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
                 logger.info(f"WebSocket notification sent to LO user_id={lo_user_id}")
             except ImportError:

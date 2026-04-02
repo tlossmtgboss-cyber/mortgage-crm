@@ -72,8 +72,8 @@ class RateMonitorTarget(Base):
     # Metadata
     notes = Column(Text)
     created_by = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     history = relationship("RateMonitorHistory", back_populates="target", cascade="all, delete-orphan")
@@ -133,7 +133,7 @@ class RateMonitorHistory(Base):
     mum_client_id = Column(Integer, ForeignKey('mum_clients.id', ondelete='SET NULL'), index=True)
 
     # Rate Check Details
-    check_timestamp = Column(DateTime, default=datetime.utcnow, index=True)
+    check_timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     client_rate = Column(Numeric(5, 3))
     market_rate = Column(Numeric(5, 3))
     rate_difference = Column(Numeric(5, 3))
@@ -227,10 +227,10 @@ class RateMonitorAlert(Base):
     conversion_date = Column(Date)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
     acknowledged_at = Column(DateTime)
     resolved_at = Column(DateTime)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     target = relationship("RateMonitorTarget", back_populates="alerts")
@@ -301,7 +301,7 @@ class OptimalBlueRateCache(Base):
     # Metadata
     source = Column(String(50), default='optimal_blue')
     is_mock = Column(Boolean, default=False)
-    fetched_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime, index=True)
 
     # Raw Response
@@ -334,7 +334,7 @@ class OptimalBlueRateCache(Base):
         """Check if cache entry has expired."""
         if not self.expires_at:
             return True
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
 
 def calculate_monthly_savings(

@@ -206,7 +206,7 @@ class SpeedToLeadService:
         Returns:
             SpeedToLeadResult with execution details
         """
-        started_at = datetime.utcnow()
+        started_at = datetime.now(timezone.utc)
         result = SpeedToLeadResult(
             lead_id=lead_id,
             status=SpeedToLeadStatus.IN_PROGRESS,
@@ -255,7 +255,7 @@ class SpeedToLeadService:
             await asyncio.gather(*tasks, return_exceptions=True)
 
         # Calculate response time and SLA compliance
-        completed_at = datetime.utcnow()
+        completed_at = datetime.now(timezone.utc)
         response_time = (completed_at - started_at).total_seconds()
 
         result.completed_at = completed_at
@@ -498,8 +498,8 @@ class SpeedToLeadService:
                 "priority": priority,
                 "lead_id": lead_info.get("id"),
                 "assigned_to": lo_info.get("id") if lo_info else None,
-                "due_date": datetime.utcnow() + timedelta(minutes=5),
-                "created_at": datetime.utcnow(),
+                "due_date": datetime.now(timezone.utc) + timedelta(minutes=5),
+                "created_at": datetime.now(timezone.utc),
             }).fetchone()
 
             self.db.commit()
@@ -547,8 +547,8 @@ class SpeedToLeadService:
                 "task_type": "FOLLOW_UP",
                 "lead_id": lead_info.get("id"),
                 "assigned_to": lo_info.get("id") if lo_info else None,
-                "due_date": datetime.utcnow() + timedelta(minutes=30),
-                "created_at": datetime.utcnow(),
+                "due_date": datetime.now(timezone.utc) + timedelta(minutes=30),
+                "created_at": datetime.now(timezone.utc),
             }).fetchone()
 
             self.db.commit()
@@ -595,7 +595,7 @@ class SpeedToLeadService:
                 "user_id": lo_info.get("id"),
                 "title": "Hot Lead Alert",
                 "message": f"New hot lead: {lead_info.get('first_name', '')} - {event.event_type}",
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
                 "data": str({
                     "lead_id": lead_info.get("id"),
                     "event_type": event.event_type,
@@ -637,7 +637,7 @@ class SpeedToLeadService:
                     "actions_completed": [a.value for a in result.actions_completed],
                     "status": result.status.value,
                 },
-                event_timestamp=datetime.utcnow(),
+                event_timestamp=datetime.now(timezone.utc),
             )
             self.db.add(stl_event)
 
@@ -672,7 +672,7 @@ class SpeedToLeadService:
         days: int = 30,
     ) -> Dict[str, Any]:
         """Get speed-to-lead SLA metrics"""
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
 
         query = self.db.query(AcquisitionEvent).filter(
             and_(
@@ -717,7 +717,7 @@ class SpeedToLeadService:
         Process any pending hot leads that haven't been handled.
         Called by background task scheduler.
         """
-        cutoff = datetime.utcnow() - timedelta(minutes=max_age_minutes)
+        cutoff = datetime.now(timezone.utc) - timedelta(minutes=max_age_minutes)
 
         # Find hot events without speed-to-lead response
         hot_events = self.db.query(AcquisitionEvent).filter(

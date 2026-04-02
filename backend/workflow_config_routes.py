@@ -400,7 +400,7 @@ async def update_day_config(
         if value is not None and field not in _protected:
             setattr(day, field, value)
 
-    day.updated_at = datetime.utcnow()
+    day.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {'success': True, 'message': 'Day configuration updated'}
@@ -653,7 +653,7 @@ async def update_role_assignment(
     if update.is_active is not None:
         assignment.is_active = update.is_active
 
-    assignment.updated_at = datetime.utcnow()
+    assignment.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {'success': True, 'message': 'Role assignment updated'}
@@ -822,7 +822,7 @@ async def check_day_health(
         day.health_status = TaskHealthStatus.HEALTHY
         day.health_message = None
 
-    day.last_health_check = datetime.utcnow()
+    day.last_health_check = datetime.now(timezone.utc)
     db.commit()
 
     return {
@@ -892,7 +892,7 @@ async def resolve_alert(
         raise HTTPException(status_code=404, detail=f"Alert {alert_id} not found")
 
     alert.is_resolved = True
-    alert.resolved_at = datetime.utcnow()
+    alert.resolved_at = datetime.now(timezone.utc)
     alert.resolved_by_id = current_user.id
     db.commit()
 
@@ -1281,7 +1281,7 @@ async def update_day_role_responsibility(
 
     # Save back
     day.role_responsibilities = responsibilities
-    day.updated_at = datetime.utcnow()
+    day.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {
@@ -1370,7 +1370,7 @@ async def get_weekly_task_status(
 
     # Get recent task instances
     from datetime import timedelta
-    week_ago = datetime.utcnow() - timedelta(days=7)
+    week_ago = datetime.now(timezone.utc) - timedelta(days=7)
 
     recent_tasks = []
     for config in weekly_configs:
@@ -1450,7 +1450,7 @@ async def test_weekly_task_for_loan(
         stakeholders = scheduler.get_loan_stakeholders(loan_id)
 
         # Calculate next occurrence
-        today = datetime.utcnow()
+        today = datetime.now(timezone.utc)
         target_day = getattr(day_config, 'repeat_day_of_week', 0)  # Default Monday
         trigger_date = getattr(loan, 'loan_estimate_sent_date', None) or loan.created_at
 
@@ -1557,7 +1557,7 @@ async def get_lead_workflow_tasks(
         if stage_date:
             from datetime import datetime
             if hasattr(stage_date, 'replace'):
-                days_in_stage = (datetime.utcnow() - stage_date.replace(tzinfo=None)).days + 1
+                days_in_stage = (datetime.now(timezone.utc) - stage_date.replace(tzinfo=None)).days + 1
             else:
                 days_in_stage = 1
         else:
@@ -1688,7 +1688,7 @@ def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14
         stage_date = getattr(lead, 'stage_changed_at', None) or lead.created_at
         if stage_date:
             if hasattr(stage_date, 'replace'):
-                days_in_stage = (datetime.utcnow() - stage_date.replace(tzinfo=None)).days + 1
+                days_in_stage = (datetime.now(timezone.utc) - stage_date.replace(tzinfo=None)).days + 1
             else:
                 days_in_stage = 1
         else:
@@ -1704,7 +1704,7 @@ def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14
                 continue
 
             # Calculate due date
-            due_date = datetime.utcnow() + timedelta(days=days_until_due)
+            due_date = datetime.now(timezone.utc) + timedelta(days=days_until_due)
 
             # Determine status
             if days_until_due < 0:
@@ -1789,7 +1789,7 @@ def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14
         stage_date = getattr(loan, 'stage_changed_at', None) or loan.created_at
         if stage_date:
             if hasattr(stage_date, 'replace'):
-                days_in_stage = (datetime.utcnow() - stage_date.replace(tzinfo=None)).days + 1
+                days_in_stage = (datetime.now(timezone.utc) - stage_date.replace(tzinfo=None)).days + 1
             else:
                 days_in_stage = 1
         else:
@@ -1804,7 +1804,7 @@ def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14
             if days_until_due > days_ahead:
                 continue
 
-            due_date = datetime.utcnow() + timedelta(days=days_until_due)
+            due_date = datetime.now(timezone.utc) + timedelta(days=days_until_due)
 
             if days_until_due < 0:
                 status = "overdue"
@@ -1895,7 +1895,7 @@ def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14
             # Determine urgency based on task type and age
             task_type = row[1]
             task_created = row[4]
-            days_old = (datetime.utcnow() - task_created.replace(tzinfo=None)).days if task_created else 0
+            days_old = (datetime.now(timezone.utc) - task_created.replace(tzinfo=None)).days if task_created else 0
 
             if days_old > 2:
                 urgency = "high"
@@ -1944,7 +1944,7 @@ def get_all_workflow_tasks_logic(db: Session, current_user, days_ahead: int = 14
                 "day_value": days_old,
                 "days_in_stage": days_old,
                 "days_until_due": days_until_due,
-                "due_date": (row[3] or row[4] or datetime.utcnow()).isoformat() if row[3] or row[4] else datetime.utcnow().isoformat(),
+                "due_date": (row[3] or row[4] or datetime.now(timezone.utc)).isoformat() if row[3] or row[4] else datetime.now(timezone.utc).isoformat(),
                 "status": status,
                 "urgency": urgency,
                 "communication_methods": methods,

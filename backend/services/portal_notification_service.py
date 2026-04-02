@@ -173,7 +173,7 @@ class PortalNotificationService:
             body=rendered_body,
             context=context or {},
             status="pending",
-            send_after=send_after or datetime.utcnow(),
+            send_after=send_after or datetime.now(timezone.utc),
             priority=priority,
         )
         self.db.add(notification)
@@ -195,7 +195,7 @@ class PortalNotificationService:
                 NotificationQueue.status == "pending",
                 or_(
                     NotificationQueue.send_after == None,
-                    NotificationQueue.send_after <= datetime.utcnow()
+                    NotificationQueue.send_after <= datetime.now(timezone.utc)
                 )
             )
         ).order_by(
@@ -222,7 +222,7 @@ class PortalNotificationService:
 
                 if result.get("success"):
                     notification.status = "sent"
-                    notification.sent_at = datetime.utcnow()
+                    notification.sent_at = datetime.now(timezone.utc)
                     notification.external_message_id = result.get("message_id")
                     results["sent"] += 1
                 else:
@@ -287,7 +287,7 @@ class PortalNotificationService:
 
         for notification in failed:
             notification.status = "pending"
-            notification.send_after = datetime.utcnow() + timedelta(minutes=5 * notification.retry_count)
+            notification.send_after = datetime.now(timezone.utc) + timedelta(minutes=5 * notification.retry_count)
 
         self.db.commit()
 
@@ -318,7 +318,7 @@ class PortalNotificationService:
             "milestone_name": milestone.template.name if milestone.template else "Milestone",
             "milestone_description": milestone.template.description if milestone.template else "",
             "lo_name": lo_name or "Your Loan Officer",
-            "completed_date": datetime.utcnow().strftime("%B %d, %Y"),
+            "completed_date": datetime.now(timezone.utc).strftime("%B %d, %Y"),
         }
 
         return self.queue_notification(

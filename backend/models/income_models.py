@@ -143,8 +143,8 @@ class IncomeSource(Base):
     verification_notes = Column(Text)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('ix_income_sources_loan_borrower', 'loan_id', 'borrower_id'),
@@ -266,8 +266,8 @@ class PaystubExtraction(Base):
     applied_fields = Column(JSON)  # Which fields were applied
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('ix_paystub_loan_borrower', 'loan_id', 'borrower_id'),
@@ -343,8 +343,8 @@ class Employment(Base):
     last_paystub_id = Column(Integer)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('ix_employments_loan_borrower', 'loan_id', 'borrower_id'),
@@ -408,8 +408,8 @@ class SelfEmploymentIncome(Base):
     # Source Documents
     source_document_ids = Column(JSON)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('ix_self_employment_income_source', 'income_source_id', 'tax_year'),
@@ -479,8 +479,8 @@ class RentalIncomeProperty(Base):
     # Source Documents
     source_document_ids = Column(JSON)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 # =============================================================================
@@ -517,4 +517,4 @@ class IncomeCalculationHistory(Base):
     calculated_by = Column(String(100))  # system or user email
     calculation_notes = Column(Text)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

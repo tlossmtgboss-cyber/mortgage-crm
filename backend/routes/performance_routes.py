@@ -142,7 +142,7 @@ async def get_slow_queries(
     """
     since = None
     if hours:
-        since = datetime.utcnow() - timedelta(hours=hours)
+        since = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     return {
         "queries": performance_service.get_slow_queries(
@@ -289,7 +289,7 @@ async def get_database_dashboard(db: Session = Depends(get_db)):
     from datetime import datetime
 
     dashboard = {
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "pool": get_pool_status(),
         "connectivity": {},
         "statistics": {},

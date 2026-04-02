@@ -47,7 +47,7 @@ class CallAudioBridge:
             "call_data": json.dumps({
                 "telephony_call_id": telephony_call_id,
                 "call_provider": provider,
-                "attached_at": datetime.utcnow().isoformat(),
+                "attached_at": datetime.now(timezone.utc).isoformat(),
             }),
         })
         self.db.flush()

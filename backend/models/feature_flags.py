@@ -63,8 +63,8 @@ def create_feature_models(Base):
         sort_order = Column(Integer, default=0)
 
         # Metadata
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         def to_dict(self):
             return {
@@ -109,8 +109,8 @@ def create_feature_models(Base):
         # Configuration overrides
         custom_config = Column(JSON)
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         def to_dict(self):
             return {
@@ -146,7 +146,7 @@ def create_feature_models(Base):
         ip_address = Column(String(50))
         user_agent = Column(Text)
 
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
         def to_dict(self):
             return {

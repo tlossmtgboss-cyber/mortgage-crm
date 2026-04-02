@@ -591,7 +591,7 @@ async def update_company_info(
     try:
         org_id = _get_org_id(current_user)
         settings = data.dict()
-        settings["updated_at"] = datetime.utcnow().isoformat()
+        settings["updated_at"] = datetime.now(timezone.utc).isoformat()
         BrandingStore.put(db, org_id, "company", settings)
         return success_response(settings, "Company information updated successfully")
     except Exception as e:
@@ -626,7 +626,7 @@ async def update_brand_colors(
     try:
         org_id = _get_org_id(current_user)
         settings = data.dict()
-        settings["updated_at"] = datetime.utcnow().isoformat()
+        settings["updated_at"] = datetime.now(timezone.utc).isoformat()
         BrandingStore.put(db, org_id, "colors", settings)
         return success_response(settings, "Brand colors updated successfully")
     except Exception as e:
@@ -642,7 +642,7 @@ async def reset_brand_colors(
     try:
         org_id = _get_org_id(current_user)
         settings = _DEFAULTS["colors"].copy()
-        settings["updated_at"] = datetime.utcnow().isoformat()
+        settings["updated_at"] = datetime.now(timezone.utc).isoformat()
         BrandingStore.put(db, org_id, "colors", settings)
         return success_response(settings, "Brand colors reset to defaults")
     except Exception as e:
@@ -677,7 +677,7 @@ async def update_typography(
     try:
         org_id = _get_org_id(current_user)
         settings = data.dict()
-        settings["updated_at"] = datetime.utcnow().isoformat()
+        settings["updated_at"] = datetime.now(timezone.utc).isoformat()
         BrandingStore.put(db, org_id, "typography", settings)
         return success_response(settings, "Typography settings updated successfully")
     except Exception as e:
@@ -712,7 +712,7 @@ async def update_brand_assets(
     try:
         org_id = _get_org_id(current_user)
         settings = data.dict()
-        settings["updated_at"] = datetime.utcnow().isoformat()
+        settings["updated_at"] = datetime.now(timezone.utc).isoformat()
         BrandingStore.put(db, org_id, "assets", settings)
         return success_response(settings, "Brand assets updated successfully")
     except Exception as e:
@@ -752,13 +752,13 @@ async def upload_brand_asset(
 
         # In production, this would upload to S3/cloud storage
         # For now, generate a mock URL
-        mock_url = f"https://storage.perennia.com/assets/{asset_type}_{datetime.utcnow().strftime('%Y%m%d%H%M%S')}{file_ext}"
+        mock_url = f"https://storage.perennia.com/assets/{asset_type}_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}{file_ext}"
 
         # Update the appropriate asset URL in the DB-backed store
         org_id = _get_org_id(current_user)
         assets = BrandingStore.get(db, org_id, "assets")
         assets[f"{asset_type}_url"] = mock_url
-        assets["updated_at"] = datetime.utcnow().isoformat()
+        assets["updated_at"] = datetime.now(timezone.utc).isoformat()
         BrandingStore.put(db, org_id, "assets", assets)
 
         return success_response({
@@ -800,7 +800,7 @@ async def update_email_branding(
     try:
         org_id = _get_org_id(current_user)
         settings = data.dict()
-        settings["updated_at"] = datetime.utcnow().isoformat()
+        settings["updated_at"] = datetime.now(timezone.utc).isoformat()
         BrandingStore.put(db, org_id, "email", settings)
         return success_response(settings, "Email branding updated successfully")
     except Exception as e:
@@ -867,7 +867,7 @@ async def update_document_branding(
     try:
         org_id = _get_org_id(current_user)
         settings = data.dict()
-        settings["updated_at"] = datetime.utcnow().isoformat()
+        settings["updated_at"] = datetime.now(timezone.utc).isoformat()
         BrandingStore.put(db, org_id, "documents", settings)
         return success_response(settings, "Document branding updated successfully")
     except Exception as e:
@@ -902,7 +902,7 @@ async def update_white_label_settings(
     try:
         org_id = _get_org_id(current_user)
         settings = data.dict()
-        settings["updated_at"] = datetime.utcnow().isoformat()
+        settings["updated_at"] = datetime.now(timezone.utc).isoformat()
         BrandingStore.put(db, org_id, "white_label", settings)
         return success_response(settings, "White-label settings updated successfully")
     except Exception as e:
@@ -955,7 +955,7 @@ async def update_social_media(
     try:
         org_id = _get_org_id(current_user)
         settings = data.dict()
-        settings["updated_at"] = datetime.utcnow().isoformat()
+        settings["updated_at"] = datetime.now(timezone.utc).isoformat()
         BrandingStore.put(db, org_id, "social", settings)
         return success_response(settings, "Social media links updated successfully")
     except Exception as e:
@@ -975,7 +975,7 @@ async def export_all_settings(
     try:
         org_id = _get_org_id(current_user)
         all_settings = BrandingStore.get_all(db, org_id)
-        all_settings["exported_at"] = datetime.utcnow().isoformat()
+        all_settings["exported_at"] = datetime.now(timezone.utc).isoformat()
         return success_response(all_settings, "Settings exported successfully")
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -991,6 +991,6 @@ async def import_all_settings(
     try:
         org_id = _get_org_id(current_user)
         BrandingStore.put_all(db, org_id, settings)
-        return success_response({"imported_at": datetime.utcnow().isoformat()}, "Settings imported successfully")
+        return success_response({"imported_at": datetime.now(timezone.utc).isoformat()}, "Settings imported successfully")
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error")

@@ -108,7 +108,7 @@ def success_response(data_or_message: Any, message_or_data: Any = None) -> Dict:
         "success": True,
         "message": message,
         "data": data,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -119,7 +119,7 @@ def error_response(message: str, errors: Optional[List[Dict]] = None, code: str 
         "message": message,
         "errors": errors or [],
         "code": code,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -667,7 +667,7 @@ async def update_integration_config(
         return success_response({
             "integration_id": integration_id,
             "config": config.dict(),
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }, f"Integration '{integration_id}' configuration updated")
 
     except HTTPException:
@@ -717,7 +717,7 @@ async def set_integration_credentials(
         return success_response({
             "integration_id": integration_id,
             "credentials_set": True,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }, "Credentials saved securely")
 
     except HTTPException:
@@ -917,7 +917,7 @@ async def connect_integration(
             return success_response({
                 "integration_id": integration_id,
                 "status": "connected",
-                "connected_at": datetime.utcnow().isoformat(),
+                "connected_at": datetime.now(timezone.utc).isoformat(),
                 "message": "Connection successful"
             }, "Integration connected")
 
@@ -984,7 +984,7 @@ async def disconnect_integration(
         return success_response({
             "integration_id": integration_id,
             "status": "disconnected",
-            "disconnected_at": datetime.utcnow().isoformat()
+            "disconnected_at": datetime.now(timezone.utc).isoformat()
         }, "Integration disconnected")
 
     except HTTPException:
@@ -1024,7 +1024,7 @@ async def trigger_sync(
             "integration_id": integration_id,
             "sync_type": sync_type,
             "status": "queued",
-            "started_at": datetime.utcnow().isoformat()
+            "started_at": datetime.now(timezone.utc).isoformat()
         }, f"Sync triggered for {integration_id}")
 
     except ValidationException as e:
@@ -1114,7 +1114,7 @@ async def test_integration(
             "integration_id": integration_id,
             "test_passed": True,
             "latency_ms": 145,
-            "tested_at": datetime.utcnow().isoformat(),
+            "tested_at": datetime.now(timezone.utc).isoformat(),
             "details": {
                 "authentication": "passed",
                 "permissions": "passed",

@@ -100,7 +100,7 @@ async def get_recommendations(
         return {
             "month": month or date.today().strftime("%Y-%m"),
             "recommendations": recommendations,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to generate recommendations")
@@ -193,7 +193,7 @@ async def detect_anomalies(
             "month": month or date.today().strftime("%Y-%m"),
             "anomalies": anomalies,
             "count": len(anomalies),
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail="Anomaly detection failed")
@@ -264,7 +264,7 @@ async def get_quick_insights(
             "month": month or date.today().strftime("%Y-%m"),
             "top_recommendations": top_recommendations,
             "alerts": critical_anomalies,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail="Failed to get quick insights")

@@ -133,7 +133,7 @@ class EngineResult:
     total_monthly_income: Decimal = Decimal("0")
 
     # Metadata
-    calculation_timestamp: datetime = field(default_factory=datetime.utcnow)
+    calculation_timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     error_message: Optional[str] = None
 
 
@@ -391,7 +391,7 @@ class BaseIncomeEngine(ABC):
         """Create a calculation step entry for audit trail."""
         step = {
             "description": description,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         if formula:

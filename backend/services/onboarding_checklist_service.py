@@ -197,7 +197,7 @@ def compute_onboarding_checklist(db, org_id: int) -> Dict:
         "is_ready": len(blocking) == 0,
         "blocking_items": blocking,
         "items": results,
-        "checked_at": datetime.utcnow().isoformat(),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

@@ -357,7 +357,7 @@ async def update_meeting_room(
         if field not in _protected:
             setattr(room, field, value)
 
-    room.updated_at = datetime.utcnow()
+    room.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(room)
 
@@ -382,7 +382,7 @@ async def delete_meeting_room(
         raise HTTPException(status_code=403, detail="Only the host can delete this meeting")
 
     room.status = "cancelled"
-    room.updated_at = datetime.utcnow()
+    room.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"success": True, "message": "Meeting cancelled"}
@@ -406,8 +406,8 @@ async def start_meeting(
         raise HTTPException(status_code=403, detail="Only the host can start this meeting")
 
     room.status = "active"
-    room.actual_start = datetime.utcnow()
-    room.updated_at = datetime.utcnow()
+    room.actual_start = datetime.now(timezone.utc)
+    room.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"success": True, "meeting": {"id": room.id, "status": room.status, "actual_start": room.actual_start.isoformat()}}
@@ -432,8 +432,8 @@ async def end_meeting(
         raise HTTPException(status_code=403, detail="Only the host can end this meeting")
 
     room.status = "ended"
-    room.actual_end = datetime.utcnow()
-    room.updated_at = datetime.utcnow()
+    room.actual_end = datetime.now(timezone.utc)
+    room.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     background_tasks.add_task(process_meeting_ai_analysis, room_id)
@@ -686,7 +686,7 @@ async def admit_or_reject_participant(
 
     if data.action == "admit":
         participant.status = "joined"
-        participant.joined_at = datetime.utcnow()
+        participant.joined_at = datetime.now(timezone.utc)
         message = f"Admitted {participant.display_name}"
     elif data.action == "reject":
         participant.status = "removed"
@@ -732,7 +732,7 @@ async def admit_all_waiting(
     admitted_count = 0
     for p in waiting:
         p.status = "joined"
-        p.joined_at = datetime.utcnow()
+        p.joined_at = datetime.now(timezone.utc)
         admitted_count += 1
 
     db.commit()
@@ -853,7 +853,7 @@ async def update_participant(
         if field not in _protected:
             setattr(participant, field, value)
 
-    participant.updated_at = datetime.utcnow()
+    participant.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"success": True, "participant": {"id": participant.id, "role": participant.role, "status": participant.status}}
@@ -886,7 +886,7 @@ async def remove_participant(
         raise HTTPException(status_code=404, detail="Participant not found")
 
     participant.status = "removed"
-    participant.updated_at = datetime.utcnow()
+    participant.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"success": True, "message": "Participant removed"}
@@ -910,13 +910,13 @@ async def create_instant_meeting(
         room_code = generate_room_code()
         room = VideoMeetingRoom(
             room_code=room_code,
-            room_name=f"Instant Meeting - {datetime.utcnow().strftime('%b %d, %H:%M')}",
+            room_name=f"Instant Meeting - {datetime.now(timezone.utc).strftime('%b %d, %H:%M')}",
             provider="internal",
             host_user_id=current_user.id,
             organization_id=getattr(current_user, 'organization_id', None),
-            scheduled_start=datetime.utcnow(),
-            scheduled_end=datetime.utcnow() + timedelta(minutes=60),
-            actual_start=datetime.utcnow(),
+            scheduled_start=datetime.now(timezone.utc),
+            scheduled_end=datetime.now(timezone.utc) + timedelta(minutes=60),
+            actual_start=datetime.now(timezone.utc),
             duration_minutes=60,
             status="active",
             waiting_room_enabled=False,
@@ -1036,7 +1036,7 @@ async def get_meeting_stats(
         VideoMeetingRoom.host_user_id == current_user.id
     ).scalar()
 
-    week_start = datetime.utcnow() - timedelta(days=datetime.utcnow().weekday())
+    week_start = datetime.now(timezone.utc) - timedelta(days=datetime.now(timezone.utc).weekday())
     meetings_this_week = db.query(func.count(VideoMeetingRoom.id)).filter(
         VideoMeetingRoom.host_user_id == current_user.id,
         VideoMeetingRoom.scheduled_start >= week_start
@@ -1045,7 +1045,7 @@ async def get_meeting_stats(
     upcoming = db.query(func.count(VideoMeetingRoom.id)).filter(
         VideoMeetingRoom.host_user_id == current_user.id,
         VideoMeetingRoom.status.in_(["scheduled", "active"]),
-        VideoMeetingRoom.scheduled_start >= datetime.utcnow()
+        VideoMeetingRoom.scheduled_start >= datetime.now(timezone.utc)
     ).scalar()
 
     total_duration = db.query(func.sum(VideoMeetingRoom.duration_minutes)).filter(
@@ -1097,7 +1097,7 @@ async def link_meeting_to_crm(
     room.settings["crm_entity_type"] = entity_type
     room.settings["crm_entity_id"] = entity_id
 
-    room.updated_at = datetime.utcnow()
+    room.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {

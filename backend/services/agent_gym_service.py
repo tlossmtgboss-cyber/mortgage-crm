@@ -147,7 +147,7 @@ class AgentGymService:
             return False
 
         scenario.is_active = False
-        scenario.updated_at = datetime.utcnow()
+        scenario.updated_at = datetime.now(timezone.utc)
         self.db.commit()
 
         return True
@@ -241,7 +241,7 @@ class AgentGymService:
             agent_id=agent_id,
             scenario_id=scenario_id,
             status='in_progress',
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             initiated_by=initiated_by
         )
 
@@ -273,7 +273,7 @@ class AgentGymService:
         if session.status != 'in_progress':
             raise ValueError(f"Session {session_id} is not in progress")
 
-        session.completed_at = datetime.utcnow()
+        session.completed_at = datetime.now(timezone.utc)
         session.status = 'completed'
         session.results = results
         session.score = score
@@ -303,7 +303,7 @@ class AgentGymService:
         if not session:
             raise ValueError(f"Session {session_id} not found")
 
-        session.completed_at = datetime.utcnow()
+        session.completed_at = datetime.now(timezone.utc)
         session.status = 'failed'
         session.results = {"error": error}
         session.passed = False
@@ -329,7 +329,7 @@ class AgentGymService:
         """List training sessions with filtering."""
         query = self.db.query(TrainingSession)
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         query = query.filter(TrainingSession.started_at >= cutoff)
 
         if agent_id:
@@ -378,7 +378,7 @@ class AgentGymService:
             "passed_sessions": len(passed),
             "pass_rate": len(passed) / len(sessions) * 100 if sessions else 0,
             "average_score": sum(scores) / len(scores) if scores else None,
-            "last_training": datetime.utcnow().isoformat()
+            "last_training": datetime.now(timezone.utc).isoformat()
         }
 
         self.db.commit()
@@ -436,7 +436,7 @@ class AgentGymService:
                 "total_executions": len(executions),
                 "successful": len([e for e in executions if e.success])
             },
-            "assessed_at": datetime.utcnow().isoformat()
+            "assessed_at": datetime.now(timezone.utc).isoformat()
         }
 
     def _calculate_difficulty_scores(
@@ -661,7 +661,7 @@ class AgentGymService:
             "scenarios_tested": len(scenarios),
             "scenarios_completed": len(agent_scores),
             "results": results,
-            "benchmarked_at": datetime.utcnow().isoformat()
+            "benchmarked_at": datetime.now(timezone.utc).isoformat()
         }
 
     def _calculate_percentile(

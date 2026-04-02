@@ -787,7 +787,7 @@ async def acknowledge_insight(
         raise HTTPException(status_code=404, detail="Insight not found")
 
     insight.is_acknowledged = True
-    insight.acknowledged_at = datetime.utcnow()
+    insight.acknowledged_at = datetime.now(timezone.utc)
     db.commit()
     return {"status": "acknowledged"}
 

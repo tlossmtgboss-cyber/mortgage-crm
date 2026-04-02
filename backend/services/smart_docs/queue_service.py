@@ -259,7 +259,7 @@ class QueueService:
                 "at_risk": at_risk,
                 "good": good,
             },
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def get_client_queue_detail(self, loan_id: int) -> Optional[Dict[str, Any]]:

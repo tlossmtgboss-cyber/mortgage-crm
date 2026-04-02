@@ -156,11 +156,11 @@ class MortgageGuidelinesScraper:
 
             # If all else fails, return recent date
             logger.warning(f"Could not parse date: {date_str}, using current date")
-            return datetime.utcnow()
+            return datetime.now(timezone.utc)
 
         except Exception as e:
             logger.error(f"Date parsing error: {e}")
-            return datetime.utcnow()
+            return datetime.now(timezone.utc)
 
     def scrape_source_updates(self, source_name: str, source_path: str, limit: int = 5) -> List[Dict]:
         """
@@ -233,7 +233,7 @@ class MortgageGuidelinesScraper:
                         date_str = date_elem.get('datetime', '')
                         published_date = self.parse_update_date(date_str)
                     else:
-                        published_date = datetime.utcnow() - timedelta(days=len(updates))
+                        published_date = datetime.now(timezone.utc) - timedelta(days=len(updates))
 
                     # Extract description from tooltip
                     description = title  # Default

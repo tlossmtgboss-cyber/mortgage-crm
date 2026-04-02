@@ -325,7 +325,7 @@ class RecruitingDialerService:
             self._update_call_record(call_id, {
                 "status": "cancelled",
                 "outcome": "recruiter_cancelled",
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
             })
 
         return response.to_xml()
@@ -357,7 +357,7 @@ class RecruitingDialerService:
         self._update_call_record(call_id, {
             "status": "completed",
             "outcome": outcome_map.get(dial_status, dial_status),
-            "completed_at": datetime.utcnow().isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
         })
 
         return response.to_xml()
@@ -373,7 +373,7 @@ class RecruitingDialerService:
 
         if call_status in ["completed", "busy", "no-answer", "failed", "canceled", "hangup"]:
             updates["status"] = "completed"
-            updates["completed_at"] = datetime.utcnow().isoformat()
+            updates["completed_at"] = datetime.now(timezone.utc).isoformat()
 
         if call_duration:
             updates["duration_seconds"] = call_duration

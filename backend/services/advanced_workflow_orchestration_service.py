@@ -106,8 +106,8 @@ class WorkflowDefinition:
     max_concurrent_instances: int = 100
 
     # Metadata
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     created_by: Optional[int] = None
     is_active: bool = True
     tags: List[str] = field(default_factory=list)
@@ -145,7 +145,7 @@ class WorkflowInstance:
     step_executions: List[StepExecution] = field(default_factory=list)
 
     # Timing
-    started_at: datetime = field(default_factory=datetime.utcnow)
+    started_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
     paused_at: Optional[datetime] = None
 
@@ -263,7 +263,7 @@ class AdvancedWorkflowOrchestrationService:
         if not workflow.start_step_id:
             workflow.start_step_id = step_id
 
-        workflow.updated_at = datetime.utcnow()
+        workflow.updated_at = datetime.now(timezone.utc)
 
         return step
 
@@ -293,7 +293,7 @@ class AdvancedWorkflowOrchestrationService:
         elif connection_type == "timeout":
             from_step.on_timeout = to_step_id
 
-        workflow.updated_at = datetime.utcnow()
+        workflow.updated_at = datetime.now(timezone.utc)
         return True
 
     def add_branch(
@@ -313,7 +313,7 @@ class AdvancedWorkflowOrchestrationService:
             return False
 
         step.branches[condition] = target_step_id
-        workflow.updated_at = datetime.utcnow()
+        workflow.updated_at = datetime.now(timezone.utc)
         return True
 
     def set_trigger(
@@ -330,7 +330,7 @@ class AdvancedWorkflowOrchestrationService:
         trigger = {
             "type": trigger_type.value,
             "config": config,
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
 
         workflow.triggers.append(trigger)
@@ -343,7 +343,7 @@ class AdvancedWorkflowOrchestrationService:
                     self._event_subscribers[event_name] = []
                 self._event_subscribers[event_name].append(workflow_id)
 
-        workflow.updated_at = datetime.utcnow()
+        workflow.updated_at = datetime.now(timezone.utc)
         return True
 
     def publish_workflow(self, workflow_id: str) -> bool:
@@ -357,7 +357,7 @@ class AdvancedWorkflowOrchestrationService:
             return False
 
         workflow.is_active = True
-        workflow.updated_at = datetime.utcnow()
+        workflow.updated_at = datetime.now(timezone.utc)
 
         logger.info(f"Published workflow: {workflow_id} v{workflow.version}")
         return True
@@ -455,7 +455,7 @@ class AdvancedWorkflowOrchestrationService:
                 if not step:
                     logger.info(f"Workflow completed: {instance.id}")
                     instance.status = WorkflowStatus.COMPLETED
-                    instance.completed_at = datetime.utcnow()
+                    instance.completed_at = datetime.now(timezone.utc)
                     break
 
                 # Execute step
@@ -481,7 +481,7 @@ class AdvancedWorkflowOrchestrationService:
 
                     if not next_step_id:
                         instance.status = WorkflowStatus.COMPLETED
-                        instance.completed_at = datetime.utcnow()
+                        instance.completed_at = datetime.now(timezone.utc)
                         instance.output_data = instance.context.get("output", {})
                         break
 
@@ -502,7 +502,7 @@ class AdvancedWorkflowOrchestrationService:
         execution = StepExecution(
             step_id=step.id,
             status=WorkflowStatus.RUNNING,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
             input_data=self._resolve_variables(step.config, instance.context)
         )
 
@@ -530,7 +530,7 @@ class AdvancedWorkflowOrchestrationService:
 
             execution.output_data = result
             execution.status = WorkflowStatus.COMPLETED
-            execution.completed_at = datetime.utcnow()
+            execution.completed_at = datetime.now(timezone.utc)
             execution.duration_ms = int(
                 (execution.completed_at - execution.started_at).total_seconds() * 1000
             )
@@ -640,7 +640,7 @@ class AdvancedWorkflowOrchestrationService:
 
         elif wait_type == "datetime":
             target_time = datetime.fromisoformat(step.config.get("datetime"))
-            wait_seconds = (target_time - datetime.utcnow()).total_seconds()
+            wait_seconds = (target_time - datetime.now(timezone.utc)).total_seconds()
             if wait_seconds > 0:
                 await asyncio.sleep(wait_seconds)
             return {"waited_until": target_time.isoformat()}
@@ -726,7 +726,7 @@ class AdvancedWorkflowOrchestrationService:
             "assignee": step.config.get("assignee"),
             "due_date": step.config.get("due_date"),
             "form_fields": step.config.get("form_fields", []),
-            "created_at": datetime.utcnow().isoformat()
+            "created_at": datetime.now(timezone.utc).isoformat()
         }
 
         # Store task (would be in database)
@@ -925,7 +925,7 @@ class AdvancedWorkflowOrchestrationService:
             return False
 
         instance.status = WorkflowStatus.PAUSED
-        instance.paused_at = datetime.utcnow()
+        instance.paused_at = datetime.now(timezone.utc)
 
         logger.info(f"Paused workflow: {instance_id}")
         return True
@@ -952,7 +952,7 @@ class AdvancedWorkflowOrchestrationService:
             return False
 
         instance.status = WorkflowStatus.CANCELLED
-        instance.completed_at = datetime.utcnow()
+        instance.completed_at = datetime.now(timezone.utc)
         instance.error = f"Cancelled: {reason}" if reason else "Cancelled"
 
         logger.info(f"Cancelled workflow: {instance_id}")

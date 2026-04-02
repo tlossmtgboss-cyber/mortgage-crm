@@ -25,8 +25,8 @@ class BlogVoiceProfile(Base):
     toggles_json = Column(JSONB, default=dict)  # use_emojis, use_hashtags, etc.
     examples_json = Column(JSONB, default=dict)  # Sample content for voice matching
     active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class BlogComplianceProfile(Base):
@@ -40,7 +40,7 @@ class BlogComplianceProfile(Base):
     banned_phrases_json = Column(JSONB, default=list)  # Prohibited words/phrases
     overrides_json = Column(JSONB, default=dict)
     active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class BlogSourceDocument(Base):
@@ -61,7 +61,7 @@ class BlogSourceDocument(Base):
     rights_attestation = Column(Boolean, default=False)
     processed = Column(Boolean, default=False, index=True)
     processing_error = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     content_items = relationship("BlogContentItem", back_populates="source_document")
@@ -83,7 +83,7 @@ class BlogCampaign(Base):
     auto_schedule = Column(Boolean, default=False)
     posts_per_week = Column(Integer, default=3)
     active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     content_items = relationship("BlogContentItem", back_populates="campaign")
@@ -115,8 +115,8 @@ class BlogContentItem(Base):
     compliance_profile_id = Column(String, ForeignKey("blog_compliance_profiles.id"))
     uniqueness_score = Column(Float)  # 0-1 how unique vs existing content
     engagement_score = Column(Float)  # Predicted engagement
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     campaign = relationship("BlogCampaign", back_populates="content_items")
@@ -143,7 +143,7 @@ class BlogContentJob(Base):
     result_json = Column(JSONB, default=dict)
     error = Column(Text)
     progress = Column(Integer, default=0)  # 0-100
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
 
@@ -160,7 +160,7 @@ class BlogImageAsset(Base):
     url = Column(Text, nullable=False)
     file_path = Column(Text)
     metadata_json = Column(JSONB, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     content_item = relationship("BlogContentItem", back_populates="images")
@@ -180,7 +180,7 @@ class BlogSocialConnection(Base):
     token_expires_at = Column(DateTime)
     channel_map_json = Column(JSONB, default=dict)
     status = Column(String(50), default="active")  # active, expired, revoked
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class BlogPublishLog(Base):
@@ -197,7 +197,7 @@ class BlogPublishLog(Base):
     response_json = Column(JSONB, default=dict)
     error = Column(Text)
     retry_count = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     completed_at = Column(DateTime)
 
     # Relationships
@@ -219,7 +219,7 @@ class BlogTopicQueue(Base):
     priority = Column(Integer, default=0)
     used = Column(Boolean, default=False, index=True)
     used_at = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     campaign = relationship("BlogCampaign", back_populates="topics")
@@ -239,7 +239,7 @@ class BlogAuditLog(Base):
     after_json = Column(JSONB, default=dict)
     ip_address = Column(String(50))
     user_agent = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('ix_blog_audit_entity', 'entity_type', 'entity_id'),
@@ -261,8 +261,8 @@ class BlogPerformanceFeedback(Base):
     clicks = Column(Integer, default=0)
     leads_generated = Column(Integer, default=0)
     engagement_rate = Column(Float)
-    fetched_at = Column(DateTime, default=datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    fetched_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     content_item = relationship("BlogContentItem", back_populates="performance")
@@ -284,5 +284,5 @@ class BlogUserSettings(Base):
     brand_colors_json = Column(JSONB, default=dict)
     llm_provider = Column(String(50), default="openai")
     llm_model = Column(String(100), default="gpt-4-turbo-preview")
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))

@@ -71,7 +71,7 @@ async def submit_task_disposition(
     task.disposition = disposition
     task.notes = notes
     task.status = "completed"
-    task.completed_at = datetime.utcnow()
+    task.completed_at = datetime.now(timezone.utc)
 
     # Update call log if exists
     if task.call_sid:
@@ -322,7 +322,7 @@ async def _process_voice_note(audio_base64: str, context_notes: str) -> Optional
         audio_data = base64.b64decode(audio_base64)
 
         # Save temporarily
-        temp_file = f"/tmp/voice_note_{datetime.utcnow().timestamp()}.webm"
+        temp_file = f"/tmp/voice_note_{datetime.now(timezone.utc).timestamp()}.webm"
         try:
             with open(temp_file, 'wb') as f:
                 f.write(audio_data)

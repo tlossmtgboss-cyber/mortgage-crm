@@ -285,7 +285,7 @@ def cleanup_old_results_task(
     """
     logger.info(f"Starting cleanup task: older than {days} days, dry_run={dry_run}")
 
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     try:
         db = get_db_session()
@@ -411,7 +411,7 @@ def reprocess_failed_task(
     """
     logger.info(f"Reprocessing failed extractions from last {hours} hours")
 
-    cutoff_date = datetime.utcnow() - timedelta(hours=hours)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     try:
         db = get_db_session()

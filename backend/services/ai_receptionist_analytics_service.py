@@ -601,5 +601,5 @@ class AIReceptionistAnalyticsService:
             "conversion_funnel": funnel.to_dict(),
             "roi_breakdown": roi.to_dict(),
             "benchmarks": [b.to_dict() for b in benchmarks],
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }

@@ -401,7 +401,7 @@ class LoanReconciliationService:
                 "loan_id": loan_id,
                 "from_stage": from_stage,
                 "to_stage": to_stage,
-                "cutoff": datetime.utcnow() - timedelta(minutes=self.DEDUP_WINDOW_MINUTES),
+                "cutoff": datetime.now(timezone.utc) - timedelta(minutes=self.DEDUP_WINDOW_MINUTES),
             }).fetchone()
             return row is not None
         except Exception as e:

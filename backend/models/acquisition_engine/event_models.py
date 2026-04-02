@@ -182,8 +182,8 @@ class AcquisitionEvent(Base):
     geo_zip = Column(String(10))
 
     # ==================== TIMESTAMPS ====================
-    event_timestamp = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    event_timestamp = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Processing tracking
     processed_at = Column(DateTime)  # When event was processed for temperature/triggers

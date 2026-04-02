@@ -171,7 +171,7 @@ async def list_chat_sessions(
     try:
         query = db.query(AgentChatSession)
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         query = query.filter(AgentChatSession.created_at >= cutoff)
 
         # Scope to current user's sessions
@@ -284,7 +284,7 @@ async def send_message(
         if not agent:
             raise HTTPException(status_code=404, detail="Agent not found")
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         # Create user message
         user_message = AgentChatMessage(
@@ -303,7 +303,7 @@ async def send_message(
             db=db
         )
 
-        response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
         # Create agent message
         agent_message = AgentChatMessage(
@@ -319,7 +319,7 @@ async def send_message(
         # Update session metrics
         session.message_count = (session.message_count or 0) + 2
         session.total_tokens = (session.total_tokens or 0) + (agent_response.get("tokens_used") or 0)
-        session.last_activity_at = datetime.utcnow()
+        session.last_activity_at = datetime.now(timezone.utc)
 
         db.commit()
         db.refresh(user_message)
@@ -418,7 +418,7 @@ async def send_message_stream(
                 sess = async_db.query(AgentChatSession).filter(AgentChatSession.id == session_id).first()
                 if sess:
                     sess.message_count = (sess.message_count or 0) + 2
-                    sess.last_activity_at = datetime.utcnow()
+                    sess.last_activity_at = datetime.now(timezone.utc)
 
                 async_db.commit()
                 async_db.refresh(agent_message)
@@ -456,7 +456,7 @@ async def close_chat_session(
         raise HTTPException(status_code=404, detail="Session not found")
 
     session.is_active = False
-    session.ended_at = datetime.utcnow()
+    session.ended_at = datetime.now(timezone.utc)
 
     # Collect session messages before committing, so we can pass them to the
     # background learning task without needing the DB session later.
@@ -556,7 +556,7 @@ async def quick_agent_action(
         if agent.status != "active":
             raise HTTPException(status_code=400, detail=f"Agent is {agent.status}")
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         # Generate response
         response = await generate_agent_response(
@@ -567,7 +567,7 @@ async def quick_agent_action(
             db=db
         )
 
-        response_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+        response_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
         return {
             "status": "success",

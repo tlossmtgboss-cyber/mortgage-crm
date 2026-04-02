@@ -86,7 +86,7 @@ class TCPAConsent(Base):
     # Status & lifecycle
     # ------------------------------------------------------------------
     is_active = Column(Boolean, default=True, nullable=False)
-    granted_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    granted_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime)              # NULL = no expiration
     revoked_at = Column(DateTime)
     # How the revocation was received: "text_reply", "phone_request",
@@ -100,11 +100,11 @@ class TCPAConsent(Base):
     # Audit trail
     # ------------------------------------------------------------------
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     updated_at = Column(
         DateTime,
-        default=datetime.utcnow,
-        onupdate=datetime.utcnow,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )
 
     # ------------------------------------------------------------------

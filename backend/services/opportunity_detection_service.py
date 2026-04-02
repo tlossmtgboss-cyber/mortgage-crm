@@ -153,7 +153,7 @@ class OpportunityDetectionService:
                         existing.annual_savings = Decimal(str(round(annual_savings, 2)))
                         existing.rate_sheet_id = rate_sheet_id
                         existing.priority = self._calculate_priority(monthly_savings, rate_difference)
-                        existing.updated_at = datetime.utcnow()
+                        existing.updated_at = datetime.now(timezone.utc)
                     continue
 
                 # Create new opportunity

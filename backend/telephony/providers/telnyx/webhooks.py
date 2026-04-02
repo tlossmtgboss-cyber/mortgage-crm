@@ -307,9 +307,9 @@ def parse_telnyx_webhook(
             occurred_at_str = occurred_at_str.replace("Z", "+00:00")
             occurred_at = datetime.fromisoformat(occurred_at_str)
         else:
-            occurred_at = datetime.utcnow()
+            occurred_at = datetime.now(timezone.utc)
     except ValueError:
-        occurred_at = datetime.utcnow()
+        occurred_at = datetime.now(timezone.utc)
 
     # Create base event
     base_event = TelnyxWebhookEvent(

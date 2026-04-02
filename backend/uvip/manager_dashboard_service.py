@@ -30,7 +30,7 @@ class ManagerDashboardService:
     ) -> Dict[str, Any]:
         """Get comprehensive team performance overview"""
 
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         ParticipantAnalytics = self.models.get("ParticipantAnalytics")
         CoachingRecommendation = self.models.get("CoachingRecommendation")
@@ -99,7 +99,7 @@ class ManagerDashboardService:
             "period": {
                 "days": days,
                 "start_date": cutoff_date.isoformat(),
-                "end_date": datetime.utcnow().isoformat()
+                "end_date": datetime.now(timezone.utc).isoformat()
             },
             "team_size": len(team_member_ids),
             "total_recordings_analyzed": len(set(a.recording_id for a in team_analytics)),
@@ -462,7 +462,7 @@ class ManagerDashboardService:
     ) -> Dict[str, Any]:
         """Compare individual performance against team averages"""
 
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         ParticipantAnalytics = self.models.get("ParticipantAnalytics")
         MeetingParticipant = self.models.get("MeetingParticipant")
@@ -532,7 +532,7 @@ class ManagerDashboardService:
     ) -> List[Dict[str, Any]]:
         """Get team leaderboard for specific metric"""
 
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         ParticipantAnalytics = self.models.get("ParticipantAnalytics")
         MeetingParticipant = self.models.get("MeetingParticipant")

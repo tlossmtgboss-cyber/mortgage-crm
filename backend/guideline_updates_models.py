@@ -19,7 +19,7 @@ class GuidelineUpdate(Base):
     description = Column(Text)
     url = Column(String(1000), nullable=False)
     published_date = Column(DateTime, nullable=False)
-    scraped_date = Column(DateTime, default=datetime.utcnow)
+    scraped_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     is_new = Column(Boolean, default=True)
     content_hash = Column(String(64), unique=True, index=True)
 
@@ -49,7 +49,7 @@ class UserUpdateView(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, nullable=False, index=True)
     update_id = Column(Integer, nullable=False, index=True)
-    viewed_at = Column(DateTime, default=datetime.utcnow)
+    viewed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('idx_user_update', 'user_id', 'update_id'),

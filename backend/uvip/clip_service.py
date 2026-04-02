@@ -66,7 +66,7 @@ class ClipService:
             raise ValueError("VideoClip model not available")
 
         # Generate storage path
-        timestamp = datetime.utcnow().strftime('%Y/%m/%d')
+        timestamp = datetime.now(timezone.utc).strftime('%Y/%m/%d')
         clip_uuid = secrets.token_hex(16)
         storage_path = f"clips/{organization_id or 'default'}/{timestamp}/{clip_uuid}"
 
@@ -152,7 +152,7 @@ class ClipService:
         clip.video_width = video_width
         clip.video_height = video_height
         clip.status = 'processing'
-        clip.processing_started_at = datetime.utcnow()
+        clip.processing_started_at = datetime.now(timezone.utc)
 
         # Set video URL
         clip.video_url = self._get_video_url(clip.storage_path)
@@ -215,7 +215,7 @@ class ClipService:
 
             clip.processing_progress = 100
             clip.status = 'ready'
-            clip.processing_completed_at = datetime.utcnow()
+            clip.processing_completed_at = datetime.now(timezone.utc)
             db.commit()
 
             return {
@@ -290,7 +290,7 @@ class ClipService:
 
         expires_at = None
         if expires_in_days:
-            expires_at = datetime.utcnow() + timedelta(days=expires_in_days)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
 
         share = ClipShare(
             clip_id=clip_id,
@@ -382,7 +382,7 @@ class ClipService:
             share = db.query(ClipShare).filter(ClipShare.id == share_id).first()
             if share:
                 share.view_count += 1
-                share.last_viewed_at = datetime.utcnow()
+                share.last_viewed_at = datetime.now(timezone.utc)
 
         db.commit()
         db.refresh(view)
@@ -462,7 +462,7 @@ class ClipService:
         view.watch_duration_seconds = watch_duration_seconds
         view.completion_rate = min(completion_rate, 1.0)
         view.watched_to_end = completion_rate >= 0.95
-        view.ended_at = datetime.utcnow()
+        view.ended_at = datetime.now(timezone.utc)
 
         if play_events:
             view.play_events = play_events
@@ -595,7 +595,7 @@ class ClipService:
         from datetime import timedelta
         views_by_day = {}
         for i in range(7):
-            day = datetime.utcnow().date() - timedelta(days=i)
+            day = datetime.now(timezone.utc).date() - timedelta(days=i)
             views_by_day[day.isoformat()] = sum(
                 1 for v in views
                 if v.started_at and v.started_at.date() == day
@@ -720,7 +720,7 @@ class ClipService:
         if not clip:
             return False
 
-        clip.deleted_at = datetime.utcnow()
+        clip.deleted_at = datetime.now(timezone.utc)
         clip.status = 'deleted'
         db.commit()
 

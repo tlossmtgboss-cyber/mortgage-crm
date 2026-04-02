@@ -190,7 +190,7 @@ class StructuredLogger:
         extra = {
             "structured_data": {
                 "environment": ENVIRONMENT,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
                 **kwargs
             }
         }
@@ -228,7 +228,7 @@ class JSONLogFormatter(logging.Formatter):
 
     def format(self, record):
         log_data = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -431,7 +431,7 @@ class HealthChecker:
         """Run all health checks and return status"""
         results = {
             "status": "healthy",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "environment": ENVIRONMENT,
             "checks": {}
         }

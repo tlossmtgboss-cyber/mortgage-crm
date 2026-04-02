@@ -234,9 +234,9 @@ async def start_recording(
     recording = MeetingRecording(
         meeting_id=room_id,
         recording_uuid=secrets.token_urlsafe(16),
-        recording_name=f"{room.room_name} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}",
+        recording_name=f"{room.room_name} - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
         status="recording",
-        recording_started_at=datetime.utcnow(),
+        recording_started_at=datetime.now(timezone.utc),
         transcription_requested=room.transcription_enabled,
         created_by=current_user.id
     )
@@ -277,8 +277,8 @@ async def stop_recording(
         raise HTTPException(status_code=404, detail="Recording not found")
 
     recording.status = "processing"
-    recording.recording_ended_at = datetime.utcnow()
-    recording.processing_started_at = datetime.utcnow()
+    recording.recording_ended_at = datetime.now(timezone.utc)
+    recording.processing_started_at = datetime.now(timezone.utc)
 
     if recording.recording_started_at:
         recording.duration_seconds = int((recording.recording_ended_at - recording.recording_started_at).total_seconds())
@@ -486,7 +486,7 @@ async def telnyx_recording_callback(
             audio_format="mp3",
             status="processing",
             recording_started_at=room.actual_start,
-            recording_ended_at=datetime.utcnow(),
+            recording_ended_at=datetime.now(timezone.utc),
             transcription_requested=room.transcription_enabled,
             created_by=room.host_user_id
         )
@@ -599,16 +599,16 @@ async def start_recording_with_consent(
     recording = MeetingRecording(
         meeting_id=room_id,
         recording_uuid=secrets.token_urlsafe(16),
-        recording_name=f"{room.room_name} - {datetime.utcnow().strftime('%Y-%m-%d %H:%M')}",
+        recording_name=f"{room.room_name} - {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}",
         status="recording",
-        recording_started_at=datetime.utcnow(),
+        recording_started_at=datetime.now(timezone.utc),
         transcription_requested=room.transcription_enabled,
         created_by=current_user.id,
         consent_obtained=True,
         consent_type=data.consent_type,
         consent_state_code=data.state_code,
         disclosure_script_shown=data.disclosure_script,
-        consent_obtained_at=datetime.utcnow()
+        consent_obtained_at=datetime.now(timezone.utc)
     )
 
     db.add(recording)
@@ -648,7 +648,7 @@ async def submit_recording_consent(
         raise HTTPException(status_code=404, detail="Participant not found")
 
     participant.recording_consent_given = data.consent_given
-    participant.recording_consent_at = datetime.utcnow()
+    participant.recording_consent_at = datetime.now(timezone.utc)
     participant.recording_consent_method = data.method
 
     db.commit()

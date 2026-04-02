@@ -248,7 +248,7 @@ class AIFileAnalysisService:
             "loan_id": loan_id,
             "loan_number": loan_data.get("loan_number"),
             "loan_type": loan_data.get("loan_type"),
-            "analysis_date": datetime.utcnow().isoformat(),
+            "analysis_date": datetime.now(timezone.utc).isoformat(),
             "summary": ai_analysis.get("summary", ""),
             "readiness_score": readiness_score,
             "readiness_grade": self._score_to_grade(readiness_score),

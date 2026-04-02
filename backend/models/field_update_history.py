@@ -42,7 +42,7 @@ class FieldUpdateHistory(Base):
     user_id = Column(Integer, index=True)
 
     # Timestamp
-    updated_at = Column(DateTime, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
     def __repr__(self):
         return f"<FieldUpdateHistory {self.profile_type}.{self.field_name}: {self.old_value} → {self.new_value}>"

@@ -42,8 +42,8 @@ class CustomDomain(Base):
 
     # Metadata
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Indexes for fast CORS lookups

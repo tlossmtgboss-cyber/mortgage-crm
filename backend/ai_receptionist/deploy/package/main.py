@@ -139,7 +139,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "perennia-ai-receptionist",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "ai_receptionist_available": AI_RECEPTIONIST_AVAILABLE,
     }
 

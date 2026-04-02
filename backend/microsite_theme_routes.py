@@ -2130,7 +2130,7 @@ async def cancel_appointment_via_chat(
             }
 
         # Check if appointment is in the past
-        if appointment.start_time < datetime.utcnow():
+        if appointment.start_time < datetime.now(timezone.utc):
             return {
                 "success": False,
                 "error": "Cannot cancel past appointments."
@@ -2138,7 +2138,7 @@ async def cancel_appointment_via_chat(
 
         # Cancel the appointment
         appointment.status = AppointmentStatus.CANCELLED.value
-        appointment.cancelled_at = datetime.utcnow()
+        appointment.cancelled_at = datetime.now(timezone.utc)
         if request.reason:
             appointment.internal_notes = f"Cancelled by user: {request.reason}"
         else:
@@ -2310,7 +2310,7 @@ async def reschedule_appointment_via_chat(
             }
 
         # Check if original appointment is in the past
-        if appointment.start_time < datetime.utcnow():
+        if appointment.start_time < datetime.now(timezone.utc):
             return {
                 "success": False,
                 "error": "Cannot reschedule past appointments."
@@ -2329,7 +2329,7 @@ async def reschedule_appointment_via_chat(
             }
 
         # Check new time is in the future
-        if new_start_time < datetime.utcnow():
+        if new_start_time < datetime.now(timezone.utc):
             return {
                 "success": False,
                 "error": "Cannot reschedule to a past time."

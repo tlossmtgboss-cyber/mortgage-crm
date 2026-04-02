@@ -529,7 +529,7 @@ class PortalHomeValueService:
         if not insight:
             return {"success": False, "error": "Insight not found"}
 
-        insight.dismissed_at = datetime.utcnow()
+        insight.dismissed_at = datetime.now(timezone.utc)
         self.db.commit()
 
         return {"success": True}

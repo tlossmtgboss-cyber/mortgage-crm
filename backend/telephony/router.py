@@ -524,7 +524,7 @@ async def update_dialer_settings(
         if value is not None and field not in _protected:
             setattr(settings, field, value)
 
-    settings.updated_at = datetime.utcnow()
+    settings.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(settings)
 
@@ -735,7 +735,7 @@ async def api_click_to_dial(
     organization_id = getattr(current_user, 'organization_id', None)
     rate_q = db.query(func.count(CallLog.id)).filter(
         CallLog.agent_id == current_user.id,
-        CallLog.created_at >= datetime.utcnow() - timedelta(minutes=1)
+        CallLog.created_at >= datetime.now(timezone.utc) - timedelta(minutes=1)
     )
     if organization_id:
         rate_q = rate_q.filter(CallLog.organization_id == organization_id)

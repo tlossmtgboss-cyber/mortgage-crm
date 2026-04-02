@@ -136,7 +136,7 @@ class CallbackRegistration:
     headers: Dict[str, str] = field(default_factory=dict)
     secret_key: Optional[str] = None  # For signing callbacks
     active: bool = True
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -267,7 +267,7 @@ class WebhookHandler:
 
         expires_at = None
         if expires_in_hours:
-            expires_at = datetime.utcnow() + timedelta(hours=expires_in_hours)
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=expires_in_hours)
 
         registration = CallbackRegistration(
             callback_id=callback_id,
@@ -484,7 +484,7 @@ class WebhookHandler:
             "status": "processing",
             "call_id": call_id,
             "webhook_id": webhook_id,
-            "started_at": datetime.utcnow().isoformat(),
+            "started_at": datetime.now(timezone.utc).isoformat(),
             "callback_id": callback_id,
         }
 
@@ -515,7 +515,7 @@ class WebhookHandler:
                 {
                     "processing_id": processing_id,
                     "call_id": call_id,
-                    "started_at": datetime.utcnow().isoformat(),
+                    "started_at": datetime.now(timezone.utc).isoformat(),
                 },
                 callback_id=callback_id,
             )
@@ -526,7 +526,7 @@ class WebhookHandler:
             # Update job status
             self._processing_jobs[processing_id].update({
                 "status": "completed",
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
                 "result_summary": {
                     "total_extractions": result.get("total_extractions", 0),
                     "high_confidence": result.get("high_confidence_count", 0),
@@ -540,7 +540,7 @@ class WebhookHandler:
                     "processing_id": processing_id,
                     "call_id": call_id,
                     "result": result,
-                    "completed_at": datetime.utcnow().isoformat(),
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
                 },
                 callback_id=callback_id,
             )
@@ -551,7 +551,7 @@ class WebhookHandler:
             self._processing_jobs[processing_id].update({
                 "status": "failed",
                 "error": "Internal server error",
-                "failed_at": datetime.utcnow().isoformat(),
+                "failed_at": datetime.now(timezone.utc).isoformat(),
             })
 
             # Send failure callback
@@ -561,7 +561,7 @@ class WebhookHandler:
                     "processing_id": processing_id,
                     "call_id": call_id,
                     "error": "Internal server error",
-                    "failed_at": datetime.utcnow().isoformat(),
+                    "failed_at": datetime.now(timezone.utc).isoformat(),
                 },
                 callback_id=callback_id,
             )
@@ -628,7 +628,7 @@ class WebhookHandler:
                 continue  # Already handled above
             if callback.active and event_type in callback.events:
                 # Check expiration
-                if callback.expires_at and datetime.utcnow() > callback.expires_at:
+                if callback.expires_at and datetime.now(timezone.utc) > callback.expires_at:
                     callback.active = False
                     continue
                 callbacks_to_send.append(callback)
@@ -648,7 +648,7 @@ class WebhookHandler:
 
         full_payload = {
             "event_type": event_type.value,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "callback_id": callback.callback_id,
             **payload,
         }
@@ -683,7 +683,7 @@ class WebhookHandler:
                         attempt.response_code = response.status
                         attempt.response_body = await response.text()
                         attempt.duration_ms = int((time.time() - start_time) * 1000)
-                        attempt.sent_at = datetime.utcnow()
+                        attempt.sent_at = datetime.now(timezone.utc)
 
                         if response.status < 400:
                             attempt.status = CallbackStatus.DELIVERED

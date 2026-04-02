@@ -105,7 +105,7 @@ class ValidationReport:
     unified_errors: List[str] = field(default_factory=list)
     agents_errors: List[str] = field(default_factory=list)
 
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def calculate_stats(self):
         """Calculate summary statistics from comparisons."""

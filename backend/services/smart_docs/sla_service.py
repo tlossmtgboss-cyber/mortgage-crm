@@ -81,7 +81,7 @@ class SLAService:
         if not request.is_active:
             return SLAStatus.GOOD  # Superseded requests are not breached
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         time_remaining = request.sla_due_at - now
 
         if time_remaining.total_seconds() < 0:
@@ -185,7 +185,7 @@ class SLAService:
         """
         if not request.sla_due_at:
             request.sla_due_at = self.calculate_sla_due_date(
-                request.created_at or datetime.utcnow()
+                request.created_at or datetime.now(timezone.utc)
             )
         return request
 
@@ -199,7 +199,7 @@ class SLAService:
         Returns:
             List of breached DocumentRequest objects
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         query = self.db.query(DocumentRequest).filter(
             DocumentRequest.is_active == True,
@@ -222,7 +222,7 @@ class SLAService:
         Returns:
             List of at-risk DocumentRequest objects
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         tomorrow = now + timedelta(hours=24)
 
         query = self.db.query(DocumentRequest).filter(

@@ -1,7 +1,7 @@
 """AI Email composition and sending routes — compose, send, schedule, and list templates."""
 import logging
 from typing import Optional, List
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from db import get_db
@@ -11,6 +11,19 @@ from services.email_tracking_service import inject_tracking, generate_tracking_i
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/ai-email", tags=["ai-email-compose"])
+
+# Auth dependency — set via set_dependencies() at registration time
+_get_current_user = None
+
+def set_dependencies(get_current_user_func=None, **kwargs):
+    global _get_current_user
+    if get_current_user_func:
+        _get_current_user = get_current_user_func
+
+def get_current_user():
+    if _get_current_user is None:
+        raise HTTPException(status_code=500, detail="Auth not configured")
+    return Depends(_get_current_user)
 
 _composer = AIEmailComposer()
 
@@ -53,17 +66,21 @@ class ScheduleRequest(BaseModel):
 
 
 @router.post("/compose")
-async def compose_email(request: ComposeRequest, db=Depends(get_db)):
+async def compose_email(request: ComposeRequest, db=Depends(get_db), current_user=Depends(lambda: _get_current_user)):
     """Compose an AI-generated email from a template."""
     lead_data = request.lead_data or {}
     lo_data = request.lo_data or {}
     org_config = request.org_config or {}
 
-    # If lead_id provided, enrich lead_data from DB
+    # If lead_id provided, enrich lead_data from DB (scoped to user's org)
     if request.lead_id and not lead_data:
         try:
             from database.models.lead_loan import Lead
-            lead = db.query(Lead).filter(Lead.id == request.lead_id).first()
+            org_id = getattr(current_user, 'organization_id', None)
+            query = db.query(Lead).filter(Lead.id == request.lead_id)
+            if org_id:
+                query = query.filter(Lead.organization_id == org_id)
+            lead = query.first()
             if lead:
                 lead_data = {
                     "first_name": lead.first_name or "",
@@ -87,7 +104,7 @@ async def compose_email(request: ComposeRequest, db=Depends(get_db)):
 
 
 @router.post("/compose-followup")
-async def compose_followup(request: FollowupRequest, db=Depends(get_db)):
+async def compose_followup(request: FollowupRequest, db=Depends(get_db), current_user=Depends(lambda: _get_current_user)):
     """Compose a follow-up email based on a previous template."""
     lead_data = request.lead_data or {}
     lo_data = request.lo_data or {}
@@ -95,7 +112,11 @@ async def compose_followup(request: FollowupRequest, db=Depends(get_db)):
     if request.lead_id and not lead_data:
         try:
             from database.models.lead_loan import Lead
-            lead = db.query(Lead).filter(Lead.id == request.lead_id).first()
+            org_id = getattr(current_user, 'organization_id', None)
+            query = db.query(Lead).filter(Lead.id == request.lead_id)
+            if org_id:
+                query = query.filter(Lead.organization_id == org_id)
+            lead = query.first()
             if lead:
                 lead_data = {
                     "first_name": lead.first_name or "",
@@ -115,8 +136,12 @@ async def compose_followup(request: FollowupRequest, db=Depends(get_db)):
 
 
 @router.post("/send")
-async def send_email(request: SendRequest, db=Depends(get_db)):
+async def send_email(request: SendRequest, db=Depends(get_db), current_user=Depends(lambda: _get_current_user)):
     """Send a composed email (via Microsoft Graph). Injects tracking if enabled."""
+    # Enforce tenant isolation: use current user's org, not client-supplied
+    org_id = getattr(current_user, 'organization_id', None)
+    if request.organization_id and org_id and str(request.organization_id) != str(org_id):
+        raise HTTPException(status_code=403, detail="Organization mismatch")
     body_html = request.body_html
     tracking_id = None
 
@@ -153,7 +178,7 @@ async def send_email(request: SendRequest, db=Depends(get_db)):
                 lead_id=request.lead_id,
                 type="Email",
                 content=f"AI email sent: {request.subject}",
-                organization_id=request.organization_id,
+                organization_id=org_id or request.organization_id,
             )
             db.add(activity)
             db.commit()

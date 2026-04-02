@@ -158,8 +158,8 @@ class DocumentRequest(Base):
     superseded_by = Column(Integer, nullable=True)  # FK to replacement request
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Note: Documents relationship accessed via SmartDocument.request_id queries
 
@@ -195,7 +195,7 @@ class SmartDocument(Base):
     file_size = Column(Integer, nullable=False)
     storage_key = Column(String(1024), nullable=False)  # S3 key
     page_count = Column(Integer, nullable=True)
-    uploaded_at = Column(DateTime, default=datetime.utcnow)  # When document was uploaded
+    uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))  # When document was uploaded
 
     # Document type
     doc_type = Column(SQLEnum(DocType), nullable=True)
@@ -241,8 +241,8 @@ class SmartDocument(Base):
     assigned_owner = Column(String(20), nullable=True)  # BORROWER, CO_BORROWER
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Note: Request relationship accessed via request_id column
 
@@ -278,7 +278,7 @@ class DocPolicyEvent(Base):
     payload = Column(JSON, nullable=True)
 
     # Timestamp
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Indexes
     __table_args__ = (
@@ -315,8 +315,8 @@ class NeedsListTemplate(Base):
     version = Column(String(16), default="1")
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Indexes
     __table_args__ = (
@@ -346,8 +346,8 @@ class ClientReminderSettings(Base):
     reminder_count = Column(Integer, default=0)
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Indexes
     __table_args__ = (

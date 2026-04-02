@@ -70,7 +70,7 @@ def test_workflow():
         loan_id=1,  # Dummy loan ID
         lead_id=lead_id,
         loan_status="Closed",
-        closed_date=datetime.utcnow(),
+        closed_date=datetime.now(timezone.utc),
         loan_officer_id=1
     )
 

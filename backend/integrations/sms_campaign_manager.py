@@ -53,7 +53,7 @@ class SMSCampaign:
         self.campaign_type = campaign_type
         self.template_key = template_key
         self.audience = audience
-        self.scheduled_at = scheduled_at or datetime.utcnow()
+        self.scheduled_at = scheduled_at or datetime.now(timezone.utc)
         self.batch_size = batch_size
         self.batch_delay_seconds = batch_delay_seconds
         self.variables = variables or {}
@@ -67,7 +67,7 @@ class SMSCampaign:
             "opted_out": 0,
             "compliance_blocked": 0,
         }
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.started_at: Optional[datetime] = None
         self.completed_at: Optional[datetime] = None
         self.errors: List[str] = []
@@ -226,7 +226,7 @@ class SMSCampaignManager:
                     "compliance_blocked": 0,
                 })
                 campaign.completed_at = rec.completed_at
-                campaign.created_at = rec.created_at or datetime.utcnow()
+                campaign.created_at = rec.created_at or datetime.now(timezone.utc)
                 campaign.errors = config.get("errors", [])
 
                 self._active_campaigns[rec.campaign_id] = campaign
@@ -280,7 +280,7 @@ class SMSCampaignManager:
             raise ValueError(f"Campaign is in {campaign.status} state, cannot launch")
 
         campaign.status = CampaignStatus.RUNNING
-        campaign.started_at = datetime.utcnow()
+        campaign.started_at = datetime.now(timezone.utc)
         self._persist_campaign(campaign)
         logger.info(f"Launching campaign {campaign_id} to {len(campaign.audience)} recipients")
 
@@ -305,7 +305,7 @@ class SMSCampaignManager:
                     await asyncio.sleep(campaign.batch_delay_seconds)
 
             campaign.status = CampaignStatus.COMPLETED
-            campaign.completed_at = datetime.utcnow()
+            campaign.completed_at = datetime.now(timezone.utc)
             self._persist_campaign(campaign)
             logger.info(f"Campaign {campaign_id} completed. Stats: {campaign.stats}")
 

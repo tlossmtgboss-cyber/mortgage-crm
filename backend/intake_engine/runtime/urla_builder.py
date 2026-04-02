@@ -25,7 +25,7 @@ class URLABuilder:
         """Build complete URLA payload from session"""
         payload = {
             "version": "3.4",
-            "generatedAt": datetime.utcnow().isoformat() + "Z",
+            "generatedAt": datetime.now(timezone.utc).isoformat() + "Z",
             "applicationId": session.session_id,
             "loanId": session.loan_id,
             "borrowers": [],

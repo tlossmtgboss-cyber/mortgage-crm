@@ -127,9 +127,9 @@ class LeadTemperature(Base):
     conversion_type = Column(String(50))  # Which conversion event
 
     # ==================== TIMESTAMPS ====================
-    last_calculated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_calculated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
         return f"<LeadTemperature lead={self.lead_id} temp={self.temperature} score={self.score}>"
@@ -207,7 +207,7 @@ class CampaignAttribution(Base):
 
     # ==================== CONVERSION TRACKING ====================
     conversion_type = Column(String(50), nullable=False)  # ConversionType enum
-    conversion_date = Column(DateTime, nullable=False, default=datetime.utcnow)
+    conversion_date = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Conversion value at each stage
     is_lead = Column(Boolean, default=False)
@@ -238,8 +238,8 @@ class CampaignAttribution(Base):
     cost_per_this_conversion = Column(Numeric(10, 2))
 
     # ==================== TIMESTAMPS ====================
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
         return f"<CampaignAttribution campaign={self.campaign_instance_id} type={self.conversion_type}>"

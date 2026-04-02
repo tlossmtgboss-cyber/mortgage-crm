@@ -330,9 +330,9 @@ def create_followup_task(
                 due_date = datetime.fromisoformat(summary.followUpDate.replace("Z", "+00:00"))
             except Exception as e:
                 logger.exception(f"Failed to parse followUpDate '{summary.followUpDate}': {e}")
-                due_date = datetime.utcnow() + timedelta(days=1)
+                due_date = datetime.now(timezone.utc) + timedelta(days=1)
         else:
-            due_date = datetime.utcnow() + timedelta(days=1)
+            due_date = datetime.now(timezone.utc) + timedelta(days=1)
 
         # Build task description
         description = f"""**Call Summary:**

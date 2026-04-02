@@ -124,7 +124,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "perennia-ai-receptionist",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
         "ai_receptionist_available": AI_RECEPTIONIST_AVAILABLE,
     }
 
@@ -200,7 +200,7 @@ async def handle_call_status(request: Request):
             update_data = {"status": call_status}
 
             if call_status in ended_statuses:
-                update_data["ended_at"] = datetime.utcnow()
+                update_data["ended_at"] = datetime.now(timezone.utc)
                 # Get duration if available
                 duration = form_data.get("CallDuration")
                 if duration:

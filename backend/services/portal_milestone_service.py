@@ -344,9 +344,9 @@ class PortalMilestoneService:
         milestone.status = status
 
         if status == MilestoneStatus.ACTIVE and not milestone.entered_at:
-            milestone.entered_at = datetime.utcnow()
+            milestone.entered_at = datetime.now(timezone.utc)
         elif status == MilestoneStatus.COMPLETED:
-            milestone.completed_at = datetime.utcnow()
+            milestone.completed_at = datetime.now(timezone.utc)
 
         if notes:
             milestone.notes = notes
@@ -424,7 +424,7 @@ class PortalMilestoneService:
         task.status = status
 
         if status == TaskStatus.DONE:
-            task.completed_at = datetime.utcnow()
+            task.completed_at = datetime.now(timezone.utc)
             task.completed_by = completed_by
 
         if notes:
@@ -455,7 +455,7 @@ class PortalMilestoneService:
         milestone_auto_completed = False
         if all_required_complete and milestone.status != MilestoneStatus.COMPLETED:
             milestone.status = MilestoneStatus.COMPLETED
-            milestone.completed_at = datetime.utcnow()
+            milestone.completed_at = datetime.now(timezone.utc)
             milestone_auto_completed = True
 
             # Log milestone completion

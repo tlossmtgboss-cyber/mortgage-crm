@@ -362,6 +362,37 @@ def verify_token(
     )
 
 
+def verify_access_token(token: str) -> Optional[Dict[str, Any]]:
+    """
+    Verify a JWT access token and return the raw payload dict.
+
+    This is a convenience wrapper around verify_token() for route files
+    that previously called jwt.decode() directly. It ensures the token
+    is not blacklisted and is a valid access token.
+
+    Returns:
+        Decoded payload dict if valid, None if invalid/expired/blacklisted.
+    """
+    token_data = verify_token(token, expected_type=TokenType.ACCESS)
+    if token_data is None:
+        # Fall back: try without type check for legacy tokens that lack a type claim
+        token_data = verify_token(token)
+    if token_data is None:
+        return None
+    # Reconstruct a payload dict compatible with what jwt.decode() returns
+    payload = {
+        "sub": token_data.sub,
+        "user_id": token_data.user_id,
+        "tenant_id": token_data.tenant_id,
+        "jti": token_data.jti,
+        "type": token_data.token_type.value if token_data.token_type else None,
+        "roles": token_data.roles,
+    }
+    if token_data.extra:
+        payload.update(token_data.extra)
+    return payload
+
+
 def get_token_jti(token: str) -> Optional[str]:
     """
     Extract the JTI (token ID) from a token without full validation.

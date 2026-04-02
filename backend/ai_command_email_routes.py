@@ -411,7 +411,7 @@ async def send_composed_email(
                 "subject": f"Email: {request.subject}",
                 "description": f"Email sent to {request.to_name or request.to_email}: {request.subject} (via {send_method})",
                 "completed": True,
-                "completed_at": datetime.utcnow(),
+                "completed_at": datetime.now(timezone.utc),
                 "user_id": current_user.id,
             }
 

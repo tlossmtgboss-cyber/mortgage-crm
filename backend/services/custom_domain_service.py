@@ -62,7 +62,7 @@ class CustomDomainService:
 
                 with self._cache_lock:
                     self._cache = domains
-                    self._last_refresh = datetime.utcnow()
+                    self._last_refresh = datetime.now(timezone.utc)
                     self._initialized = True
 
                 logger.info(f"Refreshed custom domains cache: {len(domains)} domains")
@@ -82,7 +82,7 @@ class CustomDomainService:
             self._refresh_cache()
             return
 
-        elapsed = (datetime.utcnow() - self._last_refresh).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self._last_refresh).total_seconds()
         if elapsed > self._refresh_interval:
             # Refresh in background to not block requests
             thread = threading.Thread(target=self._refresh_cache)

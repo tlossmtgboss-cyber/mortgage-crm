@@ -138,7 +138,7 @@ class RateSheetParserService:
                     'raw_text_length': len(extracted_text),
                     'rates_extracted': len(rates_created),
                     'parsing_model': parsed_result.get('model_used', 'unknown'),
-                    'parsed_at': datetime.utcnow().isoformat(),
+                    'parsed_at': datetime.now(timezone.utc).isoformat(),
                 }
                 rate_sheet.lender_name = parsed_result.get('lender_name')
                 if parsed_result.get('effective_date'):

@@ -128,7 +128,7 @@ async def salesforce_callback(
                 logger.info(f"Found OAuth state in database for state token")
 
                 # Check if state has expired
-                if oauth_state[4] and oauth_state[4] < datetime.utcnow():
+                if oauth_state[4] and oauth_state[4] < datetime.now(timezone.utc):
                     logger.error(f"OAuth state has expired")
                     return RedirectResponse(
                         url=f"{frontend_url}/settings/integrations?error=state_expired&message=OAuth+session+expired.+Please+try+again."

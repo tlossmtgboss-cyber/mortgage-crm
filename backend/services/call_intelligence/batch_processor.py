@@ -234,7 +234,7 @@ class BatchProcessor:
 
         # Mark completed time if finished
         if status in ("completed", "failed", "partial"):
-            job.completed_at = datetime.utcnow()
+            job.completed_at = datetime.now(timezone.utc)
 
         # Persist update
         if self.db:

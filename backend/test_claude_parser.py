@@ -47,7 +47,7 @@ async def test_parser():
             print(f"\n   Subject: {email_data['subject']}")
             print(f"   From: {email_data['from_email']}")
 
-            start_time = datetime.utcnow()
+            start_time = datetime.now(timezone.utc)
 
             # Parse email
             print(f"\n   ⏳ Calling Claude API...")
@@ -57,7 +57,7 @@ async def test_parser():
                 current_profile=None
             )
 
-            processing_time = (datetime.utcnow() - start_time).total_seconds()
+            processing_time = (datetime.now(timezone.utc) - start_time).total_seconds()
 
             # Display results
             print(f"\n   ✅ Parsing complete in {processing_time:.2f}s")

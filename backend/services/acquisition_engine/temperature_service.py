@@ -80,7 +80,7 @@ class TemperatureService:
                 campaign_instance_id=uuid.UUID(campaign_instance_id) if campaign_instance_id else None,
                 temperature=Temperature.COLD.value,
                 score=0,
-                first_seen_at=datetime.utcnow(),
+                first_seen_at=datetime.now(timezone.utc),
             )
             self.db.add(temp_record)
 
@@ -88,7 +88,7 @@ class TemperatureService:
         events = self._get_events_for_scoring(lead_id)
 
         if not events:
-            temp_record.last_calculated_at = datetime.utcnow()
+            temp_record.last_calculated_at = datetime.now(timezone.utc)
             self.db.commit()
             return temp_record
 
@@ -123,7 +123,7 @@ class TemperatureService:
         temp_record.last_seen_at = max(e.event_timestamp for e in events)
 
         # Calculate days since last activity
-        temp_record.days_since_last_activity = (datetime.utcnow() - temp_record.last_seen_at).days
+        temp_record.days_since_last_activity = (datetime.now(timezone.utc) - temp_record.last_seen_at).days
 
         # Track hot/warm signals
         hot_events = [e for e in events if e.is_hot_signal]
@@ -145,10 +145,10 @@ class TemperatureService:
 
         if old_temperature != new_temperature:
             temp_record.previous_temperature = old_temperature
-            temp_record.temperature_changed_at = datetime.utcnow()
+            temp_record.temperature_changed_at = datetime.now(timezone.utc)
 
         temp_record.temperature = new_temperature
-        temp_record.last_calculated_at = datetime.utcnow()
+        temp_record.last_calculated_at = datetime.now(timezone.utc)
 
         self.db.commit()
         self.db.refresh(temp_record)
@@ -163,7 +163,7 @@ class TemperatureService:
         days: int = 90,
     ) -> list:
         """Get events for temperature scoring."""
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
 
         return self.db.query(AcquisitionEvent).filter(
             and_(
@@ -246,7 +246,7 @@ class TemperatureService:
             return 0
 
         last_event = max(events, key=lambda e: e.event_timestamp)
-        days_since = (datetime.utcnow() - last_event.event_timestamp).days
+        days_since = (datetime.now(timezone.utc) - last_event.event_timestamp).days
 
         # Recency decay curve
         if days_since <= 1:
@@ -353,7 +353,7 @@ class TemperatureService:
 
         # Recent hot signal overrides score
         if temp_record.last_hot_signal and temp_record.last_hot_signal_at:
-            hot_days = (datetime.utcnow() - temp_record.last_hot_signal_at).days
+            hot_days = (datetime.now(timezone.utc) - temp_record.last_hot_signal_at).days
             if hot_days <= 3:
                 return Temperature.HOT.value
 

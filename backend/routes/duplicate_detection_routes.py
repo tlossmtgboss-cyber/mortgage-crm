@@ -621,7 +621,7 @@ async def clear_old_leads(
     Also clears related records (tasks, activities, etc.) for deleted leads.
     """
     # Get start of today (UTC)
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
     results = {}
     errors = []

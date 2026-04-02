@@ -1375,7 +1375,7 @@ async def get_applicants_with_outstanding_docs(
                     "doc_type": req.doc_type.value if req.doc_type else None,
                     "priority": req.priority.value if req.priority else "NORMAL",
                     "due_date": req.due_date.isoformat() if req.due_date else None,
-                    "is_overdue": req.due_date and req.due_date < datetime.utcnow(),
+                    "is_overdue": req.due_date and req.due_date < datetime.now(timezone.utc),
                 }
                 for req in requests
             ]
@@ -1446,7 +1446,7 @@ async def get_document_dashboard_summary(
     ).scalar() or 0
 
     # Documents processed today
-    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     processed_today = db.query(func.count(SmartDocument.id)).filter(
         SmartDocument.reviewed_at >= today_start,
         *doc_tenant_filter,
@@ -1465,7 +1465,7 @@ async def get_document_dashboard_summary(
         "activity": {
             "processed_today": processed_today,
         },
-        "generated_at": datetime.utcnow().isoformat(),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
 
@@ -1777,7 +1777,7 @@ async def update_reminder_settings(
     else:
         settings.reminders_enabled = body.reminders_enabled
         settings.reminder_frequency_hours = body.reminder_frequency_hours
-        settings.updated_at = datetime.utcnow()
+        settings.updated_at = datetime.now(timezone.utc)
 
     db.commit()
     db.refresh(settings)
@@ -1848,7 +1848,7 @@ async def send_reminder(
         sent = True  # Mark as sent for tracking purposes
 
     if sent:
-        settings.last_reminder_sent_at = datetime.utcnow()
+        settings.last_reminder_sent_at = datetime.now(timezone.utc)
         settings.reminder_count = (settings.reminder_count or 0) + 1
         db.commit()
 
@@ -1869,5 +1869,5 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "smart-docs",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }

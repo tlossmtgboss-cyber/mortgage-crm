@@ -173,7 +173,7 @@ async def submit_microsite_lead(
             'phone': lead_data.phone,
             'source': lead_data.source or 'microsite',
             'status': 'new',
-            'created_at': datetime.utcnow(),
+            'created_at': datetime.now(timezone.utc),
         }
 
         # Add optional fields if they exist on the model

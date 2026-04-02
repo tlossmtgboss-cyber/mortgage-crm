@@ -95,7 +95,7 @@ async def start_session(
     - Recommendations generated
     """
     session_id = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Log session start
     db.execute(text("""
@@ -1099,7 +1099,7 @@ async def track_interaction(
         "event_data": json.dumps(event_data) if event_data else None,
         "page_context": page_context,
         "element_id": element_id,
-        "timestamp": datetime.utcnow()
+        "timestamp": datetime.now(timezone.utc)
     })
     db.commit()
 

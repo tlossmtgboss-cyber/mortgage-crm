@@ -34,7 +34,7 @@ class AITokenUsageLog(Base):
 
     # Request identification
     request_id = Column(String(100), nullable=False, index=True)
-    timestamp = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     # Model information
     provider = Column(String(50), nullable=False)  # anthropic, openai
@@ -60,7 +60,7 @@ class AITokenUsageLog(Base):
     # Performance tracking
     latency_ms = Column(Integer)  # Response time in milliseconds
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("idx_token_log_user_date", "user_id", "timestamp"),
@@ -121,8 +121,8 @@ class UserUsageSnapshot(Base):
     ai_request_count = Column(Integer, default=0)
     api_request_count = Column(Integer, default=0)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint("organization_id", "user_id", "snapshot_date", name="uq_user_usage_date"),
@@ -164,7 +164,7 @@ class TeamUsageSnapshot(Base):
     # Top contributors for analysis
     top_users = Column(JSONB)  # [{"user_id": 1, "name": "John", "cost": 5.20}, ...]
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint("organization_id", "team_id", "snapshot_date", name="uq_team_usage_date"),
@@ -212,7 +212,7 @@ class OrgUsageSnapshot(Base):
     top_users = Column(JSONB)
     top_features = Column(JSONB)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint("organization_id", "snapshot_date", name="uq_org_usage_date"),
@@ -269,7 +269,7 @@ class UsageForecast(Base):
     # Alerts/warnings
     alerts = Column(JSONB)  # e.g., ["Projected to exceed $1000", "Unusual spike detected"]
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("idx_forecast_scope", "organization_id", "scope_type", "scope_id"),
@@ -294,7 +294,7 @@ class PricingRecommendation(Base):
     organization_id = Column(Integer, nullable=False, index=True)
 
     # Calculation period
-    calculated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    calculated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     period_start = Column(Date, nullable=False)
     period_end = Column(Date, nullable=False)
 
@@ -360,7 +360,7 @@ class PricingRecommendation(Base):
     recommendations = Column(JSONB)  # Array of actionable recommendations
 
     created_by = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("idx_pricing_org_date", "organization_id", "calculated_at"),
@@ -410,7 +410,7 @@ class UsageAlert(Base):
     # Metadata
     metadata_json = Column(JSONB)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("idx_usage_alert_org", "organization_id", "status"),
@@ -456,8 +456,8 @@ class AIModelPricing(Base):
     deprecated_date = Column(Date)  # When model was deprecated
 
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint("provider", "model_id", "effective_date", name="uq_ai_model_pricing"),

@@ -37,8 +37,8 @@ class ChartOfAccounts(Base):
     display_order = Column(Integer)
     opening_balance = Column(Numeric(15, 2), default=0)
     opening_balance_date = Column(Date)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -91,8 +91,8 @@ class AccountingPeriod(Base):
     fiscal_year = Column(Integer, nullable=False)
     fiscal_period = Column(Integer, nullable=False)
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     journal_entries = relationship("JournalEntry", back_populates="period")
@@ -146,8 +146,8 @@ class JournalEntry(Base):
     total_debits = Column(Numeric(15, 2), default=0)
     total_credits = Column(Numeric(15, 2), default=0)
     attachments = Column(JSONB, default=list)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -219,7 +219,7 @@ class JournalEntryLine(Base):
     line_order = Column(Integer, default=0)
     reconciled = Column(Boolean, default=False)
     reconciled_at = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     journal_entry = relationship("JournalEntry", back_populates="lines")
@@ -259,8 +259,8 @@ class JournalEntryTemplate(Base):
     description = Column(Text)
     entry_type = Column(String(30), default='standard')
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -314,8 +314,8 @@ class AccountingSettings(Base):
     lock_date = Column(Date)
     multi_currency_enabled = Column(Boolean, default=False)
     base_currency = Column(String(3), default='USD')
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     default_ar_account = relationship("ChartOfAccounts", foreign_keys=[default_ar_account_id])
@@ -338,8 +338,8 @@ class TaxRate(Base):
     is_recoverable = Column(Boolean, default=True)
     tax_account_id = Column(UUID(as_uuid=True), ForeignKey("chart_of_accounts.id"))
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint('organization_id', 'tax_code', name='uq_tax_code'),
@@ -367,8 +367,8 @@ class RecurringTransaction(Base):
     occurrence_count = Column(Integer, default=0)
     max_occurrences = Column(Integer)
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     __table_args__ = (
@@ -393,7 +393,7 @@ class AccountingAuditLog(Base):
     change_summary = Column(Text)
     ip_address = Column(INET)
     user_agent = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('idx_audit_entity', 'entity_type', 'entity_id'),

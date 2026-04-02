@@ -56,7 +56,7 @@ class SalesforceSchemaService:
 
     async def discover_schema(self, db: Session, integration_profile_id: int):
         """Discover schema for all relevant objects"""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             # Get access token
@@ -90,7 +90,7 @@ class SalesforceSchemaService:
             db.commit()
 
             # Log success event
-            duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             event = IntegrationEvent(
                 integration_profile_id=integration_profile_id,
                 event_type='schema_discovered',
@@ -108,7 +108,7 @@ class SalesforceSchemaService:
 
         except Exception as e:
             # Log failure event
-            duration_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            duration_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             event = IntegrationEvent(
                 integration_profile_id=integration_profile_id,
                 event_type='schema_discovery_failed',
@@ -294,7 +294,7 @@ class SalesforceSchemaService:
                 existing.fields = schema['fields']
                 existing.record_types = schema.get('recordTypes')
                 existing.picklist_values = picklist_values
-                existing.discovered_at = datetime.utcnow()
+                existing.discovered_at = datetime.now(timezone.utc)
             else:
                 new_schema = SfUserSchema(
                     integration_profile_id=integration_profile_id,
@@ -302,7 +302,7 @@ class SalesforceSchemaService:
                     fields=schema['fields'],
                     record_types=schema.get('recordTypes'),
                     picklist_values=picklist_values,
-                    discovered_at=datetime.utcnow()
+                    discovered_at=datetime.now(timezone.utc)
                 )
                 db.add(new_schema)
 

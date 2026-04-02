@@ -48,7 +48,7 @@ class CallDisposition(Base):
     source = Column(String, default="dialer")  # dialer, ai_call, manual, receptionist
     session_id = Column(String, nullable=True)  # dialer session if applicable
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("ix_disposition_org_date", "organization_id", "created_at"),

@@ -253,7 +253,7 @@ class ConfidenceEngineService:
             WHERE session_id = :session_id AND question_id = :question_id
         """), {"session_id": session_id, "question_id": question_id}).fetchone()
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         if existing:
             # Update existing
@@ -545,7 +545,7 @@ class ConfidenceEngineService:
             "key_strengths": json.dumps(strengths),
             "areas_for_improvement": json.dumps(improvements),
             "recommended_actions": json.dumps(actions),
-            "calculated_at": datetime.utcnow()
+            "calculated_at": datetime.now(timezone.utc)
         })
         self.db.commit()
 
@@ -671,8 +671,8 @@ class LoanScenarioService:
             "credit_score": credit_score,
             "ltv_ratio": float(ltv),
             "is_baseline": is_baseline,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc)
         })
 
         scenario_id = result.fetchone()[0]
@@ -952,7 +952,7 @@ class LoanScenarioService:
             "rank": option.get("rank"),
             "is_recommended": option.get("is_recommended", False),
             "recommendation_reasons": json.dumps(option.get("recommendation_reasons")) if option.get("recommendation_reasons") else None,
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         })
         self.db.commit()
 

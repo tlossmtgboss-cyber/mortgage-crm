@@ -235,8 +235,8 @@ def seed_agents(db):
             failed_executions=total_executions - successful_executions,
             success_rate=base_success_rate * 100,
             avg_response_time_ms=random.randint(500, 2000),
-            last_execution_at=datetime.utcnow() - timedelta(minutes=random.randint(1, 60)),
-            last_health_check=datetime.utcnow() - timedelta(minutes=random.randint(1, 10))
+            last_execution_at=datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 60)),
+            last_health_check=datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 10))
         )
 
         db.add(agent)
@@ -258,7 +258,7 @@ def seed_sample_metrics(db):
         # Generate hourly metrics for last 7 days
         for days_ago in range(7):
             for hour in [0, 6, 12, 18]:  # 4 data points per day
-                timestamp = datetime.utcnow() - timedelta(days=days_ago, hours=hour)
+                timestamp = datetime.now(timezone.utc) - timedelta(days=days_ago, hours=hour)
 
                 # Simulate realistic metrics
                 execution_count = random.randint(20, 150)

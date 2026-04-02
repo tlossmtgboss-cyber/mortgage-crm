@@ -39,13 +39,11 @@ async def get_user_from_request(request: Request) -> Optional[Dict[str, Any]]:
 
         token = auth_header[7:]  # Remove "Bearer " prefix
 
-        from jose import jwt
-        import os
+        from auth.tokens import verify_access_token
 
-        secret = os.getenv("SECRET_KEY")
-        if not secret:
-            raise HTTPException(status_code=500, detail="Server configuration error: SECRET_KEY not set")
-        payload = jwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
+        payload = verify_access_token(token)
+        if not payload:
+            return None
 
         # Extract user info from token
         user_email = payload.get("sub")
@@ -444,7 +442,7 @@ async def handle_create_task(args: Dict[str, Any], request: Request) -> Dict[str
                 lead_id=int(lead_id) if lead_id else None,
                 loan_id=int(loan_id) if loan_id else None,
                 due_date=datetime.fromisoformat(due_date) if due_date else None,
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
             db.add(task)
             db.commit()
@@ -526,7 +524,7 @@ async def handle_search_leads(args: Dict[str, Any], request: Request) -> Dict[st
 
             leads = query.order_by(Lead.created_at.desc()).limit(limit).all()
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             leads_list = []
 
             for lead in leads:
@@ -792,7 +790,7 @@ async def handle_get_leads_by_status(args: Dict[str, Any], request: Request) -> 
             leads = query.limit(limit).all()
 
             # Group by status and calculate days_in_status
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             result = {}
 
             for lead in leads:
@@ -908,7 +906,7 @@ async def handle_get_pipeline_metrics(args: Dict[str, Any], request: Request) ->
                         "funded_volume": sum(float(l.amount or 0) for l in funded_loans)
                     },
                     "stages": stages_list,
-                    "generated_at": datetime.utcnow().isoformat()
+                    "generated_at": datetime.now(timezone.utc).isoformat()
                 }
             }
         finally:
@@ -962,7 +960,7 @@ async def handle_get_tasks(args: Dict[str, Any], request: Request) -> Dict[str, 
             result = db.execute(text(sql), params)
             rows = result.fetchall()
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             tasks_list = []
 
             for row in rows:
@@ -1076,7 +1074,7 @@ async def handle_get_daily_priorities(args: Dict[str, Any], request: Request) ->
 
         db = SessionLocal()
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             today = now.date()
 
             # Initialize result sections
@@ -1363,7 +1361,7 @@ async def handle_get_stale_leads(args: Dict[str, Any], request: Request) -> Dict
             limit = args.get("limit", 50)
             include_never_contacted = args.get("include_never_contacted", True)
 
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             threshold_date = now - timedelta(days=days_threshold)
 
             # Build query for stale leads

@@ -227,7 +227,7 @@ class SMSRetryService:
                 "workflow_id": workflow_id,
                 "last_error": last_error,
                 "attempts": self.MAX_RETRIES,
-                "dead_lettered_at": datetime.utcnow().isoformat(),
+                "dead_lettered_at": datetime.now(timezone.utc).isoformat(),
                 "metadata": metadata or {},
             }
             self._dead_letter_queue.append(dead_letter_entry)
@@ -317,7 +317,7 @@ class SMSRetryService:
             if dl is None:
                 return None
             dl.status = "retried"
-            dl.retried_at = datetime.utcnow()
+            dl.retried_at = datetime.now(timezone.utc)
             self._db.flush()
             return {
                 "id": dl.id,

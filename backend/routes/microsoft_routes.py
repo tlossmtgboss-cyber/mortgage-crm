@@ -169,7 +169,7 @@ async def microsoft_callback(
             try:
                 expires_at_value = datetime.fromisoformat(expires_at_value.replace('Z', '+00:00'))
             except ValueError:
-                expires_at_value = datetime.utcnow() + timedelta(hours=1)
+                expires_at_value = datetime.now(timezone.utc) + timedelta(hours=1)
 
         # Prepare extra_data as JSON string
         extra_data_json = json_module.dumps({
@@ -306,7 +306,7 @@ async def microsoft_status(
         # Check if token is expired
         is_expired = False
         if row.expires_at:
-            is_expired = datetime.utcnow() > row.expires_at
+            is_expired = datetime.now(timezone.utc) > row.expires_at
 
         return success_response("Connected", {
             "connected": True,
@@ -449,7 +449,7 @@ async def list_calendar_events(
     access_token = row.access_token
 
     # Check if token is expired and refresh if needed
-    if row.expires_at and datetime.utcnow() > row.expires_at:
+    if row.expires_at and datetime.now(timezone.utc) > row.expires_at:
         token_data = microsoft_outlook_client.refresh_access_token(row.refresh_token)
         if token_data:
             access_token = token_data["access_token"]
@@ -470,7 +470,7 @@ async def list_calendar_events(
         else:
             raise HTTPException(status_code=401, detail="Token expired and refresh failed")
 
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     end_time = start_time + timedelta(days=days)
 
     events = microsoft_outlook_client.list_events(access_token, start_time=start_time, end_time=end_time)
@@ -548,7 +548,7 @@ async def list_email_messages(
     access_token = row.access_token
 
     # Check if token is expired and refresh if needed
-    if row.expires_at and datetime.utcnow() > row.expires_at:
+    if row.expires_at and datetime.now(timezone.utc) > row.expires_at:
         token_data = microsoft_outlook_client.refresh_access_token(row.refresh_token)
         if token_data:
             access_token = token_data["access_token"]
@@ -637,7 +637,7 @@ async def sync_outlook_emails(
     access_token = row.access_token
 
     # Check if token is expired and refresh if needed
-    if row.expires_at and datetime.utcnow() > row.expires_at:
+    if row.expires_at and datetime.now(timezone.utc) > row.expires_at:
         token_data = microsoft_outlook_client.refresh_access_token(row.refresh_token)
         if token_data:
             access_token = token_data["access_token"]

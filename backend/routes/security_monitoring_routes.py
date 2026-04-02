@@ -91,7 +91,7 @@ async def get_security_dashboard(
 
         return {
             "status": "active",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "environment": os.getenv("ENVIRONMENT", "development"),
             "rate_limiting": rate_limit_stats,
             "ip_blocking": ip_blocking_stats,
@@ -298,7 +298,7 @@ async def get_security_health(
         return {
             "overall_status": overall,
             "checks": checks,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
     except Exception as e:
         logger.exception("Error checking security health")

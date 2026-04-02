@@ -25,7 +25,7 @@ async def get_current_user(
     db: Session = Depends(get_db)
 ):
     """Get current user from JWT token."""
-    from jose import jwt
+    from auth.tokens import verify_access_token
     from sqlalchemy import text
 
     if not credentials:
@@ -33,8 +33,9 @@ async def get_current_user(
 
     try:
         token = credentials.credentials
-        secret = os.getenv("SECRET_KEY", "")
-        payload = jwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
+        payload = verify_access_token(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid or revoked token")
         email = payload.get("sub")
 
         if not email:
@@ -168,7 +169,7 @@ async def gmail_oauth_callback(
         settings['gmail_tokens'] = token_data
         settings['gmail_email'] = gmail_info.get('email')
         settings['gmail_connected'] = True
-        settings['gmail_connected_at'] = datetime.utcnow().isoformat()
+        settings['gmail_connected_at'] = datetime.now(timezone.utc).isoformat()
         metadata['settings'] = settings
 
         # Save metadata back to database
@@ -487,7 +488,7 @@ async def sync_emails(
         token_data = settings.get('gmail_tokens')
         credentials = gmail_service.get_credentials(token_data)
 
-        since_date = datetime.utcnow() - timedelta(days=days_back)
+        since_date = datetime.now(timezone.utc) - timedelta(days=days_back)
 
         emails = gmail_service.sync_emails(
             credentials,
@@ -619,7 +620,7 @@ async def cron_sync_all_gmail(
                 "status": "success",
                 "message": "No users with Gmail connected",
                 "users_synced": 0,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
         sync_results = []
@@ -650,7 +651,7 @@ async def cron_sync_all_gmail(
 
             try:
                 credentials = gmail_service.get_credentials(token_data)
-                since_date = datetime.utcnow() - timedelta(days=days_back)
+                since_date = datetime.now(timezone.utc) - timedelta(days=days_back)
 
                 emails = gmail_service.sync_emails(
                     credentials,
@@ -756,7 +757,7 @@ async def cron_sync_all_gmail(
                         )
                         WHERE id = :user_id
                     """),
-                    {"user_id": user_id, "sync_time": datetime.utcnow().isoformat()}
+                    {"user_id": user_id, "sync_time": datetime.now(timezone.utc).isoformat()}
                 )
                 db.commit()
 
@@ -787,7 +788,7 @@ async def cron_sync_all_gmail(
             "total_emails_fetched": total_emails_synced,
             "total_emails_processed": total_processed,
             "results": sync_results,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     except Exception as e:

@@ -116,7 +116,7 @@ class RateMonitorJob:
         Returns:
             Dict with job execution summary
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         logger.info("Starting rate monitor job...")
 
         results = {
@@ -167,8 +167,8 @@ class RateMonitorJob:
             logger.error(error_msg)
             results['errors'].append(error_msg)
 
-        results['end_time'] = datetime.utcnow().isoformat()
-        results['duration_seconds'] = (datetime.utcnow() - start_time).total_seconds()
+        results['end_time'] = datetime.now(timezone.utc).isoformat()
+        results['duration_seconds'] = (datetime.now(timezone.utc) - start_time).total_seconds()
 
         logger.info(
             f"Rate monitor job completed: {results['targets_checked']} checked, "
@@ -245,7 +245,7 @@ class RateMonitorJob:
         history = RateMonitorHistory(
             target_id=target.id,
             mum_client_id=target.mum_client_id,
-            check_timestamp=datetime.utcnow(),
+            check_timestamp=datetime.now(timezone.utc),
             client_rate=Decimal(str(client_rate)),
             market_rate=Decimal(str(market_rate)),
             rate_difference=Decimal(str(rate_difference)),
@@ -291,7 +291,7 @@ class RateMonitorJob:
             # Check cooldown - don't alert if we triggered recently (last 24 hours)
             cooldown_hours = 24
             if target.last_triggered_at:
-                hours_since_trigger = (datetime.utcnow() - target.last_triggered_at).total_seconds() / 3600
+                hours_since_trigger = (datetime.now(timezone.utc) - target.last_triggered_at).total_seconds() / 3600
                 if hours_since_trigger < cooldown_hours:
                     logger.debug(f"Target {target.id} in cooldown period, skipping alert")
                     history.alert_generated = False
@@ -313,13 +313,13 @@ class RateMonitorJob:
                 monthly_savings=Decimal(str(monthly_savings)),
                 annual_savings=Decimal(str(annual_savings)),
                 status='pending',
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             )
 
             self.db.add(alert)
 
             # Update target tracking
-            target.last_triggered_at = datetime.utcnow()
+            target.last_triggered_at = datetime.now(timezone.utc)
             target.trigger_count = (target.trigger_count or 0) + 1
 
             history.alert_generated = True

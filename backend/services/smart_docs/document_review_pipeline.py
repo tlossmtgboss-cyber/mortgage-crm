@@ -197,7 +197,7 @@ class DocumentReviewPipeline:
 
             # Update document with final decision
             document.decision = decision
-            document.reviewed_at = datetime.utcnow()
+            document.reviewed_at = datetime.now(timezone.utc)
             document.reviewed_by = "SYSTEM"
 
             if decision == DocumentDecision.ACCEPT:
@@ -401,7 +401,7 @@ class DocumentReviewPipeline:
         document.rejection_reason = reason
         document.fix_instructions = fix_instructions
         document.status = ProcessingStatus.REJECTED.value
-        document.reviewed_at = datetime.utcnow()
+        document.reviewed_at = datetime.now(timezone.utc)
         document.reviewed_by = "SYSTEM"
         self.db.commit()
 
@@ -449,7 +449,7 @@ class DocumentReviewPipeline:
 
         if request:
             request.status = status
-            request.updated_at = datetime.utcnow()
+            request.updated_at = datetime.now(timezone.utc)
 
     def _log_event(
         self,
@@ -667,7 +667,7 @@ class DocumentReviewPipeline:
         decision_lower = decision.lower()
         decision_enum = DocumentDecision.ACCEPT if decision_lower == "accept" else DocumentDecision.REJECT
         document.decision = decision_enum
-        document.reviewed_at = datetime.utcnow()
+        document.reviewed_at = datetime.now(timezone.utc)
         document.reviewed_by = reviewer
 
         if decision_lower == "accept":

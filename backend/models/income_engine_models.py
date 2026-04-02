@@ -122,7 +122,7 @@ class IncomeSummary(Base):
     info_flags_count = Column(Integer, nullable=False, default=0)
 
     # Calculation metadata
-    calculated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    calculated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     calculated_by = Column(Integer, nullable=True)  # User ID or NULL for system
     calculation_duration_ms = Column(Integer, nullable=True)
 
@@ -137,8 +137,8 @@ class IncomeSummary(Base):
     program_code = Column(String(50), nullable=True)
 
     # Audit timestamps
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     calculation_details = relationship("IncomeCalculationDetail", back_populates="summary", cascade="all, delete-orphan")
@@ -215,7 +215,7 @@ class IncomeCalculationDetail(Base):
     # Flags specific to this stream
     stream_flags = Column(JSON, nullable=True, default=list)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationship
     summary = relationship("IncomeSummary", back_populates="calculation_details")
@@ -285,7 +285,7 @@ class IncomeFlag(Base):
     condition_created = Column(Boolean, nullable=False, default=False)
     condition_id = Column(Integer, nullable=True)  # Reference to loan_conditions table
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
     # Relationship
     summary = relationship("IncomeSummary", back_populates="flags")
@@ -340,9 +340,9 @@ class MileageDepreciationRate(Base):
     notes = Column(Text, nullable=True)
 
     # Audit
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer, nullable=True)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     updated_by = Column(Integer, nullable=True)
 
     def to_dict(self) -> Dict[str, Any]:
@@ -385,7 +385,7 @@ class IncomeWorksheet(Base):
     s3_key = Column(Text, nullable=True)
 
     # Generation metadata
-    generated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    generated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
     generated_by = Column(Integer, nullable=True)
     generation_duration_ms = Column(Integer, nullable=True)
 

@@ -1196,7 +1196,7 @@ class VideoHostingService:
     def _generate_share_token(self) -> str:
         """Generate a unique share token."""
         random_bytes = os.urandom(16)
-        timestamp = datetime.utcnow().timestamp()
+        timestamp = datetime.now(timezone.utc).timestamp()
         combined = f"{random_bytes.hex()}{timestamp}"
         return hashlib.sha256(combined.encode()).hexdigest()[:24]
 

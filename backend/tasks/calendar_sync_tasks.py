@@ -304,7 +304,7 @@ async def reconcile_calendar(
 
     with ctx as db:
         service = CalendarSyncService(db)
-        cutoff = datetime.utcnow() - timedelta(hours=lookback_hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
 
         results = {
             "user_id": user_id,
@@ -407,14 +407,14 @@ async def check_sync_health() -> dict:
         ).count()
 
         # Check for stale pending events (pending > 1 hour)
-        stale_cutoff = datetime.utcnow() - timedelta(hours=1)
+        stale_cutoff = datetime.now(timezone.utc) - timedelta(hours=1)
         stale = db.query(CRMCalendarEvent).filter(
             CRMCalendarEvent.sync_status == SyncStatus.PENDING.value,
             CRMCalendarEvent.updated_at < stale_cutoff
         ).count()
 
         # Recent sync errors (last 24 hours)
-        error_cutoff = datetime.utcnow() - timedelta(hours=24)
+        error_cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
         recent_errors = db.query(CalendarSyncLog).filter(
             CalendarSyncLog.result == "failed",
             CalendarSyncLog.created_at >= error_cutoff
@@ -453,7 +453,7 @@ async def check_sync_health() -> dict:
                     f"Queue backed up: {pending} pending" if pending >= 100 else None,
                 ] if alert
             ],
-            "checked_at": datetime.utcnow().isoformat()
+            "checked_at": datetime.now(timezone.utc).isoformat()
         }
 
     finally:
@@ -538,7 +538,7 @@ async def poll_salesforce_events() -> dict:
                         # Use last poll watermark or default to 24 hours
                         since = settings.last_poll_watermark
                         if not since:
-                            since = datetime.utcnow() - timedelta(hours=24)
+                            since = datetime.now(timezone.utc) - timedelta(hours=24)
 
                         pull_result = await service.pull_events_from_salesforce(
                             user_id=profile_info["user_id"],
@@ -656,7 +656,7 @@ async def sync_user_calendar(user_id: int) -> dict:
 
         # Phase 2: Pull from Salesforce
         settings = service.get_settings(user_id)
-        since = settings.last_poll_watermark or (datetime.utcnow() - timedelta(hours=24))
+        since = settings.last_poll_watermark or (datetime.now(timezone.utc) - timedelta(hours=24))
 
         pull_result = await service.pull_events_from_salesforce(
             user_id=user_id,

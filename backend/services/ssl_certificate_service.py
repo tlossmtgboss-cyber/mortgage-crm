@@ -105,7 +105,7 @@ class CertificateInfo:
     def days_until_expiry(self) -> Optional[int]:
         if not self.expires_at:
             return None
-        delta = self.expires_at - datetime.utcnow()
+        delta = self.expires_at - datetime.now(timezone.utc)
         return max(0, delta.days)
 
     @property
@@ -114,7 +114,7 @@ class CertificateInfo:
             return False
         if not self.expires_at:
             return False
-        return datetime.utcnow() < self.expires_at
+        return datetime.now(timezone.utc) < self.expires_at
 
     @property
     def needs_renewal(self) -> bool:
@@ -506,7 +506,7 @@ class SSLCertificateService:
             status=CertificateStatus.CHALLENGE_PENDING,
             san_domains=san_domains or [],
             challenge_type=challenge_type,
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
 
         # Store challenge info for later verification
@@ -702,7 +702,7 @@ class SSLCertificateService:
             serial_number=format(cert.serial_number, 'x'),
             fingerprint_sha256=fingerprint,
             san_domains=san_domains,
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
 
     def get_certificate_status(self, domain: str) -> CertificateInfo:
@@ -722,7 +722,7 @@ class SSLCertificateService:
         return CertificateInfo(
             domain=domain,
             status=CertificateStatus.PENDING,
-            last_check=datetime.utcnow()
+            last_check=datetime.now(timezone.utc)
         )
 
     def get_certificate_files(self, domain: str) -> Optional[Dict[str, str]]:

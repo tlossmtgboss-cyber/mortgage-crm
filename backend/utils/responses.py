@@ -45,7 +45,7 @@ class SuccessResponse(BaseModel):
 
     def __init__(self, **data):
         if data.get('timestamp') is None:
-            data['timestamp'] = datetime.utcnow()
+            data['timestamp'] = datetime.now(timezone.utc)
         super().__init__(**data)
 
     class Config:
@@ -86,7 +86,7 @@ def success_response(
         "success": True,
         "message": message,
         "data": data,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -121,7 +121,7 @@ def error_response(
         "message": message,
         "details": details,
         "request_id": request_id or str(uuid.uuid4())[:12],
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 

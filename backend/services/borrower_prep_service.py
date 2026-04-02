@@ -101,7 +101,7 @@ class BorrowerPrepService:
             trigger_time = appointment_time - timedelta(hours=hours_before)
 
             # Skip if trigger time already passed
-            if trigger_time <= datetime.utcnow():
+            if trigger_time <= datetime.now(timezone.utc):
                 continue
 
             content = step_config.get("content")
@@ -184,12 +184,12 @@ class BorrowerPrepService:
                 logger.info(f"Sending prep SMS for step {step_id}: {step.content[:50]}...")
                 # Integration point: call SMS service here
                 step.status = "sent"
-                step.sent_at = datetime.utcnow()
+                step.sent_at = datetime.now(timezone.utc)
             elif step.channel == "email":
                 logger.info(f"Sending prep email for step {step_id}: {step.template_key}")
                 # Integration point: call email composer here
                 step.status = "sent"
-                step.sent_at = datetime.utcnow()
+                step.sent_at = datetime.now(timezone.utc)
             else:
                 step.status = "failed"
                 logger.warning(f"No content or unknown channel for step {step_id}")

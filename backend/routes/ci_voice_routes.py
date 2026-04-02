@@ -1568,7 +1568,7 @@ async def end_realtime_session(
 
         # Calculate duration
         started_at = row[2]
-        duration = (datetime.utcnow() - started_at).total_seconds() if started_at else 0
+        duration = (datetime.now(timezone.utc) - started_at).total_seconds() if started_at else 0
 
         # Update session
         db.execute(text("""
@@ -1880,9 +1880,9 @@ async def get_team_dashboard(
     """Get team-level dashboard metrics."""
     try:
         if not start_date:
-            start_date = datetime.utcnow() - timedelta(days=30)
+            start_date = datetime.now(timezone.utc) - timedelta(days=30)
         if not end_date:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(timezone.utc)
 
         params = {"start_date": start_date, "end_date": end_date}
         team_filter = ""
@@ -1986,9 +1986,9 @@ async def get_agent_dashboard(
     """Get individual agent dashboard metrics."""
     try:
         if not start_date:
-            start_date = datetime.utcnow() - timedelta(days=30)
+            start_date = datetime.now(timezone.utc) - timedelta(days=30)
         if not end_date:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(timezone.utc)
 
         params = {
             "agent_id": agent_id,
@@ -2102,9 +2102,9 @@ async def get_compliance_dashboard(
     """Get compliance monitoring dashboard."""
     try:
         if not start_date:
-            start_date = datetime.utcnow() - timedelta(days=30)
+            start_date = datetime.now(timezone.utc) - timedelta(days=30)
         if not end_date:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(timezone.utc)
 
         params = {"start_date": start_date, "end_date": end_date}
 
@@ -2279,7 +2279,7 @@ async def health_check():
     return {
         "status": "healthy",
         "service": "ci-voice",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 

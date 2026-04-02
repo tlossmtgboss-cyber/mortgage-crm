@@ -214,7 +214,7 @@ class PortalLoan(Base):
 
     # Lifecycle management
     lifecycle_stage = Column(SQLEnum(LifecycleStage), default=LifecycleStage.PROSPECT)
-    lifecycle_stage_entered_at = Column(DateTime, default=datetime.utcnow)
+    lifecycle_stage_entered_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     lifecycle_stage_reason = Column(Text)
     lifecycle_stage_source = Column(String(50), default="system")
 
@@ -238,8 +238,8 @@ class PortalLoan(Base):
     is_test_loan = Column(Boolean, default=False)
 
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -270,7 +270,7 @@ class LifecycleStateHistory(Base):
     source = Column(String(100), nullable=False)  # system, user, api, webhook
     triggered_by = Column(Integer)  # User ID
     extra_data = Column(JSON, default={})
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('idx_state_history_loan', 'loan_id', 'created_at'),
@@ -311,8 +311,8 @@ class MilestoneTemplate(Base):
     accent = Column(String(20))  # success, warn, danger, info
 
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     instances = relationship("MilestoneInstance", back_populates="template")
@@ -341,8 +341,8 @@ class MilestoneInstance(Base):
     evidence = Column(JSON, default=[])
     notes = Column(Text)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     loan = relationship("PortalLoan", back_populates="milestones")
@@ -375,7 +375,7 @@ class TaskTemplate(Base):
     display_order = Column(Integer, nullable=False)
     is_required = Column(Boolean, default=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     milestone_template = relationship("MilestoneTemplate", back_populates="task_templates")
@@ -402,8 +402,8 @@ class TaskInstance(Base):
     attachments = Column(JSON, default=[])
     notes = Column(Text)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     milestone = relationship("MilestoneInstance", back_populates="tasks")
@@ -423,7 +423,7 @@ class FederalHoliday(Base):
     is_observed = Column(Boolean, default=True)
     is_auto_generated = Column(Boolean, default=True)
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('idx_federal_holidays_date', 'holiday_date', postgresql_where=Column('is_observed') == True),
@@ -448,8 +448,8 @@ class CloseOnTimeSchedule(Base):
 
     status = Column(String(20), default="active")  # active, completed, cancelled
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -484,8 +484,8 @@ class CloseOnTimeMilestone(Base):
     completed_at = Column(DateTime)
     completed_by = Column(Integer)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     schedule = relationship("CloseOnTimeSchedule", back_populates="milestones")
@@ -539,8 +539,8 @@ class PortalDocument(Base):
     is_deleted = Column(Boolean, default=False)
     deleted_at = Column(DateTime)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     loan = relationship("PortalLoan", back_populates="documents")
@@ -580,7 +580,7 @@ class DocumentExtraction(Base):
     extractor_name = Column(String(100), nullable=False)
     extractor_version = Column(String(20), nullable=False)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     document = relationship("PortalDocument", back_populates="extractions")
@@ -626,8 +626,8 @@ class PropertyCosts(Base):
     is_current = Column(Boolean, default=True)
     superseded_by = Column(Integer, ForeignKey("property_costs.id"))
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('idx_property_costs_loan', 'loan_id', postgresql_where=Column('is_current') == True),
@@ -649,7 +649,7 @@ class HomePriceIndex(Base):
     period = Column(Date, nullable=False)  # Month of the index value
     index_value = Column(Numeric, nullable=False)
     data_quality = Column(String(20), default="VERIFIED")
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint('provider', 'geo_type', 'geo_key', 'period', name='unique_hpi_entry'),
@@ -670,7 +670,7 @@ class PropertyValueBaseline(Base):
     baseline_confidence = Column(String(20), default="HIGH")  # HIGH, MEDIUM, LOW
 
     active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     valuations = relationship("PropertyValuation", back_populates="baseline", cascade="all, delete-orphan")
@@ -696,7 +696,7 @@ class PropertyValuation(Base):
     confidence_level = Column(String(20), nullable=False)  # HIGH, MEDIUM, LOW
     calculation_details = Column(JSON, nullable=False)  # Index used, methodology, etc.
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     baseline = relationship("PropertyValueBaseline", back_populates="valuations")
@@ -730,7 +730,7 @@ class HomeValueInsight(Base):
     dismissed_at = Column(DateTime)
     expires_at = Column(DateTime)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     valuation = relationship("PropertyValuation", back_populates="insights")
@@ -769,8 +769,8 @@ class NotificationTemplate(Base):
     send_to_coborrower = Column(Boolean, default=False)
     send_to_realtor = Column(Boolean, default=False)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class NotificationQueue(Base):
@@ -803,7 +803,7 @@ class NotificationQueue(Base):
     expires_at = Column(DateTime)
     retry_count = Column(Integer, default=0)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('idx_notifications_pending', 'status', 'send_after', postgresql_where=Column('status') == 'pending'),
@@ -841,7 +841,7 @@ class LoanActivityLog(Base):
     visible_to_partner = Column(Boolean, default=False)
 
     icon = Column(String(50))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     loan = relationship("PortalLoan", back_populates="activity_log")
@@ -880,8 +880,8 @@ class RiskFlag(Base):
     resolution_notes = Column(Text)
     auto_resolve_condition = Column(Text)  # Condition that auto-resolves this flag
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     loan = relationship("PortalLoan", back_populates="risk_flags")
@@ -910,7 +910,7 @@ class PartnerAccessToken(Base):
     last_used_at = Column(DateTime)
     use_count = Column(Integer, default=0)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index('idx_partner_tokens', 'token', postgresql_where=(Column('is_revoked') == False)),
@@ -951,8 +951,8 @@ class AnnualRefreshCycle(Base):
     completion_percentage = Column(Integer, default=0)
     mortgage_ready_score = Column(Integer, default=0)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint('loan_id', 'cycle_year', name='unique_loan_year'),
@@ -973,12 +973,12 @@ class PresentationSession(Base):
     loan_id = Column(Integer, ForeignKey("portal_loans.id", ondelete="CASCADE"), nullable=False)
     contact_id = Column(Integer, nullable=False)  # User viewing the presentation
 
-    session_start = Column(DateTime, default=datetime.utcnow)
+    session_start = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     session_end = Column(DateTime)
     total_duration_seconds = Column(Integer)
     scenarios_explored = Column(Integer, default=0)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     scenarios = relationship("PortalPresentationScenario", back_populates="session", cascade="all, delete-orphan")
@@ -1002,8 +1002,8 @@ class PortalPresentationScenario(Base):
     is_saved = Column(Boolean, default=False)
     notes = Column(Text)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     session = relationship("PresentationSession", back_populates="scenarios")
@@ -1025,7 +1025,7 @@ class PresentationCitation(Base):
     source_description = Column(Text, nullable=False)
     confidence = Column(Numeric(3, 2))
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     scenario = relationship("PortalPresentationScenario", back_populates="citations")

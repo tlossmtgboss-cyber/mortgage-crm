@@ -266,7 +266,7 @@ class CallIntelligenceResponse:
     high_confidence_count: int = 0
     low_confidence_count: int = 0
     processing_time_ms: int = 0
-    processed_at: datetime = field(default_factory=datetime.utcnow)
+    processed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Scalability fields (new)
     model_version: Optional[str] = None  # Model/prompt version for reproducibility
@@ -324,7 +324,7 @@ class BatchJob:
     completed: int = 0
     failed: int = 0
     status: str = "pending"  # pending, processing, completed, failed, partial
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
     request_ids: List[str] = field(default_factory=list)
@@ -360,7 +360,7 @@ class ReviewQueueItem:
     reviewed_at: Optional[datetime] = None
     reviewer_notes: Optional[str] = None
     final_value: Optional[Any] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict[str, Any]:
         return {

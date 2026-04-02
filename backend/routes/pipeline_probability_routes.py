@@ -428,5 +428,5 @@ async def probability_health_check():
         "status": "healthy",
         "service": "pipeline-probability",
         "version": "1.0",
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }

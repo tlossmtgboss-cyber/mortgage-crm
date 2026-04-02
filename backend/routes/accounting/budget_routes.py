@@ -499,7 +499,7 @@ async def approve_budget(
 
     if data.approved:
         budget.status = 'approved'
-        budget.approved_at = datetime.utcnow()
+        budget.approved_at = datetime.now(timezone.utc)
         budget.approved_by = user_id
 
         if data.notes:
@@ -564,7 +564,7 @@ async def activate_budget(
     ).update({'status': 'closed'})
 
     budget.status = 'active'
-    budget.activated_at = datetime.utcnow()
+    budget.activated_at = datetime.now(timezone.utc)
 
     log_audit(
         db, org_id, user_id, 'activate', 'budget_template', budget.id,

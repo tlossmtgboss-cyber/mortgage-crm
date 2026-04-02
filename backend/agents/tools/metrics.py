@@ -17,7 +17,7 @@ class CacheMetric:
     tool_name: str
     hit: bool
     execution_time_ms: float
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class CacheMetrics:

@@ -67,7 +67,7 @@ class AppException(Exception):
         self.status_code = status_code
         self.details = details or {}
         self.request_id = str(uuid.uuid4())[:12]
-        self.timestamp = datetime.utcnow()
+        self.timestamp = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert exception to dictionary for JSON response"""

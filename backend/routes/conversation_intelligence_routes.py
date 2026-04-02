@@ -335,7 +335,7 @@ async def create_lead_from_conversation(
                 if existing_lead.stage in [LeadStage.NEW, LeadStage.ATTEMPTED_CONTACT, LeadStage.PROSPECT]:
                     existing_lead.stage = LeadStage.PRE_QUALIFIED
 
-            existing_lead.last_contact = datetime.utcnow()
+            existing_lead.last_contact = datetime.now(timezone.utc)
             existing_lead.ai_score = min(100, (existing_lead.ai_score or 50) + 10)
 
             # Detect if stage changed for workflow trigger
@@ -403,8 +403,8 @@ async def create_lead_from_conversation(
                   f"Channel: {lead_data.get('channel', 'unknown')}\n"
                   f"Qualification: {lead_data.get('qualification_percentage', 0)}%\n"
                   f"Timeline: {lead_data.get('closing_timeline', 'not specified')}",
-            lead_received_date=datetime.utcnow(),
-            last_contact=datetime.utcnow(),
+            lead_received_date=datetime.now(timezone.utc),
+            last_contact=datetime.now(timezone.utc),
         )
 
         db.add(new_lead)

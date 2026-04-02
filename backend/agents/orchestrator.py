@@ -437,7 +437,7 @@ async def run_orchestrator(
     import time
     from .intent_router import classify_intent, INTENT_TO_AGENTS
 
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc)
     start_perf = time.perf_counter()
     timing = {}  # Detailed timing breakdown
 
@@ -556,7 +556,7 @@ async def run_orchestrator(
                 "response": "Unable to process your request. Your account is missing organization context. Please contact support.",
                 "error": "tenant_isolation_failed",
                 "error_type": "authorization",
-                "processing_time_seconds": (datetime.utcnow() - start_time).total_seconds()
+                "processing_time_seconds": (datetime.now(timezone.utc) - start_time).total_seconds()
             }
 
         state = create_initial_state(
@@ -617,7 +617,7 @@ async def run_orchestrator(
         # STEP 4: Build response
         # ================================================================
         step_start = time.perf_counter()
-        processing_time = (datetime.utcnow() - start_time).total_seconds()
+        processing_time = (datetime.now(timezone.utc) - start_time).total_seconds()
 
         response = {
             "response": final_state.get("response", ""),
@@ -726,7 +726,7 @@ async def run_orchestrator(
                     """Run hallucination verification."""
                     return await _verify_response_hallucinations(
                         session_id=conversation_id or state.get("session_id"),
-                        message_id=f"msg_{datetime.utcnow().timestamp()}",
+                        message_id=f"msg_{datetime.now(timezone.utc).timestamp()}",
                         response_text=final_state.get("response", ""),
                         gathered_data=final_state.get("gathered_data", {}),
                         tools_used=[tc.tool_name for tc in final_state.get("tool_calls", [])],
@@ -805,7 +805,7 @@ async def run_orchestrator(
         return response
 
     except Exception as e:
-        processing_time = (datetime.utcnow() - start_time).total_seconds()
+        processing_time = (datetime.now(timezone.utc) - start_time).total_seconds()
         rid = get_request_id() or "unknown"
         logger.error(f"[ORCHESTRATOR] FAILED rid={rid} after {processing_time:.2f}s: {e}", exc_info=True)
 
@@ -889,7 +889,7 @@ class OrchestratorSession:
         self.anthropic_client = anthropic_client
         self.autonomous_mode = autonomous_mode
 
-        self.conversation_id = f"conv_{user_id}_{datetime.utcnow().timestamp()}"
+        self.conversation_id = f"conv_{user_id}_{datetime.now(timezone.utc).timestamp()}"
         self.conversation_history = []
         self.turn_count = 0
 
@@ -909,7 +909,7 @@ class OrchestratorSession:
         self.conversation_history.append({
             "role": "user",
             "content": message,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
         # Run orchestrator
@@ -930,7 +930,7 @@ class OrchestratorSession:
         self.conversation_history.append({
             "role": "assistant",
             "content": response.get("response", ""),
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
         response["turn_number"] = self.turn_count

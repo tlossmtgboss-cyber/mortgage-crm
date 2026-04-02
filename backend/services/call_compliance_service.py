@@ -89,7 +89,7 @@ class ConsentRecord:
     consent_timestamp: datetime = None
     verbal_acknowledgment: bool = False
     recording_started: bool = False
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_dict(self) -> Dict:
         return {
@@ -117,7 +117,7 @@ class ComplianceViolation:
     description: str
     severity: str  # low, medium, high, critical
     state: str = None
-    detected_at: datetime = field(default_factory=datetime.utcnow)
+    detected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     resolved: bool = False
     resolution_notes: str = None
 
@@ -333,8 +333,8 @@ class CallComplianceService:
             consent_type=consent_type,
             consent_status=status,
             disclosure_played=disclosure_played,
-            disclosure_timestamp=datetime.utcnow() if disclosure_played else None,
-            consent_timestamp=datetime.utcnow() if consent_obtained else None,
+            disclosure_timestamp=datetime.now(timezone.utc) if disclosure_played else None,
+            consent_timestamp=datetime.now(timezone.utc) if consent_obtained else None,
             verbal_acknowledgment=verbal_ack,
             recording_started=consent_obtained
         )
@@ -388,7 +388,7 @@ class CallComplianceService:
                 SELECT 1 FROM do_not_call_list
                 WHERE phone_number = :phone_number
                 AND (expires_at IS NULL OR expires_at > :now)
-            """), {"phone_number": clean_number, "now": datetime.utcnow()}).fetchone()
+            """), {"phone_number": clean_number, "now": datetime.now(timezone.utc)}).fetchone()
             return result is not None
         except Exception as e:
             logger.exception(f"Failed to check DNC list for phone number: {e}")
@@ -412,7 +412,7 @@ class CallComplianceService:
             """), {
                 "phone_number": clean_number,
                 "reason": reason,
-                "added_at": datetime.utcnow(),
+                "added_at": datetime.now(timezone.utc),
                 "expires_at": expires_at
             })
             self.db.commit()

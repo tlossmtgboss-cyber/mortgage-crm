@@ -50,8 +50,8 @@ class DataConflict(Base):
     additional_context = Column(JSONB)  # Any extra info to help with resolution
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     def __repr__(self):
         return f"<DataConflict {self.profile_type}.{self.field_name}: {self.current_value} vs {self.proposed_value}>"

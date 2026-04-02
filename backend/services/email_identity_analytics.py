@@ -70,7 +70,7 @@ class HealthCheckResult:
     checks: Dict[str, bool] = field(default_factory=dict)
     metrics: Dict[str, Any] = field(default_factory=dict)
     recommendations: List[str] = field(default_factory=list)
-    checked_at: datetime = field(default_factory=datetime.utcnow)
+    checked_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -118,7 +118,7 @@ class EmailIdentityAnalytics:
         Returns:
             MatchStatistics with all metrics
         """
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
             # Total emails
@@ -216,7 +216,7 @@ class EmailIdentityAnalytics:
         Returns:
             List of MethodEffectiveness for each method used
         """
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
             rows = self.db.execute(text("""
@@ -268,7 +268,7 @@ class EmailIdentityAnalytics:
         Returns:
             List of TrendingClient objects sorted by email count
         """
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
             rows = self.db.execute(text("""
@@ -327,7 +327,7 @@ class EmailIdentityAnalytics:
         Returns:
             Dictionary with pattern analysis
         """
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
             # Top unmatched senders
@@ -420,7 +420,7 @@ class EmailIdentityAnalytics:
         Returns:
             List of daily statistics
         """
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
             rows = self.db.execute(text("""
@@ -538,7 +538,7 @@ class MonitoringAlerts:
             """), {"user_id": user_id}).scalar()
 
             if oldest_pending:
-                age_hours = (datetime.utcnow() - oldest_pending).total_seconds() / 3600
+                age_hours = (datetime.now(timezone.utc) - oldest_pending).total_seconds() / 3600
                 checks["queue_not_backed_up"] = age_hours < thresholds["max_queue_age_hours"]
                 metrics["oldest_pending_hours"] = round(age_hours, 1)
 
@@ -661,7 +661,7 @@ class MonitoringAlerts:
             """), {"user_id": user_id}).scalar()
 
             if last_sync:
-                age_hours = (datetime.utcnow() - last_sync).total_seconds() / 3600
+                age_hours = (datetime.now(timezone.utc) - last_sync).total_seconds() / 3600
                 if age_hours > max_age_hours:
                     return {
                         "alert_type": "stale_sync",

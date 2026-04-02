@@ -58,8 +58,8 @@ class ServiceProvider(Base):
     alert_email = Column(String(255))
 
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     usage_records = relationship("ServiceUsageRecord", back_populates="service_provider", cascade="all, delete-orphan")
@@ -107,7 +107,7 @@ class ServiceUsageRecord(Base):
     external_id = Column(String(100))  # ID from external system
 
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     service_provider = relationship("ServiceProvider", back_populates="usage_records")
@@ -153,7 +153,7 @@ class ServiceInvoice(Base):
     raw_data = Column(JSONB)
 
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     service_provider = relationship("ServiceProvider", back_populates="invoices")
@@ -203,8 +203,8 @@ class SubscriptionRevenue(Base):
     churn_reason = Column(String(255))
 
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("idx_subscription_org_status", "organization_id", "status"),
@@ -253,7 +253,7 @@ class UsageRevenue(Base):
     stripe_invoice_id = Column(String(100))
     stripe_line_item_id = Column(String(100))
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         Index("idx_usage_revenue_org_date", "organization_id", "revenue_date"),
@@ -296,8 +296,8 @@ class MarketingCampaign(Base):
 
     description = Column(Text)
     created_by = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     metrics = relationship("MarketingMetrics", back_populates="campaign", cascade="all, delete-orphan")
@@ -345,7 +345,7 @@ class MarketingMetrics(Base):
 
     source = Column(String(20), default="manual")  # manual, api, csv_import
     raw_data = Column(JSONB)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     campaign = relationship("MarketingCampaign", back_populates="metrics")
@@ -407,8 +407,8 @@ class BusinessForecast(Base):
     is_scenario = Column(Boolean, default=False)  # What-if scenario
     parent_forecast_id = Column(UUID(as_uuid=True), ForeignKey("business_forecasts.id"))
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         CheckConstraint(
@@ -470,7 +470,7 @@ class BusinessKPI(Base):
     # Full snapshot data
     data_json = Column(JSONB)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint("organization_id", "snapshot_date", name="uq_kpi_org_date"),
@@ -503,7 +503,7 @@ class BudgetAlert(Base):
     acknowledged_by = Column(Integer)
     acknowledged_at = Column(DateTime)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         CheckConstraint(

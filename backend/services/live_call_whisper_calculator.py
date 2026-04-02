@@ -204,7 +204,7 @@ class CalculatorWhisperDetector:
                         )
 
                         # Update cooldown
-                        self.recent_suggestions[cooldown_key] = datetime.utcnow()
+                        self.recent_suggestions[cooldown_key] = datetime.now(timezone.utc)
 
                         return whisper
 
@@ -215,7 +215,7 @@ class CalculatorWhisperDetector:
         if key not in self.recent_suggestions:
             return False
 
-        elapsed = (datetime.utcnow() - self.recent_suggestions[key]).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - self.recent_suggestions[key]).total_seconds()
         return elapsed < self.suggestion_cooldown_seconds
 
     def _build_calculator_context(

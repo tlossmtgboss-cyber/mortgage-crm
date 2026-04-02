@@ -307,7 +307,7 @@ def get_escalation_status(
     if not escalations:
         return ToolResult.no_data("No escalations found matching criteria")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     overdue_count = 0
     results = []
     for esc in escalations:
@@ -521,7 +521,7 @@ def resolve_escalation(
     if escalation["status"] == "resolved":
         return ToolResult.error(f"Escalation {escalation_id} is already resolved")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     was_within_sla = (
         escalation["sla_deadline"] is None
         or now <= escalation["sla_deadline"]

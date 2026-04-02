@@ -108,6 +108,14 @@ def register_telephony_routes(app, get_db, get_current_user, get_current_user_fl
     except Exception as e:
         logger.warning(f"Could not load IVR routes: {e}")
 
+    # Include NL IVR routes (Vapi-powered natural language IVR)
+    try:
+        from routes.nl_ivr_routes import router as nl_ivr_router
+        app.include_router(nl_ivr_router, tags=["NL IVR"])
+        logger.info("NL IVR routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load NL IVR routes: {e}")
+
     # Include Conference routes
     try:
         from routes.conference_routes import router as conference_router
@@ -139,6 +147,14 @@ def register_telephony_routes(app, get_db, get_current_user, get_current_user_fl
 
     # Power Dialer routes -- DISABLED (telephony/router.py is canonical)
     logger.info("Power Dialer routes skipped (telephony/router.py is canonical)")
+
+    # Include Smart Queue routes (intelligent call queue builder)
+    try:
+        from routes.dialer_smart_queue_routes import router as smart_queue_router
+        app.include_router(smart_queue_router, tags=["Smart Queue"])
+        logger.info("Smart Queue routes loaded")
+    except Exception as e:
+        logger.warning(f"Smart Queue routes not loaded: {e}")
 
     # Include Disposition routes (voice notes + AI summarization)
     try:

@@ -267,7 +267,7 @@ async def docusign_status(
         # Check if token is expired
         is_expired = False
         if row.expires_at:
-            is_expired = datetime.utcnow() > row.expires_at
+            is_expired = datetime.now(timezone.utc) > row.expires_at
 
         extra_data = row.extra_data or {}
 
@@ -412,7 +412,7 @@ async def list_envelopes(
     if not account_id:
         raise HTTPException(status_code=400, detail="DocuSign account not configured")
 
-    from_date = datetime.utcnow() - timedelta(days=days)
+    from_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     envelopes = docusign_client.list_envelopes(
         access_token,

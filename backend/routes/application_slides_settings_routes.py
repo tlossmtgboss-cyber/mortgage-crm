@@ -360,7 +360,7 @@ async def save_application_slides_config(
             "success": True,
             "message": f"Configuration saved successfully for {app_type} application",
             "app_type": app_type,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     except SQLAlchemyError as e:

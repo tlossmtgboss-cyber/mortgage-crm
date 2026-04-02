@@ -185,7 +185,7 @@ class CalendlyService:
                 "refresh_token": data["refresh_token"],
                 "token_type": data["token_type"],
                 "expires_in": data["expires_in"],
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": datetime.now(timezone.utc).isoformat(),
             }
         except httpx.HTTPError as e:
             logger.error(f"Failed to exchange code: {e}")

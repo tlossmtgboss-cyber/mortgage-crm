@@ -90,19 +90,15 @@ def decode_jwt_token(token: str) -> Optional[dict]:
         Decoded payload dict or None if invalid
     """
     try:
-        from jose import jwt, JWTError
+        from auth.tokens import verify_access_token
 
-        secret_key = os.getenv("SECRET_KEY")
-        if not secret_key:
-            logger.error("[WebSocketAuth] SECRET_KEY not configured")
+        payload = verify_access_token(token)
+        if not payload:
+            logger.warning("[WebSocketAuth] Token invalid, expired, or revoked")
             return None
 
-        payload = jwt.decode(token, secret_key, algorithms=["HS256"], options={"verify_aud": False})
         return payload
 
-    except JWTError as e:
-        logger.warning(f"[WebSocketAuth] JWT decode error: {e}")
-        return None
     except Exception as e:
         logger.error(f"[WebSocketAuth] Token decode error: {e}")
         return None

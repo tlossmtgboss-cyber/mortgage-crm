@@ -151,7 +151,7 @@ class ConversionOrchestrator:
                     await self._schedule_action(event, action)
                     results["actions_triggered"].append({
                         "action": action.action_type,
-                        "scheduled_for": (datetime.utcnow() + timedelta(minutes=action.delay_minutes)).isoformat(),
+                        "scheduled_for": (datetime.now(timezone.utc) + timedelta(minutes=action.delay_minutes)).isoformat(),
                     })
                 else:
                     # Execute immediately
@@ -234,7 +234,7 @@ class ConversionOrchestrator:
         action: ConversionAction,
     ):
         """Schedule an action for later execution"""
-        execute_at = datetime.utcnow() + timedelta(minutes=action.delay_minutes)
+        execute_at = datetime.now(timezone.utc) + timedelta(minutes=action.delay_minutes)
 
         # Store in scheduled_actions table (create if needed)
         try:
@@ -254,7 +254,7 @@ class ConversionOrchestrator:
                 "channel": action.channel,
                 "template_id": action.template_id,
                 "execute_at": execute_at,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
             })
             self.db.commit()
             logger.info(f"Scheduled {action.action_type} for lead {event.lead_id} at {execute_at}")
@@ -374,8 +374,8 @@ class ConversionOrchestrator:
                 "task_type": "FOLLOW_UP",
                 "lead_id": event.lead_id,
                 "assigned_to": lead_info.get("assigned_to"),
-                "due_date": datetime.utcnow() + timedelta(hours=4),
-                "created_at": datetime.utcnow(),
+                "due_date": datetime.now(timezone.utc) + timedelta(hours=4),
+                "created_at": datetime.now(timezone.utc),
             })
             self.db.commit()
 
@@ -398,7 +398,7 @@ class ConversionOrchestrator:
             result=SpeedToLeadResult(
                 lead_id=event.lead_id or 0,
                 status="IN_PROGRESS",
-                started_at=datetime.utcnow(),
+                started_at=datetime.now(timezone.utc),
             ),
         )
 
@@ -480,7 +480,7 @@ class ConversionOrchestrator:
             attribution_type=attribution_type,  # Use the parameter
             attribution_credit=1.0,
             conversion_type=conversion_type,
-            conversion_date=datetime.utcnow(),
+            conversion_date=datetime.now(timezone.utc),
             loan_amount=loan_amount,
         )
 
@@ -543,7 +543,7 @@ class ConversionOrchestrator:
             )
 
         if days:
-            since = datetime.utcnow() - timedelta(days=days)
+            since = datetime.now(timezone.utc) - timedelta(days=days)
             query = query.filter(CampaignAttribution.conversion_date >= since)
 
         attributions = query.all()

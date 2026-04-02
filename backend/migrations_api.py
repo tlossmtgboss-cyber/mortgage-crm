@@ -34,30 +34,30 @@ async def verify_admin_access(
     # Option 2: Check for authenticated admin user via JWT token
     if authorization and authorization.startswith("Bearer "):
         try:
-            from jose import jwt, JWTError
+            from auth.tokens import verify_access_token
 
             token = authorization.replace("Bearer ", "")
-            secret_key = os.getenv("SECRET_KEY", "")
 
             try:
-                payload = jwt.decode(token, secret_key, algorithms=["HS256"], options={"verify_aud": False})
-                email = payload.get("sub")
+                payload = verify_access_token(token)
+                if payload:
+                    email = payload.get("sub")
 
-                if email:
-                    db = SessionLocal()
-                    try:
-                        # Check if user is admin
-                        result = db.execute(text("""
-                            SELECT u.id, u.is_admin, u.role
-                            FROM users u
-                            WHERE u.email = :email
-                        """), {"email": email}).fetchone()
+                    if email:
+                        db = SessionLocal()
+                        try:
+                            # Check if user is admin
+                            result = db.execute(text("""
+                                SELECT u.id, u.is_admin, u.role
+                                FROM users u
+                                WHERE u.email = :email
+                            """), {"email": email}).fetchone()
 
-                        if result and (result[1] or result[2] in ('admin', 'site_admin')):
-                            return True
-                    finally:
-                        db.close()
-            except JWTError as e:
+                            if result and (result[1] or result[2] in ('admin', 'site_admin')):
+                                return True
+                        finally:
+                            db.close()
+            except Exception as e:
                 logger.warning(f"JWT decode failed: {e}")
 
         except Exception as e:
@@ -77,16 +77,17 @@ async def debug_auth(
     if os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "development")).lower() == "production":
         raise HTTPException(status_code=404, detail="Not found")
 
-    from jose import jwt, JWTError
+    from auth.tokens import verify_access_token
 
     if not authorization or not authorization.startswith("Bearer "):
         return {"error": "No Bearer token provided"}
 
     token = authorization.replace("Bearer ", "")
-    secret_key = os.getenv("SECRET_KEY", "")
 
     try:
-        payload = jwt.decode(token, secret_key, algorithms=["HS256"], options={"verify_aud": False})
+        payload = verify_access_token(token)
+        if not payload:
+            return {"error": "Invalid or revoked token"}
         email = payload.get("sub")
 
         db = SessionLocal()
@@ -385,7 +386,7 @@ async def import_browser_guidelines(
             try:
                 # Parse date
                 date_str = guideline_data.get('date_str', '')
-                published_date = datetime.utcnow()
+                published_date = datetime.now(timezone.utc)
 
                 if date_str:
                     # Try to parse various date formats
@@ -419,7 +420,7 @@ async def import_browser_guidelines(
                     description=guideline_data.get('description', guideline_data['title']),
                     url=guideline_data['url'],
                     published_date=published_date,
-                    scraped_date=datetime.utcnow(),
+                    scraped_date=datetime.now(timezone.utc),
                     is_new=True,
                     content_hash=content_hash
                 )
@@ -2268,15 +2269,15 @@ async def test_mum_import_row(key: str = "", user_id: int = 118):
 
         # Add required NOT NULL fields
         required_fields = {
-            'created_at': datetime.utcnow(),
+            'created_at': datetime.now(timezone.utc),
             'status': 'active',
             'original_loan_amount': 0,
             'current_loan_amount': 0,
             'interest_rate': 0,
             'appraisal_value_at_closing': 0,
             'current_property_value': 0,
-            'closing_date': datetime.utcnow().date(),
-            'first_payment_date': datetime.utcnow().date(),
+            'closing_date': datetime.now(timezone.utc).date(),
+            'first_payment_date': datetime.now(timezone.utc).date(),
         }
 
         # Map loan_balance to required fields
@@ -2304,10 +2305,10 @@ async def test_mum_import_row(key: str = "", user_id: int = 118):
         if 'original_close_date' in columns and 'closing_date' not in columns:
             idx = columns.index('original_close_date')
             columns.append('closing_date')
-            values.append(values[idx] or datetime.utcnow().date())
+            values.append(values[idx] or datetime.now(timezone.utc).date())
             if 'first_payment_date' not in columns:
                 columns.append('first_payment_date')
-                values.append(values[idx] or datetime.utcnow().date())
+                values.append(values[idx] or datetime.now(timezone.utc).date())
 
         # Add remaining required fields
         for field, default in required_fields.items():

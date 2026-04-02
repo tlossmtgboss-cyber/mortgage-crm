@@ -214,7 +214,7 @@ def encrypt_existing_data(engine, batch_size: int = 500) -> int:
                         ),
                         {
                             "encrypted": encrypted_value,
-                            "now": datetime.utcnow(),
+                            "now": datetime.now(timezone.utc),
                             "row_id": row_id,
                         },
                     )

@@ -484,7 +484,7 @@ class AuditResult:
     warnings: List[str] = field(default_factory=list)
 
     # Processing metadata
-    processed_at: datetime = field(default_factory=datetime.utcnow)
+    processed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     processing_duration_ms: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
@@ -512,7 +512,7 @@ class CallTranscriptData:
     """Data extracted from a call transcript by Call Intelligence."""
     call_id: str
     call_type: str = ""  # "initial_intake", "follow_up", "document_review"
-    extracted_at: datetime = field(default_factory=datetime.utcnow)
+    extracted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Extracted sections by module
     identity_extractions: Dict[str, Any] = field(default_factory=dict)
@@ -580,7 +580,7 @@ class ApplicationAuditResponse:
     conflicting_fields: int = 0
 
     # Processing metadata
-    processed_at: datetime = field(default_factory=datetime.utcnow)
+    processed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     total_duration_ms: int = 0
 
     def to_dict(self) -> Dict[str, Any]:

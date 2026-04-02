@@ -855,7 +855,7 @@ async def get_my_analytics(
     if not microsite:
         raise HTTPException(status_code=404, detail="No microsite found")
 
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Get basic metrics
     total_views = db.execute(text("""

@@ -93,7 +93,7 @@ def register_enterprise_readiness_routes(app, get_db, get_current_user):
         return {
             "python": scan_python_dependencies(),
             "node": scan_node_dependencies(),
-            "scanned_at": __import__("datetime").datetime.utcnow().isoformat(),
+            "scanned_at": __import__("datetime").datetime.now(timezone.utc).isoformat(),
         }
 
     # =========================================================================

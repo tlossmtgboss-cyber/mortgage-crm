@@ -122,7 +122,7 @@ def main():
         if rows:
             print(f"  user_integrations rows: {len(rows)}")
             for r in rows:
-                expired = "EXPIRED" if r.expires_at and r.expires_at < datetime.utcnow() else "valid"
+                expired = "EXPIRED" if r.expires_at and r.expires_at < datetime.now(timezone.utc) else "valid"
                 print(f"    provider='{r.provider}', email={r.email}, "
                       f"access={r.has_access}, refresh={r.has_refresh}, "
                       f"expires={r.expires_at} ({expired}), scopes={r.scopes}")
@@ -138,7 +138,7 @@ def main():
             MicrosoftOAuthToken.user_id == admin.id
         ).first()
         if token:
-            expired = "EXPIRED" if token.token_expires_at and token.token_expires_at < datetime.utcnow() else "valid"
+            expired = "EXPIRED" if token.token_expires_at and token.token_expires_at < datetime.now(timezone.utc) else "valid"
             print(f"  microsoft_oauth_tokens: email={token.email_address}, "
                   f"sync={token.sync_enabled}, expires={token.token_expires_at} ({expired}), "
                   f"last_sync={token.last_sync_at}")

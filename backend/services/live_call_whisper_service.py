@@ -64,7 +64,7 @@ class Whisper:
     title: str
     content: str
     context: str  # What triggered this whisper
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     dismissed: bool = False
     used: bool = False
 
@@ -189,7 +189,7 @@ class LiveCallWhisperService:
         segment = TranscriptSegment(
             speaker=speaker,
             text=text,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             confidence=confidence,
         )
         self.call_transcripts[call_id].append(segment)

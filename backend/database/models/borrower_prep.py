@@ -18,7 +18,7 @@ class BorrowerPrepSequence(Base):
     organization_id = Column(String, nullable=False, index=True)
     appointment_type = Column(String, nullable=False)  # pre_approval_consult, rate_lock_call, closing_prep
     status = Column(String, default="active")  # active, completed, cancelled
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class BorrowerPrepStep(Base):
@@ -33,4 +33,4 @@ class BorrowerPrepStep(Base):
     content = Column(Text, nullable=True)
     status = Column(String, default="scheduled")  # scheduled, sent, failed, cancelled
     sent_at = Column(DateTime, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

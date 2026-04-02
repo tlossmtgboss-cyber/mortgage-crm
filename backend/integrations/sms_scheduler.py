@@ -47,7 +47,7 @@ class ScheduledSMSJob:
         self.variables = variables or {}
         self.metadata = metadata or {}
         self.status = JobStatus.PENDING
-        self.created_at = datetime.utcnow()
+        self.created_at = datetime.now(timezone.utc)
         self.sent_at: Optional[datetime] = None
         self.error: Optional[str] = None
         self.attempts: int = 0
@@ -174,7 +174,7 @@ class SMSScheduler:
                 job = ScheduledSMSJob(
                     to=rec.phone_number or "",
                     body=rec.message or "",
-                    send_at=rec.scheduled_for or datetime.utcnow(),
+                    send_at=rec.scheduled_for or datetime.now(timezone.utc),
                     tenant_id=str(rec.organization_id) if rec.organization_id else None,
                     template_key=config.get("template_key"),
                     variables=config.get("variables", {}),
@@ -182,7 +182,7 @@ class SMSScheduler:
                 )
                 job.job_id = rec.job_id  # override the auto-generated UUID
                 job.status = JobStatus(rec.status)
-                job.created_at = rec.created_at or datetime.utcnow()
+                job.created_at = rec.created_at or datetime.now(timezone.utc)
                 job.attempts = config.get("attempts", 0)
                 job.sent_at = rec.executed_at
                 if rec.result and isinstance(rec.result, dict):
@@ -251,7 +251,7 @@ class SMSScheduler:
         **kwargs,
     ) -> ScheduledSMSJob:
         """Schedule an SMS relative to now."""
-        send_at = datetime.utcnow() + timedelta(minutes=delay_minutes)
+        send_at = datetime.now(timezone.utc) + timedelta(minutes=delay_minutes)
         return self.schedule(to=to, body=body, send_at=send_at, tenant_id=tenant_id, **kwargs)
 
     def cancel_job(self, job_id: str) -> bool:
@@ -323,7 +323,7 @@ class SMSScheduler:
 
     async def _dispatch_due_jobs(self) -> None:
         """Find and dispatch all jobs that are due."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         due_jobs = [
             job for job in self._jobs.values()
             if job.status == JobStatus.PENDING and job.send_at <= now
@@ -349,14 +349,14 @@ class SMSScheduler:
                 )
                 if result.get("success"):
                     job.status = JobStatus.COMPLETED
-                    job.sent_at = datetime.utcnow()
+                    job.sent_at = datetime.now(timezone.utc)
                     logger.info(f"Scheduled SMS job {job.job_id} sent successfully")
                 else:
                     raise Exception(result.get("error", "Send failed"))
             else:
                 # Dry-run
                 job.status = JobStatus.COMPLETED
-                job.sent_at = datetime.utcnow()
+                job.sent_at = datetime.now(timezone.utc)
                 logger.debug(f"[DRY RUN] Job {job.job_id} to {job.to}: {job.body[:40]}...")
         except Exception as e:
             job.status = JobStatus.FAILED

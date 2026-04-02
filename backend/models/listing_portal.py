@@ -307,7 +307,7 @@ class TransactionSnapshot(BaseModel):
     milestones: List[Dict[str, Any]] = []
     milestone_progress: Dict[str, int] = {}  # {"completed": 5, "total": 9}
     recent_activity: List[Dict[str, Any]] = []
-    snapshot_at: datetime = Field(default_factory=datetime.utcnow)
+    snapshot_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_safe_dict(self) -> Dict[str, Any]:
         """Convert to dictionary with extra PII validation"""
@@ -328,7 +328,7 @@ class WeeklyUpdateData(BaseModel):
     unsubscribe_token: str
     unsubscribe_url: str
     portal_url: str
-    generated_at: datetime = Field(default_factory=datetime.utcnow)
+    generated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # =============================================================================

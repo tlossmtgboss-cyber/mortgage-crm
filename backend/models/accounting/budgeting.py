@@ -33,8 +33,8 @@ class BudgetTemplate(Base):
     total_expenses = Column(Numeric(15, 2), default=0)
     notes = Column(Text)
     copied_from_budget_id = Column(UUID(as_uuid=True), ForeignKey("budget_templates.id"))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -115,8 +115,8 @@ class BudgetItem(Base):
     period_11 = Column(Numeric(15, 2), default=0)
     period_12 = Column(Numeric(15, 2), default=0)
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     budget = relationship("BudgetTemplate", back_populates="items")

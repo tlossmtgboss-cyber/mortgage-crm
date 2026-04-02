@@ -44,7 +44,7 @@ class WeeklyDigestService:
             "metrics": metrics,
             "recommendations": recommendations[:3],  # Top 3
             "anomalies": [a for a in anomalies if a.get("severity") in ["critical", "warning"]][:3],
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
 
     def format_html_email(self, digest: Dict[str, Any]) -> str:
@@ -215,7 +215,7 @@ class WeeklyDigestService:
                 "status": "sent",
                 "recipients": recipients,
                 "subject": digest["subject"],
-                "sent_at": datetime.utcnow().isoformat()
+                "sent_at": datetime.now(timezone.utc).isoformat()
             }
         except Exception as e:
             return {
@@ -247,7 +247,7 @@ class WeeklyDigestService:
 
     def _get_next_run_date(self, day_of_week: int, hour: int) -> datetime:
         """Calculate the next run date for the digest."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         days_ahead = day_of_week - now.weekday()
         if days_ahead <= 0:  # Target day already happened this week
             days_ahead += 7

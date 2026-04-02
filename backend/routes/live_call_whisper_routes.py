@@ -182,7 +182,7 @@ async def websocket_endpoint(websocket: WebSocket, call_id: str):
         await websocket.send_json({
             "type": "connected",
             "call_id": call_id,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         # Send any existing whispers
@@ -493,5 +493,5 @@ async def whisper_health():
         "status": "healthy",
         "service": "live-call-whisper",
         "active_calls": len(whisper_service.active_calls),
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }

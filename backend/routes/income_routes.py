@@ -310,7 +310,7 @@ async def update_income_source(
         if key not in _protected:
             setattr(source, key, value)
 
-    source.updated_at = datetime.utcnow()
+    source.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(source)
 
@@ -328,7 +328,7 @@ async def delete_income_source(
         raise HTTPException(status_code=404, detail="Income source not found")
 
     source.is_active = False
-    source.updated_at = datetime.utcnow()
+    source.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"success": True, "message": "Income source deactivated"}
@@ -413,10 +413,10 @@ async def calculate_income(
         source.annual_qualifying_income = result.annual_qualifying_income
         source.calculation_method = IncomeCalculationMethod(result.calculation_method) if result.calculation_method else None
         source.calculation_notes = "\n".join(result.notes)
-        source.calculation_date = datetime.utcnow()
+        source.calculation_date = datetime.now(timezone.utc)
         source.declining_income_flag = result.flags.get("declining_income", False)
         source.variable_income_flag = result.flags.get("variable_income", False)
-        source.updated_at = datetime.utcnow()
+        source.updated_at = datetime.now(timezone.utc)
         db.commit()
 
     return result.to_dict()
@@ -571,7 +571,7 @@ async def extract_income_from_documents(
         source.calculation_method = IncomeCalculationMethod.BANK_STATEMENT
         source.verification_status = IncomeVerificationStatus.DOCUMENTS_RECEIVED
 
-    source.updated_at = datetime.utcnow()
+    source.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(source)
 
@@ -922,9 +922,9 @@ async def apply_extraction_to_profile(
 
         employment.monthly_income = extraction.calculated_monthly_income
         employment.annual_income = extraction.calculated_annual_income
-        employment.last_updated_from_paystub_at = datetime.utcnow()
+        employment.last_updated_from_paystub_at = datetime.now(timezone.utc)
         employment.last_paystub_id = extraction.document_id
-        employment.updated_at = datetime.utcnow()
+        employment.updated_at = datetime.now(timezone.utc)
 
         applied_records["employment_id"] = employment.id
 
@@ -954,7 +954,7 @@ async def apply_extraction_to_profile(
         income_source.annual_qualifying_income = extraction.calculated_annual_income
         income_source.extracted_data = _paystub_to_dict(extraction)
         income_source.supporting_document_ids = [extraction.document_id]
-        income_source.updated_at = datetime.utcnow()
+        income_source.updated_at = datetime.now(timezone.utc)
 
         if applied_records.get("employment_id"):
             income_source.employment_id = applied_records["employment_id"]
@@ -966,7 +966,7 @@ async def apply_extraction_to_profile(
 
     # Mark extraction as applied
     extraction.applied_to_profile = True
-    extraction.applied_at = datetime.utcnow()
+    extraction.applied_at = datetime.now(timezone.utc)
     extraction.applied_fields = request.fields_to_apply
 
     db.commit()

@@ -113,7 +113,7 @@ class BlogPDFExtractionService:
             metadata = {
                 "file_name": file_path.name,
                 "file_size": file_path.stat().st_size,
-                "extracted_at": datetime.utcnow().isoformat(),
+                "extracted_at": datetime.now(timezone.utc).isoformat(),
             }
 
             # Try standard text extraction first

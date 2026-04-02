@@ -694,7 +694,7 @@ def update_quote_request(
     if update.status in status_map:
         quote.status = status_map[update.status]
         if update.status == "quoted":
-            quote.quoted_at = datetime.utcnow()
+            quote.quoted_at = datetime.now(timezone.utc)
 
     if update.quote_data:
         quote.quote_data = update.quote_data

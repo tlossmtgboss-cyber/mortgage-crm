@@ -281,7 +281,7 @@ async def create_api_key(key_data: APIKeyCreate):
             "expires_at": key_data.expires_at.isoformat() if key_data.expires_at else None,
             "ip_whitelist": key_data.ip_whitelist,
             "is_active": True,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "last_used_at": None,
             "usage_count": 0
         }
@@ -353,7 +353,7 @@ async def update_api_key(key_id: str, update_data: APIKeyUpdate):
         if update_data.is_active is not None:
             key_data["is_active"] = update_data.is_active
 
-        key_data["updated_at"] = datetime.utcnow().isoformat()
+        key_data["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         return success_response(key_data, "API key updated successfully")
     except HTTPException:
@@ -393,7 +393,7 @@ async def rotate_api_key(key_id: str):
         # Update with new key hash
         old_key_data["key_hash"] = key_hash
         old_key_data["display_prefix"] = api_key[:12]
-        old_key_data["rotated_at"] = datetime.utcnow().isoformat()
+        old_key_data["rotated_at"] = datetime.now(timezone.utc).isoformat()
 
         return success_response({
             "id": key_id,
@@ -481,7 +481,7 @@ async def create_webhook_endpoint(webhook: WebhookEndpoint):
             "headers": webhook.headers,
             "retry_count": webhook.retry_count,
             "timeout_seconds": webhook.timeout_seconds,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
             "last_triggered_at": None,
             "success_count": 0,
             "failure_count": 0
@@ -511,7 +511,7 @@ async def update_webhook_endpoint(webhook_id: str, webhook: WebhookEndpoint):
         existing["headers"] = webhook.headers
         existing["retry_count"] = webhook.retry_count
         existing["timeout_seconds"] = webhook.timeout_seconds
-        existing["updated_at"] = datetime.utcnow().isoformat()
+        existing["updated_at"] = datetime.now(timezone.utc).isoformat()
 
         return success_response(existing, "Webhook endpoint updated successfully")
     except HTTPException:
@@ -628,7 +628,7 @@ async def update_rate_limit_settings(settings: RateLimitSettings):
             "rate_limit_by_ip": settings.rate_limit_by_ip,
             "rate_limit_by_key": settings.rate_limit_by_key,
             "custom_limits": settings.custom_limits,
-            "updated_at": datetime.utcnow().isoformat()
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
 
         return success_response(rate_limit_settings, "Rate limit settings updated successfully")

@@ -43,8 +43,8 @@ class BankAccount(Base):
     # Reconciliation
     last_reconciled_date = Column(Date)
     last_reconciled_balance = Column(Numeric(15, 2))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -101,8 +101,8 @@ class PlaidItem(Base):
     webhook_url = Column(String(500))
     last_webhook_at = Column(DateTime)
     last_successful_update = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint('organization_id', 'item_id', name='uq_plaid_item'),
@@ -167,8 +167,8 @@ class BankTransaction(Base):
     rule_id = Column(UUID(as_uuid=True))
     excluded_reason = Column(Text)
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     bank_account = relationship("BankAccount", back_populates="transactions")
@@ -246,8 +246,8 @@ class BankCategorizationRule(Base):
     is_active = Column(Boolean, default=True)
     match_count = Column(Integer, default=0)
     last_matched_at = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -332,8 +332,8 @@ class BankReconciliation(Base):
     completed_at = Column(DateTime)
     completed_by = Column(Integer)
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     bank_account = relationship("BankAccount", back_populates="reconciliations")

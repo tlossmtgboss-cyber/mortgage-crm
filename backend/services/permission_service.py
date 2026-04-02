@@ -104,7 +104,7 @@ class PermissionService:
             expires_at = result[1]
 
             # Check if permission has expired
-            if check_expiration and expires_at and datetime.utcnow() > expires_at:
+            if check_expiration and expires_at and datetime.now(timezone.utc) > expires_at:
                 granted = False
 
         # Cache the result

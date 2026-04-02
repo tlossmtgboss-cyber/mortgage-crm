@@ -272,7 +272,7 @@ async def admin_create_subscription(
         price = tier_config["price_monthly"] if data.billing_cycle == "monthly" else tier_config["price_annual"] / 12
 
         # Create subscription
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         period_end = now.replace(day=1)
         if now.month == 12:
             period_end = period_end.replace(year=now.year + 1, month=1)

@@ -624,7 +624,7 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
         """Create a test appointment for notification testing"""
         from datetime import datetime, timedelta
 
-        scheduled_start = datetime.utcnow() + timedelta(hours=hours_from_now)
+        scheduled_start = datetime.now(timezone.utc) + timedelta(hours=hours_from_now)
         scheduled_end = scheduled_start + timedelta(minutes=30)
 
         try:

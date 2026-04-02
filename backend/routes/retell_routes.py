@@ -222,7 +222,7 @@ async def connect_retell(
             {
                 "user_id": current_user["id"],
                 "api_key": request.api_key,
-                "now": datetime.utcnow(),
+                "now": datetime.now(timezone.utc),
             }
         )
         db.commit()
@@ -352,7 +352,7 @@ async def create_agent(
                 "agent_name": request.agent_name,
                 "agent_type": request.agent_type,
                 "voice_id": request.voice_id,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
             }
         )
         db.commit()
@@ -481,7 +481,7 @@ async def create_phone_number(
                 "user_id": current_user["id"],
                 "phone_number": result.get("phone_number"),
                 "agent_id": request.agent_id,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
             }
         )
         db.commit()
@@ -520,7 +520,7 @@ async def import_phone_number(
                 "user_id": current_user["id"],
                 "phone_number": request.phone_number,
                 "agent_id": request.agent_id,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
             }
         )
         db.commit()
@@ -646,7 +646,7 @@ async def create_call(
                 "lead_id": request.lead_id,
                 "loan_id": request.loan_id,
                 "campaign_id": request.campaign_id,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
             }
         )
         db.commit()
@@ -715,7 +715,7 @@ async def end_call(
             SET status = 'ended', ended_at = :now
             WHERE retell_call_id = :call_id
             """),
-            {"call_id": call_id, "now": datetime.utcnow()}
+            {"call_id": call_id, "now": datetime.now(timezone.utc)}
         )
         db.commit()
 
@@ -789,7 +789,7 @@ async def handle_call_webhook(
                 SET status = 'in_progress', started_at = :now
                 WHERE retell_call_id = :call_id
                 """),
-                {"call_id": call_id, "now": datetime.utcnow()}
+                {"call_id": call_id, "now": datetime.now(timezone.utc)}
             )
 
         elif event_type == "call_ended":
@@ -805,7 +805,7 @@ async def handle_call_webhook(
                 """),
                 {
                     "call_id": call_id,
-                    "now": datetime.utcnow(),
+                    "now": datetime.now(timezone.utc),
                     "duration": call_data.get("call_duration_ms", 0) / 1000,
                     "reason": call_data.get("disconnection_reason"),
                 }
@@ -885,7 +885,7 @@ async def process_call_completion(
                 SET last_contact_at = :now, last_contact_method = 'phone'
                 WHERE id = :lead_id
                 """),
-                {"lead_id": call_record.lead_id, "now": datetime.utcnow()}
+                {"lead_id": call_record.lead_id, "now": datetime.now(timezone.utc)}
             )
 
         # Log activity
@@ -905,7 +905,7 @@ async def process_call_completion(
                 "description": analysis.get("call_summary", "AI voice call completed"),
                 "lead_id": call_record.lead_id,
                 "loan_id": call_record.loan_id,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
             }
         )
 

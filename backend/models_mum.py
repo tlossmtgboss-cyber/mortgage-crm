@@ -68,8 +68,8 @@ class MUMClient(Base):
     status = Column(String(50), default='active')  # active, paid_off, refinanced, sold
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Calculated fields (stored for performance)
     equity_amount = Column(DECIMAL(12, 2))
@@ -98,7 +98,7 @@ class MUMTransaction(Base):
 
     notes = Column(Text)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationship
     client = relationship("MUMClient", backref="transactions")

@@ -268,6 +268,7 @@ async def ask_question(
             db=db,
             query=question,
             loan_program=category if category != "all" else None,
+            organization_id=str(getattr(current_user, 'organization_id', None) or (current_user.get('organization_id') if isinstance(current_user, dict) else None) or ''),
             limit=5
         )
         stored_guidelines = results
@@ -340,13 +341,14 @@ Please provide an accurate, helpful answer based on this information."""
         sources=sources,
         confidence=confidence,
         category=category,
-        timestamp=datetime.utcnow().isoformat()
+        timestamp=datetime.now(timezone.utc).isoformat()
     )
 
 
 @router.get("/guidelines/quick-reference")
 async def get_quick_reference(
-    category: Optional[str] = None
+    category: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
 ):
     """
     Get quick reference information from the built-in knowledge base.

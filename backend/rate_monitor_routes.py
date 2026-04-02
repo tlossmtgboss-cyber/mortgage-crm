@@ -398,7 +398,7 @@ async def get_current_rates(
         'loan_type': loan_type,
         'credit_score': credit_score,
         'ltv': ltv,
-        'fetched_at': datetime.utcnow().isoformat(),
+        'fetched_at': datetime.now(timezone.utc).isoformat(),
         'is_mock': rates.get('30_year', {}).get('is_mock', True),
     }
 
@@ -681,9 +681,9 @@ async def update_alert(
     if 'status' in update_data:
         new_status = update_data['status']
         if new_status == 'acknowledged' and not alert.acknowledged_at:
-            alert.acknowledged_at = datetime.utcnow()
+            alert.acknowledged_at = datetime.now(timezone.utc)
         elif new_status in ['converted', 'dismissed'] and not alert.resolved_at:
-            alert.resolved_at = datetime.utcnow()
+            alert.resolved_at = datetime.now(timezone.utc)
 
     _protected = {'id', 'target_id', 'mum_client_id', 'organization_id', 'created_at', 'updated_at'}
     for field, value in update_data.items():
@@ -916,7 +916,7 @@ async def test_call_target(
             call_result = call_response.json()
 
         # Update target with call info
-        target.last_call_at = datetime.utcnow()
+        target.last_call_at = datetime.now(timezone.utc)
         target.last_call_status = 'initiated'
         target.vapi_call_id = call_result.get('id')
         target.trigger_count = (target.trigger_count or 0) + 1
@@ -1222,7 +1222,7 @@ async def get_dashboard(
                 '15_year': rates.get('15_year', {}).get('rate'),
                 'is_mock': rates.get('30_year', {}).get('is_mock', True),
             },
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
         }
     except Exception as e:
         logger.error(f"Rate monitor dashboard error: {e}")
@@ -1244,7 +1244,7 @@ async def get_dashboard(
                 '15_year': None,
                 'is_mock': True,
             },
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'error': str(e),
         }
 

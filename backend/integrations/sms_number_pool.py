@@ -39,7 +39,7 @@ class PooledNumber:
         self.last_reset_date: Optional[str] = None  # YYYY-MM-DD
         self.error_count: int = 0
         self.consecutive_errors: int = 0
-        self.added_at = datetime.utcnow()
+        self.added_at = datetime.now(timezone.utc)
 
     @property
     def daily_utilization(self) -> float:
@@ -53,7 +53,7 @@ class PooledNumber:
         )
 
     def reset_daily_counters(self) -> None:
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if self.last_reset_date != today:
             self.messages_sent_today = 0
             self.last_reset_date = today
@@ -61,7 +61,7 @@ class PooledNumber:
     def record_send(self, success: bool = True) -> None:
         self.messages_sent_today += 1
         self.messages_sent_total += 1
-        self.last_used_at = datetime.utcnow()
+        self.last_used_at = datetime.now(timezone.utc)
         if success:
             self.consecutive_errors = 0
         else:

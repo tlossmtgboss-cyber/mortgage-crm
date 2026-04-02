@@ -283,7 +283,7 @@ async def close_breakout_room(
         raise HTTPException(status_code=404, detail="Breakout room not found")
 
     breakout.status = "closed"
-    breakout.closed_at = datetime.utcnow()
+    breakout.closed_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"success": True, "breakout_room_id": breakout_id, "status": "closed"}

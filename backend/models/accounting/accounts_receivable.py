@@ -39,8 +39,8 @@ class ARCustomer(Base):
     contact_id = Column(Integer)
     borrower_id = Column(Integer)
     tenant_account_id = Column(UUID(as_uuid=True))
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -106,8 +106,8 @@ class ARInvoice(Base):
     void_reason = Column(Text)
     template_id = Column(UUID(as_uuid=True))
     pdf_url = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -192,7 +192,7 @@ class ARInvoiceLine(Base):
     product_id = Column(UUID(as_uuid=True))
     service_id = Column(UUID(as_uuid=True))
     loan_id = Column(UUID(as_uuid=True))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     invoice = relationship("ARInvoice", back_populates="lines")
@@ -246,8 +246,8 @@ class ARPayment(Base):
     voided_at = Column(DateTime)
     voided_by = Column(Integer)
     void_reason = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -298,7 +298,7 @@ class ARPaymentApplication(Base):
     payment_id = Column(UUID(as_uuid=True), ForeignKey("ar_payments.id", ondelete="CASCADE"), nullable=False)
     invoice_id = Column(UUID(as_uuid=True), ForeignKey("ar_invoices.id"), nullable=False)
     amount_applied = Column(Numeric(12, 2), nullable=False)
-    applied_at = Column(DateTime, default=datetime.utcnow)
+    applied_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships

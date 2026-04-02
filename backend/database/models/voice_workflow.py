@@ -78,8 +78,8 @@ class VoiceWorkflow(Base):
     proposed_slots = Column(JSONB, default=list)  # [{start, end, formatted}]
 
     # Lifecycle
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     expires_at = Column(DateTime, nullable=True)  # Auto-expire after 48h
     completed_at = Column(DateTime, nullable=True)
 
@@ -122,7 +122,7 @@ class VoiceWorkflow(Base):
         self.conversation_history = self.conversation_history + [{
             "role": role,
             "content": content,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }]
         if role == "contact":
             self.turn_count = (self.turn_count or 0) + 1
@@ -139,7 +139,7 @@ class VoiceWorkflow(Base):
         new_entry = {
             "role": role,
             "content": content,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         import json
         db_session.execute(
@@ -161,6 +161,6 @@ class VoiceWorkflow(Base):
     def transition_to(self, new_state: str):
         """Transition to a new state with timestamp."""
         self.state = new_state
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
         if new_state in (VoiceWorkflowState.COMPLETED.value, VoiceWorkflowState.APPOINTMENT_BOOKED.value):
-            self.completed_at = datetime.utcnow()
+            self.completed_at = datetime.now(timezone.utc)

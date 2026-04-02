@@ -155,7 +155,7 @@ class IncomeOrchestrator:
                 warning_flags_count=warning_count,
                 info_flags_count=info_count,
                 ruleset_version=self.RULESET_VERSION,
-                calculated_at=datetime.utcnow(),
+                calculated_at=datetime.now(timezone.utc),
                 calculation_duration_ms=duration_ms,
                 worksheet_ids=worksheet_ids,
             )
@@ -185,7 +185,7 @@ class IncomeOrchestrator:
                 warning_flags_count=0,
                 info_flags_count=0,
                 ruleset_version=self.RULESET_VERSION,
-                calculated_at=datetime.utcnow(),
+                calculated_at=datetime.now(timezone.utc),
                 calculation_duration_ms=duration_ms,
             )
 
@@ -346,7 +346,7 @@ class IncomeOrchestrator:
                 borrower_id=request.borrower_id,
                 worksheet_type="INCOME_SUMMARY",
                 data=summary_data,
-                generated_at=datetime.utcnow(),
+                generated_at=datetime.now(timezone.utc),
             )
             self.db.add(worksheet)
             self.db.flush()
@@ -374,7 +374,7 @@ class IncomeOrchestrator:
                     borrower_id=request.borrower_id,
                     worksheet_type=f"{stream_type.value}_DETAIL",
                     data=type_data,
-                    generated_at=datetime.utcnow(),
+                    generated_at=datetime.now(timezone.utc),
                 )
                 self.db.add(worksheet)
                 self.db.flush()

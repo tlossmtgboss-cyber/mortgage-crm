@@ -191,8 +191,8 @@ def generate_borrower_token(borrower_id: str, email: str) -> str:
         "sub": borrower_id,
         "email": email,
         "type": "borrower",
-        "exp": datetime.utcnow() + timedelta(days=BORROWER_TOKEN_EXPIRY_DAYS),
-        "iat": datetime.utcnow(),
+        "exp": datetime.now(timezone.utc) + timedelta(days=BORROWER_TOKEN_EXPIRY_DAYS),
+        "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
@@ -232,7 +232,7 @@ def get_or_create_borrower(db: Session, profile: BorrowerProfile) -> dict:
                 WHERE id = :id
             """), {
                 "photo": profile.profile_photo,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(timezone.utc),
                 "id": existing[0]
             })
             db.commit()
@@ -268,7 +268,7 @@ def get_or_create_borrower(db: Session, profile: BorrowerProfile) -> dict:
             "provider": profile.provider,
             "provider_user_id": profile.provider_user_id,
             "photo": profile.profile_photo,
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
             "id": existing_email[0]
         })
         db.commit()
@@ -306,8 +306,8 @@ def get_or_create_borrower(db: Session, profile: BorrowerProfile) -> dict:
         "provider": profile.provider,
         "provider_user_id": profile.provider_user_id,
         "raw_profile": json.dumps(profile.raw_profile) if profile.raw_profile else None,
-        "created_at": datetime.utcnow(),
-        "updated_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
+        "updated_at": datetime.now(timezone.utc),
     })
     db.commit()
 
@@ -583,7 +583,7 @@ async def google_callback(
             "id": str(uuid.uuid4()),
             "borrower_id": borrower["id"],
             "ip": None,  # Would capture from request in production
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         })
         db.commit()
 
@@ -716,7 +716,7 @@ async def facebook_callback(
         """), {
             "id": str(uuid.uuid4()),
             "borrower_id": borrower["id"],
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         })
         db.commit()
 
@@ -842,7 +842,7 @@ async def linkedin_callback(
         """), {
             "id": str(uuid.uuid4()),
             "borrower_id": borrower["id"],
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         })
         db.commit()
 
@@ -878,8 +878,8 @@ def generate_apple_client_secret():
 
     payload = {
         "iss": APPLE_TEAM_ID,
-        "iat": datetime.utcnow(),
-        "exp": datetime.utcnow() + timedelta(days=180),
+        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(timezone.utc) + timedelta(days=180),
         "aud": "https://appleid.apple.com",
         "sub": APPLE_CLIENT_ID,
     }
@@ -1017,7 +1017,7 @@ async def apple_callback(
         """), {
             "id": str(uuid.uuid4()),
             "borrower_id": borrower["id"],
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         })
         db.commit()
 
@@ -1057,7 +1057,7 @@ async def request_email_login(
 
     # Generate magic link token
     magic_token = secrets.token_urlsafe(32)
-    expires_at = datetime.utcnow() + timedelta(hours=24)
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
 
     # Check if borrower exists
     existing = db.execute(text("""
@@ -1081,8 +1081,8 @@ async def request_email_login(
             "email": request.email,
             "first_name": request.first_name,
             "last_name": request.last_name,
-            "created_at": datetime.utcnow(),
-            "updated_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
         })
 
     # Store magic link token
@@ -1094,7 +1094,7 @@ async def request_email_login(
         "borrower_id": borrower_id,
         "token": magic_token,
         "expires_at": expires_at,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
     })
     db.commit()
 
@@ -1126,7 +1126,7 @@ async def verify_email_login(
     """Verify magic link and complete login."""
 
     # Atomic token consumption: UPDATE ... WHERE used_at IS NULL prevents race conditions
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     update_result = db.execute(text("""
         UPDATE borrower_magic_links
         SET used_at = :used_at
@@ -1163,7 +1163,7 @@ async def verify_email_login(
     """), {
         "id": str(uuid.uuid4()),
         "borrower_id": borrower_id,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
     })
     db.commit()
 
@@ -1205,7 +1205,7 @@ async def update_consent(
     """), {
         "comm": consent.communication_consent,
         "mktg": consent.marketing_consent,
-        "updated_at": datetime.utcnow(),
+        "updated_at": datetime.now(timezone.utc),
         "id": borrower_id,
     })
     db.commit()
@@ -1646,11 +1646,11 @@ async def submit_application(
                 "first_name": submission.profileData.get("firstName", ""),
                 "last_name": submission.profileData.get("lastName", ""),
                 "provider_user_id": borrower_email,
-                "now": datetime.utcnow(),
+                "now": datetime.now(timezone.utc),
             })
 
         # Prepare submission timestamp
-        submission_date = datetime.utcnow()
+        submission_date = datetime.now(timezone.utc)
         date_str = submission_date.strftime("%Y%m%d_%H%M%S")
         fannie_mae_bytes = fannie_mae_xml.encode('utf-8') if fannie_mae_xml else None
 

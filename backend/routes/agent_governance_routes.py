@@ -1418,8 +1418,8 @@ async def seed_missing_agents(db: Session = Depends(get_db)):
                 failed_executions=total_executions - successful_executions,
                 success_rate=base_success_rate * 100,
                 avg_response_time_ms=random.randint(500, 2000),
-                last_execution_at=datetime.utcnow() - timedelta(minutes=random.randint(1, 60)),
-                last_health_check=datetime.utcnow() - timedelta(minutes=random.randint(1, 10))
+                last_execution_at=datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 60)),
+                last_health_check=datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 10))
             )
 
             db.add(agent)

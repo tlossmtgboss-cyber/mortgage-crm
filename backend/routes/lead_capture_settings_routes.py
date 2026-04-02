@@ -76,7 +76,7 @@ def success_response(data: dict, message: str = "Success"):
         "success": True,
         "message": message,
         "data": data,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -319,7 +319,7 @@ async def get_lead_capture_settings(
 
         # In production, load from database based on organization_id
         settings = DEFAULT_SETTINGS.copy()
-        settings["last_updated"] = datetime.utcnow().isoformat()
+        settings["last_updated"] = datetime.now(timezone.utc).isoformat()
         settings["updated_by"] = None
 
         return success_response(
@@ -380,7 +380,7 @@ async def update_lead_capture_settings(
 
         # In production, save to database
         updated_settings = settings.dict()
-        updated_settings["last_updated"] = datetime.utcnow().isoformat()
+        updated_settings["last_updated"] = datetime.now(timezone.utc).isoformat()
         updated_settings["updated_by"] = getattr(current_user, 'id', None)
 
         return success_response(
@@ -706,7 +706,7 @@ async def reset_to_defaults(
             raise PermissionException("Admin access required to reset settings")
 
         settings = DEFAULT_SETTINGS.copy()
-        settings["last_updated"] = datetime.utcnow().isoformat()
+        settings["last_updated"] = datetime.now(timezone.utc).isoformat()
         settings["updated_by"] = getattr(current_user, 'id', None)
         settings["reset_to_defaults"] = True
 

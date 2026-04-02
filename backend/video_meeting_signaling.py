@@ -28,19 +28,13 @@ async def resolve_host_status(token: Optional[str], room_code: str) -> Tuple[boo
         return False, None
 
     try:
-        from jose import jwt, JWTError, ExpiredSignatureError
+        from auth.tokens import verify_access_token
 
-        secret_key = os.getenv("SECRET_KEY", "")
-        algorithm = os.getenv("AUTH_ALGORITHM", "HS256")
-
-        if not secret_key:
-            logger.warning("SECRET_KEY not set, cannot verify host status")
+        payload = verify_access_token(token)
+        if not payload:
+            logger.warning("Token invalid/expired/revoked, cannot verify host status")
             return False, None
 
-        payload = jwt.decode(
-            token, secret_key, algorithms=[algorithm],
-            options={"verify_aud": False, "verify_exp": True}
-        )
         email = payload.get("sub")
         if not email:
             return False, None
@@ -123,7 +117,7 @@ class MeetingConnectionManager:
             "id": participant_id,
             "display_name": display_name,
             "is_host": is_host,
-            "joined_at": datetime.utcnow().isoformat(),
+            "joined_at": datetime.now(timezone.utc).isoformat(),
             "video_enabled": True,
             "audio_enabled": True
         }
@@ -322,7 +316,7 @@ async def websocket_video_meeting(
                     "from": participant_id,
                     "sender_name": display_name,
                     "message": message.get("message", ""),
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
 
             elif message_type == "request_offer":
@@ -348,7 +342,7 @@ async def websocket_video_meeting(
                         "recording_id": recording_id,
                         "consent_type": message.get("consent_type"),
                         "disclosure_script": message.get("disclosure_script"),
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     }, exclude=participant_id)
 
             elif message_type == "recording_stopped":
@@ -358,7 +352,7 @@ async def websocket_video_meeting(
                         "type": "recording_state_changed",
                         "recording": False,
                         "stopped_by": participant_id,
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     }, exclude=participant_id)
 
             elif message_type == "breakout_created":
@@ -369,7 +363,7 @@ async def websocket_video_meeting(
                         "action": "created",
                         "room_id": message.get("room_id") or message.get("room"),
                         "room": message.get("room"),
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     })
 
             elif message_type == "breakout_closed":
@@ -379,7 +373,7 @@ async def websocket_video_meeting(
                         "type": "breakout_update",
                         "action": "closed",
                         "room_id": message.get("room_id"),
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     })
 
             elif message_type == "breakout_join":
@@ -390,7 +384,7 @@ async def websocket_video_meeting(
                     "room_id": message.get("room_id"),
                     "participant_id": participant_id,
                     "display_name": display_name,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
 
             elif message_type == "breakout_leave":
@@ -400,7 +394,7 @@ async def websocket_video_meeting(
                     "action": "participant_left",
                     "room_id": message.get("room_id"),
                     "participant_id": participant_id,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
 
             else:

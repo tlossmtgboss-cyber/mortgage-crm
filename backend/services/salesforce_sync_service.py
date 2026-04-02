@@ -497,7 +497,7 @@ class SalesforceSyncService:
             loan_data["salesforce_raw_stage"] = str(raw_stage)
 
         # Set sync metadata
-        loan_data["salesforce_last_synced_at"] = datetime.utcnow()
+        loan_data["salesforce_last_synced_at"] = datetime.now(timezone.utc)
         loan_data["salesforce_sync_status"] = "synced"
 
         # Ensure required fields have defaults

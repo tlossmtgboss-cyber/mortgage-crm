@@ -266,7 +266,7 @@ async def launch_campaign(
         product_focus=request.product_focus,
         capacity_leads_per_week=request.capacity_leads_per_week,
         status=CampaignStatus.LAUNCHING.value,
-        launched_at=datetime.utcnow(),
+        launched_at=datetime.now(timezone.utc),
         # Copy config from blueprint
         speed_to_lead_config=blueprint.speed_to_lead_config,
         dialer_config=blueprint.dialer_rules,
@@ -457,7 +457,7 @@ async def _activate_campaign(campaign_id: str):
             campaign.tracking_pixel_id = f"px_{campaign_id[:8]}"
 
             campaign.status = CampaignStatus.ACTIVE.value
-            campaign.activated_at = datetime.utcnow()
+            campaign.activated_at = datetime.now(timezone.utc)
             db.commit()
             logger.info(f"Campaign {campaign_id} activated with {len(sms_sequences)} SMS and {len(email_sequences)} email sequences")
     except SQLAlchemyError as e:
@@ -562,7 +562,7 @@ async def pause_campaign(
         raise HTTPException(400, f"Cannot pause campaign in {campaign.status} status")
 
     campaign.status = CampaignStatus.PAUSED.value
-    campaign.paused_at = datetime.utcnow()
+    campaign.paused_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"status": "paused", "paused_at": campaign.paused_at}
@@ -588,7 +588,7 @@ async def resume_campaign(
     campaign.paused_at = None
     db.commit()
 
-    return {"status": "active", "resumed_at": datetime.utcnow()}
+    return {"status": "active", "resumed_at": datetime.now(timezone.utc)}
 
 
 @router.post("/campaigns/{campaign_id}/activate")
@@ -611,7 +611,7 @@ async def activate_campaign(
         raise HTTPException(400, f"Cannot activate campaign in {campaign.status} status")
 
     campaign.status = CampaignStatus.ACTIVE.value
-    campaign.activated_at = datetime.utcnow()
+    campaign.activated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"status": "active", "activated_at": campaign.activated_at}
@@ -868,7 +868,7 @@ def _get_response_times_for_percentiles(
     from sqlalchemy import text
     from datetime import datetime, timedelta
 
-    cutoff = datetime.utcnow() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
     try:
         if campaign_id:
@@ -1280,7 +1280,7 @@ async def get_attribution_report(
         )
 
     query = query.filter(
-        CampaignAttribution.conversion_date >= datetime.utcnow() - timedelta(days=days)
+        CampaignAttribution.conversion_date >= datetime.now(timezone.utc) - timedelta(days=days)
     )
 
     attributions = query.all()

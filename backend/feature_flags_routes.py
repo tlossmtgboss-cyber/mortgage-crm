@@ -101,49 +101,34 @@ class UserVisibleFeaturesResponse(BaseModel):
 
 def get_current_company_id(request: Request) -> int:
     """Get current company ID from request context"""
-    from jose import jwt, JWTError
-    import os
-
-    SECRET_KEY = os.getenv("SECRET_KEY")
-    if not SECRET_KEY:
-        raise ValueError("SECRET_KEY environment variable is not set")
-    ALGORITHM = "HS256"
+    from auth.tokens import verify_access_token
 
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
-            company_id = payload.get("company_id")
-            if not company_id:
-                raise HTTPException(status_code=401, detail="Token missing company_id")
-            return company_id
-        except JWTError:
-            raise HTTPException(status_code=401, detail="Invalid authentication token")
+        payload = verify_access_token(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid or revoked token")
+        company_id = payload.get("company_id")
+        if not company_id:
+            raise HTTPException(status_code=401, detail="Token missing company_id")
+        return company_id
     raise HTTPException(status_code=401, detail="Authentication required")
 
 
 def get_current_user_id(request: Request) -> int:
     """Get current user ID from request context"""
-    from jose import jwt, JWTError
-    import os
-
-    SECRET_KEY = os.getenv("SECRET_KEY")
-    if not SECRET_KEY:
-        raise ValueError("SECRET_KEY environment variable is not set")
-    ALGORITHM = "HS256"
+    from auth.tokens import verify_access_token
 
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
-        try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
-            # Get user ID from email (sub) by querying database, or from user_id claim
-            if "user_id" in payload:
-                return payload["user_id"]
-            raise HTTPException(status_code=401, detail="Token missing user_id")
-        except JWTError:
-            raise HTTPException(status_code=401, detail="Invalid authentication token")
+        payload = verify_access_token(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid or revoked token")
+        if "user_id" in payload:
+            return payload["user_id"]
+        raise HTTPException(status_code=401, detail="Token missing user_id")
     raise HTTPException(status_code=401, detail="Authentication required")
 
 

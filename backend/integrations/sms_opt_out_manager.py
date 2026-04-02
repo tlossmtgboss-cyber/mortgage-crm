@@ -62,7 +62,7 @@ class SMSOptOutManager:
                         {"phone": normalized},
                     ).fetchone()
                     if row:
-                        self._opted_out[key] = {"phone": normalized, "opted_out_at": datetime.utcnow().isoformat()}
+                        self._opted_out[key] = {"phone": normalized, "opted_out_at": datetime.now(timezone.utc).isoformat()}
                         return True
                 except Exception as e2:
                     logger.debug(f"DB opt-out check skipped: {e2}")
@@ -78,7 +78,7 @@ class SMSOptOutManager:
         record = {
             "phone": normalized,
             "reason": reason,
-            "opted_out_at": datetime.utcnow().isoformat(),
+            "opted_out_at": datetime.now(timezone.utc).isoformat(),
             "tenant_id": tenant_id,
         }
         self._opted_out[key] = record

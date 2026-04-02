@@ -142,7 +142,7 @@ class SubscriptionService:
     def get_current_usage(db: Session, organization_id: int, feature_key: str) -> int:
         """Get current period usage for a feature"""
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             result = db.execute(text("""
                 SELECT COALESCE(usage_count, 0)
                 FROM feature_usage
@@ -160,7 +160,7 @@ class SubscriptionService:
     def increment_usage(db: Session, organization_id: int, feature_key: str, amount: int = 1) -> Dict[str, Any]:
         """Increment usage counter for a feature"""
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             # Get or create current period
             period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -215,7 +215,7 @@ class SubscriptionService:
     def get_usage_summary(db: Session, organization_id: int) -> Dict[str, Any]:
         """Get complete usage summary for organization"""
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             # Get all usage for current period
             result = db.execute(text("""

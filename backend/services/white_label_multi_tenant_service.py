@@ -351,7 +351,7 @@ class WhiteLabelMultiTenantService:
             api_key_hash = hashlib.sha256(api_key.encode()).hexdigest()
 
             # Create tenant object
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             tenant = Tenant(
                 id=tenant_id,
                 name=name,
@@ -511,7 +511,7 @@ class WhiteLabelMultiTenantService:
 
         tenant.status = TenantStatus.SUSPENDED
         tenant.metadata["suspension_reason"] = reason
-        tenant.metadata["suspended_at"] = datetime.utcnow().isoformat()
+        tenant.metadata["suspended_at"] = datetime.now(timezone.utc).isoformat()
 
         self._tenant_cache[tenant_id] = tenant
         if self.db:
@@ -531,7 +531,7 @@ class WhiteLabelMultiTenantService:
 
         tenant.status = TenantStatus.ACTIVE
         tenant.metadata.pop("suspension_reason", None)
-        tenant.metadata["reactivated_at"] = datetime.utcnow().isoformat()
+        tenant.metadata["reactivated_at"] = datetime.now(timezone.utc).isoformat()
 
         self._tenant_cache[tenant_id] = tenant
         if self.db:
@@ -673,7 +673,7 @@ class WhiteLabelMultiTenantService:
 
         # Check trial expiration
         if tenant.status == TenantStatus.TRIAL:
-            if tenant.trial_ends_at and datetime.utcnow() > tenant.trial_ends_at:
+            if tenant.trial_ends_at and datetime.now(timezone.utc) > tenant.trial_ends_at:
                 return False
 
         return tenant.features.get(feature, False)
@@ -984,7 +984,7 @@ class WhiteLabelMultiTenantService:
             by_tier[tier] = by_tier.get(tier, 0) + 1
 
         # Trials expiring soon
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         expiring_trials = [
             {
                 "id": t.id,
@@ -1016,7 +1016,7 @@ class WhiteLabelMultiTenantService:
             "by_tier": by_tier,
             "expiring_trials": expiring_trials,
             "usage_warnings": usage_warnings,
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     # =========================================================================
@@ -1059,12 +1059,12 @@ class WhiteLabelMultiTenantService:
         if tenant_id in self._usage_cache:
             usage = self._usage_cache[tenant_id]
             # Check if still in current period
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             if usage.period_start <= now <= usage.period_end:
                 return usage
 
         # Create new period
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         period_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
         next_month = period_start.month + 1 if period_start.month < 12 else 1
         next_year = period_start.year if period_start.month < 12 else period_start.year + 1

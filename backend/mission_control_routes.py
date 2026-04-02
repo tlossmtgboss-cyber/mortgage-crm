@@ -129,7 +129,7 @@ async def get_system_health_summary(db: Session = Depends(get_db)):
             "ai_improvement_delta": round(ai_improvement_delta, 2),
             "critical_alerts_count": alert_counts.get('critical', 0),
             "warning_alerts_count": alert_counts.get('warning', 0),
-            "last_updated": datetime.utcnow()
+            "last_updated": datetime.now(timezone.utc)
         }
 
     except Exception as e:
@@ -417,7 +417,7 @@ async def refresh_system_check(db: Session = Depends(get_db)):
     from datetime import datetime
 
     results = {
-        "checked_at": datetime.utcnow().isoformat(),
+        "checked_at": datetime.now(timezone.utc).isoformat(),
         "integrations": {},
         "jobs_checked": 0,
         "total_checks": 0
@@ -476,7 +476,7 @@ async def refresh_system_check(db: Session = Depends(get_db)):
             for integration in integrations_config:
                 name = integration["name"]
                 results["total_checks"] += 1
-                start_time = datetime.utcnow()
+                start_time = datetime.now(timezone.utc)
 
                 try:
                     status = "healthy"
@@ -508,7 +508,7 @@ async def refresh_system_check(db: Session = Depends(get_db)):
                                 else:
                                     response = await client.get(integration["url"], headers=headers)
 
-                                latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                                latency_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
                                 if response.status_code < 400:
                                     status = "healthy"
@@ -531,7 +531,7 @@ async def refresh_system_check(db: Session = Depends(get_db)):
                     elif integration["type"] == "database":
                         try:
                             db.execute(text(integration["query"]))
-                            latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                            latency_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
                             status = "healthy"
                         except Exception as e:
                             status = "down"
@@ -547,7 +547,7 @@ async def refresh_system_check(db: Session = Depends(get_db)):
                                 import boto3
                                 s3 = boto3.client('s3', region_name=integration.get("region", "us-east-1"))
                                 s3.head_bucket(Bucket=bucket)
-                                latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                                latency_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
                                 status = "healthy"
                             except Exception as e:
                                 status = "degraded" if "NoSuchBucket" not in str(e) else "not_configured"
@@ -563,7 +563,7 @@ async def refresh_system_check(db: Session = Depends(get_db)):
                                 import redis
                                 r = redis.from_url(redis_url, socket_timeout=5)
                                 r.ping()
-                                latency_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+                                latency_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
                                 status = "healthy"
                             except Exception as e:
                                 status = "down"
@@ -573,7 +573,7 @@ async def refresh_system_check(db: Session = Depends(get_db)):
                         "status": status,
                         "latency_ms": latency_ms,
                         "error": error_msg,
-                        "checked_at": datetime.utcnow().isoformat()
+                        "checked_at": datetime.now(timezone.utc).isoformat()
                     }
 
                     # Update database with integration status
@@ -603,7 +603,7 @@ async def refresh_system_check(db: Session = Depends(get_db)):
                     results["integrations"][name] = {
                         "status": "error",
                         "error": "Internal server error"[:200],
-                        "checked_at": datetime.utcnow().isoformat()
+                        "checked_at": datetime.now(timezone.utc).isoformat()
                     }
 
         db.commit()

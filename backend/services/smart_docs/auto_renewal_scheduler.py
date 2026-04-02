@@ -471,7 +471,7 @@ class AutoRenewalScheduler:
             )
         ).update({
             DocumentRequest.payroll_frequency: frequency,
-            DocumentRequest.updated_at: datetime.utcnow(),
+            DocumentRequest.updated_at: datetime.now(timezone.utc),
         })
 
         self.db.commit()
@@ -543,7 +543,7 @@ class AutoRenewalScheduler:
             return False
 
         doc.is_expired = True
-        doc.updated_at = datetime.utcnow()
+        doc.updated_at = datetime.now(timezone.utc)
 
         # Log the event
         event = DocPolicyEvent(
@@ -552,7 +552,7 @@ class AutoRenewalScheduler:
             event_type=DocPolicyEventType.EXPIRED,
             payload={
                 "doc_type": doc.doc_type.value if doc.doc_type else None,
-                "expired_at": datetime.utcnow().isoformat(),
+                "expired_at": datetime.now(timezone.utc).isoformat(),
             },
         )
         self.db.add(event)
@@ -662,7 +662,7 @@ class AutoRenewalScheduler:
         doc.doc_date = pay_date
         doc.doc_expires_at = expires_at
         doc.is_expired = expires_at < date.today()
-        doc.updated_at = datetime.utcnow()
+        doc.updated_at = datetime.now(timezone.utc)
 
         # Update the associated request with inferred frequency
         if doc.request_id:
@@ -671,7 +671,7 @@ class AutoRenewalScheduler:
             ).first()
             if request:
                 request.payroll_frequency = freq_enum
-                request.updated_at = datetime.utcnow()
+                request.updated_at = datetime.now(timezone.utc)
 
         self.db.commit()
 
@@ -846,7 +846,7 @@ class AutoRenewalScheduler:
                         UPDATE paystub_extractions
                         SET is_expired = true, updated_at = :now
                         WHERE id = :id
-                    """), {"id": paystub[0], "now": datetime.utcnow()})
+                    """), {"id": paystub[0], "now": datetime.now(timezone.utc)})
 
                     # Trigger immediate renewal
                     renewal = self.trigger_immediate_renewal(

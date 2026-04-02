@@ -680,7 +680,7 @@ class CallIntelligenceProcessor:
                     "total": response.total_extractions,
                     "high_conf": response.high_confidence_count,
                     "processing_time": response.processing_time_ms,
-                    "created_at": datetime.utcnow(),
+                    "created_at": datetime.now(timezone.utc),
                 }
             )
             self.db.commit()

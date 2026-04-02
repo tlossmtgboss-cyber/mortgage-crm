@@ -54,7 +54,7 @@ class RealtorSyncMessage:
             "loan_id": loan_id,
             "data": data,
             "version": version,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
 
@@ -120,7 +120,7 @@ class RealtorConnectionManager:
 
             # Store metadata
             self.connection_metadata[realtor_id] = {
-                "connected_at": datetime.utcnow().isoformat(),
+                "connected_at": datetime.now(timezone.utc).isoformat(),
                 "loan_count": len(loan_ids),
                 "ip_address": metadata.get("ip_address") if metadata else None,
                 "user_agent": metadata.get("user_agent") if metadata else None,
@@ -128,7 +128,7 @@ class RealtorConnectionManager:
 
             # Initialize rate limiting
             self.rate_limits[realtor_id] = 0
-            self.rate_limit_reset[realtor_id] = datetime.utcnow()
+            self.rate_limit_reset[realtor_id] = datetime.now(timezone.utc)
 
         logger.info(f"Realtor {realtor_id} connected, subscribed to {len(loan_ids)} loans")
 
@@ -218,7 +218,7 @@ class RealtorConnectionManager:
 
     async def _check_rate_limit(self, realtor_id: int) -> bool:
         """Check if realtor is within rate limits."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Reset counter if minute has passed
         if realtor_id in self.rate_limit_reset:
@@ -424,7 +424,7 @@ class RealtorConnectionManager:
             try:
                 await websocket.send_json({
                     "type": RealtorSyncMessage.HEARTBEAT,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
             except Exception as e:
                 logger.warning(f"Error sending heartbeat to realtor {realtor_id}: {e}")

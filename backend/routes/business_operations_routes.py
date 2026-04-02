@@ -391,7 +391,7 @@ async def update_service(
         if key not in _protected:
             setattr(service, key, value)
 
-    service.updated_at = datetime.utcnow()
+    service.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(service)
     return service

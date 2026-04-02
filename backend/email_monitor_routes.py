@@ -677,7 +677,7 @@ async def _poll_provider_emails(provider_id: int, provider_name: str):
             logger.info(f"Would poll Gmail emails for provider {provider_id}")
 
         # Update last poll time
-        provider_config.last_poll_time = datetime.utcnow()
+        provider_config.last_poll_time = datetime.now(timezone.utc)
         db.commit()
 
         logger.info(f"Email poll completed for provider {provider_name}")

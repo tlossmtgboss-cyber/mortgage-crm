@@ -672,7 +672,7 @@ async def handle_get_pipeline_snapshot(input_data: Dict[str, Any], context: Tool
                 "stages": stages,
                 "total_loans": total_count,
                 "total_volume": total_amount,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         }
     finally:
@@ -804,7 +804,7 @@ async def handle_scan_refi_opportunities(input_data: Dict[str, Any], context: To
                 "potential_new_rate": current_market_rate,
                 "rate_improvement_bps": int(rate_improvement * 100),
                 "loan_amount": float(row.loan_amount) if row.loan_amount else 0,
-                "months_since_closing": int((datetime.utcnow() - row.closed_date).days / 30)
+                "months_since_closing": int((datetime.now(timezone.utc) - row.closed_date).days / 30)
             })
 
         return {
@@ -1159,7 +1159,7 @@ async def handle_get_system_health(input_data: Dict[str, Any], context: ToolCont
                 "total_executions_last_hour": total,
                 "success_rate": round(success_rate, 2),
                 "avg_response_time_ms": round(result.avg_duration_ms or 0, 0),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
         }
     finally:

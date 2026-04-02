@@ -283,7 +283,7 @@ async def join_chime_meeting(
         ).first()
         if existing:
             existing.status = "joined"
-            existing.joined_at = datetime.utcnow()
+            existing.joined_at = datetime.now(timezone.utc)
         else:
             participant = MeetingParticipant(
                 meeting_id=room.id,
@@ -292,7 +292,7 @@ async def join_chime_meeting(
                 display_name=current_user.email.split("@")[0],
                 role="participant",
                 status="joined",
-                joined_at=datetime.utcnow(),
+                joined_at=datetime.now(timezone.utc),
             )
             db.add(participant)
         db.commit()
@@ -355,10 +355,10 @@ async def start_chime_recording(
     if MeetingRecording:
         recording = MeetingRecording(
             meeting_id=room.id,
-            recording_name=f"Recording - {datetime.utcnow().strftime('%b %d, %H:%M')}",
+            recording_name=f"Recording - {datetime.now(timezone.utc).strftime('%b %d, %H:%M')}",
             status="recording",
             chime_pipeline_id=pipeline_id,
-            started_at=datetime.utcnow(),
+            started_at=datetime.now(timezone.utc),
         )
         db.add(recording)
         db.commit()
@@ -420,7 +420,7 @@ async def stop_chime_recording(
         )
 
     recording.status = "processing" if stopped else "error"
-    recording.ended_at = datetime.utcnow()
+    recording.ended_at = datetime.now(timezone.utc)
 
     # Build the expected S3 key based on Chime media pipeline conventions
     if stopped and room.chime_meeting_id:
@@ -554,8 +554,8 @@ async def end_chime_meeting(
             # the meeting will eventually be cleaned up by Chime's TTL.
 
     room.status = "ended"
-    room.actual_end = datetime.utcnow()
-    room.updated_at = datetime.utcnow()
+    room.actual_end = datetime.now(timezone.utc)
+    room.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {

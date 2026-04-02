@@ -173,7 +173,7 @@ class CRMContextCache:
 
             cache_data = {
                 "data": context,
-                "cached_at": datetime.utcnow().isoformat(),
+                "cached_at": datetime.now(timezone.utc).isoformat(),
                 "user_id": user_id
             }
 

@@ -678,7 +678,7 @@ Be thorough but objective. Base scores only on available evidence. If data is li
 
         result = AIAnalysisResult(
             candidate_id=candidate_id,
-            analyzed_at=datetime.utcnow(),
+            analyzed_at=datetime.now(timezone.utc),
             confidence_score=analysis_data.get("overall_confidence", 0)
         )
 

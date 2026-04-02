@@ -223,7 +223,7 @@ def sanitize_filename(filename: str) -> str:
 
 def format_requirement(request: DocumentRequest, documents: list) -> dict:
     """Format a document request for portal display."""
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     is_overdue = False
     if request.due_date and request.due_date < now and request.status == RequestStatus.OPEN:
         is_overdue = True
@@ -473,8 +473,8 @@ async def upload_document_for_requirement(
         # Update request status based on result
         if result.decision and result.decision.value == "ACCEPT":
             doc_request.status = RequestStatus.ACCEPTED
-            doc_request.completed_at = datetime.utcnow()
-            doc_request.fulfilled_at = datetime.utcnow()
+            doc_request.completed_at = datetime.now(timezone.utc)
+            doc_request.fulfilled_at = datetime.now(timezone.utc)
         elif result.decision and result.decision.value == "REJECT":
             doc_request.status = RequestStatus.REJECTED
         elif doc_request.status == RequestStatus.OPEN:
@@ -543,7 +543,7 @@ async def get_document_summary(
 
     overdue_items = []
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for req in requests:
         status_key = req.status.value.lower() if req.status else "open"
         if status_key in by_status:

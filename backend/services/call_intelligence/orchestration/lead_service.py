@@ -480,7 +480,7 @@ class LeadManagementService:
                 old_status = lead.status
                 lead.status = new_status
                 if notes:
-                    lead.notes = f"{lead.notes}\n{datetime.utcnow().isoformat()}: {notes}"
+                    lead.notes = f"{lead.notes}\n{datetime.now(timezone.utc).isoformat()}: {notes}"
 
                 result.success = True
                 result.action = "status_updated"

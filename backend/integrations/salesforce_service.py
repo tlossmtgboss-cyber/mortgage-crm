@@ -42,7 +42,7 @@ def _should_run_pkce_cleanup() -> bool:
     Uses deterministic time-based check instead of random probability.
     """
     global _last_pkce_cleanup
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     if _last_pkce_cleanup is None:
         _last_pkce_cleanup = now
@@ -68,7 +68,7 @@ def _get_db_session():
 
 def _store_pkce_verifier(state: str, verifier: str) -> None:
     """Store PKCE verifier with TTL, using database if available."""
-    expires_at = datetime.utcnow() + timedelta(minutes=PKCE_TTL_MINUTES)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=PKCE_TTL_MINUTES)
 
     db = _get_db_session()
     if db:
@@ -78,7 +78,7 @@ def _store_pkce_verifier(state: str, verifier: str) -> None:
             if _should_run_pkce_cleanup():
                 db.execute(text("""
                     DELETE FROM oauth_pkce_store WHERE expires_at < :now
-                """), {"now": datetime.utcnow()})
+                """), {"now": datetime.now(timezone.utc)})
                 logger.debug("PKCE cleanup: removed expired entries")
 
             # Store the verifier
@@ -92,7 +92,7 @@ def _store_pkce_verifier(state: str, verifier: str) -> None:
                 "state": state,
                 "verifier": verifier,
                 "expires_at": expires_at,
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc)
             })
             db.commit()
             logger.info(f"Stored PKCE verifier in database for state: {state[:20]}...")
@@ -127,7 +127,7 @@ def _get_pkce_verifier(state: str) -> Optional[str]:
                 DELETE FROM oauth_pkce_store
                 WHERE state = :state AND expires_at > :now
                 RETURNING code_verifier
-            """), {"state": state, "now": datetime.utcnow()}).fetchone()
+            """), {"state": state, "now": datetime.now(timezone.utc)}).fetchone()
             db.commit()
 
             if result:
@@ -155,7 +155,7 @@ def _get_pkce_verifier(state: str) -> Optional[str]:
     stored = _pkce_store_memory.pop(state, None)
     if stored:
         verifier, expires_at = stored
-        if datetime.utcnow() < expires_at:
+        if datetime.now(timezone.utc) < expires_at:
             logger.info(f"Retrieved PKCE verifier from memory for state: {state[:20]}...")
             return verifier
         else:

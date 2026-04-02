@@ -37,7 +37,7 @@ class ModelVersion:
     model_name: str    # e.g., "claude-3-sonnet-20240229"
     schema_version: str
     prompt_hash: str
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     is_active: bool = False
     metadata: Dict[str, Any] = field(default_factory=dict)
 
@@ -60,7 +60,7 @@ class VersionComparisonReport:
     version_a: str
     version_b: str
     sample_size: int
-    generated_at: datetime = field(default_factory=datetime.utcnow)
+    generated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Metrics
     avg_extractions_a: float = 0.0
@@ -308,7 +308,7 @@ class ModelVersionTracker:
                     "high_conf": high_confidence_count,
                     "time_ms": processing_time_ms,
                     "details": json.dumps(extraction_details) if extraction_details else None,
-                    "created_at": datetime.utcnow(),
+                    "created_at": datetime.now(timezone.utc),
                 }
             )
             self.db.commit()
@@ -437,7 +437,7 @@ class ModelVersionTracker:
         from sqlalchemy import text
         from datetime import timedelta
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         try:
             result = self.db.execute(

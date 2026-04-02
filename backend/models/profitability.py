@@ -22,8 +22,8 @@ class ExpenseCategory(Base):
     description = Column(Text)
     parent_category_id = Column(UUID(as_uuid=True), ForeignKey("expense_categories.id"))
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     expenses = relationship("Expense", back_populates="category")
@@ -45,8 +45,8 @@ class Expense(Base):
     effective_date = Column(Date, nullable=False)
     end_date = Column(Date)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)
 
     # Relationships
@@ -72,8 +72,8 @@ class ProfitabilityRole(Base):
     typical_benefits_percentage = Column(Numeric(5, 2), default=25.00)
     description = Column(Text)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     employee_costs = relationship("EmployeeCost", back_populates="role")
@@ -101,8 +101,8 @@ class EmployeeCost(Base):
     hire_date = Column(Date)
     termination_date = Column(Date)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     role = relationship("ProfitabilityRole", back_populates="employee_costs")
@@ -137,8 +137,8 @@ class ProfitabilityLoan(Base):
     processing_days = Column(Integer)
     lead_source = Column(String(100))
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     attributions = relationship("LoanAttribution", back_populates="loan", cascade="all, delete-orphan")
@@ -159,7 +159,7 @@ class LoanAttribution(Base):
     attribution_percentage = Column(Numeric(5, 2), nullable=False)
     role_at_time = Column(String(100))
     notes = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     loan = relationship("ProfitabilityLoan", back_populates="attributions")
@@ -181,7 +181,7 @@ class RevenueRecord(Base):
     amount = Column(Numeric(12, 2), nullable=False)
     description = Column(Text)
     record_date = Column(Date, nullable=False, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     loan = relationship("ProfitabilityLoan", back_populates="revenue_records")
@@ -211,7 +211,7 @@ class ProfitabilitySnapshot(Base):
     employee_count = Column(Integer)
     break_even_loans = Column(Integer)
     data_json = Column(JSONB)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint("organization_id", "snapshot_month", name="uq_snapshot_org_month"),
@@ -231,8 +231,8 @@ class ProfitabilityScenario(Base):
     results = Column(JSONB)
     created_by = Column(Integer, ForeignKey("users.id"))
     is_saved = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
 class ProfitabilityInsight(Base):
@@ -249,7 +249,7 @@ class ProfitabilityInsight(Base):
     is_acknowledged = Column(Boolean, default=False)
     acknowledged_by = Column(Integer, ForeignKey("users.id"))
     acknowledged_at = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         CheckConstraint("insight_type IN ('gap', 'gain', 'trend', 'recommendation', 'alert')", name="ck_insight_type"),
@@ -269,4 +269,4 @@ class ProfitabilityAudit(Base):
     entity_id = Column(UUID(as_uuid=True))
     old_values = Column(JSONB)
     new_values = Column(JSONB)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

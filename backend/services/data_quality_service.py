@@ -610,7 +610,7 @@ class DashboardPerformanceMonitor:
                 (SELECT MAX(status_changed_at) FROM loans WHERE organization_id = :org_id) as loans_updated
         """), {"org_id": org_id}).fetchone()
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         lead_lag = None
         loan_lag = None
 

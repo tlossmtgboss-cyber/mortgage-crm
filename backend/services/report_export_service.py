@@ -667,7 +667,7 @@ def generate_sla_compliance_report(
             "report_type": "sla_compliance",
             "organization_id": org_id,
             "period_days": period_days,
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
             "scope": {"type": scope_type, "id": scope_id},
             "overall": {
                 "compliance_rate": round(compliance_rate, 1),
@@ -690,7 +690,7 @@ def generate_sla_compliance_report(
             "report_type": "sla_compliance",
             "organization_id": org_id,
             "period_days": period_days,
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
             "error": str(e),
             "overall": {
                 "compliance_rate": 0, "total_milestones": 0,

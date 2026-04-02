@@ -266,7 +266,7 @@ async def get_teams_integration_status(
             }
 
         # Check if token is expired
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         is_expired = result.expires_at and result.expires_at < now
 
         return {

@@ -408,7 +408,7 @@ class PerformanceMonitoringService:
                 "deadlock_count": len(deadlocks),
                 "long_running_queries": long_queries,
                 "long_running_count": len(long_queries),
-                "checked_at": datetime.utcnow().isoformat() + "Z",
+                "checked_at": datetime.now(timezone.utc).isoformat() + "Z",
                 "baseline": {
                     "deadlock_tolerance": PERFORMANCE_BASELINES["database"]["deadlock_tolerance"],
                     "compliant": len(deadlocks) == 0,
@@ -519,7 +519,7 @@ class PerformanceMonitoringService:
             issues.append(f"AI capacity {ai_capacity['status']}: {ai_capacity['active_requests']}/{ai_capacity['max_capacity']}")
 
         return {
-            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "generated_at": datetime.now(timezone.utc).isoformat() + "Z",
             "overall_status": "degraded" if issues else "healthy",
             "issues": issues,
             "baselines": PERFORMANCE_BASELINES,

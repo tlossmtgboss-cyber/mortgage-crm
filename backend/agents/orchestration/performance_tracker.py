@@ -85,7 +85,7 @@ class PerformanceTracker:
             "model_used": data.get("model_used", os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")),
             "response_text": data.get("response"),
             "metadata": data.get("metadata", {}),
-            "executed_at": datetime.utcnow(),
+            "executed_at": datetime.now(timezone.utc),
         }
 
         # Store in memory (or database if session available)
@@ -136,8 +136,8 @@ class PerformanceTracker:
             "booking_made": data.get("booking_made", False),
             "revenue_generated": data.get("revenue_generated"),
             "metrics": data.get("metrics", {}),
-            "created_at": datetime.utcnow(),
-            "completed_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
+            "completed_at": datetime.now(timezone.utc),
         }
 
         if self.db_session:
@@ -245,7 +245,7 @@ class PerformanceTracker:
         Returns:
             Dictionary with performance metrics
         """
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Try to fetch from database first, fall back to in-memory
         if self.db_session:
@@ -330,7 +330,7 @@ class PerformanceTracker:
 
         Returns metrics for each stage to identify bottlenecks.
         """
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Fetch from database and combine with in-memory
         if self.db_session:
@@ -399,7 +399,7 @@ class PerformanceTracker:
         """
         Get token usage trends over time.
         """
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Fetch from database and combine with in-memory
         if self.db_session:
@@ -415,7 +415,7 @@ class PerformanceTracker:
         # Group by day
         by_day: Dict[str, List[Dict]] = {}
         for e in executions:
-            day_key = e.get("executed_at", datetime.utcnow()).strftime("%Y-%m-%d")
+            day_key = e.get("executed_at", datetime.now(timezone.utc)).strftime("%Y-%m-%d")
             if day_key not in by_day:
                 by_day[day_key] = []
             by_day[day_key].append(e)
@@ -513,7 +513,7 @@ class PerformanceTracker:
                 "model_used": execution.get("model_used"),
                 "response_text": execution.get("response_text"),
                 "metadata": metadata_json,
-                "created_at": execution.get("executed_at", datetime.utcnow()),
+                "created_at": execution.get("executed_at", datetime.now(timezone.utc)),
             })
             await self.db_session.commit()
 
@@ -560,7 +560,7 @@ class PerformanceTracker:
                 "booking_made": outcome.get("booking_made", False),
                 "revenue_generated": outcome.get("revenue_generated"),
                 "metrics": metrics_json,
-                "created_at": outcome.get("created_at", datetime.utcnow()),
+                "created_at": outcome.get("created_at", datetime.now(timezone.utc)),
                 "completed_at": outcome.get("completed_at"),
             })
             await self.db_session.commit()
@@ -616,8 +616,8 @@ class ABTestTracker:
             "variant_b_conversations": 0,
             "variant_a_conversions": 0,
             "variant_b_conversions": 0,
-            "created_at": datetime.utcnow(),
-            "started_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
+            "started_at": datetime.now(timezone.utc),
         }
 
         logger.info(f"A/B test created: {test_name} ({test_id})")
@@ -725,5 +725,5 @@ class ABTestTracker:
         test = self._tests.get(test_id)
         if test:
             test["status"] = "completed"
-            test["ended_at"] = datetime.utcnow()
+            test["ended_at"] = datetime.now(timezone.utc)
             logger.info(f"A/B test ended: {test['test_name']} ({test_id})")

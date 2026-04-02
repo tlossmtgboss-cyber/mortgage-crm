@@ -82,8 +82,8 @@ class VerificationStatus(str, enum.Enum):
 #     max_calls_per_day = Column(Integer, default=200)
 #     max_concurrent_sessions = Column(Integer, default=1)
 #     preferred_pause_timeout = Column(Integer, default=90)
-#     created_at = Column(DateTime, default=datetime.utcnow)
-#     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+#     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+#     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 #
 #     # Relationships
 #     agent = relationship("Agent", back_populates="telephony_settings")
@@ -101,8 +101,8 @@ class VerificationStatus(str, enum.Enum):
 #     completed_tasks = Column(Integer, default=0)
 #     failed_tasks = Column(Integer, default=0)
 #     skipped_tasks = Column(Integer, default=0)
-#     created_at = Column(DateTime, default=datetime.utcnow)
-#     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+#     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+#     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 #     completed_at = Column(DateTime, nullable=True)
 #
 #     # Relationships
@@ -131,8 +131,8 @@ class VerificationStatus(str, enum.Enum):
 #     ai_note_summary = Column(Text, nullable=True)
 #     follow_up_date = Column(DateTime, nullable=True)
 #     task_order = Column(Integer, nullable=False)
-#     created_at = Column(DateTime, default=datetime.utcnow)
-#     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+#     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+#     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 #     completed_at = Column(DateTime, nullable=True)
 #
 #     # Relationships
@@ -155,7 +155,7 @@ class VerificationStatus(str, enum.Enum):
 #     loan_id = Column(UUID(as_uuid=True), ForeignKey("loans.id"), nullable=True)
 #     referring_partner_id = Column(UUID(as_uuid=True), ForeignKey("referring_partners.id"), nullable=True)
 #     session_id = Column(UUID(as_uuid=True), ForeignKey("dialer_sessions.session_id"), nullable=True)
-#     start_time = Column(DateTime, default=datetime.utcnow)
+#     start_time = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 #     end_time = Column(DateTime, nullable=True)
 #     duration_seconds = Column(Integer, nullable=True)
 #     call_sid = Column(String(100), nullable=False, unique=True)
@@ -165,8 +165,8 @@ class VerificationStatus(str, enum.Enum):
 #     notes = Column(Text, nullable=True)
 #     ai_note_summary = Column(Text, nullable=True)
 #     caller_id_used = Column(String(20), nullable=False)
-#     created_at = Column(DateTime, default=datetime.utcnow)
-#     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+#     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+#     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 #
 #     # Relationships
 #     agent = relationship("Agent")
@@ -188,7 +188,7 @@ class VerificationStatus(str, enum.Enum):
 #     contact_id = Column(UUID(as_uuid=True), ForeignKey("contacts.id"), nullable=False)
 #     agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False)
 #     call_sid = Column(String(100), nullable=False)
-#     locked_at = Column(DateTime, default=datetime.utcnow)
+#     locked_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 #     expires_at = Column(DateTime, nullable=False)
 #
 #     __table_args__ = (
@@ -208,8 +208,8 @@ class VerificationStatus(str, enum.Enum):
 #     provider_sid = Column(String(100), nullable=True)
 #     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id"), nullable=False)
 #     verified_at = Column(DateTime, nullable=True)
-#     created_at = Column(DateTime, default=datetime.utcnow)
-#     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+#     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+#     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 #
 #     __table_args__ = (
 #         Index('idx_caller_ids_org', 'organization_id'),

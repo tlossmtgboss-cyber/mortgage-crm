@@ -259,7 +259,7 @@ def cleanup_old_artifacts(self, days: int = 30):
     try:
         db = SessionLocal()
 
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         # Find old completed jobs
         old_jobs = db.execute(text("""

@@ -144,7 +144,7 @@ async def get_system_health_data(db: Session) -> dict:
     ).count()
 
     # 24h execution stats
-    one_day_ago = datetime.utcnow() - timedelta(hours=24)
+    one_day_ago = datetime.now(timezone.utc) - timedelta(hours=24)
     recent_metrics = db.query(AgentMetricsTimeseries).filter(
         AgentMetricsTimeseries.timestamp >= one_day_ago
     ).all()
@@ -176,7 +176,7 @@ async def get_system_health_data(db: Session) -> dict:
         "success_rate_24h": round(success_rate, 2),
         "active_alerts": active_alerts,
         "critical_alerts": critical_alerts,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -214,7 +214,7 @@ async def agent_metrics_websocket(websocket: WebSocket, agent_id: int):
                     await websocket.send_json({
                         "type": "metrics_update",
                         "data": metrics_data,
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     })
             finally:
                 db.close()
@@ -262,7 +262,7 @@ async def system_health_websocket(websocket: WebSocket):
                 await websocket.send_json({
                     "type": "system_health_update",
                     "data": health_data,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
             finally:
                 db.close()
@@ -296,7 +296,7 @@ async def alerts_websocket(websocket: WebSocket):
     finally:
         auth_db.close()
 
-    last_check = datetime.utcnow()
+    last_check = datetime.now(timezone.utc)
 
     try:
         while True:
@@ -324,7 +324,7 @@ async def alerts_websocket(websocket: WebSocket):
                             }
                         })
 
-                last_check = datetime.utcnow()
+                last_check = datetime.now(timezone.utc)
             finally:
                 db.close()
 

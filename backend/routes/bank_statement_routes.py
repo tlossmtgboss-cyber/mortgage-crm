@@ -528,7 +528,7 @@ async def update_worksheet_data(
         save_account_data(request.business_account, StatementType.BUSINESS)
 
     worksheet.status = ExtractionStatus.COMPLETED
-    worksheet.updated_at = datetime.utcnow()
+    worksheet.updated_at = datetime.now(timezone.utc)
 
     db.commit()
 

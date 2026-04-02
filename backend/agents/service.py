@@ -341,7 +341,7 @@ class AIAgentService:
         if not session_id:
             session_id = str(uuid.uuid4())
 
-        started_at = datetime.utcnow()
+        started_at = datetime.now(timezone.utc)
 
         try:
             # Status: Loading context
@@ -497,7 +497,7 @@ class AIAgentService:
                         await asyncio.sleep(0.03)
 
             # Calculate execution time
-            completed_at = datetime.utcnow()
+            completed_at = datetime.now(timezone.utc)
             execution_time_ms = (completed_at - started_at).total_seconds() * 1000
 
             # Log the interaction
@@ -2352,7 +2352,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     }
 
             # Check if token needs refresh
-            if expires_at and expires_at < datetime.utcnow():
+            if expires_at and expires_at < datetime.now(timezone.utc):
                 logger.info("Access token expired, attempting refresh...")
                 client_id = os.getenv("MICROSOFT_CLIENT_ID")
                 client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
@@ -2376,7 +2376,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                             tokens = refresh_response.json()
                             access_token = tokens["access_token"]
                             new_refresh = tokens.get("refresh_token", refresh_token)
-                            new_expires = datetime.utcnow() + timedelta(seconds=tokens.get("expires_in", 3600))
+                            new_expires = datetime.now(timezone.utc) + timedelta(seconds=tokens.get("expires_in", 3600))
 
                             # Store new tokens (encrypted using SECRET_KEY)
                             try:
@@ -2400,7 +2400,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                                     "access_token": enc_access,
                                     "refresh_token": enc_refresh,
                                     "expires_at": new_expires,
-                                    "updated_at": datetime.utcnow(),
+                                    "updated_at": datetime.now(timezone.utc),
                                     "user_id": int(user_id)
                                 })
                                 db.commit()
@@ -2432,7 +2432,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
                             if user_email:
                                 # Get calendar schedule for next 7 days
-                                start_time = datetime.utcnow()
+                                start_time = datetime.now(timezone.utc)
                                 end_time = start_time + timedelta(days=7)
 
                                 schedule_response = await cal_client.post(

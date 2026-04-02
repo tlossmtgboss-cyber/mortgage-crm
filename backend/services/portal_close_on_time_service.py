@@ -359,7 +359,7 @@ class PortalCloseOnTimeService:
             return {"success": False, "error": "Milestone not found"}
 
         milestone.is_completed = True
-        milestone.completed_at = datetime.utcnow()
+        milestone.completed_at = datetime.now(timezone.utc)
         milestone.completed_by = completed_by
 
         self.db.commit()

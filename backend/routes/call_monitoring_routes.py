@@ -770,7 +770,7 @@ async def update_session(
         return {
             "status": "success",
             "session_id": session_id,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     except HTTPException:
@@ -803,7 +803,7 @@ async def end_session(
             raise HTTPException(status_code=404, detail="Session not found")
 
         # Update session status and set transcript if provided
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         orchestrator.update_session(session_id, status='processing', ended_at=now)
 
         if request.final_transcript:
@@ -2331,7 +2331,7 @@ async def complete_uw_review(
             "structured_data": json.dumps({
                 "items_addressed": request.items_addressed,
                 "completed_by": user_id,
-                "completed_at": datetime.utcnow().isoformat(),
+                "completed_at": datetime.now(timezone.utc).isoformat(),
             })
         })
 

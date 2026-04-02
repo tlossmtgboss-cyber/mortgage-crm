@@ -658,7 +658,7 @@ async def sync_plaid_transactions(
 
         # Update plaid item
         plaid_item.transactions_cursor = cursor
-        plaid_item.last_successful_sync = datetime.utcnow()
+        plaid_item.last_successful_sync = datetime.now(timezone.utc)
         plaid_item.sync_status = 'synced'
 
         # Update account balance
@@ -1013,7 +1013,7 @@ async def match_transaction_to_entry(
 
     transaction.matched_entry_id = journal_entry_id
     transaction.match_status = 'matched'
-    transaction.matched_at = datetime.utcnow()
+    transaction.matched_at = datetime.now(timezone.utc)
     transaction.matched_by = 1
 
     db.commit()
@@ -1084,7 +1084,7 @@ async def create_entry_from_transaction(
         source='bank_transaction',
         source_id=transaction.id,
         status='posted',
-        posted_at=datetime.utcnow(),
+        posted_at=datetime.now(timezone.utc),
         posted_by=1,
     )
 
@@ -1133,7 +1133,7 @@ async def create_entry_from_transaction(
     # Update transaction
     transaction.matched_entry_id = entry.id
     transaction.match_status = 'matched'
-    transaction.matched_at = datetime.utcnow()
+    transaction.matched_at = datetime.now(timezone.utc)
     transaction.matched_by = 1
     transaction.categorized_account_id = account_id
 
@@ -1379,7 +1379,7 @@ async def start_reconciliation(
         statement_ending_balance=data.statement_ending_balance,
         beginning_balance=beginning_balance,
         status='in_progress',
-        started_at=datetime.utcnow(),
+        started_at=datetime.now(timezone.utc),
         started_by=1,
     )
 
@@ -1541,11 +1541,11 @@ async def complete_reconciliation(
             BankTransaction.id == txn_id
         ).update({
             'is_reconciled': True,
-            'reconciled_at': datetime.utcnow(),
+            'reconciled_at': datetime.now(timezone.utc),
         })
 
     recon.status = 'completed'
-    recon.completed_at = datetime.utcnow()
+    recon.completed_at = datetime.now(timezone.utc)
     recon.completed_by = 1
     recon.cleared_balance = calculated_balance
 

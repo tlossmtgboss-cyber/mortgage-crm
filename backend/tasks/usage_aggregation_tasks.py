@@ -278,7 +278,7 @@ def aggregate_daily_user_usage(
                     "cost_by_model": cost_by_model,
                     "cost_by_feature": cost_by_feature,
                     "ai_request_count": int(ai_data[3]) if ai_data[3] else 0,
-                    "updated_at": datetime.utcnow()
+                    "updated_at": datetime.now(timezone.utc)
                 })
                 snapshots_updated += 1
             else:

@@ -41,7 +41,7 @@ def run_weekly_updates(
 
     db = get_db_session()
     stats = {
-        "started_at": datetime.utcnow().isoformat(),
+        "started_at": datetime.now(timezone.utc).isoformat(),
         "parties_processed": 0,
         "emails_sent": 0,
         "emails_failed": 0,
@@ -114,7 +114,7 @@ def run_weekly_updates(
                 stats["emails_failed"] += 1
                 stats["errors"].append(str(e))
 
-        stats["completed_at"] = datetime.utcnow().isoformat()
+        stats["completed_at"] = datetime.now(timezone.utc).isoformat()
         logger.info(f"Weekly update job complete: {stats}")
 
         return stats
@@ -122,7 +122,7 @@ def run_weekly_updates(
     except Exception as e:
         logger.error(f"Weekly update job failed: {e}")
         stats["errors"].append(str(e))
-        stats["completed_at"] = datetime.utcnow().isoformat()
+        stats["completed_at"] = datetime.now(timezone.utc).isoformat()
         return stats
 
     finally:

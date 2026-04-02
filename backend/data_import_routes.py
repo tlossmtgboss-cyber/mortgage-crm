@@ -833,7 +833,7 @@ async def execute_import(
                         # Add required fields if missing
                         if 'created_at' not in columns:
                             columns.append('created_at')
-                            values.append(datetime.utcnow())
+                            values.append(datetime.now(timezone.utc))
                         if 'stage' not in columns:
                             columns.append('stage')
                             values.append('NEW')  # Must match LeadStage enum NAME (not value)
@@ -928,7 +928,7 @@ async def execute_import(
                         # Add required fields
                         if 'created_at' not in columns:
                             columns.append('created_at')
-                            values.append(datetime.utcnow())
+                            values.append(datetime.now(timezone.utc))
                         if 'stage' not in columns:
                             columns.append('stage')
                             values.append('processing')
@@ -957,7 +957,7 @@ async def execute_import(
 
                         if 'created_at' not in columns:
                             columns.append('created_at')
-                            values.append(datetime.utcnow())
+                            values.append(datetime.now(timezone.utc))
 
                         safe_cols = [c for c in columns if _safe_column_name(c)]
                         safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c)]
@@ -1053,15 +1053,15 @@ async def execute_import(
 
                         # Add required NOT NULL fields with defaults
                         required_fields = {
-                            'created_at': datetime.utcnow(),
+                            'created_at': datetime.now(timezone.utc),
                             'status': 'active',
                             'original_loan_amount': 0,
                             'current_loan_amount': 0,
                             'interest_rate': 0,
                             'appraisal_value_at_closing': 0,
                             'current_property_value': 0,
-                            'closing_date': datetime.utcnow().date(),
-                            'first_payment_date': datetime.utcnow().date(),
+                            'closing_date': datetime.now(timezone.utc).date(),
+                            'first_payment_date': datetime.now(timezone.utc).date(),
                         }
 
                         # Map imported values to required fields
@@ -1089,10 +1089,10 @@ async def execute_import(
                         if 'original_close_date' in columns and 'closing_date' not in columns:
                             idx = columns.index('original_close_date')
                             columns.append('closing_date')
-                            values.append(values[idx] or datetime.utcnow().date())
+                            values.append(values[idx] or datetime.now(timezone.utc).date())
                             if 'first_payment_date' not in columns:
                                 columns.append('first_payment_date')
-                                values.append(values[idx] or datetime.utcnow().date())
+                                values.append(values[idx] or datetime.now(timezone.utc).date())
 
                         # Add any remaining required fields with defaults
                         for field, default in required_fields.items():

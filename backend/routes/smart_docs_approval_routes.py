@@ -153,7 +153,7 @@ async def delete_document(
     # Store deletion info
     old_status = document.status
     document.status = "DELETED"
-    document.reviewed_at = datetime.utcnow()
+    document.reviewed_at = datetime.now(timezone.utc)
     document.reviewed_by = reviewer
     document.rejection_reason = reason or "Deleted by user"
 
@@ -175,7 +175,7 @@ async def delete_document(
         "status": "DELETED",
         "previous_status": old_status,
         "deleted_by": reviewer,
-        "deleted_at": datetime.utcnow().isoformat(),
+        "deleted_at": datetime.now(timezone.utc).isoformat(),
         "message": "Document deleted successfully"
     }
 
@@ -212,7 +212,7 @@ async def reject_document(
     document.status = "REJECTED"
     document.decision = DocumentDecision.REJECT
     document.rejection_reason = body.reason
-    document.reviewed_at = datetime.utcnow()
+    document.reviewed_at = datetime.now(timezone.utc)
     document.reviewed_by = body.reviewer
 
     # Set rejection category if provided
@@ -240,7 +240,7 @@ async def reject_document(
         "rejection_reason": body.reason,
         "rejection_category": body.rejection_category,
         "rejected_by": body.reviewer,
-        "rejected_at": datetime.utcnow().isoformat(),
+        "rejected_at": datetime.now(timezone.utc).isoformat(),
         "message": "Document rejected successfully"
     }
 
@@ -274,7 +274,7 @@ async def approve_document(
     # Update document status
     document.status = "APPROVED"
     document.decision = DocumentDecision.ACCEPT
-    document.reviewed_at = datetime.utcnow()
+    document.reviewed_at = datetime.now(timezone.utc)
     document.reviewed_by = reviewer
 
     # Update linked request
@@ -284,8 +284,8 @@ async def approve_document(
         ).first()
         if request:
             request.status = RequestStatus.ACCEPTED
-            request.completed_at = datetime.utcnow()
-            request.fulfilled_at = datetime.utcnow()
+            request.completed_at = datetime.now(timezone.utc)
+            request.fulfilled_at = datetime.now(timezone.utc)
 
     db.commit()
 
@@ -295,7 +295,7 @@ async def approve_document(
         "document_id": document_id,
         "status": "APPROVED",
         "approved_by": reviewer,
-        "approved_at": datetime.utcnow().isoformat(),
+        "approved_at": datetime.now(timezone.utc).isoformat(),
         "notes": notes,
         "message": "Document approved successfully"
     }
@@ -328,7 +328,7 @@ async def re_request_document(
 
     # Reset request status
     request.status = RequestStatus.OPEN
-    request.updated_at = datetime.utcnow()
+    request.updated_at = datetime.now(timezone.utc)
 
     # Set new due date if provided
     if body.new_due_date:
@@ -336,9 +336,9 @@ async def re_request_document(
             request.due_date = datetime.fromisoformat(body.new_due_date.replace('Z', '+00:00'))
         except (ValueError, AttributeError) as e:
             raise HTTPException(status_code=400, detail=f"Invalid date format: {body.new_due_date}")
-    elif not request.due_date or request.due_date < datetime.utcnow():
+    elif not request.due_date or request.due_date < datetime.now(timezone.utc):
         # Default to 7 days from now
-        request.due_date = datetime.utcnow() + timedelta(days=7)
+        request.due_date = datetime.now(timezone.utc) + timedelta(days=7)
 
     # Mark any linked documents as superseded
     linked_docs = db.query(SmartDocument).filter(
@@ -371,7 +371,7 @@ async def re_request_document(
         "status": "OPEN",
         "previous_status": old_status.value if hasattr(old_status, 'value') else str(old_status),
         "re_requested_by": body.reviewer,
-        "re_requested_at": datetime.utcnow().isoformat(),
+        "re_requested_at": datetime.now(timezone.utc).isoformat(),
         "due_date": request.due_date.isoformat() if request.due_date else None,
         "superseded_documents": superseded_count,
         "notification_sent": notification_sent,
@@ -767,7 +767,7 @@ async def apply_extracted_fields(
     extraction.applied_fields = applied
     extraction.applied_to_profile_type = body.profile_type
     extraction.applied_to_profile_id = body.profile_id
-    extraction.applied_at = datetime.utcnow()
+    extraction.applied_at = datetime.now(timezone.utc)
     extraction.review_status = ReviewStatus.APPLIED
 
     db.commit()
@@ -803,7 +803,7 @@ async def update_document_name(
         _verify_loan_tenant(db, document.loan_id, current_user)
 
     document.display_name = body.display_name
-    document.updated_at = datetime.utcnow()
+    document.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {
@@ -842,7 +842,7 @@ async def approve_document_with_review(
     # Update document status
     document.status = "APPROVED"
     document.decision = DocumentDecision.ACCEPT
-    document.reviewed_at = datetime.utcnow()
+    document.reviewed_at = datetime.now(timezone.utc)
     document.reviewed_by = body.reviewer
 
     if body.assigned_owner:
@@ -856,7 +856,7 @@ async def approve_document_with_review(
     if extraction:
         extraction.review_status = ReviewStatus.REVIEWED
         extraction.reviewed_by = body.reviewer
-        extraction.reviewed_at = datetime.utcnow()
+        extraction.reviewed_at = datetime.now(timezone.utc)
 
     # Apply fields if requested
     applied_result = None
@@ -915,7 +915,7 @@ async def approve_document_with_review(
             extraction.applied_fields = applied
             extraction.applied_to_profile_type = body.apply_fields.profile_type
             extraction.applied_to_profile_id = body.apply_fields.profile_id
-            extraction.applied_at = datetime.utcnow()
+            extraction.applied_at = datetime.now(timezone.utc)
             extraction.review_status = ReviewStatus.APPLIED
 
         applied_result = {"count": len(applied), "fields": applied}
@@ -927,8 +927,8 @@ async def approve_document_with_review(
         ).first()
         if request:
             request.status = RequestStatus.ACCEPTED
-            request.completed_at = datetime.utcnow()
-            request.fulfilled_at = datetime.utcnow()
+            request.completed_at = datetime.now(timezone.utc)
+            request.fulfilled_at = datetime.now(timezone.utc)
 
     db.commit()
 
@@ -936,7 +936,7 @@ async def approve_document_with_review(
         "document_id": document_id,
         "status": "APPROVED",
         "reviewed_by": body.reviewer,
-        "reviewed_at": datetime.utcnow().isoformat(),
+        "reviewed_at": datetime.now(timezone.utc).isoformat(),
         "assigned_owner": body.assigned_owner,
         "fields_applied": applied_result,
     }

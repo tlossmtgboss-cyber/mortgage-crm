@@ -468,7 +468,7 @@ async def update_clip(
         if field not in _protected:
             setattr(clip, field, value)
 
-    clip.updated_at = datetime.utcnow()
+    clip.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"success": True, "clip_id": clip.id}
@@ -655,7 +655,7 @@ async def get_clip_for_watch(
 
     if share:
         # Check expiration
-        if share.expires_at and share.expires_at < datetime.utcnow():
+        if share.expires_at and share.expires_at < datetime.now(timezone.utc):
             raise HTTPException(status_code=410, detail="Share link has expired")
 
         # Check max views
@@ -951,7 +951,7 @@ async def get_clips_summary(
     VideoClip = _models.get('VideoClip')
     ClipView = _models.get('ClipView')
 
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Get user's clips
     clips = db.query(VideoClip).filter(

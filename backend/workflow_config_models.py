@@ -87,8 +87,8 @@ def create_workflow_config_models(Base):
         organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
         is_system_template = Column(Boolean, default=False)  # True for system-wide templates
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         days = relationship("WorkflowDayConfig", back_populates="workflow", cascade="all, delete-orphan", order_by="WorkflowDayConfig.day_order")
@@ -150,8 +150,8 @@ def create_workflow_config_models(Base):
         # Additional config
         is_active = Column(Boolean, default=True)
         task_description = Column(Text)  # What should happen on this day
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         workflow = relationship("WorkflowConfiguration", back_populates="days")
@@ -182,8 +182,8 @@ def create_workflow_config_models(Base):
 
         user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # Assigned user
         is_active = Column(Boolean, default=True)
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         workflow = relationship("WorkflowConfiguration", back_populates="role_assignments")
@@ -233,8 +233,8 @@ def create_workflow_config_models(Base):
         retry_count = Column(Integer, default=0, nullable=False, server_default="0")
         last_failed_at = Column(DateTime, nullable=True)
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         workflow = relationship("WorkflowConfiguration")
@@ -267,8 +267,8 @@ def create_workflow_config_models(Base):
         resolved_at = Column(DateTime)
         resolved_by_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
         # Relationships
         workflow = relationship("WorkflowConfiguration")

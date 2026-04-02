@@ -653,7 +653,7 @@ async def submit_bill_for_approval(
         raise HTTPException(status_code=400, detail=f"Cannot submit bill with status '{bill.status}'")
 
     bill.status = 'pending_approval'
-    bill.submitted_at = datetime.utcnow()
+    bill.submitted_at = datetime.now(timezone.utc)
     bill.submitted_by = 1
 
     log_audit(
@@ -694,7 +694,7 @@ async def approve_bill(
 
     if data.approved:
         bill.status = 'approved'
-        bill.approved_at = datetime.utcnow()
+        bill.approved_at = datetime.now(timezone.utc)
         bill.approved_by = 1
 
         if data.notes:
@@ -719,7 +719,7 @@ async def approve_bill(
                 source='ap_bill',
                 source_id=bill.id,
                 status='posted',
-                posted_at=datetime.utcnow(),
+                posted_at=datetime.now(timezone.utc),
                 posted_by=1,
             )
             db.add(je)
@@ -758,7 +758,7 @@ async def approve_bill(
         message = f"Bill {bill.bill_number} approved"
     else:
         bill.status = 'rejected'
-        bill.rejected_at = datetime.utcnow()
+        bill.rejected_at = datetime.now(timezone.utc)
         bill.rejected_by = 1
         bill.rejection_reason = data.notes
 
@@ -808,7 +808,7 @@ async def void_bill(
 
     old_status = bill.status
     bill.status = 'void'
-    bill.voided_at = datetime.utcnow()
+    bill.voided_at = datetime.now(timezone.utc)
     bill.voided_by = 1
 
     # Reverse journal entry if exists
@@ -816,7 +816,7 @@ async def void_bill(
         je = db.query(JournalEntry).filter(JournalEntry.id == bill.journal_entry_id).first()
         if je and je.status == 'posted':
             je.status = 'voided'
-            je.voided_at = datetime.utcnow()
+            je.voided_at = datetime.now(timezone.utc)
             je.voided_by = 1
 
     # Update vendor balance
@@ -979,7 +979,7 @@ async def create_payment(
                 payment_id=payment.id,
                 bill_id=bill.id,
                 amount_applied=pay_amount,
-                applied_at=datetime.utcnow(),
+                applied_at=datetime.now(timezone.utc),
                 applied_by=1,
             )
             db.add(application)
@@ -990,7 +990,7 @@ async def create_payment(
 
             if bill.balance_due <= 0:
                 bill.status = 'paid'
-                bill.paid_at = datetime.utcnow()
+                bill.paid_at = datetime.now(timezone.utc)
             else:
                 bill.status = 'partial'
 
@@ -1014,7 +1014,7 @@ async def create_payment(
                 source='ap_payment',
                 source_id=payment.id,
                 status='posted',
-                posted_at=datetime.utcnow(),
+                posted_at=datetime.now(timezone.utc),
                 posted_by=1,
             )
             db.add(je)

@@ -365,7 +365,7 @@ class HumanReviewService:
                     "review_id": review_id,
                     "status": decision.decision,
                     "reviewer_id": decision.reviewer_id,
-                    "reviewed_at": datetime.utcnow(),
+                    "reviewed_at": datetime.now(timezone.utc),
                     "notes": decision.notes,
                     "final_value": decision.final_value,
                 }
@@ -418,7 +418,7 @@ class HumanReviewService:
         from sqlalchemy import text
         from datetime import timedelta
 
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         filters = ["created_at >= :cutoff"]
         params = {"cutoff": cutoff}

@@ -78,7 +78,7 @@ class EventService:
             campaign_instance_id=uuid.UUID(campaign_instance_id) if campaign_instance_id else None,
             session_id=session_id,
             event_source=source,
-            event_timestamp=datetime.utcnow(),
+            event_timestamp=datetime.now(timezone.utc),
         )
 
         # Add UTM parameters
@@ -185,7 +185,7 @@ class EventService:
         if event.is_hot_signal and event.lead_id:
             triggered_actions.append({
                 "action": "speed_to_lead",
-                "triggered_at": datetime.utcnow().isoformat(),
+                "triggered_at": datetime.now(timezone.utc).isoformat(),
             })
             logger.info(f"Hot lead trigger: lead_id={event.lead_id}")
 
@@ -216,7 +216,7 @@ class EventService:
 
         # Update event with triggered actions
         event.triggered_actions = triggered_actions
-        event.processed_at = datetime.utcnow()
+        event.processed_at = datetime.now(timezone.utc)
         self.db.commit()
 
     def link_identity(
@@ -244,7 +244,7 @@ class EventService:
 
         for event in events:
             event.lead_id = lead_id
-            event.identity_linked_at = datetime.utcnow()
+            event.identity_linked_at = datetime.now(timezone.utc)
             event.identity_linked_from = "visitor_identification"
 
         self.db.commit()
@@ -294,7 +294,7 @@ class EventService:
         days: int = 7,
     ) -> int:
         """Count hot signals for a lead in the given period."""
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
 
         hot_event_types = [
             EventType.MEETING_BOOKED.value,

@@ -270,7 +270,7 @@ class SEOKeywordService:
 
         # Update current ranking
         keyword.current_ranking = ranking
-        keyword.last_checked_at = datetime.utcnow()
+        keyword.last_checked_at = datetime.now(timezone.utc)
 
         # Update best ranking
         if keyword.best_ranking is None or ranking < keyword.best_ranking:

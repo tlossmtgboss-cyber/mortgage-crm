@@ -173,7 +173,7 @@ class NeedsListGenerator:
             "request_count": len(requests),
             "requests": [self._request_to_dict(r) for r in requests],
             "template_used": template.slug if template else "default",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def _find_matching_template(
@@ -618,7 +618,7 @@ class NeedsListGenerator:
             raise ValueError(f"Request {request_id} not found")
 
         request.status = RequestStatus.WAIVED
-        request.updated_at = datetime.utcnow()
+        request.updated_at = datetime.now(timezone.utc)
 
         # Log the waiver
         event = DocPolicyEvent(

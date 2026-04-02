@@ -291,7 +291,7 @@ class LetterGenerationService:
         html_content = template.render(variables)
 
         # Calculate expiration
-        expires_at = datetime.utcnow() + timedelta(days=template.expiration_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=template.expiration_days)
 
         # Generate share token
         share_token = secrets.token_urlsafe(32)
@@ -468,7 +468,7 @@ class LetterGenerationService:
             "share_token": result[14],
             "download_count": result[15],
             "template_name": result[16],
-            "is_expired": result[11] < datetime.utcnow() if result[11] else False
+            "is_expired": result[11] < datetime.now(timezone.utc) if result[11] else False
         }
 
     def get_letter_by_share_token(self, share_token: str) -> Optional[Dict]:
@@ -516,7 +516,7 @@ class LetterGenerationService:
                 "expires_at": r[6].isoformat() if r[6] else None,
                 "is_void": r[7],
                 "download_count": r[8],
-                "is_expired": r[6] < datetime.utcnow() if r[6] else False
+                "is_expired": r[6] < datetime.now(timezone.utc) if r[6] else False
             }
             for r in results
         ]
@@ -626,7 +626,7 @@ class LetterRateLimiter:
             # No limit configured
             return {"allowed": True, "reason": "No limits configured"}
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Reset counters if needed
         hour_usage = policy[3]

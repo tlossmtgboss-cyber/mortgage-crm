@@ -135,14 +135,14 @@ class PortalLifecycleService:
                 PartnerAccessToken.is_active == True,
                 or_(
                     PartnerAccessToken.expires_at.is_(None),
-                    PartnerAccessToken.expires_at > datetime.utcnow()
+                    PartnerAccessToken.expires_at > datetime.now(timezone.utc)
                 )
             )
         ).first()
 
         if token:
             # Update last used
-            token.last_used_at = datetime.utcnow()
+            token.last_used_at = datetime.now(timezone.utc)
             self.db.commit()
             return token.portal_loan
 
@@ -246,7 +246,7 @@ class PortalLifecycleService:
 
         # Update portal loan
         portal_loan.lifecycle_stage = new_stage
-        portal_loan.lifecycle_stage_entered_at = datetime.utcnow()
+        portal_loan.lifecycle_stage_entered_at = datetime.now(timezone.utc)
 
         # Log activity
         self._log_activity(
@@ -269,7 +269,7 @@ class PortalLifecycleService:
             "success": True,
             "from_stage": current_stage.value,
             "to_stage": new_stage.value,
-            "transitioned_at": datetime.utcnow().isoformat(),
+            "transitioned_at": datetime.now(timezone.utc).isoformat(),
         }
 
     def get_valid_transitions(self, loan_id: int) -> List[Dict[str, Any]]:
@@ -403,7 +403,7 @@ class PortalLifecycleService:
             return {"success": False, "error": "Risk flag not found"}
 
         risk_flag.is_resolved = True
-        risk_flag.resolved_at = datetime.utcnow()
+        risk_flag.resolved_at = datetime.now(timezone.utc)
         risk_flag.resolved_by = resolved_by
         risk_flag.resolution_notes = resolution_notes
 
@@ -524,7 +524,7 @@ class PortalLifecycleService:
         """Calculate days in current stage."""
         if not portal_loan.lifecycle_stage_entered_at:
             return 0
-        delta = datetime.utcnow() - portal_loan.lifecycle_stage_entered_at
+        delta = datetime.now(timezone.utc) - portal_loan.lifecycle_stage_entered_at
         return delta.days
 
     def _log_activity(

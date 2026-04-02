@@ -77,7 +77,7 @@ class MISMOGenerator:
 
     def __init__(self):
         self.message_id = str(uuid.uuid4())
-        self.timestamp = datetime.utcnow().isoformat() + "Z"
+        self.timestamp = datetime.now(timezone.utc).isoformat() + "Z"
 
     def generate(self, application_data: Dict[str, Any]) -> str:
         """
@@ -473,7 +473,7 @@ class MISMOGenerator:
 
     def generate_filename(self, application_id: str) -> str:
         """Generate a standardized filename for the MISMO XML"""
-        timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         return f"MISMO34_{application_id}_{timestamp}.xml"
 
 

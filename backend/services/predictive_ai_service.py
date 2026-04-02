@@ -73,7 +73,7 @@ class Prediction:
 
     # Metadata
     model_version: str = "1.0"
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = None
 
     # Explanation
@@ -105,7 +105,7 @@ class Recommendation:
 
     # Status
     status: str = "pending"  # pending, accepted, dismissed, completed
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = None
     acted_on_at: Optional[datetime] = None
 
@@ -129,7 +129,7 @@ class ProactiveAlert:
     # Status
     is_read: bool = False
     is_dismissed: bool = False
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     read_at: Optional[datetime] = None
 
 
@@ -491,7 +491,7 @@ class PredictiveAIService:
         delay_days = int(predicted_days * delay_risk)
         predicted_days += delay_days
 
-        predicted_close = datetime.utcnow() + timedelta(days=predicted_days)
+        predicted_close = datetime.now(timezone.utc) + timedelta(days=predicted_days)
 
         velocity = "on_track" if days_in_stage <= stage_benchmarks.get(stage, 5) else "behind"
 
@@ -777,7 +777,7 @@ class PredictiveAIService:
         if lock_expires:
             if isinstance(lock_expires, str):
                 lock_expires = datetime.fromisoformat(lock_expires)
-            days_until_expiry = (lock_expires - datetime.utcnow()).days
+            days_until_expiry = (lock_expires - datetime.now(timezone.utc)).days
 
             if days_until_expiry <= 7:
                 recommendations.append(Recommendation(
@@ -884,7 +884,7 @@ class PredictiveAIService:
             if lock_expires:
                 if isinstance(lock_expires, str):
                     lock_expires = datetime.fromisoformat(lock_expires)
-                days_until_expiry = (lock_expires - datetime.utcnow()).days
+                days_until_expiry = (lock_expires - datetime.now(timezone.utc)).days
 
                 if days_until_expiry <= 5:
                     alerts.append(ProactiveAlert(
@@ -963,7 +963,7 @@ class PredictiveAIService:
             for alert in alerts:
                 if alert.id == alert_id:
                     alert.is_read = True
-                    alert.read_at = datetime.utcnow()
+                    alert.read_at = datetime.now(timezone.utc)
                     return True
         return False
 
@@ -1075,7 +1075,7 @@ class PredictiveAIService:
             for rec in recs:
                 if rec.id == recommendation_id:
                     rec.status = "accepted"
-                    rec.acted_on_at = datetime.utcnow()
+                    rec.acted_on_at = datetime.now(timezone.utc)
                     return True
         return False
 

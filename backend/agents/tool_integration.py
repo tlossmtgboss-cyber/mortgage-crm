@@ -495,7 +495,7 @@ class AgentToolExecutor:
         Returns:
             ToolExecutionResult with data or error
         """
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         # Validate tool is available to this agent
         if tool_name not in self.config.tool_names:
@@ -510,12 +510,12 @@ class AgentToolExecutor:
 
         # Check if approval required
         if not can_skip_approval and tool_name in self.config.requires_approval_for:
-            approval_id = f"approval_{tool_name}_{datetime.utcnow().timestamp()}"
+            approval_id = f"approval_{tool_name}_{datetime.now(timezone.utc).timestamp()}"
             self._pending_approvals[approval_id] = {
                 "tool_name": tool_name,
                 "params": params,
                 "user_id": user_id,
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
             }
             return ToolExecutionResult(
                 tool_name=tool_name,
@@ -532,7 +532,7 @@ class AgentToolExecutor:
                 timeout=self.config.tool_timeout_seconds
             )
 
-            execution_time = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            execution_time = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             if isinstance(result, ToolResult):
                 execution_result = ToolExecutionResult(
@@ -630,7 +630,7 @@ class AgentToolExecutor:
 
         approval = self._pending_approvals.pop(approval_id)
         approval["approved_by"] = approved_by
-        approval["approved_at"] = datetime.utcnow()
+        approval["approved_at"] = datetime.now(timezone.utc)
         return approval
 
     def reject(self, approval_id: str, rejected_by: str, reason: str) -> Optional[Dict]:
@@ -640,7 +640,7 @@ class AgentToolExecutor:
 
         approval = self._pending_approvals.pop(approval_id)
         approval["rejected_by"] = rejected_by
-        approval["rejected_at"] = datetime.utcnow()
+        approval["rejected_at"] = datetime.now(timezone.utc)
         approval["rejection_reason"] = reason
         return approval
 

@@ -234,7 +234,7 @@ class CalendarSyncService:
                 setattr(event, field, value)
 
         # Update tracking fields
-        event.last_modified_at = datetime.utcnow()
+        event.last_modified_at = datetime.now(timezone.utc)
         event.last_modified_by_system = SourceSystem.CRM.value
         event.update_fingerprint()
 
@@ -278,7 +278,7 @@ class CalendarSyncService:
             return None
 
         event.status = EventStatus.CANCELED.value
-        event.last_modified_at = datetime.utcnow()
+        event.last_modified_at = datetime.now(timezone.utc)
         event.last_modified_by_system = SourceSystem.CRM.value
 
         if auto_sync:
@@ -444,7 +444,7 @@ class CalendarSyncService:
                         salesforce_event_id=sf_event_id,
                         organization_id=event.organization_id,
                         fingerprint_hash=event.fingerprint_hash,
-                        last_pushed_at=datetime.utcnow(),
+                        last_pushed_at=datetime.now(timezone.utc),
                         sync_version=1
                     )
                     self.db.add(sync_map)
@@ -455,12 +455,12 @@ class CalendarSyncService:
                 # Update event sync status
                 event.sync_status = SyncStatus.SYNCED.value
                 event.sync_error = None
-                event.last_synced_at = datetime.utcnow()
+                event.last_synced_at = datetime.now(timezone.utc)
 
                 # Update sync mapping
                 if sync_map:
                     sync_map.fingerprint_hash = event.fingerprint_hash
-                    sync_map.last_pushed_at = datetime.utcnow()
+                    sync_map.last_pushed_at = datetime.now(timezone.utc)
                     sync_map.sync_version = (sync_map.sync_version or 0) + 1
 
                 result.success = True
@@ -758,7 +758,7 @@ class CalendarSyncService:
                     })
 
             # Update last poll watermark
-            settings.last_poll_watermark = datetime.utcnow()
+            settings.last_poll_watermark = datetime.now(timezone.utc)
             self.db.commit()
 
         except SQLAlchemyError as e:
@@ -885,7 +885,7 @@ class CalendarSyncService:
             # Check echo window - if we recently pushed, ignore changes
             if sync_map.last_pushed_at:
                 echo_window = timedelta(seconds=settings.echo_ignore_window_seconds)
-                if datetime.utcnow() - sync_map.last_pushed_at < echo_window:
+                if datetime.now(timezone.utc) - sync_map.last_pushed_at < echo_window:
                     logger.debug(f"Skipping echo within window for SF event {sf_event_id}")
                     return {"action": "skipped_echo", "reason": "within_echo_window"}
 
@@ -916,7 +916,7 @@ class CalendarSyncService:
 
             # Update sync mapping
             if sync_map:
-                sync_map.last_pulled_at = datetime.utcnow()
+                sync_map.last_pulled_at = datetime.now(timezone.utc)
                 sync_map.last_seen_sf_modified_at = self._parse_sf_datetime(sf_last_modified)
                 sync_map.fingerprint_hash = crm_event.fingerprint_hash
 
@@ -939,7 +939,7 @@ class CalendarSyncService:
                 salesforce_event_id=sf_event_id,
                 organization_id=crm_event.organization_id,
                 fingerprint_hash=crm_event.fingerprint_hash,
-                last_pulled_at=datetime.utcnow(),
+                last_pulled_at=datetime.now(timezone.utc),
                 last_seen_sf_modified_at=self._parse_sf_datetime(sf_last_modified),
                 sync_version=1
             )
@@ -985,7 +985,7 @@ class CalendarSyncService:
                 if sf_modified > crm_modified:
                     # Salesforce is newer - apply SF changes
                     self._update_crm_event_from_salesforce(crm_event, sf_event)
-                    sync_map.last_pulled_at = datetime.utcnow()
+                    sync_map.last_pulled_at = datetime.now(timezone.utc)
                     sync_map.fingerprint_hash = crm_event.fingerprint_hash
                     self.db.commit()
                     logger.info(f"Conflict resolved: SF wins for event {crm_event.id}")
@@ -1007,7 +1007,7 @@ class CalendarSyncService:
         elif policy == ConflictPolicy.SALESFORCE_WINS.value:
             # Always apply Salesforce changes
             self._update_crm_event_from_salesforce(crm_event, sf_event)
-            sync_map.last_pulled_at = datetime.utcnow()
+            sync_map.last_pulled_at = datetime.now(timezone.utc)
             sync_map.fingerprint_hash = crm_event.fingerprint_hash
             self.db.commit()
             logger.info(f"Conflict policy SF_WINS: applying SF version for {crm_event.id}")
@@ -1251,7 +1251,7 @@ class CalendarSyncService:
         crm_event.location = sf_event.get("Location")
         crm_event.notes = sf_event.get("Description")
         crm_event.attendees = self._parse_sf_attendees(sf_event, sf_event.get("_event_relations"))
-        crm_event.last_modified_at = datetime.utcnow()
+        crm_event.last_modified_at = datetime.now(timezone.utc)
         crm_event.last_modified_by_system = SourceSystem.SALESFORCE.value
         crm_event.sync_status = SyncStatus.SYNCED.value
 

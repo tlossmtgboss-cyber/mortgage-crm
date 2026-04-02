@@ -44,15 +44,16 @@ async def get_current_user(
     db: Session = Depends(get_db)
 ):
     """Get current user from JWT token."""
-    from jose import jwt
+    from auth.tokens import verify_access_token
 
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
 
     try:
         token = credentials.credentials
-        secret = os.getenv("SECRET_KEY", "")
-        payload = jwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
+        payload = verify_access_token(token)
+        if not payload:
+            raise HTTPException(status_code=401, detail="Invalid or revoked token")
         email = payload.get("sub")
 
         if not email:

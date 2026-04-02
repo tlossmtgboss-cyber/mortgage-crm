@@ -19,7 +19,7 @@ class CacheLogger:
 
     def _log(self, level: str, data: Dict[str, Any]):
         """Internal log method with JSON formatting"""
-        data["timestamp"] = datetime.utcnow().isoformat()
+        data["timestamp"] = datetime.now(timezone.utc).isoformat()
         log_method = getattr(self.logger, level, self.logger.info)
         log_method(json.dumps(data))
 

@@ -70,7 +70,7 @@ class LeadProfile(Base):
     status = Column(String(50), default='active')  # 'active', 'converted', 'lost', 'archived'
 
     # ==================== IMPORTANT DATES (13 fields) ====================
-    lead_created_date = Column(DateTime, default=datetime.utcnow)
+    lead_created_date = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     first_contact_attempt_date = Column(DateTime)
     first_contact_successful_date = Column(DateTime)
     lead_qualification_date = Column(DateTime)
@@ -91,8 +91,8 @@ class LeadProfile(Base):
     referral_source = Column(String(255))  # Specific referral source name
     data_sources = Column(ARRAY(String))  # Which sources contributed data: ['email', 'manual_entry', 'import']
 
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     last_email_sync = Column(DateTime)
     last_activity_date = Column(DateTime)
 

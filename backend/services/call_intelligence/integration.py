@@ -441,7 +441,7 @@ class CallIntelligenceIntegration:
             with db_transaction(self.db, f"create tasks for loan {loan_id}"):
                 for task in tasks:
                     # Calculate due date
-                    due_date = datetime.utcnow() + timedelta(days=task.days_until_due)
+                    due_date = datetime.now(timezone.utc) + timedelta(days=task.days_until_due)
 
                     # Map assignee to user
                     assigned_to_id = None
@@ -485,8 +485,8 @@ class CallIntelligenceIntegration:
                             "loan_id": loan_id,
                             "owner_id": assigned_to_id,
                             "related_type": f"application_engine_{task.module.value}",
-                            "created_at": datetime.utcnow(),
-                            "updated_at": datetime.utcnow(),
+                            "created_at": datetime.now(timezone.utc),
+                            "updated_at": datetime.now(timezone.utc),
                         }
                     )
 
@@ -570,7 +570,7 @@ class CallIntelligenceIntegration:
                         "processing_time": ci_response.processing_time_ms,
                         "app_status": audit_response.overall_status.value if audit_response else None,
                         "app_completion": audit_response.overall_completion if audit_response else None,
-                        "created_at": datetime.utcnow(),
+                        "created_at": datetime.now(timezone.utc),
                     }
                 )
                 return True

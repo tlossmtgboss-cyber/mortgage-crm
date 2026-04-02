@@ -88,7 +88,7 @@ def success_response(data, message: str = "Success"):
         "success": True,
         "message": message,
         "data": data,
-        "timestamp": datetime.utcnow().isoformat(),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
 

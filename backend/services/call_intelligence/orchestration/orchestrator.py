@@ -240,7 +240,7 @@ class CallIntelligenceOrchestrator:
         """
         config = config_override or self.config
         result = OrchestrationResult(call_id=call_id)
-        result.started_at = datetime.utcnow()
+        result.started_at = datetime.now(timezone.utc)
         result.status = OrchestrationStatus.IN_PROGRESS
 
         # Normalize extracted data format
@@ -359,11 +359,11 @@ class CallIntelligenceOrchestrator:
         **kwargs,
     ) -> StepResult:
         """Run a single orchestration step with timing and error handling."""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             data = await func(*args, **kwargs)
-            duration = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            duration = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             return StepResult(
                 step=step,
@@ -373,7 +373,7 @@ class CallIntelligenceOrchestrator:
             )
 
         except Exception as e:
-            duration = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            duration = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             logger.exception(f"Orchestration step {step.value} failed: {e}")
 
             return StepResult(
@@ -587,7 +587,7 @@ class CallIntelligenceOrchestrator:
 
     def _finalize_result(self, result: OrchestrationResult) -> OrchestrationResult:
         """Finalize the orchestration result."""
-        result.completed_at = datetime.utcnow()
+        result.completed_at = datetime.now(timezone.utc)
 
         if result.started_at:
             result.total_duration_ms = int(

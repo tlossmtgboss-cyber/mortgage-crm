@@ -22,7 +22,7 @@ class DripEnrollment:
         self.current_phase = 0
         self.current_step = 0
         self.paused_reason = None
-        self.started_at = datetime.utcnow()
+        self.started_at = datetime.now(timezone.utc)
         self.paused_at = None
 
     def to_dict(self) -> Dict:
@@ -87,7 +87,7 @@ class DripEnrollmentService:
             if e.status == "active":
                 e.status = "paused"
                 e.paused_reason = reason
-                e.paused_at = datetime.utcnow()
+                e.paused_at = datetime.now(timezone.utc)
                 paused += 1
 
         return {"status": "paused", "paused_count": paused, "reason": reason}

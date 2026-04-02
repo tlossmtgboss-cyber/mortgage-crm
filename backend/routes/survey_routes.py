@@ -464,7 +464,7 @@ async def send_survey(
 
     # Create survey response record
     access_token = generate_access_token()
-    expires_at = datetime.utcnow() + timedelta(days=template.expires_days)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=template.expires_days)
 
     response = SurveyResponse(
         organization_id=org_id,
@@ -474,7 +474,7 @@ async def send_survey(
         email=data.email,
         access_token=access_token,
         status=ResponseStatus.PENDING,
-        sent_at=datetime.utcnow(),
+        sent_at=datetime.now(timezone.utc),
         expires_at=expires_at,
         trigger_event=data.trigger_event,
         loan_officer_id=data.loan_officer_id,
@@ -531,7 +531,7 @@ async def send_bulk_surveys(
     for recipient in recipients:
         try:
             access_token = generate_access_token()
-            expires_at = datetime.utcnow() + timedelta(days=template.expires_days)
+            expires_at = datetime.now(timezone.utc) + timedelta(days=template.expires_days)
 
             response = SurveyResponse(
                 organization_id=org_id,
@@ -541,7 +541,7 @@ async def send_bulk_surveys(
                 email=recipient.email,
                 access_token=access_token,
                 status=ResponseStatus.PENDING,
-                sent_at=datetime.utcnow(),
+                sent_at=datetime.now(timezone.utc),
                 expires_at=expires_at,
                 trigger_event=recipient.trigger_event,
                 loan_officer_id=recipient.loan_officer_id,
@@ -596,7 +596,7 @@ async def get_survey_for_response(
             "thank_you_message": response.template.thank_you_message,
         }
 
-    if response.expires_at and response.expires_at < datetime.utcnow():
+    if response.expires_at and response.expires_at < datetime.now(timezone.utc):
         response.status = ResponseStatus.EXPIRED
         db.commit()
         return {
@@ -607,7 +607,7 @@ async def get_survey_for_response(
     # Mark as in progress if first access
     if response.status == ResponseStatus.PENDING:
         response.status = ResponseStatus.IN_PROGRESS
-        response.started_at = datetime.utcnow()
+        response.started_at = datetime.now(timezone.utc)
         db.commit()
 
     template = response.template
@@ -657,7 +657,7 @@ async def submit_survey_response(
     if response.status == ResponseStatus.COMPLETED:
         raise HTTPException(status_code=400, detail="Survey already completed")
 
-    if response.expires_at and response.expires_at < datetime.utcnow():
+    if response.expires_at and response.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Survey has expired")
 
     # Validate required questions
@@ -710,7 +710,7 @@ async def submit_survey_response(
 
     # Update response record
     response.status = ResponseStatus.COMPLETED
-    response.completed_at = datetime.utcnow()
+    response.completed_at = datetime.now(timezone.utc)
     response.nps_score = nps_score
 
     if score_count > 0:
@@ -733,7 +733,7 @@ async def submit_survey_response(
     # Track completion time
     if response.started_at:
         response.completion_time_seconds = int(
-            (datetime.utcnow() - response.started_at).total_seconds()
+            (datetime.now(timezone.utc) - response.started_at).total_seconds()
         )
 
     # Track IP and user agent
@@ -964,7 +964,7 @@ async def get_analytics_trends(
 
     # Calculate date range
     period_days = {"7d": 7, "30d": 30, "90d": 90, "1y": 365}.get(period, 30)
-    start_date = datetime.utcnow() - timedelta(days=period_days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=period_days)
 
     query = db.query(SurveyResponse).filter(
         and_(org_filter, SurveyResponse.sent_at >= start_date)

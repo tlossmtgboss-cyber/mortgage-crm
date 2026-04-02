@@ -108,8 +108,8 @@ class CampaignBlueprint(Base):
     # }
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     created_by = Column(Integer)  # User ID who created the blueprint
 
     # Relationships
@@ -172,8 +172,8 @@ class CampaignInstance(Base):
     tracking_pixel_id = Column(String(100))  # For retargeting
 
     # Lifecycle Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     launched_at = Column(DateTime)  # When LAUNCHING started
     activated_at = Column(DateTime)  # When ACTIVE started
     paused_at = Column(DateTime)

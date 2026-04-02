@@ -271,7 +271,7 @@ async def connect_number_to_retell(
                     "user_id": user_id,
                     "phone_number": request.phone_number,
                     "agent_id": request.retell_agent_id,
-                    "created_at": datetime.utcnow(),
+                    "created_at": datetime.now(timezone.utc),
                 }
             )
             db.commit()

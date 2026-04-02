@@ -45,7 +45,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 def create_access_token(data: dict):
     """Create JWT access token"""
     to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -187,8 +187,8 @@ async def create_demo_user(
         stripe_customer_id="demo_customer",
         stripe_subscription_id="demo_subscription",
         status="active",
-        current_period_start=datetime.utcnow(),
-        current_period_end=datetime.utcnow() + timedelta(days=365),
+        current_period_start=datetime.now(timezone.utc),
+        current_period_end=datetime.now(timezone.utc) + timedelta(days=365),
         trial_end=None
     )
     db.add(demo_subscription)
@@ -199,7 +199,7 @@ async def create_demo_user(
         current_step=5,
         steps_completed=[1, 2, 3, 4, 5],
         is_complete=True,
-        completed_at=datetime.utcnow()
+        completed_at=datetime.now(timezone.utc)
     )
     db.add(onboarding)
 
@@ -359,8 +359,8 @@ async def register_user(registration: UserRegistration, db: Session = Depends(ge
                 stripe_customer_id=f"dev_customer_{db_user.id}",
                 stripe_subscription_id=f"dev_sub_{db_user.id}",
                 status="active",
-                current_period_start=datetime.utcnow(),
-                current_period_end=datetime.utcnow() + timedelta(days=365),
+                current_period_start=datetime.now(timezone.utc),
+                current_period_end=datetime.now(timezone.utc) + timedelta(days=365),
                 trial_end=None
             )
             db.add(db_subscription)
@@ -615,9 +615,9 @@ async def update_onboarding_step(
     # Check if all steps completed
     if len(progress.steps_completed) >= 5:
         progress.is_complete = True
-        progress.completed_at = datetime.utcnow()
+        progress.completed_at = datetime.now(timezone.utc)
 
-    progress.updated_at = datetime.utcnow()
+    progress.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {
@@ -653,7 +653,7 @@ async def upload_onboarding_documents(
         progress.uploaded_documents = []
 
     progress.uploaded_documents.extend(files)
-    progress.updated_at = datetime.utcnow()
+    progress.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {
@@ -834,7 +834,7 @@ Return ONLY valid JSON, no markdown or explanation."""
     # Update progress
     if progress:
         progress.workflows_generated = len(created_workflows)
-        progress.updated_at = datetime.utcnow()
+        progress.updated_at = datetime.now(timezone.utc)
 
     db.commit()
 
@@ -930,7 +930,7 @@ async def submit_mortgage_planner_questionnaire(
         lead.notes = f"""
 MORTGAGE PLANNER QUESTIONNAIRE RESPONSES
 ========================================
-Submitted: {submission.submitted_at or datetime.utcnow().isoformat()}
+Submitted: {submission.submitted_at or datetime.now(timezone.utc).isoformat()}
 
 PERSONAL INFORMATION
 - Name: {submission.name}
@@ -1017,7 +1017,7 @@ Suggested approach: Mention that you work with many clients who need a {prof_typ
                 "status": "pending",
                 "owner_id": loan_officer_id,
                 "lead_id": lead.id,
-                "due_date": datetime.utcnow() + timedelta(days=7),
+                "due_date": datetime.now(timezone.utc) + timedelta(days=7),
                 "related_type": "introduction_request",
                 "related_contact_name": submission.name
             })
@@ -1052,7 +1052,7 @@ Track which partners you introduce and follow up on the outcomes for your Circle
                 "status": "pending",
                 "owner_id": loan_officer_id,
                 "lead_id": lead.id,
-                "due_date": datetime.utcnow() + timedelta(days=3),
+                "due_date": datetime.now(timezone.utc) + timedelta(days=3),
                 "related_type": "referral_opportunity",
                 "related_contact_name": submission.name
             })
@@ -1084,7 +1084,7 @@ CIRCLE OF CASHFLOW STATUS:
             "status": "pending",
             "owner_id": loan_officer_id,
             "lead_id": lead.id,
-            "due_date": datetime.utcnow() + timedelta(days=1),
+            "due_date": datetime.now(timezone.utc) + timedelta(days=1),
             "related_type": "questionnaire",
             "related_contact_name": submission.name
         })
@@ -1300,7 +1300,7 @@ async def resend_email_verification(
         # Store token (expires in 24 hours)
         verification_codes[f"email_{request.email}"] = {
             "token": token,
-            "expires": datetime.utcnow() + timedelta(hours=24),
+            "expires": datetime.now(timezone.utc) + timedelta(hours=24),
             "type": "email"
         }
 
@@ -1365,7 +1365,7 @@ async def send_phone_verification_code(
         # Store code (expires in 10 minutes)
         verification_codes[f"phone_{request.phone}"] = {
             "code": code,
-            "expires": datetime.utcnow() + timedelta(minutes=10),
+            "expires": datetime.now(timezone.utc) + timedelta(minutes=10),
             "method": request.method
         }
 
@@ -1412,7 +1412,7 @@ async def verify_phone_code(
         if not stored:
             raise HTTPException(status_code=400, detail="No verification code found. Please request a new code.")
 
-        if datetime.utcnow() > stored["expires"]:
+        if datetime.now(timezone.utc) > stored["expires"]:
             # Clean up expired code
             del verification_codes[f"phone_{request.phone}"]
             raise HTTPException(status_code=400, detail="Verification code has expired. Please request a new code.")
@@ -1429,7 +1429,7 @@ async def verify_phone_code(
             user = db.query(User).filter(User.id == request.user_id).first()
             if user:
                 user.phone_verified = True
-                user.phone_verified_at = datetime.utcnow()
+                user.phone_verified_at = datetime.now(timezone.utc)
                 db.commit()
 
         return {
@@ -1457,7 +1457,7 @@ async def check_email_verification(
         for key, data in verification_codes.items():
             import hmac as _hmac
             if key.startswith("email_") and _hmac.compare_digest(data.get("token") or "", token):
-                if datetime.utcnow() > data["expires"]:
+                if datetime.now(timezone.utc) > data["expires"]:
                     del verification_codes[key]
                     return {"valid": False, "message": "Token expired"}
 
@@ -1470,7 +1470,7 @@ async def check_email_verification(
                 user = db.query(User).filter(User.email == email).first()
                 if user:
                     user.email_verified = True
-                    user.email_verified_at = datetime.utcnow()
+                    user.email_verified_at = datetime.now(timezone.utc)
                     db.commit()
 
                 return {"valid": True, "email": email, "message": "Email verified"}

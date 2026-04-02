@@ -129,7 +129,7 @@ class ContentPublisherService:
         # Update brief status
         if all_success:
             brief.status = ContentStatus.PUBLISHED.value
-            brief.published_at = datetime.utcnow()
+            brief.published_at = datetime.now(timezone.utc)
             brief.publish_results = results
         else:
             brief.status = ContentStatus.FAILED.value
@@ -354,7 +354,7 @@ class ContentPublisherService:
                 brief_id=brief_id,
                 channel=channel,
                 scheduled_at=scheduled_at,
-                published_at=datetime.utcnow() if result.get("status") == "published" else None,
+                published_at=datetime.now(timezone.utc) if result.get("status") == "published" else None,
                 status=result.get("status", "failed" if not result.get("success") else "pending"),
                 external_post_id=result.get("post_id"),
                 external_url=result.get("url"),
@@ -435,7 +435,7 @@ class ContentPublisherService:
         """Get content scheduled to publish now or in the past."""
         return self.db.query(ContentPublishLog).filter(
             ContentPublishLog.status == "scheduled",
-            ContentPublishLog.scheduled_at <= datetime.utcnow()
+            ContentPublishLog.scheduled_at <= datetime.now(timezone.utc)
         ).order_by(ContentPublishLog.scheduled_at).all()
 
     async def process_scheduled_publications(self) -> Dict[str, Any]:
@@ -495,7 +495,7 @@ class ContentPublisherService:
                 log.comments = channel_metrics.get("comments", 0)
                 log.shares = channel_metrics.get("shares", 0)
                 log.clicks = channel_metrics.get("clicks", 0)
-                log.metrics_updated_at = datetime.utcnow()
+                log.metrics_updated_at = datetime.now(timezone.utc)
 
         self.db.commit()
 
@@ -503,7 +503,7 @@ class ContentPublisherService:
             "success": True,
             "brief_id": brief_id,
             "metrics": metrics,
-            "updated_at": datetime.utcnow().isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
         }
 
     async def _fetch_channel_metrics(
@@ -528,7 +528,7 @@ class ContentPublisherService:
         days: int = 30
     ) -> Dict[str, Any]:
         """Get publishing analytics for the organization."""
-        start_date = datetime.utcnow() - timedelta(days=days)
+        start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         logs = self.db.query(ContentPublishLog).filter(
             ContentPublishLog.created_at >= start_date

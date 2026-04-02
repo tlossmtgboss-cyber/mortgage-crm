@@ -222,7 +222,7 @@ async def hubspot_status(
         # Check if token is expired
         is_expired = False
         if row.expires_at:
-            is_expired = datetime.utcnow() > row.expires_at
+            is_expired = datetime.now(timezone.utc) > row.expires_at
 
         return success_response({
             "connected": True,
@@ -356,7 +356,7 @@ async def get_hubspot_contacts(
     access_token = row.access_token
 
     # Check if token is expired and refresh if needed
-    if row.expires_at and datetime.utcnow() > row.expires_at:
+    if row.expires_at and datetime.now(timezone.utc) > row.expires_at:
         token_data = hubspot_client.refresh_access_token(row.refresh_token)
         if token_data:
             access_token = token_data["access_token"]

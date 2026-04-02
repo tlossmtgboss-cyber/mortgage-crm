@@ -609,7 +609,7 @@ async def auto_import(
                         if 'name' not in row_data:
                             row_data['name'] = row_data.get('email', f'Lead {idx + 1}')
                         if 'created_at' not in row_data:
-                            row_data['created_at'] = datetime.utcnow()
+                            row_data['created_at'] = datetime.now(timezone.utc)
                         if 'stage' not in row_data:
                             row_data['stage'] = 'NEW'
                         if 'source' not in row_data:
@@ -633,7 +633,7 @@ async def auto_import(
                                 logger.info(f"Matched lead email '{mask_email(email_normalized)}' to existing lead ID {existing[0]}")
                                 # Update existing - use safe SQL builder
                                 update_data = {k: v for k, v in row_data.items() if k not in ['created_at']}
-                                update_data['updated_at'] = datetime.utcnow()
+                                update_data['updated_at'] = datetime.now(timezone.utc)
                                 update_data['id'] = existing[0]
                                 sql, safe_data = build_safe_update_sql('leads', update_data)
                                 safe_data['id'] = existing[0]
@@ -653,7 +653,7 @@ async def auto_import(
                         if 'loan_number' not in row_data:
                             row_data['loan_number'] = f"AUTO-{uuid.uuid4().hex[:8].upper()}"
                         if 'created_at' not in row_data:
-                            row_data['created_at'] = datetime.utcnow()
+                            row_data['created_at'] = datetime.now(timezone.utc)
                         if 'stage' not in row_data:
                             row_data['stage'] = 'PROCESSING'
                         if 'amount' not in row_data:
@@ -686,7 +686,7 @@ async def auto_import(
                             if existing:
                                 # Update existing - use safe SQL builder
                                 update_data = {k: v for k, v in row_data.items() if k not in ['loan_number', 'created_at']}
-                                update_data['updated_at'] = datetime.utcnow()
+                                update_data['updated_at'] = datetime.now(timezone.utc)
                                 update_data['id'] = existing[0]
                                 sql, safe_data = build_safe_update_sql('loans', update_data)
                                 safe_data['id'] = existing[0]
@@ -737,11 +737,11 @@ async def auto_import(
                             lb = row_data.get('loan_balance', row_data.get('amount', 0)) or 0
                             row_data['current_property_value'] = lb * 1.25 if lb else 0
                         if 'closing_date' not in row_data:
-                            row_data['closing_date'] = row_data.get('original_close_date', datetime.utcnow().date())
+                            row_data['closing_date'] = row_data.get('original_close_date', datetime.now(timezone.utc).date())
                         if 'first_payment_date' not in row_data:
-                            row_data['first_payment_date'] = row_data.get('closing_date', datetime.utcnow().date())
+                            row_data['first_payment_date'] = row_data.get('closing_date', datetime.now(timezone.utc).date())
                         if 'created_at' not in row_data:
-                            row_data['created_at'] = datetime.utcnow()
+                            row_data['created_at'] = datetime.now(timezone.utc)
                         if 'status' not in row_data:
                             row_data['status'] = 'active'
 
@@ -769,7 +769,7 @@ async def auto_import(
                                 logger.info(f"✅ Matched MUM client loan_number '{loan_number_normalized}' to ID {existing[0]}")
                                 # Update existing - use safe SQL builder
                                 update_data = {k: v for k, v in row_data.items() if k not in ['created_at', 'loan_number']}
-                                update_data['updated_at'] = datetime.utcnow()
+                                update_data['updated_at'] = datetime.now(timezone.utc)
                                 if update_data:
                                     update_data['id'] = existing[0]
                                     sql, safe_data = build_safe_update_sql('mum_clients', update_data)
@@ -824,7 +824,7 @@ async def auto_import(
                                     'warnings': transform_result.get('warnings'),
                                     'errors': import_errors,
                                 }),
-                                "created_at": datetime.utcnow(),
+                                "created_at": datetime.now(timezone.utc),
                             }
                         )
                         db.commit()

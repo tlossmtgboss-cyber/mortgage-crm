@@ -153,8 +153,8 @@ class CalendarInviteService:
         return self.generate_ics(
             meeting_name=getattr(room, "room_name", "Perennia AI Meeting"),
             description=full_description,
-            start_time=getattr(room, "scheduled_start", datetime.utcnow()),
-            end_time=getattr(room, "scheduled_end", datetime.utcnow() + timedelta(hours=1)),
+            start_time=getattr(room, "scheduled_start", datetime.now(timezone.utc)),
+            end_time=getattr(room, "scheduled_end", datetime.now(timezone.utc) + timedelta(hours=1)),
             organizer_email=host_email,
             organizer_name=host_name,
             attendees=attendee_list,

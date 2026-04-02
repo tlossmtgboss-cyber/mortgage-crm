@@ -243,7 +243,7 @@ def scan_for_branding_leaks(db, org_id: int) -> Dict:
         "leaks_found": len(leaks),
         "leaks": leaks,
         "is_clean": len(leaks) == 0,
-        "scanned_at": __import__("datetime").datetime.utcnow().isoformat(),
+        "scanned_at": __import__("datetime").datetime.now(timezone.utc).isoformat(),
     }
 
 

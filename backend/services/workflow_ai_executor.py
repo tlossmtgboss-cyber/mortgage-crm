@@ -143,7 +143,7 @@ class WorkflowAIExecutor:
                         "task_type": task["task_type"],
                         "success": True,
                         "result_summary": result.get("summary"),
-                        "timestamp": datetime.utcnow().isoformat()
+                        "timestamp": datetime.now(timezone.utc).isoformat()
                     }
                 )
             else:

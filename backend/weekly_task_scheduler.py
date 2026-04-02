@@ -226,7 +226,7 @@ class WeeklyTaskScheduler:
             True if the task should be sent today
         """
         if today is None:
-            today = datetime.utcnow()
+            today = datetime.now(timezone.utc)
 
         # Check if this is a repeat_weekly task
         if not getattr(day_config, 'repeat_weekly', False):
@@ -292,7 +292,7 @@ class WeeklyTaskScheduler:
             return None
 
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
 
             # Build task description with stakeholder info
             stakeholder_names = [s['name'] for s in stakeholders[:5]]
@@ -335,7 +335,7 @@ class WeeklyTaskScheduler:
         Returns:
             Summary of tasks processed
         """
-        today = datetime.utcnow()
+        today = datetime.now(timezone.utc)
         week_start = today - timedelta(days=today.weekday())  # Monday of current week
 
         results = {

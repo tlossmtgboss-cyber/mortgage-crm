@@ -44,7 +44,7 @@ class ProviderRecord:
         self.total_sent += 1
         self.consecutive_failures = 0
         self._consecutive_successes += 1
-        self.last_success_at = datetime.utcnow()
+        self.last_success_at = datetime.now(timezone.utc)
         # Recovery logic
         if self.status != ProviderStatus.HEALTHY:
             if self._consecutive_successes >= self.recovery_threshold:
@@ -56,7 +56,7 @@ class ProviderRecord:
         self.total_failed += 1
         self.consecutive_failures += 1
         self._consecutive_successes = 0
-        self.last_failure_at = datetime.utcnow()
+        self.last_failure_at = datetime.now(timezone.utc)
         if self.consecutive_failures >= self.down_threshold:
             if self.status != ProviderStatus.DOWN:
                 self.status = ProviderStatus.DOWN

@@ -380,7 +380,7 @@ class VerificationTokenService:
 
         # Generate new token
         token = VerificationTokenService.generate_token()
-        expires_at = datetime.utcnow() + timedelta(hours=24)
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
 
         # Create token record
         db_token = EmailVerificationToken(
@@ -416,7 +416,7 @@ class VerificationTokenService:
             return None
 
         # Check if expired
-        if token_record.expires_at < datetime.utcnow():
+        if token_record.expires_at < datetime.now(timezone.utc):
             db.delete(token_record)
             db.commit()
             return None

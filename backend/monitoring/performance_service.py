@@ -82,7 +82,7 @@ class EndpointStats:
     max_duration_ms: float = 0
     error_count: int = 0
     slow_count: int = 0
-    last_updated: datetime = field(default_factory=datetime.utcnow)
+    last_updated: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def update(self, duration_ms: float, status_code: int):
         self.total_requests += 1
@@ -93,7 +93,7 @@ class EndpointStats:
             self.error_count += 1
         if duration_ms > SLOW_ENDPOINT_THRESHOLD_MS:
             self.slow_count += 1
-        self.last_updated = datetime.utcnow()
+        self.last_updated = datetime.now(timezone.utc)
 
     @property
     def avg_duration_ms(self) -> float:
@@ -160,7 +160,7 @@ class PerformanceService:
         self._endpoint_stats: Dict[str, EndpointStats] = {}
         self._stats_lock = Lock()
         self._queries_lock = Lock()
-        self._started_at = datetime.utcnow()
+        self._started_at = datetime.now(timezone.utc)
 
         self._initialized = True
         logger.info("Performance monitoring service initialized")
@@ -177,7 +177,7 @@ class PerformanceService:
         record = SlowQuery(
             query=query,
             duration_ms=duration_ms,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             params_hash=params_hash
         )
 
@@ -308,7 +308,7 @@ class PerformanceService:
                 method=method,
                 duration_ms=duration_ms,
                 status_code=status_code,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 user_id=user_id
             )
             self._slow_endpoints.append(record)
@@ -368,7 +368,7 @@ class PerformanceService:
         most_errors = [s for s in stats[:5] if s.error_count > 0]
 
         return {
-            "uptime_seconds": (datetime.utcnow() - self._started_at).total_seconds(),
+            "uptime_seconds": (datetime.now(timezone.utc) - self._started_at).total_seconds(),
             "total_requests": total_requests,
             "total_errors": total_errors,
             "error_rate_percent": round((total_errors / total_requests) * 100, 2) if total_requests > 0 else 0,
@@ -390,7 +390,7 @@ class PerformanceService:
         with self._queries_lock:
             self._slow_queries.clear()
         self._slow_endpoints.clear()
-        self._started_at = datetime.utcnow()
+        self._started_at = datetime.now(timezone.utc)
         logger.info("Performance statistics cleared")
 
 

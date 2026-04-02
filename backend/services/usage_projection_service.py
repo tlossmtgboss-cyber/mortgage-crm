@@ -622,7 +622,7 @@ class UsageProjectionService:
             """), {
                 "id": str(uuid.uuid4()),
                 "org_id": self.organization_id,
-                "calculated_at": datetime.utcnow(),
+                "calculated_at": datetime.now(timezone.utc),
                 "period_start": result["period_start"],
                 "period_end": result["period_end"],
                 "total_cost": str(result["total_actual_cost"]),

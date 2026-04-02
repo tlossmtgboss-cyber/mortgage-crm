@@ -373,7 +373,7 @@ async def claim_document(
     # Mark as claimed
     doc.reviewed_by = user_id
     doc.status = "NEEDS_REVIEW"
-    doc.updated_at = datetime.utcnow()
+    doc.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     logger.info(f"Document {document_id} claimed by {reviewer_name}")
@@ -382,7 +382,7 @@ async def claim_document(
         "document_id": document_id,
         "claimed_by": reviewer_name,
         "claimed_by_id": user_id,
-        "claimed_at": datetime.utcnow().isoformat(),
+        "claimed_at": datetime.now(timezone.utc).isoformat(),
         "file_name": doc.file_name,
         "doc_type": doc.doc_type.value if doc.doc_type else None,
         "loan_id": doc.loan_id,
@@ -431,7 +431,7 @@ async def release_document(
     previous_reviewer = doc.reviewed_by
     doc.reviewed_by = None
     doc.status = "UPLOADED"
-    doc.updated_at = datetime.utcnow()
+    doc.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     logger.info(f"Document {document_id} released by {user_id} (was claimed by {previous_reviewer})")
@@ -439,7 +439,7 @@ async def release_document(
     return {
         "document_id": document_id,
         "released_by": user_id,
-        "released_at": datetime.utcnow().isoformat(),
+        "released_at": datetime.now(timezone.utc).isoformat(),
         "previous_reviewer": previous_reviewer,
         "status": "UPLOADED",
         "message": "Document returned to review queue",
@@ -740,7 +740,7 @@ async def update_auto_review_settings(
     if body.enabled_checks is not None:
         current_settings["enabled_checks"] = body.enabled_checks
 
-    current_settings["updated_at"] = datetime.utcnow().isoformat()
+    current_settings["updated_at"] = datetime.now(timezone.utc).isoformat()
     current_settings["updated_by"] = str(getattr(current_user, "id", "unknown"))
 
     settings_json = json.dumps(current_settings)

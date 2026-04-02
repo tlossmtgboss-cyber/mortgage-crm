@@ -36,8 +36,8 @@ class UserIntegration(Base):
     provider_user_id = Column(String(255), nullable=True)  # User ID on provider
 
     # Timestamps
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Ensure one integration per user per provider
     __table_args__ = (
@@ -53,7 +53,7 @@ class UserIntegration(Base):
         """Check if the access token is expired."""
         if not self.expires_at:
             return True
-        return datetime.utcnow() >= self.expires_at
+        return datetime.now(timezone.utc) >= self.expires_at
 
     @property
     def is_connected(self) -> bool:

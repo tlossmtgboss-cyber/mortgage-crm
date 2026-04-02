@@ -61,7 +61,7 @@ def success_response(data: Any, message: str = "Success") -> Dict:
         "success": True,
         "message": message,
         "data": data,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -72,7 +72,7 @@ def error_response(message: str, errors: Optional[List[Dict]] = None, code: str 
         "message": message,
         "errors": errors or [],
         "code": code,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 
@@ -604,7 +604,7 @@ async def test_notification(
             "recipient": recipient_email or recipient_phone,
             "status": "sent",
             "message": f"Test {notification_type} notification sent successfully",
-            "sent_at": datetime.utcnow().isoformat()
+            "sent_at": datetime.now(timezone.utc).isoformat()
         }
 
         return success_response(result, f"Test {notification_type} sent")
@@ -672,7 +672,7 @@ async def reset_to_defaults(
         # In production, reset in database
         result = {
             "section": reset_section,
-            "reset_at": datetime.utcnow().isoformat(),
+            "reset_at": datetime.now(timezone.utc).isoformat(),
             "message": f"Settings reset to defaults for: {reset_section}"
         }
 

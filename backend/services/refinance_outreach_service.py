@@ -112,7 +112,7 @@ class RefinanceOutreachService:
         if result.get('success'):
             # Update opportunity status
             opportunity.status = 'sms_sent'
-            opportunity.sms_sent_at = datetime.utcnow()
+            opportunity.sms_sent_at = datetime.now(timezone.utc)
             opportunity.sms_message_sid = result.get('message_sid')
             self.db.commit()
 
@@ -224,7 +224,7 @@ class RefinanceOutreachService:
 
             # Update opportunity
             opportunity.status = 'called'
-            opportunity.call_initiated_at = datetime.utcnow()
+            opportunity.call_initiated_at = datetime.now(timezone.utc)
             opportunity.vapi_call_id = vapi_call_id
             opportunity.call_status = 'initiated'
             self.db.commit()
@@ -431,7 +431,7 @@ class RefinanceOutreachService:
         if 'appointment' in summary_lower or 'scheduled' in summary_lower:
             opportunity.call_outcome = 'appointment_scheduled'
             opportunity.status = 'scheduled'
-            opportunity.appointment_scheduled_at = datetime.utcnow()
+            opportunity.appointment_scheduled_at = datetime.now(timezone.utc)
 
         elif 'callback' in summary_lower or 'call back' in summary_lower:
             opportunity.call_outcome = 'callback_requested'

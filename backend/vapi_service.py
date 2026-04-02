@@ -1453,7 +1453,7 @@ Status: {whisper_data.get('caller_type', 'Unknown')}.
                 # Update staff call count
                 if staff:
                     staff.current_call_count += 1
-                    staff.last_call_at = datetime.utcnow()
+                    staff.last_call_at = datetime.now(timezone.utc)
                     self.db.commit()
 
                 return {

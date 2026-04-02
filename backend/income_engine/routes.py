@@ -472,7 +472,7 @@ async def resolve_income_flag(
             )
 
         flag.is_resolved = True
-        flag.resolved_at = datetime.utcnow()
+        flag.resolved_at = datetime.now(timezone.utc)
         flag.resolved_by = resolved_by
         flag.resolution_note = resolution_note
 

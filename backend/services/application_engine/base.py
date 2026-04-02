@@ -415,7 +415,7 @@ class BaseAuditModule(ABC):
             borrower_type=borrower_type,
             required_document_type=field_def.document_types[0] if field_def.document_types else None,
             days_until_due=3 if priority == TaskPriority.HIGH else 5,
-            due_date=datetime.utcnow() + timedelta(days=3 if priority == TaskPriority.HIGH else 5),
+            due_date=datetime.now(timezone.utc) + timedelta(days=3 if priority == TaskPriority.HIGH else 5),
             borrower_portal_visible=borrower_visible,
             borrower_instructions=field_def.borrower_instructions or None,
         )
@@ -445,7 +445,7 @@ class BaseAuditModule(ABC):
             status=status,
             confidence=confidence,
             source=source,
-            extracted_at=datetime.utcnow(),
+            extracted_at=datetime.now(timezone.utc),
         )
 
     def merge_field(
@@ -490,7 +490,7 @@ class BaseAuditModule(ABC):
                 confidence=max(call_confidence,
                               existing_value.confidence if isinstance(existing_value, ExtractedField) else 100),
                 source="verified",
-                verified_at=datetime.utcnow(),
+                verified_at=datetime.now(timezone.utc),
                 verification_method="call_confirm",
             )
 
@@ -501,7 +501,7 @@ class BaseAuditModule(ABC):
             status=FieldStatus.CONFLICTING,
             confidence=call_confidence,
             source="call_transcript",
-            extracted_at=datetime.utcnow(),
+            extracted_at=datetime.now(timezone.utc),
             conflicts=[
                 {
                     "source": "existing",

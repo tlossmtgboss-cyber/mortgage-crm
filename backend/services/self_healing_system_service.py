@@ -95,7 +95,7 @@ class HealthCheck:
 
     # Details
     details: Dict[str, Any] = field(default_factory=dict)
-    checked_at: datetime = field(default_factory=datetime.utcnow)
+    checked_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 @dataclass
@@ -116,7 +116,7 @@ class Incident:
     stack_trace: str = ""
 
     # Tracking
-    detected_at: datetime = field(default_factory=datetime.utcnow)
+    detected_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     acknowledged_at: Optional[datetime] = None
     resolved_at: Optional[datetime] = None
 
@@ -329,7 +329,7 @@ class SelfHealingSystemService:
             "health_check_fn": health_check_fn,
             "critical": critical,
             "dependencies": dependencies or [],
-            "registered_at": datetime.utcnow()
+            "registered_at": datetime.now(timezone.utc)
         }
 
         self._health_history[component_id] = deque(maxlen=100)
@@ -389,17 +389,17 @@ class SelfHealingSystemService:
         component: Dict[str, Any]
     ) -> HealthCheck:
         """Perform health check for a component."""
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         # Check circuit breaker
         cb = self._circuit_breakers.get(component_id)
         if cb and cb.state == "open":
             # Check if ready to try again
             if cb.opened_at:
-                elapsed = (datetime.utcnow() - cb.opened_at).total_seconds()
+                elapsed = (datetime.now(timezone.utc) - cb.opened_at).total_seconds()
                 if elapsed >= cb.recovery_timeout_seconds:
                     cb.state = "half-open"
-                    cb.half_open_at = datetime.utcnow()
+                    cb.half_open_at = datetime.now(timezone.utc)
                 else:
                     return HealthCheck(
                         component_id=component_id,
@@ -421,7 +421,7 @@ class SelfHealingSystemService:
                 message = "Component registered"
                 details = {}
 
-            response_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            response_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             # Update circuit breaker on success
             if cb and cb.state == "half-open":
@@ -441,15 +441,15 @@ class SelfHealingSystemService:
             )
 
         except Exception as e:
-            response_time = (datetime.utcnow() - start_time).total_seconds() * 1000
+            response_time = (datetime.now(timezone.utc) - start_time).total_seconds() * 1000
 
             # Update circuit breaker on failure
             if cb:
                 cb.failure_count += 1
-                cb.last_failure_at = datetime.utcnow()
+                cb.last_failure_at = datetime.now(timezone.utc)
                 if cb.failure_count >= cb.failure_threshold:
                     cb.state = "open"
-                    cb.opened_at = datetime.utcnow()
+                    cb.opened_at = datetime.now(timezone.utc)
 
             return HealthCheck(
                 component_id=component_id,
@@ -515,7 +515,7 @@ class SelfHealingSystemService:
                 cb for cb in self._circuit_breakers.values()
                 if cb.state == "open"
             ]),
-            "checked_at": datetime.utcnow().isoformat()
+            "checked_at": datetime.now(timezone.utc).isoformat()
         }
 
     # =========================================================================
@@ -626,7 +626,7 @@ class SelfHealingSystemService:
                     "action_id": action.id,
                     "action_type": action_type.value,
                     "success": success,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 })
 
                 if success:
@@ -636,7 +636,7 @@ class SelfHealingSystemService:
 
                     if health and health.status == HealthStatus.HEALTHY:
                         incident.status = IncidentStatus.RESOLVED
-                        incident.resolved_at = datetime.utcnow()
+                        incident.resolved_at = datetime.now(timezone.utc)
                         incident.auto_healed = True
                         incident.resolution = f"Auto-healed using {playbook.name}"
 
@@ -691,7 +691,7 @@ class SelfHealingSystemService:
     async def _execute_healing_action(self, action: HealingAction) -> bool:
         """Execute a healing action."""
         action.status = "executing"
-        action.started_at = datetime.utcnow()
+        action.started_at = datetime.now(timezone.utc)
 
         handler = self._healing_handlers.get(action.action_type)
         if not handler:
@@ -702,20 +702,20 @@ class SelfHealingSystemService:
         try:
             result = await handler(action.target_component, action.parameters)
             action.status = "completed"
-            action.completed_at = datetime.utcnow()
+            action.completed_at = datetime.now(timezone.utc)
             action.result = str(result)
             return result.get("success", False) if isinstance(result, dict) else bool(result)
 
         except Exception as e:
             action.status = "failed"
             action.error = str(e)
-            action.completed_at = datetime.utcnow()
+            action.completed_at = datetime.now(timezone.utc)
             logger.error(f"Healing action failed: {action.id} - {e}")
             return False
 
     async def _escalate_incident(self, incident: Incident, reason: str):
         """Escalate an incident for human intervention."""
-        incident.escalated_at = datetime.utcnow()
+        incident.escalated_at = datetime.now(timezone.utc)
         incident.escalated_to = "on_call"
 
         # Would send notification here
@@ -782,7 +782,7 @@ class SelfHealingSystemService:
         cb = self._circuit_breakers.get(component_id)
         if cb:
             cb.state = "open"
-            cb.opened_at = datetime.utcnow()
+            cb.opened_at = datetime.now(timezone.utc)
             cb.recovery_timeout_seconds = duration
 
         return {"success": True, "action": "circuit_break", "duration": duration}
@@ -859,7 +859,7 @@ class SelfHealingSystemService:
         """Acknowledge an incident."""
         incident = self._active_incidents.get(incident_id)
         if incident:
-            incident.acknowledged_at = datetime.utcnow()
+            incident.acknowledged_at = datetime.now(timezone.utc)
             incident.status = IncidentStatus.INVESTIGATING
             return True
         return False
@@ -874,7 +874,7 @@ class SelfHealingSystemService:
         incident = self._active_incidents.get(incident_id)
         if incident:
             incident.status = IncidentStatus.RESOLVED
-            incident.resolved_at = datetime.utcnow()
+            incident.resolved_at = datetime.now(timezone.utc)
             incident.resolution = resolution
             incident.root_cause = root_cause
 
@@ -957,7 +957,7 @@ class SelfHealingSystemService:
 
     def get_incident_summary(self, days: int = 7) -> Dict[str, Any]:
         """Get incident summary for the past N days."""
-        cutoff = datetime.utcnow() - timedelta(days=days)
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
 
         recent = [
             i for i in self._resolved_incidents

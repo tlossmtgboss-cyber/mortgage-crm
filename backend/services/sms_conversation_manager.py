@@ -56,7 +56,7 @@ class SMSConversationManager:
             ctx.update(intent_result.entities)
             conversation.context_data = ctx
 
-        conversation.last_message_at = datetime.utcnow()
+        conversation.last_message_at = datetime.now(timezone.utc)
         conversation.message_count = (conversation.message_count or 0) + 1
 
         # 5. Generate AI response

@@ -291,7 +291,7 @@ Respond in JSON format:
 
                 return ConversationInsight(
                     conversation_id=conversation_id or "unknown",
-                    timestamp=timestamp or datetime.utcnow(),
+                    timestamp=timestamp or datetime.now(timezone.utc),
                     intent=IntentCategory(data.get("intent", "other")),
                     sentiment=SentimentLevel(data.get("sentiment", "neutral")),
                     objections=[ObjectionType(o) for o in data.get("objections", []) if o in [e.value for e in ObjectionType]],
@@ -348,7 +348,7 @@ Respond in JSON format:
 
         return ConversationInsight(
             conversation_id=conversation_id or "unknown",
-            timestamp=timestamp or datetime.utcnow(),
+            timestamp=timestamp or datetime.now(timezone.utc),
             intent=intent,
             sentiment=sentiment,
             objections=objections,

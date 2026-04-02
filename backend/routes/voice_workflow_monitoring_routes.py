@@ -111,7 +111,7 @@ async def get_voice_workflow_health(
             detail="No organization context available",
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     one_hour_ago = now - timedelta(hours=1)
     twenty_four_hours_ago = now - timedelta(hours=24)
 
@@ -602,7 +602,7 @@ async def test_workflow_webhook(
             "organization_id": workflow.organization_id,
             "state": workflow.state,
             "data": status_dict,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         return {
@@ -666,7 +666,7 @@ async def export_voice_workflow_gdpr_data(
                 "organization_id": organization_id,
                 "workflow_count": 0,
                 "workflows": [],
-                "exported_at": datetime.utcnow().isoformat(),
+                "exported_at": datetime.now(timezone.utc).isoformat(),
                 "gdpr_article": "Article 15 — Right of Access",
             }
 
@@ -733,7 +733,7 @@ async def export_voice_workflow_gdpr_data(
             "workflow_count": len(workflows),
             "workflows": exported_workflows,
             "audit_trail": relevant_audit,
-            "exported_at": datetime.utcnow().isoformat(),
+            "exported_at": datetime.now(timezone.utc).isoformat(),
             "gdpr_article": "Article 15 — Right of Access",
         }
 

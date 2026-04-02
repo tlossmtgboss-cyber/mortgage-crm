@@ -360,7 +360,7 @@ def trigger_sync(
         """, {"loan_id": loan_id})
 
         if last_sync and last_sync["created_at"]:
-            minutes_since = (datetime.utcnow() - last_sync["created_at"]).total_seconds() / 60
+            minutes_since = (datetime.now(timezone.utc) - last_sync["created_at"]).total_seconds() / 60
             if minutes_since < 5:
                 return ToolResult.error(
                     f"Last sync was {int(minutes_since)} minutes ago. "

@@ -585,7 +585,7 @@ class OpsManagerAgent(SpecializedAgent):
                     if row:
                         if row.stage in TERMINAL_STAGES:
                             should_resolve = True
-                        elif row.lock_expiration_date and row.lock_expiration_date > datetime.utcnow() + timedelta(days=5):
+                        elif row.lock_expiration_date and row.lock_expiration_date > datetime.now(timezone.utc) + timedelta(days=5):
                             should_resolve = True
 
                 elif cat == OPS_CATEGORIES["SLA_BREACH"] and loan_id:
@@ -669,7 +669,7 @@ class OpsManagerAgent(SpecializedAgent):
 
         org_id = input_data.get("organization_id")
         dry_run = input_data.get("dry_run", False)
-        started_at = datetime.utcnow()
+        started_at = datetime.now(timezone.utc)
 
         # Use route's DB session if available, otherwise create one
         existing_db = context.get("_shared_db") if context else None
@@ -726,7 +726,7 @@ class OpsManagerAgent(SpecializedAgent):
             team_result = sub_results.get("team_gaps", ToolResult(success=False, error="skipped"))
             stalled_result = sub_results.get("stalled_files", ToolResult(success=False, error="skipped"))
 
-            completed_at = datetime.utcnow()
+            completed_at = datetime.now(timezone.utc)
             duration = (completed_at - started_at).total_seconds()
 
             # Aggregate results
@@ -1229,7 +1229,7 @@ class OpsManagerAgent(SpecializedAgent):
             for loan in doc_loans:
                 for doc_type, col in [("Credit docs", loan.credit_docs_expire_date),
                                       ("Appraisal docs", loan.appraisal_docs_expire_date)]:
-                    if col and col <= datetime.utcnow() + timedelta(days=doc_days):
+                    if col and col <= datetime.now(timezone.utc) + timedelta(days=doc_days):
                         exp_date = col.strftime("%m/%d/%Y") if hasattr(col, 'strftime') else str(col)
                         title = f"[DOCS] {doc_type} expiring {exp_date}: {loan.borrower_name or 'Unknown'} ({loan.loan_number or ''})"
                         impediments.append({"category": "DOC_EXPIRING", "title": title, "priority": "high"})
@@ -1364,7 +1364,7 @@ class OpsManagerAgent(SpecializedAgent):
                         if loan.loan_officer_id:
                             for doc_type_label, col in [("Credit docs", loan.credit_docs_expire_date),
                                                         ("Appraisal docs", loan.appraisal_docs_expire_date)]:
-                                if col and col <= datetime.utcnow() + timedelta(days=doc_days):
+                                if col and col <= datetime.now(timezone.utc) + timedelta(days=doc_days):
                                     try:
                                         exp_str = col.strftime("%m/%d/%Y") if hasattr(col, 'strftime') else str(col)
                                         push_svc.notify_doc_expiring(
@@ -1913,14 +1913,14 @@ class OpsManagerAgent(SpecializedAgent):
             for task in tasks:
                 # Build loan_data context for scoring
                 loan_data = {}
-                if task.due_date and task.due_date < datetime.utcnow():
+                if task.due_date and task.due_date < datetime.now(timezone.utc):
                     loan_data["is_overdue"] = True
                 if task.closing_date:
-                    days_to_close = (task.closing_date - datetime.utcnow()).total_seconds() / 86400
+                    days_to_close = (task.closing_date - datetime.now(timezone.utc)).total_seconds() / 86400
                     if 0 < days_to_close <= 3:
                         loan_data["closing_within_3d"] = True
                 if task.lock_expiration_date:
-                    days_to_lock = (task.lock_expiration_date - datetime.utcnow()).total_seconds() / 86400
+                    days_to_lock = (task.lock_expiration_date - datetime.now(timezone.utc)).total_seconds() / 86400
                     if 0 < days_to_lock <= 3:
                         loan_data["lock_within_3d"] = True
 
@@ -2016,7 +2016,7 @@ class OpsManagerAgent(SpecializedAgent):
 
             # 1. Days in stage vs SLA target
             if loan.stage_changed_at and loan.stage not in TERMINAL_STAGES:
-                days_in_stage = (datetime.utcnow() - loan.stage_changed_at).total_seconds() / 86400
+                days_in_stage = (datetime.now(timezone.utc) - loan.stage_changed_at).total_seconds() / 86400
                 sla_target = STAGE_SLA_DAYS.get(loan.stage, 10)
                 if days_in_stage > sla_target:
                     over_by = days_in_stage - sla_target
@@ -2090,7 +2090,7 @@ class OpsManagerAgent(SpecializedAgent):
 
             # 4. Lock expiration risk
             if loan.lock_expiration_date and loan.stage not in TERMINAL_STAGES:
-                days_to_lock = (loan.lock_expiration_date - datetime.utcnow()).total_seconds() / 86400
+                days_to_lock = (loan.lock_expiration_date - datetime.now(timezone.utc)).total_seconds() / 86400
                 if days_to_lock < 0:
                     health_score -= 20
                     impediments.append({

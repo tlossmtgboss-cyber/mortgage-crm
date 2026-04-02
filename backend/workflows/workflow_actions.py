@@ -277,7 +277,7 @@ class WorkflowActionExecutor:
             if not title or not assigned_to:
                 return {"success": False, "error": "Missing title or assigned_to"}
 
-            due_date = datetime.utcnow() + timedelta(hours=due_hours)
+            due_date = datetime.now(timezone.utc) + timedelta(hours=due_hours)
 
             # Try to insert task into database
             try:
@@ -292,7 +292,7 @@ class WorkflowActionExecutor:
                     "priority": priority,
                     "lead_id": lead_id,
                     "assigned_to": assigned_to,
-                    "created_at": datetime.utcnow()
+                    "created_at": datetime.now(timezone.utc)
                 })
 
                 task_id = result.fetchone()[0]
@@ -331,7 +331,7 @@ class WorkflowActionExecutor:
                 "message": message,
                 "priority": priority,
                 "lead_id": lead_id,
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc)
             })
             self.db.commit()
 
@@ -360,7 +360,7 @@ class WorkflowActionExecutor:
                 """), {
                     "lead_id": lead_id,
                     "campaign": stop_campaign,
-                    "now": datetime.utcnow()
+                    "now": datetime.now(timezone.utc)
                 })
 
             # Enroll in new campaign
@@ -372,7 +372,7 @@ class WorkflowActionExecutor:
                 """), {
                     "lead_id": lead_id,
                     "campaign": campaign,
-                    "now": datetime.utcnow()
+                    "now": datetime.now(timezone.utc)
                 })
 
             self.db.commit()
@@ -399,7 +399,7 @@ class WorkflowActionExecutor:
                 "lead_id": lead_id,
                 "activity_type": activity_type,
                 "note": note,
-                "created_at": datetime.utcnow()
+                "created_at": datetime.now(timezone.utc)
             })
             self.db.commit()
 
@@ -425,7 +425,7 @@ class WorkflowActionExecutor:
                 """), {
                     "lead_id": lead_id,
                     "tag": tag,
-                    "created_at": datetime.utcnow()
+                    "created_at": datetime.now(timezone.utc)
                 })
 
             self.db.commit()

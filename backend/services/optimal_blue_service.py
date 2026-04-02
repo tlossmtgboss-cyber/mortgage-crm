@@ -204,7 +204,7 @@ class OptimalBlueService:
                     ),
                     source='optimal_blue',
                     is_mock=False,
-                    fetched_at=datetime.utcnow(),
+                    fetched_at=datetime.now(timezone.utc),
                     scenario=scenario,
                     rate_options=data.get('rates', []),
                 )
@@ -316,7 +316,7 @@ class OptimalBlueService:
             ),
             source='mock',
             is_mock=True,
-            fetched_at=datetime.utcnow(),
+            fetched_at=datetime.now(timezone.utc),
             scenario=scenario,
             rate_options=rate_options,
         )
@@ -330,7 +330,7 @@ class OptimalBlueService:
             return None
 
         cache_key = scenario.generate_cache_key()
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         cached = self.db.query(OptimalBlueRateCache).filter(
             OptimalBlueRateCache.cache_key == cache_key,
@@ -363,7 +363,7 @@ class OptimalBlueService:
             return
 
         cache_key = scenario.generate_cache_key()
-        expires_at = datetime.utcnow() + timedelta(minutes=RATE_CACHE_TTL_MINUTES)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=RATE_CACHE_TTL_MINUTES)
 
         # Check if cache entry exists
         existing = self.db.query(OptimalBlueRateCache).filter(
@@ -456,7 +456,7 @@ class OptimalBlueService:
         if not self.db:
             return 0
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         result = self.db.query(OptimalBlueRateCache).filter(
             OptimalBlueRateCache.expires_at < now
         ).delete()

@@ -97,7 +97,7 @@ def create_test_realtor():
 
         # Create a session token
         token = f"test-prod-{secrets.token_urlsafe(32)}"
-        expires_at = datetime.utcnow() + timedelta(days=30)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=30)
 
         # Check for existing session
         existing_session = conn.execute(text("""

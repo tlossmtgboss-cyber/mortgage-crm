@@ -595,7 +595,7 @@ class OutreachService:
             channel=OutreachChannel.EMAIL,
             outreach_type=outreach_type,
             status=OutreachStatus.SENT,
-            sent_at=datetime.utcnow(),
+            sent_at=datetime.now(timezone.utc),
             recipient=to_email,
             subject=subject,
         )
@@ -634,7 +634,7 @@ class OutreachService:
             channel=OutreachChannel.SMS,
             outreach_type=outreach_type,
             status=OutreachStatus.SENT,
-            sent_at=datetime.utcnow(),
+            sent_at=datetime.now(timezone.utc),
             recipient=to_phone,
             subject=message[:50] + "..." if len(message) > 50 else message,
         )

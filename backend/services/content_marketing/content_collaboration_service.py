@@ -167,7 +167,7 @@ class ContentCollaborationService:
 
         comment.resolved = True
         comment.resolved_by = resolved_by
-        comment.resolved_at = datetime.utcnow()
+        comment.resolved_at = datetime.now(timezone.utc)
         self.db.commit()
         return True
 
@@ -369,7 +369,7 @@ class ContentCollaborationService:
 
         approval.status = ApprovalStatus.APPROVED.value
         approval.decision_by = decision_by
-        approval.decision_at = datetime.utcnow()
+        approval.decision_at = datetime.now(timezone.utc)
         approval.decision_notes = decision_notes
         self.db.commit()
 
@@ -399,7 +399,7 @@ class ContentCollaborationService:
 
         approval.status = ApprovalStatus.REJECTED.value
         approval.decision_by = decision_by
-        approval.decision_at = datetime.utcnow()
+        approval.decision_at = datetime.now(timezone.utc)
         approval.decision_notes = decision_notes
         self.db.commit()
 
@@ -435,7 +435,7 @@ class ContentCollaborationService:
 
         approval.status = ApprovalStatus.CHANGES_REQUESTED.value
         approval.decision_by = decision_by
-        approval.decision_at = datetime.utcnow()
+        approval.decision_at = datetime.now(timezone.utc)
         approval.decision_notes = decision_notes
         self.db.commit()
 

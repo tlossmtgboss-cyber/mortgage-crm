@@ -27,7 +27,7 @@ class DealBreakerResult:
     eligible_programs: List[str] = field(default_factory=list)
     recommended_action: str = ""  # proceed, alternative_path, nurture, disqualify
     evaluation_id: str = field(default_factory=lambda: str(uuid.uuid4())[:12].upper())
-    evaluated_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
+    evaluated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     def to_dict(self) -> Dict[str, Any]:
         return {

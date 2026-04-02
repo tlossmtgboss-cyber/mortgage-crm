@@ -43,7 +43,7 @@ class WorkflowEvent:
             "lead_id": lead_id,
             "loan_id": loan_id,
             "contact_name": contact_name,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -68,7 +68,7 @@ class WorkflowEvent:
             "contact_name": contact_name,
             "contact_phone": contact_phone,
             "route": route,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -91,7 +91,7 @@ class WorkflowEvent:
             "siblings_cancelled": siblings_cancelled,
             "lead_id": lead_id,
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -110,7 +110,7 @@ class WorkflowEvent:
             "error": error,
             "lead_id": lead_id,
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -129,7 +129,7 @@ class WorkflowEvent:
             "reason": reason,
             "lead_id": lead_id,
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -152,7 +152,7 @@ class WorkflowEvent:
             "lead_id": lead_id,
             "loan_id": loan_id,
             "contact_name": contact_name,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     # =========================================================================
@@ -177,7 +177,7 @@ class WorkflowEvent:
             "lead_id": lead_id,
             "loan_id": loan_id,
             "contact_name": contact_name,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -196,7 +196,7 @@ class WorkflowEvent:
             "reason": reason,
             "lead_id": lead_id,
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -213,7 +213,7 @@ class WorkflowEvent:
             "workflow_name": workflow_name,
             "lead_id": lead_id,
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -236,7 +236,7 @@ class WorkflowEvent:
             "duration_days": duration_days,
             "lead_id": lead_id,
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -255,7 +255,7 @@ class WorkflowEvent:
             "reason": reason,
             "lead_id": lead_id,
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     # =========================================================================
@@ -282,7 +282,7 @@ class WorkflowEvent:
             "auto_executed": auto_executed,
             "lead_id": lead_id,
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -303,7 +303,7 @@ class WorkflowEvent:
             "lead_id": lead_id,
             "loan_id": loan_id,
             "contact_name": contact_name,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -328,7 +328,7 @@ class WorkflowEvent:
             "error": error,
             "lead_id": lead_id,
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -351,7 +351,7 @@ class WorkflowEvent:
             "lead_id": lead_id,
             "loan_id": loan_id,
             "contact_name": contact_name,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     # =========================================================================
@@ -378,7 +378,7 @@ class WorkflowEvent:
             "escalated_to_name": escalated_to_name,
             "lead_id": lead_id,
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -401,7 +401,7 @@ class WorkflowEvent:
             "lead_id": lead_id,
             "loan_id": loan_id,
             "contact_name": contact_name,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -424,7 +424,7 @@ class WorkflowEvent:
             "lead_id": lead_id,
             "loan_id": loan_id,
             "contact_name": contact_name,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     # =========================================================================
@@ -449,7 +449,7 @@ class WorkflowEvent:
             "position": position,
             "contact_name": contact_name,
             "contact_phone": contact_phone,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
     @staticmethod
@@ -474,7 +474,7 @@ class WorkflowEvent:
             "siblings_cancelled": siblings_cancelled,
             "lead_id": lead_id,
             "loan_id": loan_id,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
 

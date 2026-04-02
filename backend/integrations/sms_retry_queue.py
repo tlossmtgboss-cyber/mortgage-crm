@@ -122,7 +122,7 @@ def mark_failed(db: Session, queue_id: int, error: str, permanent: bool = False)
             logger.warning(f"SMS {queue_id} moved to dead_letter after {retry_count} attempts")
         else:
             delay = _calculate_backoff(retry_count)
-            next_attempt = datetime.utcnow() + timedelta(seconds=delay)
+            next_attempt = datetime.now(timezone.utc) + timedelta(seconds=delay)
             db.execute(
                 text("""
                     UPDATE sms_queue

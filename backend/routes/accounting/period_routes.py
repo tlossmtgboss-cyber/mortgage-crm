@@ -409,7 +409,7 @@ async def close_period(
         )
 
     period.status = 'closed'
-    period.closed_at = datetime.utcnow()
+    period.closed_at = datetime.now(timezone.utc)
     period.closed_by = 1
 
     if data.notes:

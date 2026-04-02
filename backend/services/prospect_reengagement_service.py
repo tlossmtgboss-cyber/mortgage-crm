@@ -231,7 +231,7 @@ class ProspectReEngagementService:
         if not message_id:
             return {"success": False, "error": "Failed to send SMS"}
 
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Create conversation record
         self.db.execute(text("""
@@ -374,7 +374,7 @@ class ProspectReEngagementService:
             context = _json_loads(context)
 
         # Append inbound message
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         messages.append({
             "role": "user",
             "content": message_body,
@@ -398,7 +398,7 @@ class ProspectReEngagementService:
         messages.append({
             "role": "assistant",
             "content": response_text,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         # State transitions
@@ -429,14 +429,14 @@ class ProspectReEngagementService:
                 messages.append({
                     "role": "assistant",
                     "content": booking["confirmation_message"],
-                    "timestamp": datetime.utcnow().isoformat(),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
                 })
                 self._update_conversation(conv_id, {
                     "state": "appointment_booked",
                     "messages": messages,
                     "booked_appointment_id": booking.get("appointment_id"),
                     "outcome": "booked",
-                    "completed_at": datetime.utcnow(),
+                    "completed_at": datetime.now(timezone.utc),
                     "turn_count": conv_data["turn_count"] + 1,
                 })
                 _send_sms_sync(
@@ -555,7 +555,7 @@ Classify intent and generate response:"""
 
             lo_user_id = conv_data.get("lo_user_id")
             org_id = conv_data.get("organization_id")
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             end_dt = now + timedelta(days=5)
 
             query = self.db.query(ScheduledAppointment).filter(
@@ -580,7 +580,7 @@ Classify intent and generate response:"""
 
             # Suggest 3 open slots in the next 3 business days
             slots = []
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             for day_offset in range(1, 5):
                 candidate = now + timedelta(days=day_offset)
                 if candidate.weekday() >= 5:  # Skip weekends
@@ -714,7 +714,7 @@ Classify intent and generate response:"""
         """), {
             "lead_id": conv_data["lead_id"],
             "content": f"[AI Re-Engagement] Lead opted out: {message_body[:100]}",
-            "now": datetime.utcnow(),
+            "now": datetime.now(timezone.utc),
             "lo_id": conv_data["lo_user_id"],
         })
 
@@ -747,7 +747,7 @@ Classify intent and generate response:"""
         messages.append({
             "role": "assistant",
             "content": response_text,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
         self._update_conversation(conv_id, {
@@ -755,7 +755,7 @@ Classify intent and generate response:"""
             "messages": messages,
             "outcome": "declined",
             "outcome_notes": reason,
-            "completed_at": datetime.utcnow(),
+            "completed_at": datetime.now(timezone.utc),
             "turn_count": conv_data["turn_count"] + 1,
         })
 
@@ -771,7 +771,7 @@ Classify intent and generate response:"""
         """), {
             "lead_id": conv_data["lead_id"],
             "content": f"[AI Re-Engagement] Lead declined: {reason[:100]}",
-            "now": datetime.utcnow(),
+            "now": datetime.now(timezone.utc),
             "lo_id": conv_data["lo_user_id"],
         })
 

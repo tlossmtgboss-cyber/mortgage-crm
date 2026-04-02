@@ -957,7 +957,7 @@ async def get_unified_tasks(
                 # Only fetch calendly slots if needed (lazy load once)
                 if has_scheduling:
                     if calendly_slots is None:
-                        calendly_slots = get_calendly_time_slots_for_user(current_user.id, db, num_slots=5)
+                        calendly_slots = await get_calendly_time_slots_for_user(current_user.id, db, num_slots=5)
                     ai_response = generate_scheduling_email_draft(
                         client_name=client_name,
                         calendly_slots=calendly_slots,
@@ -1033,7 +1033,7 @@ async def get_unified_tasks(
 
                 if has_calendly:
                     if calendly_slots is None:
-                        calendly_slots = get_calendly_time_slots_for_user(current_user.id, db, num_slots=5)
+                        calendly_slots = await get_calendly_time_slots_for_user(current_user.id, db, num_slots=5)
                     ai_response = generate_scheduling_email_draft(
                         client_name=client_name,
                         calendly_slots=calendly_slots,

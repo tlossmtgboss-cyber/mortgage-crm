@@ -94,7 +94,7 @@ Provide a clear, data-driven answer with specific metrics and actionable recomme
                 "total_revenue": context["summary"]["total_revenue"],
                 "total_expenses": context["summary"]["total_expenses"]
             },
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
 
     @llm_cache.cached(ttl=LLMCacheService.TTL_LONG, prefix="insights:recommendations")
@@ -214,7 +214,7 @@ Provide a detailed hiring analysis with ROI projections."""
             "proposed_salary": salary,
             "analysis": response.content[0].text,
             "current_role_metrics": role_data,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
 
     @llm_cache.cached(ttl=LLMCacheService.TTL_DAILY, prefix="insights:digest")
@@ -261,7 +261,7 @@ Create a professional executive digest email."""
             "subject": f"Perennia AI Profitability Insights - Week of {month.strftime('%b %d')}",
             "content": response.content[0].text,
             "summary": context["summary"],
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
 
     @llm_cache.cached(ttl=LLMCacheService.TTL_MEDIUM, prefix="insights:anomalies")
@@ -354,7 +354,7 @@ Provide a detailed comparison and recommendation."""
         return {
             "scenarios_analyzed": len(scenarios),
             "analysis": response.content[0].text,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
 
     def _build_context(self, month: date) -> Dict[str, Any]:

@@ -659,7 +659,7 @@ Provide 3-5 specific investment areas and 3-5 cost-cutting opportunities."""
         return {
             "analysis": response.content[0].text,
             "data_context": context,
-            "generated_at": datetime.utcnow().isoformat()
+            "generated_at": datetime.now(timezone.utc).isoformat()
         }
 
     # ============ Executive Dashboard ============
@@ -725,7 +725,7 @@ Provide 3-5 specific investment areas and 3-5 cost-cutting opportunities."""
             "16_tech_roi": parallel_results[12],
             "17_18_19_operational_losses": parallel_results[13],
             "20_recommendations": None,  # Lazy load - call /investment-recommendations endpoint separately
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "_meta": {
                 "cached": False,
                 "ai_recommendations_included": include_ai_recommendations,

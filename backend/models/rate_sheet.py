@@ -40,8 +40,8 @@ class RateSheet(Base):
 
     # Audit
     uploaded_by = Column(Integer)  # Reference to users table
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     rates = relationship("RateSheetRate", back_populates="rate_sheet", cascade="all, delete-orphan")
@@ -96,7 +96,7 @@ class RateSheetRate(Base):
     confidence_score = Column(Numeric(3, 2))
 
     # Timestamp
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     rate_sheet = relationship("RateSheet", back_populates="rates")
@@ -169,8 +169,8 @@ class RefinanceOpportunity(Base):
     # Metadata
     notes = Column(Text)
     created_by = Column(Integer)  # Reference to users table
-    created_at = Column(DateTime, default=datetime.utcnow, index=True)
-    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
     rate_sheet = relationship("RateSheet", back_populates="opportunities")

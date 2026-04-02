@@ -33,7 +33,7 @@ class VoiceWorkflowAnalytics:
                 "user_id": str(user_id),
                 "workflow_type": workflow_type,
                 "meeting_type": meeting_type,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -55,7 +55,7 @@ class VoiceWorkflowAnalytics:
                 "old_state": old_state,
                 "new_state": new_state,
                 "turn_count": turn_count,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -79,7 +79,7 @@ class VoiceWorkflowAnalytics:
                 "turn_count": turn_count,
                 "duration_seconds": duration_seconds,
                 "appointment_id": str(appointment_id) if appointment_id else None,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -101,7 +101,7 @@ class VoiceWorkflowAnalytics:
                 "failure_state": failure_state,
                 "error_message": error_message,
                 "turn_count": turn_count,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -121,7 +121,7 @@ class VoiceWorkflowAnalytics:
                 "organization_id": str(organization_id),
                 "last_state": last_state,
                 "turn_count": turn_count,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -139,7 +139,7 @@ class VoiceWorkflowAnalytics:
                 "workflow_id": str(workflow_id),
                 "organization_id": str(organization_id),
                 "message_type": message_type,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -157,7 +157,7 @@ class VoiceWorkflowAnalytics:
                 "workflow_id": str(workflow_id),
                 "organization_id": str(organization_id),
                 "classified_intent": intent,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )
 
@@ -177,6 +177,6 @@ class VoiceWorkflowAnalytics:
                 "organization_id": str(organization_id),
                 "appointment_id": str(appointment_id),
                 "negotiation_turns": negotiation_turns,
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             },
         )

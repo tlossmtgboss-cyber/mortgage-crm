@@ -312,7 +312,7 @@ Return a JSON array of slides, each with:
                 "slides": slides,
                 "project_type": project_type,
                 "platform": platform,
-                "generated_at": datetime.utcnow().isoformat(),
+                "generated_at": datetime.now(timezone.utc).isoformat(),
                 "tokens_used": response.usage.input_tokens + response.usage.output_tokens,
             }
 

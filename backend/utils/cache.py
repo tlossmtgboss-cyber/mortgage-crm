@@ -188,7 +188,7 @@ class PerenniaCache:
             # Add cache metadata
             cache_data = {
                 **response,
-                "cached_at": datetime.utcnow().isoformat(),
+                "cached_at": datetime.now(timezone.utc).isoformat(),
                 "intent": intent,
                 "ttl": ttl,
                 "query": query  # Store original query for debugging

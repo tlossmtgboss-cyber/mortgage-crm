@@ -113,7 +113,7 @@ class PostgresStore:
 
     def set_session(self, session: Session, ttl: int = 3600):
         with self.SessionLocal() as db:
-            expires_at = datetime.utcnow() + timedelta(seconds=ttl)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl)
             db.execute(text(f"""
                 INSERT INTO {self.prefix}sessions
                 (session_id, data, expires_at, created_at, updated_at)
@@ -313,7 +313,7 @@ class SessionStorage:
 
     def save_session(self, session: Session):
         """Save session to storage"""
-        session.updated_at = datetime.utcnow()
+        session.updated_at = datetime.now(timezone.utc)
 
         # Save to Redis (cache)
         if self.redis_store:

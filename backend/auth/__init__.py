@@ -32,6 +32,7 @@ from .tokens import (
     create_access_token,
     create_refresh_token,
     verify_token,
+    verify_access_token,
     decode_token,
     get_token_jti,
     token_blacklist,

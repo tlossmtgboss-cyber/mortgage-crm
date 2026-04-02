@@ -301,8 +301,8 @@ def create_video_clip_models(Base):
         expires_at = Column(DateTime)
 
         # Timestamps
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
         deleted_at = Column(DateTime)
 
         def generate_share_token(self):
@@ -350,8 +350,8 @@ def create_video_clip_models(Base):
         usage_count = Column(Integer, default=0)
 
         # Timestamps
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     class ClipShare(Base):
         """
@@ -393,7 +393,7 @@ def create_video_clip_models(Base):
         is_active = Column(Boolean, default=True)
 
         # Timestamps
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
         def generate_share_token(self):
             """Generate unique share token"""
@@ -443,7 +443,7 @@ def create_video_clip_models(Base):
         seek_events = Column(JSON)
 
         # Timestamps
-        started_at = Column(DateTime, default=datetime.utcnow)
+        started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
         ended_at = Column(DateTime)
 
     class ClipComment(Base):
@@ -477,8 +477,8 @@ def create_video_clip_models(Base):
         is_resolved = Column(Boolean, default=False)
 
         # Timestamps
-        created_at = Column(DateTime, default=datetime.utcnow)
-        updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+        updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
         deleted_at = Column(DateTime)
 
     class ClipNotification(Base):
@@ -509,7 +509,7 @@ def create_video_clip_models(Base):
         read_at = Column(DateTime)
 
         # Timestamps
-        created_at = Column(DateTime, default=datetime.utcnow)
+        created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Return all models as a dictionary
     return {

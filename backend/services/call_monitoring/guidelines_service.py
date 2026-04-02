@@ -108,7 +108,7 @@ async def process_guideline(guideline_id: str, file_path: str, file_ext: str):
             logger.warning(f"Section splitting failed: {e}")
 
         guideline.is_processed = True
-        guideline.last_processed_at = datetime.utcnow()
+        guideline.last_processed_at = datetime.now(timezone.utc)
         db.commit()
 
         logger.info(f"Successfully processed guideline {guideline_id}")
@@ -442,6 +442,7 @@ async def search_guidelines(
     loan_program: Optional[str] = None,
     category: Optional[str] = None,
     guideline_type: Optional[str] = None,
+    organization_id: Optional[str] = None,
     limit: int = 10,
 ) -> List[Dict[str, Any]]:
     """
@@ -459,6 +460,15 @@ async def search_guidelines(
 
     # Build base guideline filter
     guideline_filter = [UnderwritingGuideline.is_active == True]
+
+    # Tenant isolation: show org-specific guidelines + global guidelines (no org)
+    if organization_id:
+        guideline_filter.append(
+            or_(
+                UnderwritingGuideline.organization_id == organization_id,
+                UnderwritingGuideline.organization_id.is_(None)
+            )
+        )
 
     if loan_program:
         guideline_filter.append(

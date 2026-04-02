@@ -46,7 +46,8 @@ class EmailProcessor:
         self,
         email_data: Dict[str, Any],
         user_id: int,
-        db: Session
+        db: Session,
+        organization_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Complete email processing pipeline
@@ -66,7 +67,7 @@ class EmailProcessor:
             Processing result dict with status, profile info, etc.
         """
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
         email_id = email_data.get('id', email_data.get('email_id', email_data.get('message_id')))
 
         try:
@@ -86,7 +87,7 @@ class EmailProcessor:
             sender_email = email_data.get('from_email', email_data.get('sender'))
             if sender_email and profile_type:
                 current_profile = await self._preliminary_profile_lookup(
-                    sender_email, profile_type, db, user_id
+                    sender_email, profile_type, db, user_id, organization_id
                 )
                 if current_profile:
                     logger.info(f"Found existing profile for sender {sender_email}")
@@ -109,7 +110,8 @@ class EmailProcessor:
                 parsed_result['extracted_fields'],
                 profile_type,
                 db,
-                user_id
+                user_id,
+                organization_id
             )
 
             logger.info(f"Profile match: {match_result['match_type']} (confidence: {match_result.get('confidence', 0)}%)")
@@ -194,7 +196,7 @@ class EmailProcessor:
 
             db.commit()
 
-            total_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            total_time_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
 
             return {
                 'status': 'success',
@@ -226,7 +228,8 @@ class EmailProcessor:
         sender_email: str,
         profile_type: str,
         db: Session,
-        user_id: int
+        user_id: int,
+        organization_id: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Quick lookup of existing profile by sender email.
@@ -247,8 +250,11 @@ class EmailProcessor:
             else:
                 return None
 
-            # Look up by email
-            profile = db.query(model).filter_by(email=sender_email).first()
+            # Look up by email, scoped to organization
+            query = db.query(model).filter_by(email=sender_email)
+            if organization_id and hasattr(model, 'organization_id'):
+                query = query.filter_by(organization_id=organization_id)
+            profile = query.first()
             if profile:
                 # Convert to dict for AI parser
                 return {
@@ -269,7 +275,8 @@ class EmailProcessor:
         extracted_fields: Dict[str, Any],
         profile_type: str,
         db: Session,
-        user_id: int
+        user_id: int,
+        organization_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Match extracted fields to existing profile
@@ -289,9 +296,15 @@ class EmailProcessor:
         else:
             return {'match_type': 'new', 'profile_id': None, 'confidence': 0}
 
+        def _org_filter(query):
+            """Apply organization filter if available."""
+            if organization_id and hasattr(model, 'organization_id'):
+                return query.filter_by(organization_id=organization_id)
+            return query
+
         # Try email match (highest confidence)
         if email := extracted_fields.get('email'):
-            profile = db.query(model).filter_by(email=email).first()
+            profile = _org_filter(db.query(model).filter_by(email=email)).first()
             if profile:
                 return {
                     'match_type': 'email',
@@ -302,7 +315,7 @@ class EmailProcessor:
 
         # Try phone match
         if phone := extracted_fields.get('phone'):
-            profile = db.query(model).filter_by(phone=phone).first()
+            profile = _org_filter(db.query(model).filter_by(phone=phone)).first()
             if profile:
                 return {
                     'match_type': 'phone',
@@ -313,7 +326,7 @@ class EmailProcessor:
 
         # Try loan number match (for active_loan)
         if profile_type == 'active_loan' and (loan_num := extracted_fields.get('loan_number')):
-            profile = db.query(ActiveLoanProfile).filter_by(loan_number=loan_num).first()
+            profile = _org_filter(db.query(ActiveLoanProfile).filter_by(loan_number=loan_num)).first()
             if profile:
                 return {
                     'match_type': 'loan_number',
@@ -365,7 +378,7 @@ class EmailProcessor:
 
         elif profile_type == 'active_loan':
             profile = ActiveLoanProfile(
-                loan_number=extracted_fields.get('loan_number', f'LOAN-{datetime.utcnow().strftime("%Y%m%d%H%M%S")}'),
+                loan_number=extracted_fields.get('loan_number', f'LOAN-{datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")}'),
                 amount=extracted_fields.get('amount'),
                 rate=extracted_fields.get('rate'),
                 property_address=extracted_fields.get('property_address'),

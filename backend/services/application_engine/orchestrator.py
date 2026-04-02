@@ -449,7 +449,7 @@ class ApplicationEngineOrchestrator:
                     "complete": response.complete_fields,
                     "missing": response.missing_fields,
                     "tasks": len(response.all_tasks),
-                    "created_at": datetime.utcnow(),
+                    "created_at": datetime.now(timezone.utc),
                 }
             )
             self.db.commit()

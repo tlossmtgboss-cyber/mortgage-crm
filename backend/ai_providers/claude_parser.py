@@ -279,7 +279,7 @@ class ClaudeEmailParser:
         if profile_type not in self.FIELD_SCHEMAS:
             raise ValueError(f"Invalid profile_type: {profile_type}")
 
-        start_time = datetime.utcnow()
+        start_time = datetime.now(timezone.utc)
 
         try:
             # Build comprehensive prompt
@@ -306,7 +306,7 @@ class ClaudeEmailParser:
             extracted = self._extract_json(response_text)
 
             # Validate and enrich
-            processing_time_ms = int((datetime.utcnow() - start_time).total_seconds() * 1000)
+            processing_time_ms = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
             result = self._validate_and_enrich(extracted, email_data, processing_time_ms)
 
             logger.info(f"Successfully parsed {profile_type} email in {processing_time_ms}ms")
@@ -513,7 +513,7 @@ SPECIAL INSTRUCTIONS FOR {profile_type.upper()}:
         extracted['extraction_metadata'] = {
             'parser_version': '1.0.0',
             'model': self.model,
-            'timestamp': datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'email_id': email_data.get('id', email_data.get('email_id', email_data.get('message_id', 'unknown'))),
             'processing_time_ms': processing_time_ms
         }

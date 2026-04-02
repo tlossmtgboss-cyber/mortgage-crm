@@ -469,7 +469,7 @@ class CalculationResponse:
 
     # Metadata
     ruleset_version: str = "2025.1"
-    calculated_at: datetime = field(default_factory=datetime.utcnow)
+    calculated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     calculation_duration_ms: int = 0
 
     # Generated worksheets

@@ -112,7 +112,7 @@ class VoiceSchedulingWorkflowService:
             conversation_history=[],
             turn_count=0,
             max_turns=self.MAX_TURNS,
-            expires_at=datetime.utcnow() + timedelta(hours=self.DEFAULT_EXPIRY_HOURS),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=self.DEFAULT_EXPIRY_HOURS),
         )
         self.db.add(workflow)
         self.db.flush()
@@ -148,7 +148,7 @@ class VoiceSchedulingWorkflowService:
                     VoiceWorkflowState.AWAITING_REPLY.value,
                     VoiceWorkflowState.NEGOTIATING.value,
                 ]),
-                VoiceWorkflow.expires_at > datetime.utcnow(),
+                VoiceWorkflow.expires_at > datetime.now(timezone.utc),
             )
             .order_by(VoiceWorkflow.created_at.desc())
             .with_for_update(skip_locked=True)
@@ -196,7 +196,7 @@ class VoiceSchedulingWorkflowService:
                     VoiceWorkflowState.AWAITING_REPLY.value,
                     VoiceWorkflowState.NEGOTIATING.value,
                 ]),
-                VoiceWorkflow.expires_at > datetime.utcnow(),
+                VoiceWorkflow.expires_at > datetime.now(timezone.utc),
             )
             .order_by(VoiceWorkflow.created_at.desc())
             .with_for_update(skip_locked=True)
@@ -291,7 +291,7 @@ class VoiceSchedulingWorkflowService:
                 type=ActivityType.NOTE,
                 content=f"Voice scheduling workflow {workflow.id} transitioned: {old_state} -> {new_state}",
                 lead_id=workflow.lead_id,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             )
             self.db.add(activity)
             savepoint.commit()
@@ -319,7 +319,7 @@ class VoiceSchedulingWorkflowService:
         stale = (
             self.db.query(VoiceWorkflow)
             .filter(
-                VoiceWorkflow.expires_at <= datetime.utcnow(),
+                VoiceWorkflow.expires_at <= datetime.now(timezone.utc),
                 VoiceWorkflow.state.notin_([
                     VoiceWorkflowState.COMPLETED.value,
                     VoiceWorkflowState.EXPIRED.value,
@@ -345,7 +345,7 @@ class VoiceSchedulingWorkflowService:
                     type=ActivityType.NOTE,
                     content=f"Voice scheduling workflow {wf.id} expired (was in state: {old_state})",
                     lead_id=wf.lead_id,
-                    created_at=datetime.utcnow(),
+                    created_at=datetime.now(timezone.utc),
                 )
                 self.db.add(activity)
                 savepoint.commit()
@@ -415,7 +415,7 @@ class VoiceSchedulingWorkflowService:
                 type=ActivityType.NOTE,
                 content=f"Voice scheduling workflow {workflow.id} cancelled (was in state: {old_state})",
                 lead_id=workflow.lead_id,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(timezone.utc),
             )
             self.db.add(activity)
             savepoint.commit()

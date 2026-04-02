@@ -242,7 +242,7 @@ def process_telnyx_webhook(db: Session, payload: dict) -> dict:
 
             delivered_at = None
             if dlr == "delivered":
-                delivered_at = datetime.utcnow()
+                delivered_at = datetime.now(timezone.utc)
 
             update_delivery_status(
                 db, message_id, dlr,

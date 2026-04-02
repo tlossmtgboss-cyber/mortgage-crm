@@ -172,7 +172,7 @@ class WorkflowEngine:
     def _create_workflow_task(db: Session, loan_id: int, lead_id: int,
                               rule_id, config: Dict):
         """Create a task from workflow rule"""
-        due_date = datetime.utcnow() + timedelta(days=config.get('due_in_days', 1))
+        due_date = datetime.now(timezone.utc) + timedelta(days=config.get('due_in_days', 1))
 
         db.execute(text("""
             INSERT INTO workflow_tasks

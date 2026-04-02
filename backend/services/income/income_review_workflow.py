@@ -107,8 +107,8 @@ class IncomeReviewItem:
     history: List[ReviewHistoryEntry] = field(default_factory=list)
 
     # Timestamps
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     reviewed_at: Optional[datetime] = None
 
     # Source tracking
@@ -247,7 +247,7 @@ class IncomeReviewWorkflowService:
         item.history.append(ReviewHistoryEntry(
             action=ReviewAction.ADD_COMMENT,
             performed_by="SYSTEM",
-            performed_at=datetime.utcnow(),
+            performed_at=datetime.now(timezone.utc),
             comment=f"Submitted for review with {confidence}% confidence",
             confidence_at_action=confidence,
         ))
@@ -256,11 +256,11 @@ class IncomeReviewWorkflowService:
             item.history.append(ReviewHistoryEntry(
                 action=ReviewAction.APPROVE,
                 performed_by="AUTO_APPROVE_SYSTEM",
-                performed_at=datetime.utcnow(),
+                performed_at=datetime.now(timezone.utc),
                 comment=f"Auto-approved: confidence {confidence}% >= {self.auto_approve_threshold}% threshold",
                 confidence_at_action=confidence,
             ))
-            item.reviewed_at = datetime.utcnow()
+            item.reviewed_at = datetime.now(timezone.utc)
 
         self._review_items[item_id] = item
         return item
@@ -329,13 +329,13 @@ class IncomeReviewWorkflowService:
                 item.annual_income = Decimal(str(override_values["annual_income"]))
 
         item.status = ReviewStatus.APPROVED
-        item.reviewed_at = datetime.utcnow()
-        item.updated_at = datetime.utcnow()
+        item.reviewed_at = datetime.now(timezone.utc)
+        item.updated_at = datetime.now(timezone.utc)
 
         item.history.append(ReviewHistoryEntry(
             action=ReviewAction.APPROVE if not override_values else ReviewAction.OVERRIDE_VALUE,
             performed_by=reviewer,
-            performed_at=datetime.utcnow(),
+            performed_at=datetime.now(timezone.utc),
             previous_value=previous_value,
             new_value=override_values,
             comment=comment,
@@ -357,13 +357,13 @@ class IncomeReviewWorkflowService:
             raise ValueError(f"Review item {item_id} not found")
 
         item.status = ReviewStatus.REJECTED
-        item.reviewed_at = datetime.utcnow()
-        item.updated_at = datetime.utcnow()
+        item.reviewed_at = datetime.now(timezone.utc)
+        item.updated_at = datetime.now(timezone.utc)
 
         item.history.append(ReviewHistoryEntry(
             action=ReviewAction.REJECT,
             performed_by=reviewer,
-            performed_at=datetime.utcnow(),
+            performed_at=datetime.now(timezone.utc),
             comment=reason,
             confidence_at_action=item.confidence_score,
         ))
@@ -384,7 +384,7 @@ class IncomeReviewWorkflowService:
             raise ValueError(f"Review item {item_id} not found")
 
         item.status = ReviewStatus.REVISION_REQUESTED
-        item.updated_at = datetime.utcnow()
+        item.updated_at = datetime.now(timezone.utc)
 
         comment = f"Revision requested: {revision_notes}"
         if required_fields:
@@ -393,7 +393,7 @@ class IncomeReviewWorkflowService:
         item.history.append(ReviewHistoryEntry(
             action=ReviewAction.REQUEST_REVISION,
             performed_by=reviewer,
-            performed_at=datetime.utcnow(),
+            performed_at=datetime.now(timezone.utc),
             comment=comment,
             confidence_at_action=item.confidence_score,
         ))
@@ -415,12 +415,12 @@ class IncomeReviewWorkflowService:
         previous_reviewer = item.assigned_reviewer
         item.assigned_reviewer = reviewer
         item.status = ReviewStatus.IN_REVIEW
-        item.updated_at = datetime.utcnow()
+        item.updated_at = datetime.now(timezone.utc)
 
         item.history.append(ReviewHistoryEntry(
             action=ReviewAction.REASSIGN,
             performed_by=assigned_by,
-            performed_at=datetime.utcnow(),
+            performed_at=datetime.now(timezone.utc),
             previous_value={"reviewer": previous_reviewer},
             new_value={"reviewer": reviewer},
             comment=f"Assigned to {reviewer}",
@@ -448,7 +448,7 @@ class IncomeReviewWorkflowService:
         previous_confidence = item.confidence_score
         item.confidence_score = new_confidence
         item.field_confidences.update(updated_fields)
-        item.updated_at = datetime.utcnow()
+        item.updated_at = datetime.now(timezone.utc)
 
         # Update confidence level
         if new_confidence >= 95:
@@ -463,7 +463,7 @@ class IncomeReviewWorkflowService:
         item.history.append(ReviewHistoryEntry(
             action=ReviewAction.ADD_COMMENT,
             performed_by="SYSTEM",
-            performed_at=datetime.utcnow(),
+            performed_at=datetime.now(timezone.utc),
             previous_value={"confidence": previous_confidence},
             new_value={"confidence": new_confidence},
             comment=f"Confidence updated: {reason}",
@@ -476,11 +476,11 @@ class IncomeReviewWorkflowService:
             and item.status not in [ReviewStatus.APPROVED, ReviewStatus.AUTO_APPROVED, ReviewStatus.REJECTED]
         ):
             item.status = ReviewStatus.AUTO_APPROVED
-            item.reviewed_at = datetime.utcnow()
+            item.reviewed_at = datetime.now(timezone.utc)
             item.history.append(ReviewHistoryEntry(
                 action=ReviewAction.APPROVE,
                 performed_by="AUTO_APPROVE_SYSTEM",
-                performed_at=datetime.utcnow(),
+                performed_at=datetime.now(timezone.utc),
                 comment=f"Auto-approved after confidence improved to {new_confidence}%",
                 confidence_at_action=new_confidence,
             ))
@@ -490,7 +490,7 @@ class IncomeReviewWorkflowService:
 
     def get_queue_summary(self) -> ReviewQueueSummary:
         """Get summary of review queue status."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
 
         items = list(self._review_items.values())

@@ -173,7 +173,7 @@ class PreQualificationResult:
     warnings: List[str] = field(default_factory=list)
 
     # Metadata
-    calculated_at: datetime = field(default_factory=datetime.utcnow)
+    calculated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     data_completeness: float = 0.0  # Percentage of required data available
 
     def to_dict(self) -> Dict[str, Any]:

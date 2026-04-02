@@ -1598,7 +1598,7 @@ def _log_notification(
                 "subject": subject,
                 "success": success,
                 "error": error,
-                "sent_at": datetime.utcnow(),
+                "sent_at": datetime.now(timezone.utc),
             },
         )
         db.commit()

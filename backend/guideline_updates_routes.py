@@ -176,7 +176,7 @@ async def mark_update_viewed(
             view_record = UserUpdateView(
                 user_id=user_id,
                 update_id=update_id,
-                viewed_at=datetime.utcnow()
+                viewed_at=datetime.now(timezone.utc)
             )
             db.add(view_record)
             db.commit()
@@ -218,7 +218,7 @@ async def mark_all_viewed(
                 view_record = UserUpdateView(
                     user_id=user_id,
                     update_id=update.id,
-                    viewed_at=datetime.utcnow()
+                    viewed_at=datetime.now(timezone.utc)
                 )
                 db.add(view_record)
                 marked_count += 1

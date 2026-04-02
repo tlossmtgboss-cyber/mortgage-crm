@@ -162,7 +162,7 @@ async def process_graph_email_notification(notification: Dict[str, Any]):
                     "change_type": change_type,
                     "tenant_id": tenant_id,
                     "resource": resource,
-                    "received_at": datetime.utcnow(),
+                    "received_at": datetime.now(timezone.utc),
                 })
                 await db.commit()
 
@@ -180,7 +180,7 @@ async def process_graph_email_notification(notification: Dict[str, Any]):
                         WHERE email_id = :email_id
                     """), {
                         "email_id": email_id,
-                        "processed_at": datetime.utcnow(),
+                        "processed_at": datetime.now(timezone.utc),
                     })
                     await db.commit()
 
@@ -335,7 +335,7 @@ async def process_incoming_email(email: Dict[str, Any], db: Any):
             "attachments": json.dumps([]) if not has_attachments else json.dumps([{"type": "unknown"}]),
             "received_at": received_at,
             "user_id": user_id,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         })
         event_row = result.fetchone()
         event_id = event_row.id if event_row else None
@@ -407,7 +407,7 @@ async def process_incoming_email(email: Dict[str, Any], db: Any):
             "pattern_confidence": pattern_match.get("confidence_score") if pattern_match else None,
             "status": "auto_executed" if should_auto_execute else "pending",
             "priority": priority,
-            "created_at": datetime.utcnow(),
+            "created_at": datetime.now(timezone.utc),
         })
         await db.commit()
 
@@ -650,7 +650,7 @@ async def execute_email_response_pattern(
             "pattern_id": pattern.get("id"),
             "ai_action": recommended_action.get("action_type"),
             "ai_confidence": recommended_action.get("confidence"),
-            "now": datetime.utcnow(),
+            "now": datetime.now(timezone.utc),
         })
 
         # Update pattern usage
@@ -658,7 +658,7 @@ async def execute_email_response_pattern(
             UPDATE email_response_patterns
             SET last_matched_at = :now, last_approved_at = :now
             WHERE id = :pattern_id
-        """), {"now": datetime.utcnow(), "pattern_id": pattern.get("id")})
+        """), {"now": datetime.now(timezone.utc), "pattern_id": pattern.get("id")})
 
         await db.commit()
 
@@ -750,7 +750,7 @@ async def execute_email_response_pattern(
                             UPDATE email_templates
                             SET updated_at = :now
                             WHERE id = :template_id
-                        """), {"now": datetime.utcnow(), "template_id": config.get("template_id")})
+                        """), {"now": datetime.now(timezone.utc), "template_id": config.get("template_id")})
                         await db.commit()
                     else:
                         logger.warning(f"[GRAPH WEBHOOK] Failed to send auto-reply to {sender_email_addr}")
@@ -771,9 +771,9 @@ async def execute_email_response_pattern(
                 "description": recommended_action.get("reasoning", ""),
                 "type": config.get("task_type", "email_followup"),
                 "priority": config.get("priority", "medium"),
-                "due_date": datetime.utcnow(),
+                "due_date": datetime.now(timezone.utc),
                 "metadata": json.dumps({"email_id": email_id, "pattern_id": pattern.get("id")}),
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
                 "user_id": user_id,
             })
             await db.commit()
@@ -885,9 +885,9 @@ AI Assistant | Perennia AI"""
                 "description": task_details.get("description", clean_message),
                 "type": task_details.get("type", "internal_request"),
                 "priority": task_details.get("priority", "medium"),
-                "due_date": datetime.utcnow(),
+                "due_date": datetime.now(timezone.utc),
                 "metadata": json.dumps({"from_email": from_email, "original_message": clean_message[:500]}),
-                "created_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
                 "user_id": user_row.id,
                 "assigned_to": task_details.get("assigned_to", user_row.id),
             })
@@ -1107,14 +1107,14 @@ async def process_ai_conversation_reply(
             state.message_history.append({
                 "role": "user",
                 "content": clean_message,
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
 
             # Record AI response in history
             state.message_history.append({
                 "role": "assistant",
                 "content": result['response'],
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             })
 
             # Format response email
@@ -1166,7 +1166,7 @@ AI Mortgage Assistant | Perennia AI"""
                 SET message_count = message_count + 2,
                     last_message_at = :now
                 WHERE conversation_id = :conv_id
-            """), {"conv_id": conv_id, "now": datetime.utcnow()})
+            """), {"conv_id": conv_id, "now": datetime.now(timezone.utc)})
 
             # Log the message exchange (use the same AI email for consistency)
             ai_email = ai_from_email
@@ -1180,7 +1180,7 @@ AI Mortgage Assistant | Perennia AI"""
                 "ai_email": ai_email,
                 "subject": subject,
                 "body": clean_message,
-                "now": datetime.utcnow(),
+                "now": datetime.now(timezone.utc),
             })
 
             await db.execute(text("""
@@ -1193,7 +1193,7 @@ AI Mortgage Assistant | Perennia AI"""
                 "to_email": from_email,
                 "subject": reply_subject,
                 "body": result['response'],
-                "now": datetime.utcnow(),
+                "now": datetime.now(timezone.utc),
             })
 
             await db.commit()
@@ -1308,7 +1308,7 @@ async def register_graph_subscription(user_email: str = "admin@perenniaai.com"):
     for sub in existing_subs:
         if sub.get("notificationUrl") == webhook_url:
             # Renew existing subscription
-            expiration = (datetime.utcnow() + timedelta(days=2, hours=23)).isoformat() + "Z"
+            expiration = (datetime.now(timezone.utc) + timedelta(days=2, hours=23)).isoformat() + "Z"
             renew_response = requests.patch(
                 f"https://graph.microsoft.com/v1.0/subscriptions/{sub['id']}",
                 headers={"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"},
@@ -1320,7 +1320,7 @@ async def register_graph_subscription(user_email: str = "admin@perenniaai.com"):
                 return {"error": f"Failed to renew: {renew_response.text}"}
 
     # Create new subscription
-    expiration = (datetime.utcnow() + timedelta(days=2, hours=23)).isoformat() + "Z"
+    expiration = (datetime.now(timezone.utc) + timedelta(days=2, hours=23)).isoformat() + "Z"
     resource = f"users/{user_email}/mailFolders/inbox/messages"
 
     subscription_data = {
@@ -1809,7 +1809,7 @@ async def handle_retr_webhook(
                 "status": "processing",
                 "agents_queued": agents_count,
                 "loan_officers_queued": los_count,
-                "created_at": datetime.utcnow().isoformat()
+                "created_at": datetime.now(timezone.utc).isoformat()
             }),
             status_code=202,
             media_type="application/json"
@@ -2038,7 +2038,7 @@ def process_retr_loan_officer_import(import_id: str, lo_data: Dict[str, Any]):
             "list_name": lo_data.get("ListName"),
             "exported_by": lo_data.get("Owner"),
             "export_date": lo_data.get("ExportDate"),
-            "import_date": datetime.utcnow().isoformat()
+            "import_date": datetime.now(timezone.utc).isoformat()
         }
 
         db = SessionLocal()

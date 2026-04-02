@@ -258,7 +258,7 @@ class CoachingService:
             return {"error": "Required models not available"}
 
         # Get analytics for this user's meetings
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
+        cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
         analytics_records = db.query(ParticipantAnalytics).join(
             MeetingParticipant,

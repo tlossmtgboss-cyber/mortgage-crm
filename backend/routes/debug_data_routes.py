@@ -974,7 +974,7 @@ def register_debug_data_routes(
                 extracted.fields = new_fields
                 extracted.match_confidence = parsed_result.get('overall_confidence', 0) / 100
                 extracted.email_intent = parsed_result.get('email_summary', profile_type)
-                extracted.updated_at = datetime.utcnow()
+                extracted.updated_at = datetime.now(timezone.utc)
 
                 db.commit()
 
@@ -1069,7 +1069,7 @@ def register_debug_data_routes(
                     extracted.fields = new_fields
                     extracted.match_confidence = parsed_result.get('overall_confidence', 0) / 100
                     extracted.email_intent = parsed_result.get('email_summary', profile_type)
-                    extracted.updated_at = datetime.utcnow()
+                    extracted.updated_at = datetime.now(timezone.utc)
 
                     success_count += 1
                     logger.info(f"Re-extracted {extracted.id}: {len(new_fields)} fields as {profile_type}")

@@ -90,7 +90,7 @@ class SchedulingConversationService:
                 "action": action,
                 "workflow_id": workflow_id,
                 "details": details or {},
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": datetime.now(timezone.utc).isoformat(),
             })
 
             # ActivityType doesn't have a VOICE_WORKFLOW member; use NOTE as the
@@ -231,7 +231,7 @@ class SchedulingConversationService:
                  "formatted": s.get("formatted", "")}
                 for s in slots[:self.MAX_SLOTS_TO_SEND]
             ]
-            workflow.last_sms_sent_at = datetime.utcnow()
+            workflow.last_sms_sent_at = datetime.now(timezone.utc)
             wf_service.advance_state(workflow, VoiceWorkflowState.AWAITING_REPLY.value)
 
             # Audit: state transition
@@ -347,7 +347,7 @@ class SchedulingConversationService:
 
         # Record the inbound message (raw)
         VoiceWorkflow.add_message_atomic(self.db, workflow.id, "contact", message_body)
-        workflow.last_sms_received_at = datetime.utcnow()
+        workflow.last_sms_received_at = datetime.now(timezone.utc)
 
         # Sanitize before passing to LLM for classification
         sanitized_body = _sanitize_sms_input(message_body)
@@ -631,7 +631,7 @@ Return ONLY valid JSON:
                     ai_booking_context={
                         "source": "voice_workflow",
                         "workflow_id": wf_id,
-                        "booking_time": datetime.utcnow().isoformat(),
+                        "booking_time": datetime.now(timezone.utc).isoformat(),
                     },
                     check_conflicts=True,
                     generate_meeting_link=True,
@@ -875,7 +875,7 @@ Return ONLY valid JSON:
                     f"Error: {error_msg}\n\n"
                     f"Please create the appointment manually and confirm with the contact."
                 ),
-                due_date=datetime.utcnow() + timedelta(hours=2),
+                due_date=datetime.now(timezone.utc) + timedelta(hours=2),
                 priority="high",
                 status="pending",
                 lead_id=workflow.lead_id,
@@ -1189,7 +1189,7 @@ Return ONLY valid JSON:
                     f"Automated scheduling via SMS didn't converge after {workflow.turn_count} turns. "
                     f"Please reach out to {workflow.contact_name} at {_mask_phone(workflow.contact_phone)} directly."
                 ),
-                due_date=datetime.utcnow() + timedelta(days=1),
+                due_date=datetime.now(timezone.utc) + timedelta(days=1),
                 priority="high",
                 status="pending",
                 lead_id=workflow.lead_id,

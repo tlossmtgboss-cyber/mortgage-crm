@@ -1487,7 +1487,7 @@ async def get_daily_stats(
     """Get daily call statistics"""
     from sqlalchemy import func
 
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     stats = db.query(
         func.date(VapiCall.created_at).label('date'),
@@ -1523,7 +1523,7 @@ async def get_sentiment_analysis(
     """Get sentiment analysis of calls"""
     from sqlalchemy import func
 
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     sentiment_stats = db.query(
         VapiCall.sentiment,

@@ -40,7 +40,7 @@ async def get_mobile_tasks(
     and health_status when include_workflow=true.
     """
     user_id = current_user.id
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     params: dict = {"user_id": user_id, "limit": limit, "now": now}
 
     # Build WHERE clauses
@@ -160,7 +160,7 @@ async def get_mobile_tasks_summary(
     Counts: pending, overdue, in_progress, completed_today, total_active.
     """
     user_id = current_user.id
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     params = {"user_id": user_id, "now": now, "today_start": today_start}
 

@@ -19,7 +19,7 @@ class SMSDeadLetter(Base):
     attempts = Column(Integer, default=3)
     status = Column(String(20), default="pending")  # pending, retried, resolved
     extra_metadata = Column("metadata", JSONB, default=dict)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     retried_at = Column(DateTime, nullable=True)
 
     __table_args__ = (

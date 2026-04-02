@@ -95,7 +95,7 @@ class DocuSignClient:
 
             # Calculate expiration time
             expires_in = token_data.get("expires_in", 28800)  # Default 8 hours
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
             return {
                 "access_token": token_data.get("access_token"),
@@ -138,7 +138,7 @@ class DocuSignClient:
             logger.info("Successfully refreshed DocuSign access token")
 
             expires_in = token_data.get("expires_in", 28800)
-            expires_at = datetime.utcnow() + timedelta(seconds=expires_in)
+            expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
             return {
                 "access_token": token_data.get("access_token"),

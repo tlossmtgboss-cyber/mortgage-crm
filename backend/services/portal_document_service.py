@@ -226,7 +226,7 @@ class PortalDocumentService:
         doc.status = status
 
         if status in [DocumentStatus.APPROVED, DocumentStatus.REJECTED]:
-            doc.reviewed_at = datetime.utcnow()
+            doc.reviewed_at = datetime.now(timezone.utc)
             doc.reviewed_by = reviewed_by
 
         if status == DocumentStatus.REJECTED and rejection_reason:
@@ -370,7 +370,7 @@ class PortalDocumentService:
 
         extraction.is_verified = True
         extraction.verified_by = verified_by
-        extraction.verified_at = datetime.utcnow()
+        extraction.verified_at = datetime.now(timezone.utc)
 
         # Update document status to approved
         extraction.document.status = DocumentStatus.APPROVED
@@ -413,7 +413,7 @@ class PortalDocumentService:
             if monthly_other is not None:
                 costs.monthly_other = monthly_other
             costs.data_source = data_source
-            costs.last_updated = datetime.utcnow()
+            costs.last_updated = datetime.now(timezone.utc)
         else:
             costs = PropertyCosts(
                 loan_id=loan_id,

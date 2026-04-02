@@ -68,7 +68,7 @@ try:
 
         db = SessionLocal()
         try:
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             current_hour = now.hour
             current_dow = now.weekday()  # 0=Monday
             current_dom = now.day

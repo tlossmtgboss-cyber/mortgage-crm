@@ -55,7 +55,7 @@ class AgentMetrics:
         self.total_latency_ms += latency_ms
         self.consecutive_failures += 1
         self.last_error = error
-        self.last_error_time = datetime.utcnow()
+        self.last_error_time = datetime.now(timezone.utc)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -389,7 +389,7 @@ class SpecializedAgent(ABC):
             "organization_id": self.context.get("organization_id"),
             "entity_type": entity_type,
             "entity_id": str(entity_id) if entity_id else None,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
         if details:
             log_entry["details"] = details
@@ -424,7 +424,7 @@ class SpecializedAgent(ABC):
         tool_metrics = self._metrics.get(tool_name)
         if tool_metrics and tool_metrics.consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD:
             if tool_metrics.last_error_time:
-                elapsed = (datetime.utcnow() - tool_metrics.last_error_time).total_seconds()
+                elapsed = (datetime.now(timezone.utc) - tool_metrics.last_error_time).total_seconds()
                 if elapsed < CIRCUIT_BREAKER_RESET_SECONDS:
                     return ToolResult(
                         success=False,
@@ -474,7 +474,7 @@ class SpecializedAgent(ABC):
 
             # Update usage tracking
             self._tool_usage_counts[tool_name] += 1
-            self._last_tool_use[tool_name] = datetime.utcnow()
+            self._last_tool_use[tool_name] = datetime.now(timezone.utc)
 
             # Wrap raw result if needed
             if isinstance(result, ToolResult):
@@ -512,7 +512,7 @@ class SpecializedAgent(ABC):
 
     def _check_rate_limit(self, tool: AgentTool) -> bool:
         """Check if tool execution is within rate limits"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Check cooldown
         if tool.cooldown_seconds > 0:

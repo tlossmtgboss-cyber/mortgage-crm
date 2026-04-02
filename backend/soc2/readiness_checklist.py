@@ -1243,7 +1243,7 @@ def run_assessment() -> ReadinessReport:
     ]
 
     return ReadinessReport(
-        generated_at=datetime.utcnow().isoformat() + "Z",
+        generated_at=datetime.now(timezone.utc).isoformat() + "Z",
         backend_root=str(_BACKEND_ROOT),
         summary=summary,
         overall_status=overall_status,

@@ -32,7 +32,7 @@ class FetchResult:
     records: List[UsageRecord] = field(default_factory=list)
     error: Optional[str] = None
     raw_response: Optional[Dict[str, Any]] = None
-    fetched_at: datetime = field(default_factory=datetime.utcnow)
+    fetched_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @classmethod
     def success_result(cls, records: List[UsageRecord], raw_response: Dict = None):

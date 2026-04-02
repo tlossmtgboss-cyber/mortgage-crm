@@ -117,7 +117,7 @@ class ConversationTurn(BaseModel):
     """A single turn in the conversation"""
     role: str  # "user" or "assistant"
     content: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     audio_duration_ms: Optional[int] = None
     intent: Optional[UserIntent] = None
     slots_extracted: Optional[Dict[str, Any]] = None
@@ -155,8 +155,8 @@ class VoiceWorkflowSession(BaseModel):
     current_state: str
     slots: Dict[str, Any] = Field(default_factory=dict)
     conversation_history: List[ConversationTurn] = Field(default_factory=list)
-    started_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     is_active: bool = True
 
     # Cached context data
@@ -249,7 +249,7 @@ class WorkflowExecutionResult(BaseModel):
     workflow_type: WorkflowType
     result_data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
-    completed_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 # =============================================================================

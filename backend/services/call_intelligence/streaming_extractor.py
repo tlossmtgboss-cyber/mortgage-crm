@@ -76,7 +76,7 @@ class ExtractionEvent:
     """Event emitted during streaming extraction."""
     event_type: ExtractionEventType
     call_id: str
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     data: Dict[str, Any] = field(default_factory=dict)
 
     def to_json(self) -> str:
@@ -95,7 +95,7 @@ class StreamingSession:
     call_id: str
     loan_id: Optional[int]
     organization_id: Optional[int]
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     # Accumulated transcript
     segments: List[TranscriptSegment] = field(default_factory=list)
@@ -384,7 +384,7 @@ class StreamingExtractor:
         """Determine if we should run extraction on current state."""
         # Don't extract too frequently
         if session.last_extraction_time:
-            elapsed = (datetime.utcnow() - session.last_extraction_time).total_seconds()
+            elapsed = (datetime.now(timezone.utc) - session.last_extraction_time).total_seconds()
             if elapsed < MIN_EXTRACTION_INTERVAL:
                 return False
 
@@ -399,7 +399,7 @@ class StreamingExtractor:
         session: StreamingSession,
     ) -> AsyncGenerator[ExtractionEvent, None]:
         """Run extraction on current session state."""
-        session.last_extraction_time = datetime.utcnow()
+        session.last_extraction_time = datetime.now(timezone.utc)
 
         try:
             # Use unified extractor

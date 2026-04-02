@@ -288,7 +288,7 @@ class SurveyService:
         from models.surveying_models import SurveyResponse, SurveyTemplate, ResponseStatus
 
         # Build query for surveys needing reminders
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         query = self.db.query(SurveyResponse).join(
             SurveyTemplate,
@@ -343,7 +343,7 @@ class SurveyService:
             SurveyResponse, SurveyAnalytics, ResponseStatus, SentimentLevel
         )
 
-        target_date = date or datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        target_date = date or datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
         # Get responses for the day
         start_of_day = target_date
@@ -506,7 +506,7 @@ class SurveyTriggerService:
 
         # Create survey response
         access_token = secrets.token_urlsafe(32)
-        expires_at = datetime.utcnow() + timedelta(days=template.expires_days)
+        expires_at = datetime.now(timezone.utc) + timedelta(days=template.expires_days)
 
         response = SurveyResponse(
             organization_id=organization_id,
@@ -516,7 +516,7 @@ class SurveyTriggerService:
             email=loan.borrower_email,
             access_token=access_token,
             status=ResponseStatus.PENDING,
-            sent_at=datetime.utcnow(),
+            sent_at=datetime.now(timezone.utc),
             expires_at=expires_at,
             trigger_event=event_type,
             loan_officer_id=loan.loan_officer_id,

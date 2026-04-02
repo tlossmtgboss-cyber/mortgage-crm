@@ -142,7 +142,7 @@ async def create_application(
     borrower = get_borrower_from_token(req, db)
 
     application_id = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     db.execute(text("""
         INSERT INTO borrower_applications (
@@ -265,7 +265,7 @@ async def update_application(
 
     # Build dynamic update
     updates = ["updated_at = :updated_at"]
-    params = {"id": application_id, "updated_at": datetime.utcnow()}
+    params = {"id": application_id, "updated_at": datetime.now(timezone.utc)}
 
     if request.current_step:
         updates.append("current_step = :current_step")
@@ -338,7 +338,7 @@ async def submit_application(
     if app[1] == "submitted":
         raise HTTPException(status_code=400, detail="Application already submitted")
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # Update application status
     db.execute(text("""
@@ -441,7 +441,7 @@ async def upload_document(
 
     # Store document
     doc_id = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     db.execute(text("""
         INSERT INTO borrower_documents (
@@ -578,7 +578,7 @@ async def invite_coborrower(
     import secrets
     invitation_id = str(uuid.uuid4())
     invitation_token = secrets.token_urlsafe(32)
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     expires_at = now + timedelta(days=7)
 
     db.execute(text("""
@@ -674,7 +674,7 @@ async def accept_coborrower_invitation(
     if result[5] == "completed":
         raise HTTPException(status_code=400, detail="Invitation already accepted")
 
-    if result[6] < datetime.utcnow():
+    if result[6] < datetime.now(timezone.utc):
         raise HTTPException(status_code=400, detail="Invitation expired")
 
     # Update invitation status
@@ -682,7 +682,7 @@ async def accept_coborrower_invitation(
         UPDATE coborrower_invitations
         SET status = 'accepted', accepted_at = :accepted_at
         WHERE id = :id
-    """), {"id": result[0], "accepted_at": datetime.utcnow()})
+    """), {"id": result[0], "accepted_at": datetime.now(timezone.utc)})
     db.commit()
 
     return {
@@ -729,7 +729,7 @@ async def concierge_chat(
 
     # Store conversation
     message_id = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     db.execute(text("""
         INSERT INTO concierge_messages (
@@ -837,7 +837,7 @@ async def schedule_review_call(
 
     # Create scheduled call
     call_id = str(uuid.uuid4())
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     db.execute(text("""
         INSERT INTO scheduled_calls (

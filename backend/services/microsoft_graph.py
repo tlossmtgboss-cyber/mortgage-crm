@@ -149,7 +149,7 @@ class MicrosoftGraphUserService:
                 return False
 
             # Check if token is expired (with 5 min buffer)
-            now = datetime.utcnow()
+            now = datetime.now(timezone.utc)
             if result.expires_at and result.expires_at < now + timedelta(minutes=5):
                 refreshed = await self._refresh_token(
                     integration_id=result.id,
@@ -198,7 +198,7 @@ class MicrosoftGraphUserService:
 
                 # Update stored tokens
                 from sqlalchemy import text
-                new_expires_at = datetime.utcnow() + timedelta(seconds=tokens["expires_in"])
+                new_expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens["expires_in"])
                 new_refresh = tokens.get("refresh_token", refresh_token)
 
                 self.db.execute(text("""
@@ -213,7 +213,7 @@ class MicrosoftGraphUserService:
                     "access_token": tokens["access_token"],
                     "refresh_token": new_refresh,
                     "expires_at": new_expires_at,
-                    "updated_at": datetime.utcnow(),
+                    "updated_at": datetime.now(timezone.utc),
                 })
                 self.db.commit()
 

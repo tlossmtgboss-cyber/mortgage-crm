@@ -101,7 +101,7 @@ def create_subscription(access_token, user_email=None):
         return None
 
     # Subscription expires in 3 days (max for mail is 4230 minutes = ~2.9 days)
-    expiration = (datetime.utcnow() + timedelta(days=2, hours=23)).isoformat() + "Z"
+    expiration = (datetime.now(timezone.utc) + timedelta(days=2, hours=23)).isoformat() + "Z"
 
     # Resource path - either for specific user or /me
     if user_email:
@@ -148,7 +148,7 @@ def create_subscription(access_token, user_email=None):
 def renew_subscription(access_token, subscription_id):
     """Renew an existing subscription."""
     # Extend by 3 days
-    expiration = (datetime.utcnow() + timedelta(days=2, hours=23)).isoformat() + "Z"
+    expiration = (datetime.now(timezone.utc) + timedelta(days=2, hours=23)).isoformat() + "Z"
 
     print(f"\n=== Renewing Subscription ===")
     print(f"  Subscription ID: {subscription_id}")

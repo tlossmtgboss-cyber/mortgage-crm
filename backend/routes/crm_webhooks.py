@@ -62,7 +62,7 @@ class LifecycleChangePayload(BaseModel):
     loan_id: int
     previous_stage: Optional[str] = None
     new_stage: str  # PROSPECT, LEAD, PREAPPROVAL, UNDER_CONTRACT, PROCESSING, CLEAR_TO_CLOSE, FUNDED, MUM
-    changed_at: datetime = Field(default_factory=datetime.utcnow)
+    changed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     changed_by: Optional[str] = None
     reason: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
@@ -76,7 +76,7 @@ class DocumentUploadPayload(BaseModel):
     file_name: str
     status: str  # uploaded, pending_review, approved, rejected
     uploaded_by: Optional[str] = None
-    uploaded_at: datetime = Field(default_factory=datetime.utcnow)
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     metadata: Optional[Dict[str, Any]] = None
 
 
@@ -150,7 +150,7 @@ async def broadcast_loan_update(
             "type": update_type,
             "loan_id": loan_id,
             "data": data,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat()
         }
 
         await portal_ws_manager.broadcast_to_loan(loan_id, message)
@@ -347,7 +347,7 @@ async def handle_close_on_time_milestone(
             milestone.business_days_before_close = payload.business_days_before_close
             milestone.is_completed = payload.is_completed
             if payload.is_completed:
-                milestone.completed_at = payload.completed_at or datetime.utcnow()
+                milestone.completed_at = payload.completed_at or datetime.now(timezone.utc)
                 milestone.completed_by = payload.completed_by
         else:
             # Create new
@@ -729,5 +729,5 @@ async def webhook_health():
     return {
         "status": "healthy",
         "service": "crm-webhooks",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }

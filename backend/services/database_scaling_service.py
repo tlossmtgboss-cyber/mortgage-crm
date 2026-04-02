@@ -140,7 +140,7 @@ class DatabaseScalingService:
                 "usage_percent": usage_pct,
                 "status": "healthy",
                 "alerts": [],
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
             # Check thresholds
@@ -171,7 +171,7 @@ class DatabaseScalingService:
     async def _send_alert(self, alert_type: str, message: str):
         """Send alert with cooldown to prevent spam."""
         cooldown_key = f"alert_{alert_type}"
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Check cooldown (5 minutes between same alerts)
         if cooldown_key in self._alert_cooldown:
@@ -309,7 +309,7 @@ class DatabaseScalingService:
         Call this from health check endpoints to monitor scaling status.
         """
         status = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "overall_status": "healthy",
             "components": {},
             "recommendations": [],
@@ -425,7 +425,7 @@ class DatabaseScalingService:
         Use this to assess readiness for scale.
         """
         report = {
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
             "target_users": 1000,
             "current_status": {},
             "requirements": {},

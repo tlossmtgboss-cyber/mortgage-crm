@@ -802,7 +802,7 @@ async def acknowledge_alert(
         "alert_id": alert_id,
         "org_id": getattr(current_user, 'organization_id', 1),
         "user_id": current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, 'id', None),
-        "now": datetime.utcnow()
+        "now": datetime.now(timezone.utc)
     })
     db.commit()
 
@@ -827,7 +827,7 @@ async def resolve_alert(
     """), {
         "alert_id": alert_id,
         "org_id": getattr(current_user, 'organization_id', 1),
-        "now": datetime.utcnow()
+        "now": datetime.now(timezone.utc)
     })
     db.commit()
 

@@ -411,7 +411,7 @@ class DialerEngine:
             # Update task
             task.status = DialerTaskStatus.IN_PROGRESS
             task.call_sid = result.call_sid
-            task.updated_at = datetime.utcnow()
+            task.updated_at = datetime.now(timezone.utc)
 
             # Update soft lock with real call SID
             self.compliance.acquire_soft_lock(
@@ -454,7 +454,7 @@ class DialerEngine:
             task.status = DialerTaskStatus.FAILED
             task.disposition = "call_failed"
             task.notes = result.error_message
-            task.updated_at = datetime.utcnow()
+            task.updated_at = datetime.now(timezone.utc)
             self.db.commit()
 
             # Send failure event via WebSocket
@@ -578,7 +578,7 @@ class DialerEngine:
             duration_seconds=duration,
             outcome=call_outcome,
             start_time=task.created_at,  # Use created_at as start time
-            end_time=datetime.utcnow(),
+            end_time=datetime.now(timezone.utc),
         )
         if self.organization_id and hasattr(CallLog, 'organization_id'):
             call_log_kwargs['organization_id'] = self.organization_id
@@ -596,7 +596,7 @@ class DialerEngine:
 
         if pending == 0:
             session.status = DialerSessionStatus.COMPLETED
-            session.completed_at = datetime.utcnow()
+            session.completed_at = datetime.now(timezone.utc)
 
             # Send session completed event
             completed_count = self.db.query(DialerSessionTask).filter(
@@ -784,7 +784,7 @@ class DialerEngine:
                 self.compliance.release_soft_lock(current_task.contact_phone, self.agent_id)
 
         session.status = DialerSessionStatus.STOPPED
-        session.completed_at = datetime.utcnow()
+        session.completed_at = datetime.now(timezone.utc)
         session.current_task_id = None
         self.db.commit()
 
@@ -915,7 +915,7 @@ def click_to_dial(
             session_task_id=task_id,
             call_sid=result.call_sid,
             outcome=CallOutcome.INITIATED,
-            start_time=datetime.utcnow(),
+            start_time=datetime.now(timezone.utc),
         )
         if organization_id and hasattr(CallLog, 'organization_id'):
             call_log_kwargs['organization_id'] = organization_id

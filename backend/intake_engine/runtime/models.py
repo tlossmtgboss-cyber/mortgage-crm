@@ -94,7 +94,7 @@ class Party(BaseModel):
     party_type: PartyType
     display_name: Optional[str] = None
     is_complete: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class AnswerMeta(BaseModel):
@@ -102,7 +102,7 @@ class AnswerMeta(BaseModel):
     party_id: Optional[str] = None
     confidence: float = 0.9
     evidence_source: str = "memory"
-    answered_at: datetime = Field(default_factory=datetime.utcnow)
+    answered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     response_time_ms: int = 0
     edits_count: int = 0
     hedges_detected: List[str] = Field(default_factory=list)
@@ -116,7 +116,7 @@ class Flag(BaseModel):
     severity: FlagSeverity
     message: Optional[str] = None
     triggered_by: Optional[str] = None
-    triggered_at: datetime = Field(default_factory=datetime.utcnow)
+    triggered_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     party_id: Optional[str] = None
 
 
@@ -125,7 +125,7 @@ class ConsentRecord(BaseModel):
     consent_key: str
     accepted: bool
     version_hash: str
-    captured_at: datetime = Field(default_factory=datetime.utcnow)
+    captured_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     ip_address: Optional[str] = None
     user_agent: Optional[str] = None
 
@@ -169,7 +169,7 @@ class EditHistory(BaseModel):
     party_id: Optional[str] = None
     old_value: Any = None
     new_value: Any = None
-    edited_at: datetime = Field(default_factory=datetime.utcnow)
+    edited_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Session(BaseModel):
@@ -182,8 +182,8 @@ class Session(BaseModel):
     mode: str = "intake_prequal"
     status: SessionStatus = SessionStatus.ACTIVE
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
     expires_at: Optional[datetime] = None
 
@@ -259,7 +259,7 @@ class Session(BaseModel):
             key = f"{party_id or 'global'}:{question_id}"
             self.answer_meta[key] = meta
 
-        self.updated_at = datetime.utcnow()
+        self.updated_at = datetime.now(timezone.utc)
 
     def add_flag(self, flag: Flag):
         """Add a flag if not already present"""
@@ -302,7 +302,7 @@ class AuditEvent(BaseModel):
     session_id: str
     party_id: Optional[str] = None
     event_type: EventType
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     payload: Dict[str, Any] = Field(default_factory=dict)
     hash_prev: Optional[str] = None
     hash_self: str = ""
@@ -382,4 +382,4 @@ class SLATask(BaseModel):
     status: str = "OPEN"
     assignee_role: Optional[str] = None
     due_hours: Optional[int] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

@@ -358,7 +358,7 @@ class RefinanceCallService:
                 for msg in tool_calls:
                     if msg.get('type') == 'tool-call' and 'schedule' in str(msg).lower():
                         # Extract appointment details if available
-                        alert.appointment_scheduled_at = datetime.utcnow()
+                        alert.appointment_scheduled_at = datetime.now(timezone.utc)
                         break
 
             elif 'callback' in summary_lower or 'call back' in summary_lower:
@@ -384,7 +384,7 @@ class RefinanceCallService:
                 ).first()
 
                 if target:
-                    target.last_call_at = datetime.utcnow()
+                    target.last_call_at = datetime.now(timezone.utc)
                     target.last_call_status = call_status
                     target.vapi_call_id = vapi_call_id
 

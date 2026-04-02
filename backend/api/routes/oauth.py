@@ -164,7 +164,7 @@ async def microsoft_callback(
                 ms_email = ms_user.get("mail") or ms_user.get("userPrincipalName")
                 logger.info(f"Connected Microsoft account: {ms_email}")
 
-        expires_at = datetime.utcnow() + timedelta(seconds=tokens.get("expires_in", 3600))
+        expires_at = datetime.now(timezone.utc) + timedelta(seconds=tokens.get("expires_in", 3600))
 
         # Store or update integration using raw SQL (since model may not be loaded)
         integration_id = str(uuid.uuid4())
@@ -190,7 +190,7 @@ async def microsoft_callback(
                 "refresh_token": tokens.get("refresh_token"),
                 "expires_at": expires_at,
                 "scopes": MICROSOFT_SCOPES,
-                "updated_at": datetime.utcnow(),
+                "updated_at": datetime.now(timezone.utc),
                 "user_id": user_id,
             })
             logger.info(f"Updated Microsoft integration for user {user_id}")
@@ -206,8 +206,8 @@ async def microsoft_callback(
                 "refresh_token": tokens.get("refresh_token"),
                 "expires_at": expires_at,
                 "scopes": MICROSOFT_SCOPES,
-                "created_at": datetime.utcnow(),
-                "updated_at": datetime.utcnow(),
+                "created_at": datetime.now(timezone.utc),
+                "updated_at": datetime.now(timezone.utc),
             })
             logger.info(f"Created new Microsoft integration for user {user_id}")
 

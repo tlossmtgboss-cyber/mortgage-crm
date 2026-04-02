@@ -99,7 +99,7 @@ class TenantProvisioningService:
                 subdomain=subdomain,
                 database_name=db_name,
                 is_active=True,
-                created_at=datetime.utcnow()
+                created_at=datetime.now(timezone.utc)
             )
             
             master_db_session.add(tenant)

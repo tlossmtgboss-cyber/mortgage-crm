@@ -229,7 +229,7 @@ def check_calling_window(
             )
 
     # Calculate local time from UTC
-    utc_now = datetime.utcnow()
+    utc_now = datetime.now(timezone.utc)
     local_now = utc_now + timedelta(hours=utc_offset)
     local_hour = local_now.hour
     local_minute = local_now.minute

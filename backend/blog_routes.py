@@ -517,7 +517,7 @@ async def update_voice_profile(
     profile.sliders_json = request.sliders_json
     profile.toggles_json = request.toggles_json
     profile.examples_json = request.examples_json
-    profile.updated_at = datetime.utcnow()
+    profile.updated_at = datetime.now(timezone.utc)
 
     db.commit()
     log_audit(db, user_id, "update", "voice_profile", profile_id, before=before, after=request.dict())
@@ -1170,12 +1170,12 @@ async def update_content(
     if request.status is not None:
         item.status = request.status
         if request.status == "published":
-            item.published_at = datetime.utcnow()
+            item.published_at = datetime.now(timezone.utc)
     if request.scheduled_at is not None:
         item.scheduled_at = request.scheduled_at
         item.status = "scheduled"
 
-    item.updated_at = datetime.utcnow()
+    item.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"message": "Content updated"}
@@ -1399,7 +1399,7 @@ async def update_user_settings(
         if value is not None and field not in _protected:
             setattr(settings, field, value)
 
-    settings.updated_at = datetime.utcnow()
+    settings.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     return {"message": "Settings updated"}
@@ -1418,7 +1418,7 @@ async def get_analytics_overview(
     from sqlalchemy import func
     from datetime import timedelta
 
-    start_date = datetime.utcnow() - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     # Count content by status
     status_counts = db.query(

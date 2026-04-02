@@ -28,7 +28,7 @@ def seed_sample_guidelines():
             'section_code': 'SEL-2024-08',
             'description': 'Updated requirements for home equity conversion mortgages',
             'url': 'https://selling-guide.fanniemae.com/Selling-Guide/Origination-thru-Closing/Subpart-B3-Underwriting-Borrowers/Chapter-B3-5-Credit-Assessment/Section-B3-5-1-Credit-Scores',
-            'published_date': datetime.utcnow() - timedelta(days=2),
+            'published_date': datetime.now(timezone.utc) - timedelta(days=2),
             'is_new': True
         },
         {
@@ -37,7 +37,7 @@ def seed_sample_guidelines():
             'section_code': 'SEL-2024-07',
             'description': 'Changes to income calculation guidelines for self-employed borrowers',
             'url': 'https://selling-guide.fanniemae.com/Selling-Guide/Origination-thru-Closing/Subpart-B3-Underwriting-Borrowers/Chapter-B3-3-Income-Assessment/1040',
-            'published_date': datetime.utcnow() - timedelta(days=5),
+            'published_date': datetime.now(timezone.utc) - timedelta(days=5),
             'is_new': True
         },
 
@@ -48,7 +48,7 @@ def seed_sample_guidelines():
             'section_code': '2024-15',
             'description': 'New debt-to-income ratio requirements for conventional loans',
             'url': 'https://guide.freddiemac.com/app/guide/bulletin/2024-15',
-            'published_date': datetime.utcnow() - timedelta(days=3),
+            'published_date': datetime.now(timezone.utc) - timedelta(days=3),
             'is_new': True
         },
         {
@@ -57,7 +57,7 @@ def seed_sample_guidelines():
             'section_code': '2024-14',
             'description': 'Expanded use of automated valuation models',
             'url': 'https://guide.freddiemac.com/app/guide/bulletin/2024-14',
-            'published_date': datetime.utcnow() - timedelta(days=7),
+            'published_date': datetime.now(timezone.utc) - timedelta(days=7),
             'is_new': True
         },
 
@@ -68,7 +68,7 @@ def seed_sample_guidelines():
             'section_code': 'ML 2024-11',
             'description': 'Updated minimum credit score requirements for FHA loans',
             'url': 'https://www.hud.gov/program_offices/administration/hudclips/letters/mortgagee/2024ml',
-            'published_date': datetime.utcnow() - timedelta(days=4),
+            'published_date': datetime.now(timezone.utc) - timedelta(days=4),
             'is_new': True
         },
         {
@@ -77,7 +77,7 @@ def seed_sample_guidelines():
             'section_code': 'ML 2024-10',
             'description': 'Changes to anti-flipping regulations',
             'url': 'https://www.hud.gov/program_offices/administration/hudclips/letters/mortgagee/2024ml',
-            'published_date': datetime.utcnow() - timedelta(days=8),
+            'published_date': datetime.now(timezone.utc) - timedelta(days=8),
             'is_new': False
         },
 
@@ -88,7 +88,7 @@ def seed_sample_guidelines():
             'section_code': '26-24-10',
             'description': 'Updated residual income tables for VA loans',
             'url': 'https://www.benefits.va.gov/HOMELOANS/circulars.asp',
-            'published_date': datetime.utcnow() - timedelta(days=6),
+            'published_date': datetime.now(timezone.utc) - timedelta(days=6),
             'is_new': True
         },
         {
@@ -97,7 +97,7 @@ def seed_sample_guidelines():
             'section_code': '26-24-09',
             'description': 'Expanded eligibility for energy efficiency upgrades',
             'url': 'https://www.benefits.va.gov/HOMELOANS/circulars.asp',
-            'published_date': datetime.utcnow() - timedelta(days=10),
+            'published_date': datetime.now(timezone.utc) - timedelta(days=10),
             'is_new': False
         },
 
@@ -108,7 +108,7 @@ def seed_sample_guidelines():
             'section_code': None,
             'description': 'Updated list of eligible rural areas for USDA loans',
             'url': 'https://www.rd.usda.gov/newsroom',
-            'published_date': datetime.utcnow() - timedelta(days=1),
+            'published_date': datetime.now(timezone.utc) - timedelta(days=1),
             'is_new': True
         },
         {
@@ -117,7 +117,7 @@ def seed_sample_guidelines():
             'section_code': None,
             'description': 'New income limits for USDA guaranteed loan program',
             'url': 'https://www.rd.usda.gov/newsroom',
-            'published_date': datetime.utcnow() - timedelta(days=9),
+            'published_date': datetime.now(timezone.utc) - timedelta(days=9),
             'is_new': False
         },
     ]

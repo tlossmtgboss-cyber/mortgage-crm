@@ -283,7 +283,7 @@ async def get_team_analytics(
     team_id = getattr(current_user, 'team_id', None)
     organization_id = getattr(current_user, 'organization_id', None)
 
-    cutoff_date = datetime.utcnow() - timedelta(days=30)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=30)
 
     analytics_records = db.query(ParticipantAnalytics).filter(
         ParticipantAnalytics.created_at >= cutoff_date
@@ -434,7 +434,7 @@ async def get_intelligence_summary(
     if not all([MortgageIntelligence, MeetingRecording, VideoMeetingRoom]):
         raise HTTPException(status_code=500, detail="Required models not available")
 
-    cutoff_date = datetime.utcnow() - timedelta(days=days)
+    cutoff_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     recordings = db.query(MeetingRecording).join(
         VideoMeetingRoom,
@@ -862,7 +862,7 @@ async def update_org_video_settings(
         if value is not None and field not in _protected:
             setattr(settings, field, value)
 
-    settings.updated_at = datetime.utcnow()
+    settings.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(settings)
 
