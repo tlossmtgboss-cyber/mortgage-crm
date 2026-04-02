@@ -2971,3 +2971,65 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
         total = sum(v for v in counts.values() if isinstance(v, int))
         return {"counts": counts, "total_rows": total}
+
+    @app.post("/api/v1/admin/seed-demo-account")
+    async def seed_demo_account_endpoint(
+        admin_key: str = Query(None),
+        db: Session = Depends(get_db),
+    ):
+        """Create the demo@perenniaai.com account for App Store review.
+        Protected by ADMIN_API_KEY.
+        """
+        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
+            raise HTTPException(status_code=403, detail="Invalid admin key")
+
+        try:
+            from passlib.context import CryptContext
+            pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+            demo_email = "demo@perenniaai.com"
+            demo_password = os.getenv("DEMO_USER_PASSWORD", "demo123!")
+            org_name = "Summit Peak Mortgage"
+            org_slug = "summit-peak-demo-appstore"
+            now = datetime.now(timezone.utc)
+
+            # Check if demo org already exists
+            existing = db.execute(text("SELECT id FROM organizations WHERE slug = :s"), {"s": org_slug}).fetchone()
+            if existing:
+                org_id = existing[0]
+                # Check if user already exists
+                user_exists = db.execute(text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).fetchone()
+                if user_exists:
+                    # Update password
+                    hashed = pwd_context.hash(demo_password)
+                    db.execute(text("UPDATE users SET hashed_password = :h WHERE email = :e"), {"h": hashed, "e": demo_email})
+                    db.commit()
+                    return {"status": "updated", "message": "Demo user password updated", "email": demo_email, "org_id": org_id}
+            else:
+                # Create org
+                db.execute(text("""
+                    INSERT INTO organizations (name, slug, domain, subscription_tier, is_active, timezone, created_at)
+                    VALUES (:name, :slug, :domain, :tier, TRUE, :tz, :now)
+                """), {"name": org_name, "slug": org_slug, "domain": "summitpeakdemo.com",
+                       "tier": "professional", "tz": "America/Chicago", "now": now})
+                org_id = db.execute(text("SELECT id FROM organizations WHERE slug = :s"), {"s": org_slug}).scalar()
+
+            # Create or update demo user
+            hashed = pwd_context.hash(demo_password)
+            user_exists = db.execute(text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).fetchone()
+            if user_exists:
+                db.execute(text("UPDATE users SET hashed_password = :h, organization_id = :oid WHERE email = :e"),
+                           {"h": hashed, "e": demo_email, "oid": org_id})
+            else:
+                db.execute(text("""
+                    INSERT INTO users (email, hashed_password, first_name, last_name, role, organization_id, is_active, created_at)
+                    VALUES (:email, :hash, :first, :last, :role, :oid, TRUE, :now)
+                """), {"email": demo_email, "hash": hashed, "first": "Demo", "last": "User",
+                       "role": "admin", "oid": org_id, "now": now})
+
+            db.commit()
+            return {"status": "created", "message": "Demo account ready", "email": demo_email, "org_id": org_id}
+        except Exception as e:
+            db.rollback()
+            logger.exception("Demo account seed failed")
+            raise HTTPException(status_code=500, detail=str(e))
