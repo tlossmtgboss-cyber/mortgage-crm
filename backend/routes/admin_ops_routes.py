@@ -3032,4 +3032,9 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         except Exception as e:
             db.rollback()
             logger.exception("Demo account seed failed")
-            raise HTTPException(status_code=500, detail=str(e))
+            import traceback
+            return JSONResponse(status_code=500, content={
+                "status": "error",
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+            })
