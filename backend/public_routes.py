@@ -267,6 +267,57 @@ async def seed_demo_data(
             except Exception:
                 pass
 
+        # ── FIX ENUM COLUMNS ──
+        # Some columns use PostgreSQL enum types that may be missing values.
+        # Convert them to VARCHAR to avoid enum mismatch issues.
+        enum_fixes = [
+            ("activities", "type", "activitytype"),
+            ("leads", "stage", "leadstage"),
+            ("loans", "stage", "loanstage"),
+            ("documents", "doc_type", "documenttype"),
+            ("documents", "doc_category", "documentcategory"),
+            ("documents", "match_status", "emailintakematchstatus"),
+            ("documents", "classification_status", "attachmentclassificationstatus"),
+            ("documents", "classified_doc_type", None),
+            ("documents", "classified_doc_category", None),
+            ("disclosure_events", "disclosure_type", "disclosuretype"),
+            ("loan_fees", "tolerance_category", "tolerancecategory"),
+            ("availability_slots", "day_of_week", "dayofweek"),
+            ("availability_slots", "priority", "slotpriority"),
+            ("appointments", "meeting_mode", "meetingmode"),
+            ("appointments", "meeting_type", "meetingtype"),
+            ("appointments", "status", "appointmentstatus"),
+            ("scheduler_configs", "default_meeting_mode", None),
+            ("scheduler_configs", "routing_strategy", None),
+            ("scheduler_appointment_types", "meeting_type", None),
+            ("scheduler_appointment_types", "default_mode", None),
+            ("scheduler_appointment_types", "routing_strategy", None),
+            ("tasks", "type", "tasktype"),
+            ("compliance_alerts", "severity", None),
+            ("compliance_alerts", "status", None),
+            ("referral_partners", "category", None),
+            ("referral_partners", "status", None),
+            ("mum_clients", "status", None),
+        ]
+        for tbl, col, enum_name in enum_fixes:
+            try:
+                nested = db.begin_nested()
+                db.execute(_text(f"""
+                    ALTER TABLE {tbl} ALTER COLUMN {col} TYPE VARCHAR(100) USING {col}::text
+                """))
+                nested.commit()
+            except Exception:
+                nested.rollback()
+            if enum_name:
+                try:
+                    nested2 = db.begin_nested()
+                    db.execute(_text(f"DROP TYPE IF EXISTS {enum_name}"))
+                    nested2.commit()
+                except Exception:
+                    nested2.rollback()
+
+        db.commit()
+
         # Get all user IDs in this org
         user_rows = db.execute(_text("SELECT id FROM users WHERE organization_id = :oid"), {"oid": org_id}).fetchall()
         lo_ids = [r[0] for r in user_rows[:3]] if len(user_rows) >= 3 else [demo_user_id]
@@ -1997,4 +2048,107 @@ async def check_email_verification(
 
 
 # debug/token-info endpoint REMOVED — was unauthenticated and exposed
+
+
+# =============================================================================
+# SMS OPT-IN (PUBLIC)
+# =============================================================================
+
+class SMSOptInRequest(BaseModel):
+    first_name: str
+    last_name: str
+    phone: str  # E.164 format: +1XXXXXXXXXX
+    email: Optional[str] = None
+    consent_text: str
+    consent_source: str = "web_form"
+    consent_page_url: Optional[str] = None
+
+
+@router.post("/api/v1/public/sms-opt-in")
+async def public_sms_opt_in(request: SMSOptInRequest, req: Request, db: Session = Depends(get_db)):
+    """
+    Public endpoint for SMS opt-in from the website consent form.
+    Records TCPA consent and creates/updates a lead record.
+    """
+    import re
+
+    # Validate phone format
+    phone_digits = re.sub(r"\D", "", request.phone)
+    if len(phone_digits) == 11 and phone_digits.startswith("1"):
+        phone_digits = phone_digits[1:]
+    if len(phone_digits) != 10:
+        raise HTTPException(status_code=400, detail="Invalid phone number. Please provide a 10-digit US number.")
+
+    e164_phone = f"+1{phone_digits}"
+
+    try:
+        from database.models.tcpa_consent import TCPAConsentCertificate
+        from sqlalchemy import text
+
+        # Check for existing active consent
+        existing = db.query(TCPAConsentCertificate).filter(
+            TCPAConsentCertificate.phone_number == e164_phone,
+            TCPAConsentCertificate.consent_channel.in_(["sms", "both"]),
+            TCPAConsentCertificate.is_active == True,
+        ).first()
+
+        if existing:
+            return {
+                "status": "already_opted_in",
+                "message": "This phone number is already opted in to receive SMS updates.",
+            }
+
+        # Record TCPA consent
+        consent = TCPAConsentCertificate(
+            phone_number=e164_phone,
+            consent_type="express_written",
+            consent_channel="sms",
+            consent_source=request.consent_source,
+            consent_text=request.consent_text,
+            consent_ip_address=req.client.host if req.client else None,
+            consent_user_agent=req.headers.get("user-agent"),
+            is_active=True,
+            granted_at=datetime.now(timezone.utc),
+        )
+        db.add(consent)
+
+        # Try to find or create a lead for this phone number
+        try:
+            result = db.execute(
+                text("SELECT id FROM leads WHERE phone = :phone LIMIT 1"),
+                {"phone": e164_phone},
+            ).fetchone()
+
+            if not result:
+                # Create a minimal lead record
+                db.execute(
+                    text("""
+                        INSERT INTO leads (first_name, last_name, phone, email, source, stage, created_at)
+                        VALUES (:first_name, :last_name, :phone, :email, 'sms_opt_in', 'New', :now)
+                    """),
+                    {
+                        "first_name": request.first_name,
+                        "last_name": request.last_name,
+                        "phone": e164_phone,
+                        "email": request.email,
+                        "now": datetime.now(timezone.utc),
+                    },
+                )
+        except Exception as e:
+            logger.warning(f"Lead create/lookup during SMS opt-in failed (non-blocking): {e}")
+
+        db.commit()
+        logger.info(f"SMS opt-in recorded for {mask_phone(e164_phone)}")
+
+        return {
+            "status": "success",
+            "message": "You have been opted in to receive SMS updates. Reply STOP at any time to unsubscribe.",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"SMS opt-in error: {e}")
+        raise HTTPException(status_code=500, detail="Unable to process your request. Please try again.")
 # token metadata (workspace, scope, expiry) to anyone with a token value.
