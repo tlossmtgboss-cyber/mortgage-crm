@@ -33,6 +33,7 @@ from sqlalchemy import (
     Column,
     DateTime,
     Float,
+    ForeignKey,
     Index,
     Integer,
     JSON,
@@ -242,7 +243,7 @@ class ESignatureRecipient(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    envelope_id = Column(Integer, nullable=False, comment="references esignature_envelopes.id")
+    envelope_id = Column(Integer, ForeignKey("esignature_envelopes.id"), nullable=False)
 
     # Recipient role and ordering
     recipient_type = Column(String(20), nullable=False, default=RecipientType.SIGNER.value)
@@ -318,8 +319,8 @@ class ESignatureField(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    envelope_id = Column(Integer, nullable=False, comment="references esignature_envelopes.id")
-    recipient_id = Column(Integer, nullable=True, comment="references esignature_recipients.id")
+    envelope_id = Column(Integer, ForeignKey("esignature_envelopes.id"), nullable=False)
+    recipient_id = Column(Integer, ForeignKey("esignature_recipients.id"), nullable=True)
 
     # Field classification
     field_type = Column(String(20), nullable=False)
@@ -378,8 +379,8 @@ class ESignatureAuditEvent(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    envelope_id = Column(Integer, nullable=False, comment="references esignature_envelopes.id")
-    recipient_id = Column(Integer, nullable=True, comment="references esignature_recipients.id; null for envelope-level events")
+    envelope_id = Column(Integer, ForeignKey("esignature_envelopes.id"), nullable=False)
+    recipient_id = Column(Integer, ForeignKey("esignature_recipients.id"), nullable=True)
 
     # Event classification
     event_type = Column(String(30), nullable=False)
@@ -507,9 +508,9 @@ class ESignConsentSession(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    recipient_id = Column(Integer, nullable=False, comment="references esignature_recipients.id")
-    envelope_id = Column(Integer, nullable=False, comment="references esignature_envelopes.id")
-    organization_id = Column(Integer, nullable=True, comment="references organizations.id")
+    recipient_id = Column(Integer, ForeignKey("esignature_recipients.id"), nullable=False)
+    envelope_id = Column(Integer, ForeignKey("esignature_envelopes.id"), nullable=False)
+    organization_id = Column(Integer, nullable=True)
 
     # Consent state
     consent_given = Column(Boolean, nullable=False, default=False)
@@ -559,8 +560,8 @@ class ESignKBASession(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     session_uuid = Column(String(36), unique=True, nullable=False, index=True)
-    recipient_id = Column(Integer, nullable=False, comment="references esignature_recipients.id")
-    envelope_id = Column(Integer, nullable=False, comment="references esignature_envelopes.id")
+    recipient_id = Column(Integer, ForeignKey("esignature_recipients.id"), nullable=False)
+    envelope_id = Column(Integer, ForeignKey("esignature_envelopes.id"), nullable=False)
 
     # Questions / answers stored as JSON: [{question, options, correct_answer_hash}]
     # correct_answer_hash is a bcrypt hash of the correct answer text (lowercased, stripped)
