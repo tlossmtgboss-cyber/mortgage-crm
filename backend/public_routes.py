@@ -151,87 +151,63 @@ async def create_demo_user(
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:
-        from database.models import User, Subscription, OnboardingProgress, Organization
         from main import get_password_hash
+        from sqlalchemy import text as _text
 
         demo_email = "demo@perenniaai.com"
         demo_password = _os.getenv("DEMO_USER_PASSWORD", "demo123!")
         now = datetime.now(timezone.utc)
+        org_slug = "summit-peak-demo-appstore"
 
-        # Ensure org exists
-        org = db.query(Organization).filter(Organization.slug == "summit-peak-demo-appstore").first()
-        if not org:
-            org = Organization(
-                name="Summit Peak Mortgage",
-                slug="summit-peak-demo-appstore",
-                domain="summitpeakdemo.com",
-                subscription_tier="professional",
-                is_active=True,
-                timezone="America/Chicago",
-                created_at=now,
-            )
-            db.add(org)
-            db.flush()
+        # Use raw SQL to avoid ORM column mismatch with production DB
+        org_row = db.execute(_text("SELECT id FROM organizations WHERE slug = :s"), {"s": org_slug}).fetchone()
+        if org_row:
+            org_id = org_row[0]
+        else:
+            db.execute(_text("""
+                INSERT INTO organizations (name, slug, domain, subscription_tier, is_active, created_at)
+                VALUES (:name, :slug, :domain, :tier, TRUE, :now)
+            """), {"name": "Summit Peak Mortgage", "slug": org_slug,
+                   "domain": "summitpeakdemo.com", "tier": "professional", "now": now})
+            org_id = db.execute(_text("SELECT id FROM organizations WHERE slug = :s"), {"s": org_slug}).scalar()
 
-        # Create or update demo user
-        existing = db.query(User).filter(User.email == demo_email).first()
-        if existing:
-            existing.hashed_password = get_password_hash(demo_password)
-            existing.organization_id = org.id
-            existing.is_active = True
-            existing.email_verified = True
+        hashed = get_password_hash(demo_password)
+
+        user_row = db.execute(_text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).fetchone()
+        if user_row:
+            db.execute(_text(
+                "UPDATE users SET hashed_password = :h, organization_id = :oid, is_active = TRUE, email_verified = TRUE WHERE email = :e"
+            ), {"h": hashed, "e": demo_email, "oid": org_id})
             db.commit()
-            return {"status": "updated", "email": demo_email, "org_id": org.id}
+            return {"status": "updated", "email": demo_email, "org_id": org_id}
 
-        demo_user = User(
-            email=demo_email,
-            hashed_password=get_password_hash(demo_password),
-            first_name="Demo",
-            last_name="User",
-            email_verified=True,
-            is_active=True,
-            role="admin",
-            organization_id=org.id,
-            user_metadata={
-                "company_name": "Summit Peak Mortgage",
-                "phone": "555-0000",
-                "plan": "professional",
-                "demo_mode": True,
-            },
-        )
-        db.add(demo_user)
-        db.flush()
+        db.execute(_text("""
+            INSERT INTO users (email, hashed_password, first_name, last_name, role,
+                              organization_id, is_active, email_verified, created_at)
+            VALUES (:email, :hash, 'Demo', 'User', 'admin', :oid, TRUE, TRUE, :now)
+        """), {"email": demo_email, "hash": hashed, "oid": org_id, "now": now})
 
-        # Create demo subscription
-        demo_subscription = Subscription(
-            user_id=demo_user.id,
-            stripe_customer_id="demo_customer",
-            stripe_subscription_id="demo_subscription",
-            status="active",
-            current_period_start=now,
-            current_period_end=now + timedelta(days=365),
-            trial_end=None,
-        )
-        db.add(demo_subscription)
+        user_id = db.execute(_text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).scalar()
 
-        # Create onboarding progress (completed)
-        onboarding = OnboardingProgress(
-            user_id=demo_user.id,
-            current_step=5,
-            steps_completed=[1, 2, 3, 4, 5],
-            is_complete=True,
-            completed_at=now,
-        )
-        db.add(onboarding)
+        # Subscription (upsert)
+        sub_exists = db.execute(_text("SELECT id FROM subscriptions WHERE user_id = :uid"), {"uid": user_id}).fetchone()
+        if not sub_exists:
+            db.execute(_text("""
+                INSERT INTO subscriptions (user_id, stripe_customer_id, stripe_subscription_id,
+                                          status, current_period_start, current_period_end)
+                VALUES (:uid, 'demo_customer', 'demo_subscription', 'active', :now, :end)
+            """), {"uid": user_id, "now": now, "end": now + timedelta(days=365)})
+
+        # Onboarding (upsert)
+        ob_exists = db.execute(_text("SELECT id FROM onboarding_progress WHERE user_id = :uid"), {"uid": user_id}).fetchone()
+        if not ob_exists:
+            db.execute(_text("""
+                INSERT INTO onboarding_progress (user_id, current_step, steps_completed, is_complete, completed_at)
+                VALUES (:uid, 5, :steps, TRUE, :now)
+            """), {"uid": user_id, "steps": "[1,2,3,4,5]", "now": now})
 
         db.commit()
-
-        return {
-            "status": "created",
-            "email": demo_email,
-            "org_id": org.id,
-            "user_id": demo_user.id,
-        }
+        return {"status": "created", "email": demo_email, "org_id": org_id, "user_id": user_id}
     except Exception as e:
         db.rollback()
         return _JSONResponse(status_code=500, content={
