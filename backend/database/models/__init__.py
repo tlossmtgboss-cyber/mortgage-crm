@@ -645,8 +645,8 @@ from .email_tracking import EmailTrackingEvent, TrackingLinkMap
 
 # SMS Conversation Threading (AI two-way SMS with intent detection)
 from .sms_conversation import (
-    SMSConversation as SMSAIConversation,
-    SMSConversationMessage as SMSAIConversationMessage,
+    SMSAIConversation,
+    SMSAIConversationMessage,
 )
 
 # Borrower Prep Sequences (pre-appointment document & reminder flows)

@@ -6,7 +6,7 @@ from typing import Optional, Dict, List
 
 from sqlalchemy.orm import Session
 
-from database.models.sms_conversation import SMSConversation, SMSConversationMessage
+from database.models.sms_conversation import SMSAIConversation as SMSConversation, SMSAIConversationMessage as SMSConversationMessage
 from services.sms_intent_detector import SMSIntentDetector
 
 logger = logging.getLogger(__name__)

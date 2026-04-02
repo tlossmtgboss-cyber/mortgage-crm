@@ -1,6 +1,6 @@
 """SMS conversation threading models."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Integer, Float, Text, JSON, ForeignKey, Index, Boolean
 from db import Base
 
@@ -9,7 +9,7 @@ def _uuid():
     return str(uuid.uuid4())
 
 
-class SMSConversation(Base):
+class SMSAIConversation(Base):
     __tablename__ = "sms_conversations"
     __table_args__ = (
         Index("ix_sms_conv_phone_org", "phone_number", "organization_id"),
@@ -29,7 +29,7 @@ class SMSConversation(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
-class SMSConversationMessage(Base):
+class SMSAIConversationMessage(Base):
     __tablename__ = "sms_conversation_messages"
 
     id = Column(String, primary_key=True, default=_uuid)
