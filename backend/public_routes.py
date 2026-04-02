@@ -434,6 +434,22 @@ async def seed_demo_data(
                     :app_date, :disc_sent, :lock, :lock_exp,
                     :uw_recv, :approved, :ctc, :cd_sent,
                     :sc, :created, :updated, :lo_name, :program, :lender)
+                ON CONFLICT (loan_number) DO UPDATE SET
+                    organization_id = EXCLUDED.organization_id,
+                    borrower_name = EXCLUDED.borrower_name,
+                    borrower_email = EXCLUDED.borrower_email,
+                    stage = EXCLUDED.stage,
+                    loan_type = EXCLUDED.loan_type,
+                    amount = EXCLUDED.amount,
+                    purchase_price = EXCLUDED.purchase_price,
+                    rate = EXCLUDED.rate,
+                    property_address = EXCLUDED.property_address,
+                    loan_officer_id = EXCLUDED.loan_officer_id,
+                    closing_date = EXCLUDED.closing_date,
+                    funded_date = EXCLUDED.funded_date,
+                    application_date = EXCLUDED.application_date,
+                    stage_changed_at = EXCLUDED.stage_changed_at,
+                    updated_at = EXCLUDED.updated_at
             """), {
                 "oid": org_id, "ln": ln_num, "bn": borrower, "be": email,
                 "stage": stage, "lt": ltype, "amt": amount, "pp": int(amount * 1.05),
