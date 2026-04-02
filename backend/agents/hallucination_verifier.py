@@ -16,8 +16,9 @@ import re
 import json
 import logging
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
+import httpx
 from anthropic import Anthropic
 
 from .metrics.models import (
@@ -116,7 +117,10 @@ class HallucinationVerifier:
     """
 
     def __init__(self):
-        self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self.client = Anthropic(
+            api_key=os.getenv("ANTHROPIC_API_KEY"),
+            timeout=httpx.Timeout(15.0),
+        )
         self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
         # Numeric patterns for rule-based extraction
@@ -594,7 +598,7 @@ class HallucinationVerifier:
             tools_used=tools_used or [],
             source_data_summary=self._summarize_source_data(source_data),
             analysis_time_ms=analysis_time,
-            timestamp=datetime.utcnow()
+            timestamp=datetime.now(timezone.utc)
         )
 
     def _summarize_source_data(self, source_data: Dict[str, Any]) -> Dict[str, Any]:

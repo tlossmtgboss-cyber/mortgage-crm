@@ -221,37 +221,47 @@ async def execute_tool(
         # returns None in the thread and tenant isolation is bypassed.
         TOOL_TIMEOUT = 15  # seconds
         try:
-            if asyncio.iscoroutinefunction(func):
-                result = await asyncio.wait_for(func(arguments), timeout=TOOL_TIMEOUT)
-            else:
-                from contextvars import copy_context
-                ctx = copy_context()
-                loop = asyncio.get_event_loop()
-                result = await asyncio.wait_for(
-                    loop.run_in_executor(None, ctx.run, func, arguments), timeout=TOOL_TIMEOUT
-                )
-        except asyncio.TimeoutError:
-            tool_call.error = f"Tool '{tool_name}' timed out after {TOOL_TIMEOUT}s"
-            tool_call.execution_time_ms = (time.time() - start_time) * 1000
-            logger.error(f"Tool {tool_name} timed out after {TOOL_TIMEOUT}s")
-            return tool_call
-
-        tool_call.result = result
-        tool_call.execution_time_ms = (time.time() - start_time) * 1000
-
-        # Cache the result for cacheable tools and release stampede lock
-        if (cache_key and result is not None and
-            "error" not in result):
-            ttl = CACHEABLE_TOOLS.get(tool_name, 300)
-            await cache.set(cache_key, result, ttl)
-            # Release stampede lock
             try:
-                await cache.delete(f"lock:{cache_key}")
-            except Exception:
-                pass
-            logger.info(f"Tool {tool_name} executed in {tool_call.execution_time_ms:.1f}ms (cached for {ttl}s)")
-        else:
-            logger.info(f"Tool {tool_name} executed in {tool_call.execution_time_ms:.1f}ms")
+                if asyncio.iscoroutinefunction(func):
+                    result = await asyncio.wait_for(func(arguments), timeout=TOOL_TIMEOUT)
+                else:
+                    from contextvars import copy_context
+                    ctx = copy_context()
+                    loop = asyncio.get_event_loop()
+                    result = await asyncio.wait_for(
+                        loop.run_in_executor(None, ctx.run, func, arguments), timeout=TOOL_TIMEOUT
+                    )
+            except asyncio.TimeoutError:
+                tool_call.error = f"Tool '{tool_name}' timed out after {TOOL_TIMEOUT}s"
+                tool_call.execution_time_ms = (time.time() - start_time) * 1000
+                logger.error(f"Tool {tool_name} timed out after {TOOL_TIMEOUT}s")
+                return tool_call
+
+            # Normalize tool result: ToolResult dataclass -> dict
+            if hasattr(result, 'to_dict'):
+                result = result.to_dict()
+            elif not isinstance(result, dict):
+                result = {"result": result}
+
+            tool_call.result = result
+            tool_call.execution_time_ms = (time.time() - start_time) * 1000
+
+            # Cache the result for cacheable tools and release stampede lock
+            if (cache_key and result is not None and
+                isinstance(result, dict) and "error" not in result):
+                ttl = CACHEABLE_TOOLS.get(tool_name, 300)
+                await cache.set(cache_key, result, ttl)
+                # Release stampede lock
+                try:
+                    await cache.delete(f"lock:{cache_key}")
+                except Exception:
+                    pass
+                logger.info(f"Tool {tool_name} executed in {tool_call.execution_time_ms:.1f}ms (cached for {ttl}s)")
+            else:
+                logger.info(f"Tool {tool_name} executed in {tool_call.execution_time_ms:.1f}ms")
+        finally:
+            if organization_id is not None:
+                clear_tenant_context()
 
         # Record cache miss metric (actual execution)
         if METRICS_AVAILABLE and cache_metrics:

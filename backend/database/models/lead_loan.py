@@ -17,7 +17,8 @@ Usage:
 from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, ForeignKey, JSON, Enum as SQLEnum, Index, Numeric, text
+    Text, ForeignKey, JSON, Enum as SQLEnum, Index, Numeric, text,
+    UniqueConstraint, CheckConstraint
 )
 from sqlalchemy.orm import relationship, validates
 
@@ -60,10 +61,15 @@ class Lead(Base):
         Index('ix_leads_owner_last_contact', 'owner_id', 'last_contact'),
         Index('ix_leads_org_source', 'organization_id', 'source'),
         Index('ix_leads_org_ai_score', 'organization_id', 'ai_score'),
+        # DATA-006: Unique email per organization (partial index needed for NULL emails;
+        # deploy migration: CREATE UNIQUE INDEX uix_lead_email_org ON leads (email, organization_id) WHERE email IS NOT NULL)
+        UniqueConstraint('email', 'organization_id', name='uix_lead_email_org'),
+        # DATA-009: Every lead must have at least one contact method
+        CheckConstraint("email IS NOT NULL OR phone IS NOT NULL", name='ck_lead_has_contact'),
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)  # Multi-tenant isolation
     name = Column(String, nullable=False, index=True)
     first_name = Column(String)
     last_name = Column(String)
@@ -311,7 +317,7 @@ class Loan(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     loan_number = Column(String, unique=True, index=True, nullable=False)
 
     # Borrower info

@@ -11,7 +11,7 @@ import os
 import uuid
 from contextvars import ContextVar
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -66,7 +66,7 @@ class AuditEntry:
     errors: List[str] = field(default_factory=list)
     pii_masked: bool = True
     hallucination_score: Optional[float] = None
-    timestamp: datetime = field(default_factory=datetime.utcnow)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     def to_db_params(self) -> Dict[str, Any]:
         """Convert to parameters for the ai_audit_log INSERT."""

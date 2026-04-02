@@ -133,7 +133,13 @@ class SmartDocsS3Service:
 
         Returns:
             Storage key string
+
+        Raises:
+            ValueError: If organization_id is None
         """
+        if organization_id is None:
+            raise ValueError("organization_id is required for document storage")
+
         # Sanitize filename
         safe_name = "".join(c for c in file_name if c.isalnum() or c in '.-_').strip()
         if not safe_name:

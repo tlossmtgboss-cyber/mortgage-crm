@@ -334,6 +334,7 @@ class LOSSyncService:
         db: Session,
         loan_id: int,
         fields: Optional[List[str]] = None,
+        organization_id: Optional[int] = None,
     ) -> LOSSyncResult:
         """Push loan data from CRM to LOS.
 
@@ -345,13 +346,17 @@ class LOSSyncService:
             loan_id: CRM loan ID
             fields: Optional list of specific CRM fields to push.
                     If None, pushes all push/bidirectional-mapped fields.
+            organization_id: Tenant org ID for isolation (required in multi-tenant)
 
         Returns:
             LOSSyncResult with sync outcome
         """
         from database.models.lead_loan import Loan
 
-        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        query = db.query(Loan).filter(Loan.id == loan_id)
+        if organization_id is not None:
+            query = query.filter(Loan.organization_id == organization_id)
+        loan = query.first()
         if not loan:
             return LOSSyncResult(
                 status=LOSSyncStatus.FAILED,
@@ -434,6 +439,7 @@ class LOSSyncService:
         db: Session,
         loan_id: int,
         los_loan_id: Optional[str] = None,
+        organization_id: Optional[int] = None,
     ) -> LOSSyncResult:
         """Pull loan data from LOS to CRM.
 
@@ -451,13 +457,17 @@ class LOSSyncService:
             db: Database session
             loan_id: CRM loan ID
             los_loan_id: Override LOS loan ID (if not stored on CRM loan)
+            organization_id: Tenant org ID for isolation (required in multi-tenant)
 
         Returns:
             LOSSyncResult with sync outcome
         """
         from database.models.lead_loan import Loan
 
-        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        query = db.query(Loan).filter(Loan.id == loan_id)
+        if organization_id is not None:
+            query = query.filter(Loan.organization_id == organization_id)
+        loan = query.first()
         if not loan:
             return LOSSyncResult(
                 status=LOSSyncStatus.FAILED,
@@ -699,19 +709,23 @@ class LOSSyncService:
     # Status & Configuration
     # =========================================================================
 
-    async def get_sync_status(self, db: Session, loan_id: int) -> Dict[str, Any]:
+    async def get_sync_status(self, db: Session, loan_id: int, organization_id: Optional[int] = None) -> Dict[str, Any]:
         """Get the last sync status for a loan.
 
         Args:
             db: Database session
             loan_id: CRM loan ID
+            organization_id: Tenant org ID for isolation (required in multi-tenant)
 
         Returns:
             Dict with sync status, last sync time, and LOS loan ID
         """
         from database.models.lead_loan import Loan
 
-        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        query = db.query(Loan).filter(Loan.id == loan_id)
+        if organization_id is not None:
+            query = query.filter(Loan.organization_id == organization_id)
+        loan = query.first()
         if not loan:
             return {"error": f"Loan {loan_id} not found"}
 

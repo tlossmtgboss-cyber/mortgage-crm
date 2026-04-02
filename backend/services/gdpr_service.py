@@ -12,6 +12,12 @@ Tables affected:
 - sms_messages: Message content redacted (metadata retained for compliance)
 - email_messages: Body/subject redacted (metadata retained for compliance)
 - conversation_memory: Hard deleted (no regulatory retention requirement)
+- borrower_auth_events: IP/user-agent redacted (event type retained)
+- application_documents: Hard deleted (child of borrower_applications)
+- call_logs: Contact name/phone redacted, notes cleared (metadata retained)
+- activities: Content redacted (type/timestamps retained for audit)
+- conversations: Message/response redacted (role/timestamps retained)
+- voicemail_drops: Contact PII and message text redacted (delivery metadata retained)
 - users: PII redacted, account deactivated (for internal user deletion)
 - audit_logs: Retained with PII redacted (regulatory requirement)
 
@@ -227,6 +233,82 @@ class DataDeletionService:
         """, {"redacted": self.REDACTED})
         if count:
             results["tables_affected"].append({"table": "borrower_auth_events", "action": "redacted", "count": count})
+            results["records_redacted"] += count
+
+        # 8. Delete application_documents for redacted borrower_applications
+        # Child table with FK CASCADE — delete before parent references are lost.
+        # Contains filenames, storage URLs, and AI-extracted data that may contain PII.
+        count = self._execute_update("""
+            DELETE FROM application_documents
+            WHERE application_id IN (
+                SELECT id FROM borrower_applications WHERE borrower_email = :redacted
+            )
+        """, {"redacted": self.REDACTED})
+        if count:
+            results["tables_affected"].append({"table": "application_documents", "action": "deleted", "count": count})
+            results["records_deleted"] += count
+
+        # 9. Redact call_logs — contains contact_phone, contact_name (PII).
+        # Keep metadata (duration, outcome, timestamps) for compliance.
+        count = self._execute_update("""
+            UPDATE call_logs
+            SET contact_phone = :redacted,
+                contact_name = :redacted,
+                notes = NULL,
+                ai_note_summary = NULL
+            WHERE lead_id IN (
+                SELECT id FROM leads WHERE email = :redacted
+            )
+        """, {"redacted": self.REDACTED})
+        if count:
+            results["tables_affected"].append({"table": "call_logs", "action": "redacted", "count": count})
+            results["records_redacted"] += count
+
+        # 10. Redact activities — content field is free text that may contain PII.
+        # Keep activity type and timestamps for audit trail.
+        count = self._execute_update("""
+            UPDATE activities
+            SET content = :gdpr_redacted,
+                user_metadata = NULL
+            WHERE lead_id IN (
+                SELECT id FROM leads WHERE email = :redacted
+            )
+        """, {"redacted": self.REDACTED, "gdpr_redacted": self.REDACTED_GDPR})
+        if count:
+            results["tables_affected"].append({"table": "activities", "action": "redacted", "count": count})
+            results["records_redacted"] += count
+
+        # 11. Redact conversations — message/response fields contain PII-bearing chat content.
+        # Keep timestamps and role for audit trail.
+        count = self._execute_update("""
+            UPDATE conversations
+            SET message = :gdpr_redacted,
+                response = :gdpr_redacted,
+                meta_data = NULL
+            WHERE lead_id IN (
+                SELECT id FROM leads WHERE email = :redacted
+            )
+        """, {"redacted": self.REDACTED, "gdpr_redacted": self.REDACTED_GDPR})
+        if count:
+            results["tables_affected"].append({"table": "conversations", "action": "redacted", "count": count})
+            results["records_redacted"] += count
+
+        # 12. Redact voicemail_drops — contains contact_name, phone_number,
+        # contact_email, message_text (PII). Keep delivery metadata for compliance.
+        count = self._execute_update("""
+            UPDATE voicemail_drops
+            SET contact_name = :redacted,
+                phone_number = :redacted,
+                contact_email = NULL,
+                message_text = :gdpr_redacted,
+                message_variables = NULL,
+                callback_notes = NULL
+            WHERE lead_id IN (
+                SELECT id FROM leads WHERE email = :redacted
+            )
+        """, {"redacted": self.REDACTED, "gdpr_redacted": self.REDACTED_GDPR})
+        if count:
+            results["tables_affected"].append({"table": "voicemail_drops", "action": "redacted", "count": count})
             results["records_redacted"] += count
 
     def _delete_user_pii(self, user_id: int, results: dict):

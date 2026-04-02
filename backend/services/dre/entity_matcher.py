@@ -164,10 +164,15 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int, organization
         # ========== CHECK MUM CLIENTS FIRST (Portfolio) ==========
         logger.info(f"[MUM] Searching MUM clients for loan_number='{loan_num}'")
         try:
-            total_mum = db.query(MUMClient).count()
-            logger.info(f"[MUM] Total MUM clients in database: {total_mum}")
+            # TENANT-001: Scope MUM client queries to organization to prevent cross-tenant leakage
+            mum_base_query = db.query(MUMClient)
+            if organization_id:
+                mum_base_query = mum_base_query.filter(MUMClient.organization_id == organization_id)
 
-            mum_client = db.query(MUMClient).filter(
+            total_mum = mum_base_query.count()
+            logger.info(f"[MUM] Total MUM clients in database (org-scoped): {total_mum}")
+
+            mum_client = mum_base_query.filter(
                 func.upper(MUMClient.loan_number) == loan_num_upper
             ).first()
 
@@ -183,7 +188,7 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int, organization
                 })
             else:
                 logger.info(f"[MUM] No exact match for loan_number='{loan_num}'")
-                mum_clients = db.query(MUMClient).filter(
+                mum_clients = mum_base_query.filter(
                     MUMClient.loan_number.ilike(f"%{loan_num}%")
                 ).all()
                 logger.info(f"[MUM] Partial match search found {len(mum_clients)} clients")
@@ -304,7 +309,11 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int, organization
     # ========== LEAD MATCHING (Email, Phone, Name) ==========
     if extracted_email:
         logger.info(f"Trying email match: '{extracted_email}'")
-        email_leads = db.query(Lead).filter(
+        # TENANT-002: Scope lead query to organization to prevent cross-tenant leakage
+        email_lead_query = db.query(Lead)
+        if organization_id:
+            email_lead_query = email_lead_query.filter(Lead.organization_id == organization_id)
+        email_leads = email_lead_query.filter(
             Lead.email.ilike(extracted_email)
         ).all()
         for lead in email_leads:
@@ -582,7 +591,11 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int, organization
 
     if partner_name or partner_email or partner_phone:
         logger.info(f"Trying partner match: name='{partner_name}', email='{partner_email}', phone='{partner_phone}'")
-        all_partners = db.query(ReferralPartner).filter(ReferralPartner.status == "active").all()
+        # TENANT-001: Scope partner query to organization to prevent cross-tenant leakage
+        partner_query = db.query(ReferralPartner).filter(ReferralPartner.status == "active")
+        if organization_id:
+            partner_query = partner_query.filter(ReferralPartner.organization_id == organization_id)
+        all_partners = partner_query.all()
 
         for partner in all_partners:
             partner_conf = 0.0
@@ -623,7 +636,11 @@ def match_entity(fields: Dict[str, Any], db: Session, user_id: int, organization
     if borrower_name or extracted_email or extracted_phone:
         logger.info(f"[MUM-NAME] Starting name/email/phone matching for borrower='{borrower_name}'")
         try:
-            all_mum_clients = db.query(MUMClient).all()
+            # TENANT-001: Scope MUM client query to organization to prevent cross-tenant leakage
+            mum_name_query = db.query(MUMClient)
+            if organization_id:
+                mum_name_query = mum_name_query.filter(MUMClient.organization_id == organization_id)
+            all_mum_clients = mum_name_query.all()
             logger.info(f"[MUM-NAME] Checking {len(all_mum_clients)} MUM clients for name match")
 
             sample_names = [c.name for c in all_mum_clients[:5]]

@@ -66,7 +66,7 @@ def calculate_stage_performance(db: Session, user_id: int, thirty_days_ago, org_
 
     for config in stage_configs:
         if config["type"] == "lead":
-            # Query leads in these stages
+            # Aggregate leads in these stages using SQL avg
             query_filters = [Lead.stage.in_(config["stages"])]
             if org_id:
                 query_filters.append(Lead.organization_id == org_id)
@@ -75,29 +75,23 @@ def calculate_stage_performance(db: Session, user_id: int, thirty_days_ago, org_
             else:
                 query_filters.append(Lead.owner_id == user_id)
 
-            leads_in_stage = db.query(Lead).filter(*query_filters).all()
+            result = db.query(
+                func.count(Lead.id).label('cnt'),
+                func.avg(
+                    func.extract('epoch', now - func.coalesce(Lead.stage_changed_at, Lead.created_at)) / 86400
+                ).label('avg_days')
+            ).filter(*query_filters).first()
 
-            if leads_in_stage:
-                total_days = 0
-                count = 0
-                for lead in leads_in_stage:
-                    if lead.stage_changed_at:
-                        days_in_stage = (now - lead.stage_changed_at).days
-                        total_days += days_in_stage
-                        count += 1
-                    elif lead.created_at:
-                        days_in_stage = (now - lead.created_at).days
-                        total_days += days_in_stage
-                        count += 1
-
-                avg_days = total_days / count if count > 0 else 0
+            count = result.cnt or 0
+            if count > 0:
+                avg_days = float(result.avg_days or 0)
                 # Calculate efficiency: 100% if at or below target, decreases linearly
                 efficiency = max(0, min(100, int(100 - max(0, (avg_days - config["target_days"]) * 10))))
             else:
                 efficiency = 100  # No items = no delays
                 avg_days = 0
         else:
-            # Query loans in these stages
+            # Aggregate loans in these stages using SQL avg
             query_filters = [Loan.stage.in_(config["stages"])]
             if org_id:
                 query_filters.append(Loan.organization_id == org_id)
@@ -106,21 +100,19 @@ def calculate_stage_performance(db: Session, user_id: int, thirty_days_ago, org_
             else:
                 query_filters.append(Loan.loan_officer_id == user_id)
 
-            loans_in_stage = db.query(Loan).filter(*query_filters).all()
+            result = db.query(
+                func.count(Loan.id).label('cnt'),
+                func.avg(
+                    func.coalesce(
+                        Loan.days_in_stage,
+                        func.extract('epoch', now - Loan.created_at) / 86400
+                    )
+                ).label('avg_days')
+            ).filter(*query_filters).first()
 
-            if loans_in_stage:
-                total_days = 0
-                count = 0
-                for loan in loans_in_stage:
-                    if loan.days_in_stage:
-                        total_days += loan.days_in_stage
-                        count += 1
-                    elif loan.created_at:
-                        days_in_stage = (now - loan.created_at).days
-                        total_days += days_in_stage
-                        count += 1
-
-                avg_days = total_days / count if count > 0 else 0
+            count = result.cnt or 0
+            if count > 0:
+                avg_days = float(result.avg_days or 0)
                 efficiency = max(0, min(100, int(100 - max(0, (avg_days - config["target_days"]) * 10))))
             else:
                 efficiency = 100
@@ -180,7 +172,7 @@ def calculate_team_performance(db: Session, user_id: int, thirty_days_ago, org_i
 
     team_results.append({"role": "Loan Officers", "performance": lo_performance})
 
-    # Processors performance - based on processing time
+    # Processors performance - based on processing time (SQL aggregation)
     query_filters = [Loan.stage == LoanStage.PROCESSING]
     if org_id:
         query_filters.append(Loan.organization_id == org_id)
@@ -189,12 +181,13 @@ def calculate_team_performance(db: Session, user_id: int, thirty_days_ago, org_i
     else:
         query_filters.append(Loan.loan_officer_id == user_id)
 
-    processing_loans = db.query(Loan).filter(*query_filters).all()
+    processing_result = db.query(
+        func.count(Loan.id).label('cnt'),
+        func.avg(func.coalesce(Loan.days_in_stage, 0)).label('avg_days')
+    ).filter(*query_filters).first()
 
-    if processing_loans:
-        avg_processing_days = sum(
-            loan.days_in_stage or 0 for loan in processing_loans
-        ) / len(processing_loans)
+    if processing_result.cnt and processing_result.cnt > 0:
+        avg_processing_days = float(processing_result.avg_days or 0)
         # Target: 10 days for processing, scale inversely
         processor_performance = max(0, min(100, int(100 - max(0, (avg_processing_days - 10) * 5))))
     else:
@@ -202,7 +195,7 @@ def calculate_team_performance(db: Session, user_id: int, thirty_days_ago, org_i
 
     team_results.append({"role": "Processors", "performance": processor_performance})
 
-    # Underwriters performance - based on underwriting time
+    # Underwriters performance - based on underwriting time (SQL aggregation)
     query_filters = [Loan.stage.in_([LoanStage.UW_RECEIVED, LoanStage.UNDERWRITING])]
     if org_id:
         query_filters.append(Loan.organization_id == org_id)
@@ -211,12 +204,13 @@ def calculate_team_performance(db: Session, user_id: int, thirty_days_ago, org_i
     else:
         query_filters.append(Loan.loan_officer_id == user_id)
 
-    uw_loans = db.query(Loan).filter(*query_filters).all()
+    uw_result = db.query(
+        func.count(Loan.id).label('cnt'),
+        func.avg(func.coalesce(Loan.days_in_stage, 0)).label('avg_days')
+    ).filter(*query_filters).first()
 
-    if uw_loans:
-        avg_uw_days = sum(
-            loan.days_in_stage or 0 for loan in uw_loans
-        ) / len(uw_loans)
+    if uw_result.cnt and uw_result.cnt > 0:
+        avg_uw_days = float(uw_result.avg_days or 0)
         # Target: 7 days for underwriting
         uw_performance = max(0, min(100, int(100 - max(0, (avg_uw_days - 7) * 5))))
     else:
@@ -224,7 +218,7 @@ def calculate_team_performance(db: Session, user_id: int, thirty_days_ago, org_i
 
     team_results.append({"role": "Underwriters", "performance": uw_performance})
 
-    # Closers performance - based on CTC to funding time
+    # Closers performance - based on CTC to funding time (SQL count)
     query_filters = [
         Loan.stage == LoanStage.FUNDED,
         Loan.funded_date >= thirty_days_ago
@@ -236,11 +230,11 @@ def calculate_team_performance(db: Session, user_id: int, thirty_days_ago, org_i
     else:
         query_filters.append(Loan.loan_officer_id == user_id)
 
-    funded_loans = db.query(Loan).filter(*query_filters).all()
+    funded_count = db.query(func.count(Loan.id)).filter(*query_filters).scalar() or 0
 
-    if funded_loans:
+    if funded_count > 0:
         # Closers are performing well if loans get funded promptly
-        closer_performance = min(100, max(0, 75 + len(funded_loans) * 2))
+        closer_performance = min(100, max(0, 75 + funded_count * 2))
     else:
         closer_performance = 85  # Default if no data
 
@@ -260,7 +254,7 @@ def calculate_bottlenecks(db: Session, user_id: int, org_id: Optional[int] = Non
     now = datetime.now(timezone.utc)
     bottlenecks = []
 
-    # 1. Check for loans missing documents (stuck in processing)
+    # 1. Check for loans missing documents (stuck in processing) - SQL aggregation
     query_filters = [
         Loan.stage == LoanStage.PROCESSING,
         Loan.days_in_stage > 10
@@ -272,15 +266,17 @@ def calculate_bottlenecks(db: Session, user_id: int, org_id: Optional[int] = Non
     else:
         query_filters.append(Loan.loan_officer_id == user_id)
 
-    processing_loans = db.query(Loan).filter(*query_filters).all()
+    processing_result = db.query(
+        func.count(Loan.id).label('cnt'),
+        func.avg(func.coalesce(Loan.days_in_stage, 0)).label('avg_delay')
+    ).filter(*query_filters).first()
 
-    if processing_loans:
-        avg_delay = sum(loan.days_in_stage or 0 for loan in processing_loans) / len(processing_loans)
+    if processing_result.cnt and processing_result.cnt > 0:
         bottlenecks.append({
             "issue": "Loans Delayed in Processing",
             "stage": "Processing",
-            "affectedLoans": len(processing_loans),
-            "avgDelay": f"{round(avg_delay, 1)} days"
+            "affectedLoans": processing_result.cnt,
+            "avgDelay": f"{round(float(processing_result.avg_delay or 0), 1)} days"
         })
 
     # 2. Check for leads stuck without contact
@@ -305,7 +301,7 @@ def calculate_bottlenecks(db: Session, user_id: int, org_id: Optional[int] = Non
             "avgDelay": ">3 days"
         })
 
-    # 3. Check for underwriting delays
+    # 3. Check for underwriting delays - SQL aggregation
     query_filters = [
         Loan.stage.in_([LoanStage.UW_RECEIVED, LoanStage.UNDERWRITING]),
         Loan.days_in_stage > 7
@@ -317,15 +313,17 @@ def calculate_bottlenecks(db: Session, user_id: int, org_id: Optional[int] = Non
     else:
         query_filters.append(Loan.loan_officer_id == user_id)
 
-    uw_delays = db.query(Loan).filter(*query_filters).all()
+    uw_result = db.query(
+        func.count(Loan.id).label('cnt'),
+        func.avg(func.coalesce(Loan.days_in_stage, 0)).label('avg_delay')
+    ).filter(*query_filters).first()
 
-    if uw_delays:
-        avg_uw_delay = sum(loan.days_in_stage or 0 for loan in uw_delays) / len(uw_delays)
+    if uw_result.cnt and uw_result.cnt > 0:
         bottlenecks.append({
             "issue": "Underwriting Taking Longer Than Expected",
             "stage": "Underwriting",
-            "affectedLoans": len(uw_delays),
-            "avgDelay": f"{round(avg_uw_delay, 1)} days"
+            "affectedLoans": uw_result.cnt,
+            "avgDelay": f"{round(float(uw_result.avg_delay or 0), 1)} days"
         })
 
     # 4. Check for loans with rate lock expiring soon
@@ -363,20 +361,19 @@ def calculate_bottlenecks(db: Session, user_id: int, org_id: Optional[int] = Non
     else:
         query_filters.append(Lead.owner_id == user_id)
 
-    app_delays = db.query(Lead).filter(*query_filters).all()
+    app_result = db.query(
+        func.count(Lead.id).label('cnt'),
+        func.avg(
+            func.extract('epoch', now - Lead.stage_changed_at) / 86400
+        ).label('avg_delay')
+    ).filter(*query_filters).first()
 
-    if app_delays:
-        avg_app_delay = sum(
-            (now - lead.stage_changed_at).days
-            for lead in app_delays
-            if lead.stage_changed_at
-        ) / len(app_delays) if app_delays else 0
-
+    if app_result.cnt and app_result.cnt > 0:
         bottlenecks.append({
             "issue": "Applications Pending Completion",
             "stage": "Application",
-            "affectedLoans": len(app_delays),
-            "avgDelay": f"{round(avg_app_delay, 1)} days"
+            "affectedLoans": app_result.cnt,
+            "avgDelay": f"{round(float(app_result.avg_delay or 0), 1)} days"
         })
 
     return bottlenecks
@@ -450,51 +447,41 @@ def calculate_efficiency_trends(db: Session, user_id: int, org_id: Optional[int]
 
     prev_pull_through = (prev_funded / prev_total_apps * 100) if prev_total_apps > 0 else 0
 
-    # Calculate average time to close for both periods (use application_date with fallback)
-    def _loan_days_to_close(loan):
-        """Get days from application (or creation) to funding."""
-        if not loan.funded_date:
-            return None
-        start = loan.application_date or loan.created_at
-        if not start:
-            return None
-        funded_d = loan.funded_date.date() if hasattr(loan.funded_date, 'date') else loan.funded_date
-        start_d = start.date() if hasattr(start, 'date') else start
-        days = (funded_d - start_d).days
-        return days if days > 0 else None
+    # Calculate average time to close for both periods using SQL aggregation
+    # Uses COALESCE(application_date, created_at) as start date
+    def _avg_time_to_close_query(extra_filters):
+        """Run SQL avg for days from application to funding."""
+        qf = extra_filters[:]
+        if org_id:
+            qf.append(Loan.organization_id == org_id)
+        if branch_user_ids is not None:
+            qf.append(Loan.loan_officer_id.in_(branch_user_ids))
+        else:
+            qf.append(Loan.loan_officer_id == user_id)
+        qf.append(func.coalesce(Loan.application_date, Loan.created_at).isnot(None))
 
-    query_filters = [
+        result = db.query(
+            func.avg(
+                func.extract('epoch',
+                    Loan.funded_date - func.coalesce(Loan.application_date, Loan.created_at)
+                ) / 86400
+            ).label('avg_days')
+        ).filter(*qf).scalar()
+        val = float(result) if result and result > 0 else 0
+        return val
+
+    current_avg_time = _avg_time_to_close_query([
         Loan.stage == LoanStage.FUNDED,
         Loan.funded_date >= thirty_days_ago.date(),
-    ]
-    if org_id:
-        query_filters.append(Loan.organization_id == org_id)
-    if branch_user_ids is not None:
-        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
-    else:
-        query_filters.append(Loan.loan_officer_id == user_id)
+        Loan.funded_date.isnot(None),
+    ])
 
-    current_funded_loans = db.query(Loan).filter(*query_filters).all()
-
-    current_days = [d for loan in current_funded_loans if (d := _loan_days_to_close(loan)) is not None]
-    current_avg_time = sum(current_days) / len(current_days) if current_days else 0
-
-    query_filters = [
+    prev_avg_time = _avg_time_to_close_query([
         Loan.stage == LoanStage.FUNDED,
         Loan.funded_date >= sixty_days_ago.date(),
         Loan.funded_date < thirty_days_ago.date(),
-    ]
-    if org_id:
-        query_filters.append(Loan.organization_id == org_id)
-    if branch_user_ids is not None:
-        query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
-    else:
-        query_filters.append(Loan.loan_officer_id == user_id)
-
-    prev_funded_loans = db.query(Loan).filter(*query_filters).all()
-
-    prev_days = [d for loan in prev_funded_loans if (d := _loan_days_to_close(loan)) is not None]
-    prev_avg_time = sum(prev_days) / len(prev_days) if prev_days else 0
+        Loan.funded_date.isnot(None),
+    ])
 
     # Calculate trend percentages
     def calc_change(current, previous):
@@ -754,13 +741,17 @@ async def get_dashboard(
         "volume": None
     })
 
-    # OPTIMIZED: Fetch all active loans in one query and aggregate in memory
-    # Query ALL non-terminal stages so no active loans are missed
+    # OPTIMIZED: Single GROUP BY query to aggregate active loans by pipeline category
     TERMINAL_STAGES = [
         LoanStage.FUNDED, LoanStage.CANCELLED, LoanStage.DENIED,
         LoanStage.DEAD, LoanStage.WITHDRAWN, LoanStage.DOES_NOT_QUALIFY,
         LoanStage.NURTURE,
     ]
+    processing_stages_list = [LoanStage.APPLICATION, LoanStage.DISCLOSED, LoanStage.PROCESSING]
+    underwriting_stages_list = [LoanStage.SUBMITTED, LoanStage.UNDERWRITING, LoanStage.UW_RECEIVED, LoanStage.CONDITIONAL_APPROVAL]
+    ctc_stages_list = [LoanStage.CTC, LoanStage.CLEAR_TO_CLOSE, LoanStage.APPROVED]
+    closing_stages_list = [LoanStage.CLOSING, LoanStage.DOCS, LoanStage.DOCS_OUT]
+
     try:
         query_filters = [Loan.stage.notin_(TERMINAL_STAGES)]
         if org_id:
@@ -770,67 +761,78 @@ async def get_dashboard(
         else:
             query_filters.append(Loan.loan_officer_id == current_user.id)
 
-        active_loans = db.query(Loan).filter(*query_filters).all()
+        # Compute all pipeline buckets in a single query using CASE expressions
+        pipeline_agg = db.query(
+            # Processing bucket
+            func.count(case((Loan.stage.in_(processing_stages_list), 1))).label('processing_count'),
+            func.sum(case((Loan.stage.in_(processing_stages_list), Loan.amount), else_=0)).label('processing_volume'),
+            func.count(case(((Loan.stage.in_(processing_stages_list)) & (Loan.days_in_stage > 14), 1))).label('processing_alerts'),
+            # Underwriting bucket
+            func.count(case((Loan.stage.in_(underwriting_stages_list), 1))).label('uw_count'),
+            func.sum(case((Loan.stage.in_(underwriting_stages_list), Loan.amount), else_=0)).label('uw_volume'),
+            func.count(case((Loan.stage == LoanStage.SUSPENDED, 1))).label('uw_alerts'),
+            # CTC bucket
+            func.count(case((Loan.stage.in_(ctc_stages_list), 1))).label('ctc_count'),
+            func.sum(case((Loan.stage.in_(ctc_stages_list), Loan.amount), else_=0)).label('ctc_volume'),
+            # Closing bucket
+            func.count(case((Loan.stage.in_(closing_stages_list), 1))).label('closing_count'),
+            func.sum(case((Loan.stage.in_(closing_stages_list), Loan.amount), else_=0)).label('closing_volume'),
+        ).filter(*query_filters).first()
 
-        # Bucket loans into pipeline categories
-        processing_stages = {LoanStage.APPLICATION, LoanStage.DISCLOSED, LoanStage.PROCESSING}
-        underwriting_stages = {LoanStage.SUBMITTED, LoanStage.UNDERWRITING, LoanStage.UW_RECEIVED, LoanStage.CONDITIONAL_APPROVAL}
-        ctc_stages = {LoanStage.CTC, LoanStage.CLEAR_TO_CLOSE, LoanStage.APPROVED}
-        closing_stages = {LoanStage.CLOSING, LoanStage.DOCS, LoanStage.DOCS_OUT}
+        processing_count = pipeline_agg.processing_count or 0
+        processing_volume = int(pipeline_agg.processing_volume or 0)
+        processing_alerts = pipeline_agg.processing_alerts or 0
+        uw_count = pipeline_agg.uw_count or 0
+        underwriting_volume = int(pipeline_agg.uw_volume or 0)
+        underwriting_alerts = pipeline_agg.uw_alerts or 0
+        ctc_count = pipeline_agg.ctc_count or 0
+        ctc_volume = int(pipeline_agg.ctc_volume or 0)
+        closing_count = pipeline_agg.closing_count or 0
+        closing_volume = int(pipeline_agg.closing_volume or 0)
 
-        processing = [l for l in active_loans if l.stage in processing_stages]
-        underwriting = [l for l in active_loans if l.stage in underwriting_stages]
-        ctc = [l for l in active_loans if l.stage in ctc_stages]
-        closing = [l for l in active_loans if l.stage in closing_stages]
-
-        processing_volume = sum(loan.amount for loan in processing if loan.amount)
-        processing_alerts = sum(1 for loan in processing if loan.days_in_stage and loan.days_in_stage > 14)
-
-        underwriting_volume = sum(loan.amount for loan in underwriting if loan.amount)
-        underwriting_alerts = sum(1 for loan in underwriting if loan.stage == LoanStage.SUSPENDED)
-
-        ctc_volume = sum(loan.amount for loan in ctc if loan.amount)
-        closing_volume = sum(loan.amount for loan in closing if loan.amount)
+        # Total active count for efficiency section (avoids a separate query later)
+        total_loan_count_from_pipeline = processing_count + uw_count + ctc_count + closing_count
     except Exception as loan_err:
         logger.warning(f"Dashboard: Error getting active loans: {loan_err}")
-        processing = underwriting = ctc = closing = []
+        processing_count = uw_count = ctc_count = closing_count = 0
         processing_volume = underwriting_volume = ctc_volume = closing_volume = 0
         processing_alerts = underwriting_alerts = 0
+        total_loan_count_from_pipeline = 0
 
     pipeline_stats.append({
         "id": "processing",
         "name": "In Processing",
-        "count": len(processing),
+        "count": processing_count,
         "alerts": processing_alerts,
         "alert_text": "delayed" if processing_alerts > 0 else "",
-        "volume": int(processing_volume)
+        "volume": processing_volume
     })
 
     pipeline_stats.append({
         "id": "underwriting",
         "name": "In Underwriting",
-        "count": len(underwriting),
+        "count": uw_count,
         "alerts": underwriting_alerts,
         "alert_text": "suspended" if underwriting_alerts > 0 else "",
-        "volume": int(underwriting_volume)
+        "volume": underwriting_volume
     })
 
     pipeline_stats.append({
         "id": "ctc",
         "name": "Clear to Close",
-        "count": len(ctc),
+        "count": ctc_count,
         "alerts": 0,
         "alert_text": "",
-        "volume": int(ctc_volume)
+        "volume": ctc_volume
     })
 
     pipeline_stats.append({
         "id": "closing",
         "name": "Closing",
-        "count": len(closing),
+        "count": closing_count,
         "alerts": 0,
         "alert_text": "",
-        "volume": int(closing_volume)
+        "volume": closing_volume
     })
 
     # Funded this month - use aggregation
@@ -1053,27 +1055,16 @@ async def get_dashboard(
     # EFFICIENCY METRICS
     # ============================================================================
 
-    # Get total loan count for this user (to determine if they have any data)
-    try:
-        query_filters = []
-        if org_id:
-            query_filters.append(Loan.organization_id == org_id)
-        if branch_user_ids is not None:
-            query_filters.append(Loan.loan_officer_id.in_(branch_user_ids))
-        else:
-            query_filters.append(Loan.loan_officer_id == current_user.id)
+    # Reuse total active loan count from pipeline aggregation (avoids extra query)
+    total_loan_count = total_loan_count_from_pipeline
 
-        total_loan_count = db.query(Loan).filter(*query_filters).count()
-    except Exception as e:
-        logger.error(f"Error in get_dashboard (total_loan_count): {e}")
-        total_loan_count = 0
-
-    # Calculate average time to close from funded loans
+    # Calculate average time to close from funded loans using SQL aggregation
     # Note: thirty_days_ago now comes from date range params or defaults to 30 days
     try:
         query_filters = [
             Loan.stage == LoanStage.FUNDED,
-            Loan.funded_date >= thirty_days_ago
+            Loan.funded_date >= thirty_days_ago,
+            Loan.funded_date.isnot(None),
         ]
         if org_id:
             query_filters.append(Loan.organization_id == org_id)
@@ -1082,25 +1073,23 @@ async def get_dashboard(
         else:
             query_filters.append(Loan.loan_officer_id == current_user.id)
 
-        funded_loans_recent = db.query(Loan).filter(*query_filters).all()
+        # Use SQL to compute avg days from application (or creation) to funding
+        # COALESCE picks application_date first, then created_at
+        avg_ttc_result = db.query(
+            func.avg(
+                func.extract('epoch',
+                    Loan.funded_date - func.coalesce(Loan.application_date, Loan.created_at)
+                ) / 86400
+            ).label('avg_days')
+        ).filter(
+            *query_filters,
+            func.coalesce(Loan.application_date, Loan.created_at).isnot(None),
+        ).scalar()
+
+        avg_time_to_close = float(avg_ttc_result) if avg_ttc_result and avg_ttc_result > 0 else 0
     except Exception as e:
-        logger.error(f"Error in get_dashboard (funded_loans_recent): {e}")
-        funded_loans_recent = []
-
-    # Calculate avg time to close (use application_date for accuracy, fallback to created_at)
-    time_to_close_list = []
-    for loan in funded_loans_recent:
-        if loan.funded_date:
-            start_date = loan.application_date or loan.created_at
-            if start_date:
-                # Handle both datetime and date types
-                funded_date = loan.funded_date.date() if hasattr(loan.funded_date, 'date') else loan.funded_date
-                start_as_date = start_date.date() if hasattr(start_date, 'date') else start_date
-                days = (funded_date - start_as_date).days
-                if days > 0:
-                    time_to_close_list.append(days)
-
-    avg_time_to_close = sum(time_to_close_list) / len(time_to_close_list) if time_to_close_list else 0
+        logger.error(f"Error in get_dashboard (avg_time_to_close): {e}")
+        avg_time_to_close = 0
 
     # Calculate pull-through rate using 90-day cohort:
     # Of loans created 90+ days ago, what % have funded?

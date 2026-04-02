@@ -44,6 +44,7 @@ class PreApprovalLetterSettings(Base):
     __tablename__ = "pre_approval_letter_settings"
 
     id = Column(Integer, primary_key=True, index=True)
+    organization_id = Column(Integer, nullable=True, index=True)
 
     # Company Information
     company_name = Column(String(255), default="")
@@ -106,11 +107,14 @@ class PreApprovalLetterSettingsResponse(BaseModel):
 
 
 # Helper function to get or create settings
-def get_or_create_settings(db: Session) -> PreApprovalLetterSettings:
-    """Get existing settings or create default ones"""
-    settings = db.query(PreApprovalLetterSettings).first()
+def get_or_create_settings(db: Session, organization_id: int = None) -> PreApprovalLetterSettings:
+    """Get existing settings or create default ones, scoped by organization"""
+    query = db.query(PreApprovalLetterSettings)
+    if organization_id is not None:
+        query = query.filter(PreApprovalLetterSettings.organization_id == organization_id)
+    settings = query.first()
     if not settings:
-        settings = PreApprovalLetterSettings()
+        settings = PreApprovalLetterSettings(organization_id=organization_id)
         db.add(settings)
         db.commit()
         db.refresh(settings)

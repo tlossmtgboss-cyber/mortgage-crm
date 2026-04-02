@@ -30,6 +30,79 @@ router = APIRouter(prefix="/api/v1/loans", tags=["Loans CRUD"])
 
 
 # ============================================================================
+# Loan stage state machine — valid transitions (DATA-004)
+# ============================================================================
+
+VALID_LOAN_TRANSITIONS = {
+    "APPLICATION": ["DISCLOSED", "CANCELLED", "WITHDRAWN", "DOES_NOT_QUALIFY"],
+    "DISCLOSED": ["PROCESSING", "CANCELLED", "WITHDRAWN"],
+    "PROCESSING": ["SUBMITTED", "CANCELLED", "WITHDRAWN", "SUSPENDED"],
+    "SUBMITTED": ["UNDERWRITING", "CANCELLED", "WITHDRAWN"],
+    "UNDERWRITING": ["UW_RECEIVED", "CANCELLED", "WITHDRAWN", "SUSPENDED"],
+    "UW_RECEIVED": ["CONDITIONAL_APPROVAL", "APPROVED", "DENIED", "SUSPENDED"],
+    "CONDITIONAL_APPROVAL": ["APPROVED", "DENIED", "SUSPENDED"],
+    "APPROVED": ["CTC", "CLEAR_TO_CLOSE", "SUSPENDED"],
+    "SUSPENDED": ["PROCESSING", "UNDERWRITING", "CANCELLED"],
+    "CTC": ["CLEAR_TO_CLOSE", "SUSPENDED"],
+    "CLEAR_TO_CLOSE": ["CLOSING", "DOCS", "SUSPENDED"],
+    "CLOSING": ["DOCS", "DOCS_OUT", "SUSPENDED"],
+    "DOCS": ["DOCS_OUT", "SUSPENDED"],
+    "DOCS_OUT": ["FUNDED", "SUSPENDED"],
+    "NURTURE": ["APPLICATION", "CANCELLED", "DEAD"],
+}
+
+# Roles allowed to bypass stage transition validation
+ADMIN_ROLES = {"admin", "site_admin", "platform_admin"}
+
+
+def _validate_stage_transition(
+    current_stage: str,
+    new_stage: str,
+    user_role: str = None,
+    force: bool = False,
+) -> Optional[str]:
+    """Validate a loan stage transition against the state machine.
+
+    Returns an error message string if invalid, or None if allowed.
+    Admins can bypass with force=True.
+    """
+    # Normalize stages to uppercase
+    current_upper = current_stage.upper() if current_stage else ""
+    new_upper = new_stage.upper() if new_stage else ""
+
+    # No change = always allowed
+    if current_upper == new_upper:
+        return None
+
+    # Admin bypass with force flag
+    if force and user_role and user_role.lower() in ADMIN_ROLES:
+        logger.info(
+            f"Admin stage transition bypass: {current_upper} -> {new_upper} "
+            f"(role={user_role}, force=True)"
+        )
+        return None
+
+    # Check if current stage has defined transitions
+    allowed = VALID_LOAN_TRANSITIONS.get(current_upper)
+    if allowed is None:
+        # Terminal stages (FUNDED, CANCELLED, DENIED, DEAD, WITHDRAWN, DOES_NOT_QUALIFY)
+        # have no outgoing transitions defined — block unless admin-forced
+        return (
+            f"Stage '{current_upper}' is terminal and cannot transition to '{new_upper}'. "
+            f"Use force_stage=true with an admin account to override."
+        )
+
+    if new_upper not in allowed:
+        return (
+            f"Invalid stage transition: '{current_upper}' -> '{new_upper}'. "
+            f"Allowed transitions from '{current_upper}': {allowed}. "
+            f"Use force_stage=true with an admin account to override."
+        )
+
+    return None
+
+
+# ============================================================================
 # Lazy imports to avoid circular dependency
 # ============================================================================
 
@@ -411,14 +484,24 @@ async def create_loan(
 
         logger.info(f"Loan created: {db_loan.loan_number} (ID: {db_loan.id}, Stage: {db_loan.stage})")
 
+        # Build response dict BEFORE post-commit operations so a sync failure
+        # cannot corrupt the ORM object or prevent returning the result (DATA-008)
+        response = _loan_to_dict(db_loan)
+
         # Portal stage sync — if loan created at DISCLOSED or later, transition workspace
+        # Wrapped with error isolation: sync failures must not mask the successful creation
         try:
             from services.portal_stage_transition_service import sync_portal_stage
             sync_portal_stage(db, db_loan.id, db_loan.stage)
         except Exception as e:
             logger.warning(f"Portal stage sync failed for new loan {db_loan.id}: {e}")
+            # Ensure session is clean after a failed post-commit operation
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
-        return _loan_to_dict(db_loan)
+        return response
 
     except HTTPException:
         raise
@@ -510,6 +593,7 @@ async def update_loan(
     loan_id: int,
     update_data: dict,
     force_closing: bool = Query(False, description="Override CD waiting period (admin/site_admin only)"),
+    force_stage: bool = Query(False, description="Override stage transition validation (admin/site_admin only)"),
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
@@ -520,6 +604,8 @@ async def update_loan(
       auto-trigger a Revised LE DisclosureEvent and ComplianceAlert.
     - Setting closing_date enforces the 3 business day CD waiting period.
       Use force_closing=true (admin/site_admin only) to override.
+    - Stage transitions are validated against the loan state machine.
+      Use force_stage=true (admin/site_admin only) to override.
     """
     Loan, User = get_models()
     filter_loans_by_permissions = get_permission_functions()
@@ -575,6 +661,21 @@ async def update_loan(
     old_stage = getattr(loan, 'stage', None)
     if old_stage and hasattr(old_stage, 'value'):
         old_stage = old_stage.value  # Convert enum to string
+
+    # ========================================================================
+    # DATA-004: Loan stage state machine validation
+    # ========================================================================
+    if "stage" in update_data and update_data["stage"]:
+        new_stage = update_data["stage"]
+        user_role = getattr(current_user, "permission_role", None) or getattr(current_user, "role", None)
+        transition_error = _validate_stage_transition(
+            current_stage=old_stage or "",
+            new_stage=new_stage,
+            user_role=user_role,
+            force=force_stage,
+        )
+        if transition_error:
+            raise HTTPException(status_code=422, detail=transition_error)
 
     # Fields that can be updated
     updatable_fields = [

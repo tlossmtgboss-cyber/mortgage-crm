@@ -12,7 +12,7 @@ import base64
 from uuid import UUID
 from typing import Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -50,11 +50,22 @@ def set_dependencies(get_db_func):
 
 
 async def get_current_user_id(
-    token: str = Query(...),
+    request: Request,
     db: Session = Depends(get_db),
 ) -> int:
-    """Get user ID from authentication token (supports JWT and session tokens)."""
+    """Get user ID from Authorization header (supports JWT and session tokens).
+
+    Extracts the token from the 'Authorization: Bearer <token>' header.
+    Note: The WebSocket endpoint (/ws) passes the token via query parameter
+    directly because WebSocket connections cannot reliably use HTTP headers.
+    """
     import jwt
+
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+
+    token = auth_header[7:]  # Strip "Bearer " prefix
 
     SECRET_KEY = os.getenv("SECRET_KEY", "")
     ALGORITHM = "HS256"
@@ -191,18 +202,6 @@ async def voice_workflow_websocket(
             """), {"token": token}).fetchone()
             if result:
                 user_id = result[0]
-
-        # Debug mode: allow "debug:<user_id>" token format for testing
-        if not user_id and token.startswith("debug:"):
-            try:
-                debug_user_id = int(token.split(":")[1])
-                # Verify the user exists
-                user_check = db.execute(text("SELECT id FROM users WHERE id = :id"), {"id": debug_user_id}).fetchone()
-                if user_check:
-                    user_id = debug_user_id
-                    logger.warning(f"WebSocket using DEBUG token for user {user_id}")
-            except (ValueError, IndexError):
-                pass
 
         if not user_id:
             await websocket.send_json({

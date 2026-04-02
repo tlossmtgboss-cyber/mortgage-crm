@@ -74,6 +74,9 @@ async def debug_auth(
     authorization: Optional[str] = Header(None)
 ):
     """Debug endpoint to check auth token decoding"""
+    if os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "development")).lower() == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+
     from jose import jwt, JWTError
 
     if not authorization or not authorization.startswith("Bearer "):
@@ -2041,6 +2044,9 @@ async def debug_loans(key: str = ""):
     Debug endpoint to check loan data for validation issues.
     Call with: GET /api/v1/migrations/debug-loans?key=debug
     """
+    if os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "development")).lower() == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+
     if key != "debug":
         raise HTTPException(status_code=403, detail="Invalid key")
 
@@ -2134,6 +2140,9 @@ async def debug_mum_clients(key: str = ""):
     Debug endpoint to check mum_clients data and table structure.
     Call with: GET /api/v1/migrations/debug-mum-clients?key=debug
     """
+    if os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "development")).lower() == "production":
+        raise HTTPException(status_code=404, detail="Not found")
+
     if key != "debug":
         raise HTTPException(status_code=403, detail="Invalid key")
 

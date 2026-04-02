@@ -516,14 +516,18 @@ async def webhook_call_completed(
     Webhook endpoint for VAPI call completion.
     Updates opportunity status based on call outcome.
     """
-    # Validate Vapi webhook secret
+    # Validate Vapi webhook secret — fail-closed in production
     if VAPI_WEBHOOK_SECRET:
         vapi_secret = request.headers.get("X-Vapi-Secret", "")
         if not hmac.compare_digest(vapi_secret, VAPI_WEBHOOK_SECRET):
             logger.warning(f"Invalid Vapi secret on call-completed webhook from {request.client.host}")
             raise HTTPException(status_code=401, detail="Invalid webhook authentication")
     else:
-        logger.warning("VAPI_WEBHOOK_SECRET not configured — skipping webhook verification")
+        is_production = os.getenv("ENVIRONMENT") == "production" or os.getenv("RAILWAY_ENVIRONMENT")
+        if is_production:
+            logger.error("VAPI_WEBHOOK_SECRET not configured in production — rejecting webhook")
+            raise HTTPException(status_code=503, detail="Webhook authentication not configured")
+        logger.warning("VAPI_WEBHOOK_SECRET not configured — skipping webhook verification (dev only)")
 
     call_data = await request.json()
     from services.refinance_outreach_service import RefinanceOutreachService

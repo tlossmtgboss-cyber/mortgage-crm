@@ -102,6 +102,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
 
         try:
             # Tables to export — all tenant-scoped tables with organization_id
+            # Includes all PII-bearing tables for GDPR Article 20 compliance.
             EXPORT_TABLES = [
                 ("users", "SELECT id, email, first_name, last_name, phone, role, permission_role, is_active, created_at FROM users WHERE organization_id = :org_id"),
                 ("leads", "SELECT id, name, first_name, last_name, email, phone, stage, source, assigned_to, created_at, updated_at FROM leads WHERE organization_id = :org_id"),
@@ -112,7 +113,14 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
                 ("notes", "SELECT id, content, entity_type, entity_id, created_by, created_at FROM notes WHERE organization_id = :org_id"),
                 ("documents", "SELECT id, filename, document_type, entity_type, entity_id, uploaded_by, created_at FROM documents WHERE organization_id = :org_id"),
                 ("email_messages", "SELECT id, from_email, to_email, subject, body, direction, status, sent_at FROM email_messages WHERE organization_id = :org_id"),
-                ("sms_messages", "SELECT id, from_number, to_number, message, direction, status, sent_at FROM sms_messages WHERE organization_id = :org_id"),
+                ("sms_messages", "SELECT id, from_number, to_number, message, direction, status, created_at FROM sms_messages WHERE organization_id = :org_id"),
+                ("borrower_profiles", "SELECT id, email, first_name, last_name, provider, communication_consent, marketing_consent, consent_captured_at, created_at FROM borrower_profiles WHERE organization_id = :org_id"),
+                ("borrower_applications", "SELECT id, borrower_first_name, borrower_last_name, borrower_email, borrower_phone, status, current_step, progress_percentage, submitted_at, created_at FROM borrower_applications WHERE organization_id = :org_id"),
+                ("application_documents", "SELECT ad.id, ad.application_id, ad.filename, ad.original_filename, ad.category, ad.is_verified, ad.created_at FROM application_documents ad JOIN borrower_applications ba ON ba.id = ad.application_id WHERE ba.organization_id = :org_id"),
+                ("call_logs", "SELECT id, contact_phone, contact_name, call_sid, start_time, end_time, duration_seconds, outcome, disposition, created_at FROM call_logs WHERE organization_id = :org_id"),
+                ("activities", "SELECT id, type, content, lead_id, loan_id, user_id, duration, sentiment, created_at FROM activities WHERE organization_id = :org_id"),
+                ("conversations", "SELECT id, user_id, lead_id, loan_id, message, response, role, created_at FROM conversations WHERE organization_id = :org_id"),
+                ("voicemail_drops", "SELECT id, contact_name, phone_number, contact_email, message_text, delivery_method, status, delivered_at, created_at FROM voicemail_drops WHERE organization_id = :org_id"),
                 ("audit_logs", "SELECT id, user_id, change_type, entity_type, reason, timestamp FROM audit_logs WHERE organization_id = :org_id ORDER BY timestamp DESC LIMIT 10000"),
             ]
 

@@ -34,6 +34,13 @@ class TokenBudget:
     Tracks token usage per org and blocks requests when the budget is exhausted.
     Budget resets at the start of each period (default: 1 hour).
 
+    LIMITATION: This budget tracker uses in-process memory and is therefore
+    per-replica. In a multi-replica deployment (e.g., Railway with multiple
+    instances), each replica tracks its own budget independently, meaning
+    the effective budget is multiplied by the number of replicas. For
+    accurate cross-replica enforcement, replace the in-memory dict with
+    Redis-backed counters (e.g., INCRBY + EXPIRE).
+
     Usage:
         budget = TokenBudget(max_tokens_per_org=500_000, period_seconds=3600)
 
@@ -124,6 +131,10 @@ class RateLimiter:
 
     Allows burst traffic up to `max_burst` requests, then limits
     to `requests_per_minute` sustained rate.
+
+    LIMITATION: Same per-replica caveat as TokenBudget — in-memory buckets
+    are not shared across replicas. For multi-replica deployments, use
+    Redis-backed rate limiting (e.g., sliding window with ZADD + ZRANGEBYSCORE).
 
     Usage:
         limiter = RateLimiter(requests_per_minute=30, max_burst=10)

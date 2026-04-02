@@ -46,7 +46,7 @@ DATABASE_URL = DATABASE_POOLED_URL or os.getenv("DATABASE_URL", "sqlite:///./mor
 _raw_direct = os.getenv("DATABASE_URL", "")
 _raw_pooled = os.getenv("DATABASE_POOLED_URL", "")
 USE_PGBOUNCER = bool(_raw_pooled and _raw_pooled != _raw_direct)
-print(f"DB.PY: PgBouncer detected: {USE_PGBOUNCER} (pooled_url_set={bool(_raw_pooled)}, urls_differ={_raw_pooled != _raw_direct})", flush=True)
+logger.info(f"PgBouncer detected: {USE_PGBOUNCER} (pooled_url_set={bool(_raw_pooled)}, urls_differ={_raw_pooled != _raw_direct})")
 
 # Fix postgres:// to postgresql:// for SQLAlchemy
 if DATABASE_URL.startswith("postgres://"):
@@ -69,7 +69,6 @@ elif USE_PGBOUNCER:
     # PgBouncer mode: Let PgBouncer handle connection pooling
     # Use NullPool - each request gets a fresh connection from PgBouncer
     # This prevents "too many clients" errors by using PgBouncer's pool
-    print("DB.PY: Using PgBouncer connection pooling (NullPool)", flush=True)
     logger.info("Using PgBouncer connection pooling (NullPool)")
     engine = create_engine(
         DATABASE_URL,
@@ -87,8 +86,7 @@ else:
     # Direct PostgreSQL connection with SQLAlchemy pooling
     # Railway has 97 connections max; conservative pool to prevent exhaustion
     # Key: pool_size + max_overflow should not exceed ~50% of Railway's limit
-    print("DB.PY: Using direct PostgreSQL with QueuePool (pool_size=3, max_overflow=5, max=8)", flush=True)
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling")
+    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=3, max_overflow=5, max=8)")
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,           # CRITICAL: Verify connections before use (catches stale/dead connections)
@@ -343,6 +341,16 @@ def _setup_mutation_audit():
             return  # Only audit on PostgreSQL
 
         try:
+            # Extract authenticated user from request context (COMP-001)
+            current_user_id = None
+            try:
+                from middleware.request_context import get_user_id
+                uid_str = get_user_id()
+                if uid_str is not None:
+                    current_user_id = int(uid_str)
+            except (ImportError, ValueError, TypeError):
+                pass  # No request context or non-integer user_id
+
             # Collect changes from the flush
             audit_entries = []
 
@@ -357,6 +365,7 @@ def _setup_mutation_audit():
                     "entity_type": table,
                     "entity_id": entity_id,
                     "organization_id": org_id,
+                    "user_id": current_user_id,
                     "after_state": _safe_state(obj),
                 })
 
@@ -382,6 +391,7 @@ def _setup_mutation_audit():
                     "entity_type": table,
                     "entity_id": entity_id,
                     "organization_id": org_id,
+                    "user_id": current_user_id,
                     "before_state": {k: v["old"] for k, v in changes.items()},
                     "after_state": {k: v["new"] for k, v in changes.items()},
                 })
@@ -397,6 +407,7 @@ def _setup_mutation_audit():
                     "entity_type": table,
                     "entity_id": entity_id,
                     "organization_id": org_id,
+                    "user_id": current_user_id,
                     "before_state": _safe_state(obj),
                 })
 
@@ -455,10 +466,12 @@ def _write_audit_batch(entries: list):
                                 (user_id, changed_by_id, change_type, entity_type, entity_id,
                                  before_state, after_state, timestamp, organization_id)
                             VALUES
-                                (NULL, NULL, :change_type, :entity_type, :entity_id,
+                                (:user_id, :changed_by_id, :change_type, :entity_type, :entity_id,
                                  :before_state, :after_state, :ts, :org_id)
                         """),
                         {
+                            "user_id": entry.get("user_id"),
+                            "changed_by_id": entry.get("user_id"),
                             "change_type": entry["change_type"],
                             "entity_type": entry["entity_type"],
                             "entity_id": entry.get("entity_id"),

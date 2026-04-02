@@ -229,6 +229,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 raise HTTPException(status_code=403, detail="Permission denied: leads.update")
 
         updated_count = 0
+        updated_lead_ids = []  # Track actually-updated IDs (not just a slice of input)
         errors = []
         cascade_totals = {"loans_updated": 0, "mum_clients_updated": 0}
 
@@ -287,6 +288,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                     logger.error(f"Failed to record stage history for lead {lead_id}: {hist_err}")
 
                 updated_count += 1
+                updated_lead_ids.append(lead_id)
 
                 # Cascade to loans and MUM clients
                 try:
@@ -315,7 +317,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             # Event-driven workflow enrollment for all updated leads (post-commit)
             try:
                 from services.workflow_scheduler import trigger_workflow_evaluation_for_lead
-                for lead_id in lead_ids[:updated_count]:
+                for lead_id in updated_lead_ids:
                     try:
                         trigger_workflow_evaluation_for_lead(
                             db, lead_id, new_status,
@@ -553,6 +555,16 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         stage_changed = old_status != new_status and new_status
 
         if stage_changed:
+            # Validate transition against workflow engine's state machine
+            from workflows.lead_workflow_engine import VALID_TRANSITIONS as _LEAD_VALID_TRANSITIONS
+            allowed = _LEAD_VALID_TRANSITIONS.get(old_status, [])
+            if allowed and new_status not in allowed:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid stage transition: '{old_status}' -> '{new_status}'. "
+                           f"Allowed transitions: {allowed}",
+                )
+
             now = datetime.now(timezone.utc)
 
             # Calculate duration in previous stage

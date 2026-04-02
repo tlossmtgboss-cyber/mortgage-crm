@@ -593,6 +593,8 @@ class TokenBlacklist:
         if token_iat:
             try:
                 revoked_timestamp = datetime.fromisoformat(revoked_at.decode() if isinstance(revoked_at, bytes) else revoked_at)
+                if revoked_timestamp.tzinfo is None:
+                    revoked_timestamp = revoked_timestamp.replace(tzinfo=timezone.utc)
                 token_issued = datetime.fromtimestamp(token_iat, tz=timezone.utc)
                 return token_issued < revoked_timestamp
             except (ValueError, TypeError):

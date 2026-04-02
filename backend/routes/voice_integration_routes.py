@@ -151,8 +151,8 @@ async def voice_chat(
             raise HTTPException(status_code=400, detail="Audio or text input required")
 
         # Step 2: Process through orchestrator
-        all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).all()
-        all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).all()
+        all_leads = db.query(Lead).filter(Lead.owner_id == current_user.id).limit(200).all()
+        all_tasks = db.query(Task).filter(Task.owner_id == current_user.id).limit(200).all()
 
         # Get user's local time
         user_timezone = getattr(current_user, 'timezone', None) or "America/Chicago"

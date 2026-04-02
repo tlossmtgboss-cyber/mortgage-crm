@@ -1813,7 +1813,7 @@ def create_sample_data(db: Session):
         # Create demo user
         demo_user = User(
             email="admin@perenniaai.com",
-            hashed_password=get_password_hash(os.getenv("DEMO_USER_PASSWORD", "demo123")),
+            hashed_password=get_password_hash(os.getenv("DEMO_USER_PASSWORD", "")),
             full_name="Demo User",
             role="loan_officer",
             branch_id=branch.id

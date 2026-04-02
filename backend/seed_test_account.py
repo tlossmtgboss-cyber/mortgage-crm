@@ -13,7 +13,7 @@ Creates a fully-populated test account with dummy data across all CRM categories
 
 Test Account Credentials:
   Email:    testuser@perenniaai.com
-  Password: TestAccount2026!
+  Password: (set via TEST_PASSWORD env var)
 """
 
 import sys
@@ -36,7 +36,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 # TEST ACCOUNT CREDENTIALS
 # =============================================================================
 TEST_EMAIL = os.environ.get("TEST_EMAIL", "testuser@perenniaai.com")
-TEST_PASSWORD = os.environ.get("TEST_PASSWORD", "TestAccount2026!")
+TEST_PASSWORD = os.environ.get("TEST_PASSWORD")
+if not TEST_PASSWORD:
+    raise RuntimeError("TEST_PASSWORD environment variable must be set")
 TEST_FULL_NAME = "Test User"
 TEST_COMPANY = "Perennia Test Corp"
 
@@ -1936,7 +1938,7 @@ def seed_test_account():
         logger.info("")
         logger.info("  Test Account Credentials:")
         logger.info(f"    Email:    {TEST_EMAIL}")
-        logger.info(f"    Password: {TEST_PASSWORD}")
+        logger.info("    Password: [REDACTED - see TEST_PASSWORD env var]")
         logger.info("")
         logger.info("  Data Summary:")
         logger.info(f"    Leads:              {leads_count}")

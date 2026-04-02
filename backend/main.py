@@ -449,11 +449,14 @@ except Exception as e:
     logger.warning(f"⚠️ Tenant context middleware not loaded: {e}")
 
 # SOC 2 Type II Compliance — Audit trail middleware
+# In production this is mandatory — fail hard to prevent unaudited operations.
 try:
     from soc2_compliance.middleware.audit_middleware import AuditMiddleware
     app.add_middleware(AuditMiddleware)
     logger.info("✅ SOC 2 audit trail middleware enabled")
 except Exception as e:
+    if ENVIRONMENT == "production":
+        raise RuntimeError(f"SOC 2 audit middleware is required in production but failed to load: {e}") from e
     logger.warning(f"⚠️ SOC 2 audit middleware not loaded: {e}")
 
 logger.info(f"✅ Security middleware enabled (ENVIRONMENT={os.getenv('ENVIRONMENT', 'development')}): "

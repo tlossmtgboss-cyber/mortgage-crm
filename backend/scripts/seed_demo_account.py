@@ -9,7 +9,7 @@ Usage:
 
 Credentials:
     Email:    demo@perenniaai.com
-    Password: PerenniaReview2026!
+    Password: (set via DEMO_USER_PASSWORD env var)
 """
 from __future__ import annotations
 
@@ -39,7 +39,10 @@ Session = sessionmaker(bind=engine)
 # ─── Constants ───────────────────────────────────────────────────────────────
 
 DEMO_EMAIL = "demo@perenniaai.com"
-DEMO_PASSWORD = "PerenniaReview2026!"
+DEMO_PASSWORD = os.environ.get("DEMO_USER_PASSWORD")
+if not DEMO_PASSWORD:
+    print("ERROR: DEMO_USER_PASSWORD environment variable not set")
+    sys.exit(1)
 ORG_NAME = "Summit Peak Mortgage"
 ORG_SLUG = "summit-peak-demo-appstore"
 

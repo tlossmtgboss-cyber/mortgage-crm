@@ -7,7 +7,7 @@ LangGraph orchestrator. Each node can read from and write to this shared state.
 
 from typing import TypedDict, Literal, Optional, Any
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 
@@ -187,7 +187,7 @@ def create_initial_state(
 
         # Metadata
         node_trace=[],
-        start_time=datetime.utcnow(),
+        start_time=datetime.now(timezone.utc),
         errors=[],
 
         # Context
@@ -220,12 +220,12 @@ def update_state(state: AgentState, updates: dict) -> AgentState:
 def add_node_trace(state: AgentState, node_name: str) -> AgentState:
     """Record that a node has processed this state"""
     node_trace = list(state.get("node_trace", []))
-    node_trace.append(f"{node_name}:{datetime.utcnow().isoformat()}")
+    node_trace.append(f"{node_name}:{datetime.now(timezone.utc).isoformat()}")
     return update_state(state, {"node_trace": node_trace})
 
 
 def add_error(state: AgentState, error: str) -> AgentState:
     """Add an error to the state"""
     errors = list(state.get("errors", []))
-    errors.append(f"[{datetime.utcnow().isoformat()}] {error}")
+    errors.append(f"[{datetime.now(timezone.utc).isoformat()}] {error}")
     return update_state(state, {"errors": errors})
