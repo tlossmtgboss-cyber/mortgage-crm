@@ -628,30 +628,30 @@ async def seed_demo_data(
         try:
             _sp_mum = db.begin_nested()
             mum_data = [
-            ("Ryan Walker", "r.walker@email.com", "512-555-1013", "SP-2026-006", 520000, 6.500, 15),
-            ("Nicole Robinson", "n.robinson@email.com", "512-555-1014", "SP-2026-007", 385000, 6.375, 30),
-            ("Patricia Nguyen", "p.nguyen@email.com", "512-555-3001", "SP-2025-048", 410000, 5.875, 180),
-            ("Marcus Johnson", "m.johnson@email.com", "512-555-3002", "SP-2025-032", 550000, 6.125, 270),
-            ("Catherine Park", "c.park@email.com", "512-555-3003", "SP-2025-015", 325000, 5.500, 365),
-        ]
-        for name, email, phone, ln, amt, rate, days_since in mum_data:
-            close_date = today - timedelta(days=days_since)
-            db.execute(_text("""
-                INSERT INTO mum_clients (organization_id, client_name, email, phone, loan_number,
-                    original_close_date, closing_date, first_payment_date, days_since_funding,
-                    original_rate, current_rate, original_loan_amount, current_loan_amount,
-                    engagement_score, status, last_contact, user_id, created_at)
-                VALUES (:oid, :name, :email, :phone, :ln,
-                    :close, :close, :fpp, :dsf,
-                    :rate, :crate, :amt, :camt,
-                    :escore, :status, :lc, :uid, :created)
-            """), {"oid": org_id, "name": name, "email": email, "phone": phone, "ln": ln,
-                   "close": close_date, "fpp": close_date + timedelta(days=30),
-                   "dsf": days_since, "rate": rate, "crate": 6.750,
-                   "amt": amt, "camt": int(amt * 0.98),
-                   "escore": _random.randint(60, 95), "status": "active",
-                   "lc": now - timedelta(days=_random.randint(5, 60)),
-                   "uid": demo_user_id, "created": now - timedelta(days=days_since)})
+                ("Ryan Walker", "r.walker@email.com", "512-555-1013", "SP-2026-006", 520000, 6.500, 15),
+                ("Nicole Robinson", "n.robinson@email.com", "512-555-1014", "SP-2026-007", 385000, 6.375, 30),
+                ("Patricia Nguyen", "p.nguyen@email.com", "512-555-3001", "SP-2025-048", 410000, 5.875, 180),
+                ("Marcus Johnson", "m.johnson@email.com", "512-555-3002", "SP-2025-032", 550000, 6.125, 270),
+                ("Catherine Park", "c.park@email.com", "512-555-3003", "SP-2025-015", 325000, 5.500, 365),
+            ]
+            for name, email, phone, ln, amt, rate, days_since in mum_data:
+                close_date = today - timedelta(days=days_since)
+                db.execute(_text("""
+                    INSERT INTO mum_clients (organization_id, client_name, email, phone, loan_number,
+                        original_close_date, closing_date, first_payment_date, days_since_funding,
+                        original_rate, current_rate, original_loan_amount, current_loan_amount,
+                        engagement_score, status, last_contact, user_id, created_at)
+                    VALUES (:oid, :name, :email, :phone, :ln,
+                        :close, :close, :fpp, :dsf,
+                        :rate, :crate, :amt, :camt,
+                        :escore, :status, :lc, :uid, :created)
+                """), {"oid": org_id, "name": name, "email": email, "phone": phone, "ln": ln,
+                       "close": close_date, "fpp": close_date + timedelta(days=30),
+                       "dsf": days_since, "rate": rate, "crate": 6.750,
+                       "amt": amt, "camt": int(amt * 0.98),
+                       "escore": _random.randint(60, 95), "status": "active",
+                       "lc": now - timedelta(days=_random.randint(5, 60)),
+                       "uid": demo_user_id, "created": now - timedelta(days=days_since)})
             _sp_mum.commit()
         except Exception:
             _sp_mum.rollback()
@@ -659,167 +659,164 @@ async def seed_demo_data(
         # ── SCHEDULER CONFIG & APPOINTMENTS (tables may not exist) ──
         try:
             _sp_sched = db.begin_nested()
-        db.execute(_text("""
-            INSERT INTO scheduler_configs (organization_id, user_id, config_name, timezone,
-                default_duration_minutes, min_notice_hours, max_advance_days,
-                max_meetings_per_day, is_active, created_at)
-            VALUES (:oid, :uid, :name, :tz, :dur, :notice, :advance, :max, TRUE, :now)
-        """), {"oid": org_id, "uid": demo_user_id, "name": "Default Schedule",
-               "tz": "America/Chicago", "dur": 30, "notice": 2, "advance": 30, "max": 8, "now": now})
-        config_id = db.execute(_text(
-            "SELECT id FROM scheduler_configs WHERE user_id = :uid ORDER BY id DESC LIMIT 1"
-        ), {"uid": demo_user_id}).scalar()
-
-        for dow in ["monday", "tuesday", "wednesday", "thursday", "friday"]:
             db.execute(_text("""
-                INSERT INTO availability_slots (organization_id, config_id, user_id,
-                    day_of_week, start_time, end_time, priority, is_active, created_at)
-                VALUES (:oid, :cid, :uid, :dow, :start, :end, :pri, TRUE, :now)
-            """), {"oid": org_id, "cid": config_id, "uid": demo_user_id,
-                   "dow": dow, "start": _time(9, 0), "end": _time(17, 0),
-                   "pri": "standard", "now": now})
-
-        appt_types = [
-            ("discovery_call", "Discovery Call", 15),
-            ("pre_approval_review", "Pre-Approval Review", 30),
-            ("application_walkthrough", "Application Walkthrough", 45),
-            ("rate_lock_consultation", "Rate Lock Consultation", 20),
-            ("closing_prep", "Closing Preparation", 30),
-            ("refinance_analysis", "Refinance Analysis", 30),
-        ]
-        appt_type_ids = {}
-        for key, name, dur in appt_types:
-            db.execute(_text("""
-                INSERT INTO appointment_types (organization_id, config_id, type_key, type_name,
-                    default_duration_minutes, is_public, created_at)
-                VALUES (:oid, :cid, :key, :name, :dur, TRUE, :now)
-            """), {"oid": org_id, "cid": config_id, "key": key, "name": name, "dur": dur, "now": now})
-            atid = db.execute(_text(
-                "SELECT id FROM appointment_types WHERE config_id = :cid AND type_key = :key"
-            ), {"cid": config_id, "key": key}).scalar()
-            appt_type_ids[key] = atid
-
-        appointments_data = [
-            ("Discovery Call — Michael Thompson", "m.thompson@email.com", "512-555-1001", "discovery_call", "booked", 2, 10, 15),
-            ("Pre-Approval Review — Emily Martinez", "e.martinez@email.com", "512-555-1004", "pre_approval_review", "confirmed", 3, 14, 30),
-            ("Application Walkthrough — Robert Wilson", "r.wilson@email.com", "512-555-1003", "application_walkthrough", "booked", 4, 9, 45),
-            ("Closing Prep — David Anderson", "d.anderson@email.com", "512-555-1005", "closing_prep", "confirmed", 1, 11, 30),
-            ("Rate Lock — Jessica Harris", "j.harris@email.com", "512-555-1010", "rate_lock_consultation", "booked", 5, 15, 20),
-            ("Refinance Analysis — Megan Adams", "m.adams@email.com", "512-555-1018", "refinance_analysis", "booked", 6, 10, 30),
-            ("Discovery Call — Tyler Scott", "t.scott@email.com", "512-555-1017", "discovery_call", "booked", 7, 13, 15),
-            ("Pre-Approval — Stephanie King", "s.king@email.com", "512-555-1016", "pre_approval_review", "confirmed", 2, 16, 30),
-            ("Discovery Call — Ryan Walker", "r.walker@email.com", "512-555-1013", "discovery_call", "completed", -20, 10, 15),
-            ("Application — Nicole Robinson", "n.robinson@email.com", "512-555-1014", "application_walkthrough", "completed", -30, 14, 45),
-            ("Pre-Approval — Amanda Jackson", "a.jackson@email.com", "512-555-1008", "pre_approval_review", "completed", -15, 11, 30),
-            ("Closing Prep — Brandon Young", "b.young@email.com", "512-555-1015", "closing_prep", "completed", -5, 9, 30),
-            ("Discovery Call — Jennifer Davis", "j.davis@email.com", "512-555-1002", "discovery_call", "no_show", -7, 10, 15),
-        ]
-        for title, email, phone, tkey, status, day_offset, hour, dur in appointments_data:
-            sched_start = datetime.combine(today + timedelta(days=day_offset), _time(hour, 0), tzinfo=timezone.utc)
-            sched_end = sched_start + timedelta(minutes=dur)
-            completed_at = sched_end if status == "completed" else None
-            db.execute(_text("""
-                INSERT INTO scheduler_appointments (organization_id, appointment_type_id, assigned_user_id,
-                    title, scheduled_start, scheduled_end, duration_minutes, timezone,
-                    meeting_mode, attendee_name, attendee_email, attendee_phone,
-                    status, completed_at, created_at, updated_at)
-                VALUES (:oid, :atid, :uid, :title, :start, :end, :dur, :tz,
-                    :mode, :aname, :aemail, :aphone, :status, :completed, :created, :updated)
-            """), {"oid": org_id, "atid": appt_type_ids[tkey], "uid": demo_user_id,
-                   "title": title, "start": sched_start, "end": sched_end, "dur": dur,
-                   "tz": "America/Chicago", "mode": _random.choice(["video", "phone"]),
-                   "aname": title.split(" — ")[1] if " — " in title else "Client",
-                   "aemail": email, "aphone": phone, "status": status,
-                   "completed": completed_at,
-                   "created": sched_start - timedelta(days=_random.randint(1, 5)), "updated": now})
+                INSERT INTO scheduler_configs (organization_id, user_id, config_name, timezone,
+                    default_duration_minutes, min_notice_hours, max_advance_days,
+                    max_meetings_per_day, is_active, created_at)
+                VALUES (:oid, :uid, :name, :tz, :dur, :notice, :advance, :max, TRUE, :now)
+            """), {"oid": org_id, "uid": demo_user_id, "name": "Default Schedule",
+                   "tz": "America/Chicago", "dur": 30, "notice": 2, "advance": 30, "max": 8, "now": now})
+            config_id = db.execute(_text(
+                "SELECT id FROM scheduler_configs WHERE user_id = :uid ORDER BY id DESC LIMIT 1"
+            ), {"uid": demo_user_id}).scalar()
+            for dow in ["monday", "tuesday", "wednesday", "thursday", "friday"]:
+                db.execute(_text("""
+                    INSERT INTO availability_slots (organization_id, config_id, user_id,
+                        day_of_week, start_time, end_time, priority, is_active, created_at)
+                    VALUES (:oid, :cid, :uid, :dow, :start, :end, :pri, TRUE, :now)
+                """), {"oid": org_id, "cid": config_id, "uid": demo_user_id,
+                       "dow": dow, "start": _time(9, 0), "end": _time(17, 0),
+                       "pri": "standard", "now": now})
+            appt_types = [
+                ("discovery_call", "Discovery Call", 15),
+                ("pre_approval_review", "Pre-Approval Review", 30),
+                ("application_walkthrough", "Application Walkthrough", 45),
+                ("rate_lock_consultation", "Rate Lock Consultation", 20),
+                ("closing_prep", "Closing Preparation", 30),
+                ("refinance_analysis", "Refinance Analysis", 30),
+            ]
+            appt_type_ids = {}
+            for key, name, dur in appt_types:
+                db.execute(_text("""
+                    INSERT INTO appointment_types (organization_id, config_id, type_key, type_name,
+                        default_duration_minutes, is_public, created_at)
+                    VALUES (:oid, :cid, :key, :name, :dur, TRUE, :now)
+                """), {"oid": org_id, "cid": config_id, "key": key, "name": name, "dur": dur, "now": now})
+                atid = db.execute(_text(
+                    "SELECT id FROM appointment_types WHERE config_id = :cid AND type_key = :key"
+                ), {"cid": config_id, "key": key}).scalar()
+                appt_type_ids[key] = atid
+            appointments_data = [
+                ("Discovery Call -- Michael Thompson", "m.thompson@email.com", "512-555-1001", "discovery_call", "booked", 2, 10, 15),
+                ("Pre-Approval Review -- Emily Martinez", "e.martinez@email.com", "512-555-1004", "pre_approval_review", "confirmed", 3, 14, 30),
+                ("Application Walkthrough -- Robert Wilson", "r.wilson@email.com", "512-555-1003", "application_walkthrough", "booked", 4, 9, 45),
+                ("Closing Prep -- David Anderson", "d.anderson@email.com", "512-555-1005", "closing_prep", "confirmed", 1, 11, 30),
+                ("Rate Lock -- Jessica Harris", "j.harris@email.com", "512-555-1010", "rate_lock_consultation", "booked", 5, 15, 20),
+                ("Refinance Analysis -- Megan Adams", "m.adams@email.com", "512-555-1018", "refinance_analysis", "booked", 6, 10, 30),
+                ("Discovery Call -- Tyler Scott", "t.scott@email.com", "512-555-1017", "discovery_call", "booked", 7, 13, 15),
+                ("Pre-Approval -- Stephanie King", "s.king@email.com", "512-555-1016", "pre_approval_review", "confirmed", 2, 16, 30),
+                ("Discovery Call -- Ryan Walker", "r.walker@email.com", "512-555-1013", "discovery_call", "completed", -20, 10, 15),
+                ("Application -- Nicole Robinson", "n.robinson@email.com", "512-555-1014", "application_walkthrough", "completed", -30, 14, 45),
+                ("Pre-Approval -- Amanda Jackson", "a.jackson@email.com", "512-555-1008", "pre_approval_review", "completed", -15, 11, 30),
+                ("Closing Prep -- Brandon Young", "b.young@email.com", "512-555-1015", "closing_prep", "completed", -5, 9, 30),
+                ("Discovery Call -- Jennifer Davis", "j.davis@email.com", "512-555-1002", "discovery_call", "no_show", -7, 10, 15),
+            ]
+            for title, email, phone, tkey, status, day_offset, hour, dur in appointments_data:
+                sched_start = datetime.combine(today + timedelta(days=day_offset), _time(hour, 0), tzinfo=timezone.utc)
+                sched_end = sched_start + timedelta(minutes=dur)
+                completed_at = sched_end if status == "completed" else None
+                db.execute(_text("""
+                    INSERT INTO scheduler_appointments (organization_id, appointment_type_id, assigned_user_id,
+                        title, scheduled_start, scheduled_end, duration_minutes, timezone,
+                        meeting_mode, attendee_name, attendee_email, attendee_phone,
+                        status, completed_at, created_at, updated_at)
+                    VALUES (:oid, :atid, :uid, :title, :start, :end, :dur, :tz,
+                        :mode, :aname, :aemail, :aphone, :status, :completed, :created, :updated)
+                """), {"oid": org_id, "atid": appt_type_ids[tkey], "uid": demo_user_id,
+                       "title": title, "start": sched_start, "end": sched_end, "dur": dur,
+                       "tz": "America/Chicago", "mode": _random.choice(["video", "phone"]),
+                       "aname": title.split(" -- ")[1] if " -- " in title else "Client",
+                       "aemail": email, "aphone": phone, "status": status,
+                       "completed": completed_at,
+                       "created": sched_start - timedelta(days=_random.randint(1, 5)), "updated": now})
             _sp_sched.commit()
         except Exception:
             _sp_sched.rollback()
 
         # ── STAGE HISTORY (table may not exist) ──
+        sh_count = 0
         try:
             _sp_sh = db.begin_nested()
-        stage_sequences = {
-            "PROCESSING": ["APPLICATION", "DISCLOSED", "PROCESSING"],
-            "SUBMITTED": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED"],
-            "UNDERWRITING": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING"],
-            "CONDITIONAL_APPROVAL": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL"],
-            "CLEAR_TO_CLOSE": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL", "APPROVED", "CLEAR_TO_CLOSE"],
-            "DOCS_OUT": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL", "APPROVED", "CLEAR_TO_CLOSE", "DOCS_OUT"],
-            "FUNDED": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL", "APPROVED", "CLEAR_TO_CLOSE", "DOCS_OUT", "FUNDED"],
-            "DISCLOSED": ["APPLICATION", "DISCLOSED"],
-            "APPLICATION": ["APPLICATION"],
-        }
-        sh_count = 0
-        for i, loan_id in enumerate(loan_ids):
-            stage = loans_data[i][3]
-            seq = stage_sequences.get(stage, [stage])
-            base_date = now - timedelta(days=len(seq) * 4)
-            for j in range(len(seq) - 1):
-                changed = base_date + timedelta(days=(j + 1) * _random.randint(2, 5))
-                db.execute(_text("""
-                    INSERT INTO stage_history (organization_id, entity_type, entity_id,
-                        from_stage, to_stage, changed_at, changed_by_id, created_at)
-                    VALUES (:oid, :etype, :eid, :from_s, :to_s, :changed, :by, :changed)
-                """), {"oid": org_id, "etype": "loan", "eid": loan_id,
-                       "from_s": seq[j], "to_s": seq[j + 1], "changed": changed,
-                       "by": demo_user_id})
-                sh_count += 1
+            stage_sequences = {
+                "PROCESSING": ["APPLICATION", "DISCLOSED", "PROCESSING"],
+                "SUBMITTED": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED"],
+                "UNDERWRITING": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING"],
+                "CONDITIONAL_APPROVAL": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL"],
+                "CLEAR_TO_CLOSE": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL", "APPROVED", "CLEAR_TO_CLOSE"],
+                "DOCS_OUT": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL", "APPROVED", "CLEAR_TO_CLOSE", "DOCS_OUT"],
+                "FUNDED": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED", "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL", "APPROVED", "CLEAR_TO_CLOSE", "DOCS_OUT", "FUNDED"],
+                "DISCLOSED": ["APPLICATION", "DISCLOSED"],
+                "APPLICATION": ["APPLICATION"],
+            }
+            for i, loan_id in enumerate(loan_ids):
+                stage = loans_data[i][3]
+                seq = stage_sequences.get(stage, [stage])
+                base_date = now - timedelta(days=len(seq) * 4)
+                for j in range(len(seq) - 1):
+                    changed = base_date + timedelta(days=(j + 1) * _random.randint(2, 5))
+                    db.execute(_text("""
+                        INSERT INTO stage_history (organization_id, entity_type, entity_id,
+                            from_stage, to_stage, changed_at, changed_by_id, created_at)
+                        VALUES (:oid, :etype, :eid, :from_s, :to_s, :changed, :by, :changed)
+                    """), {"oid": org_id, "etype": "loan", "eid": loan_id,
+                           "from_s": seq[j], "to_s": seq[j + 1], "changed": changed,
+                           "by": demo_user_id})
+                    sh_count += 1
             _sp_sh.commit()
         except Exception:
             _sp_sh.rollback()
 
         # ── DISCLOSURE EVENTS (table may not exist) ──
+        disc_count = 0
         try:
             _sp_de = db.begin_nested()
-        disc_count = 0
-        for i, loan_id in enumerate(loan_ids):
-            stage = loans_data[i][3]
-            if stage == "APPLICATION":
-                continue
-            db.execute(_text("""
-                INSERT INTO disclosure_events (organization_id, loan_id, disclosure_type,
-                    sent_at, delivery_method, is_on_time, created_at)
-                VALUES (:oid, :lid, :dt, :sent, :dm, :ot, :created)
-            """), {"oid": org_id, "lid": loan_id, "dt": "loan_estimate",
-                   "sent": now - timedelta(days=_random.randint(15, 40)),
-                   "dm": "email", "ot": True, "created": now - timedelta(days=_random.randint(15, 40))})
-            disc_count += 1
-            if stage in ("CLEAR_TO_CLOSE", "DOCS_OUT", "FUNDED"):
+            for i, loan_id in enumerate(loan_ids):
+                stage = loans_data[i][3]
+                if stage == "APPLICATION":
+                    continue
                 db.execute(_text("""
                     INSERT INTO disclosure_events (organization_id, loan_id, disclosure_type,
                         sent_at, delivery_method, is_on_time, created_at)
                     VALUES (:oid, :lid, :dt, :sent, :dm, :ot, :created)
-                """), {"oid": org_id, "lid": loan_id, "dt": "closing_disclosure",
-                       "sent": now - timedelta(days=_random.randint(3, 10)),
-                       "dm": "esign", "ot": True, "created": now - timedelta(days=_random.randint(3, 10))})
+                """), {"oid": org_id, "lid": loan_id, "dt": "loan_estimate",
+                       "sent": now - timedelta(days=_random.randint(15, 40)),
+                       "dm": "email", "ot": True, "created": now - timedelta(days=_random.randint(15, 40))})
                 disc_count += 1
+                if stage in ("CLEAR_TO_CLOSE", "DOCS_OUT", "FUNDED"):
+                    db.execute(_text("""
+                        INSERT INTO disclosure_events (organization_id, loan_id, disclosure_type,
+                            sent_at, delivery_method, is_on_time, created_at)
+                        VALUES (:oid, :lid, :dt, :sent, :dm, :ot, :created)
+                    """), {"oid": org_id, "lid": loan_id, "dt": "closing_disclosure",
+                           "sent": now - timedelta(days=_random.randint(3, 10)),
+                           "dm": "esign", "ot": True, "created": now - timedelta(days=_random.randint(3, 10))})
+                    disc_count += 1
             _sp_de.commit()
         except Exception:
             _sp_de.rollback()
 
         # ── LOAN FEES (table may not exist) ──
+        fee_count = 0
         try:
             _sp_lf = db.begin_nested()
-            fee_count = 0
-        for loan_id in loan_ids[:7]:
-            for fn, fc, tc, le, cd in [
-                ("Origination Fee", "origination", "zero", 2500, 2500),
-                ("Appraisal Fee", "appraisal", "zero", 550, 550),
-                ("Credit Report Fee", "credit", "zero", 75, 75),
-                ("Title Insurance", "title", "ten_percent", 1800, 1850),
-                ("Title Search", "title", "ten_percent", 350, 375),
-                ("Recording Fees", "government", "ten_percent", 125, 130),
-                ("Flood Certification", "other", "unlimited", 15, 20),
-                ("Homeowners Insurance", "insurance", "unlimited", 1400, 1450),
-            ]:
-                db.execute(_text("""
-                    INSERT INTO loan_fees (organization_id, loan_id, fee_name, fee_category,
-                        tolerance_category, le_amount, cd_amount, created_at)
-                    VALUES (:oid, :lid, :fn, :fc, :tc, :le, :cd, :now)
-                """), {"oid": org_id, "lid": loan_id, "fn": fn, "fc": fc, "tc": tc,
-                       "le": le, "cd": cd, "now": now})
-                fee_count += 1
+            for loan_id in loan_ids[:7]:
+                for fn, fc, tc, le, cd in [
+                    ("Origination Fee", "origination", "zero", 2500, 2500),
+                    ("Appraisal Fee", "appraisal", "zero", 550, 550),
+                    ("Credit Report Fee", "credit", "zero", 75, 75),
+                    ("Title Insurance", "title", "ten_percent", 1800, 1850),
+                    ("Title Search", "title", "ten_percent", 350, 375),
+                    ("Recording Fees", "government", "ten_percent", 125, 130),
+                    ("Flood Certification", "other", "unlimited", 15, 20),
+                    ("Homeowners Insurance", "insurance", "unlimited", 1400, 1450),
+                ]:
+                    db.execute(_text("""
+                        INSERT INTO loan_fees (organization_id, loan_id, fee_name, fee_category,
+                            tolerance_category, le_amount, cd_amount, created_at)
+                        VALUES (:oid, :lid, :fn, :fc, :tc, :le, :cd, :now)
+                    """), {"oid": org_id, "lid": loan_id, "fn": fn, "fc": fc, "tc": tc,
+                           "le": le, "cd": cd, "now": now})
+                    fee_count += 1
             _sp_lf.commit()
         except Exception:
             _sp_lf.rollback()
