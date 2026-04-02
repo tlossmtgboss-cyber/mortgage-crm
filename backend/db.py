@@ -168,6 +168,48 @@ def after_cursor_execute(conn, cursor, statement, parameters, context, executema
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+def cleanup_idle_connections():
+    """Terminate idle database connections at startup to prevent connection exhaustion.
+
+    Railway PostgreSQL has a ~97 connection limit. After crashes or restarts,
+    stale connections from previous instances can linger, preventing new
+    connections. This function terminates idle connections older than 5 minutes
+    that aren't the current connection.
+    """
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT count(*) as total,
+                       count(*) FILTER (WHERE state = 'idle') as idle,
+                       count(*) FILTER (WHERE state = 'active') as active
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+            """))
+            row = result.fetchone()
+            logger.info(f"DB connections at startup: total={row[0]}, idle={row[1]}, active={row[2]}")
+
+            if row[0] > 50:  # More than half the limit
+                # Terminate idle connections older than 2 minutes (not our own)
+                terminated = conn.execute(text("""
+                    SELECT pg_terminate_backend(pid)
+                    FROM pg_stat_activity
+                    WHERE datname = current_database()
+                      AND state = 'idle'
+                      AND pid != pg_backend_pid()
+                      AND state_change < now() - interval '2 minutes'
+                """))
+                count = terminated.rowcount
+                logger.warning(f"Terminated {count} idle DB connections to prevent exhaustion")
+                conn.commit()
+    except Exception as e:
+        logger.warning(f"Connection cleanup skipped: {e}")
+
+
+# Run cleanup on module load (runs once at startup)
+if DATABASE_URL.startswith("postgresql"):
+    cleanup_idle_connections()
+
+
 # Per-tenant connection tracking (PERF-008)
 # Prevents one org from exhausting all DB connections
 import threading
