@@ -2744,3 +2744,83 @@
   background: var(--brand-primary);
   color: white;
 }
+
+/* Efficiency Monitor cards */
+[data-theme="dark"] .efficiency-metric-card {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .efficiency-metric-card .metric-label {
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .efficiency-metric-card .metric-value {
+  color: var(--color-text-primary);
+}
+
+/* Bottleneck items */
+[data-theme="dark"] .bottleneck-item {
+  background: var(--color-bg-secondary);
+  border-color: rgba(251, 191, 36, 0.3);
+  color: var(--color-text-secondary);
+}
+
+/* Workflow Scorecards */
+[data-theme="dark"] .workflow-scorecards-block {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .workflow-scorecards-block .block-header {
+  border-bottom-color: var(--color-border);
+}
+
+/* Profitability cards */
+[data-theme="dark"] .profitability-metric {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .profitability-metric.clickable:hover {
+  background: rgba(33, 141, 141, 0.15);
+  border-color: var(--brand-primary);
+}
+
+[data-theme="dark"] .profitability-metric .metric-label {
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .profitability-metric .metric-value {
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .profitability-metric .metric-change.positive {
+  color: #34d399;
+  background: rgba(16, 185, 129, 0.15);
+}
+
+[data-theme="dark"] .profitability-metric .metric-change.negative {
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.15);
+}
+
+[data-theme="dark"] .profitability-metric .metric-change.neutral {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-hover);
+}
+
+[data-theme="dark"] .profitability-insights {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+[data-theme="dark"] .btn-view-profitability {
+  background: var(--brand-primary);
+}
+
+/* Efficiency score badge */
+[data-theme="dark"] .efficiency-score-display .score-change {
+  background: rgba(255, 255, 255, 0.15);
+}

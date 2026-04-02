@@ -517,3 +517,54 @@
     animation: none;
   }
 }
+
+/* ---------- Dark Mode ---------- */
+
+[data-theme="dark"] .morning-briefing-card {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .briefing-narrative {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .narrative-text {
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .briefing-refresh-btn:hover,
+[data-theme="dark"] .briefing-collapse-btn:hover,
+[data-theme="dark"] .briefing-dismiss-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .briefing-section-header:hover {
+  background: var(--color-bg-hover);
+}
+
+[data-theme="dark"] .briefing-section.section-team {
+  border-top-color: var(--color-border);
+}
+
+[data-theme="dark"] .briefing-item {
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .briefing-table th {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .briefing-table td {
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .briefing-refresh-btn,
+[data-theme="dark"] .briefing-collapse-btn,
+[data-theme="dark"] .briefing-dismiss-btn {
+  color: var(--color-text-tertiary);
+}

@@ -1267,3 +1267,79 @@
     font-size: 22px;
   }
 }
+
+/* =============================================================================
+   Dark Mode
+   ============================================================================= */
+
+[data-theme="dark"] .summary-card,
+[data-theme="dark"] .alerts-section,
+[data-theme="dark"] .alert-card,
+[data-theme="dark"] .deal-alerts-embedded {
+  background: var(--color-bg-surface);
+  border-color: var(--color-border);
+}
+
+[data-theme="dark"] .summary-value,
+[data-theme="dark"] .section-title,
+[data-theme="dark"] .alert-borrower,
+[data-theme="dark"] .alert-value,
+[data-theme="dark"] .stat-value,
+[data-theme="dark"] .embedded-title {
+  color: var(--color-text-primary);
+}
+
+[data-theme="dark"] .summary-label,
+[data-theme="dark"] .alert-subtitle,
+[data-theme="dark"] .alert-detail-label,
+[data-theme="dark"] .stat-label,
+[data-theme="dark"] .alert-description,
+[data-theme="dark"] .embedded-subtitle {
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .alert-detail-value,
+[data-theme="dark"] .alert-loan-info {
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .filter-btn,
+[data-theme="dark"] .action-btn,
+[data-theme="dark"] .sort-btn,
+[data-theme="dark"] .tooltip-item {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+}
+
+[data-theme="dark"] .filter-btn.active,
+[data-theme="dark"] .filter-btn:hover,
+[data-theme="dark"] .action-btn:hover {
+  background: rgba(33, 141, 141, 0.15);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+[data-theme="dark"] .alert-header {
+  border-bottom-color: var(--color-border);
+}
+
+[data-theme="dark"] .alert-card:hover {
+  border-color: var(--brand-primary);
+  box-shadow: var(--shadow-md);
+}
+
+[data-theme="dark"] .severity-badge {
+  opacity: 0.9;
+}
+
+[data-theme="dark"] .healthy-pipeline,
+[data-theme="dark"] .pipeline-healthy {
+  background: rgba(16, 185, 129, 0.12);
+  color: #34d399;
+}
+
+[data-theme="dark"] .deal-alerts-embedded .summary-stat {
+  background: var(--color-bg-secondary);
+  border-color: var(--color-border);
+}
