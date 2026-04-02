@@ -11,6 +11,10 @@ def _uuid():
 
 class SMSConversation(Base):
     __tablename__ = "sms_conversations"
+    __table_args__ = (
+        Index("ix_sms_conv_phone_org", "phone_number", "organization_id"),
+        {"extend_existing": True},
+    )
 
     id = Column(String, primary_key=True, default=_uuid)
     phone_number = Column(String, nullable=False)
@@ -22,11 +26,7 @@ class SMSConversation(Base):
     close_reason = Column(String, nullable=True)
     last_message_at = Column(DateTime, nullable=True)
     message_count = Column(Integer, default=0)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    __table_args__ = (
-        Index("ix_sms_conv_phone_org", "phone_number", "organization_id"),
-    )
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class SMSConversationMessage(Base):
@@ -41,4 +41,4 @@ class SMSConversationMessage(Base):
     intent_method = Column(String, nullable=True)  # keyword, llm
     entities = Column(JSON, default=dict)
     ai_generated = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
