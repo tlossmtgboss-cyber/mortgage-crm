@@ -373,6 +373,23 @@ async def seed_demo_data(
             ), {"oid": org_id, "e": email}).scalar()
             lead_ids.append(lid)
 
+        # ── FORCE-CLEAN EXISTING LOANS by loan_number pattern ──
+        _loan_subq = "SELECT id FROM loans WHERE loan_number LIKE 'SP-2026-%'"
+        for fk_table in ["stage_history", "disclosure_events", "loan_fees", "compliance_alerts",
+                         "documents", "activities", "loan_team_members", "appointments"]:
+            try:
+                sp = db.begin_nested()
+                db.execute(_text(f"DELETE FROM {fk_table} WHERE loan_id IN ({_loan_subq})"))
+                sp.commit()
+            except Exception:
+                sp.rollback()
+        try:
+            sp = db.begin_nested()
+            db.execute(_text("DELETE FROM loans WHERE loan_number LIKE 'SP-2026-%'"))
+            sp.commit()
+        except Exception:
+            sp.rollback()
+
         # ── LOANS ──
         loans_data = [
             ("SP-2026-001", "Amanda Jackson", "a.jackson@email.com", "PROCESSING", "conventional", 615000, 6.875, "1234 Congress Ave, Austin TX 78701", 35),
