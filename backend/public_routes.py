@@ -176,15 +176,16 @@ async def create_demo_user(
         user_row = db.execute(_text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).fetchone()
         if user_row:
             db.execute(_text(
-                "UPDATE users SET hashed_password = :h, organization_id = :oid, is_active = TRUE, email_verified = TRUE WHERE email = :e"
+                "UPDATE users SET hashed_password = :h, organization_id = :oid, is_active = TRUE, "
+                "email_verified = TRUE, role = 'loan_officer', permission_role = 'sales' WHERE email = :e"
             ), {"h": hashed, "e": demo_email, "oid": org_id})
             db.commit()
             return {"status": "updated", "email": demo_email, "org_id": org_id}
 
         db.execute(_text("""
-            INSERT INTO users (email, hashed_password, first_name, last_name, role,
+            INSERT INTO users (email, hashed_password, first_name, last_name, role, permission_role,
                               organization_id, is_active, email_verified, created_at)
-            VALUES (:email, :hash, 'Demo', 'User', 'admin', :oid, TRUE, TRUE, :now)
+            VALUES (:email, :hash, 'Demo', 'User', 'loan_officer', 'sales', :oid, TRUE, TRUE, :now)
         """), {"email": demo_email, "hash": hashed, "oid": org_id, "now": now})
 
         user_id = db.execute(_text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).scalar()

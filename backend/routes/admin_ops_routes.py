@@ -3000,11 +3000,13 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 # Check if user already exists
                 user_exists = db.execute(text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).fetchone()
                 if user_exists:
-                    # Update password
+                    # Update password and ensure correct role
                     hashed = pwd_context.hash(demo_password)
-                    db.execute(text("UPDATE users SET hashed_password = :h WHERE email = :e"), {"h": hashed, "e": demo_email})
+                    db.execute(text(
+                        "UPDATE users SET hashed_password = :h, role = 'loan_officer', permission_role = 'sales' WHERE email = :e"
+                    ), {"h": hashed, "e": demo_email})
                     db.commit()
-                    return {"status": "updated", "message": "Demo user password updated", "email": demo_email, "org_id": org_id}
+                    return {"status": "updated", "message": "Demo user password and role updated", "email": demo_email, "org_id": org_id}
             else:
                 # Create org
                 db.execute(text("""
@@ -3018,14 +3020,17 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             hashed = pwd_context.hash(demo_password)
             user_exists = db.execute(text("SELECT id FROM users WHERE email = :e"), {"e": demo_email}).fetchone()
             if user_exists:
-                db.execute(text("UPDATE users SET hashed_password = :h, organization_id = :oid WHERE email = :e"),
-                           {"h": hashed, "e": demo_email, "oid": org_id})
+                db.execute(text(
+                    "UPDATE users SET hashed_password = :h, organization_id = :oid, "
+                    "role = 'loan_officer', permission_role = 'sales' WHERE email = :e"
+                ), {"h": hashed, "e": demo_email, "oid": org_id})
             else:
                 db.execute(text("""
-                    INSERT INTO users (email, hashed_password, first_name, last_name, role, organization_id, is_active, created_at)
-                    VALUES (:email, :hash, :first, :last, :role, :oid, TRUE, :now)
+                    INSERT INTO users (email, hashed_password, first_name, last_name, role, permission_role,
+                                      organization_id, is_active, created_at)
+                    VALUES (:email, :hash, :first, :last, 'loan_officer', 'sales', :oid, TRUE, :now)
                 """), {"email": demo_email, "hash": hashed, "first": "Demo", "last": "User",
-                       "role": "admin", "oid": org_id, "now": now})
+                       "oid": org_id, "now": now})
 
             db.commit()
             return {"status": "created", "message": "Demo account ready", "email": demo_email, "org_id": org_id}

@@ -83,7 +83,7 @@ def main():
 
         users = [
             # (email, first, last, role, permission_role, nmls, title, is_demo_user)
-            (DEMO_EMAIL, "Alex", "Morgan", "loan_officer", "site_admin", "ML-987654", "Senior Loan Officer", True),
+            (DEMO_EMAIL, "Alex", "Morgan", "loan_officer", "sales", "ML-987654", "Senior Loan Officer", True),
             ("sarah.chen@summitpeakdemo.com", "Sarah", "Chen", "loan_officer", "sales", "ML-112233", "Loan Officer", False),
             ("james.brooks@summitpeakdemo.com", "James", "Brooks", "loan_officer", "sales", "ML-445566", "Loan Officer", False),
             ("maria.gonzalez@summitpeakdemo.com", "Maria", "Gonzalez", "processor", "processing", None, "Loan Processor", False),
