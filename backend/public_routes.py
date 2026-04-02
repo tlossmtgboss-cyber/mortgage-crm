@@ -569,53 +569,65 @@ async def seed_demo_data(
                                "src": _random.choice(["borrower_upload", "email_intake", "los_sync"])})
                         doc_count += 1
 
-        # ── COMPLIANCE ALERTS ──
-        alerts_data = [
-            ("LE_TIMING", "critical", "LE Deadline Approaching", "Loan Estimate must be sent within 3 business days of application", "open", loan_ids[3], 2),
-            ("LOCK_EXPIRING", "high", "Rate Lock Expiring Soon", "Rate lock on SP-2026-005 expires in 3 days", "open", loan_ids[4], 3),
-            ("MISSING_DOCUMENT", "medium", "Missing Bank Statement", "Page 2 of October bank statement not received", "open", loan_ids[0], 5),
-            ("CD_TIMING", "high", "CD Delivery Deadline", "Closing Disclosure must be delivered 3 business days before closing", "open", loan_ids[8], 4),
-            ("TRID_VIOLATION", "critical", "Potential TRID Timing Issue", "LE was sent 4 business days after application", "acknowledged", loan_ids[7], None),
-            ("APPRAISAL_REVIEW", "medium", "Appraisal Below Contract Price", "Appraisal came in $15K below — may need renegotiation", "resolved", loan_ids[5], None),
-            ("CONDITION_PAST_DUE", "high", "UW Condition Past Due", "Employment verification requested 10 days ago", "open", loan_ids[2], 1),
-            ("RATE_CHANGE", "medium", "Rate Market Movement", "Rates moved +0.125% since lock", "resolved", loan_ids[6], None),
-        ]
-        for atype, severity, title, desc, status, lid, deadline_days in alerts_data:
-            deadline = today + timedelta(days=deadline_days) if deadline_days else None
-            resolved_at = now - timedelta(days=_random.randint(1, 5)) if status == "resolved" else None
-            db.execute(_text("""
-                INSERT INTO compliance_alerts (organization_id, loan_id, alert_type, severity, title,
-                    description, status, deadline_date, created_at, resolved_at)
-                VALUES (:oid, :lid, :atype, :sev, :title, :desc, :status, :deadline, :created, :resolved)
-            """), {"oid": org_id, "lid": lid, "atype": atype, "sev": severity, "title": title,
-                   "desc": desc, "status": status, "deadline": deadline,
-                   "created": now - timedelta(days=_random.randint(1, 10)), "resolved": resolved_at})
+        # ── COMPLIANCE ALERTS (table may not exist in production) ──
+        try:
+            _sp_ca = db.begin_nested()
+            alerts_data = [
+                ("LE_TIMING", "critical", "LE Deadline Approaching", "Loan Estimate must be sent within 3 business days of application", "open", loan_ids[3], 2),
+                ("LOCK_EXPIRING", "high", "Rate Lock Expiring Soon", "Rate lock on SP-2026-005 expires in 3 days", "open", loan_ids[4], 3),
+                ("MISSING_DOCUMENT", "medium", "Missing Bank Statement", "Page 2 of October bank statement not received", "open", loan_ids[0], 5),
+                ("CD_TIMING", "high", "CD Delivery Deadline", "Closing Disclosure must be delivered 3 business days before closing", "open", loan_ids[8], 4),
+                ("TRID_VIOLATION", "critical", "Potential TRID Timing Issue", "LE was sent 4 business days after application", "acknowledged", loan_ids[7], None),
+                ("APPRAISAL_REVIEW", "medium", "Appraisal Below Contract Price", "Appraisal came in $15K below — may need renegotiation", "resolved", loan_ids[5], None),
+                ("CONDITION_PAST_DUE", "high", "UW Condition Past Due", "Employment verification requested 10 days ago", "open", loan_ids[2], 1),
+                ("RATE_CHANGE", "medium", "Rate Market Movement", "Rates moved +0.125% since lock", "resolved", loan_ids[6], None),
+            ]
+            for atype, severity, title, desc, status, lid, deadline_days in alerts_data:
+                deadline = today + timedelta(days=deadline_days) if deadline_days else None
+                resolved_at = now - timedelta(days=_random.randint(1, 5)) if status == "resolved" else None
+                db.execute(_text("""
+                    INSERT INTO compliance_alerts (organization_id, loan_id, alert_type, severity, title,
+                        description, status, deadline_date, created_at, resolved_at)
+                    VALUES (:oid, :lid, :atype, :sev, :title, :desc, :status, :deadline, :created, :resolved)
+                """), {"oid": org_id, "lid": lid, "atype": atype, "sev": severity, "title": title,
+                       "desc": desc, "status": status, "deadline": deadline,
+                       "created": now - timedelta(days=_random.randint(1, 10)), "resolved": resolved_at})
+            _sp_ca.commit()
+        except Exception:
+            _sp_ca.rollback()
 
-        # ── REFERRAL PARTNERS ──
-        partners_data = [
-            ("Laura Mitchell", "Mitchell Realty Group", "realtor", "laura@mitchellrealty.com", "512-555-2001", 12, 8, 6, 2850000, "gold"),
-            ("Greg Hernandez", "Hernandez & Associates", "realtor", "greg@hernandezre.com", "512-555-2002", 8, 5, 3, 1650000, "silver"),
-            ("Samantha Lee", "Capital Title Partners", "title_company", "sam@captitle.com", "512-555-2003", 6, 2, 4, 1900000, "silver"),
-            ("Brian Cooper", "Cooper Insurance Agency", "insurance_agent", "brian@cooperins.com", "512-555-2004", 4, 3, 2, 890000, "bronze"),
-            ("Angela Foster", "Austin Home Inspections", "home_inspector", "angela@austininspect.com", "512-555-2005", 3, 1, 1, 450000, "bronze"),
-            ("Mark Sullivan", "Sullivan Financial Planning", "financial_advisor", "mark@sullivanfp.com", "512-555-2006", 5, 4, 3, 1400000, "silver"),
-            ("Karen Phillips", "Lone Star Real Estate", "realtor", "karen@lonestarRE.com", "512-555-2007", 15, 10, 9, 4200000, "platinum"),
-            ("Jason Rivera", "Rivera Homes", "builder", "jason@riverahomes.com", "512-555-2008", 7, 3, 4, 2100000, "silver"),
-        ]
-        for name, biz, cat, email, phone, ri, ro, cl, vol, tier in partners_data:
-            db.execute(_text("""
-                INSERT INTO referral_partners (organization_id, name, business_name, category,
-                    email, phone, referrals_in, referrals_out, closed_loans, volume,
-                    status, loyalty_tier, owner_id, created_at)
-                VALUES (:oid, :name, :biz, :cat, :email, :phone, :ri, :ro, :cl, :vol,
-                    :status, :tier, :owner, :created)
-            """), {"oid": org_id, "name": name, "biz": biz, "cat": cat, "email": email,
-                   "phone": phone, "ri": ri, "ro": ro, "cl": cl, "vol": vol,
-                   "status": "active", "tier": tier, "owner": demo_user_id,
-                   "created": now - timedelta(days=_random.randint(30, 365))})
+        # ── REFERRAL PARTNERS (table may not exist) ──
+        try:
+            _sp_rp = db.begin_nested()
+            partners_data = [
+                ("Laura Mitchell", "Mitchell Realty Group", "realtor", "laura@mitchellrealty.com", "512-555-2001", 12, 8, 6, 2850000, "gold"),
+                ("Greg Hernandez", "Hernandez & Associates", "realtor", "greg@hernandezre.com", "512-555-2002", 8, 5, 3, 1650000, "silver"),
+                ("Samantha Lee", "Capital Title Partners", "title_company", "sam@captitle.com", "512-555-2003", 6, 2, 4, 1900000, "silver"),
+                ("Brian Cooper", "Cooper Insurance Agency", "insurance_agent", "brian@cooperins.com", "512-555-2004", 4, 3, 2, 890000, "bronze"),
+                ("Angela Foster", "Austin Home Inspections", "home_inspector", "angela@austininspect.com", "512-555-2005", 3, 1, 1, 450000, "bronze"),
+                ("Mark Sullivan", "Sullivan Financial Planning", "financial_advisor", "mark@sullivanfp.com", "512-555-2006", 5, 4, 3, 1400000, "silver"),
+                ("Karen Phillips", "Lone Star Real Estate", "realtor", "karen@lonestarRE.com", "512-555-2007", 15, 10, 9, 4200000, "platinum"),
+                ("Jason Rivera", "Rivera Homes", "builder", "jason@riverahomes.com", "512-555-2008", 7, 3, 4, 2100000, "silver"),
+            ]
+            for name, biz, cat, email, phone, ri, ro, cl, vol, tier in partners_data:
+                db.execute(_text("""
+                    INSERT INTO referral_partners (organization_id, name, business_name, category,
+                        email, phone, referrals_in, referrals_out, closed_loans, volume,
+                        status, loyalty_tier, owner_id, created_at)
+                    VALUES (:oid, :name, :biz, :cat, :email, :phone, :ri, :ro, :cl, :vol,
+                        :status, :tier, :owner, :created)
+                """), {"oid": org_id, "name": name, "biz": biz, "cat": cat, "email": email,
+                       "phone": phone, "ri": ri, "ro": ro, "cl": cl, "vol": vol,
+                       "status": "active", "tier": tier, "owner": demo_user_id,
+                       "created": now - timedelta(days=_random.randint(30, 365))})
+            _sp_rp.commit()
+        except Exception:
+            _sp_rp.rollback()
 
-        # ── MUM CLIENTS (Portfolio) ──
-        mum_data = [
+        # ── MUM CLIENTS (Portfolio — table may not exist) ──
+        try:
+            _sp_mum = db.begin_nested()
+            mum_data = [
             ("Ryan Walker", "r.walker@email.com", "512-555-1013", "SP-2026-006", 520000, 6.500, 15),
             ("Nicole Robinson", "n.robinson@email.com", "512-555-1014", "SP-2026-007", 385000, 6.375, 30),
             ("Patricia Nguyen", "p.nguyen@email.com", "512-555-3001", "SP-2025-048", 410000, 5.875, 180),
@@ -640,8 +652,13 @@ async def seed_demo_data(
                    "escore": _random.randint(60, 95), "status": "active",
                    "lc": now - timedelta(days=_random.randint(5, 60)),
                    "uid": demo_user_id, "created": now - timedelta(days=days_since)})
+            _sp_mum.commit()
+        except Exception:
+            _sp_mum.rollback()
 
-        # ── SCHEDULER CONFIG & APPOINTMENTS ──
+        # ── SCHEDULER CONFIG & APPOINTMENTS (tables may not exist) ──
+        try:
+            _sp_sched = db.begin_nested()
         db.execute(_text("""
             INSERT INTO scheduler_configs (organization_id, user_id, config_name, timezone,
                 default_duration_minutes, min_notice_hours, max_advance_days,
@@ -715,8 +732,13 @@ async def seed_demo_data(
                    "aemail": email, "aphone": phone, "status": status,
                    "completed": completed_at,
                    "created": sched_start - timedelta(days=_random.randint(1, 5)), "updated": now})
+            _sp_sched.commit()
+        except Exception:
+            _sp_sched.rollback()
 
-        # ── STAGE HISTORY ──
+        # ── STAGE HISTORY (table may not exist) ──
+        try:
+            _sp_sh = db.begin_nested()
         stage_sequences = {
             "PROCESSING": ["APPLICATION", "DISCLOSED", "PROCESSING"],
             "SUBMITTED": ["APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED"],
@@ -743,8 +765,13 @@ async def seed_demo_data(
                        "from_s": seq[j], "to_s": seq[j + 1], "changed": changed,
                        "by": demo_user_id})
                 sh_count += 1
+            _sp_sh.commit()
+        except Exception:
+            _sp_sh.rollback()
 
-        # ── DISCLOSURE EVENTS ──
+        # ── DISCLOSURE EVENTS (table may not exist) ──
+        try:
+            _sp_de = db.begin_nested()
         disc_count = 0
         for i, loan_id in enumerate(loan_ids):
             stage = loans_data[i][3]
@@ -767,9 +794,14 @@ async def seed_demo_data(
                        "sent": now - timedelta(days=_random.randint(3, 10)),
                        "dm": "esign", "ot": True, "created": now - timedelta(days=_random.randint(3, 10))})
                 disc_count += 1
+            _sp_de.commit()
+        except Exception:
+            _sp_de.rollback()
 
-        # ── LOAN FEES ──
-        fee_count = 0
+        # ── LOAN FEES (table may not exist) ──
+        try:
+            _sp_lf = db.begin_nested()
+            fee_count = 0
         for loan_id in loan_ids[:7]:
             for fn, fc, tc, le, cd in [
                 ("Origination Fee", "origination", "zero", 2500, 2500),
@@ -788,6 +820,9 @@ async def seed_demo_data(
                 """), {"oid": org_id, "lid": loan_id, "fn": fn, "fc": fc, "tc": tc,
                        "le": le, "cd": cd, "now": now})
                 fee_count += 1
+            _sp_lf.commit()
+        except Exception:
+            _sp_lf.rollback()
 
         db.commit()
         return {
