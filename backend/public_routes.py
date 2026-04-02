@@ -252,22 +252,7 @@ async def seed_demo_data(
             return _JSONResponse(status_code=404, content={"error": "Demo user not found."})
         demo_user_id = demo_row[0]
 
-        # Clean existing demo data (order matters for FKs)
-        for table in [
-            "morning_briefings", "stage_history", "disclosure_events", "loan_fees",
-            "compliance_alerts", "appointments", "availability_slots",
-            "scheduler_appointment_types", "scheduler_configs",
-            "loan_team_members", "mum_clients",
-            "ai_tasks", "tasks", "activities", "documents",
-            "email_intakes", "attachment_intakes",
-            "loans", "leads", "referral_partners",
-        ]:
-            try:
-                db.execute(_text(f"DELETE FROM {table} WHERE organization_id = :oid"), {"oid": org_id})
-            except Exception:
-                pass
-
-        # ── FIX ENUM COLUMNS ──
+        # ── FIX ENUM COLUMNS (must run first, before any DML) ──
         # Some columns use PostgreSQL enum types that may be missing values.
         # Convert them to VARCHAR to avoid enum mismatch issues.
         enum_fixes = [
@@ -315,6 +300,25 @@ async def seed_demo_data(
                     nested2.commit()
                 except Exception:
                     nested2.rollback()
+
+        db.commit()
+
+        # Clean existing demo data (order matters for FKs)
+        for table in [
+            "morning_briefings", "stage_history", "disclosure_events", "loan_fees",
+            "compliance_alerts", "appointments", "availability_slots",
+            "scheduler_appointment_types", "scheduler_configs",
+            "loan_team_members", "mum_clients",
+            "ai_tasks", "tasks", "activities", "documents",
+            "email_intakes", "attachment_intakes",
+            "loans", "leads", "referral_partners",
+        ]:
+            try:
+                sp = db.begin_nested()
+                db.execute(_text(f"DELETE FROM {table} WHERE organization_id = :oid"), {"oid": org_id})
+                sp.commit()
+            except Exception:
+                sp.rollback()
 
         db.commit()
 
