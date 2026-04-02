@@ -17,7 +17,7 @@ This is separate from conversation_intelligence_routes.py which handles email/SM
 import os
 import logging
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 from uuid import UUID
 import json
@@ -604,14 +604,15 @@ async def list_recordings(
 
         where_clause = " AND ".join(filters)
 
-        result = db.execute(text(f"""
+        sql = """
             SELECT id, loan_id, lead_id, agent_user_id, direction, status,
                    duration_seconds, recording_url, created_at
             FROM ci_call_recordings
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
-        """), params)
+        """
+        result = db.execute(text(sql), params)
 
         recordings = []
         for row in result.fetchall():
@@ -631,9 +632,8 @@ async def list_recordings(
             })
 
         # Get total count
-        count_result = db.execute(text(f"""
-            SELECT COUNT(*) FROM ci_call_recordings WHERE {where_clause}
-        """), params)
+        count_sql = "SELECT COUNT(*) FROM ci_call_recordings WHERE " + where_clause
+        count_result = db.execute(text(count_sql), params)
         total = count_result.fetchone()[0]
 
         return {
@@ -1695,17 +1695,18 @@ async def list_coaching_clips(
 
         where_clause = " AND ".join(filters)
 
-        result = db.execute(text(f"""
+        sql = """
             SELECT c.id, c.recording_id, c.title, c.description,
                    c.category, c.duration_seconds, c.view_count,
                    c.created_at, u.email as created_by_email
             FROM ci_coaching_clips c
             JOIN ci_call_recordings r ON r.id = c.recording_id
             LEFT JOIN users u ON u.id = c.created_by
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY c.created_at DESC
             LIMIT :limit OFFSET :offset
-        """), params)
+        """
+        result = db.execute(text(sql), params)
 
         clips = []
         for row in result.fetchall():
@@ -1808,16 +1809,17 @@ async def list_coaching_assignments(
 
         where_clause = " AND ".join(filters)
 
-        result = db.execute(text(f"""
+        sql = """
             SELECT a.id, a.clip_id, c.title as clip_title,
                    a.assigned_to, a.assigned_by, a.title,
                    a.status, a.due_date, a.created_at
             FROM ci_coaching_assignments a
             JOIN ci_coaching_clips c ON c.id = a.clip_id
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY a.due_date ASC NULLS LAST, a.created_at DESC
             LIMIT :limit
-        """), params)
+        """
+        result = db.execute(text(sql), params)
 
         assignments = []
         for row in result.fetchall():
@@ -1888,11 +1890,11 @@ async def get_team_dashboard(
         team_filter = ""
 
         if team_id:
-            team_filter = "AND u.team_id = :team_id"
+            team_filter = " AND u.team_id = :team_id"
             params["team_id"] = team_id
 
         # Get overall metrics
-        metrics_result = db.execute(text(f"""
+        metrics_sql = """
             SELECT
                 COUNT(*) as total_calls,
                 AVG(r.duration_seconds) as avg_duration,
@@ -1900,13 +1902,13 @@ async def get_team_dashboard(
             FROM ci_call_recordings r
             JOIN users u ON u.id = r.agent_user_id
             WHERE r.created_at BETWEEN :start_date AND :end_date
-            {team_filter}
-        """), params)
+        """ + team_filter
+        metrics_result = db.execute(text(metrics_sql), params)
 
         metrics_row = metrics_result.fetchone()
 
         # Get QA score distribution
-        score_result = db.execute(text(f"""
+        score_sql = """
             SELECT
                 AVG(s.percentage_score) as avg_score,
                 COUNT(CASE WHEN s.grade = 'A' THEN 1 END) as grade_a,
@@ -1917,13 +1919,13 @@ async def get_team_dashboard(
             JOIN ci_call_recordings r ON r.id = s.recording_id
             JOIN users u ON u.id = r.agent_user_id
             WHERE s.created_at BETWEEN :start_date AND :end_date
-            {team_filter}
-        """), params)
+        """ + team_filter
+        score_result = db.execute(text(score_sql), params)
 
         score_row = score_result.fetchone()
 
         # Get top performers
-        performers_result = db.execute(text(f"""
+        performers_sql = """
             SELECT
                 u.id, u.email, u.full_name,
                 COUNT(r.id) as call_count,
@@ -1932,11 +1934,12 @@ async def get_team_dashboard(
             JOIN ci_call_recordings r ON r.agent_user_id = u.id
             LEFT JOIN ci_qa_scorecards s ON s.recording_id = r.id
             WHERE r.created_at BETWEEN :start_date AND :end_date
-            {team_filter}
+        """ + team_filter + """
             GROUP BY u.id, u.email, u.full_name
             ORDER BY avg_score DESC NULLS LAST
             LIMIT 5
-        """), params)
+        """
+        performers_result = db.execute(text(performers_sql), params)
 
         top_performers = []
         for row in performers_result.fetchall():
@@ -2200,16 +2203,17 @@ async def export_recordings(
 
         where_clause = " AND ".join(filters)
 
-        result = db.execute(text(f"""
+        sql = """
             SELECT r.id, r.agent_user_id, u.email as agent_email,
                    r.direction, r.duration_seconds, r.status,
                    r.created_at, s.grade, s.percentage_score
             FROM ci_call_recordings r
             LEFT JOIN users u ON u.id = r.agent_user_id
             LEFT JOIN ci_qa_scorecards s ON s.recording_id = r.id
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY r.created_at DESC
-        """), params)
+        """
+        result = db.execute(text(sql), params)
 
         rows = result.fetchall()
 
@@ -2537,7 +2541,7 @@ async def get_summary_feed(
 
         where_clause = " AND ".join(filters)
 
-        result = db.execute(text(f"""
+        sql = """
             SELECT
                 s.id, s.recording_id, s.one_liner, s.call_outcome,
                 s.customer_sentiment, s.customer_urgency, s.generated_at,
@@ -2549,10 +2553,11 @@ async def get_summary_feed(
             LEFT JOIN users u ON u.id = r.agent_user_id
             LEFT JOIN loans l ON l.id = s.loan_id
             LEFT JOIN leads ld ON ld.id = s.lead_id
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY s.generated_at DESC
             LIMIT :limit OFFSET :offset
-        """), params)
+        """
+        result = db.execute(text(sql), params)
 
         feed = []
         for row in result.fetchall():

@@ -5,7 +5,7 @@ OAuth flow endpoints: connect, callback, status, disconnect.
 """
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query

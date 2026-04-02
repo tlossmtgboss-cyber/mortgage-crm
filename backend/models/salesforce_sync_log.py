@@ -4,7 +4,7 @@ Salesforce Sync Log Model
 Tracks all Salesforce sync operations for auditing and troubleshooting.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
 from sqlalchemy.orm import relationship

@@ -15,7 +15,7 @@ To migrate to this structure in the future:
 
 from sqlalchemy import Column, String, Integer, Boolean, DateTime, Enum, Text, ForeignKey, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 
 # For future use with UUID-based architecture:

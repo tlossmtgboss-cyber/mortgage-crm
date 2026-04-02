@@ -20,7 +20,7 @@ import os
 import uuid
 import logging
 import statistics
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, List, Any, Optional, Tuple
 from collections import defaultdict
@@ -713,40 +713,36 @@ class UsageProjectionService:
             filter_col = None
 
         if filter_col:
-            result = self.db.execute(text(f"""
-                SELECT
-                    snapshot_date,
-                    total_cost,
-                    ai_tokens_cost,
-                    CASE
-                        WHEN '{scope_type}' = 'user' THEN sms_cost + voice_cost + email_cost
-                        ELSE communications_cost
-                    END as communications_cost,
-                    storage_cost
-                FROM {table}
-                WHERE organization_id = :org_id
-                AND {filter_col} = :scope_id
-                AND snapshot_date BETWEEN :start_date AND :end_date
-                ORDER BY snapshot_date ASC
-            """), {
+            comm_expr = (
+                "sms_cost + voice_cost + email_cost"
+                if scope_type == "user" else "communications_cost"
+            )
+            scoped_query = (
+                "SELECT snapshot_date, total_cost, ai_tokens_cost,"
+                " " + comm_expr + " as communications_cost,"
+                " storage_cost"
+                " FROM " + table
+                + " WHERE organization_id = :org_id"
+                " AND " + filter_col + " = :scope_id"
+                " AND snapshot_date BETWEEN :start_date AND :end_date"
+                " ORDER BY snapshot_date ASC"
+            )
+            result = self.db.execute(text(scoped_query), {
                 "org_id": self.organization_id,
                 "scope_id": scope_id,
                 "start_date": start_date,
                 "end_date": end_date
             }).fetchall()
         else:
-            result = self.db.execute(text(f"""
-                SELECT
-                    snapshot_date,
-                    total_cost,
-                    ai_tokens_cost,
-                    communications_cost,
-                    storage_cost
-                FROM {table}
-                WHERE organization_id = :org_id
-                AND snapshot_date BETWEEN :start_date AND :end_date
-                ORDER BY snapshot_date ASC
-            """), {
+            org_query = (
+                "SELECT snapshot_date, total_cost, ai_tokens_cost,"
+                " communications_cost, storage_cost"
+                " FROM " + table
+                + " WHERE organization_id = :org_id"
+                " AND snapshot_date BETWEEN :start_date AND :end_date"
+                " ORDER BY snapshot_date ASC"
+            )
+            result = self.db.execute(text(org_query), {
                 "org_id": self.organization_id,
                 "start_date": start_date,
                 "end_date": end_date

@@ -149,7 +149,8 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
             status_list.extend(["'withdrawn'", "'cancelled'"])
 
         # Query loans for the reporting period
-        loans = db.execute(text(f"""
+        status_in = ",".join(status_list)
+        query_sql = """
             SELECT
                 l.id, l.loan_number, l.loan_type, l.loan_purpose, l.loan_amount,
                 l.interest_rate, l.status, l.status_changed_at,
@@ -165,10 +166,11 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
             LEFT JOIN organizations o ON o.id = l.organization_id
             WHERE l.organization_id = :org_id
               AND EXTRACT(YEAR FROM l.status_changed_at) = :year
-              AND l.status IN ({','.join(status_list)})
-              {date_filter}
+              AND l.status IN (""" + status_in + """)
+              """ + date_filter + """
             ORDER BY l.status_changed_at
-        """), {
+        """
+        loans = db.execute(text(query_sql), {
             "org_id": org_id, "year": body.year,
             **({"q_start_month": q_start_month, "q_end_month": q_end_month} if q_start_month else {}),
         }).fetchall()

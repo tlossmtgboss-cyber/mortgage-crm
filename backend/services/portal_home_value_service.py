@@ -7,7 +7,7 @@ equity calculations, and value insights for the MUM portal.
 
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, desc

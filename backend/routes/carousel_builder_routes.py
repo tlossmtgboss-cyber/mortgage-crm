@@ -76,7 +76,10 @@ async def carousel_health_check(db: Session = Depends(get_db)):
 
     for table in tables:
         try:
-            result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            ALLOWED_TABLES = {"carousel_projects", "carousel_slides", "carousel_themes", "carousel_templates", "carousel_exports"}
+            if table not in ALLOWED_TABLES:
+                raise ValueError(f"Invalid table name: {table}")
+            result = db.execute(text("SELECT COUNT(*) FROM " + table))
             count = result.scalar()
             status["tables"][table] = {"exists": True, "count": count}
         except Exception as e:

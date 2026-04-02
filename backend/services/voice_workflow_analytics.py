@@ -6,7 +6,7 @@ format that can be consumed by any analytics backend (DataDog, Mixpanel, etc.).
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)

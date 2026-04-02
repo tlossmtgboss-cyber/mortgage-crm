@@ -141,13 +141,14 @@ async def upsert_lead(
             lead_data['lead_id'] = lead_id
             lead_data['salesforce_id'] = salesforce_id
             lead_data['org_id'] = org_id
-            db.execute(text(f"""
-                UPDATE leads SET {set_clauses},
-                    salesforce_id = :salesforce_id,
-                    organization_id = COALESCE(organization_id, :org_id),
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = :lead_id
-            """), lead_data)
+            query = (
+                "UPDATE leads SET " + set_clauses + ","
+                "    salesforce_id = :salesforce_id,"
+                "    organization_id = COALESCE(organization_id, :org_id),"
+                "    updated_at = CURRENT_TIMESTAMP"
+                " WHERE id = :lead_id"
+            )
+            db.execute(text(query), lead_data)
         logger.info(f"Updated lead {lead_id} from Salesforce {salesforce_id} ({len(lead_data)} fields)")
 
         # Wire to SLA tracking — detect stage changes
@@ -185,13 +186,14 @@ async def upsert_lead(
         conflict_set_parts.append("updated_at = CURRENT_TIMESTAMP")
         conflict_set_clause = ", ".join(conflict_set_parts)
 
-        result = db.execute(text(f"""
-            INSERT INTO leads ({columns}, created_at, updated_at)
-            VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ON CONFLICT (salesforce_id) WHERE salesforce_id IS NOT NULL
-            DO UPDATE SET {conflict_set_clause}
-            RETURNING id, (xmax = 0) AS was_inserted
-        """), lead_data)
+        query = (
+            "INSERT INTO leads (" + columns + ", created_at, updated_at)"
+            " VALUES (" + placeholders + ", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            " ON CONFLICT (salesforce_id) WHERE salesforce_id IS NOT NULL"
+            " DO UPDATE SET " + conflict_set_clause
+            + " RETURNING id, (xmax = 0) AS was_inserted"
+        )
+        result = db.execute(text(query), lead_data)
 
         row = result.fetchone()
         lead_id = row[0]
@@ -282,16 +284,17 @@ async def update_lead_from_salesforce(
     update_fields['lead_id'] = lead_id
     update_fields['sf_type'] = sf_type
 
-    db.execute(text(f"""
-        UPDATE leads SET {set_clauses},
-            meta_data = COALESCE(meta_data, '{{}}'::jsonb) ||
-                jsonb_build_object(
-                    'salesforce_type', :sf_type,
-                    'salesforce_synced_at', CURRENT_TIMESTAMP
-                ),
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = :lead_id
-    """), update_fields)
+    query = (
+        "UPDATE leads SET " + set_clauses + ","
+        "    meta_data = COALESCE(meta_data, '{}'::jsonb) ||"
+        "        jsonb_build_object("
+        "            'salesforce_type', :sf_type,"
+        "            'salesforce_synced_at', CURRENT_TIMESTAMP"
+        "        ),"
+        "    updated_at = CURRENT_TIMESTAMP"
+        " WHERE id = :lead_id"
+    )
+    db.execute(text(query), update_fields)
 
     logger.info(f"Updated lead {lead_id} with {len(update_fields)} fields from Salesforce {sf_type} {sf_id}")
     return True

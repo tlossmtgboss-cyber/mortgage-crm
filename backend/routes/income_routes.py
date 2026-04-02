@@ -7,7 +7,7 @@ Supports the AI-powered income extraction system.
 
 import logging
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials

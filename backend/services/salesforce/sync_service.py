@@ -758,10 +758,11 @@ class SalesforceSyncService:
                     mum_data['sf_id'] = salesforce_id
                     set_parts.append("salesforce_id = :sf_id")
                     set_parts.append("updated_at = CURRENT_TIMESTAMP")
-                    db.execute(sa_text(f"""
+                    query = f"""
                         UPDATE mum_clients SET {', '.join(set_parts)}
                         WHERE id = :mum_id
-                    """), mum_data)
+                    """
+                    db.execute(sa_text(query), mum_data)
                     logger.info(f"Updated MUM client {existing['id']} from SF {salesforce_id}")
             except Exception as e:
                 logger.warning(f"MUM client update failed (non-fatal): {e}")
@@ -961,13 +962,14 @@ class SalesforceSyncService:
                 lead_data['lead_id'] = lead_id
                 lead_data['salesforce_id'] = salesforce_id
                 lead_data['org_id'] = org_id
-                db.execute(text(f"""
+                query = f"""
                     UPDATE leads SET {set_clauses},
                         salesforce_id = :salesforce_id,
                         organization_id = COALESCE(organization_id, :org_id),
                         updated_at = CURRENT_TIMESTAMP
                     WHERE id = :lead_id
-                """), lead_data)
+                """
+                db.execute(text(query), lead_data)
             logger.info(f"Updated lead {lead_id} from Salesforce {salesforce_id} ({len(lead_data)} fields)")
 
             # Wire to SLA tracking — detect stage changes
@@ -1005,13 +1007,14 @@ class SalesforceSyncService:
             conflict_set_parts.append("updated_at = CURRENT_TIMESTAMP")
             conflict_set_clause = ", ".join(conflict_set_parts)
 
-            result = db.execute(text(f"""
+            query = f"""
                 INSERT INTO leads ({columns}, created_at, updated_at)
                 VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT (salesforce_id) WHERE salesforce_id IS NOT NULL
                 DO UPDATE SET {conflict_set_clause}
                 RETURNING id, (xmax = 0) AS was_inserted
-            """), lead_data)
+            """
+            result = db.execute(text(query), lead_data)
 
             row = result.fetchone()
             lead_id = row[0]
@@ -1213,10 +1216,11 @@ class SalesforceSyncService:
             loan_data['salesforce_id'] = salesforce_id
             loan_data['org_id'] = org_id
 
-            db.execute(text(f"""
+            query = f"""
                 UPDATE loans SET {', '.join(set_parts)}
                 WHERE id = :loan_id
-            """), loan_data)
+            """
+            db.execute(text(query), loan_data)
             logger.info(f"Updated loan {loan_id} from Salesforce {salesforce_id}")
 
             # Wire to SLA tracking — detect stage changes
@@ -1271,13 +1275,14 @@ class SalesforceSyncService:
             conflict_set_parts.append("updated_at = CURRENT_TIMESTAMP")
             conflict_set_clause = ", ".join(conflict_set_parts)
 
-            result = db.execute(text(f"""
+            query = f"""
                 INSERT INTO loans ({columns}, created_at, updated_at)
                 VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ON CONFLICT (salesforce_id) WHERE salesforce_id IS NOT NULL
                 DO UPDATE SET {conflict_set_clause}
                 RETURNING id, (xmax = 0) AS was_inserted
-            """), loan_data)
+            """
+            result = db.execute(text(query), loan_data)
 
             row = result.fetchone()
             loan_id = row[0]
@@ -1785,7 +1790,7 @@ class SalesforceSyncService:
         update_fields['lead_id'] = lead_id
         update_fields['sf_type'] = sf_type
 
-        db.execute(text(f"""
+        query = f"""
             UPDATE leads SET {set_clauses},
                 meta_data = COALESCE(meta_data, '{{}}'::jsonb) ||
                     jsonb_build_object(
@@ -1794,7 +1799,8 @@ class SalesforceSyncService:
                     ),
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :lead_id
-        """), update_fields)
+        """
+        db.execute(text(query), update_fields)
 
         logger.info(f"Updated lead {lead_id} with {len(update_fields)} fields from Salesforce {sf_type} {sf_id}")
         return True
@@ -1921,11 +1927,12 @@ class SalesforceSyncService:
         set_clauses = ", ".join([f"{k} = :{k}" for k in update_fields.keys()])
         update_fields['loan_id'] = loan_id
 
-        db.execute(text(f"""
+        query = f"""
             UPDATE loans SET {set_clauses},
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :loan_id
-        """), update_fields)
+        """
+        db.execute(text(query), update_fields)
 
         logger.info(f"Updated loan {loan_id} with {len(update_fields) - 1} fields from Salesforce Opportunity {sf_id}")
 
@@ -2066,34 +2073,37 @@ class SalesforceSyncService:
         # 1. Check loans by salesforce_id (org-scoped)
         if salesforce_id:
             params = {"sf_id": salesforce_id, **params_base}
-            row = db.execute(sa_text(f"""
+            query = f"""
                 SELECT id, stage FROM loans
                 WHERE salesforce_id = :sf_id {org_filter}
                 LIMIT 1
-            """), params).fetchone()
+            """
+            row = db.execute(sa_text(query), params).fetchone()
             if row:
                 return {"table": "loans", "id": row[0], "stage": row[1]}
 
         # 2. Check leads by salesforce_id (org-scoped)
         if salesforce_id:
             params = {"sf_id": salesforce_id, **params_base}
-            row = db.execute(sa_text(f"""
+            query = f"""
                 SELECT id, stage FROM leads
                 WHERE (salesforce_id = :sf_id OR meta_data->>'salesforce_id' = :sf_id)
                     {org_filter}
                 LIMIT 1
-            """), params).fetchone()
+            """
+            row = db.execute(sa_text(query), params).fetchone()
             if row:
                 return {"table": "leads", "id": row[0], "stage": row[1]}
 
         # 3. Check mum_clients by salesforce_id (org-scoped)
         if salesforce_id:
             params = {"sf_id": salesforce_id, **params_base}
-            row = db.execute(sa_text(f"""
+            query = f"""
                 SELECT id FROM mum_clients
                 WHERE salesforce_id = :sf_id {org_filter}
                 LIMIT 1
-            """), params).fetchone()
+            """
+            row = db.execute(sa_text(query), params).fetchone()
             if row:
                 return {"table": "mum_clients", "id": row[0], "stage": None}
 

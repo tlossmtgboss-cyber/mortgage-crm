@@ -7,7 +7,7 @@ import os
 import uuid
 import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple
 from pathlib import Path
 from sqlalchemy import text, func
@@ -418,18 +418,20 @@ class VideoHostingService:
         where_clause = " AND ".join(filters)
 
         # Get total count
-        count_result = db.execute(text(f"""
+        query = f"""
             SELECT COUNT(*) FROM video_library WHERE {where_clause}
-        """), params)
+        """
+        count_result = db.execute(text(query), params)
         total = count_result.scalar()
 
         # Get videos
-        result = db.execute(text(f"""
+        query = f"""
             SELECT * FROM video_library
             WHERE {where_clause}
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
-        """), params)
+        """
+        result = db.execute(text(query), params)
 
         videos = [dict(row._mapping) for row in result.fetchall()]
         return videos, total
@@ -456,10 +458,11 @@ class VideoHostingService:
 
         filtered_updates["video_id"] = video_id
 
-        db.execute(text(f"""
+        query = f"""
             UPDATE video_library SET {', '.join(set_clauses)}
             WHERE id = :video_id
-        """), filtered_updates)
+        """
+        db.execute(text(query), filtered_updates)
         db.commit()
 
         return self.get_video(db, video_id)
@@ -669,11 +672,12 @@ class VideoHostingService:
             updates.append("cta_clicked_at = CURRENT_TIMESTAMP")
             params["cta_clicked"] = cta_clicked
 
-        db.execute(text(f"""
+        query = f"""
             UPDATE video_viewer_sessions
             SET {', '.join(updates)}
             WHERE session_id = :session_id
-        """), params)
+        """
+        db.execute(text(query), params)
         db.commit()
 
         return True
@@ -732,11 +736,12 @@ class VideoHostingService:
         if not updates:
             return False
 
-        db.execute(text(f"""
+        query = f"""
             UPDATE video_viewer_sessions
             SET {', '.join(updates)}
             WHERE session_id = :session_id
-        """), params)
+        """
+        db.execute(text(query), params)
         db.commit()
 
         return True
@@ -847,7 +852,7 @@ class VideoHostingService:
             return {}
 
         # Get session aggregates
-        session_stats = db.execute(text(f"""
+        query = f"""
             SELECT
                 COUNT(*) as total_views,
                 COUNT(DISTINCT COALESCE(viewer_id, session_id)) as unique_viewers,
@@ -858,7 +863,8 @@ class VideoHostingService:
                 COUNT(CASE WHEN cta_clicked THEN 1 END) as cta_clicks
             FROM video_viewer_sessions
             WHERE video_id = :video_id {date_filter}
-        """), params).fetchone()
+        """
+        session_stats = db.execute(text(query), params).fetchone()
 
         # Calculate rates
         total_views = session_stats[0] or 0
@@ -866,7 +872,7 @@ class VideoHostingService:
         cta_click_rate = (session_stats[6] / session_stats[5] * 100) if session_stats[5] > 0 else 0
 
         # Get views by day
-        views_by_day = db.execute(text(f"""
+        query = f"""
             SELECT
                 DATE(started_at) as date,
                 COUNT(*) as views,
@@ -876,7 +882,8 @@ class VideoHostingService:
             GROUP BY DATE(started_at)
             ORDER BY date DESC
             LIMIT 30
-        """), params).fetchall()
+        """
+        views_by_day = db.execute(text(query), params).fetchall()
 
         # Get drop-off analysis
         drop_off_points = self._analyze_drop_off(db, video_id, video.get("duration_seconds", 60))
@@ -972,7 +979,7 @@ class VideoHostingService:
 
         where_clause = " AND ".join(filters)
 
-        result = db.execute(text(f"""
+        query = f"""
             SELECT
                 vs.viewer_email,
                 vs.viewer_name,
@@ -989,7 +996,8 @@ class VideoHostingService:
             GROUP BY vs.viewer_email, vs.viewer_name, vs.lead_id
             ORDER BY total_watch_time DESC
             LIMIT :limit
-        """), params)
+        """
+        result = db.execute(text(query), params)
 
         return [
             {
@@ -1135,11 +1143,12 @@ class VideoHostingService:
             filters.append("cta_type = :cta_type")
             params["cta_type"] = cta_type
 
-        result = db.execute(text(f"""
+        query = f"""
             SELECT * FROM video_cta_overlays
             WHERE {' AND '.join(filters)}
             ORDER BY created_at DESC
-        """), params)
+        """
+        result = db.execute(text(query), params)
 
         return [dict(row._mapping) for row in result.fetchall()]
 

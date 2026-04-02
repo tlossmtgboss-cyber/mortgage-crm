@@ -51,12 +51,12 @@ def run_migration():
             for col_name, col_type in new_columns:
                 try:
                     # Check if column exists
-                    check_sql = text(f"""
+                    check_sql = text("""
                         SELECT column_name
                         FROM information_schema.columns
-                        WHERE table_name = '{table}' AND column_name = '{col_name}'
+                        WHERE table_name = :table_name AND column_name = :col_name
                     """)
-                    result = conn.execute(check_sql)
+                    result = conn.execute(check_sql, {"table_name": table, "col_name": col_name})
 
                     if result.fetchone() is None:
                         # Add column

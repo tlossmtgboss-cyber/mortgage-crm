@@ -25,7 +25,7 @@ Comprehensive financial analysis service that answers the 20 key executive quest
 """
 
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_

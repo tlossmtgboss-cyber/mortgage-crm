@@ -6,7 +6,7 @@ Handles creation, deletion, and management of tenant databases.
 import uuid
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 from tenant_database_manager import tenant_db_manager

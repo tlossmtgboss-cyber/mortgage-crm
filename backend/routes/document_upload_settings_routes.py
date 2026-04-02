@@ -6,7 +6,7 @@ Comprehensive error handling pattern for document configuration
 import re
 import logging
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, validator
 from sqlalchemy.orm import Session

@@ -1315,7 +1315,8 @@ async def cleanup_test_account(
             for table_name, col in dependent_tables:
                 try:
                     sp = db.begin_nested()
-                    db.execute(text(f"DELETE FROM {table_name} WHERE {col} = ANY(:ids)"), {'ids': user_ids})
+                    delete_sql = "DELETE FROM " + table_name + " WHERE " + col + " = ANY(:ids)"
+                    db.execute(text(delete_sql), {'ids': user_ids})
                     sp.commit()
                 except Exception as e:
                     logger.error(f"Error in cleanup_test_account (delete {table_name}.{col}): {e}")

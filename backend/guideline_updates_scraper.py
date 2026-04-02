@@ -6,7 +6,7 @@ Run this as a scheduled task (daily)
 
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import logging
 from typing import List, Dict

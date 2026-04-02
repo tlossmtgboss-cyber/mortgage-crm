@@ -400,11 +400,8 @@ async def update_availability_settings(
             if update_fields:
                 update_fields.append("updated_at = CURRENT_TIMESTAMP")
                 params["config_id"] = config_id
-                db.execute(text(f"""
-                    UPDATE scheduler_configs
-                    SET {', '.join(update_fields)}
-                    WHERE id = :config_id
-                """), params)
+                query = "UPDATE scheduler_configs SET " + ", ".join(update_fields) + " WHERE id = :config_id"
+                db.execute(text(query), params)
         else:
             wh_json = params.get("working_hours", json.dumps({}))
             db.execute(text("""
@@ -611,15 +608,14 @@ async def update_appointment_type(
 
         fields.append("updated_at = CURRENT_TIMESTAMP")
 
-        result = db.execute(text(f"""
-            UPDATE appointment_types
-            SET {', '.join(fields)}
+        query = "UPDATE appointment_types SET " + ", ".join(fields) + """
             WHERE id = :type_id
               AND organization_id = :org_id
               AND config_id IN (
                   SELECT id FROM scheduler_configs WHERE user_id = :user_id
               )
-        """), params)
+        """
+        result = db.execute(text(query), params)
 
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Appointment type not found")

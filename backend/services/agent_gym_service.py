@@ -7,7 +7,7 @@ Provides business logic for agent training and simulation:
 - Performance benchmarking
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, Integer

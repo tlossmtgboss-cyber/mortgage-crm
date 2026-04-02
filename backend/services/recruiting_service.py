@@ -560,9 +560,10 @@ class RecruitingService:
         org_filter = "AND organization_id = :org_id"
         params = {"id": candidate_id, "org_id": organization_id}
 
-        current = self.db.execute(text(f"""
+        query = f"""
             SELECT status FROM mm_candidates WHERE id = :id {org_filter}
-        """), params).fetchone()
+        """
+        current = self.db.execute(text(query), params).fetchone()
 
         if not current:
             raise ValueError(f"Candidate {candidate_id} not found")
@@ -594,7 +595,7 @@ class RecruitingService:
 
         # Build update query — include disposition fields when provided
         if disposition_code:
-            self.db.execute(text(f"""
+            query = f"""
                 UPDATE mm_candidates
                 SET status = :status,
                     status_changed_at = CURRENT_TIMESTAMP,
@@ -604,7 +605,8 @@ class RecruitingService:
                     disposition_by = :user_id,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id {org_filter}
-            """), {
+            """
+            self.db.execute(text(query), {
                 "id": candidate_id,
                 "status": new_status,
                 "user_id": updated_by,
@@ -612,14 +614,15 @@ class RecruitingService:
                 "org_id": organization_id,
             })
         else:
-            self.db.execute(text(f"""
+            query = f"""
                 UPDATE mm_candidates
                 SET status = :status,
                     status_changed_at = CURRENT_TIMESTAMP,
                     status_changed_by = :user_id,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id {org_filter}
-            """), {
+            """
+            self.db.execute(text(query), {
                 "id": candidate_id,
                 "status": new_status,
                 "user_id": updated_by,
@@ -853,7 +856,7 @@ class RecruitingService:
         # Update candidate status if still in early stage (org-scoped)
         org_filter = "AND organization_id = :org_id"
         update_params = {"id": candidate_id, "org_id": organization_id}
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE mm_candidates
             SET status = CASE
                 WHEN status IN ('new', 'screening', 'phone_screen') THEN 'interview'
@@ -861,7 +864,8 @@ class RecruitingService:
             END,
             updated_at = CURRENT_TIMESTAMP
             WHERE id = :id {org_filter}
-        """), update_params)
+        """
+        self.db.execute(text(query), update_params)
 
         # Log activity
         await self._log_activity(
@@ -890,9 +894,10 @@ class RecruitingService:
         org_filter = "AND i.organization_id = :org_id"
         params = {"id": interview_id, "org_id": organization_id}
 
-        current = self.db.execute(text(f"""
+        query = f"""
             SELECT i.feedback, i.candidate_id FROM mm_interviews i WHERE i.id = :id {org_filter}
-        """), params).fetchone()
+        """
+        current = self.db.execute(text(query), params).fetchone()
 
         if not current:
             raise ValueError(f"Interview {interview_id} not found")
@@ -921,7 +926,7 @@ class RecruitingService:
         update_org_filter = "AND organization_id = :org_id"
         update_params["org_id"] = organization_id
 
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE mm_interviews
             SET feedback = :feedback,
                 overall_score = :score,
@@ -930,7 +935,8 @@ class RecruitingService:
                 status = 'completed',
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :id {update_org_filter}
-        """), update_params)
+        """
+        self.db.execute(text(query), update_params)
 
         # Log activity
         await self._log_activity(
@@ -1006,11 +1012,12 @@ class RecruitingService:
         # Update candidate status (org-scoped)
         offer_org_filter = "AND organization_id = :org_id"
         offer_update_params = {"id": candidate_id, "org_id": organization_id}
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE mm_candidates
             SET status = 'offer', updated_at = CURRENT_TIMESTAMP
             WHERE id = :id {offer_org_filter}
-        """), offer_update_params)
+        """
+        self.db.execute(text(query), offer_update_params)
 
         # Log activity
         await self._log_activity(
@@ -1046,7 +1053,7 @@ class RecruitingService:
         send_org_filter = "AND organization_id = :org_id"
         send_params["org_id"] = organization_id
 
-        result = self.db.execute(text(f"""
+        query = f"""
             UPDATE mm_offers
             SET status = 'sent',
                 sent_at = CURRENT_TIMESTAMP,
@@ -1055,7 +1062,8 @@ class RecruitingService:
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = :id {send_org_filter}
             RETURNING candidate_id, offer_number
-        """), send_params).fetchone()
+        """
+        result = self.db.execute(text(query), send_params).fetchone()
 
         if not result:
             raise ValueError(f"Offer {offer_id} not found")
@@ -1088,7 +1096,7 @@ class RecruitingService:
         resp_params_base = {"id": offer_id, "notes": notes, "org_id": organization_id}
 
         if accepted:
-            result = self.db.execute(text(f"""
+            query = f"""
                 UPDATE mm_offers
                 SET status = 'accepted',
                     accepted_at = CURRENT_TIMESTAMP,
@@ -1097,7 +1105,8 @@ class RecruitingService:
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id AND status IN ('sent', 'viewed', 'negotiating') {resp_org_filter}
                 RETURNING candidate_id, offer_number
-            """), resp_params_base).fetchone()
+            """
+            result = self.db.execute(text(query), resp_params_base).fetchone()
 
             if not result:
                 raise ValueError(f"Offer {offer_id} not found or already responded to")
@@ -1106,13 +1115,14 @@ class RecruitingService:
             hired_params = {"id": result.candidate_id, "org_id": organization_id}
             hired_org_filter = "AND organization_id = :org_id"
 
-            self.db.execute(text(f"""
+            query = f"""
                 UPDATE mm_candidates
                 SET status = 'hired',
                     hired_at = CURRENT_TIMESTAMP,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id {hired_org_filter}
-            """), hired_params)
+            """
+            self.db.execute(text(query), hired_params)
 
             # Bridge: create talent state for new hire
             candidate_row = self.db.execute(text("""
@@ -1130,7 +1140,7 @@ class RecruitingService:
             activity_type = "offer_accepted"
             description = f"Offer {result.offer_number} accepted"
         else:
-            result = self.db.execute(text(f"""
+            query = f"""
                 UPDATE mm_offers
                 SET status = 'declined',
                     declined_at = CURRENT_TIMESTAMP,
@@ -1139,7 +1149,8 @@ class RecruitingService:
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id AND status IN ('sent', 'viewed', 'negotiating') {resp_org_filter}
                 RETURNING candidate_id, offer_number
-            """), resp_params_base).fetchone()
+            """
+            result = self.db.execute(text(query), resp_params_base).fetchone()
 
             if not result:
                 raise ValueError(f"Offer {offer_id} not found or already responded to")
@@ -1215,11 +1226,12 @@ class RecruitingService:
         # Update last activity (org-scoped)
         activity_org_filter = "AND organization_id = :org_id"
         activity_params = {"id": candidate_id, "org_id": organization_id}
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE mm_candidates
             SET last_activity_at = CURRENT_TIMESTAMP
             WHERE id = :id {activity_org_filter}
-        """), activity_params)
+        """
+        self.db.execute(text(query), activity_params)
 
     async def _create_talent_state_for_hire(
         self,

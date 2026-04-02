@@ -316,17 +316,15 @@ class IRSTranscriptService:
             vendor_clause = ", vendor = :vendor"
             update_params["vendor"] = vendor
 
-        self.db.execute(
-            text(f"""
-                UPDATE irs_transcript_requests
-                SET transcript_data = :transcript_data,
-                    status = 'received',
-                    received_at = :received_at
-                    {vendor_clause}
-                WHERE id = :request_id AND organization_id = :org_id
-            """),
-            update_params,
+        irs_update_query = (
+            "UPDATE irs_transcript_requests"
+            " SET transcript_data = :transcript_data,"
+            "     status = 'received',"
+            "     received_at = :received_at"
+            + vendor_clause
+            + " WHERE id = :request_id AND organization_id = :org_id"
         )
+        self.db.execute(text(irs_update_query), update_params)
         self.db.commit()
 
         logger.info(f"Imported transcript data for request {request_id}")

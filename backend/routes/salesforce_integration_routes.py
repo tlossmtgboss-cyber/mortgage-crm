@@ -5,7 +5,7 @@ Per-user OAuth, schema discovery, field mapping, and bidirectional sync
 import os
 import logging
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Query, Body, Header
 from fastapi.responses import RedirectResponse
@@ -166,10 +166,8 @@ def fix_salesforce_schema(db: Session) -> dict:
             logger.warning(f"Skipping invalid column name: {col_name}")
             continue
         try:
-            db.execute(text(f"""
-                ALTER TABLE sf_user_schemas
-                ADD COLUMN IF NOT EXISTS {col_name} {col_type}
-            """))
+            ddl = "ALTER TABLE sf_user_schemas ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+            db.execute(text(ddl))
             db.commit()
             fixes.append(f"Added {col_name} to sf_user_schemas")
         except SQLAlchemyError as e:
@@ -182,7 +180,8 @@ def fix_salesforce_schema(db: Session) -> dict:
         if col_name not in _allowed_fm_cols or not col_name.isidentifier():
             continue
         try:
-            db.execute(text(f"ALTER TABLE field_mappings ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            ddl = "ALTER TABLE field_mappings ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+            db.execute(text(ddl))
             db.commit()
             fixes.append(f"Added {col_name} to field_mappings")
         except SQLAlchemyError as e:
@@ -213,7 +212,8 @@ def fix_salesforce_schema(db: Session) -> dict:
         if col_name not in _allowed_ie_cols or not col_name.isidentifier():
             continue
         try:
-            db.execute(text(f"ALTER TABLE integration_events ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            ddl = "ALTER TABLE integration_events ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+            db.execute(text(ddl))
             db.commit()
             fixes.append(f"Added {col_name} to integration_events")
         except SQLAlchemyError as e:
@@ -244,7 +244,8 @@ def fix_salesforce_schema(db: Session) -> dict:
         if col_name not in _allowed_sq_cols or not col_name.isidentifier():
             continue
         try:
-            db.execute(text(f"ALTER TABLE sync_queue ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            ddl = "ALTER TABLE sync_queue ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+            db.execute(text(ddl))
             db.commit()
             fixes.append(f"Added {col_name} to sync_queue")
         except SQLAlchemyError as e:
@@ -269,7 +270,8 @@ def fix_salesforce_schema(db: Session) -> dict:
         if col_name not in _allowed_rt_cols or not col_name.isidentifier():
             continue
         try:
-            db.execute(text(f"ALTER TABLE integration_record_tracking ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+            ddl = "ALTER TABLE integration_record_tracking ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+            db.execute(text(ddl))
             db.commit()
             fixes.append(f"Added {col_name} to integration_record_tracking")
         except SQLAlchemyError as e:
@@ -316,7 +318,7 @@ async def ensure_tables_endpoint(
                 tables_status[table] = {"exists": False, "error": "Table not in allowed list"}
                 continue
             try:
-                result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                result = db.execute(text("SELECT COUNT(*) FROM " + table))
                 count = result.scalar()
                 tables_status[table] = {"exists": True, "count": count}
             except SQLAlchemyError as e:
@@ -1316,7 +1318,7 @@ async def get_debug_status(
             debug_info["tables_exist"][table] = {"exists": False, "error": "Table not in allowed list"}
             continue
         try:
-            result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            result = db.execute(text("SELECT COUNT(*) FROM " + table))
             count = result.scalar()
             debug_info["tables_exist"][table] = {"exists": True, "count": count}
         except SQLAlchemyError as e:

@@ -99,34 +99,37 @@ def find_existing_record(
     # 1. Check loans by salesforce_id (org-scoped)
     if salesforce_id:
         params = {"sf_id": salesforce_id, **params_base}
-        row = db.execute(text(f"""
-            SELECT id, stage FROM loans
-            WHERE salesforce_id = :sf_id {org_filter}
-            LIMIT 1
-        """), params).fetchone()
+        query = (
+            "SELECT id, stage FROM loans"
+            " WHERE salesforce_id = :sf_id " + org_filter
+            + " LIMIT 1"
+        )
+        row = db.execute(text(query), params).fetchone()
         if row:
             return {"table": "loans", "id": row[0], "stage": row[1]}
 
     # 2. Check leads by salesforce_id (org-scoped)
     if salesforce_id:
         params = {"sf_id": salesforce_id, **params_base}
-        row = db.execute(text(f"""
-            SELECT id, stage FROM leads
-            WHERE (salesforce_id = :sf_id OR meta_data->>'salesforce_id' = :sf_id)
-                {org_filter}
-            LIMIT 1
-        """), params).fetchone()
+        query = (
+            "SELECT id, stage FROM leads"
+            " WHERE (salesforce_id = :sf_id OR meta_data->>'salesforce_id' = :sf_id)"
+            " " + org_filter
+            + " LIMIT 1"
+        )
+        row = db.execute(text(query), params).fetchone()
         if row:
             return {"table": "leads", "id": row[0], "stage": row[1]}
 
     # 3. Check mum_clients by salesforce_id (org-scoped)
     if salesforce_id:
         params = {"sf_id": salesforce_id, **params_base}
-        row = db.execute(text(f"""
-            SELECT id FROM mum_clients
-            WHERE salesforce_id = :sf_id {org_filter}
-            LIMIT 1
-        """), params).fetchone()
+        query = (
+            "SELECT id FROM mum_clients"
+            " WHERE salesforce_id = :sf_id " + org_filter
+            + " LIMIT 1"
+        )
+        row = db.execute(text(query), params).fetchone()
         if row:
             return {"table": "mum_clients", "id": row[0], "stage": None}
 

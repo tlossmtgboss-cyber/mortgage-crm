@@ -1012,11 +1012,12 @@ class AIDocumentReviewService:
 
         _org_filter = "AND organization_id = :_org_id" if self.org_id is not None else ""
         _org_params = {"_org_id": self.org_id} if self.org_id is not None else {}
-        loan_info = self.db.execute(text(f"""
-            SELECT borrower_name, coborrower_name
-            FROM loans
-            WHERE id = :loan_id {_org_filter}
-        """), {"loan_id": document.loan_id, **_org_params}).fetchone()
+        loan_query = (
+            "SELECT borrower_name, coborrower_name"
+            " FROM loans"
+            " WHERE id = :loan_id " + _org_filter
+        )
+        loan_info = self.db.execute(text(loan_query), {"loan_id": document.loan_id, **_org_params}).fetchone()
 
         if not loan_info:
             return True, 50, []

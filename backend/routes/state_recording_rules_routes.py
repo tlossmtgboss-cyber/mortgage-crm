@@ -172,15 +172,16 @@ async def list_all_rules(
 
         where_clause = " AND ".join(filters)
 
-        result = db.execute(text(f"""
+        query = """
             SELECT
                 state, recording_required, requires_verbal_ack,
                 disclosure_script, consent_type, notes, updated_at
             FROM state_recording_rules
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY state
             LIMIT :limit OFFSET :offset
-        """), params)
+        """
+        result = db.execute(text(query), params)
 
         rules = []
         for row in result.fetchall():
@@ -195,9 +196,8 @@ async def list_all_rules(
             })
 
         # Get total count
-        count_result = db.execute(text(f"""
-            SELECT COUNT(*) FROM state_recording_rules WHERE {where_clause}
-        """), params)
+        count_query = "SELECT COUNT(*) FROM state_recording_rules WHERE " + where_clause
+        count_result = db.execute(text(count_query), params)
         total = count_result.scalar()
 
         return {
@@ -304,12 +304,12 @@ async def update_rule(
             update_fields.append("notes = :notes")
             params["notes"] = updates.notes
 
-        result = db.execute(text(f"""
-            UPDATE state_recording_rules
-            SET {', '.join(update_fields)}
-            WHERE state = :state
-            RETURNING state
-        """), params)
+        update_query = (
+            "UPDATE state_recording_rules SET "
+            + ", ".join(update_fields)
+            + " WHERE state = :state RETURNING state"
+        )
+        result = db.execute(text(update_query), params)
 
         row = result.fetchone()
         db.commit()

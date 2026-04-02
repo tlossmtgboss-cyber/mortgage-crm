@@ -7,7 +7,7 @@ Supports toggling between OpenAI (legacy) and Claude (new)
 import os
 import logging
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 # Import AI providers

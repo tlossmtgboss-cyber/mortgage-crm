@@ -5,7 +5,7 @@ Generates industry-standard MISMO 3.4 XML from application data for LOS integrat
 
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 from xml.etree.ElementTree import Element, SubElement, tostring
 from xml.dom import minidom

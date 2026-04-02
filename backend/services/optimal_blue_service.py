@@ -12,7 +12,7 @@ Features:
 import os
 import hashlib
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, Any, Optional, List
 from dataclasses import dataclass

@@ -8,7 +8,7 @@ Date: 2025-11-16
 """
 
 from sqlalchemy import create_engine, text
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import json
 

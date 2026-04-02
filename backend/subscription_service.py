@@ -5,7 +5,7 @@ Handles tier validation, feature access, and usage tracking
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 import logging
 import json

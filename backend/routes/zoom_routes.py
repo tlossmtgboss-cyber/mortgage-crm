@@ -5,7 +5,7 @@ Handles OAuth and meeting operations for Zoom
 import os
 import logging
 from typing import Optional, Callable
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse

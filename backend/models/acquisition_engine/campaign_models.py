@@ -7,7 +7,7 @@ CampaignInstance - Runtime campaign state and metrics
 from sqlalchemy import Column, String, Integer, Numeric, DateTime, Boolean, Text, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from enum import Enum
 

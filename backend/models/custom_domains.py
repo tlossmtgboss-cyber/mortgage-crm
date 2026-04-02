@@ -5,7 +5,7 @@ Stores custom domains for multi-tenant CORS support.
 Allows users/organizations to use their own domains.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Index
 from sqlalchemy.orm import relationship
 from database import Base

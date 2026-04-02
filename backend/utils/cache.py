@@ -4,7 +4,7 @@ import redis.asyncio as redis
 import json
 import hashlib
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import logging
 

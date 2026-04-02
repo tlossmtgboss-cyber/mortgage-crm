@@ -1232,17 +1232,23 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             ]
 
             for table, column, col_type in columns_to_add:
-                db.execute(text(f"""
-                    DO $$
-                    BEGIN
-                        IF NOT EXISTS (
-                            SELECT 1 FROM information_schema.columns
-                            WHERE table_name='{table}' AND column_name='{column}'
-                        ) THEN
-                            ALTER TABLE {table} ADD COLUMN {column} {col_type};
-                        END IF;
-                    END $$;
-                """))
+                # table, column, col_type are from hardcoded list above — not user input.
+                # Validate identifiers and build DDL outside text().
+                safe_table = _safe_identifier(table)
+                safe_col = _safe_identifier(column)
+                # col_type is from hardcoded list (TIMESTAMP, DECIMAL, VARCHAR) — safe to concatenate
+                ddl_sql = (
+                    "DO $$ BEGIN"
+                    " IF NOT EXISTS ("
+                    "   SELECT 1 FROM information_schema.columns"
+                    "   WHERE table_name=" + "'" + table + "'"
+                    "   AND column_name=" + "'" + column + "'"
+                    " ) THEN"
+                    "   ALTER TABLE " + safe_table + " ADD COLUMN " + safe_col + " " + col_type + ";"
+                    " END IF;"
+                    " END $$;"
+                )
+                db.execute(text(ddl_sql))
 
             db.commit()
             logger.info("Appraisal columns added successfully")
@@ -1955,10 +1961,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                     try:
                         safe_table = _safe_identifier(table_name)
                         safe_col = _safe_identifier(column_name)
-                        count = db.execute(
-                            text(f"SELECT COUNT(*) FROM {safe_table} WHERE {safe_col} = :user_id"),
-                            params
-                        ).scalar()
+                        count_sql = "SELECT COUNT(*) FROM " + safe_table + " WHERE " + safe_col + " = :user_id"
+                        count = db.execute(text(count_sql), params).scalar()
                         if count and count > 0:
                             tables_with_data.append((table_name, column_name, count))
                     except Exception as e:
@@ -1990,7 +1994,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 try:
                     safe_ct = _safe_identifier(child_table)
                     safe_cc = _safe_identifier(child_col)
-                    db.execute(text(f"DELETE FROM {safe_ct} WHERE {safe_cc} IN ({parent_subquery})"), params)
+                    cascade_sql = "DELETE FROM " + safe_ct + " WHERE " + safe_cc + " IN (" + parent_subquery + ")"
+                    db.execute(text(cascade_sql), params)
                 except Exception as e:
                     logger.error(f"Error cascading delete from {child_table}.{child_col} for user {user_id}: {e}")
 
@@ -2003,12 +2008,14 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                     safe_tbl = _safe_identifier(table_name)
                     safe_col = _safe_identifier(column_name)
                     # Try UPDATE to NULL first (for nullable columns)
-                    db.execute(text(f"UPDATE {safe_tbl} SET {safe_col} = NULL WHERE {safe_col} = :user_id"), params)
+                    update_null_sql = "UPDATE " + safe_tbl + " SET " + safe_col + " = NULL WHERE " + safe_col + " = :user_id"
+                    db.execute(text(update_null_sql), params)
                     cleaned += 1
                 except Exception as update_e:
                     # If UPDATE fails (NOT NULL constraint), try DELETE
                     try:
-                        db.execute(text(f"DELETE FROM {safe_tbl} WHERE {safe_col} = :user_id"), params)
+                        delete_sql = "DELETE FROM " + safe_tbl + " WHERE " + safe_col + " = :user_id"
+                        db.execute(text(delete_sql), params)
                         cleaned += 1
                     except Exception as del_e:
                         logger.warning(f"Could not clean {table_name}.{column_name}: {del_e}")
@@ -2120,7 +2127,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
                     for table_name, column_name in cleanup_tables:
                         try:
-                            db.execute(text(f"DELETE FROM {_safe_identifier(table_name)} WHERE {_safe_identifier(column_name)} = :user_id"), params)
+                            cleanup_sql = "DELETE FROM " + _safe_identifier(table_name) + " WHERE " + _safe_identifier(column_name) + " = :user_id"
+                            db.execute(text(cleanup_sql), params)
                         except Exception as e:
                             logger.error(f"Error cleaning up {table_name}.{column_name} for sample user deletion: {e}")
 
@@ -2560,12 +2568,10 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                     # Validate column names to prevent injection via field mappings
                     safe_cols = [_safe_identifier(k) for k in mapped_values.keys()]
                     columns = ', '.join(safe_cols)
-                    placeholders = ', '.join([f':{k}' for k in mapped_values.keys()])
+                    placeholders = ', '.join([':' + k for k in mapped_values.keys()])
 
-                    db.execute(
-                        text(f"INSERT INTO loans ({columns}) VALUES ({placeholders})"),
-                        mapped_values
-                    )
+                    insert_sql = "INSERT INTO loans (" + columns + ") VALUES (" + placeholders + ")"
+                    db.execute(text(insert_sql), mapped_values)
                     successful += 1
                 except Exception as e:
                     failed += 1
@@ -2810,7 +2816,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                     db.rollback()
                     try:
                         safe_tbl = _safe_identifier(child_tbl)
-                        r = db.execute(text(f'DELETE FROM {safe_tbl}'))
+                        r = db.execute(text("DELETE FROM " + safe_tbl))
                         if r.rowcount > 0:
                             cleaned[f"{child_tbl} deleted"] = r.rowcount
                     except ValueError:
@@ -2849,7 +2855,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
             for tbl in tables_to_clear:
                 try:
-                    r = db.execute(text(f'DELETE FROM {_safe_identifier(tbl)}'))
+                    r = db.execute(text("DELETE FROM " + _safe_identifier(tbl)))
                     if r.rowcount > 0:
                         cleaned[tbl] = r.rowcount
                 except Exception:
@@ -2957,7 +2963,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         counts = {}
         for tbl in tables:
             try:
-                r = db.execute(text(f'SELECT COUNT(*) FROM "{tbl}"')).scalar()
+                r = db.execute(text("SELECT COUNT(*) FROM " + _safe_identifier(tbl))).scalar()
                 counts[tbl] = r
             except Exception:
                 db.rollback()

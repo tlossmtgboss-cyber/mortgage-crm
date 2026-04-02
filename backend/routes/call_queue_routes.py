@@ -225,7 +225,7 @@ async def list_queues(
     try:
         where_clause = "" if include_inactive else "WHERE q.is_active = TRUE"
 
-        results = db.execute(text(f"""
+        query = """
             SELECT q.id, q.name, q.friendly_name, q.description,
                    q.max_wait_time_seconds, q.max_queue_size,
                    q.is_active, q.telephony_queue_sid, q.created_at,
@@ -234,10 +234,11 @@ async def list_queues(
             FROM call_queues q
             LEFT JOIN queue_members qm ON qm.queue_id = q.id AND qm.is_active = TRUE
             LEFT JOIN queue_entries qe ON qe.queue_id = q.id AND qe.status = 'waiting'
-            {where_clause}
+            """ + where_clause + """
             GROUP BY q.id
             ORDER BY q.name
-        """)).fetchall()
+        """
+        results = db.execute(text(query)).fetchall()
 
         queues = []
         for row in results:
@@ -396,9 +397,8 @@ async def update_queue(
         updates.append("updated_at = CURRENT_TIMESTAMP")
 
         if updates:
-            db.execute(text(f"""
-                UPDATE call_queues SET {', '.join(updates)} WHERE id = :queue_id
-            """), params)
+            query = "UPDATE call_queues SET " + ", ".join(updates) + " WHERE id = :queue_id"
+            db.execute(text(query), params)
             db.commit()
 
         return {"success": True, "message": "Queue updated"}

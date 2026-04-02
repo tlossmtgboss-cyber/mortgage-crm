@@ -11,7 +11,7 @@ Centralized performance monitoring with:
 import os
 import time
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from collections import deque
 from dataclasses import dataclass, field, asdict

@@ -1740,7 +1740,8 @@ def register_debug_data_routes(
                     results["errors"].append(f"loans.{col_name}: invalid column name")
                 else:
                     try:
-                        db.execute(text(f"ALTER TABLE loans ADD COLUMN {col_name} {col_type}"))
+                        alter_sql = "ALTER TABLE loans ADD COLUMN " + col_name + " " + col_type
+                        db.execute(text(alter_sql))
                         results["loans_added"].append(col_name)
                     except Exception as e:
                         logger.error(f"loans.{col_name} migration failed: {e}")
@@ -1762,7 +1763,8 @@ def register_debug_data_routes(
                     results["errors"].append(f"leads.{col_name}: invalid column name")
                 else:
                     try:
-                        db.execute(text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}"))
+                        alter_sql = "ALTER TABLE leads ADD COLUMN " + col_name + " " + col_type
+                        db.execute(text(alter_sql))
                         results["leads_added"].append(col_name)
                     except Exception as e:
                         logger.error(f"leads.{col_name} migration failed: {e}")

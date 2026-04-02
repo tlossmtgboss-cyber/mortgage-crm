@@ -510,9 +510,8 @@ class EsignService:
         updates.append("updated_at = NOW()")
 
         try:
-            self.db.execute(text(f"""
-                UPDATE esign_fields SET {', '.join(updates)} WHERE id = :id
-            """), params)
+            sql = "UPDATE esign_fields SET " + ", ".join(updates) + " WHERE id = :id"
+            self.db.execute(text(sql), params)
 
             self.db.commit()
 

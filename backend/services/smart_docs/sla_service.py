@@ -8,7 +8,7 @@ Handles SLA calculation, tracking, and status determination:
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 from enum import Enum
 from sqlalchemy.orm import Session

@@ -18,7 +18,7 @@ Security features:
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Body, BackgroundTasks, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field, validator
 import logging

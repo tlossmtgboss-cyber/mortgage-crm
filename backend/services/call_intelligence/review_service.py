@@ -14,7 +14,7 @@ Features:
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -239,23 +239,21 @@ class HumanReviewService:
         where_clause = " AND ".join(filters)
 
         try:
-            result = self.db.execute(
-                text(f"""
+            sql = """
                     SELECT
                         id, call_id, loan_id, extraction_type, field_name,
                         extracted_value, confidence_score, source_text,
                         review_status, reviewed_by, reviewed_at, reviewer_notes,
                         final_value, created_at
                     FROM extraction_review_queue
-                    WHERE {where_clause}
+                    WHERE """ + where_clause + """
                     ORDER BY
                         CASE WHEN extraction_type IN ('compliance', 'financial') THEN 0 ELSE 1 END,
                         confidence_score ASC,
                         created_at ASC
                     LIMIT :limit OFFSET :offset
-                """),
-                params
-            ).fetchall()
+                """
+            result = self.db.execute(text(sql), params).fetchall()
 
             items = []
             for row in result:
@@ -434,18 +432,16 @@ class HumanReviewService:
         where_clause = " AND ".join(filters)
 
         try:
-            result = self.db.execute(
-                text(f"""
+            sql = """
                     SELECT
                         review_status,
                         COUNT(*) as count,
                         AVG(confidence_score) as avg_confidence
                     FROM extraction_review_queue
-                    WHERE {where_clause}
+                    WHERE """ + where_clause + """
                     GROUP BY review_status
-                """),
-                params
-            ).fetchall()
+                """
+            result = self.db.execute(text(sql), params).fetchall()
 
             stats = {
                 "pending": 0,

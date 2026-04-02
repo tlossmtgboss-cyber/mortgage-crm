@@ -9,7 +9,7 @@ FastAPI application entry point with Telnyx webhook and WebSocket endpoints.
 import os
 import logging
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException

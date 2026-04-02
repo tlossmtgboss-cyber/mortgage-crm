@@ -9,7 +9,7 @@ All routes require owner/admin authentication.
 
 import os
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -745,7 +745,7 @@ async def get_usage_alerts(
         status_filter = "AND status = :status"
         params["status"] = status
 
-    alerts = db.execute(text(f"""
+    query = """
         SELECT
             id, scope_type, scope_id, category,
             alert_type, severity, title, message,
@@ -753,10 +753,11 @@ async def get_usage_alerts(
             status, created_at, acknowledged_at, resolved_at
         FROM usage_alerts
         WHERE organization_id = :org_id
-        {status_filter}
+        """ + status_filter + """
         ORDER BY created_at DESC
         LIMIT :limit
-    """), params).fetchall()
+    """
+    alerts = db.execute(text(query), params).fetchall()
 
     return {
         "total": len(alerts),

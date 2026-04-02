@@ -286,16 +286,17 @@ def _complete_task_instance(
         completed_by_clause = ", completed_by_id = :completed_by_id"
         params["completed_by_id"] = completed_by_id
 
-    db.execute(text(f"""
-        UPDATE workflow_task_instances
-        SET status = 'completed',
-            completion_source = :source,
-            completed_at = NOW(),
-            updated_at = NOW()
-            {completed_by_clause}
-        WHERE id = :id
-        AND status IN ('scheduled', 'pending', 'in_progress')
-    """), params)
+    complete_query = (
+        "UPDATE workflow_task_instances"
+        " SET status = 'completed',"
+        "     completion_source = :source,"
+        "     completed_at = NOW(),"
+        "     updated_at = NOW()"
+        + completed_by_clause
+        + " WHERE id = :id"
+        " AND status IN ('scheduled', 'pending', 'in_progress')"
+    )
+    db.execute(text(complete_query), params)
 
 
 def _complete_linked_task(db: Session, linked_task_id: int) -> int:

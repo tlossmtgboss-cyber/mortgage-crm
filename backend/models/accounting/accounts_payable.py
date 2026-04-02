@@ -3,7 +3,7 @@ Accounts Payable Models: Vendors, Bills, Payments.
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from sqlalchemy import (
     Column, String, Integer, Boolean, DateTime, Date, Text,

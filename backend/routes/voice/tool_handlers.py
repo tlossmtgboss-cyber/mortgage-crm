@@ -262,11 +262,8 @@ async def handle_browser_function_call(
 
         try:
             # CRIT-2: Tenant-scoped lead search
-            org_filter = "AND organization_id = :org_id" if organization_id else ""
             query_params = {"pattern": f"%{name_query}%"}
-            if organization_id:
-                query_params["org_id"] = organization_id
-            results = db.execute(text(f"""
+            sql = """
                 SELECT id, first_name, last_name, name, phone, email, stage, source
                 FROM leads
                 WHERE (
@@ -275,10 +272,15 @@ async def handle_browser_function_call(
                     OR LOWER(COALESCE(first_name, '')) LIKE LOWER(:pattern)
                     OR LOWER(COALESCE(last_name, '')) LIKE LOWER(:pattern)
                 )
-                {org_filter}
+            """
+            if organization_id:
+                sql += " AND organization_id = :org_id"
+                query_params["org_id"] = organization_id
+            sql += """
                 ORDER BY updated_at DESC NULLS LAST
                 LIMIT 5
-            """), query_params).fetchall()
+            """
+            results = db.execute(text(sql), query_params).fetchall()
 
             if not results:
                 return {"success": True, "message": f"No contacts found matching '{name_query}'.", "contacts": []}
@@ -364,18 +366,17 @@ async def handle_browser_function_call(
 
                 # CRIT-2: Tenant-scoped appointment lookup
                 appt_params = {"check_date": date_str}
-                appt_org_filter = ""
-                if organization_id:
-                    appt_org_filter = "AND organization_id = :org_id"
-                    appt_params["org_id"] = organization_id
-                existing = db.execute(text(f"""
+                appt_sql = """
                     SELECT appointment_datetime
                     FROM appointments
                     WHERE DATE(appointment_datetime) = :check_date
                         AND status != 'cancelled'
-                        {appt_org_filter}
-                    ORDER BY appointment_datetime
-                """), appt_params).fetchall()
+                """
+                if organization_id:
+                    appt_sql += " AND organization_id = :org_id"
+                    appt_params["org_id"] = organization_id
+                appt_sql += " ORDER BY appointment_datetime"
+                existing = db.execute(text(appt_sql), appt_params).fetchall()
 
                 booked_hours = {row.appointment_datetime.hour for row in existing} if existing else set()
 
@@ -556,11 +557,7 @@ async def handle_browser_function_call(
         try:
             # CRIT-2: Tenant-scoped pipeline query
             pipeline_params = {}
-            pipeline_org_filter = ""
-            if organization_id:
-                pipeline_org_filter = "WHERE organization_id = :org_id"
-                pipeline_params["org_id"] = organization_id
-            summary = db.execute(text(f"""
+            pipeline_sql = """
                 SELECT
                     COUNT(*) FILTER (WHERE stage NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY')) as active_loans,
                     COALESCE(SUM(amount) FILTER (WHERE stage NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY')), 0) as active_volume,
@@ -568,8 +565,11 @@ async def handle_browser_function_call(
                     COUNT(*) FILTER (WHERE stage = 'FUNDED' AND funded_date >= CURRENT_DATE - 30) as funded_last_30,
                     COALESCE(SUM(amount) FILTER (WHERE stage = 'FUNDED' AND funded_date >= CURRENT_DATE - 30), 0) as funded_volume_30
                 FROM loans
-                {pipeline_org_filter}
-            """), pipeline_params).fetchone()
+            """
+            if organization_id:
+                pipeline_sql += " WHERE organization_id = :org_id"
+                pipeline_params["org_id"] = organization_id
+            summary = db.execute(text(pipeline_sql), pipeline_params).fetchone()
 
             active_volume = float(summary.active_volume or 0)
             funded_volume = float(summary.funded_volume_30 or 0)
@@ -693,9 +693,7 @@ async def handle_browser_function_call(
         try:
             # CRIT-2: Tenant-scoped task lookup
             task_params = {}
-            org_filter = ""
             if organization_id:
-                org_filter = "AND organization_id = :org_id"
                 task_params["org_id"] = organization_id
 
             task_row = None
@@ -703,27 +701,30 @@ async def handle_browser_function_call(
             if task_id:
                 # Look up by exact ID first
                 task_params["task_id"] = task_id
-                task_row = db.execute(text(f"""
+                task_id_sql = """
                     SELECT id, title, status
                     FROM tasks
                     WHERE id = :task_id
                         AND status != 'completed'
-                        {org_filter}
-                    LIMIT 1
-                """), task_params).fetchone()
+                """
+                if organization_id:
+                    task_id_sql += " AND organization_id = :org_id"
+                task_id_sql += " LIMIT 1"
+                task_row = db.execute(text(task_id_sql), task_params).fetchone()
 
             if not task_row and task_title:
                 # Fall back to ILIKE search by title
                 task_params["pattern"] = f"%{task_title}%"
-                task_row = db.execute(text(f"""
+                task_title_sql = """
                     SELECT id, title, status
                     FROM tasks
                     WHERE LOWER(title) LIKE LOWER(:pattern)
                         AND status != 'completed'
-                        {org_filter}
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                """), task_params).fetchone()
+                """
+                if organization_id:
+                    task_title_sql += " AND organization_id = :org_id"
+                task_title_sql += " ORDER BY created_at DESC LIMIT 1"
+                task_row = db.execute(text(task_title_sql), task_params).fetchone()
 
             if not task_row:
                 search_term = task_id or task_title
@@ -734,13 +735,15 @@ async def handle_browser_function_call(
 
             # Mark as completed
             complete_params = {"task_id": str(task_row.id)}
-            if organization_id:
-                complete_params["org_id"] = organization_id
-            db.execute(text(f"""
+            complete_sql = """
                 UPDATE tasks
                 SET status = 'completed', completed_at = NOW(), updated_at = NOW()
-                WHERE id = :task_id {org_filter}
-            """), complete_params)
+                WHERE id = :task_id
+            """
+            if organization_id:
+                complete_sql += " AND organization_id = :org_id"
+                complete_params["org_id"] = organization_id
+            db.execute(text(complete_sql), complete_params)
             db.commit()
 
             logger.info(f"Task completed: '{task_row.title}' (id={task_row.id})")
@@ -839,18 +842,16 @@ async def handle_browser_function_call(
             # CRIT-2: Tenant-scoped session lookup
             if session_id_arg:
                 stop_params = {"session_id": session_id_arg}
-                stop_org_filter = ""
-                if organization_id:
-                    stop_org_filter = "AND organization_id = :org_id"
-                    stop_params["org_id"] = organization_id
-
-                session_row = db.execute(text(f"""
+                stop_sql = """
                     SELECT id, status, started_at
                     FROM call_sessions
                     WHERE id = :session_id AND status = 'active'
-                        {stop_org_filter}
-                    LIMIT 1
-                """), stop_params).fetchone()
+                """
+                if organization_id:
+                    stop_sql += " AND organization_id = :org_id"
+                    stop_params["org_id"] = organization_id
+                stop_sql += " LIMIT 1"
+                session_row = db.execute(text(stop_sql), stop_params).fetchone()
             else:
                 # Find most recent active session for this user/org
                 stop_params = {}
@@ -863,13 +864,8 @@ async def handle_browser_function_call(
                     stop_params["user_id"] = user_id
 
                 stop_where = " AND ".join(stop_filters)
-                session_row = db.execute(text(f"""
-                    SELECT id, status, started_at
-                    FROM call_sessions
-                    WHERE {stop_where}
-                    ORDER BY started_at DESC
-                    LIMIT 1
-                """), stop_params).fetchone()
+                stop_sql = "SELECT id, status, started_at FROM call_sessions WHERE " + stop_where + " ORDER BY started_at DESC LIMIT 1"
+                session_row = db.execute(text(stop_sql), stop_params).fetchone()
 
             if not session_row:
                 return {"success": False, "message": "No active call recording found to stop."}
@@ -878,17 +874,15 @@ async def handle_browser_function_call(
 
             # Update session: status -> processing, set ended_at
             update_params = {"session_id": found_session_id, "ended_at": now}
-            update_org_filter = ""
-            if organization_id:
-                update_org_filter = "AND organization_id = :org_id"
-                update_params["org_id"] = organization_id
-
-            db.execute(text(f"""
+            update_sql = """
                 UPDATE call_sessions
                 SET status = 'processing', ended_at = :ended_at, updated_at = NOW()
                 WHERE id = :session_id
-                    {update_org_filter}
-            """), update_params)
+            """
+            if organization_id:
+                update_sql += " AND organization_id = :org_id"
+                update_params["org_id"] = organization_id
+            db.execute(text(update_sql), update_params)
             db.commit()
 
             logger.info(f"Call recording stopped: session={found_session_id[:8]}")
@@ -926,18 +920,12 @@ async def handle_browser_function_call(
             # Resolve session ID if not provided — find most recent for org
             if not session_id_arg:
                 resolve_params = {}
-                resolve_org_filter = ""
+                resolve_sql = "SELECT id FROM call_sessions"
                 if organization_id:
-                    resolve_org_filter = "WHERE organization_id = :org_id"
+                    resolve_sql += " WHERE organization_id = :org_id"
                     resolve_params["org_id"] = organization_id
-
-                recent_session = db.execute(text(f"""
-                    SELECT id
-                    FROM call_sessions
-                    {resolve_org_filter}
-                    ORDER BY started_at DESC NULLS LAST
-                    LIMIT 1
-                """), resolve_params).fetchone()
+                resolve_sql += " ORDER BY started_at DESC NULLS LAST LIMIT 1"
+                recent_session = db.execute(text(resolve_sql), resolve_params).fetchone()
 
                 if not recent_session:
                     return {"success": True, "message": "No call intelligence sessions found.", "sent": False}
@@ -946,19 +934,17 @@ async def handle_browser_function_call(
 
             # CRIT-2: Query document_request artifacts scoped to organization_id
             checklist_params = {"session_id": session_id_arg}
-            checklist_org_filter = ""
-            if organization_id:
-                checklist_org_filter = "AND organization_id = :org_id"
-                checklist_params["org_id"] = organization_id
-
-            artifacts = db.execute(text(f"""
+            checklist_sql = """
                 SELECT id, title, content
                 FROM call_artifacts
                 WHERE session_id = :session_id
                     AND artifact_type = 'document_request'
-                    {checklist_org_filter}
-                ORDER BY created_at ASC
-            """), checklist_params).fetchall()
+            """
+            if organization_id:
+                checklist_sql += " AND organization_id = :org_id"
+                checklist_params["org_id"] = organization_id
+            checklist_sql += " ORDER BY created_at ASC"
+            artifacts = db.execute(text(checklist_sql), checklist_params).fetchall()
 
             if not artifacts:
                 return {

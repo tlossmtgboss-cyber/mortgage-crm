@@ -510,22 +510,20 @@ class EmploymentGapService:
 
         where_sql = " AND ".join(filters)
 
-        rows = self.db.execute(
-            text(f"""
-                SELECT
-                    sd.id              AS doc_id,
-                    sd.doc_type        AS doc_type,
-                    sd.uploaded_at     AS uploaded_at,
-                    sde.extracted_fields  AS extracted_fields,
-                    sde.overall_confidence AS overall_confidence
-                FROM smart_documents sd
-                LEFT JOIN smart_document_extractions sde
-                    ON sde.document_id = sd.id
-                WHERE {where_sql}
-                ORDER BY sd.uploaded_at DESC
-            """),
-            params,
-        ).fetchall()
+        emp_query = (
+            "SELECT"
+            " sd.id AS doc_id,"
+            " sd.doc_type AS doc_type,"
+            " sd.uploaded_at AS uploaded_at,"
+            " sde.extracted_fields AS extracted_fields,"
+            " sde.overall_confidence AS overall_confidence"
+            " FROM smart_documents sd"
+            " LEFT JOIN smart_document_extractions sde"
+            "     ON sde.document_id = sd.id"
+            " WHERE " + where_sql
+            + " ORDER BY sd.uploaded_at DESC"
+        )
+        rows = self.db.execute(text(emp_query), params).fetchall()
 
         records: List[EmploymentRecord] = []
         seen_employers: Dict[str, EmploymentRecord] = {}

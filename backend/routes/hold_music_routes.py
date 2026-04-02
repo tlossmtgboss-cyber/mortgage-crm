@@ -230,14 +230,15 @@ async def list_hold_music(
     try:
         where_clause = "" if include_inactive else "WHERE is_active = TRUE"
 
-        results = db.execute(text(f"""
-            SELECT id, name, description, source_type, audio_url, twilio_music_name,
-                   duration_seconds, is_default, is_active, comfort_messages,
-                   comfort_message_interval, created_at
-            FROM hold_music
-            {where_clause}
-            ORDER BY is_default DESC, name ASC
-        """)).fetchall()
+        sql = (
+            "SELECT id, name, description, source_type, audio_url, twilio_music_name,"
+            " duration_seconds, is_default, is_active, comfort_messages,"
+            " comfort_message_interval, created_at"
+            " FROM hold_music"
+            " " + where_clause +
+            " ORDER BY is_default DESC, name ASC"
+        )
+        results = db.execute(text(sql)).fetchall()
 
         music_list = []
         for row in results:
@@ -405,9 +406,8 @@ async def update_hold_music(
         updates.append("updated_at = CURRENT_TIMESTAMP")
 
         if updates:
-            db.execute(text(f"""
-                UPDATE hold_music SET {', '.join(updates)} WHERE id = :music_id
-            """), params)
+            sql = "UPDATE hold_music SET " + ", ".join(updates) + " WHERE id = :music_id"
+            db.execute(text(sql), params)
             db.commit()
 
         return {"success": True, "message": "Hold music updated"}

@@ -110,8 +110,9 @@ def register_debug_status_routes(app, get_db, get_current_user, route_errors=Non
             if table_name == 'users':
                 continue
             try:
+                count_sql = "SELECT COUNT(*) FROM " + _safe_identifier(table_name) + " WHERE " + _safe_identifier(column_name) + " = :uid"
                 count = db.execute(
-                    text(f"SELECT COUNT(*) FROM {_safe_identifier(table_name)} WHERE {_safe_identifier(column_name)} = :uid"),
+                    text(count_sql),
                     {"uid": user_id}
                 ).scalar()
                 if count > 0:

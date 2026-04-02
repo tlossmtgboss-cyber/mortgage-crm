@@ -4,7 +4,7 @@ Seed sample guideline updates for testing
 """
 import sys
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))

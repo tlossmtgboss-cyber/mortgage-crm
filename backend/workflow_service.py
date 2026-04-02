@@ -15,7 +15,7 @@ The WorkflowEngine class should not be used for new integrations.
 import warnings
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 from typing import Dict, Any, List, Optional
 import logging
 import json

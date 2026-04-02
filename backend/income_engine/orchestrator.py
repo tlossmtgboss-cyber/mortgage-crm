@@ -14,7 +14,7 @@ Responsibilities:
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List, Dict, Any, Optional, Tuple
 import time

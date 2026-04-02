@@ -60,7 +60,7 @@ Comprehensive field extraction for all CRM profile types
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 from anthropic import Anthropic
 

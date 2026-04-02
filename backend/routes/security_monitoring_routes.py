@@ -11,7 +11,7 @@ Provides real-time security monitoring data for the admin dashboard including:
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 import logging
 import os

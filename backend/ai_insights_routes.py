@@ -2,7 +2,7 @@
 FastAPI routes for AI-powered profitability insights.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session

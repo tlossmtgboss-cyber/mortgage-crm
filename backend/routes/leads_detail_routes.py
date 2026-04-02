@@ -157,7 +157,8 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                         continue
                     if table in existing_tables:
                         try:
-                            db.execute(text(f"DELETE FROM {table} WHERE {column} = :lead_id"), {"lead_id": lead_id})
+                            sql = "DELETE FROM " + table + " WHERE " + column + " = :lead_id"
+                            db.execute(text(sql), {"lead_id": lead_id})
                         except Exception as te:
                             logger.warning(f"Error cleaning {table} for lead {lead_id}: {te}")
 
@@ -305,6 +306,37 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                     cascade_totals["mum_clients_updated"] += len(cr["mum_clients_updated"])
                 except Exception as cascade_err:
                     logger.error(f"Cascade error for lead {lead_id}: {cascade_err}")
+
+                # LOS auto-push: when lead transitions to Application-stage,
+                # push to Encompass if org has auto_push_on_stage_change enabled
+                LOS_PUSH_STAGES = {"Application", "Converted", "Pre-Approved"}
+                if new_status in LOS_PUSH_STAGES and lead.loan_number:
+                    try:
+                        from sqlalchemy import text as sa_text
+                        lead_org_id = getattr(lead, 'organization_id', None)
+                        enc_cfg = db.execute(sa_text("""
+                            SELECT auto_push_on_stage_change, is_connected
+                            FROM encompass_configs
+                            WHERE organization_id = :org_id
+                        """), {"org_id": lead_org_id}).fetchone()
+
+                        if enc_cfg and enc_cfg.auto_push_on_stage_change and enc_cfg.is_connected:
+                            loan_row = db.execute(sa_text(
+                                "SELECT id FROM loans WHERE loan_number = :ln LIMIT 1"
+                            ), {"ln": lead.loan_number}).fetchone()
+
+                            if loan_row:
+                                from services.los_integration.encompass_oauth_service import EncompassOAuthService
+                                from services.los_integration.sync_service import LOSSyncService
+                                oauth_svc = EncompassOAuthService()
+                                client = await oauth_svc.get_authenticated_client(db=db, org_id=lead_org_id)
+                                sync_svc = LOSSyncService(client=client)
+                                sync_result = await sync_svc.push_to_los(db=db, loan_id=loan_row.id, organization_id=lead_org_id)
+                                logger.info(f"LOS auto-push triggered for lead {lead_id} → loan {loan_row.id} (stage={new_status}, result={sync_result.status.value})")
+                    except ImportError:
+                        pass  # Encompass integration not installed
+                    except Exception as los_err:
+                        logger.warning(f"LOS auto-push failed for lead {lead_id}: {los_err}")
 
             except Exception as e:
                 logger.error(f"Failed to update lead {lead_id}: {e}")
@@ -815,8 +847,9 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                     continue
                 if table in existing_tables:
                     try:
+                        sql = "DELETE FROM " + table + " WHERE " + column + " = :lead_id"
                         db.execute(
-                            text(f"DELETE FROM {table} WHERE {column} = :lead_id"),
+                            text(sql),
                             {"lead_id": lead_id}
                         )
                     except Exception as e:

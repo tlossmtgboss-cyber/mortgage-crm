@@ -15,7 +15,7 @@ FLOW:
 
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 
@@ -402,9 +402,10 @@ class RecruitingDialerService:
                 org_filter = "AND organization_id = :org_id"
                 params["org_id"] = organization_id
 
-            result = self.db.execute(text(f"""
-                SELECT phone FROM users WHERE id = :user_id {org_filter}
-            """), params).first()
+            sql = "SELECT phone FROM users WHERE id = :user_id"
+            if org_filter:
+                sql += " " + org_filter
+            result = self.db.execute(text(sql), params).first()
             return result.phone if result else None
         except Exception as e:
             logger.error(f"Error getting user phone: {e}")
@@ -435,11 +436,10 @@ class RecruitingDialerService:
                 org_filter = "AND rc.organization_id = :org_id"
                 params["org_id"] = organization_id
 
-            result = self.db.execute(text(f"""
-                SELECT rc.* FROM recruiting_calls rc
-                JOIN mm_candidates c ON c.id = rc.candidate_id
-                WHERE rc.id = :call_id {org_filter}
-            """), params).first()
+            sql = "SELECT rc.* FROM recruiting_calls rc JOIN mm_candidates c ON c.id = rc.candidate_id WHERE rc.id = :call_id"
+            if org_filter:
+                sql += " " + org_filter
+            result = self.db.execute(text(sql), params).first()
 
             if result:
                 return dict(result._mapping)
@@ -465,11 +465,8 @@ class RecruitingDialerService:
             set_clauses = ", ".join([f"{k} = :{k}" for k in safe_updates.keys()])
             params = {"call_id": call_id, **safe_updates}
 
-            self.db.execute(text(f"""
-                UPDATE recruiting_calls
-                SET {set_clauses}, updated_at = NOW()
-                WHERE id = :call_id
-            """), params)
+            sql = "UPDATE recruiting_calls SET " + set_clauses + ", updated_at = NOW() WHERE id = :call_id"
+            self.db.execute(text(sql), params)
             self.db.commit()
         except Exception as e:
             logger.error(f"Error updating call record: {e}")

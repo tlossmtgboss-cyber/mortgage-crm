@@ -76,14 +76,15 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # 1. Tasks with invalid assignees (owner_id -> users.id)
         try:
-            tasks_invalid_owner = db.execute(text(f"""
+            sql = """
                 SELECT t.id, t.title, t.owner_id, t.lead_id, t.loan_id
                 FROM tasks t
                 LEFT JOIN users u ON u.id = t.owner_id
                 WHERE t.owner_id IS NOT NULL AND u.id IS NULL
-                {org_filter}
+                """ + org_filter + """
                 LIMIT :limit
-            """), params).mappings().all()
+            """
+            tasks_invalid_owner = db.execute(text(sql), params).mappings().all()
             orphans["tasks_invalid_assignee"] = {
                 "count": len(tasks_invalid_owner),
                 "description": "Tasks assigned to non-existent users",
@@ -98,14 +99,15 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # 2. Tasks referencing non-existent leads
         try:
-            tasks_invalid_lead = db.execute(text(f"""
+            sql = """
                 SELECT t.id, t.title, t.lead_id
                 FROM tasks t
                 LEFT JOIN leads le ON le.id = t.lead_id
                 WHERE t.lead_id IS NOT NULL AND le.id IS NULL
-                {org_filter}
+                """ + org_filter + """
                 LIMIT :limit
-            """), params).mappings().all()
+            """
+            tasks_invalid_lead = db.execute(text(sql), params).mappings().all()
             orphans["tasks_invalid_lead"] = {
                 "count": len(tasks_invalid_lead),
                 "description": "Tasks referencing non-existent leads",
@@ -120,14 +122,15 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # 3. Tasks referencing non-existent loans
         try:
-            tasks_invalid_loan = db.execute(text(f"""
+            sql = """
                 SELECT t.id, t.title, t.loan_id
                 FROM tasks t
                 LEFT JOIN loans lo ON lo.id = t.loan_id
                 WHERE t.loan_id IS NOT NULL AND lo.id IS NULL
-                {org_filter}
+                """ + org_filter + """
                 LIMIT :limit
-            """), params).mappings().all()
+            """
+            tasks_invalid_loan = db.execute(text(sql), params).mappings().all()
             orphans["tasks_invalid_loan"] = {
                 "count": len(tasks_invalid_loan),
                 "description": "Tasks referencing non-existent loans",
@@ -142,14 +145,15 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # 4. Activities referencing non-existent leads
         try:
-            activities_invalid_lead = db.execute(text(f"""
+            sql = """
                 SELECT a.id, a.type, a.lead_id
                 FROM activities a
                 LEFT JOIN leads le ON le.id = a.lead_id
                 WHERE a.lead_id IS NOT NULL AND le.id IS NULL
-                {org_filter_a}
+                """ + org_filter_a + """
                 LIMIT :limit
-            """), params).mappings().all()
+            """
+            activities_invalid_lead = db.execute(text(sql), params).mappings().all()
             orphans["activities_invalid_lead"] = {
                 "count": len(activities_invalid_lead),
                 "description": "Activities referencing non-existent leads",
@@ -164,14 +168,15 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # 5. Activities referencing non-existent loans
         try:
-            activities_invalid_loan = db.execute(text(f"""
+            sql = """
                 SELECT a.id, a.type, a.loan_id
                 FROM activities a
                 LEFT JOIN loans lo ON lo.id = a.loan_id
                 WHERE a.loan_id IS NOT NULL AND lo.id IS NULL
-                {org_filter_a}
+                """ + org_filter_a + """
                 LIMIT :limit
-            """), params).mappings().all()
+            """
+            activities_invalid_loan = db.execute(text(sql), params).mappings().all()
             orphans["activities_invalid_loan"] = {
                 "count": len(activities_invalid_loan),
                 "description": "Activities referencing non-existent loans",
@@ -186,14 +191,15 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # 6. Activities referencing non-existent users
         try:
-            activities_invalid_user = db.execute(text(f"""
+            sql = """
                 SELECT a.id, a.type, a.user_id
                 FROM activities a
                 LEFT JOIN users u ON u.id = a.user_id
                 WHERE a.user_id IS NOT NULL AND u.id IS NULL
-                {org_filter_a}
+                """ + org_filter_a + """
                 LIMIT :limit
-            """), params).mappings().all()
+            """
+            activities_invalid_user = db.execute(text(sql), params).mappings().all()
             orphans["activities_invalid_user"] = {
                 "count": len(activities_invalid_user),
                 "description": "Activities referencing non-existent users",
@@ -208,14 +214,15 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # 7. Leads with invalid owner_id
         try:
-            leads_invalid_owner = db.execute(text(f"""
+            sql = """
                 SELECT l.id, l.name, l.owner_id
                 FROM leads l
                 LEFT JOIN users u ON u.id = l.owner_id
                 WHERE l.owner_id IS NOT NULL AND u.id IS NULL
-                {org_filter_l}
+                """ + org_filter_l + """
                 LIMIT :limit
-            """), params).mappings().all()
+            """
+            leads_invalid_owner = db.execute(text(sql), params).mappings().all()
             orphans["leads_invalid_owner"] = {
                 "count": len(leads_invalid_owner),
                 "description": "Leads assigned to non-existent users",
@@ -230,14 +237,15 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # 8. AI tasks referencing non-existent entities
         try:
-            ai_tasks_invalid_lead = db.execute(text(f"""
+            sql = """
                 SELECT t.id, t.title, t.lead_id
                 FROM ai_tasks t
                 LEFT JOIN leads le ON le.id = t.lead_id
                 WHERE t.lead_id IS NOT NULL AND le.id IS NULL
-                {"AND t.organization_id = :org_id" if org_id else ""}
+                """ + ("AND t.organization_id = :org_id" if org_id else "") + """
                 LIMIT :limit
-            """), params).mappings().all()
+            """
+            ai_tasks_invalid_lead = db.execute(text(sql), params).mappings().all()
             orphans["ai_tasks_invalid_lead"] = {
                 "count": len(ai_tasks_invalid_lead),
                 "description": "AI tasks referencing non-existent leads",
@@ -311,24 +319,25 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
         # 1. Tasks with invalid assignees -> nullify owner_id
         if should_clean("tasks_invalid_assignee"):
             try:
-                count_result = db.execute(text(f"""
+                sql = """
                     SELECT COUNT(*) as cnt FROM tasks t
                     LEFT JOIN users u ON u.id = t.owner_id
                     WHERE t.owner_id IS NOT NULL AND u.id IS NULL
-                    {org_filter}
-                """), params).mappings().first()
+                    """ + org_filter
+                count_result = db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
-                    db.execute(text(f"""
+                    sql = """
                         UPDATE tasks SET owner_id = NULL, updated_at = :now
                         WHERE id IN (
                             SELECT t.id FROM tasks t
                             LEFT JOIN users u ON u.id = t.owner_id
                             WHERE t.owner_id IS NOT NULL AND u.id IS NULL
-                            {org_filter}
+                            """ + org_filter + """
                         )
-                    """), {**params, "now": datetime.now(timezone.utc)})
+                    """
+                    db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
 
                 results["tasks_invalid_assignee"] = {
                     "action": "nullify_owner_id",
@@ -341,24 +350,25 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
         # 2. Tasks with invalid lead refs -> nullify lead_id
         if should_clean("tasks_invalid_lead"):
             try:
-                count_result = db.execute(text(f"""
+                sql = """
                     SELECT COUNT(*) as cnt FROM tasks t
                     LEFT JOIN leads le ON le.id = t.lead_id
                     WHERE t.lead_id IS NOT NULL AND le.id IS NULL
-                    {org_filter}
-                """), params).mappings().first()
+                    """ + org_filter
+                count_result = db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
-                    db.execute(text(f"""
+                    sql = """
                         UPDATE tasks SET lead_id = NULL, updated_at = :now
                         WHERE id IN (
                             SELECT t.id FROM tasks t
                             LEFT JOIN leads le ON le.id = t.lead_id
                             WHERE t.lead_id IS NOT NULL AND le.id IS NULL
-                            {org_filter}
+                            """ + org_filter + """
                         )
-                    """), {**params, "now": datetime.now(timezone.utc)})
+                    """
+                    db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
 
                 results["tasks_invalid_lead"] = {
                     "action": "nullify_lead_id",
@@ -371,24 +381,25 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
         # 3. Tasks with invalid loan refs -> nullify loan_id
         if should_clean("tasks_invalid_loan"):
             try:
-                count_result = db.execute(text(f"""
+                sql = """
                     SELECT COUNT(*) as cnt FROM tasks t
                     LEFT JOIN loans lo ON lo.id = t.loan_id
                     WHERE t.loan_id IS NOT NULL AND lo.id IS NULL
-                    {org_filter}
-                """), params).mappings().first()
+                    """ + org_filter
+                count_result = db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
-                    db.execute(text(f"""
+                    sql = """
                         UPDATE tasks SET loan_id = NULL, updated_at = :now
                         WHERE id IN (
                             SELECT t.id FROM tasks t
                             LEFT JOIN loans lo ON lo.id = t.loan_id
                             WHERE t.loan_id IS NOT NULL AND lo.id IS NULL
-                            {org_filter}
+                            """ + org_filter + """
                         )
-                    """), {**params, "now": datetime.now(timezone.utc)})
+                    """
+                    db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
 
                 results["tasks_invalid_loan"] = {
                     "action": "nullify_loan_id",
@@ -401,23 +412,24 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
         # 4. Activities with invalid lead refs -> delete
         if should_clean("activities_invalid_lead"):
             try:
-                count_result = db.execute(text(f"""
+                sql = """
                     SELECT COUNT(*) as cnt FROM activities a
                     LEFT JOIN leads le ON le.id = a.lead_id
                     WHERE a.lead_id IS NOT NULL AND le.id IS NULL
-                    {org_filter_a}
-                """), params).mappings().first()
+                    """ + org_filter_a
+                count_result = db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
-                    db.execute(text(f"""
+                    sql = """
                         DELETE FROM activities WHERE id IN (
                             SELECT a.id FROM activities a
                             LEFT JOIN leads le ON le.id = a.lead_id
                             WHERE a.lead_id IS NOT NULL AND le.id IS NULL
-                            {org_filter_a}
+                            """ + org_filter_a + """
                         )
-                    """), params)
+                    """
+                    db.execute(text(sql), params)
 
                 results["activities_invalid_lead"] = {
                     "action": "delete_orphan_activities",
@@ -430,23 +442,24 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
         # 5. Activities with invalid loan refs -> delete
         if should_clean("activities_invalid_loan"):
             try:
-                count_result = db.execute(text(f"""
+                sql = """
                     SELECT COUNT(*) as cnt FROM activities a
                     LEFT JOIN loans lo ON lo.id = a.loan_id
                     WHERE a.loan_id IS NOT NULL AND lo.id IS NULL
-                    {org_filter_a}
-                """), params).mappings().first()
+                    """ + org_filter_a
+                count_result = db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
-                    db.execute(text(f"""
+                    sql = """
                         DELETE FROM activities WHERE id IN (
                             SELECT a.id FROM activities a
                             LEFT JOIN loans lo ON lo.id = a.loan_id
                             WHERE a.loan_id IS NOT NULL AND lo.id IS NULL
-                            {org_filter_a}
+                            """ + org_filter_a + """
                         )
-                    """), params)
+                    """
+                    db.execute(text(sql), params)
 
                 results["activities_invalid_loan"] = {
                     "action": "delete_orphan_activities",
@@ -459,24 +472,25 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
         # 6. Activities with invalid user refs -> nullify user_id
         if should_clean("activities_invalid_user"):
             try:
-                count_result = db.execute(text(f"""
+                sql = """
                     SELECT COUNT(*) as cnt FROM activities a
                     LEFT JOIN users u ON u.id = a.user_id
                     WHERE a.user_id IS NOT NULL AND u.id IS NULL
-                    {org_filter_a}
-                """), params).mappings().first()
+                    """ + org_filter_a
+                count_result = db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
-                    db.execute(text(f"""
+                    sql = """
                         UPDATE activities SET user_id = NULL
                         WHERE id IN (
                             SELECT a.id FROM activities a
                             LEFT JOIN users u ON u.id = a.user_id
                             WHERE a.user_id IS NOT NULL AND u.id IS NULL
-                            {org_filter_a}
+                            """ + org_filter_a + """
                         )
-                    """), params)
+                    """
+                    db.execute(text(sql), params)
 
                 results["activities_invalid_user"] = {
                     "action": "nullify_user_id",
@@ -489,24 +503,25 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
         # 7. Leads with invalid owner -> reassign to current admin
         if should_clean("leads_invalid_owner"):
             try:
-                count_result = db.execute(text(f"""
+                sql = """
                     SELECT COUNT(*) as cnt FROM leads l
                     LEFT JOIN users u ON u.id = l.owner_id
                     WHERE l.owner_id IS NOT NULL AND u.id IS NULL
-                    {org_filter_l}
-                """), params).mappings().first()
+                    """ + org_filter_l
+                count_result = db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
-                    db.execute(text(f"""
+                    sql = """
                         UPDATE leads SET owner_id = :admin_id, updated_at = :now
                         WHERE id IN (
                             SELECT l.id FROM leads l
                             LEFT JOIN users u ON u.id = l.owner_id
                             WHERE l.owner_id IS NOT NULL AND u.id IS NULL
-                            {org_filter_l}
+                            """ + org_filter_l + """
                         )
-                    """), {**params, "admin_id": current_user.id, "now": datetime.now(timezone.utc)})
+                    """
+                    db.execute(text(sql), {**params, "admin_id": current_user.id, "now": datetime.now(timezone.utc)})
 
                 results["leads_invalid_owner"] = {
                     "action": "reassign_to_admin",
@@ -520,24 +535,26 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
         # 8. AI tasks with invalid lead refs -> nullify
         if should_clean("ai_tasks_invalid_lead"):
             try:
-                count_result = db.execute(text(f"""
+                ai_org_filter = "AND t.organization_id = :org_id" if org_id else ""
+                sql = """
                     SELECT COUNT(*) as cnt FROM ai_tasks t
                     LEFT JOIN leads le ON le.id = t.lead_id
                     WHERE t.lead_id IS NOT NULL AND le.id IS NULL
-                    {"AND t.organization_id = :org_id" if org_id else ""}
-                """), params).mappings().first()
+                    """ + ai_org_filter
+                count_result = db.execute(text(sql), params).mappings().first()
                 count = count_result["cnt"] if count_result else 0
 
                 if not dry_run and count > 0:
-                    db.execute(text(f"""
+                    sql = """
                         UPDATE ai_tasks SET lead_id = NULL, updated_at = :now
                         WHERE id IN (
                             SELECT t.id FROM ai_tasks t
                             LEFT JOIN leads le ON le.id = t.lead_id
                             WHERE t.lead_id IS NOT NULL AND le.id IS NULL
-                            {"AND t.organization_id = :org_id" if org_id else ""}
+                            """ + ai_org_filter + """
                         )
-                    """), {**params, "now": datetime.now(timezone.utc)})
+                    """
+                    db.execute(text(sql), {**params, "now": datetime.now(timezone.utc)})
 
                 results["ai_tasks_invalid_lead"] = {
                     "action": "nullify_lead_id",
@@ -599,9 +616,8 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # Total leads
         try:
-            total_leads_result = db.execute(text(f"""
-                SELECT COUNT(*) as cnt FROM leads WHERE 1=1 {org_filter_l}
-            """), params).mappings().first()
+            sql = "SELECT COUNT(*) as cnt FROM leads WHERE 1=1 " + org_filter_l
+            total_leads_result = db.execute(text(sql), params).mappings().first()
             total_leads = total_leads_result["cnt"] if total_leads_result else 0
             metrics["total_leads"] = total_leads
         except Exception as e:
@@ -611,12 +627,12 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # Leads missing both email and phone
         try:
-            missing_contact = db.execute(text(f"""
+            sql = """
                 SELECT COUNT(*) as cnt FROM leads
                 WHERE (email IS NULL OR email = '')
                   AND (phone IS NULL OR phone = '')
-                  {org_filter_l}
-            """), params).mappings().first()
+                  """ + org_filter_l
+            missing_contact = db.execute(text(sql), params).mappings().first()
             metrics["leads_missing_contact"] = missing_contact["cnt"] if missing_contact else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (leads_missing_contact): {e}")
@@ -624,11 +640,11 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # Leads missing email only
         try:
-            missing_email = db.execute(text(f"""
+            sql = """
                 SELECT COUNT(*) as cnt FROM leads
                 WHERE (email IS NULL OR email = '')
-                  {org_filter_l}
-            """), params).mappings().first()
+                  """ + org_filter_l
+            missing_email = db.execute(text(sql), params).mappings().first()
             metrics["leads_missing_email"] = missing_email["cnt"] if missing_email else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (leads_missing_email): {e}")
@@ -636,11 +652,11 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # Leads missing phone only
         try:
-            missing_phone = db.execute(text(f"""
+            sql = """
                 SELECT COUNT(*) as cnt FROM leads
                 WHERE (phone IS NULL OR phone = '')
-                  {org_filter_l}
-            """), params).mappings().first()
+                  """ + org_filter_l
+            missing_phone = db.execute(text(sql), params).mappings().first()
             metrics["leads_missing_phone"] = missing_phone["cnt"] if missing_phone else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (leads_missing_phone): {e}")
@@ -648,11 +664,11 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # Tasks missing titles (empty or null)
         try:
-            tasks_no_title = db.execute(text(f"""
+            sql = """
                 SELECT COUNT(*) as cnt FROM tasks
                 WHERE (title IS NULL OR title = '')
-                  {org_filter_t}
-            """), params).mappings().first()
+                  """ + org_filter_t
+            tasks_no_title = db.execute(text(sql), params).mappings().first()
             metrics["tasks_missing_title"] = tasks_no_title["cnt"] if tasks_no_title else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (tasks_missing_title): {e}")
@@ -660,9 +676,8 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # Total tasks
         try:
-            total_tasks = db.execute(text(f"""
-                SELECT COUNT(*) as cnt FROM tasks WHERE 1=1 {org_filter_t}
-            """), params).mappings().first()
+            sql = "SELECT COUNT(*) as cnt FROM tasks WHERE 1=1 " + org_filter_t
+            total_tasks = db.execute(text(sql), params).mappings().first()
             metrics["total_tasks"] = total_tasks["cnt"] if total_tasks else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (total_tasks): {e}")
@@ -670,13 +685,14 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
 
         # Leads with duplicate names (potential duplicates)
         try:
-            duplicate_names = db.execute(text(f"""
+            sql = """
                 SELECT COUNT(*) as cnt FROM (
                     SELECT name, COUNT(*) as c FROM leads
-                    WHERE name IS NOT NULL {org_filter_l}
+                    WHERE name IS NOT NULL """ + org_filter_l + """
                     GROUP BY name HAVING COUNT(*) > 1
                 ) dupes
-            """), params).mappings().first()
+            """
+            duplicate_names = db.execute(text(sql), params).mappings().first()
             metrics["potential_duplicate_leads"] = duplicate_names["cnt"] if duplicate_names else 0
         except Exception as e:
             logger.error(f"Error in get_data_quality_summary (potential_duplicate_leads): {e}")
@@ -735,24 +751,25 @@ def register_data_quality_routes(app, get_db, get_current_user, **kwargs):
             params["org_id"] = org_id
 
         # Count total
-        count_result = db.execute(text(f"""
+        sql = """
             SELECT COUNT(*) as cnt FROM leads l
             WHERE (l.email IS NULL OR l.email = '')
               AND (l.phone IS NULL OR l.phone = '')
-              {org_filter}
-        """), params).mappings().first()
+              """ + org_filter
+        count_result = db.execute(text(sql), params).mappings().first()
         total = count_result["cnt"] if count_result else 0
 
         # Get records
-        leads = db.execute(text(f"""
+        sql = """
             SELECT l.id, l.name, l.email, l.phone, l.source, l.stage, l.created_at
             FROM leads l
             WHERE (l.email IS NULL OR l.email = '')
               AND (l.phone IS NULL OR l.phone = '')
-              {org_filter}
+              """ + org_filter + """
             ORDER BY l.created_at DESC
             LIMIT :limit OFFSET :offset
-        """), params).mappings().all()
+        """
+        leads = db.execute(text(sql), params).mappings().all()
 
         return {
             "total": total,

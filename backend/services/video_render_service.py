@@ -180,23 +180,23 @@ class VideoRenderService:
         where_clause = " AND ".join(filters) if filters else "1=1"
 
         # Get total count
-        count_result = db.execute(text(f"""
-            SELECT COUNT(*) FROM video_render_jobs rj
-            JOIN video_projects p ON p.id = rj.project_id
-            WHERE {where_clause}
-        """), params)
+        count_q = (
+            "SELECT COUNT(*) FROM video_render_jobs rj"
+            " JOIN video_projects p ON p.id = rj.project_id"
+            " WHERE " + where_clause
+        )
+        count_result = db.execute(text(count_q), params)
         total = count_result.scalar() or 0
 
-        results = db.execute(text(f"""
-            SELECT
-                rj.*,
-                p.title as project_title
-            FROM video_render_jobs rj
-            JOIN video_projects p ON p.id = rj.project_id
-            WHERE {where_clause}
-            ORDER BY rj.created_at DESC
-            LIMIT :limit OFFSET :offset
-        """), params).fetchall()
+        list_q = (
+            "SELECT rj.*, p.title as project_title"
+            " FROM video_render_jobs rj"
+            " JOIN video_projects p ON p.id = rj.project_id"
+            " WHERE " + where_clause
+            + " ORDER BY rj.created_at DESC"
+            " LIMIT :limit OFFSET :offset"
+        )
+        results = db.execute(text(list_q), params).fetchall()
 
         return [self._row_to_dict(r) for r in results], total
 

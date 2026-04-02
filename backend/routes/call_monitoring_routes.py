@@ -14,7 +14,7 @@ import base64
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 from uuid import UUID
 
@@ -320,16 +320,16 @@ async def lookup_caller(
 
         # Search in leads table first (most common for new calls)
         org_id = current_user.get("organization_id")
-        org_filter = "AND organization_id = :org_id" if org_id else ""
-        lead_query = text(f"""
+        lead_sql = """
             SELECT id, first_name, last_name, email, phone, status,
                    loan_amount, property_address, created_at
             FROM leads
             WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') LIKE :phone_pattern
-            {org_filter}
-            ORDER BY created_at DESC
-            LIMIT 1
-        """)
+        """
+        if org_id:
+            lead_sql += " AND organization_id = :org_id"
+        lead_sql += " ORDER BY created_at DESC LIMIT 1"
+        lead_query = text(lead_sql)
 
         lead_params = {"phone_pattern": f"%{normalized_phone[-10:]}"}
         if org_id:
@@ -356,16 +356,16 @@ async def lookup_caller(
             )
 
         # Search in contacts table
-        contact_org_filter = "AND organization_id = :org_id" if org_id else ""
-        contact_query = text(f"""
+        contact_sql = """
             SELECT id, first_name, last_name, email, phone, contact_type,
                    company, created_at
             FROM contacts
             WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') LIKE :phone_pattern
-            {contact_org_filter}
-            ORDER BY created_at DESC
-            LIMIT 1
-        """)
+        """
+        if org_id:
+            contact_sql += " AND organization_id = :org_id"
+        contact_sql += " ORDER BY created_at DESC LIMIT 1"
+        contact_query = text(contact_sql)
 
         contact_params = {"phone_pattern": f"%{normalized_phone[-10:]}"}
         if org_id:
@@ -391,16 +391,16 @@ async def lookup_caller(
             )
 
         # Search in loans table (borrower info)
-        loan_org_filter = "AND organization_id = :org_id" if org_id else ""
-        loan_query = text(f"""
+        loan_sql = """
             SELECT id, borrower_first_name, borrower_last_name, borrower_email,
                    borrower_phone, status, loan_amount, property_address
             FROM loans
             WHERE REGEXP_REPLACE(borrower_phone, '[^0-9]', '', 'g') LIKE :phone_pattern
-            {loan_org_filter}
-            ORDER BY created_at DESC
-            LIMIT 1
-        """)
+        """
+        if org_id:
+            loan_sql += " AND organization_id = :org_id"
+        loan_sql += " ORDER BY created_at DESC LIMIT 1"
+        loan_query = text(loan_sql)
 
         loan_params = {"phone_pattern": f"%{normalized_phone[-10:]}"}
         if org_id:
@@ -538,39 +538,39 @@ async def search_clients(
             name_parts = name.strip().split()
             if len(name_parts) >= 2:
                 # Full name search
-                lead_query = text(f"""
+                lead_name_sql = """
                     SELECT id, first_name, last_name, email, phone, status, created_at
                     FROM leads
                     WHERE LOWER(first_name) LIKE LOWER(:first_pattern)
                       AND LOWER(last_name) LIKE LOWER(:last_pattern)
-                    {org_filter}
-                    ORDER BY created_at DESC
-                    LIMIT 5
-                """)
+                """
+                if org_id:
+                    lead_name_sql += " AND organization_id = :org_id"
+                lead_name_sql += " ORDER BY created_at DESC LIMIT 5"
                 lead_params = {
                     "first_pattern": f"{name_parts[0]}%",
                     "last_pattern": f"{name_parts[1]}%",
                 }
                 if org_id:
                     lead_params["org_id"] = org_id
-                results = db.execute(lead_query, lead_params).fetchall()
+                results = db.execute(text(lead_name_sql), lead_params).fetchall()
             else:
                 # Single name search (first or last)
-                lead_query = text(f"""
+                lead_single_sql = """
                     SELECT id, first_name, last_name, email, phone, status, created_at
                     FROM leads
                     WHERE (LOWER(first_name) LIKE LOWER(:pattern)
                        OR LOWER(last_name) LIKE LOWER(:pattern))
-                    {org_filter}
-                    ORDER BY created_at DESC
-                    LIMIT 5
-                """)
+                """
+                if org_id:
+                    lead_single_sql += " AND organization_id = :org_id"
+                lead_single_sql += " ORDER BY created_at DESC LIMIT 5"
                 lead_params = {
                     "pattern": f"{name}%",
                 }
                 if org_id:
                     lead_params["org_id"] = org_id
-                results = db.execute(lead_query, lead_params).fetchall()
+                results = db.execute(text(lead_single_sql), lead_params).fetchall()
 
             for r in results:
                 clients.append({
@@ -589,38 +589,38 @@ async def search_clients(
         if name and len(clients) < 5:
             name_parts = name.strip().split()
             if len(name_parts) >= 2:
-                contact_query = text(f"""
+                contact_name_sql = """
                     SELECT id, first_name, last_name, email, phone, created_at
                     FROM contacts
                     WHERE LOWER(first_name) LIKE LOWER(:first_pattern)
                       AND LOWER(last_name) LIKE LOWER(:last_pattern)
-                    {org_filter}
-                    ORDER BY created_at DESC
-                    LIMIT 5
-                """)
+                """
+                if org_id:
+                    contact_name_sql += " AND organization_id = :org_id"
+                contact_name_sql += " ORDER BY created_at DESC LIMIT 5"
                 contact_params = {
                     "first_pattern": f"{name_parts[0]}%",
                     "last_pattern": f"{name_parts[1]}%",
                 }
                 if org_id:
                     contact_params["org_id"] = org_id
-                results = db.execute(contact_query, contact_params).fetchall()
+                results = db.execute(text(contact_name_sql), contact_params).fetchall()
             else:
-                contact_query = text(f"""
+                contact_single_sql = """
                     SELECT id, first_name, last_name, email, phone, created_at
                     FROM contacts
                     WHERE (LOWER(first_name) LIKE LOWER(:pattern)
                        OR LOWER(last_name) LIKE LOWER(:pattern))
-                    {org_filter}
-                    ORDER BY created_at DESC
-                    LIMIT 5
-                """)
+                """
+                if org_id:
+                    contact_single_sql += " AND organization_id = :org_id"
+                contact_single_sql += " ORDER BY created_at DESC LIMIT 5"
                 contact_params = {
                     "pattern": f"{name}%",
                 }
                 if org_id:
                     contact_params["org_id"] = org_id
-                results = db.execute(contact_query, contact_params).fetchall()
+                results = db.execute(text(contact_single_sql), contact_params).fetchall()
 
             for r in results:
                 clients.append({
@@ -636,13 +636,15 @@ async def search_clients(
 
         # Search by email if provided
         if email:
-            email_query = text(f"""
+            email_sql = """
                 SELECT id, first_name, last_name, email, phone, status
                 FROM leads
                 WHERE LOWER(email) = LOWER(:email)
-                {org_filter}
-                LIMIT 1
-            """)
+            """
+            if org_id:
+                email_sql += " AND organization_id = :org_id"
+            email_sql += " LIMIT 1"
+            email_query = text(email_sql)
             email_params = {"email": email}
             if org_id:
                 email_params["org_id"] = org_id
@@ -1492,21 +1494,20 @@ async def process_ci_recording(
     try:
         # Check if recording exists and has transcription (scoped to user's org)
         org_id = current_user.get("organization_id")
-        rec_org_filter = "AND u.organization_id = :org_id" if org_id else ""
         rec_params = {"recording_id": request.recording_id}
-        if org_id:
-            rec_params["org_id"] = org_id
-        recording = db.execute(text(f"""
+        rec_sql = """
             SELECT r.id, r.status, r.loan_id, r.lead_id,
                    t.id as transcription_id, t.status as transcription_status
             FROM ci_call_recordings r
             LEFT JOIN users u ON u.id = r.agent_user_id
             LEFT JOIN ci_call_transcriptions t ON t.recording_id = r.id
             WHERE r.id = :recording_id
-            {rec_org_filter}
-            ORDER BY t.created_at DESC
-            LIMIT 1
-        """), rec_params).fetchone()
+        """
+        if org_id:
+            rec_sql += " AND u.organization_id = :org_id"
+            rec_params["org_id"] = org_id
+        rec_sql += " ORDER BY t.created_at DESC LIMIT 1"
+        recording = db.execute(text(rec_sql), rec_params).fetchone()
 
         if not recording:
             raise HTTPException(status_code=404, detail="Recording not found")
@@ -1864,19 +1865,22 @@ async def get_call_metrics(
     try:
         # Get counts (scoped to org)
         org_id = current_user.get("organization_id")
-        org_filter = "AND organization_id = :org_id" if org_id else ""
-        result = db.execute(text(f"""
+        metrics_params = {"days": days}
+        metrics_sql = """
             SELECT
                 COUNT(*) FILTER (WHERE status IN ('active', 'capturing')) as active_calls,
                 COUNT(*) FILTER (WHERE status = 'completed' AND approval_status = 'pending') as pending_reviews,
                 COUNT(*) FILTER (WHERE DATE(ended_at) = CURRENT_DATE) as completed_today,
-                COUNT(*) FILTER (WHERE metadata->>'converted_to' IS NOT NULL AND ended_at >= NOW() - INTERVAL ':days days') as conversions,
-                COUNT(*) FILTER (WHERE ended_at >= NOW() - INTERVAL ':days days') as total_completed,
+                COUNT(*) FILTER (WHERE metadata->>'converted_to' IS NOT NULL AND ended_at >= NOW() - INTERVAL '1 day' * :days) as conversions,
+                COUNT(*) FILTER (WHERE ended_at >= NOW() - INTERVAL '1 day' * :days) as total_completed,
                 AVG(duration_seconds) FILTER (WHERE duration_seconds > 0) as avg_duration
             FROM call_sessions
-            WHERE created_at >= NOW() - INTERVAL ':days days'
-            {org_filter}
-        """.replace(':days', str(days))), {"org_id": org_id} if org_id else {})
+            WHERE created_at >= NOW() - INTERVAL '1 day' * :days
+        """
+        if org_id:
+            metrics_sql += " AND organization_id = :org_id"
+            metrics_params["org_id"] = org_id
+        result = db.execute(text(metrics_sql), metrics_params)
 
         row = result.fetchone()
         metrics = dict(row._mapping) if row else {}
@@ -2182,18 +2186,18 @@ async def get_stacked_notes(
     try:
         # Get all sessions for this client (via loan_id or lead_id, scoped to org)
         org_id = current_user.get("organization_id")
-        org_filter = "AND cs.organization_id = :org_id" if org_id else ""
-        sessions_query = text(f"""
+        sessions_sql = """
             SELECT DISTINCT cs.id as session_id, cs.call_mode, cs.started_at, cs.ended_at
             FROM call_sessions cs
             WHERE (cs.loan_id = :client_id OR cs.lead_id = :client_id)
-            {org_filter}
-            ORDER BY cs.started_at DESC
-        """)
+        """
+        if org_id:
+            sessions_sql += " AND cs.organization_id = :org_id"
+        sessions_sql += " ORDER BY cs.started_at DESC"
         session_params = {"client_id": client_id}
         if org_id:
             session_params["org_id"] = org_id
-        sessions_result = db.execute(sessions_query, session_params)
+        sessions_result = db.execute(text(sessions_sql), session_params)
         sessions = [dict(row._mapping) for row in sessions_result]
 
         if not sessions:

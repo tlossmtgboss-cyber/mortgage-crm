@@ -223,7 +223,7 @@ async def list_conferences(
 
         where_clause = "WHERE " + " AND ".join(conditions) if conditions else ""
 
-        results = db.execute(text(f"""
+        query = """
             SELECT cr.id, cr.room_name, cr.friendly_name, cr.max_participants,
                    cr.status, cr.pin_required, cr.record_conference,
                    cr.started_at, cr.is_active, cr.created_at,
@@ -233,10 +233,11 @@ async def list_conferences(
             LEFT JOIN users u ON u.id = cr.created_by
             LEFT JOIN conference_participants cp ON cp.conference_id = cr.id
                 AND cp.status IN ('ringing', 'connected')
-            {where_clause}
+            """ + where_clause + """
             GROUP BY cr.id, u.full_name
             ORDER BY cr.created_at DESC
-        """), params).fetchall()
+        """
+        results = db.execute(text(query), params).fetchall()
 
         conferences = []
         for row in results:
@@ -377,9 +378,8 @@ async def update_conference(
         updates.append("updated_at = CURRENT_TIMESTAMP")
 
         if updates:
-            db.execute(text(f"""
-                UPDATE conference_rooms SET {', '.join(updates)} WHERE id = :conf_id
-            """), params)
+            query = "UPDATE conference_rooms SET " + ", ".join(updates) + " WHERE id = :conf_id"
+            db.execute(text(query), params)
             db.commit()
 
         return {"success": True, "message": "Conference updated"}
@@ -758,10 +758,11 @@ async def mute_all_participants(
 
         # Get participants to mute
         role_filter = "AND role NOT IN ('host', 'moderator')" if except_hosts else ""
-        participants = db.execute(text(f"""
+        query = """
             SELECT id, call_sid FROM conference_participants
-            WHERE conference_id = :id AND status = 'connected' {role_filter}
-        """), {"id": conference_id}).fetchall()
+            WHERE conference_id = :id AND status = 'connected' """ + role_filter + """
+        """
+        participants = db.execute(text(query), {"id": conference_id}).fetchall()
 
         muted_count = 0
         for p in participants:

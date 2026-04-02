@@ -358,10 +358,11 @@ def register_email_template_routes(app, get_db, get_current_user, **kwargs):
             raise HTTPException(status_code=400, detail="No fields to update")
 
         updates.append("updated_at = NOW()")
-        db.execute(text(f"""
-            UPDATE tenant_email_templates SET {', '.join(updates)}
-            WHERE id = :id AND organization_id = :org_id
-        """), params)
+        update_sql = (
+            "UPDATE tenant_email_templates SET " + ", ".join(updates)
+            + " WHERE id = :id AND organization_id = :org_id"
+        )
+        db.execute(text(update_sql), params)
         db.commit()
 
         return {"id": template_id, "message": "Template updated"}

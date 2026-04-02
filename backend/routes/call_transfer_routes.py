@@ -1155,7 +1155,7 @@ async def list_transfers(
 
         where_clause = " AND ".join(conditions)
 
-        results = db.execute(text(f"""
+        query = """
             SELECT ct.id, ct.transfer_type, ct.status, ct.original_call_sid,
                    ct.transfer_call_sid, ct.to_phone, ct.to_user_id,
                    ct.from_user_id, ct.transfer_reason, ct.initiated_at, ct.completed_at,
@@ -1163,10 +1163,11 @@ async def list_transfers(
             FROM call_transfers ct
             LEFT JOIN users fu ON fu.id = ct.from_user_id
             LEFT JOIN users tu ON tu.id = ct.to_user_id
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY ct.initiated_at DESC
             LIMIT :limit OFFSET :offset
-        """), params).fetchall()
+        """
+        results = db.execute(text(query), params).fetchall()
 
         transfers = []
         for row in results:

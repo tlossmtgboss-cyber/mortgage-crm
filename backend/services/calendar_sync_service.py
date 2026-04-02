@@ -15,7 +15,7 @@ Phase 2: Inbound Sync (Salesforce → CRM)
 """
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple
 import httpx
 

@@ -8,7 +8,7 @@ rate limiting, and utility functions used across all video meeting sub-routers.
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 from collections import defaultdict
 import logging

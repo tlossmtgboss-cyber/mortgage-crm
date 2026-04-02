@@ -9,7 +9,7 @@ and handles opt-outs by creating tasks.
 import logging
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any, List
 
 from sqlalchemy import text
@@ -104,13 +104,13 @@ class ProspectReEngagementService:
             **stage_params,
         }
 
-        results = self.db.execute(text(f"""
+        sql = """
             SELECT
                 l.id, l.first_name, l.last_name, l.phone, l.email,
                 l.stage, l.last_contact, l.owner_id, l.organization_id
             FROM leads l
             WHERE l.organization_id = :org_id
-              AND l.stage IN ({stage_placeholders})
+              AND l.stage IN (""" + stage_placeholders + """)
               AND l.phone IS NOT NULL
               AND l.phone != ''
               AND l.owner_id IS NOT NULL
@@ -134,7 +134,8 @@ class ProspectReEngagementService:
               )
             ORDER BY l.last_contact ASC NULLS FIRST
             LIMIT :limit
-        """), params).fetchall()
+        """
+        results = self.db.execute(text(sql), params).fetchall()
 
         return [dict(r._mapping) for r in results]
 

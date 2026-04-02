@@ -8,7 +8,7 @@ Flow: Call Transcript → AI Extraction → ExtractedData → Audit Modules → 
 """
 
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
 from typing import Optional, List, Dict, Any, Union

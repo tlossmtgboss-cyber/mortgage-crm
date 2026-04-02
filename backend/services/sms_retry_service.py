@@ -8,7 +8,7 @@ and a circuit breaker to avoid hammering Telnyx when the API is down.
 import logging
 import asyncio
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
 from enum import Enum
 

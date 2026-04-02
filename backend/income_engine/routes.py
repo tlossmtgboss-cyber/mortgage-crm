@@ -4,7 +4,7 @@ Income Engine API Routes
 FastAPI routes for income calculation endpoints.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import List, Dict, Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query

@@ -1248,18 +1248,19 @@ async def get_intelligence_stats(
         params["org_id"] = org_id
 
     # Classification stats
+    class_query = (
+        "SELECT"
+        " COUNT(*) AS total_classifications,"
+        " AVG(prediction_confidence) AS avg_confidence,"
+        " COUNT(CASE WHEN is_correct = true THEN 1 END) AS correct_count,"
+        " COUNT(CASE WHEN is_correct = false THEN 1 END) AS incorrect_count,"
+        " COUNT(CASE WHEN is_correct IS NOT NULL THEN 1 END) AS reviewed_count"
+        " FROM ai_document_classifications"
+        " WHERE created_at >= CURRENT_DATE - :days "
+        + org_filter
+    )
     class_stats = db.execute(
-        sa_text(f"""
-            SELECT
-                COUNT(*) AS total_classifications,
-                AVG(prediction_confidence) AS avg_confidence,
-                COUNT(CASE WHEN is_correct = true THEN 1 END) AS correct_count,
-                COUNT(CASE WHEN is_correct = false THEN 1 END) AS incorrect_count,
-                COUNT(CASE WHEN is_correct IS NOT NULL THEN 1 END) AS reviewed_count
-            FROM ai_document_classifications
-            WHERE created_at >= CURRENT_DATE - :days
-            {org_filter}
-        """),
+        sa_text(class_query),
         params,
     ).first()
 
@@ -1270,33 +1271,35 @@ async def get_intelligence_stats(
     accuracy_rate = round((correct / reviewed) * 100, 1) if reviewed > 0 else None
 
     # Most common doc types
+    common_query = (
+        "SELECT predicted_doc_type, COUNT(*) AS count"
+        " FROM ai_document_classifications"
+        " WHERE created_at >= CURRENT_DATE - :days "
+        + org_filter
+        + " GROUP BY predicted_doc_type"
+        " ORDER BY count DESC"
+        " LIMIT 10"
+    )
     common_types = db.execute(
-        sa_text(f"""
-            SELECT predicted_doc_type, COUNT(*) AS count
-            FROM ai_document_classifications
-            WHERE created_at >= CURRENT_DATE - :days
-            {org_filter}
-            GROUP BY predicted_doc_type
-            ORDER BY count DESC
-            LIMIT 10
-        """),
+        sa_text(common_query),
         params,
     ).fetchall()
 
     # Call intelligence stats
+    call_query = (
+        "SELECT"
+        " COUNT(*) AS total_needs,"
+        " COUNT(CASE WHEN status = 'DETECTED' THEN 1 END) AS detected,"
+        " COUNT(CASE WHEN status = 'CONFIRMED' THEN 1 END) AS confirmed,"
+        " COUNT(CASE WHEN status = 'DISMISSED' THEN 1 END) AS dismissed,"
+        " COUNT(CASE WHEN status = 'REQUEST_CREATED' THEN 1 END) AS request_created,"
+        " AVG(detection_confidence) AS avg_detection_confidence"
+        " FROM call_intel_document_needs"
+        " WHERE created_at >= CURRENT_DATE - :days "
+        + org_filter
+    )
     call_stats = db.execute(
-        sa_text(f"""
-            SELECT
-                COUNT(*) AS total_needs,
-                COUNT(CASE WHEN status = 'DETECTED' THEN 1 END) AS detected,
-                COUNT(CASE WHEN status = 'CONFIRMED' THEN 1 END) AS confirmed,
-                COUNT(CASE WHEN status = 'DISMISSED' THEN 1 END) AS dismissed,
-                COUNT(CASE WHEN status = 'REQUEST_CREATED' THEN 1 END) AS request_created,
-                AVG(detection_confidence) AS avg_detection_confidence
-            FROM call_intel_document_needs
-            WHERE created_at >= CURRENT_DATE - :days
-            {org_filter}
-        """),
+        sa_text(call_query),
         params,
     ).first()
 

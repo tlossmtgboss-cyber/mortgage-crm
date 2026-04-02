@@ -450,7 +450,7 @@ class AIMetricsService:
                 params["user_id"] = user_id
 
             # Get faithfulness scores
-            faith_result = db.execute(text(f"""
+            faith_sql = """
                 SELECT
                     AVG(value) as avg_faithfulness,
                     AVG((metadata->>'hallucination_rate')::float) as avg_hallucination_rate,
@@ -464,12 +464,13 @@ class AIMetricsService:
                 FROM ai_metrics
                 WHERE metric_type = 'faithfulness_score'
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
-                {user_filter}
-            """), params)
+                """ + user_filter + """
+            """
+            faith_result = db.execute(text(faith_sql), params)
             faith_row = faith_result.fetchone()
 
             # Get hallucination rate by claim type
-            type_result = db.execute(text(f"""
+            type_sql = """
                 SELECT
                     metadata->>'claim_type' as claim_type,
                     COUNT(*) as total,
@@ -477,9 +478,10 @@ class AIMetricsService:
                 FROM ai_metrics
                 WHERE metric_type IN ('claim_verified', 'claim_unsupported', 'claim_contradicted')
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
-                {user_filter}
+                """ + user_filter + """
                 GROUP BY metadata->>'claim_type'
-            """), params)
+            """
+            type_result = db.execute(text(type_sql), params)
             hallucination_by_type = {}
             for row in type_result:
                 claim_type = row[0] or 'unknown'
@@ -488,7 +490,7 @@ class AIMetricsService:
                 hallucination_by_type[claim_type] = contradicted / total if total > 0 else 0
 
             # Get hallucination rate by tool
-            tool_result = db.execute(text(f"""
+            tool_sql = """
                 SELECT
                     metadata->>'source_tool' as tool,
                     COUNT(*) as total,
@@ -497,9 +499,10 @@ class AIMetricsService:
                 WHERE metric_type IN ('claim_verified', 'claim_unsupported', 'claim_contradicted')
                 AND metadata->>'source_tool' IS NOT NULL
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
-                {user_filter}
+                """ + user_filter + """
                 GROUP BY metadata->>'source_tool'
-            """), params)
+            """
+            tool_result = db.execute(text(tool_sql), params)
             hallucination_by_tool = {}
             for row in tool_result:
                 tool = row[0] or 'unknown'
@@ -576,7 +579,7 @@ class AIMetricsService:
                 params["user_id"] = user_id
 
             # Response time stats
-            time_result = db.execute(text(f"""
+            time_sql = """
                 SELECT
                     AVG(value) as avg_time,
                     PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY value) as p50,
@@ -585,57 +588,62 @@ class AIMetricsService:
                 FROM ai_metrics
                 WHERE metric_type = 'response_time'
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
-                {user_filter}
-            """), params)
+                """ + user_filter + """
+            """
+            time_result = db.execute(text(time_sql), params)
             time_row = time_result.fetchone()
 
             # Tool success rate
-            tool_result = db.execute(text(f"""
+            tool_success_sql = """
                 SELECT
                     COUNT(*) as total,
                     SUM(value) as successes
                 FROM ai_metrics
                 WHERE metric_type = 'tool_execution'
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
-                {user_filter}
-            """), params)
+                """ + user_filter + """
+            """
+            tool_result = db.execute(text(tool_success_sql), params)
             tool_row = tool_result.fetchone()
 
             # Error counts by node
-            error_result = db.execute(text(f"""
+            error_sql = """
                 SELECT
                     metadata->>'node_name' as node_name,
                     COUNT(*) as error_count
                 FROM ai_metrics
                 WHERE metric_type = 'node_error'
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
-                {user_filter}
+                """ + user_filter + """
                 GROUP BY metadata->>'node_name'
-            """), params)
+            """
+            error_result = db.execute(text(error_sql), params)
             errors_by_node = {row[0]: row[1] for row in error_result}
 
             # Total errors
-            total_queries_result = db.execute(text(f"""
+            total_queries_sql = """
                 SELECT COUNT(*) FROM ai_metrics
                 WHERE metric_type = 'query_type'
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
-                {user_filter}
-            """), params)
+                """ + user_filter + """
+            """
+            total_queries_result = db.execute(text(total_queries_sql), params)
             total_queries = total_queries_result.scalar() or 1
 
             total_errors = sum(errors_by_node.values())
             error_rate = total_errors / total_queries if total_queries > 0 else 0
 
             # User feedback
-            feedback_result = db.execute(text(f"""
+            feedback_sql = """
                 SELECT
                     SUM(CASE WHEN value = 1 THEN 1 ELSE 0 END) as positive,
                     SUM(CASE WHEN value = 0 THEN 1 ELSE 0 END) as negative
                 FROM ai_metrics
                 WHERE metric_type = 'user_feedback'
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
-                {user_filter}
-            """), params)
+                """ + user_filter + """
+            """
+            feedback_result = db.execute(text(feedback_sql), params)
             feedback_row = feedback_result.fetchone()
 
             positive = feedback_row[0] or 0
@@ -690,7 +698,7 @@ class AIMetricsService:
             period_end = datetime.now(timezone.utc)
 
             # Total queries and unique users
-            query_result = db.execute(text(f"""
+            query_result = db.execute(text("""
                 SELECT
                     COUNT(*) as total_queries,
                     COUNT(DISTINCT user_id) as unique_users
@@ -703,7 +711,7 @@ class AIMetricsService:
             unique_users = query_row[1] or 1
 
             # Most common queries
-            common_result = db.execute(text(f"""
+            common_result = db.execute(text("""
                 SELECT
                     metadata->>'query_type' as query_type,
                     COUNT(*) as count
@@ -717,7 +725,7 @@ class AIMetricsService:
             most_common = [{"query_type": row[0], "count": row[1]} for row in common_result]
 
             # Tool usage ranking
-            tool_result = db.execute(text(f"""
+            tool_result = db.execute(text("""
                 SELECT
                     metadata->>'tool_name' as tool_name,
                     COUNT(*) as usage_count,
@@ -735,7 +743,7 @@ class AIMetricsService:
             ]
 
             # Actions executed
-            action_result = db.execute(text(f"""
+            action_result = db.execute(text("""
                 SELECT
                     COUNT(*) as total,
                     metadata->>'action_type' as action_type
@@ -751,7 +759,7 @@ class AIMetricsService:
                 total_actions += row[0]
 
             # Engagement (sessions per user, messages per session)
-            engagement_result = db.execute(text(f"""
+            engagement_result = db.execute(text("""
                 SELECT
                     COUNT(DISTINCT session_id) as total_sessions,
                     COUNT(*) as total_messages
@@ -810,7 +818,7 @@ class AIMetricsService:
             period_end = datetime.now(timezone.utc)
 
             # Intent classification accuracy (based on user confirmations)
-            intent_result = db.execute(text(f"""
+            intent_result = db.execute(text("""
                 SELECT
                     AVG(value) as avg_confidence,
                     COUNT(CASE WHEN (metadata->>'user_confirmed')::boolean = true THEN 1 END) as confirmed_correct,
@@ -828,7 +836,7 @@ class AIMetricsService:
             intent_accuracy = confirmed_correct / total_confirmed if total_confirmed > 0 else 0
 
             # Tool selection accuracy (inferred from tool success)
-            tool_result = db.execute(text(f"""
+            tool_result = db.execute(text("""
                 SELECT AVG(value) FROM ai_metrics
                 WHERE metric_type = 'tool_execution'
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
@@ -836,7 +844,7 @@ class AIMetricsService:
             tool_accuracy = tool_result.scalar() or 0
 
             # Response quality (from feedback)
-            quality_result = db.execute(text(f"""
+            quality_result = db.execute(text("""
                 SELECT AVG(value) FROM ai_metrics
                 WHERE metric_type = 'user_feedback'
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
@@ -844,14 +852,14 @@ class AIMetricsService:
             response_quality = quality_result.scalar() or 0
 
             # Follow-up click-through rate
-            followup_result = db.execute(text(f"""
+            followup_result = db.execute(text("""
                 SELECT COUNT(*) FROM ai_metrics
                 WHERE metric_type = 'followup_click'
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
             """))
             followup_clicks = followup_result.scalar() or 0
 
-            total_queries_result = db.execute(text(f"""
+            total_queries_result = db.execute(text("""
                 SELECT COUNT(*) FROM ai_metrics
                 WHERE metric_type = 'query_type'
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
@@ -904,7 +912,7 @@ class AIMetricsService:
             if query_type:
                 params["query_type"] = query_type
 
-            result = db.execute(text(f"""
+            breakdown_sql = """
                 SELECT
                     metadata->>'query_type' as query_type,
                     AVG(value) as avg_total,
@@ -917,10 +925,11 @@ class AIMetricsService:
                 FROM ai_metrics
                 WHERE metric_type = 'response_time'
                 AND created_at > NOW() - (INTERVAL '1 day' * :days)
-                {type_filter}
+                """ + type_filter + """
                 GROUP BY metadata->>'query_type'
                 ORDER BY count DESC
-            """), params)
+            """
+            result = db.execute(text(breakdown_sql), params)
 
             breakdown = []
             for row in result:

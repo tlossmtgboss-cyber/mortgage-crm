@@ -117,15 +117,16 @@ async def get_all_date_reconciliation_tasks(
             status_filter = "AND status = :status"
             params["status"] = status
 
-        result = db.execute(text(f"""
-            SELECT id, title, description, status, priority, created_at, completed_at
-            FROM tasks
-            WHERE source = 'Salesforce Date Sync'
-              AND owner_id = :owner_id
-              {status_filter}
-            ORDER BY created_at DESC
-            LIMIT :limit OFFSET :offset
-        """), params)
+        query = (
+            "SELECT id, title, description, status, priority, created_at, completed_at"
+            " FROM tasks"
+            " WHERE source = 'Salesforce Date Sync'"
+            " AND owner_id = :owner_id"
+            " " + status_filter +
+            " ORDER BY created_at DESC"
+            " LIMIT :limit OFFSET :offset"
+        )
+        result = db.execute(text(query), params)
 
         tasks = [
             {
@@ -141,12 +142,13 @@ async def get_all_date_reconciliation_tasks(
         ]
 
         # Get total count
-        count_result = db.execute(text(f"""
-            SELECT COUNT(*) FROM tasks
-            WHERE source = 'Salesforce Date Sync'
-              AND owner_id = :owner_id
-              {status_filter}
-        """), params)
+        count_query = (
+            "SELECT COUNT(*) FROM tasks"
+            " WHERE source = 'Salesforce Date Sync'"
+            " AND owner_id = :owner_id"
+            " " + status_filter
+        )
+        count_result = db.execute(text(count_query), params)
         total = count_result.scalar()
 
         return {

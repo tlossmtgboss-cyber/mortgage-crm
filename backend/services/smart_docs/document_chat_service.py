@@ -1239,24 +1239,22 @@ Respond with ONLY the JSON object, no additional text or markdown."""
         }
         params["org_id"] = self.org_id
 
-        rows = self.db.execute(
-            text(f"""
-                SELECT
-                    sd.id, sd.file_name, sd.original_filename,
-                    sd.doc_type, sd.detected_doc_type,
-                    sd.ocr_text, sd.extracted_dates,
-                    sd.extracted_names, sd.extracted_employer,
-                    sd.extraction_confidence, sd.page_count,
-                    sd.loan_id, sd.borrower_id,
-                    sd.status, sd.mime_type
-                FROM smart_documents sd
-                JOIN loans l ON l.id = sd.loan_id
-                WHERE sd.id IN ({placeholders})
-                  AND l.organization_id = :org_id
-                ORDER BY sd.doc_type, sd.created_at DESC
-            """),
-            params,
-        ).fetchall()
+        chat_docs_query = (
+            "SELECT"
+            " sd.id, sd.file_name, sd.original_filename,"
+            " sd.doc_type, sd.detected_doc_type,"
+            " sd.ocr_text, sd.extracted_dates,"
+            " sd.extracted_names, sd.extracted_employer,"
+            " sd.extraction_confidence, sd.page_count,"
+            " sd.loan_id, sd.borrower_id,"
+            " sd.status, sd.mime_type"
+            " FROM smart_documents sd"
+            " JOIN loans l ON l.id = sd.loan_id"
+            " WHERE sd.id IN (" + placeholders + ")"
+            "   AND l.organization_id = :org_id"
+            " ORDER BY sd.doc_type, sd.created_at DESC"
+        )
+        rows = self.db.execute(text(chat_docs_query), params).fetchall()
 
         documents = []
         for row in rows:

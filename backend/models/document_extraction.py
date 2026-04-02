@@ -6,7 +6,7 @@ Includes extracted fields, confidence scores, provenance, and owner detection.
 """
 
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import (

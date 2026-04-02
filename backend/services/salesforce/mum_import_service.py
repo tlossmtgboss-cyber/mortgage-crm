@@ -113,14 +113,15 @@ class MumImportService:
 
         try:
             # Count eligible loans first
-            count = self.db.execute(text(f"""
-                SELECT COUNT(*) FROM loans l
-                WHERE {_FUNDED_STAGE_FILTERS}
-                AND l.loan_number IS NOT NULL
-                AND NOT EXISTS (
-                    SELECT 1 FROM mum_clients m WHERE m.loan_number = l.loan_number
-                )
-            """)).scalar()
+            count_query = (
+                "SELECT COUNT(*) FROM loans l"
+                " WHERE " + _FUNDED_STAGE_FILTERS
+                + " AND l.loan_number IS NOT NULL"
+                " AND NOT EXISTS ("
+                "    SELECT 1 FROM mum_clients m WHERE m.loan_number = l.loan_number"
+                ")"
+            )
+            count = self.db.execute(text(count_query)).scalar()
             result["total_eligible"] = count or 0
 
             if count == 0:
@@ -144,55 +145,56 @@ class MumImportService:
             if self.user_id:
                 params["user_id"] = self.user_id
 
-            insert_result = self.db.execute(text(f"""
-                INSERT INTO mum_clients (
-                    client_name, loan_number, original_close_date,
-                    original_rate, loan_balance,
-                    original_loan_amount, current_loan_amount,
-                    interest_rate, appraisal_value_at_closing,
-                    current_property_value, closing_date, first_payment_date,
-                    status, engagement_score, created_at
-                    {sf_id_col}{user_id_col}
-                )
-                SELECT
-                    COALESCE(
-                        NULLIF(
-                            CASE WHEN l.borrower_name ~ '^[0-9a-zA-Z]{{15,18}}$'
-                                 THEN NULL
-                                 ELSE l.borrower_name
-                            END,
-                            ''
-                        ),
-                        NULLIF(TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')), ''),
-                        NULLIF(TRIM(COALESCE(le2.first_name, '') || ' ' || COALESCE(le2.last_name, '')), ''),
-                        NULLIF(TRIM(COALESCE(le3.first_name, '') || ' ' || COALESCE(le3.last_name, '')), ''),
-                        'Client - ' || l.loan_number
-                    ),
-                    l.loan_number,
-                    COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
-                    COALESCE(l.rate, 0),
-                    COALESCE(l.amount, 0),
-                    COALESCE(l.amount, 0),
-                    COALESCE(l.amount, 0),
-                    COALESCE(l.rate, 0),
-                    COALESCE(l.appraisal_value, l.amount * 1.25, 0),
-                    COALESCE(l.appraisal_value, l.amount * 1.25, 0),
-                    COALESCE(l.closing_date, l.funded_date, CURRENT_DATE),
-                    COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),
-                    'active',
-                    50,
-                    CURRENT_TIMESTAMP
-                    {sf_id_val}{user_id_val}
-                FROM loans l
-                LEFT JOIN leads le ON le.email = l.borrower_email AND le.email IS NOT NULL
-                LEFT JOIN leads le2 ON le2.loan_number = l.loan_number AND le2.loan_number IS NOT NULL
-                LEFT JOIN leads le3 ON le3.salesforce_id = l.salesforce_id AND le3.salesforce_id IS NOT NULL
-                WHERE {_FUNDED_STAGE_FILTERS}
-                AND l.loan_number IS NOT NULL
-                AND NOT EXISTS (
-                    SELECT 1 FROM mum_clients m WHERE m.loan_number = l.loan_number
-                )
-            """), params)
+            insert_query = (
+                "INSERT INTO mum_clients ("
+                "    client_name, loan_number, original_close_date,"
+                "    original_rate, loan_balance,"
+                "    original_loan_amount, current_loan_amount,"
+                "    interest_rate, appraisal_value_at_closing,"
+                "    current_property_value, closing_date, first_payment_date,"
+                "    status, engagement_score, created_at"
+                + sf_id_col + user_id_col
+                + ")"
+                " SELECT"
+                "    COALESCE("
+                "        NULLIF("
+                "            CASE WHEN l.borrower_name ~ '^[0-9a-zA-Z]{15,18}$'"
+                "                 THEN NULL"
+                "                 ELSE l.borrower_name"
+                "            END,"
+                "            ''"
+                "        ),"
+                "        NULLIF(TRIM(COALESCE(le.first_name, '') || ' ' || COALESCE(le.last_name, '')), ''),"
+                "        NULLIF(TRIM(COALESCE(le2.first_name, '') || ' ' || COALESCE(le2.last_name, '')), ''),"
+                "        NULLIF(TRIM(COALESCE(le3.first_name, '') || ' ' || COALESCE(le3.last_name, '')), ''),"
+                "        'Client - ' || l.loan_number"
+                "    ),"
+                "    l.loan_number,"
+                "    COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),"
+                "    COALESCE(l.rate, 0),"
+                "    COALESCE(l.amount, 0),"
+                "    COALESCE(l.amount, 0),"
+                "    COALESCE(l.amount, 0),"
+                "    COALESCE(l.rate, 0),"
+                "    COALESCE(l.appraisal_value, l.amount * 1.25, 0),"
+                "    COALESCE(l.appraisal_value, l.amount * 1.25, 0),"
+                "    COALESCE(l.closing_date, l.funded_date, CURRENT_DATE),"
+                "    COALESCE(l.funded_date, l.closing_date, CURRENT_DATE),"
+                "    'active',"
+                "    50,"
+                "    CURRENT_TIMESTAMP"
+                + sf_id_val + user_id_val
+                + " FROM loans l"
+                " LEFT JOIN leads le ON le.email = l.borrower_email AND le.email IS NOT NULL"
+                " LEFT JOIN leads le2 ON le2.loan_number = l.loan_number AND le2.loan_number IS NOT NULL"
+                " LEFT JOIN leads le3 ON le3.salesforce_id = l.salesforce_id AND le3.salesforce_id IS NOT NULL"
+                " WHERE " + _FUNDED_STAGE_FILTERS
+                + " AND l.loan_number IS NOT NULL"
+                " AND NOT EXISTS ("
+                "    SELECT 1 FROM mum_clients m WHERE m.loan_number = l.loan_number"
+                ")"
+            )
+            insert_result = self.db.execute(text(insert_query), params)
 
             result["created"] = insert_result.rowcount
 
@@ -279,26 +281,27 @@ class MumImportService:
             user_id_col = ", user_id" if self.user_id else ""
             user_id_val = ", :user_id" if self.user_id else ""
 
-            self.db.execute(text(f"""
-                INSERT INTO mum_clients (
-                    client_name, loan_number, original_close_date,
-                    original_rate, loan_balance,
-                    original_loan_amount, current_loan_amount,
-                    interest_rate, appraisal_value_at_closing,
-                    current_property_value, closing_date, first_payment_date,
-                    status, engagement_score, salesforce_id, created_at
-                    {user_id_col}
-                ) VALUES (
-                    :name, :ln, COALESCE(:close_date, CURRENT_DATE),
-                    :rate, :amount,
-                    :amount, :amount,
-                    :rate, :appraisal,
-                    :appraisal, COALESCE(:close_date, CURRENT_DATE),
-                    COALESCE(:close_date, CURRENT_DATE),
-                    'active', 50, :sf_id, CURRENT_TIMESTAMP
-                    {user_id_val}
-                )
-            """), params)
+            single_query = (
+                "INSERT INTO mum_clients ("
+                "    client_name, loan_number, original_close_date,"
+                "    original_rate, loan_balance,"
+                "    original_loan_amount, current_loan_amount,"
+                "    interest_rate, appraisal_value_at_closing,"
+                "    current_property_value, closing_date, first_payment_date,"
+                "    status, engagement_score, salesforce_id, created_at"
+                + user_id_col
+                + ") VALUES ("
+                "    :name, :ln, COALESCE(:close_date, CURRENT_DATE),"
+                "    :rate, :amount,"
+                "    :amount, :amount,"
+                "    :rate, :appraisal,"
+                "    :appraisal, COALESCE(:close_date, CURRENT_DATE),"
+                "    COALESCE(:close_date, CURRENT_DATE),"
+                "    'active', 50, :sf_id, CURRENT_TIMESTAMP"
+                + user_id_val
+                + ")"
+            )
+            self.db.execute(text(single_query), params)
 
             if commit:
                 self.db.commit()

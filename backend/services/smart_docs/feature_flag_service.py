@@ -404,17 +404,15 @@ class SmartDocsFeatureFlagService:
                 update_params["enabled_at"] = now
                 trial_cols += ", enabled_at = :enabled_at"
 
-            self._db.execute(
-                text(f"""
-                    UPDATE company_feature_access
-                    SET is_enabled = :is_enabled,
-                        is_trial = :is_trial,
-                        updated_at = :updated_at
-                        {trial_cols}
-                    WHERE company_id = :org_id AND feature_key = :feature_key
-                """),
-                update_params,
+            update_query = (
+                "UPDATE company_feature_access"
+                " SET is_enabled = :is_enabled,"
+                "     is_trial = :is_trial,"
+                "     updated_at = :updated_at"
+                + trial_cols
+                + " WHERE company_id = :org_id AND feature_key = :feature_key"
             )
+            self._db.execute(text(update_query), update_params)
         else:
             insert_params: Dict[str, Any] = {
                 "org_id": org_id,
@@ -441,15 +439,15 @@ class SmartDocsFeatureFlagService:
                 extra_cols += ", trial_start, trial_end"
                 extra_vals += ", :trial_start, :trial_end"
 
-            self._db.execute(
-                text(f"""
-                    INSERT INTO company_feature_access
-                        (company_id, feature_key, is_enabled, is_trial, created_at, updated_at{extra_cols})
-                    VALUES
-                        (:org_id, :feature_key, :is_enabled, :is_trial, :created_at, :updated_at{extra_vals})
-                """),
-                insert_params,
+            insert_query = (
+                "INSERT INTO company_feature_access"
+                "     (company_id, feature_key, is_enabled, is_trial, created_at, updated_at"
+                + extra_cols + ")"
+                " VALUES"
+                "     (:org_id, :feature_key, :is_enabled, :is_trial, :created_at, :updated_at"
+                + extra_vals + ")"
             )
+            self._db.execute(text(insert_query), insert_params)
 
         self._db.commit()
 

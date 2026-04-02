@@ -415,7 +415,7 @@ class ReferralCoordinationService:
             org_filter = "AND rp.organization_id = :org_id"
             params["org_id"] = organization_id
 
-        partners = self.db.execute(text(f"""
+        sql = """
             SELECT
                 rp.id, rp.name, rp.type, rp.loyalty_tier,
                 rp.reciprocity_score,
@@ -424,14 +424,19 @@ class ReferralCoordinationService:
                 COALESCE(SUM(CASE WHEN lo.status = 'Funded' THEN lo.loan_amount END), 0) as period_volume
             FROM referral_partners rp
             LEFT JOIN leads ld ON ld.referral_partner_id = rp.id
-                AND ld.created_at >= NOW() - INTERVAL '{days} days'
+                AND ld.created_at >= NOW() - INTERVAL '1 day' * :days
             LEFT JOIN loans lo ON lo.lead_id = ld.id
-            WHERE rp.status = 'active' {org_filter}
+            WHERE rp.status = 'active'
+        """
+        if org_filter:
+            sql += " " + org_filter
+        sql += """
             GROUP BY rp.id, rp.name, rp.type, rp.loyalty_tier, rp.reciprocity_score
             HAVING COUNT(DISTINCT ld.id) > 0
             ORDER BY period_volume DESC
             LIMIT :limit
-        """), params).mappings().all()
+        """
+        partners = self.db.execute(text(sql), params).mappings().all()
 
         return {
             "period_days": days,

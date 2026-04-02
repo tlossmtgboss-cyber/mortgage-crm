@@ -1108,8 +1108,7 @@ class ReportBuilderService:
         }
 
         # Summary
-        summary_row = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     COUNT(*) AS total_documents,
                     COUNT(DISTINCT sd.loan_id) AS distinct_loans,
@@ -1128,7 +1127,10 @@ class ReportBuilderService:
                   AND sd.uploaded_at >= :start_date
                   AND sd.uploaded_at <= :end_date + INTERVAL '1 day'
                   {filter_frag}
-            """),
+            """
+
+        summary_row = self.db.execute(
+            sa_text(query),
             params,
         ).fetchone()
 
@@ -1146,8 +1148,7 @@ class ReportBuilderService:
         }
 
         # By doc type
-        by_type_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     COALESCE(CAST(sd.doc_type AS TEXT), 'UNKNOWN') AS doc_type,
                     COUNT(*) AS count
@@ -1159,7 +1160,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY COALESCE(CAST(sd.doc_type AS TEXT), 'UNKNOWN')
                 ORDER BY count DESC
-            """),
+            """
+
+        by_type_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1171,8 +1175,7 @@ class ReportBuilderService:
         }
 
         # By LO
-        by_lo_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     l.loan_officer_id AS lo_id,
                     CONCAT(u.first_name, ' ', u.last_name) AS lo_name,
@@ -1186,7 +1189,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY l.loan_officer_id, u.first_name, u.last_name
                 ORDER BY count DESC
-            """),
+            """
+
+        by_lo_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1196,8 +1202,7 @@ class ReportBuilderService:
         ]
 
         # Time series
-        series_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     {grp_expr} AS period,
                     COUNT(*) AS count,
@@ -1211,7 +1216,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY {grp_expr}
                 ORDER BY period
-            """),
+            """
+
+        series_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1243,8 +1251,7 @@ class ReportBuilderService:
         }
 
         # Overall summary
-        summary_row = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     COUNT(*) AS total_processed,
                     AVG(EXTRACT(EPOCH FROM (sd.reviewed_at - sd.uploaded_at)) / 3600)
@@ -1267,7 +1274,10 @@ class ReportBuilderService:
                   AND sd.reviewed_at >= :start_date
                   AND sd.reviewed_at <= :end_date + INTERVAL '1 day'
                   {filter_frag}
-            """),
+            """
+
+        summary_row = self.db.execute(
+            sa_text(query),
             params,
         ).fetchone()
 
@@ -1281,8 +1291,7 @@ class ReportBuilderService:
         }
 
         # By doc type
-        by_type_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     COALESCE(CAST(sd.doc_type AS TEXT), 'UNKNOWN') AS doc_type,
                     COUNT(*) AS count,
@@ -1301,7 +1310,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY COALESCE(CAST(sd.doc_type AS TEXT), 'UNKNOWN')
                 ORDER BY avg_hours DESC
-            """),
+            """
+
+        by_type_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1318,8 +1330,7 @@ class ReportBuilderService:
         }
 
         # By processor (reviewed_by)
-        by_processor_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     sd.reviewed_by AS processor,
                     COUNT(*) AS count,
@@ -1335,7 +1346,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY sd.reviewed_by
                 ORDER BY count DESC
-            """),
+            """
+
+        by_processor_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1349,8 +1363,7 @@ class ReportBuilderService:
         ]
 
         # Time series
-        series_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     {grp_expr} AS period,
                     COUNT(*) AS count,
@@ -1366,7 +1379,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY {grp_expr}
                 ORDER BY period
-            """),
+            """
+
+        series_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1396,8 +1412,7 @@ class ReportBuilderService:
             **extra_params,
         }
 
-        summary_row = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     COUNT(*) AS total_requests,
                     COUNT(CASE
@@ -1432,7 +1447,11 @@ class ReportBuilderService:
                   AND sdr.created_at >= :start_date
                   AND sdr.created_at <= :end_date + INTERVAL '1 day'
                   {filter_frag}
-            """),
+            """
+
+
+        summary_row = self.db.execute(
+            sa_text(query),
             params,
         ).fetchone()
 
@@ -1452,8 +1471,7 @@ class ReportBuilderService:
         }
 
         # By doc type
-        by_type_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     COALESCE(CAST(sdr.doc_type AS TEXT), 'UNKNOWN') AS doc_type,
                     COUNT(*) AS total,
@@ -1480,7 +1498,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY COALESCE(CAST(sdr.doc_type AS TEXT), 'UNKNOWN')
                 ORDER BY breached DESC
-            """),
+            """
+
+        by_type_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1498,8 +1519,7 @@ class ReportBuilderService:
         }
 
         # Time series
-        series_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     {grp_expr} AS period,
                     COUNT(*) AS total,
@@ -1526,7 +1546,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY {grp_expr}
                 ORDER BY period
-            """),
+            """
+
+        series_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1644,8 +1667,7 @@ class ReportBuilderService:
         }
 
         # Time series
-        series_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     {grp_expr} AS period,
                     COUNT(*) AS count,
@@ -1659,7 +1681,10 @@ class ReportBuilderService:
                   AND sd.reviewed_at <= :end_date + INTERVAL '1 day'
                 GROUP BY {grp_expr}
                 ORDER BY period
-            """),
+            """
+
+        series_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1777,8 +1802,7 @@ class ReportBuilderService:
         ]
 
         # Time series
-        series_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     {grp_expr} AS period,
                     COUNT(*) AS total,
@@ -1791,7 +1815,10 @@ class ReportBuilderService:
                   AND sd.uploaded_at <= :end_date + INTERVAL '1 day'
                 GROUP BY {grp_expr}
                 ORDER BY period
-            """),
+            """
+
+        series_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1823,8 +1850,7 @@ class ReportBuilderService:
         }
 
         # Upload source distribution
-        summary_row = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     COUNT(*) AS total_uploads,
                     COUNT(DISTINCT sd.borrower_id) AS unique_borrowers,
@@ -1838,7 +1864,10 @@ class ReportBuilderService:
                   AND sd.uploaded_at >= :start_date
                   AND sd.uploaded_at <= :end_date + INTERVAL '1 day'
                   {filter_frag}
-            """),
+            """
+
+        summary_row = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1861,8 +1890,7 @@ class ReportBuilderService:
         }
 
         # Response time: time between request creation and first upload
-        response = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     AVG(
                         EXTRACT(EPOCH FROM (
@@ -1883,7 +1911,10 @@ class ReportBuilderService:
                       SELECT 1 FROM smart_documents sd2
                       WHERE sd2.request_id = sdr.id
                   )
-            """),
+            """
+
+        response = self.db.execute(
+            sa_text(query),
             params,
         ).fetchone()
 
@@ -1906,8 +1937,7 @@ class ReportBuilderService:
         }
 
         # Time series: uploads per period
-        series_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     {grp_expr} AS period,
                     COUNT(*) AS uploads,
@@ -1920,7 +1950,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY {grp_expr}
                 ORDER BY period
-            """),
+            """
+
+        series_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -1950,8 +1983,7 @@ class ReportBuilderService:
             **extra_params,
         }
 
-        summary_row = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     COUNT(*) AS total_conditions,
                     COUNT(CASE WHEN sdr.status = 'OPEN' THEN 1 END) AS open,
@@ -1973,7 +2005,11 @@ class ReportBuilderService:
                   AND sdr.created_at >= :start_date
                   AND sdr.created_at <= :end_date + INTERVAL '1 day'
                   {filter_frag}
-            """),
+            """
+
+
+        summary_row = self.db.execute(
+            sa_text(query),
             params,
         ).fetchone()
 
@@ -1994,8 +2030,7 @@ class ReportBuilderService:
         }
 
         # By priority
-        by_priority_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     COALESCE(CAST(sdr.priority AS TEXT), 'NORMAL') AS priority,
                     COUNT(*) AS total,
@@ -2009,7 +2044,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY COALESCE(CAST(sdr.priority AS TEXT), 'NORMAL')
                 ORDER BY total DESC
-            """),
+            """
+
+        by_priority_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -2027,8 +2065,7 @@ class ReportBuilderService:
         }
 
         # Aging — open conditions grouped by age bucket
-        aging_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     CASE
                         WHEN EXTRACT(EPOCH FROM (NOW() - sdr.created_at)) / 86400 <= 3
@@ -2048,7 +2085,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY age_bucket
                 ORDER BY MIN(EXTRACT(EPOCH FROM (NOW() - sdr.created_at)))
-            """),
+            """
+
+        aging_rows = self.db.execute(
+            sa_text(query),
             {
                 "org_id": self.org_id,
                 **extra_params,
@@ -2061,8 +2101,7 @@ class ReportBuilderService:
         ]
 
         # Time series
-        series_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     {grp_expr} AS period,
                     COUNT(*) AS created,
@@ -2075,7 +2114,10 @@ class ReportBuilderService:
                   {filter_frag}
                 GROUP BY {grp_expr}
                 ORDER BY period
-            """),
+            """
+
+        series_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -2213,8 +2255,7 @@ class ReportBuilderService:
         }
 
         # Time series
-        series_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     {grp_expr} AS period,
                     COUNT(*) AS loans,
@@ -2230,7 +2271,10 @@ class ReportBuilderService:
                   AND l.application_date <= :end_date + INTERVAL '1 day'
                 GROUP BY {grp_expr}
                 ORDER BY period
-            """),
+            """
+
+        series_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 
@@ -2343,8 +2387,7 @@ class ReportBuilderService:
             data["workload_gini"] = 0.0
 
         # Time series: total reviewed per period
-        series_rows = self.db.execute(
-            sa_text(f"""
+        query = f"""
                 SELECT
                     {grp_expr} AS period,
                     COUNT(*) AS reviewed,
@@ -2358,7 +2401,10 @@ class ReportBuilderService:
                   AND sd.reviewed_at <= :end_date + INTERVAL '1 day'
                 GROUP BY {grp_expr}
                 ORDER BY period
-            """),
+            """
+
+        series_rows = self.db.execute(
+            sa_text(query),
             params,
         ).fetchall()
 

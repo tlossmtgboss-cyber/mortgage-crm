@@ -247,7 +247,7 @@ def cleanup_old_artifacts(self, days: int = 30):
     """
     import shutil
     from pathlib import Path
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from database import SessionLocal
     from sqlalchemy import text
 

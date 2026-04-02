@@ -53,7 +53,7 @@ class AgentFeedbackService:
             agent_filter = "AND ar.agent_type = :agent_type"
             params["agent_type"] = agent_type
 
-        rows = self.db.execute(text(f"""
+        sql = """
             SELECT
                 ar.agent_type,
                 ca.artifact_type,
@@ -66,10 +66,13 @@ class AgentFeedbackService:
             JOIN agent_runs ar ON ar.id = ca.run_id
             WHERE ca.organization_id = :org_id
                 AND ca.created_at >= :since
-                {agent_filter}
-            GROUP BY ar.agent_type, ca.artifact_type
+        """
+        if agent_filter:
+            sql += "                " + agent_filter + "\n"
+        sql += """            GROUP BY ar.agent_type, ca.artifact_type
             ORDER BY ar.agent_type, total DESC
-        """), params).fetchall()
+        """
+        rows = self.db.execute(text(sql), params).fetchall()
 
         stats = {}
         for row in rows:

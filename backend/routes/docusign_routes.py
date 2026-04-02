@@ -5,7 +5,7 @@ Handles OAuth and e-signature operations for DocuSign
 import os
 import logging
 from typing import Optional, Callable, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse

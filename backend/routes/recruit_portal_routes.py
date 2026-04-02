@@ -400,11 +400,12 @@ async def update_contact_info(
         params["email"] = email
 
     if updates:
-        db.execute(text(f"""
+        update_sql = """
             UPDATE mm_candidates
-            SET {', '.join(updates)}, updated_at = CURRENT_TIMESTAMP
+            SET """ + ', '.join(updates) + """, updated_at = CURRENT_TIMESTAMP
             WHERE id = :id
-        """), params)
+        """
+        db.execute(text(update_sql), params)
 
         # Log the update
         db.execute(text("""
@@ -439,10 +440,11 @@ async def add_portal_columns(
 
     for col_name, col_type, description in columns:
         try:
-            db.execute(text(f"""
-                ALTER TABLE mm_candidates
-                ADD COLUMN IF NOT EXISTS {col_name} {col_type}
-            """))
+            alter_sql = (
+                "ALTER TABLE mm_candidates"
+                " ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+            )
+            db.execute(text(alter_sql))
             added.append(col_name)
             logger.info(f"Added column: {col_name} ({description})")
         except SQLAlchemyError as e:

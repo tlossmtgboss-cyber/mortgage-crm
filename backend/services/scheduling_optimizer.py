@@ -110,20 +110,21 @@ class SchedulingOptimizer:
             user_filter = "AND sa.assigned_user_id = :user_id"
             params["user_id"] = user_id
 
-        rows = db.execute(text(f"""
-            SELECT
-                EXTRACT(HOUR FROM sa.scheduled_start)::int AS hour,
-                COUNT(*) AS total,
-                COUNT(CASE WHEN sa.status = 'completed' THEN 1 END) AS completed,
-                COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) AS no_shows
-            FROM scheduler_appointments sa
-            WHERE sa.organization_id = :org_id
-                {user_filter}
-                AND sa.scheduled_start >= CURRENT_DATE - :days
-                AND sa.status IN ('completed', 'no_show', 'cancelled')
-            GROUP BY EXTRACT(HOUR FROM sa.scheduled_start)
-            ORDER BY hour
-        """), params).fetchall()
+        query = (
+            "SELECT"
+            " EXTRACT(HOUR FROM sa.scheduled_start)::int AS hour,"
+            " COUNT(*) AS total,"
+            " COUNT(CASE WHEN sa.status = 'completed' THEN 1 END) AS completed,"
+            " COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) AS no_shows"
+            " FROM scheduler_appointments sa"
+            " WHERE sa.organization_id = :org_id"
+            " " + user_filter
+            + " AND sa.scheduled_start >= CURRENT_DATE - :days"
+            " AND sa.status IN ('completed', 'no_show', 'cancelled')"
+            " GROUP BY EXTRACT(HOUR FROM sa.scheduled_start)"
+            " ORDER BY hour"
+        )
+        rows = db.execute(text(query), params).fetchall()
 
         result: Dict[int, Dict[str, Any]] = {}
         for r in rows:
@@ -157,20 +158,21 @@ class SchedulingOptimizer:
             user_filter = "AND sa.assigned_user_id = :user_id"
             params["user_id"] = user_id
 
-        rows = db.execute(text(f"""
-            SELECT
-                EXTRACT(DOW FROM sa.scheduled_start)::int AS dow,
-                COUNT(*) AS total,
-                COUNT(CASE WHEN sa.status = 'completed' THEN 1 END) AS completed,
-                COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) AS no_shows
-            FROM scheduler_appointments sa
-            WHERE sa.organization_id = :org_id
-                {user_filter}
-                AND sa.scheduled_start >= CURRENT_DATE - :days
-                AND sa.status IN ('completed', 'no_show', 'cancelled')
-            GROUP BY EXTRACT(DOW FROM sa.scheduled_start)
-            ORDER BY dow
-        """), params).fetchall()
+        query = (
+            "SELECT"
+            " EXTRACT(DOW FROM sa.scheduled_start)::int AS dow,"
+            " COUNT(*) AS total,"
+            " COUNT(CASE WHEN sa.status = 'completed' THEN 1 END) AS completed,"
+            " COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) AS no_shows"
+            " FROM scheduler_appointments sa"
+            " WHERE sa.organization_id = :org_id"
+            " " + user_filter
+            + " AND sa.scheduled_start >= CURRENT_DATE - :days"
+            " AND sa.status IN ('completed', 'no_show', 'cancelled')"
+            " GROUP BY EXTRACT(DOW FROM sa.scheduled_start)"
+            " ORDER BY dow"
+        )
+        rows = db.execute(text(query), params).fetchall()
 
         result: Dict[int, Dict[str, Any]] = {}
         for r in rows:

@@ -4,7 +4,7 @@ Base class for service cost fetchers.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import List, Dict, Any, Optional
 import logging

@@ -198,16 +198,16 @@ async def list_accounts(
         where_sql = " AND ".join(where_clauses)
 
         # Get total count
-        count_query = f"""
+        count_query = """
             SELECT COUNT(DISTINCT ta.id)
             FROM tenant_accounts ta
             LEFT JOIN users u ON u.id = ta.owner_user_id
-            WHERE {where_sql}
+            WHERE """ + where_sql + """
         """
         total = db.execute(text(count_query), params).scalar() or 0
 
         # Get accounts with owner info
-        query = f"""
+        query = """
             SELECT
                 ta.id, ta.name, ta.domain, ta.status, ta.plan_id, ta.plan_name,
                 ta.billing_interval, ta.seats_purchased, ta.internal_notes, ta.add_ons,
@@ -221,7 +221,7 @@ async def list_accounts(
                  WHERE account_id = ta.id AND status = 'active' LIMIT 1), 0) as mrr
             FROM tenant_accounts ta
             LEFT JOIN users u ON u.id = ta.owner_user_id
-            WHERE {where_sql}
+            WHERE """ + where_sql + """
             ORDER BY ta.created_at DESC
             LIMIT :limit OFFSET :offset
         """
@@ -618,9 +618,8 @@ async def delete_account(
             for table_name, column_name in dependent_tables:
                 try:
                     savepoint = db.begin_nested()
-                    db.execute(text(f"""
-                        DELETE FROM {table_name} WHERE {column_name} IN :user_ids
-                    """), {'user_ids': tuple(user_ids)})
+                    delete_sql = "DELETE FROM " + table_name + " WHERE " + column_name + " IN :user_ids"
+                    db.execute(text(delete_sql), {'user_ids': tuple(user_ids)})
                     savepoint.commit()
                 except Exception as e:
                     logger.error(f"Error in delete_account (delete {table_name}.{column_name}): {e}")
@@ -853,18 +852,18 @@ async def get_login_history(
             where_clause += " AND result = :result"
             params['result'] = result_filter
 
-        events = db.execute(text(f"""
+        events_sql = """
             SELECT id, result, failure_reason, ip_address, device, browser,
                    location, session_duration_seconds, created_at
             FROM login_events
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
-        """), params).fetchall()
+        """
+        events = db.execute(text(events_sql), params).fetchall()
 
-        total = db.execute(text(f"""
-            SELECT COUNT(*) FROM login_events WHERE {where_clause}
-        """), params).scalar() or 0
+        count_sql = "SELECT COUNT(*) FROM login_events WHERE " + where_clause
+        total = db.execute(text(count_sql), params).scalar() or 0
 
         history = []
         for e in events:

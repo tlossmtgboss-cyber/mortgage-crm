@@ -6,7 +6,7 @@ Automatically logs in and retrieves the latest guideline updates
 import os
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 import logging
 import re

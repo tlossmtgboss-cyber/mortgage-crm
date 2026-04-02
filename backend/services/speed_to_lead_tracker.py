@@ -189,24 +189,25 @@ async def get_speed_to_lead_metrics(
 
     # Per-method breakdown with percentiles
     try:
-        result = db.execute(text(f"""
-            SELECT
-                delivery_method,
-                COUNT(*) as count,
-                AVG(elapsed_seconds) as avg_seconds,
-                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY elapsed_seconds) as median_seconds,
-                PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY elapsed_seconds) as p95_seconds,
-                MIN(elapsed_seconds) as min_seconds,
-                MAX(elapsed_seconds) as max_seconds,
-                COUNT(CASE WHEN elapsed_seconds <= {THRESHOLD_ELITE_SECONDS} THEN 1 END) as under_60s,
-                COUNT(CASE WHEN elapsed_seconds <= {THRESHOLD_EXCELLENT_SECONDS} THEN 1 END) as under_5min,
-                COUNT(CASE WHEN elapsed_seconds <= {THRESHOLD_GOOD_SECONDS} THEN 1 END) as under_30min,
-                COUNT(CASE WHEN elapsed_seconds <= {THRESHOLD_ACCEPTABLE_SECONDS} THEN 1 END) as under_1hr
-            FROM speed_to_lead_metrics
-            WHERE {where_sql}
-            GROUP BY delivery_method
-            ORDER BY count DESC
-        """), params).fetchall()
+        method_query = (
+            "SELECT"
+            " delivery_method,"
+            " COUNT(*) as count,"
+            " AVG(elapsed_seconds) as avg_seconds,"
+            " PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY elapsed_seconds) as median_seconds,"
+            " PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY elapsed_seconds) as p95_seconds,"
+            " MIN(elapsed_seconds) as min_seconds,"
+            " MAX(elapsed_seconds) as max_seconds,"
+            " COUNT(CASE WHEN elapsed_seconds <= " + str(THRESHOLD_ELITE_SECONDS) + " THEN 1 END) as under_60s,"
+            " COUNT(CASE WHEN elapsed_seconds <= " + str(THRESHOLD_EXCELLENT_SECONDS) + " THEN 1 END) as under_5min,"
+            " COUNT(CASE WHEN elapsed_seconds <= " + str(THRESHOLD_GOOD_SECONDS) + " THEN 1 END) as under_30min,"
+            " COUNT(CASE WHEN elapsed_seconds <= " + str(THRESHOLD_ACCEPTABLE_SECONDS) + " THEN 1 END) as under_1hr"
+            " FROM speed_to_lead_metrics"
+            " WHERE " + where_sql
+            + " GROUP BY delivery_method"
+            " ORDER BY count DESC"
+        )
+        result = db.execute(text(method_query), params).fetchall()
     except Exception as e:
         logger.exception(f"Failed to query speed-to-lead metrics: {e}")
         return {
@@ -285,18 +286,19 @@ async def get_speed_to_lead_trend(
         date_trunc = "DATE_TRUNC('day', created_at)"
 
     try:
-        result = db.execute(text(f"""
-            SELECT
-                {date_trunc} as period,
-                COUNT(*) as count,
-                AVG(elapsed_seconds) as avg_seconds,
-                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY elapsed_seconds) as median_seconds,
-                COUNT(CASE WHEN elapsed_seconds <= {THRESHOLD_ELITE_SECONDS} THEN 1 END) as under_60s
-            FROM speed_to_lead_metrics
-            WHERE {where_sql}
-            GROUP BY {date_trunc}
-            ORDER BY period ASC
-        """), params).fetchall()
+        trend_query = (
+            "SELECT"
+            " " + date_trunc + " as period,"
+            " COUNT(*) as count,"
+            " AVG(elapsed_seconds) as avg_seconds,"
+            " PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY elapsed_seconds) as median_seconds,"
+            " COUNT(CASE WHEN elapsed_seconds <= " + str(THRESHOLD_ELITE_SECONDS) + " THEN 1 END) as under_60s"
+            " FROM speed_to_lead_metrics"
+            " WHERE " + where_sql
+            + " GROUP BY " + date_trunc
+            + " ORDER BY period ASC"
+        )
+        result = db.execute(text(trend_query), params).fetchall()
     except Exception as e:
         logger.exception(f"Failed to query speed-to-lead trend: {e}")
         return {"period_days": days, "bucket": bucket, "trend": [], "error": str(e)}
@@ -341,25 +343,26 @@ async def get_lo_speed_leaderboard(
     params: Dict[str, Any] = {"days": days, "org_id": organization_id, "limit": limit}
 
     try:
-        result = db.execute(text(f"""
-            SELECT
-                stl.loan_officer_id,
-                CONCAT(u.first_name, ' ', u.last_name) as lo_name,
-                COUNT(*) as count,
-                AVG(stl.elapsed_seconds) as avg_seconds,
-                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY stl.elapsed_seconds) as median_seconds,
-                COUNT(CASE WHEN stl.elapsed_seconds <= {THRESHOLD_ELITE_SECONDS} THEN 1 END) as under_60s
-            FROM speed_to_lead_metrics stl
-            LEFT JOIN users u ON u.id = stl.loan_officer_id
-            WHERE stl.organization_id = :org_id
-                AND stl.created_at >= CURRENT_DATE - :days
-                AND stl.elapsed_seconds IS NOT NULL
-                AND stl.loan_officer_id IS NOT NULL
-            GROUP BY stl.loan_officer_id, u.first_name, u.last_name
-            HAVING COUNT(*) >= 3
-            ORDER BY median_seconds ASC
-            LIMIT :limit
-        """), params).fetchall()
+        lb_query = (
+            "SELECT"
+            " stl.loan_officer_id,"
+            " CONCAT(u.first_name, ' ', u.last_name) as lo_name,"
+            " COUNT(*) as count,"
+            " AVG(stl.elapsed_seconds) as avg_seconds,"
+            " PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY stl.elapsed_seconds) as median_seconds,"
+            " COUNT(CASE WHEN stl.elapsed_seconds <= " + str(THRESHOLD_ELITE_SECONDS) + " THEN 1 END) as under_60s"
+            " FROM speed_to_lead_metrics stl"
+            " LEFT JOIN users u ON u.id = stl.loan_officer_id"
+            " WHERE stl.organization_id = :org_id"
+            "     AND stl.created_at >= CURRENT_DATE - :days"
+            "     AND stl.elapsed_seconds IS NOT NULL"
+            "     AND stl.loan_officer_id IS NOT NULL"
+            " GROUP BY stl.loan_officer_id, u.first_name, u.last_name"
+            " HAVING COUNT(*) >= 3"
+            " ORDER BY median_seconds ASC"
+            " LIMIT :limit"
+        )
+        result = db.execute(text(lb_query), params).fetchall()
     except Exception as e:
         logger.exception(f"Failed to query LO speed leaderboard: {e}")
         return {"organization_id": organization_id, "leaderboard": [], "error": str(e)}

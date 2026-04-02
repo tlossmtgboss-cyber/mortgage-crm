@@ -1,6 +1,6 @@
 """Email open/click tracking models."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Index
 from db import Base
 

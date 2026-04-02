@@ -680,26 +680,27 @@ async def get_capacity_alerts(
     """Get capacity and risk alerts."""
     status_filter = "AND status = :status" if status != "all" else ""
 
-    query = text(f"""
-        SELECT
-            a.*,
-            u.full_name as user_name,
-            rd.role_name
-        FROM mm_capacity_alerts a
-        LEFT JOIN users u ON u.id = a.user_id
-        LEFT JOIN mm_role_definitions rd ON rd.id = a.role_definition_id
-        WHERE (:org_id IS NULL OR a.organization_id = :org_id)
-        {status_filter}
-        AND (:severity IS NULL OR a.severity = :severity)
-        ORDER BY
-            CASE a.severity
-                WHEN 'critical' THEN 1
-                WHEN 'warning' THEN 2
-                ELSE 3
-            END,
-            a.created_at DESC
-        LIMIT :limit
-    """)
+    sql = (
+        "SELECT"
+        " a.*,"
+        " u.full_name as user_name,"
+        " rd.role_name"
+        " FROM mm_capacity_alerts a"
+        " LEFT JOIN users u ON u.id = a.user_id"
+        " LEFT JOIN mm_role_definitions rd ON rd.id = a.role_definition_id"
+        " WHERE (:org_id IS NULL OR a.organization_id = :org_id)"
+        " " + status_filter +
+        " AND (:severity IS NULL OR a.severity = :severity)"
+        " ORDER BY"
+        " CASE a.severity"
+        " WHEN 'critical' THEN 1"
+        " WHEN 'warning' THEN 2"
+        " ELSE 3"
+        " END,"
+        " a.created_at DESC"
+        " LIMIT :limit"
+    )
+    query = text(sql)
 
     results = db.execute(query, {
         "org_id": organization_id,

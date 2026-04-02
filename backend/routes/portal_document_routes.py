@@ -775,20 +775,20 @@ async def list_workspace_documents(
 
     where_clause = " AND ".join(filters)
 
-    documents = db.execute(text(f"""
+    docs_sql = """
         SELECT id, file_name, file_size, mime_type, status,
                doc_type, doc_subtype, classification_status,
                classification_confidence, rejection_reason,
                created_at, updated_at
         FROM perennia_documents
-        WHERE {where_clause}
+        WHERE """ + where_clause + """
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
-    """), params).fetchall()
+    """
+    documents = db.execute(text(docs_sql), params).fetchall()
 
-    total = db.execute(text(f"""
-        SELECT COUNT(*) FROM perennia_documents WHERE {where_clause}
-    """), params).scalar()
+    total_sql = "SELECT COUNT(*) FROM perennia_documents WHERE " + where_clause
+    total = db.execute(text(total_sql), params).scalar()
 
     return {
         "documents": [

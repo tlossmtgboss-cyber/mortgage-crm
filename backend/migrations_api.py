@@ -366,7 +366,7 @@ async def import_browser_guidelines(
     try:
         from database import SessionLocal
         from guideline_updates_models import GuidelineUpdate
-        from datetime import datetime, timedelta
+        from datetime import datetime, timedelta, timezone
         import hashlib
         import re
 
@@ -1798,16 +1798,17 @@ async def delete_sample_data_endpoint(
                 # Delete related records first
                 for table in ['loan_documents', 'loan_notes', 'loan_activities', 'loan_conditions', 'loan_team_members']:
                     try:
-                        db.execute(text(f"""
-                            DELETE FROM {table}
-                            WHERE loan_id IN (
-                                SELECT id FROM loans WHERE
-                                borrower_name = ANY(:names) OR
-                                borrower_name LIKE '%Test%' OR
-                                borrower_name LIKE '%Sample%' OR
-                                borrower_name LIKE '%Demo%'
-                            )
-                        """), {"names": seeded_borrower_names})
+                        delete_related_sql = (
+                            "DELETE FROM " + table +
+                            " WHERE loan_id IN ("
+                            " SELECT id FROM loans WHERE"
+                            " borrower_name = ANY(:names) OR"
+                            " borrower_name LIKE '%Test%' OR"
+                            " borrower_name LIKE '%Sample%' OR"
+                            " borrower_name LIKE '%Demo%'"
+                            " )"
+                        )
+                        db.execute(text(delete_related_sql), {"names": seeded_borrower_names})
                         db.commit()
                     except Exception as e:
                         logger.exception(f"Failed to delete related records from {table}: {e}")
@@ -1873,9 +1874,8 @@ async def add_missing_database_columns(
 
             for col in jungo_date_columns:
                 try:
-                    db.execute(text(f"""
-                        ALTER TABLE loans ADD COLUMN IF NOT EXISTS {col} TIMESTAMP
-                    """))
+                    alter_sql = "ALTER TABLE loans ADD COLUMN IF NOT EXISTS " + col + " TIMESTAMP"
+                    db.execute(text(alter_sql))
                     results["columns_added"].append(f"loans.{col}")
                 except Exception as e:
                     if "already exists" in str(e).lower():
@@ -2743,7 +2743,8 @@ async def create_salesforce_oauth_tables(key: str = ""):
 
             for table in tables:
                 try:
-                    result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
+                    count_sql = "SELECT COUNT(*) FROM " + table
+                    result = db.execute(text(count_sql))
                     count = result.scalar()
                     tables_status[table] = {"exists": True, "count": count}
                 except Exception as e:

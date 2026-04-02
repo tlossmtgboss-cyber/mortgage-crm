@@ -224,7 +224,7 @@ CREATE TABLE {table}_default PARTITION OF {table}_partitioned DEFAULT;
         results = []
         for table in cls.HASH_PARTITION_TABLES + cls.TIME_PARTITION_TABLES:
             try:
-                row = db_session.execute(text(f"""
+                row = db_session.execute(text("""
                     SELECT reltuples::bigint AS estimate
                     FROM pg_class WHERE relname = :table
                 """), {"table": table}).fetchone()

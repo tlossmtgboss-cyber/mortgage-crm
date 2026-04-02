@@ -656,8 +656,7 @@ async def get_recruiting_dialer_queue(
         params["assigned_to"] = assigned_to
 
     with get_db_connection() as conn:
-        result = conn.execute(
-            text(f"""
+        queue_sql = """
                 SELECT rt.id as task_id, rt.candidate_id, rt.title as task_title,
                        rt.description as task_description, rt.due_date, rt.priority,
                        rc.first_name, rc.last_name, rc.phone, rc.email,
@@ -672,7 +671,7 @@ async def get_recruiting_dialer_queue(
                 WHERE rt.organization_id = :org_id
                     AND rt.status = 'pending'
                     AND rt.route_to = 'dialer_queue'
-                    {user_filter}
+                    """ + user_filter + """
                 ORDER BY
                     rt.due_date ASC,
                     CASE rt.priority
@@ -680,7 +679,9 @@ async def get_recruiting_dialer_queue(
                         WHEN 'medium' THEN 2
                         ELSE 3
                     END
-            """),
+            """
+        result = conn.execute(
+            text(queue_sql),
             params
         )
         rows = result.fetchall()

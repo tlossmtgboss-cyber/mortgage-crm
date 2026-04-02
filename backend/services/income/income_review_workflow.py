@@ -14,7 +14,7 @@ Target: 98% confidence for auto-approval
 import enum
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 

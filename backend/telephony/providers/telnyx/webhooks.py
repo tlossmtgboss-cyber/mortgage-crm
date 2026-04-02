@@ -12,7 +12,7 @@ import hashlib
 import logging
 from dataclasses import dataclass
 from typing import Optional, Dict, Any, Union
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 logger = logging.getLogger(__name__)

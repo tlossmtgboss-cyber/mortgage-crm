@@ -7,7 +7,7 @@ countdown, and milestone scheduling for on-time closings.
 
 import logging
 from typing import Optional, Dict, Any, List, Tuple
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, extract
 

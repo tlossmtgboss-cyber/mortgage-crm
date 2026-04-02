@@ -447,14 +447,15 @@ class WorkflowSLAService:
             entity_id = task_instance.lead_id or task_instance.loan_id
             entity_col = "lead_id" if task_instance.lead_id else "loan_id"
             if entity_id:
-                sla_cancelled = self.db.execute(text(f"""
-                    UPDATE tasks
-                    SET status = 'cancelled', updated_at = NOW()
-                    WHERE {entity_col} = :entity_id
-                    AND sla_milestone_id IS NOT NULL
-                    AND status IN ('pending')
-                    AND workflow_task_instance_id IS NULL
-                """), {"entity_id": entity_id}).rowcount
+                sla_cancel_query = (
+                    "UPDATE tasks"
+                    " SET status = 'cancelled', updated_at = NOW()"
+                    " WHERE " + entity_col + " = :entity_id"
+                    " AND sla_milestone_id IS NOT NULL"
+                    " AND status IN ('pending')"
+                    " AND workflow_task_instance_id IS NULL"
+                )
+                sla_cancelled = self.db.execute(text(sla_cancel_query), {"entity_id": entity_id}).rowcount
                 if sla_cancelled:
                     logger.info(f"Cancelled {sla_cancelled} SLA warning tasks for {entity_col}={entity_id}")
 
@@ -712,13 +713,14 @@ class WorkflowSLAService:
             params["loan_id"] = loan_id
             entity_filter = "loan_id = :loan_id"
 
-        result = self.db.execute(text(f"""
-            SELECT id FROM workflow_instances
-            WHERE {entity_filter}
-            AND workflow_configuration_id = :config_id
-            AND status = 'active'
-            LIMIT 1
-        """), params).fetchone()
+        find_query = (
+            "SELECT id FROM workflow_instances"
+            " WHERE " + entity_filter
+            + " AND workflow_configuration_id = :config_id"
+            " AND status = 'active'"
+            " LIMIT 1"
+        )
+        result = self.db.execute(text(find_query), params).fetchone()
 
         if result:
             return self._get_workflow_instance(result[0])
@@ -807,15 +809,16 @@ class WorkflowSLAService:
             params["loan_id"] = loan_id
             entity_filter = "loan_id = :loan_id"
 
-        self.db.execute(text(f"""
-            UPDATE workflow_instances
-            SET status = 'cancelled',
-                cancelled_at = NOW(),
-                cancellation_reason = 'Superseded by new workflow enrollment'
-            WHERE {entity_filter}
-            AND status = 'active'
-            AND workflow_configuration_id != :new_config_id
-        """), params)
+        cancel_query = (
+            "UPDATE workflow_instances"
+            " SET status = 'cancelled',"
+            "     cancelled_at = NOW(),"
+            "     cancellation_reason = 'Superseded by new workflow enrollment'"
+            " WHERE " + entity_filter
+            + " AND status = 'active'"
+            " AND workflow_configuration_id != :new_config_id"
+        )
+        self.db.execute(text(cancel_query), params)
 
     def _cancel_pending_tasks(self, instance_id: int, reason: str = "Workflow cancelled"):
         """Cancel all pending/scheduled tasks for a workflow instance."""

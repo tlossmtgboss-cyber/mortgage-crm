@@ -8,7 +8,7 @@ from typing import Optional
 import pandas as pd
 import io
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import re
 

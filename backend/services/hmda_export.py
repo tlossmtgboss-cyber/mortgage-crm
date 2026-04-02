@@ -30,7 +30,7 @@ Usage:
 """
 
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Dict, Any, List, Optional, Tuple
 
 from sqlalchemy.orm import Session

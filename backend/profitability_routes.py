@@ -2,7 +2,7 @@
 FastAPI routes for the Profitability Intelligence System.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List, Optional
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Request

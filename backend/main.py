@@ -2088,7 +2088,8 @@ def _run_critical_schema_migrations():
         added = 0
         for col_name, col_type in loan_columns:
             try:
-                db.execute(sa_text(f"ALTER TABLE loans ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                alter_sql = "ALTER TABLE loans ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+                db.execute(sa_text(alter_sql))
                 db.commit()
                 added += 1
             except Exception as e:
@@ -2221,7 +2222,8 @@ def _run_critical_schema_migrations():
         leads_added = 0
         for col_name, col_type in lead_columns:
             try:
-                db.execute(sa_text(f"ALTER TABLE leads ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                alter_sql = "ALTER TABLE leads ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+                db.execute(sa_text(alter_sql))
                 db.commit()
                 leads_added += 1
             except Exception as e:
@@ -2296,7 +2298,8 @@ def _run_critical_schema_migrations():
         for table, cols in chime_columns.items():
             for col_name, col_type in cols:
                 try:
-                    db.execute(sa_text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                    alter_sql = "ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+                    db.execute(sa_text(alter_sql))
                     db.commit()
                 except Exception as e:
                     db.rollback()
@@ -2361,7 +2364,8 @@ def _run_critical_schema_migrations():
         u_added = 0
         for col_name, col_type in users_columns:
             try:
-                db.execute(sa_text(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                alter_sql = "ALTER TABLE users ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+                db.execute(sa_text(alter_sql))
                 db.commit()
                 u_added += 1
             except Exception as e:
@@ -2509,7 +2513,8 @@ def _run_critical_schema_migrations():
             tbl_added = 0
             for col_name, col_type in columns:
                 try:
-                    db.execute(sa_text(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {col_name} {col_type}"))
+                    alter_sql = "ALTER TABLE " + table_name + " ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+                    db.execute(sa_text(alter_sql))
                     db.commit()
                     tbl_added += 1
                 except Exception as e:
@@ -2535,14 +2540,14 @@ def _run_critical_schema_migrations():
                     "WHERE table_name = :tbl AND column_name = :col"
                 ), {"tbl": table, "col": col}).fetchone()
                 if col_info and col_info[0] == 'USER-DEFINED':
-                    db.execute(sa_text(
-                        f"ALTER TABLE {table} ALTER COLUMN {col} TYPE VARCHAR(50) USING {col}::text"
-                    ))
+                    alter_col_sql = "ALTER TABLE " + table + " ALTER COLUMN " + col + " TYPE VARCHAR(50) USING " + col + "::text"
+                    db.execute(sa_text(alter_col_sql))
                     db.commit()
                     logger.info(f"✅ Converted {table}.{col} from enum to VARCHAR")
                     # Drop the old enum type if it's no longer used
                     try:
-                        db.execute(sa_text(f"DROP TYPE IF EXISTS {enum_type}"))
+                        drop_type_sql = "DROP TYPE IF EXISTS " + enum_type
+                        db.execute(sa_text(drop_type_sql))
                         db.commit()
                     except Exception:
                         db.rollback()

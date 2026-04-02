@@ -4,7 +4,7 @@ Primary: Telnyx. Fallback: configurable secondary providers.
 """
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 
 logger = logging.getLogger(__name__)

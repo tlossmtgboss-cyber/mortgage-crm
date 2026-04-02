@@ -16,7 +16,7 @@ Expected ROI: 300-1,775% based on:
 
 import os
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field
 from decimal import Decimal
@@ -289,15 +289,17 @@ class AIReceptionistAnalyticsService:
 
         # Get call metrics from AI receptionist activities
         try:
-            calls_result = self.db.execute(text(f"""
+            sql = """
                 SELECT
                     COUNT(*) as total_calls,
                     COUNT(CASE WHEN outcome_status = 'engaged' OR outcome_status = 'completed' THEN 1 END) as engaged_calls,
                     COUNT(CASE WHEN action_type = 'appointment_scheduled' THEN 1 END) as appointments
                 FROM ai_receptionist_activity
                 WHERE DATE(timestamp) BETWEEN :start_date AND :end_date
-                {user_filter}
-            """), params).fetchone()
+            """
+            if user_filter:
+                sql += " " + user_filter
+            calls_result = self.db.execute(text(sql), params).fetchone()
 
             if calls_result:
                 funnel.total_calls = calls_result[0] or 0
@@ -307,7 +309,7 @@ class AIReceptionistAnalyticsService:
             logger.warning(f"Could not fetch AI receptionist activity: {e}")
             # Try alternative table
             try:
-                calls_result = self.db.execute(text(f"""
+                calls_result = self.db.execute(text("""
                     SELECT
                         COUNT(*) as total_conversations
                     FROM ai_receptionist_conversations
@@ -320,15 +322,17 @@ class AIReceptionistAnalyticsService:
 
         # Get application and loan metrics
         try:
-            loans_result = self.db.execute(text(f"""
+            loans_sql = """
                 SELECT
                     COUNT(CASE WHEN source = 'ai_receptionist' OR source LIKE '%ai%' THEN 1 END) as ai_applications,
                     COUNT(CASE WHEN (source = 'ai_receptionist' OR source LIKE '%ai%') AND status = 'approved' THEN 1 END) as approved,
                     COUNT(CASE WHEN (source = 'ai_receptionist' OR source LIKE '%ai%') AND status = 'funded' THEN 1 END) as funded
                 FROM loans
                 WHERE DATE(created_at) BETWEEN :start_date AND :end_date
-                {user_filter.replace('user_id', 'loan_officer_id')}
-            """), params).fetchone()
+            """
+            if user_filter:
+                loans_sql += " " + user_filter.replace('user_id', 'loan_officer_id')
+            loans_result = self.db.execute(text(loans_sql), params).fetchone()
 
             if loans_result:
                 funnel.applications_submitted = loans_result[0] or 0

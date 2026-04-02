@@ -263,34 +263,36 @@ async def get_dashboard_stats(
     user_id = current_user.id
     org_id = current_user.organization_id
 
-    category_filter = ""
     params = {"user_id": user_id, "org_id": org_id}
-    if candidate_category:
-        category_filter = "AND candidate_category = :candidate_category"
-        params["candidate_category"] = candidate_category
 
     # Get counts by status
-    status_counts = db.execute(text(f"""
+    status_sql = """
         SELECT status, COUNT(*) as count
         FROM partner_candidates
-        WHERE owner_id = :user_id AND organization_id = :org_id AND is_active = true {category_filter}
-        GROUP BY status
-    """), params).fetchall()
+        WHERE owner_id = :user_id AND organization_id = :org_id AND is_active = true
+    """
+    if candidate_category:
+        status_sql += " AND candidate_category = :candidate_category"
+        params["candidate_category"] = candidate_category
+    status_sql += " GROUP BY status"
+    status_counts = db.execute(text(status_sql), params).fetchall()
 
     counts = {row.status: row.count for row in status_counts}
 
     # Get recent activity count (last 7 days)
-    recent_count = db.execute(text(f"""
+    recent_sql = """
         SELECT COUNT(*) as count
         FROM partner_candidates
         WHERE owner_id = :user_id AND organization_id = :org_id
           AND is_active = true
           AND created_at >= CURRENT_DATE - INTERVAL '7 days'
-          {category_filter}
-    """), params).fetchone()
+    """
+    if candidate_category:
+        recent_sql += " AND candidate_category = :candidate_category"
+    recent_count = db.execute(text(recent_sql), params).fetchone()
 
     # Get upcoming meetings
-    upcoming_meetings = db.execute(text(f"""
+    meetings_sql = """
         SELECT COUNT(*) as count
         FROM partner_meetings pm
         JOIN partner_candidates pc ON pc.id = pm.partner_candidate_id
@@ -298,18 +300,22 @@ async def get_dashboard_stats(
           AND pm.status IN ('scheduled', 'confirmed')
           AND pm.scheduled_at >= CURRENT_TIMESTAMP
           AND pm.scheduled_at < CURRENT_TIMESTAMP + INTERVAL '7 days'
-          {category_filter.replace('candidate_category', 'pc.candidate_category') if category_filter else ''}
-    """), params).fetchone()
+    """
+    if candidate_category:
+        meetings_sql += " AND pc.candidate_category = :candidate_category"
+    upcoming_meetings = db.execute(text(meetings_sql), params).fetchone()
 
     # Get pending proposals (partner-only concept)
-    pending_proposals = db.execute(text(f"""
+    proposals_sql = """
         SELECT COUNT(*) as count
         FROM partner_proposals pp
         JOIN partner_candidates pc ON pc.id = pp.partner_candidate_id
         WHERE pc.owner_id = :user_id
           AND pp.status IN ('sent', 'viewed')
-          {category_filter.replace('candidate_category', 'pc.candidate_category') if category_filter else ''}
-    """), params).fetchone()
+    """
+    if candidate_category:
+        proposals_sql += " AND pc.candidate_category = :candidate_category"
+    pending_proposals = db.execute(text(proposals_sql), params).fetchone()
 
     # Calculate total active pipeline based on category
     if candidate_category == 'employee':
@@ -367,10 +373,8 @@ async def get_pipeline_metrics(
     user_id = current_user.id
     org_id = current_user.organization_id
 
-    category_filter = ""
     params = {"user_id": user_id, "org_id": org_id, "days": days}
     if candidate_category:
-        category_filter = "AND candidate_category = :candidate_category"
         params["candidate_category"] = candidate_category
 
     def calc_rate(num, denom):
@@ -378,7 +382,7 @@ async def get_pipeline_metrics(
 
     if candidate_category == 'employee':
         # Employee funnel
-        funnel = db.execute(text(f"""
+        emp_funnel_sql = """
             SELECT
                 COUNT(*) as total,
                 COUNT(*) FILTER (WHERE status NOT IN ('new', 'declined', 'inactive', 'withdrawn')) as contacted,
@@ -393,8 +397,10 @@ async def get_pipeline_metrics(
             WHERE owner_id = :user_id AND organization_id = :org_id
               AND is_active = true
               AND created_at >= CURRENT_DATE - :days * INTERVAL '1 day'
-              {category_filter}
-        """), params).fetchone()
+        """
+        if candidate_category:
+            emp_funnel_sql += " AND candidate_category = :candidate_category"
+        funnel = db.execute(text(emp_funnel_sql), params).fetchone()
 
         return {
             "period_days": days,
@@ -423,7 +429,7 @@ async def get_pipeline_metrics(
         }
 
     # Partner funnel (default)
-    funnel = db.execute(text(f"""
+    partner_funnel_sql = """
         SELECT
             COUNT(*) as total,
             COUNT(*) FILTER (WHERE status IN ('contacted', 'qualified', 'meeting_scheduled', 'met', 'proposal_sent', 'negotiating', 'onboarded')) as contacted,
@@ -436,8 +442,10 @@ async def get_pipeline_metrics(
         WHERE owner_id = :user_id AND organization_id = :org_id
           AND is_active = true
           AND created_at >= CURRENT_DATE - :days * INTERVAL '1 day'
-          {category_filter}
-    """), params).fetchone()
+    """
+    if candidate_category:
+        partner_funnel_sql += " AND candidate_category = :candidate_category"
+    funnel = db.execute(text(partner_funnel_sql), params).fetchone()
 
     return {
         "period_days": days,
@@ -513,7 +521,7 @@ async def list_partner_candidates(
 
     where_sql = " AND ".join(filters)
 
-    results = db.execute(text(f"""
+    list_sql = """
         SELECT
             id, first_name, last_name, email, phone,
             partner_type, company_name, business_name, title,
@@ -522,7 +530,7 @@ async def list_partner_candidates(
             city, state, created_at, last_activity_at,
             candidate_category, employee_role, current_employer, years_experience
         FROM partner_candidates
-        WHERE {where_sql}
+        WHERE """ + where_sql + """
         ORDER BY
             CASE status
                 WHEN 'new' THEN 1
@@ -541,12 +549,12 @@ async def list_partner_candidates(
             END,
             created_at DESC
         LIMIT :limit OFFSET :offset
-    """), params).fetchall()
+    """
+    results = db.execute(text(list_sql), params).fetchall()
 
     # Get total count
-    count_result = db.execute(text(f"""
-        SELECT COUNT(*) as count FROM partner_candidates WHERE {where_sql}
-    """), {k: v for k, v in params.items() if k not in ['limit', 'offset']}).fetchone()
+    count_sql = "SELECT COUNT(*) as count FROM partner_candidates WHERE " + where_sql
+    count_result = db.execute(text(count_sql), {k: v for k, v in params.items() if k not in ['limit', 'offset']}).fetchone()
 
     candidates = []
     for r in results:
@@ -956,12 +964,8 @@ async def update_partner_candidate(
     update_fields.append("updated_at = CURRENT_TIMESTAMP")
 
     try:
-        result = db.execute(text(f"""
-            UPDATE partner_candidates
-            SET {', '.join(update_fields)}
-            WHERE id = :partner_id AND owner_id = :user_id AND organization_id = :org_id
-            RETURNING id
-        """), params)
+        update_sql = "UPDATE partner_candidates SET " + ', '.join(update_fields) + " WHERE id = :partner_id AND owner_id = :user_id AND organization_id = :org_id RETURNING id"
+        result = db.execute(text(update_sql), params)
 
         if not result.fetchone():
             raise HTTPException(status_code=404, detail="Partner not found")
@@ -1022,22 +1026,21 @@ async def update_partner_status(
         raise HTTPException(status_code=400, detail=f"Invalid status for {category}. Must be one of: {valid_statuses}")
 
     # Build extra SET clauses for terminal statuses
-    extra_sets = ""
-    if data.status == 'hired' and category == 'employee':
-        extra_sets = ", hired_at = CURRENT_TIMESTAMP"
-    elif data.status == 'withdrawn' and category == 'employee':
-        extra_sets = ", withdrawn_at = CURRENT_TIMESTAMP"
-
-    db.execute(text(f"""
+    status_sql = """
         UPDATE partner_candidates
         SET status = :status,
             status_changed_at = CURRENT_TIMESTAMP,
             status_changed_by = :user_id,
             last_activity_at = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP
-            {extra_sets}
-        WHERE id = :partner_id AND organization_id = :org_id
-    """), {"partner_id": partner_id, "status": data.status, "user_id": user_id, "org_id": current_user.organization_id})
+    """
+    if data.status == 'hired' and category == 'employee':
+        status_sql += ", hired_at = CURRENT_TIMESTAMP"
+    elif data.status == 'withdrawn' and category == 'employee':
+        status_sql += ", withdrawn_at = CURRENT_TIMESTAMP"
+    status_sql += " WHERE id = :partner_id AND organization_id = :org_id"
+
+    db.execute(text(status_sql), {"partner_id": partner_id, "status": data.status, "user_id": user_id, "org_id": current_user.organization_id})
 
     log_partner_activity(
         db, partner_id, "status_change",
@@ -1760,15 +1763,12 @@ async def log_partner_call(
     partner = verify_partner_ownership(partner_id, user_id, db, current_user.organization_id)
 
     # Update last activity and status if needed
-    update_status = ""
+    call_update_sql = "UPDATE partner_candidates SET last_activity_at = CURRENT_TIMESTAMP"
     if partner.status == 'new':
-        update_status = ", status = 'contacted', status_changed_at = CURRENT_TIMESTAMP"
+        call_update_sql += ", status = 'contacted', status_changed_at = CURRENT_TIMESTAMP"
+    call_update_sql += " WHERE id = :partner_id"
 
-    db.execute(text(f"""
-        UPDATE partner_candidates
-        SET last_activity_at = CURRENT_TIMESTAMP{update_status}
-        WHERE id = :partner_id
-    """), {"partner_id": partner_id})
+    db.execute(text(call_update_sql), {"partner_id": partner_id})
 
     log_partner_activity(
         db, partner_id, "call_made",

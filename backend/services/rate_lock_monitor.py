@@ -61,7 +61,7 @@ def check_expiring_locks(
 
     where_sql = " AND ".join(filters)
 
-    query = text(f"""
+    sql = """
         SELECT
             l.id AS loan_id,
             l.loan_number,
@@ -75,9 +75,10 @@ def check_expiring_locks(
             EXTRACT(EPOCH FROM (l.lock_expiration_date - CURRENT_TIMESTAMP)) / 3600.0 AS hours_remaining
         FROM loans l
         LEFT JOIN users u ON u.id = l.loan_officer_id
-        WHERE {where_sql}
+        WHERE """ + where_sql + """
         ORDER BY l.lock_expiration_date ASC
-    """)
+    """
+    query = text(sql)
 
     try:
         result = db.execute(query, params)

@@ -18,7 +18,7 @@ import hashlib
 import logging
 from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from anthropic import Anthropic
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -971,11 +971,8 @@ Be thorough but objective. Base scores only on available evidence. If data is li
             updates.append("assessed_by = :assessed_by")
             params["assessed_by"] = applied_by
 
-        self.db.execute(text(f"""
-            UPDATE mm_candidate_assessments
-            SET {', '.join(updates)}
-            WHERE candidate_id = :candidate_id
-        """), params)
+        update_sql = "UPDATE mm_candidate_assessments SET " + ", ".join(updates) + " WHERE candidate_id = :candidate_id"
+        self.db.execute(text(update_sql), params)
 
         self.db.commit()
 

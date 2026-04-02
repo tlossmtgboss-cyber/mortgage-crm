@@ -3,7 +3,7 @@ URLA Payload Builder
 Transforms intake session data into URLA-compliant payload
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from .models import Session, Party, PartyType
 

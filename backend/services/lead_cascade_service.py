@@ -79,13 +79,10 @@ def cascade_lead_status(
             org_filter = "AND l.organization_id = :org_id"
             params["org_id"] = organization_id
 
-        loans = db.execute(text(f"""
-            SELECT l.id, l.loan_number, l.stage
-            FROM loans l
-            WHERE {where_clause}
-              AND COALESCE(l.stage, '') NOT IN :terminal
-              {org_filter}
-        """), params).fetchall()
+        loans_sql = "SELECT l.id, l.loan_number, l.stage FROM loans l WHERE " + where_clause + " AND COALESCE(l.stage, '') NOT IN :terminal"
+        if org_filter:
+            loans_sql += " " + org_filter
+        loans = db.execute(text(loans_sql), params).fetchall()
 
         for loan in loans:
             loan_id = loan[0]
@@ -134,13 +131,8 @@ def cascade_lead_status(
         # Check both mum_clients and mum_client_profiles tables
         for table in ("mum_clients", "mum_client_profiles"):
             try:
-                rows = db.execute(text(f"""
-                    UPDATE {table}
-                    SET status = :new_status
-                    WHERE loan_number = :loan_number
-                      AND COALESCE(status, '') != :new_status
-                    RETURNING id, loan_number
-                """), mum_params).fetchall()
+                mum_sql = "UPDATE " + table + " SET status = :new_status WHERE loan_number = :loan_number AND COALESCE(status, '') != :new_status RETURNING id, loan_number"
+                rows = db.execute(text(mum_sql), mum_params).fetchall()
 
                 for row in rows:
                     mum_clients_updated.append({"id": row[0], "table": table, "new_status": target_mum_status})

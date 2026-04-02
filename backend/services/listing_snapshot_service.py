@@ -7,7 +7,7 @@ import hashlib
 import json
 import logging
 from typing import Optional, List, Dict, Any
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -228,7 +228,7 @@ class ListingSnapshotService:
                 org_filter = "AND t.organization_id = :org_id"
                 params["org_id"] = organization_id
 
-            result = db.execute(text(f"""
+            sql = """
                 SELECT DISTINCT
                     p.id as party_id,
                     p.email,
@@ -243,9 +243,12 @@ class ListingSnapshotService:
                   AND p.unsubscribed_at IS NULL
                   AND t.is_active = true
                   AND t.current_status NOT IN ('closed', 'cancelled')
-                  {org_filter}
-                ORDER BY p.email, p.transaction_id
-            """), params)
+            """
+            if org_filter:
+                sql += "                  " + org_filter + "\n"
+            sql += """                ORDER BY p.email, p.transaction_id
+            """
+            result = db.execute(text(sql), params)
 
             # Group by email
             parties_by_email = {}
@@ -382,13 +385,8 @@ class ListingSnapshotService:
             elif status == "failed":
                 timestamp_field = ", retry_count = retry_count + 1"
 
-            db.execute(text(f"""
-                UPDATE listing_update_deliveries
-                SET status = :status,
-                    error_message = :error
-                    {timestamp_field}
-                WHERE id = :id
-            """), {
+            sql = "UPDATE listing_update_deliveries SET status = :status, error_message = :error" + timestamp_field + " WHERE id = :id"
+            db.execute(text(sql), {
                 "id": delivery_id,
                 "status": status,
                 "error": error_message

@@ -144,11 +144,8 @@ class BrandVoiceAnalyzerService:
 
         set_clauses.append("updated_at = NOW()")
 
-        self.db.execute(text(f"""
-            UPDATE content_brand_voices
-            SET {', '.join(set_clauses)}
-            WHERE id = :id
-        """), params)
+        sql = "UPDATE content_brand_voices SET " + ", ".join(set_clauses) + " WHERE id = :id"
+        self.db.execute(text(sql), params)
         self.db.commit()
 
         return self.get_voice_profile(profile_id)
@@ -370,11 +367,8 @@ class ContentCalendarService:
 
         if set_clauses:
             set_clauses.append("updated_at = NOW()")
-            self.db.execute(text(f"""
-                UPDATE content_calendars
-                SET {', '.join(set_clauses)}
-                WHERE id = :id
-            """), params)
+            sql = "UPDATE content_calendars SET " + ", ".join(set_clauses) + " WHERE id = :id"
+            self.db.execute(text(sql), params)
             self.db.commit()
 
         return self.get_calendar(calendar_id)
@@ -525,11 +519,8 @@ class ContentCalendarService:
 
         if set_clauses:
             set_clauses.append("updated_at = NOW()")
-            self.db.execute(text(f"""
-                UPDATE content_briefs
-                SET {', '.join(set_clauses)}
-                WHERE id = :id
-            """), params)
+            sql = "UPDATE content_briefs SET " + ", ".join(set_clauses) + " WHERE id = :id"
+            self.db.execute(text(sql), params)
             self.db.commit()
 
         return self.get_brief(brief_id)
@@ -664,11 +655,8 @@ class SEOKeywordService:
 
         if set_clauses:
             set_clauses.append("updated_at = NOW()")
-            self.db.execute(text(f"""
-                UPDATE seo_keywords
-                SET {', '.join(set_clauses)}
-                WHERE id = :id
-            """), params)
+            sql = "UPDATE seo_keywords SET " + ", ".join(set_clauses) + " WHERE id = :id"
+            self.db.execute(text(sql), params)
             self.db.commit()
 
         return self.get_keyword(keyword_id)

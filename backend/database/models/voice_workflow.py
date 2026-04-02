@@ -1,6 +1,6 @@
 """Voice Workflow — persistent state machine for multi-step voice command workflows."""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import (
     Column, Integer, String, DateTime, Text, ForeignKey,
     Enum as SAEnum, Index, CheckConstraint,

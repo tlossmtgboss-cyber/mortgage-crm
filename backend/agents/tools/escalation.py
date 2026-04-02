@@ -9,7 +9,7 @@ Integrates with:
     - database/models/task.py (EscalationRecord, HandoffLog)
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 
 from .base import (

@@ -851,16 +851,17 @@ class DocumentValidationEngine:
             # For true dedup, we'd need a hash column.  For now, check by file_size
             # + doc_type as a heuristic, and note the hash in metadata.
 
-            existing = db.execute(text(f"""
-                SELECT smart_documents.id, file_name, file_size, doc_type, uploaded_at
-                FROM smart_documents
-                {_org_join}
-                WHERE loan_id = :loan_id
-                    AND file_size = :file_size
-                    AND status NOT IN ('REJECTED', 'EXPIRED')
-                ORDER BY uploaded_at DESC
-                LIMIT 5
-            """), {
+            dedup_query = (
+                "SELECT smart_documents.id, file_name, file_size, doc_type, uploaded_at"
+                " FROM smart_documents"
+                " " + _org_join
+                + " WHERE loan_id = :loan_id"
+                "     AND file_size = :file_size"
+                "     AND status NOT IN ('REJECTED', 'EXPIRED')"
+                " ORDER BY uploaded_at DESC"
+                " LIMIT 5"
+            )
+            existing = db.execute(text(dedup_query), {
                 "loan_id": loan_id,
                 "file_size": len(file_content),
                 **_org_params,
@@ -881,17 +882,18 @@ class DocumentValidationEngine:
 
             # Check for same doc type uploaded in last 24 hours
             if doc_type:
-                recent_same_type = db.execute(text(f"""
-                    SELECT smart_documents.id, file_name, uploaded_at
-                    FROM smart_documents
-                    {_org_join}
-                    WHERE loan_id = :loan_id
-                        AND doc_type = :doc_type
-                        AND uploaded_at >= NOW() - INTERVAL '24 hours'
-                        AND status NOT IN ('REJECTED', 'EXPIRED')
-                    ORDER BY uploaded_at DESC
-                    LIMIT 3
-                """), {
+                recent_query = (
+                    "SELECT smart_documents.id, file_name, uploaded_at"
+                    " FROM smart_documents"
+                    " " + _org_join
+                    + " WHERE loan_id = :loan_id"
+                    "     AND doc_type = :doc_type"
+                    "     AND uploaded_at >= NOW() - INTERVAL '24 hours'"
+                    "     AND status NOT IN ('REJECTED', 'EXPIRED')"
+                    " ORDER BY uploaded_at DESC"
+                    " LIMIT 3"
+                )
+                recent_same_type = db.execute(text(recent_query), {
                     "loan_id": loan_id,
                     "doc_type": doc_type,
                     **_org_params,

@@ -145,22 +145,24 @@ class AvatarService:
         where_sql = " AND ".join(where_clauses)
 
         # Get total count
+        query = f"SELECT COUNT(*) FROM video_avatar_profiles WHERE {where_sql}"
         count_result = db.execute(
-            text(f"SELECT COUNT(*) FROM video_avatar_profiles WHERE {where_sql}"),
+            text(query),
             params
         )
         total = count_result.scalar()
 
         # Get profiles
-        result = db.execute(
-            text(f"""
+        query = f"""
                 SELECT id, name, status, reference_image_url,
                        total_videos_generated, last_used_at, created_at
                 FROM video_avatar_profiles
                 WHERE {where_sql}
                 ORDER BY created_at DESC
                 LIMIT :limit OFFSET :offset
-            """),
+            """
+        result = db.execute(
+            text(query),
             params
         )
 
@@ -217,12 +219,13 @@ class AvatarService:
         updates.append("updated_at = NOW()")
         set_sql = ", ".join(updates)
 
-        db.execute(
-            text(f"""
+        query = f"""
                 UPDATE video_avatar_profiles
                 SET {set_sql}
                 WHERE id = :id AND user_id = :user_id
-            """),
+            """
+        db.execute(
+            text(query),
             params
         )
         db.commit()
@@ -390,12 +393,13 @@ class AvatarService:
             updates.append("voice_model_id = :voice_model_id")
             params["voice_model_id"] = voice_model_id
 
-        db.execute(
-            text(f"""
+        query = f"""
                 UPDATE video_avatar_profiles
                 SET {", ".join(updates)}
                 WHERE id = :id
-            """),
+            """
+        db.execute(
+            text(query),
             params
         )
         db.commit()
@@ -516,27 +520,29 @@ class AvatarService:
         where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
 
         # Get total
-        count_result = db.execute(
-            text(f"""
+        query = f"""
                 SELECT COUNT(*)
                 FROM video_avatar_jobs j
                 JOIN video_avatar_profiles p ON p.id = j.avatar_id
                 WHERE {where_sql}
-            """),
+            """
+        count_result = db.execute(
+            text(query),
             params
         )
         total = count_result.scalar()
 
         # Get jobs
-        result = db.execute(
-            text(f"""
+        query = f"""
                 SELECT j.*
                 FROM video_avatar_jobs j
                 JOIN video_avatar_profiles p ON p.id = j.avatar_id
                 WHERE {where_sql}
                 ORDER BY j.created_at DESC
                 LIMIT :limit OFFSET :offset
-            """),
+            """
+        result = db.execute(
+            text(query),
             params
         )
 
@@ -599,12 +605,13 @@ class AvatarService:
             updates.append("lip_sync_generation_ms = :lip_sync_generation_ms")
             params["lip_sync_generation_ms"] = lip_sync_generation_ms
 
-        db.execute(
-            text(f"""
+        query = f"""
                 UPDATE video_avatar_jobs
                 SET {", ".join(updates)}
                 WHERE job_id = :job_id
-            """),
+            """
+        db.execute(
+            text(query),
             params
         )
         db.commit()

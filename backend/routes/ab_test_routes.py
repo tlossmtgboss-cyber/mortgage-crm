@@ -98,15 +98,16 @@ async def list_experiments(status: Optional[str] = None, db=Depends(get_db)):
         params["status"] = status
 
     try:
-        rows = db.execute(text(f"""
+        query_sql = """
             SELECT e.id, e.name, e.experiment_type, e.status, e.primary_metric,
                    e.started_at, e.ended_at,
                    (SELECT COUNT(*) FROM ab_variants WHERE experiment_id = e.id) as variant_count,
                    (SELECT COUNT(*) FROM ab_assignments WHERE experiment_id = e.id) as total_assignments
             FROM ab_experiments e
-            {status_filter}
+            """ + status_filter + """
             ORDER BY e.created_at DESC
-        """), params).mappings().all()
+        """
+        rows = db.execute(text(query_sql), params).mappings().all()
 
         return {
             "experiments": [

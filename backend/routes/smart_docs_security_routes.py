@@ -1259,25 +1259,27 @@ async def get_retention_expiring(
             continue
 
         # Find loans with matching event date where retention is near expiry
-        sql = sa_text(f"""
-            SELECT
-                sd.id as document_id,
-                sd.loan_id,
-                sd.doc_type,
-                l.loan_number,
-                l.borrower_name,
-                l.{event_col} as event_date,
-                l.{event_col} + INTERVAL ':retention_days days' as expiry_date
-            FROM smart_documents sd
-            JOIN loans l ON l.id = sd.loan_id
-            WHERE sd.doc_type = :doc_type
-                AND l.{event_col} IS NOT NULL
-                AND l.{event_col} + INTERVAL ':retention_days days'
-                    BETWEEN CURRENT_TIMESTAMP AND CURRENT_TIMESTAMP + INTERVAL ':days_ahead days'
-                {"AND l.organization_id = :org_id" if (org_id and not _is_platform_admin(current_user)) else ""}
-            ORDER BY l.{event_col} + INTERVAL ':retention_days days' ASC
-            LIMIT 200
-        """)
+        org_clause = "AND l.organization_id = :org_id" if (org_id and not _is_platform_admin(current_user)) else ""
+        sql_str = (
+            "SELECT"
+            "    sd.id as document_id,"
+            "    sd.loan_id,"
+            "    sd.doc_type,"
+            "    l.loan_number,"
+            "    l.borrower_name,"
+            "    l." + event_col + " as event_date,"
+            "    l." + event_col + " + INTERVAL ':retention_days days' as expiry_date"
+            " FROM smart_documents sd"
+            " JOIN loans l ON l.id = sd.loan_id"
+            " WHERE sd.doc_type = :doc_type"
+            "    AND l." + event_col + " IS NOT NULL"
+            "    AND l." + event_col + " + INTERVAL ':retention_days days'"
+            "        BETWEEN CURRENT_TIMESTAMP AND CURRENT_TIMESTAMP + INTERVAL ':days_ahead days'"
+            "    " + org_clause +
+            " ORDER BY l." + event_col + " + INTERVAL ':retention_days days' ASC"
+            " LIMIT 200"
+        )
+        sql = sa_text(sql_str)
 
         params = {
             "doc_type": policy.doc_type,
@@ -1615,54 +1617,46 @@ async def get_compliance_report(
         params["org_id"] = org_id
 
     # Total documents
-    total_docs_row = db.execute(
-        sa_text(f"""
-            SELECT COUNT(*) as total
-            FROM smart_documents sd
-            JOIN loans l ON l.id = sd.loan_id
-            WHERE 1=1 {org_filter}
-        """),
-        params,
-    ).first()
+    total_docs_sql = (
+        "SELECT COUNT(*) as total"
+        " FROM smart_documents sd"
+        " JOIN loans l ON l.id = sd.loan_id"
+        " WHERE 1=1 " + org_filter
+    )
+    total_docs_row = db.execute(sa_text(total_docs_sql), params).first()
     total_docs = total_docs_row[0] if total_docs_row else 0
 
     # Documents with access logs
-    docs_with_logs_row = db.execute(
-        sa_text(f"""
-            SELECT COUNT(DISTINCT dal.document_id) as count
-            FROM document_access_logs dal
-            JOIN smart_documents sd ON sd.id = dal.document_id
-            JOIN loans l ON l.id = sd.loan_id
-            WHERE 1=1 {org_filter}
-        """),
-        params,
-    ).first()
+    docs_with_logs_sql = (
+        "SELECT COUNT(DISTINCT dal.document_id) as count"
+        " FROM document_access_logs dal"
+        " JOIN smart_documents sd ON sd.id = dal.document_id"
+        " JOIN loans l ON l.id = sd.loan_id"
+        " WHERE 1=1 " + org_filter
+    )
+    docs_with_logs_row = db.execute(sa_text(docs_with_logs_sql), params).first()
     docs_with_logs = docs_with_logs_row[0] if docs_with_logs_row else 0
 
     # Encryption coverage
-    encrypted_docs_row = db.execute(
-        sa_text(f"""
-            SELECT COUNT(DISTINCT der.document_id) as count
-            FROM document_encryption_records der
-            JOIN smart_documents sd ON sd.id = der.document_id
-            JOIN loans l ON l.id = sd.loan_id
-            WHERE der.encryption_status = 'encrypted' {org_filter}
-        """),
-        params,
-    ).first()
+    encrypted_docs_sql = (
+        "SELECT COUNT(DISTINCT der.document_id) as count"
+        " FROM document_encryption_records der"
+        " JOIN smart_documents sd ON sd.id = der.document_id"
+        " JOIN loans l ON l.id = sd.loan_id"
+        " WHERE der.encryption_status = 'encrypted' " + org_filter
+    )
+    encrypted_docs_row = db.execute(sa_text(encrypted_docs_sql), params).first()
     encrypted_docs = encrypted_docs_row[0] if encrypted_docs_row else 0
 
     # Integrity check coverage
-    checked_docs_row = db.execute(
-        sa_text(f"""
-            SELECT COUNT(DISTINCT dic.document_id) as count
-            FROM document_integrity_checks dic
-            JOIN smart_documents sd ON sd.id = dic.document_id
-            JOIN loans l ON l.id = sd.loan_id
-            WHERE 1=1 {org_filter}
-        """),
-        params,
-    ).first()
+    checked_docs_sql = (
+        "SELECT COUNT(DISTINCT dic.document_id) as count"
+        " FROM document_integrity_checks dic"
+        " JOIN smart_documents sd ON sd.id = dic.document_id"
+        " JOIN loans l ON l.id = sd.loan_id"
+        " WHERE 1=1 " + org_filter
+    )
+    checked_docs_row = db.execute(sa_text(checked_docs_sql), params).first()
     checked_docs = checked_docs_row[0] if checked_docs_row else 0
 
     # Active retention policies

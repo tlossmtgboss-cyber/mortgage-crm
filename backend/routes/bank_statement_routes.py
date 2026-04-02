@@ -7,7 +7,7 @@ Supports Non-QM bank statement income calculation programs.
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse

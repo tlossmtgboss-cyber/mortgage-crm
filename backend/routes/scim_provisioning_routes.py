@@ -335,23 +335,20 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
         order_dir = "DESC" if sortOrder and sortOrder.lower() == "descending" else "ASC"
 
         # Count total
-        total_row = db.execute(
-            text(f"SELECT COUNT(*) as cnt FROM users WHERE {where_sql}"), params
-        ).fetchone()
+        count_sql = "SELECT COUNT(*) as cnt FROM users WHERE " + where_sql
+        total_row = db.execute(text(count_sql), params).fetchone()
         total_count = total_row.cnt if total_row else 0
 
         # Fetch page
-        rows = db.execute(
-            text(f"""
-                SELECT id, email, first_name, last_name, is_active,
-                       permission_role, organization_id, created_at
-                FROM users
-                WHERE {where_sql}
-                ORDER BY {order_column} {order_dir}
-                LIMIT :limit OFFSET :offset
-            """),
-            params,
-        ).fetchall()
+        select_sql = (
+            "SELECT id, email, first_name, last_name, is_active,"
+            "       permission_role, organization_id, created_at"
+            " FROM users"
+            " WHERE " + where_sql +
+            " ORDER BY " + order_column + " " + order_dir +
+            " LIMIT :limit OFFSET :offset"
+        )
+        rows = db.execute(text(select_sql), params).fetchall()
 
         base_url = str(request.base_url).rstrip("/")
         resources = [_user_to_scim(r, base_url) for r in rows]
@@ -597,18 +594,16 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             update_params["permission_role"] = role
             update_params["role_legacy"] = role
 
-        db.execute(
-            text(f"""
-                UPDATE users SET
-                    email = :email,
-                    first_name = :first_name,
-                    last_name = :last_name,
-                    is_active = :is_active
-                    {role_clause}
-                WHERE id = :user_id
-            """),
-            update_params,
+        update_sql = (
+            "UPDATE users SET"
+            "    email = :email,"
+            "    first_name = :first_name,"
+            "    last_name = :last_name,"
+            "    is_active = :is_active"
+            "    " + role_clause +
+            " WHERE id = :user_id"
         )
+        db.execute(text(update_sql), update_params)
         db.commit()
 
         # Re-fetch and return
@@ -796,10 +791,8 @@ def register_scim_provisioning_routes(app, get_db, get_current_user, **kwargs):
             set_parts.append(f"{col} = :{param_key}")
             params[param_key] = val
 
-        db.execute(
-            text(f"UPDATE users SET {', '.join(set_parts)} WHERE id = :user_id"),
-            params,
-        )
+        patch_sql = "UPDATE users SET " + ', '.join(set_parts) + " WHERE id = :user_id"
+        db.execute(text(patch_sql), params)
         db.commit()
 
         row = db.execute(

@@ -673,26 +673,24 @@ class IncomeTrendingService:
         if loan_id:
             params["loan_id"] = loan_id
 
-        rows = self.db.execute(
-            text(f"""
-                SELECT
-                    sd.id AS doc_id,
-                    sd.doc_type,
-                    sd.uploaded_at,
-                    sde.extracted_fields,
-                    sde.overall_confidence
-                FROM smart_documents sd
-                LEFT JOIN smart_document_extractions sde
-                    ON sde.document_id = sd.id
-                WHERE sd.organization_id = :org_id
-                  AND sd.borrower_id = :borrower_id
-                  AND sd.doc_type IN ('PAYSTUB', 'W2', 'TAX_RETURN')
-                  AND sd.status NOT IN ('REJECTED', 'EXPIRED')
-                  {loan_filter}
-                ORDER BY sd.uploaded_at ASC
-            """),
-            params,
-        ).fetchall()
+        trend_query = (
+            "SELECT"
+            " sd.id AS doc_id,"
+            " sd.doc_type,"
+            " sd.uploaded_at,"
+            " sde.extracted_fields,"
+            " sde.overall_confidence"
+            " FROM smart_documents sd"
+            " LEFT JOIN smart_document_extractions sde"
+            "     ON sde.document_id = sd.id"
+            " WHERE sd.organization_id = :org_id"
+            "   AND sd.borrower_id = :borrower_id"
+            "   AND sd.doc_type IN ('PAYSTUB', 'W2', 'TAX_RETURN')"
+            "   AND sd.status NOT IN ('REJECTED', 'EXPIRED')"
+            "   " + loan_filter
+            + " ORDER BY sd.uploaded_at ASC"
+        )
+        rows = self.db.execute(text(trend_query), params).fetchall()
 
         for row in rows:
             extracted = self._parse_json_field(row.extracted_fields)
@@ -736,29 +734,30 @@ class IncomeTrendingService:
 
         # income_sources joined through income_calculations for tenant isolation
         # income_calculations links to loan which has organization_id
+        isrc_query = (
+            "SELECT"
+            " isrc.source_type,"
+            " isrc.employer_name,"
+            " isrc.total_monthly_income,"
+            " isrc.total_annual_income,"
+            " isrc.year1_income,"
+            " isrc.year2_income,"
+            " isrc.year_over_year_change_pct,"
+            " isrc.trending_direction,"
+            " isrc.ai_confidence,"
+            " isrc.created_at,"
+            " ic.loan_id"
+            " FROM income_sources isrc"
+            " JOIN income_calculations ic ON ic.id = isrc.calculation_id"
+            " JOIN loans l ON l.id = ic.loan_id"
+            " WHERE isrc.borrower_id = :borrower_id"
+            "   AND l.organization_id = :org_id"
+            "   AND ic.status NOT IN ('rejected', 'error')"
+            "   " + loan_filter
+            + " ORDER BY isrc.created_at ASC"
+        )
         rows = self.db.execute(
-            text(f"""
-                SELECT
-                    isrc.source_type,
-                    isrc.employer_name,
-                    isrc.total_monthly_income,
-                    isrc.total_annual_income,
-                    isrc.year1_income,
-                    isrc.year2_income,
-                    isrc.year_over_year_change_pct,
-                    isrc.trending_direction,
-                    isrc.ai_confidence,
-                    isrc.created_at,
-                    ic.loan_id
-                FROM income_sources isrc
-                JOIN income_calculations ic ON ic.id = isrc.calculation_id
-                JOIN loans l ON l.id = ic.loan_id
-                WHERE isrc.borrower_id = :borrower_id
-                  AND l.organization_id = :org_id
-                  AND ic.status NOT IN ('rejected', 'error')
-                  {loan_filter}
-                ORDER BY isrc.created_at ASC
-            """),
+            text(isrc_query),
             {**params, "org_id": org_id},
         ).fetchall()
 

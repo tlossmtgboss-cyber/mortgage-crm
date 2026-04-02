@@ -6,7 +6,7 @@ Provides consistent response formatting across all API endpoints.
 
 from typing import Optional, Any, Dict
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 

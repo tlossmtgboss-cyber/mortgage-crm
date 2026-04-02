@@ -263,10 +263,11 @@ async def upsert_loan(
         loan_data['salesforce_id'] = salesforce_id
         loan_data['org_id'] = org_id
 
-        db.execute(text(f"""
-            UPDATE loans SET {', '.join(set_parts)}
-            WHERE id = :loan_id
-        """), loan_data)
+        query = (
+            "UPDATE loans SET " + ", ".join(set_parts)
+            + " WHERE id = :loan_id"
+        )
+        db.execute(text(query), loan_data)
         logger.info(f"Updated loan {loan_id} from Salesforce {salesforce_id}")
 
         # Wire to SLA tracking — detect stage changes
@@ -321,13 +322,14 @@ async def upsert_loan(
         conflict_set_parts.append("updated_at = CURRENT_TIMESTAMP")
         conflict_set_clause = ", ".join(conflict_set_parts)
 
-        result = db.execute(text(f"""
-            INSERT INTO loans ({columns}, created_at, updated_at)
-            VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            ON CONFLICT (salesforce_id) WHERE salesforce_id IS NOT NULL
-            DO UPDATE SET {conflict_set_clause}
-            RETURNING id, (xmax = 0) AS was_inserted
-        """), loan_data)
+        query = (
+            "INSERT INTO loans (" + columns + ", created_at, updated_at)"
+            " VALUES (" + placeholders + ", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            " ON CONFLICT (salesforce_id) WHERE salesforce_id IS NOT NULL"
+            " DO UPDATE SET " + conflict_set_clause
+            + " RETURNING id, (xmax = 0) AS was_inserted"
+        )
+        result = db.execute(text(query), loan_data)
 
         row = result.fetchone()
         loan_id = row[0]
@@ -418,11 +420,12 @@ async def update_loan_from_salesforce(
     set_clauses = ", ".join([f"{k} = :{k}" for k in update_fields.keys()])
     update_fields['loan_id'] = loan_id
 
-    db.execute(text(f"""
-        UPDATE loans SET {set_clauses},
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = :loan_id
-    """), update_fields)
+    query = (
+        "UPDATE loans SET " + set_clauses + ","
+        "    updated_at = CURRENT_TIMESTAMP"
+        " WHERE id = :loan_id"
+    )
+    db.execute(text(query), update_fields)
 
     logger.info(f"Updated loan {loan_id} with {len(update_fields) - 1} fields from Salesforce Opportunity {sf_id}")
 

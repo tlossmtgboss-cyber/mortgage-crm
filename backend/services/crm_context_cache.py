@@ -10,7 +10,7 @@ import os
 import json
 import logging
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 
 logger = logging.getLogger(__name__)

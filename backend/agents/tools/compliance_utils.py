@@ -6,7 +6,7 @@ Tools providing compliance gate functions for outbound contact tools.
 validation, and composite outbound contact validation.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
 
 from .base import (

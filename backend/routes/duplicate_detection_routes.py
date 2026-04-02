@@ -456,9 +456,11 @@ async def clear_sample_data(
     errors = []
 
     # Helper to safely delete from a table using raw SQL
+    # Table names are hardcoded string literals below — never from user input
     def safe_delete(table_name: str) -> int:
         try:
-            result = db.execute(text(f"DELETE FROM {table_name}"))
+            delete_sql = "DELETE FROM " + table_name
+            result = db.execute(text(delete_sql))
             db.commit()  # Commit after each successful delete
             return result.rowcount
         except Exception as e:

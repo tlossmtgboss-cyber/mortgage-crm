@@ -50,7 +50,7 @@ class ChatAnalytics:
 
         where_clause = " AND ".join(filters)
 
-        result = self.db.execute(text(f"""
+        sql = """
             SELECT
                 COUNT(*) as total_sessions,
                 COUNT(CASE WHEN current_phase >= 2 THEN 1 END) as reached_phase_2,
@@ -62,8 +62,9 @@ class ChatAnalytics:
                 AVG(turn_count) as avg_turns,
                 AVG(intent_score) as avg_intent_score
             FROM chat_sessions
-            WHERE {where_clause}
-        """), params).first()
+            WHERE """ + where_clause + """
+        """
+        result = self.db.execute(text(sql), params).first()
 
         total = result.total_sessions or 0
 
@@ -126,13 +127,14 @@ class ChatAnalytics:
         where_clause = " AND ".join(filters)
 
         # Get all sessions with intent signals
-        result = self.db.execute(text(f"""
+        intent_sql = """
             SELECT intent_signals
             FROM chat_sessions
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             AND intent_signals IS NOT NULL
             AND jsonb_array_length(intent_signals) > 0
-        """), params).fetchall()
+        """
+        result = self.db.execute(text(intent_sql), params).fetchall()
 
         signal_counts = {}
         for row in result:
@@ -164,15 +166,16 @@ class ChatAnalytics:
 
         where_clause = " AND ".join(filters)
 
-        result = self.db.execute(text(f"""
+        cta_sql = """
             SELECT
                 AVG(turn_count) as avg_turns_to_cta,
                 MIN(turn_count) as min_turns,
                 MAX(turn_count) as max_turns,
                 COUNT(*) as sample_size
             FROM chat_sessions
-            WHERE {where_clause}
-        """), params).first()
+            WHERE """ + where_clause + """
+        """
+        result = self.db.execute(text(cta_sql), params).first()
 
         return {
             'avg_turns_to_cta': round(float(result.avg_turns_to_cta or 0), 1),

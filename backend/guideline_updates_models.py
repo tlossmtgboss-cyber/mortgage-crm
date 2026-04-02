@@ -3,7 +3,7 @@ Database Models for Guideline Updates Tracking
 Store guideline updates from all 5 sources (Fannie Mae, Freddie Mac, FHA, VA, USDA)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, Index
 from database import Base
 

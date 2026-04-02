@@ -213,23 +213,20 @@ class WorkflowAIEvaluator:
             type_filter = "AND wti.task_type = ANY(:types)"
             params["types"] = task_types
 
-        results = self.db.execute(text(f"""
-            SELECT
-                wti.id,
-                wti.task_name,
-                wti.task_type,
-                wti.lead_id,
-                wti.loan_id,
-                wti.scheduled_date,
-                wti.ai_confidence
-            FROM workflow_task_instances wti
-            WHERE wti.ai_eligible = true
-            AND wti.status IN ('scheduled', 'pending')
-            AND wti.ai_confidence IS NULL
-            {type_filter}
-            ORDER BY wti.scheduled_date ASC
-            LIMIT :limit
-        """), params).fetchall()
+        eval_query = (
+            "SELECT"
+            " wti.id, wti.task_name, wti.task_type,"
+            " wti.lead_id, wti.loan_id,"
+            " wti.scheduled_date, wti.ai_confidence"
+            " FROM workflow_task_instances wti"
+            " WHERE wti.ai_eligible = true"
+            " AND wti.status IN ('scheduled', 'pending')"
+            " AND wti.ai_confidence IS NULL"
+            " " + type_filter
+            + " ORDER BY wti.scheduled_date ASC"
+            " LIMIT :limit"
+        )
+        results = self.db.execute(text(eval_query), params).fetchall()
 
         return [
             {

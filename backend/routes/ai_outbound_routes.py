@@ -209,7 +209,7 @@ async def get_call_queue(
         params["status"] = status
 
     try:
-        rows = db.execute(text(f"""
+        query_sql = """
             SELECT
                 call_id, contact_id, entity_type, contact_name,
                 caller_type, priority, purpose, status, outcome,
@@ -217,7 +217,7 @@ async def get_call_queue(
                 vapi_call_id, appointment_id, created_at,
                 last_attempt_at, completed_at, call_duration_seconds
             FROM ai_outbound_calls
-            WHERE lo_id = :lo_id {status_filter}
+            WHERE lo_id = :lo_id """ + status_filter + """
             ORDER BY
                 CASE status
                     WHEN 'in_progress' THEN 0
@@ -228,12 +228,14 @@ async def get_call_queue(
                 priority ASC,
                 scheduled_for ASC NULLS FIRST
             LIMIT :limit OFFSET :offset
-        """), params).fetchall()
+        """
+        rows = db.execute(text(query_sql), params).fetchall()
 
-        total_result = db.execute(text(f"""
+        count_sql = """
             SELECT COUNT(*) FROM ai_outbound_calls
-            WHERE lo_id = :lo_id {status_filter}
-        """), params).fetchone()
+            WHERE lo_id = :lo_id """ + status_filter + """
+        """
+        total_result = db.execute(text(count_sql), params).fetchone()
 
         calls = []
         for row in rows:

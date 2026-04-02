@@ -6,7 +6,7 @@ projections for pricing decisions. Owner-only access.
 """
 
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from sqlalchemy import (
     Column, String, Integer, BigInteger, Boolean, DateTime, Date, Text,

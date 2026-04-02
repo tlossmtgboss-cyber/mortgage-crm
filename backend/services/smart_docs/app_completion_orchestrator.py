@@ -1066,33 +1066,36 @@ class AppCompletionOrchestrator:
             org_filt = "AND acr.organization_id = :org"
             p["org"] = organization_id
 
-        stats = self.db.execute(text(f"""
-            SELECT COUNT(*) total,
-                   COUNT(CASE WHEN review_status='COMPLETED' THEN 1 END) completed,
-                   AVG(overall_score) avg_score,
-                   COUNT(CASE WHEN overall_score >= 90 THEN 1 END) near_complete,
-                   COUNT(CASE WHEN overall_score >= 50 AND overall_score < 90 THEN 1 END) moderate,
-                   COUNT(CASE WHEN overall_score < 50 THEN 1 END) high_touch
-            FROM application_completeness_reviews acr
-            WHERE created_at >= :cutoff {org_filt}
-        """), p).mappings().first()
+        stats_query = (
+            "SELECT COUNT(*) total,"
+            " COUNT(CASE WHEN review_status='COMPLETED' THEN 1 END) completed,"
+            " AVG(overall_score) avg_score,"
+            " COUNT(CASE WHEN overall_score >= 90 THEN 1 END) near_complete,"
+            " COUNT(CASE WHEN overall_score >= 50 AND overall_score < 90 THEN 1 END) moderate,"
+            " COUNT(CASE WHEN overall_score < 50 THEN 1 END) high_touch"
+            " FROM application_completeness_reviews acr"
+            " WHERE created_at >= :cutoff " + org_filt
+        )
+        stats = self.db.execute(text(stats_query), p).mappings().first()
 
-        items = self.db.execute(text(f"""
-            SELECT COUNT(*) total,
-                   COUNT(CASE WHEN mi.status='RESOLVED' THEN 1 END) resolved,
-                   COUNT(CASE WHEN mi.resolved_by_type='AI' OR mi.resolution_method='AI_AUTO_FILL' THEN 1 END) ai,
-                   COUNT(CASE WHEN mi.status='ESCALATED' THEN 1 END) escalated,
-                   COUNT(CASE WHEN mi.status IN ('IDENTIFIED','STAGED','SENT_TO_BORROWER','BORROWER_RESPONDED') THEN 1 END) pending
-            FROM missing_items mi JOIN application_completeness_reviews acr ON acr.id=mi.review_id
-            WHERE acr.created_at >= :cutoff {org_filt}
-        """), p).mappings().first()
+        items_query = (
+            "SELECT COUNT(*) total,"
+            " COUNT(CASE WHEN mi.status='RESOLVED' THEN 1 END) resolved,"
+            " COUNT(CASE WHEN mi.resolved_by_type='AI' OR mi.resolution_method='AI_AUTO_FILL' THEN 1 END) ai,"
+            " COUNT(CASE WHEN mi.status='ESCALATED' THEN 1 END) escalated,"
+            " COUNT(CASE WHEN mi.status IN ('IDENTIFIED','STAGED','SENT_TO_BORROWER','BORROWER_RESPONDED') THEN 1 END) pending"
+            " FROM missing_items mi JOIN application_completeness_reviews acr ON acr.id=mi.review_id"
+            " WHERE acr.created_at >= :cutoff " + org_filt
+        )
+        items = self.db.execute(text(items_query), p).mappings().first()
 
-        top = self.db.execute(text(f"""
-            SELECT mi.field_section, mi.item_type, COUNT(*) cnt
-            FROM missing_items mi JOIN application_completeness_reviews acr ON acr.id=mi.review_id
-            WHERE acr.created_at >= :cutoff AND mi.status != 'RESOLVED' {org_filt}
-            GROUP BY mi.field_section, mi.item_type ORDER BY cnt DESC LIMIT 10
-        """), p).mappings().all()
+        top_query = (
+            "SELECT mi.field_section, mi.item_type, COUNT(*) cnt"
+            " FROM missing_items mi JOIN application_completeness_reviews acr ON acr.id=mi.review_id"
+            " WHERE acr.created_at >= :cutoff AND mi.status != 'RESOLVED' " + org_filt
+            + " GROUP BY mi.field_section, mi.item_type ORDER BY cnt DESC LIMIT 10"
+        )
+        top = self.db.execute(text(top_query), p).mappings().all()
 
         ti = int(items["total"] or 0) if items else 0
         ri = int(items["resolved"] or 0) if items else 0
@@ -1148,19 +1151,20 @@ class AppCompletionOrchestrator:
                  "created_desc": "acr.created_at DESC",
                  "updated_desc": "acr.updated_at DESC"}.get(sort_by, "acr.overall_score ASC NULLS LAST")
 
-        total = self.db.execute(text(
-            f"SELECT COUNT(*) FROM application_completeness_reviews acr {where}"), p).scalar() or 0
+        count_query = "SELECT COUNT(*) FROM application_completeness_reviews acr " + where
+        total = self.db.execute(text(count_query), p).scalar() or 0
 
-        rows = self.db.execute(text(f"""
-            SELECT acr.id, acr.loan_id, acr.review_status, acr.overall_score,
-                   acr.complexity_level, acr.next_recommended_action, acr.total_missing_items,
-                   acr.assigned_to_user_id, acr.assigned_to_queue,
-                   acr.created_at, acr.updated_at,
-                   l.loan_number, l.borrower_name, l.loan_officer_name, l.loan_type, l.stage
-            FROM application_completeness_reviews acr
-            LEFT JOIN loans l ON l.id = acr.loan_id
-            {where} ORDER BY {order} LIMIT :lim OFFSET :off
-        """), p).mappings().all()
+        list_query = (
+            "SELECT acr.id, acr.loan_id, acr.review_status, acr.overall_score,"
+            " acr.complexity_level, acr.next_recommended_action, acr.total_missing_items,"
+            " acr.assigned_to_user_id, acr.assigned_to_queue,"
+            " acr.created_at, acr.updated_at,"
+            " l.loan_number, l.borrower_name, l.loan_officer_name, l.loan_type, l.stage"
+            " FROM application_completeness_reviews acr"
+            " LEFT JOIN loans l ON l.id = acr.loan_id"
+            " " + where + " ORDER BY " + order + " LIMIT :lim OFFSET :off"
+        )
+        rows = self.db.execute(text(list_query), p).mappings().all()
 
         queue = []
         for r in rows:

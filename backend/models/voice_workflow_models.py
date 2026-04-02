@@ -6,7 +6,7 @@ loan officers to complete tasks through natural two-way conversations.
 """
 from enum import Enum
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 from uuid import UUID
 

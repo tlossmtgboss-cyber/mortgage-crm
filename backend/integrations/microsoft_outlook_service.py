@@ -5,7 +5,7 @@ Handles OAuth authentication for Outlook Calendar and Outlook Email via Microsof
 import os
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import requests
 from urllib.parse import urlencode
 

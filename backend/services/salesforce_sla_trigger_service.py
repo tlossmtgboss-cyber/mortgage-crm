@@ -606,15 +606,16 @@ class SalesforceSLATriggerService:
         """Check if entity is already enrolled in a specific workflow."""
         entity_filter = "lead_id" if entity_type == "lead" else "loan_id"
 
-        result = self.db.execute(text(f"""
+        query = """
             SELECT wi.id, wi.status, wc.workflow_key
             FROM workflow_instances wi
             JOIN workflow_configurations wc ON wc.id = wi.workflow_configuration_id
-            WHERE wi.{entity_filter} = :entity_id
+            WHERE wi.""" + entity_filter + """ = :entity_id
             AND wc.workflow_key = :workflow_key
             AND wi.status = 'active'
             LIMIT 1
-        """), {
+        """
+        result = self.db.execute(text(query), {
             "entity_id": entity_id,
             "workflow_key": workflow_key
         }).fetchone()
@@ -660,7 +661,7 @@ class SalesforceSLATriggerService:
         entity_filter = "lead_id" if entity_type == "lead" else "loan_id"
 
         try:
-            self.db.execute(text(f"""
+            query = """
                 UPDATE workflow_instances
                 SET status = CASE
                     WHEN :status = 'Funded' THEN 'completed'
@@ -679,9 +680,10 @@ class SalesforceSLATriggerService:
                     ELSE cancellation_reason
                 END,
                 updated_at = NOW()
-                WHERE {entity_filter} = :entity_id
+                WHERE """ + entity_filter + """ = :entity_id
                 AND status = 'active'
-            """), {
+            """
+            self.db.execute(text(query), {
                 "entity_id": entity_id,
                 "status": terminal_status
             })

@@ -165,12 +165,13 @@ class VideoProjectService:
         where_clause = " AND ".join(filters) if filters else "1=1"
 
         # Get total count
-        count_result = db.execute(text(f"""
+        query = f"""
             SELECT COUNT(*) FROM video_projects p WHERE {where_clause}
-        """), params)
+        """
+        count_result = db.execute(text(query), params)
         total = count_result.scalar() or 0
 
-        results = db.execute(text(f"""
+        query = f"""
             SELECT
                 p.id, p.title, p.source_type, p.status,
                 p.target_duration_seconds, p.tags, p.category,
@@ -181,7 +182,8 @@ class VideoProjectService:
             WHERE {where_clause}
             ORDER BY p.created_at DESC
             LIMIT :limit OFFSET :offset
-        """), params).fetchall()
+        """
+        results = db.execute(text(query), params).fetchall()
 
         return [self._row_to_dict(r) for r in results], total
 
@@ -215,11 +217,12 @@ class VideoProjectService:
 
             set_clauses.append("updated_at = CURRENT_TIMESTAMP")
 
-            db.execute(text(f"""
+            query = f"""
                 UPDATE video_projects
                 SET {', '.join(set_clauses)}
                 WHERE id = :id
-            """), params)
+            """
+            db.execute(text(query), params)
             db.commit()
 
             return self.get_project(db, project_id)
@@ -446,11 +449,12 @@ class VideoProjectService:
 
             set_clauses.append("updated_at = CURRENT_TIMESTAMP")
 
-            db.execute(text(f"""
+            query = f"""
                 UPDATE video_storyboard_scenes
                 SET {', '.join(set_clauses)}
                 WHERE id = :id
-            """), params)
+            """
+            db.execute(text(query), params)
             db.commit()
 
             result = db.execute(text("""
@@ -483,11 +487,12 @@ class VideoProjectService:
 
         where_clause = " AND ".join(filters)
 
-        results = db.execute(text(f"""
+        query = f"""
             SELECT * FROM video_brand_templates
             WHERE {where_clause}
             ORDER BY is_default DESC, name
-        """), params).fetchall()
+        """
+        results = db.execute(text(query), params).fetchall()
 
         return [self._row_to_dict(r) for r in results]
 
@@ -514,11 +519,12 @@ class VideoProjectService:
             columns = ", ".join(values.keys())
             placeholders = ", ".join(f":{k}" for k in values.keys())
 
-            result = db.execute(text(f"""
+            query = f"""
                 INSERT INTO video_brand_templates ({columns}, created_at, updated_at)
                 VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 RETURNING id
-            """), values)
+            """
+            result = db.execute(text(query), values)
 
             template_id = result.fetchone()[0]
             db.commit()
@@ -557,11 +563,12 @@ class VideoProjectService:
 
         where_clause = " AND ".join(filters)
 
-        results = db.execute(text(f"""
+        query = f"""
             SELECT * FROM video_voice_profiles
             WHERE {where_clause}
             ORDER BY is_default DESC, name
-        """), params).fetchall()
+        """
+        results = db.execute(text(query), params).fetchall()
 
         return [self._row_to_dict(r) for r in results]
 
@@ -657,11 +664,12 @@ class VideoProjectService:
 
             set_clauses.append("updated_at = CURRENT_TIMESTAMP")
 
-            db.execute(text(f"""
+            query = f"""
                 UPDATE video_voice_profiles
                 SET {', '.join(set_clauses)}
                 WHERE id = :id
-            """), params)
+            """
+            db.execute(text(query), params)
             db.commit()
 
             return self.get_voice_profile(db, profile_id)
@@ -864,11 +872,12 @@ class VideoProjectService:
 
             set_clauses.append("updated_at = CURRENT_TIMESTAMP")
 
-            db.execute(text(f"""
+            query = f"""
                 UPDATE video_brand_templates
                 SET {', '.join(set_clauses)}
                 WHERE id = :id
-            """), params)
+            """
+            db.execute(text(query), params)
             db.commit()
 
             return self.get_brand_template(db, template_id)

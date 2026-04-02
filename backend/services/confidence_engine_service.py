@@ -12,7 +12,7 @@ Based on the Borrower Confidence Manifesto.
 
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass, field
@@ -149,17 +149,21 @@ class ConfidenceEngineService:
                 )
             """
 
-        results = self.db.execute(text(f"""
+        sql = """
             SELECT cq.id, cq.code, cq.category, cq.subcategory,
                    cq.question_text, cq.question_type, cq.options,
                    cq.weight, cq.display_order, cq.dependencies,
                    cq.education_overlay_id
             FROM confidence_questions cq
             WHERE cq.is_active = true
-            {category_filter}
-            {answered_filter}
-            ORDER BY cq.display_order, cq.id
-        """), params).fetchall()
+        """
+        if category_filter:
+            sql += "            " + category_filter + "\n"
+        if answered_filter:
+            sql += "            " + answered_filter + "\n"
+        sql += """            ORDER BY cq.display_order, cq.id
+        """
+        results = self.db.execute(text(sql), params).fetchall()
 
         questions = []
         for r in results:

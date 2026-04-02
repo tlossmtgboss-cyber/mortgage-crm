@@ -12,7 +12,7 @@ Based on the Borrower Confidence Manifesto.
 
 import uuid
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -849,14 +849,15 @@ async def list_lessons(
         category_filter = "WHERE category = :category"
         params["category"] = category
 
-    results = db.execute(text(f"""
-        SELECT id, code, category, title, summary,
-               difficulty_level, estimated_minutes, display_order
-        FROM education_lessons
-        WHERE is_active = true
-        {category_filter}
-        ORDER BY display_order, id
-    """), params).fetchall()
+    query = (
+        "SELECT id, code, category, title, summary,"
+        " difficulty_level, estimated_minutes, display_order"
+        " FROM education_lessons"
+        " WHERE is_active = true"
+        " " + category_filter +
+        " ORDER BY display_order, id"
+    )
+    results = db.execute(text(query), params).fetchall()
 
     lessons = []
     for r in results:
@@ -962,73 +963,6 @@ async def seed_questions(
     except SQLAlchemyError as e:
         logger.error(f"Seed error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@router.get("/admin/debug-tables")
-async def debug_tables(
-    request: Request,
-    db: Session = Depends(get_db)
-):
-    """Debug endpoint to check table state (admin only)."""
-    import json
-    from auth.dependencies import get_current_user_flexible
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-    await get_current_user_flexible(token=token, request=request, db=db)
-
-    result = {"errors": []}
-
-    try:
-        # Check if table exists and count rows
-        questions_count = db.execute(text(
-            "SELECT COUNT(*) FROM confidence_questions"
-        )).scalar()
-        result["questions_count"] = questions_count
-
-        overlays_count = db.execute(text(
-            "SELECT COUNT(*) FROM education_overlays"
-        )).scalar()
-        result["overlays_count"] = overlays_count
-
-        # Get first few questions
-        sample_questions = db.execute(text(
-            "SELECT id, code, question_text FROM confidence_questions LIMIT 3"
-        )).fetchall()
-        result["sample_questions"] = [{"id": q[0], "code": q[1], "text": q[2][:50]} for q in sample_questions]
-
-    except SQLAlchemyError as e:
-        result["errors"].append(f"Table query error: {str(e)}")
-
-    # Try to insert a test question directly
-    try:
-        test_options = json.dumps({"min": 1, "max": 5})
-        db.execute(text("""
-            INSERT INTO confidence_questions (
-                code, category, question_text, question_type, options, is_active
-            ) VALUES (
-                :code, :category, :question_text, :question_type, :options::jsonb, true
-            ) ON CONFLICT (code) DO UPDATE SET
-                question_text = EXCLUDED.question_text
-        """), {
-            "code": "TEST_QUESTION",
-            "category": "test",
-            "question_text": "This is a test question",
-            "question_type": "scale",
-            "options": test_options
-        })
-        db.commit()
-        result["test_insert"] = "success"
-
-        # Verify it was inserted
-        new_count = db.execute(text("SELECT COUNT(*) FROM confidence_questions")).scalar()
-        result["new_count"] = new_count
-
-    except SQLAlchemyError as e:
-        import traceback
-        logger.error(f"Decision lab test insert error: {traceback.format_exc()}")
-        result["test_insert_error"] = "Database error"
-
-    return result
 
 
 @router.post("/admin/run-migration")

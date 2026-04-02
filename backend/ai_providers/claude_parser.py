@@ -9,7 +9,7 @@ import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import anthropic
 
 logger = logging.getLogger(__name__)

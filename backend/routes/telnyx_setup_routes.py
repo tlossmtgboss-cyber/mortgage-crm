@@ -191,11 +191,12 @@ async def save_user_telnyx_config(
 
             if updates:
                 updates.append("updated_at = NOW()")
-                db.execute(text(f"""
-                    UPDATE user_twilio_config  -- Legacy table name
-                    SET {', '.join(updates)}
-                    WHERE user_id = :user_id
-                """), params)
+                query = (
+                    "UPDATE user_twilio_config "  # Legacy table name
+                    "SET " + ", ".join(updates) + " "
+                    "WHERE user_id = :user_id"
+                )
+                db.execute(text(query), params)
         else:
             # Insert new record
             db.execute(text("""

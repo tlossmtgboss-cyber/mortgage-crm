@@ -6,7 +6,7 @@ Complete team member profile with all 29 fields from specification
 from sqlalchemy import Column, String, Integer, Numeric, Date, DateTime, Text, Boolean, ARRAY
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from database import Base

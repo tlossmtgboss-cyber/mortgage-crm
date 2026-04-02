@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Optional
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import os
 import base64

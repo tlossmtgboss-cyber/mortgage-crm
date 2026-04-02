@@ -14,7 +14,7 @@ issues before submission.
 
 import os
 import json
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text

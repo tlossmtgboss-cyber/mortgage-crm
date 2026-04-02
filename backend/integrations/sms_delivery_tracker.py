@@ -2,7 +2,7 @@
 # Tracks SMS delivery status via Telnyx webhooks and DB updates
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 
 from sqlalchemy.orm import Session

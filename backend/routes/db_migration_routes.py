@@ -631,7 +631,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
                 """), {"col_name": col_name})
 
                 if not result.fetchone():
-                    db.execute(text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}"))
+                    alter_sql = "ALTER TABLE leads ADD COLUMN " + col_name + " " + col_type
+                    db.execute(text(alter_sql))
                     columns_added.append(col_name)
                     logger.info(f"Added column {col_name} to leads table")
 
@@ -780,7 +781,8 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
                 """), {"col_name": col_name})
 
                 if not result.fetchone():
-                    db.execute(text(f"ALTER TABLE loans ADD COLUMN {col_name} {col_type}"))
+                    alter_sql = "ALTER TABLE loans ADD COLUMN " + col_name + " " + col_type
+                    db.execute(text(alter_sql))
                     columns_added.append(col_name)
                     logger.info(f"Added column {col_name} to loans table")
 
@@ -834,9 +836,9 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
             fixed_count = 0
             for old_value, new_value in stage_fixes.items():
                 try:
-                    result = db.execute(text(f"""
-                        UPDATE leads SET stage = :new_value WHERE stage = :old_value
-                    """), {"old_value": old_value, "new_value": new_value})
+                    result = db.execute(text(
+                        "UPDATE leads SET stage = :new_value WHERE stage = :old_value"
+                    ), {"old_value": old_value, "new_value": new_value})
                     if result.rowcount > 0:
                         logger.info(f"Fixed {result.rowcount} leads: '{old_value}' -> '{new_value}'")
                         fixed_count += result.rowcount

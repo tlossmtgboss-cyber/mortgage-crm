@@ -1285,13 +1285,14 @@ class CapacityPlanningService:
             if not name or name.startswith("User "):
                 continue
             try:
-                row = self.db.execute(text(f"""
+                query = f"""
                     SELECT COUNT(*) AS cnt
                     FROM loans
                     WHERE organization_id = :org_id
                       AND stage NOT IN {self._terminal_in_clause()}
                       AND (processor = :name OR underwriter = :name)
-                """), {"org_id": org_id, "name": name}).fetchone()
+                """
+                row = self.db.execute(text(query), {"org_id": org_id, "name": name}).fetchone()
                 result[user["id"]] = int(row.cnt) if row else 0
             except Exception as e:
                 logger.debug(f"Active loans query for {name} failed: {e}")
@@ -1397,7 +1398,7 @@ class CapacityPlanningService:
     def _get_bottleneck_stages(self, org_id: int) -> List[Dict[str, Any]]:
         """Loan stages with the most pending document work."""
         try:
-            rows = self.db.execute(text(f"""
+            query = f"""
                 SELECT
                     l.stage,
                     COUNT(DISTINCT l.id) AS loan_count,
@@ -1411,7 +1412,8 @@ class CapacityPlanningService:
                 GROUP BY l.stage
                 ORDER BY pending_docs DESC
                 LIMIT 5
-            """), {"org_id": org_id}).fetchall()
+            """
+            rows = self.db.execute(text(query), {"org_id": org_id}).fetchall()
             return [
                 {
                     "stage": r.stage,
@@ -1450,14 +1452,15 @@ class CapacityPlanningService:
         self, org_id: int, days: int = 7,
     ) -> List[Dict[str, Any]]:
         try:
-            rows = self.db.execute(text(f"""
+            query = f"""
                 SELECT id, loan_number, borrower_name, closing_date, processor
                 FROM loans
                 WHERE organization_id = :org_id
                   AND closing_date BETWEEN CURRENT_DATE AND CURRENT_DATE + :days
                   AND stage NOT IN {self._terminal_in_clause()}
                 ORDER BY closing_date ASC
-            """), {"org_id": org_id, "days": days}).fetchall()
+            """
+            rows = self.db.execute(text(query), {"org_id": org_id, "days": days}).fetchall()
             return [dict(r._mapping) for r in rows]
         except Exception as e:
             logger.debug(f"Loans closing within query failed: {e}")
@@ -1472,7 +1475,7 @@ class CapacityPlanningService:
             return []
         type_in = "(" + ", ".join(f"'{t}'" for t in high_complexity_types) + ")"
         try:
-            rows = self.db.execute(text(f"""
+            query = f"""
                 SELECT id, doc_type, loan_id
                 FROM document_requests
                 WHERE organization_id = :org_id
@@ -1480,7 +1483,8 @@ class CapacityPlanningService:
                   AND status IN ('OPEN', 'PENDING_REVIEW')
                   AND doc_type IN {type_in}
                 LIMIT 50
-            """), {"org_id": org_id}).fetchall()
+            """
+            rows = self.db.execute(text(query), {"org_id": org_id}).fetchall()
             return [dict(r._mapping) for r in rows]
         except Exception as e:
             logger.debug(f"Complex pending docs query failed: {e}")
@@ -1489,13 +1493,14 @@ class CapacityPlanningService:
     def _project_doc_volume_from_pipeline(self, org_id: int) -> float:
         """Project expected document volume from current pipeline composition."""
         try:
-            rows = self.db.execute(text(f"""
+            query = f"""
                 SELECT stage, COUNT(*) AS cnt
                 FROM loans
                 WHERE organization_id = :org_id
                   AND stage NOT IN {self._terminal_in_clause()}
                 GROUP BY stage
-            """), {"org_id": org_id}).fetchall()
+            """
+            rows = self.db.execute(text(query), {"org_id": org_id}).fetchall()
             total = 0.0
             for r in rows:
                 total += int(r.cnt) * DOCS_PER_LOAN_BY_STAGE.get(r.stage, 2.0)
@@ -1529,13 +1534,14 @@ class CapacityPlanningService:
         self, org_id: int, start: date, end: date,
     ) -> int:
         try:
-            row = self.db.execute(text(f"""
+            query = f"""
                 SELECT COUNT(*) AS cnt
                 FROM loans
                 WHERE organization_id = :org_id
                   AND closing_date BETWEEN :start AND :end
                   AND stage NOT IN {self._terminal_in_clause()}
-            """), {"org_id": org_id, "start": start, "end": end}).fetchone()
+            """
+            row = self.db.execute(text(query), {"org_id": org_id, "start": start, "end": end}).fetchone()
             return int(row.cnt) if row else 0
         except Exception as e:
             logger.debug(f"Scheduled closings query failed: {e}")
@@ -1543,12 +1549,13 @@ class CapacityPlanningService:
 
     def _count_loans_needing_income_calc(self, org_id: int) -> int:
         try:
-            row = self.db.execute(text(f"""
+            query = f"""
                 SELECT COUNT(*) AS cnt
                 FROM loans
                 WHERE organization_id = :org_id
                   AND stage IN ('PROCESSING', 'SUBMITTED', 'UNDERWRITING', 'UW_RECEIVED')
-            """), {"org_id": org_id}).fetchone()
+            """
+            row = self.db.execute(text(query), {"org_id": org_id}).fetchone()
             return int(row.cnt) if row else 0
         except Exception as e:
             logger.debug(f"Loans needing income calc query failed: {e}")

@@ -16,7 +16,7 @@ import time
 import json
 import logging
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, Callable
 from functools import wraps
 from contextlib import asynccontextmanager

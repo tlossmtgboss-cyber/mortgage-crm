@@ -14,7 +14,7 @@ This service can be triggered by:
 - Manual trigger from admin panel
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_

@@ -6,7 +6,7 @@ For storing equity scenarios created in PresentationEngine
 from sqlalchemy import Column, String, Integer, Numeric, Date, DateTime, Text, Boolean, ForeignKey, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 import enum
 

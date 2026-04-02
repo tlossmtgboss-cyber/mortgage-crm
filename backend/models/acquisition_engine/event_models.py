@@ -6,7 +6,7 @@ AcquisitionEvent - Behavioral event tracking for lead scoring and attribution
 from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Index, Boolean, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from enum import Enum
 

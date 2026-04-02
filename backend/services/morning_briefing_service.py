@@ -217,7 +217,7 @@ class MorningBriefingService:
         """Active loans count, volume, stage breakdown, closing soon."""
         terminal = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)
         try:
-            summary = db.execute(sa_text(f"""
+            query = f"""
                 SELECT
                     COUNT(*) as total_count,
                     COALESCE(SUM(amount), 0) as total_volume,
@@ -225,16 +225,18 @@ class MorningBriefingService:
                 FROM loans
                 WHERE loan_officer_id = :uid AND organization_id = :oid
                   AND (stage IS NULL OR UPPER(stage) NOT IN ({terminal}))
-            """), {"uid": user_id, "oid": org_id, "week_ahead": week_ahead}).fetchone()
+            """
+            summary = db.execute(sa_text(query), {"uid": user_id, "oid": org_id, "week_ahead": week_ahead}).fetchone()
 
-            stages = db.execute(sa_text(f"""
+            query = f"""
                 SELECT UPPER(stage) as stage, COUNT(*) as cnt
                 FROM loans
                 WHERE loan_officer_id = :uid AND organization_id = :oid
                   AND (stage IS NULL OR UPPER(stage) NOT IN ({terminal}))
                 GROUP BY UPPER(stage)
                 ORDER BY cnt DESC
-            """), {"uid": user_id, "oid": org_id}).fetchall()
+            """
+            stages = db.execute(sa_text(query), {"uid": user_id, "oid": org_id}).fetchall()
 
             return {
                 "active_count": summary[0] or 0,
@@ -253,7 +255,7 @@ class MorningBriefingService:
         """Loans with SLA breaches, expiring locks, or stagnation."""
         terminal = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)
         try:
-            rows = db.execute(sa_text(f"""
+            query = f"""
                 SELECT
                     id, loan_number, borrower_name, UPPER(stage) as stage,
                     stage_changed_at, lock_expiration_date,
@@ -269,7 +271,8 @@ class MorningBriefingService:
                     CASE WHEN lock_expiration_date <= :lock_deadline THEN 0 ELSE 1 END,
                     days_in_stage DESC
                 LIMIT :max_items
-            """), {"uid": user_id, "oid": org_id, "lock_deadline": lock_deadline, "stage_days": stage_days, "max_items": limit}).fetchall()
+            """
+            rows = db.execute(sa_text(query), {"uid": user_id, "oid": org_id, "lock_deadline": lock_deadline, "stage_days": stage_days, "max_items": limit}).fetchall()
 
             results = []
             for r in rows:
@@ -448,7 +451,7 @@ class MorningBriefingService:
             terminal = ", ".join(f"'{s}'" for s in TERMINAL_STAGES)
 
             # Team pipeline summary per report
-            team_loans = db.execute(sa_text(f"""
+            query = f"""
                 SELECT
                     loan_officer_id,
                     COUNT(*) as loan_count,
@@ -458,12 +461,13 @@ class MorningBriefingService:
                 WHERE loan_officer_id IN ({id_list}) AND organization_id = :oid
                   AND (stage IS NULL OR UPPER(stage) NOT IN ({terminal}))
                 GROUP BY loan_officer_id
-            """), {"oid": org_id}).fetchall()
+            """
+            team_loans = db.execute(sa_text(query), {"oid": org_id}).fetchall()
 
             loan_map = {r[0]: {"count": r[1], "volume": float(r[2] or 0), "avg_days": float(r[3] or 0)} for r in team_loans}
 
             # At-risk per report
-            at_risk_counts = db.execute(sa_text(f"""
+            query = f"""
                 SELECT loan_officer_id, COUNT(*) as cnt,
                     BOOL_OR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - stage_changed_at)) / 86400 >
                         CASE UPPER(stage)
@@ -481,19 +485,21 @@ class MorningBriefingService:
                     OR EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - stage_changed_at)) / 86400 > :at_risk_days
                   )
                 GROUP BY loan_officer_id
-            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
+            """
+            at_risk_counts = db.execute(sa_text(query), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             risk_map = {r[0]: {"count": r[1], "sla_breach": bool(r[2])} for r in at_risk_counts}
 
             # Stale leads per report
-            stale_counts = db.execute(sa_text(f"""
+            query = f"""
                 SELECT owner_id, COUNT(*) as cnt
                 FROM leads
                 WHERE owner_id IN ({id_list}) AND organization_id = :oid
                   AND last_contact IS NOT NULL
                   AND last_contact < CURRENT_DATE - make_interval(days => :lead_days)
                 GROUP BY owner_id
-            """), {"oid": org_id, "lead_days": lead_days}).fetchall()
+            """
+            stale_counts = db.execute(sa_text(query), {"oid": org_id, "lead_days": lead_days}).fetchall()
 
             stale_map = {r[0]: r[1] for r in stale_counts}
 
@@ -519,7 +525,7 @@ class MorningBriefingService:
                 })
 
             # Top attention items across all reports
-            attention = db.execute(sa_text(f"""
+            query = f"""
                 SELECT
                     l.loan_officer_id, l.loan_number, l.borrower_name,
                     UPPER(l.stage) as stage, l.lock_expiration_date,
@@ -535,7 +541,8 @@ class MorningBriefingService:
                     CASE WHEN l.lock_expiration_date <= :lock_cutoff THEN 0 ELSE 1 END,
                     days DESC
                 LIMIT 5
-            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
+            """
+            attention = db.execute(sa_text(query), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             attention_items = []
             for r in attention:
@@ -579,14 +586,15 @@ class MorningBriefingService:
 
         try:
             # Org active pipeline snapshot (excludes terminal stages)
-            org_snap = db.execute(sa_text(f"""
+            query = f"""
                 SELECT
                     COUNT(*) as total,
                     COALESCE(SUM(amount), 0) as volume
                 FROM loans
                 WHERE organization_id = :oid
                   AND (stage IS NULL OR UPPER(stage) NOT IN ({terminal}))
-            """), {"oid": org_id}).fetchone()
+            """
+            org_snap = db.execute(sa_text(query), {"oid": org_id}).fetchone()
 
             # Funded counts (separate query — funded IS a terminal stage)
             funded_snap = db.execute(sa_text("""
@@ -598,7 +606,7 @@ class MorningBriefingService:
             """), {"oid": org_id, "week_ago": week_ago, "two_weeks_ago": two_weeks_ago}).fetchone()
 
             # Branch comparison
-            branches = db.execute(sa_text(f"""
+            query = f"""
                 SELECT
                     COALESCE(b.name, 'Unassigned') as branch_name,
                     COUNT(l.id) as loan_count,
@@ -614,7 +622,8 @@ class MorningBriefingService:
                   AND (l.stage IS NULL OR UPPER(l.stage) NOT IN ({terminal}))
                 GROUP BY b.name
                 ORDER BY volume DESC
-            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
+            """
+            branches = db.execute(sa_text(query), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             branch_list = []
             for r in branches:
@@ -630,7 +639,7 @@ class MorningBriefingService:
                 })
 
             # Top org risks
-            top_risks = db.execute(sa_text(f"""
+            query = f"""
                 SELECT
                     l.loan_number, l.borrower_name, UPPER(l.stage) as stage,
                     l.lock_expiration_date,
@@ -650,7 +659,8 @@ class MorningBriefingService:
                     CASE WHEN l.lock_expiration_date <= :lock_cutoff THEN 0 ELSE 1 END,
                     days DESC
                 LIMIT 10
-            """), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
+            """
+            top_risks = db.execute(sa_text(query), {"oid": org_id, "lock_cutoff": lock_cutoff, "at_risk_days": at_risk_days}).fetchall()
 
             risks = []
             for r in top_risks:

@@ -6,7 +6,7 @@ Supports personal and business bank statements with multiple calculation methods
 """
 
 import enum
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from typing import Optional, List
 

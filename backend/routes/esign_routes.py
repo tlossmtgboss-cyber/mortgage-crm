@@ -315,16 +315,17 @@ async def list_envelopes(
 
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
-    result = db.execute(text(f"""
-        SELECT e.*, u.name as created_by_name,
-               (SELECT COUNT(*) FROM esign_signers WHERE envelope_id = e.id) as signer_count,
-               (SELECT COUNT(*) FROM esign_fields WHERE envelope_id = e.id) as field_count
-        FROM esign_envelopes e
-        LEFT JOIN users u ON u.id = e.created_by_user_id
-        {where_clause}
-        ORDER BY e.created_at DESC
-        LIMIT :limit OFFSET :offset
-    """), params)
+    sql = (
+        "SELECT e.*, u.name as created_by_name,"
+        " (SELECT COUNT(*) FROM esign_signers WHERE envelope_id = e.id) as signer_count,"
+        " (SELECT COUNT(*) FROM esign_fields WHERE envelope_id = e.id) as field_count"
+        " FROM esign_envelopes e"
+        " LEFT JOIN users u ON u.id = e.created_by_user_id"
+        " " + where_clause +
+        " ORDER BY e.created_at DESC"
+        " LIMIT :limit OFFSET :offset"
+    )
+    result = db.execute(text(sql), params)
 
     envelopes = [dict(row._mapping) for row in result]
 

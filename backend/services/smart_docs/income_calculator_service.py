@@ -346,27 +346,28 @@ class IncomeCalculatorService:
             if self.org_id is not None else ""
         )
         _org_params = {"_org_id": self.org_id} if self.org_id is not None else {}
+        docs_query = (
+            "SELECT"
+            " sd.id AS doc_id,"
+            " sd.doc_type AS doc_type,"
+            " sd.ocr_text AS ocr_text,"
+            " sd.uploaded_at AS uploaded_at,"
+            " sd.file_name AS file_name,"
+            " sde.extracted_fields AS extracted_fields,"
+            " sde.confidence_scores AS confidence_scores,"
+            " sde.overall_confidence AS overall_confidence"
+            " FROM smart_documents sd"
+            " LEFT JOIN smart_document_extractions sde"
+            "     ON sde.document_id = sd.id"
+            " " + _org_join
+            + " WHERE sd.loan_id = :loan_id"
+            "   AND sd.borrower_id = :borrower_id"
+            "   AND sd.doc_type IN :doc_types"
+            "   AND sd.status NOT IN ('REJECTED', 'EXPIRED')"
+            " ORDER BY sd.uploaded_at DESC"
+        )
         rows = self.db.execute(
-            text(f"""
-                SELECT
-                    sd.id              AS doc_id,
-                    sd.doc_type        AS doc_type,
-                    sd.ocr_text        AS ocr_text,
-                    sd.uploaded_at     AS uploaded_at,
-                    sd.file_name       AS file_name,
-                    sde.extracted_fields  AS extracted_fields,
-                    sde.confidence_scores AS confidence_scores,
-                    sde.overall_confidence AS overall_confidence
-                FROM smart_documents sd
-                LEFT JOIN smart_document_extractions sde
-                    ON sde.document_id = sd.id
-                {_org_join}
-                WHERE sd.loan_id = :loan_id
-                  AND sd.borrower_id = :borrower_id
-                  AND sd.doc_type IN :doc_types
-                  AND sd.status NOT IN ('REJECTED', 'EXPIRED')
-                ORDER BY sd.uploaded_at DESC
-            """),
+            text(docs_query),
             {
                 "loan_id": loan_id,
                 "borrower_id": borrower_id,
@@ -956,14 +957,15 @@ class IncomeCalculatorService:
         # Query loan for proposed housing payment and obligations (with org_id filter)
         _loan_org_filter = "AND organization_id = :_org_id" if self.org_id is not None else ""
         _org_params = {"_org_id": self.org_id} if self.org_id is not None else {}
+        dti_query = (
+            "SELECT"
+            " COALESCE(proposed_monthly_payment, 0) AS pitia,"
+            " COALESCE(total_monthly_obligations, 0) AS obligations"
+            " FROM loans"
+            " WHERE id = :loan_id " + _loan_org_filter
+        )
         row = self.db.execute(
-            text(f"""
-                SELECT
-                    COALESCE(proposed_monthly_payment, 0) AS pitia,
-                    COALESCE(total_monthly_obligations, 0) AS obligations
-                FROM loans
-                WHERE id = :loan_id {_loan_org_filter}
-            """),
+            text(dti_query),
             {"loan_id": loan_id, **_org_params},
         ).fetchone()
 
@@ -1629,13 +1631,14 @@ Respond with ONLY the JSON object."""
             if self.org_id is not None else ""
         )
         _org_params = {"_org_id": self.org_id} if self.org_id is not None else {}
+        recalc_query = (
+            "SELECT ic.loan_id, ic.borrower_id"
+            " FROM income_calculations ic"
+            " " + _org_join
+            + " WHERE ic.id = :calc_id"
+        )
         existing = self.db.execute(
-            text(f"""
-                SELECT ic.loan_id, ic.borrower_id
-                FROM income_calculations ic
-                {_org_join}
-                WHERE ic.id = :calc_id
-            """),
+            text(recalc_query),
             {"calc_id": calculation_id, **_org_params},
         ).fetchone()
 

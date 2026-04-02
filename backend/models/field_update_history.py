@@ -5,7 +5,7 @@ Tracks all field-level changes for audit trail and conflict resolution
 
 from sqlalchemy import Column, String, Integer, DateTime, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from database import Base

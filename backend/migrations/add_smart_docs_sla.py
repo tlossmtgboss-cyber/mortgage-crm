@@ -362,24 +362,22 @@ def run_migration():
                 print(f"  Backfilled sla_due_at for {result.rowcount} rows")
 
             # Mark completed requests as inactive
-            inactive_val = "FALSE" if is_pg else "0"
-            result = conn.execute(text(f"""
+            result = conn.execute(text("""
                 UPDATE smart_document_requests
-                SET is_active = {inactive_val}
+                SET is_active = :inactive_val
                 WHERE is_active IS NULL
                   AND status IN ('ACCEPTED', 'REJECTED', 'WAIVED')
-            """))
+            """), {"inactive_val": False})
             if result.rowcount > 0:
                 print(f"  Marked {result.rowcount} completed requests as inactive")
 
             # Ensure OPEN/PENDING_REVIEW are active
-            active_val = "TRUE" if is_pg else "1"
-            result = conn.execute(text(f"""
+            result = conn.execute(text("""
                 UPDATE smart_document_requests
-                SET is_active = {active_val}
+                SET is_active = :active_val
                 WHERE is_active IS NULL
                   AND status IN ('OPEN', 'PENDING_REVIEW')
-            """))
+            """), {"active_val": True})
             if result.rowcount > 0:
                 print(f"  Marked {result.rowcount} open requests as active")
 

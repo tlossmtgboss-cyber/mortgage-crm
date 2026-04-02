@@ -128,18 +128,20 @@ def update_tenant_branding(db, org_id: int, updates: Dict) -> Dict:
     ), {"org_id": org_id}).fetchone()
 
     if existing:
-        db.execute(text(f"""
-            UPDATE organization_branding
-            SET {set_clauses}, updated_at = NOW()
-            WHERE organization_id = :org_id
-        """), valid_updates)
+        update_q = (
+            "UPDATE organization_branding"
+            " SET " + set_clauses + ", updated_at = NOW()"
+            " WHERE organization_id = :org_id"
+        )
+        db.execute(text(update_q), valid_updates)
     else:
         cols = ", ".join(["organization_id"] + list(valid_updates.keys() - {"org_id"}))
         vals = ", ".join([":org_id"] + [f":{k}" for k in valid_updates if k != "org_id"])
-        db.execute(text(f"""
-            INSERT INTO organization_branding ({cols})
-            VALUES ({vals})
-        """), valid_updates)
+        insert_q = (
+            "INSERT INTO organization_branding (" + cols + ")"
+            " VALUES (" + vals + ")"
+        )
+        db.execute(text(insert_q), valid_updates)
 
     db.commit()
     return {"updated": True, "fields": list(valid_updates.keys() - {"org_id"})}

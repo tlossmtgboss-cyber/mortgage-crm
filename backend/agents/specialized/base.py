@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, TypedDict
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timezone
 import time
 import logging
 from langchain_core.tools import StructuredTool

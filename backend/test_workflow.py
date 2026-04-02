@@ -17,7 +17,7 @@ from workflows.post_closing_workflow import (
     calculate_referral_score
 )
 from database import SessionLocal
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 def test_workflow():

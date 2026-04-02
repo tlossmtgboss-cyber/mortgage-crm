@@ -8,7 +8,7 @@ import re
 import logging
 from typing import Dict, Any, List, Optional
 from anthropic import Anthropic
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 logger = logging.getLogger(__name__)

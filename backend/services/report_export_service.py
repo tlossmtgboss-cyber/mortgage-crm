@@ -32,7 +32,7 @@ Usage:
 import io
 import csv
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Dict, Any, Optional, List
 from decimal import Decimal
 
@@ -576,7 +576,7 @@ def generate_sla_compliance_report(
 
     try:
         # Overall compliance
-        overall = db.execute(text(f"""
+        overall_sql = """
             SELECT
                 COUNT(*) AS total_milestones,
                 COUNT(CASE WHEN status = 'COMPLETED' AND variance_hours <= 0 THEN 1 END) AS on_time,
@@ -586,9 +586,10 @@ def generate_sla_compliance_report(
                 AVG(CASE WHEN status = 'COMPLETED' THEN actual_hours END) AS avg_completion_hours,
                 AVG(CASE WHEN status = 'COMPLETED' THEN variance_pct END) AS avg_variance_pct
             FROM loan_milestone_history lmh
-            WHERE {scope_filter}
+            WHERE """ + scope_filter + """
                 AND lmh.created_at >= CURRENT_DATE - :period_days
-        """), params).fetchone()
+        """
+        overall = db.execute(text(overall_sql), params).fetchone()
 
         total = overall[0] or 0
         on_time = overall[1] or 0
@@ -597,7 +598,7 @@ def generate_sla_compliance_report(
         compliance_rate = (on_time / total * 100) if total > 0 else 0
 
         # By milestone type
-        by_milestone_rows = db.execute(text(f"""
+        milestone_sql = """
             SELECT
                 milestone_type,
                 COUNT(*) AS total,
@@ -605,11 +606,12 @@ def generate_sla_compliance_report(
                 COUNT(CASE WHEN status = 'COMPLETED' AND variance_hours > 0 THEN 1 END) AS late,
                 AVG(CASE WHEN status = 'COMPLETED' THEN actual_hours END) AS avg_completion_hours
             FROM loan_milestone_history lmh
-            WHERE {scope_filter}
+            WHERE """ + scope_filter + """
                 AND lmh.created_at >= CURRENT_DATE - :period_days
             GROUP BY milestone_type
             ORDER BY COUNT(*) DESC
-        """), params).fetchall()
+        """
+        by_milestone_rows = db.execute(text(milestone_sql), params).fetchall()
 
         by_milestone = []
         for row in by_milestone_rows:
@@ -625,13 +627,13 @@ def generate_sla_compliance_report(
             })
 
         # Bottlenecks (stages with highest average delay)
-        bottleneck_rows = db.execute(text(f"""
+        bottleneck_sql = """
             SELECT
                 milestone_type AS stage,
                 AVG(variance_hours) AS avg_delay_hours,
                 COUNT(*) AS count
             FROM loan_milestone_history lmh
-            WHERE {scope_filter}
+            WHERE """ + scope_filter + """
                 AND lmh.created_at >= CURRENT_DATE - :period_days
                 AND variance_hours > 0
                 AND status = 'COMPLETED'
@@ -639,7 +641,8 @@ def generate_sla_compliance_report(
             HAVING AVG(variance_hours) > 2
             ORDER BY AVG(variance_hours) DESC
             LIMIT 10
-        """), params).fetchall()
+        """
+        bottleneck_rows = db.execute(text(bottleneck_sql), params).fetchall()
 
         bottlenecks = [
             {"stage": str(row[0]), "avg_delay_hours": float(row[1] or 0), "count": row[2] or 0}

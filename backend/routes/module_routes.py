@@ -780,11 +780,13 @@ async def clear_demo_data(
             for table_name in main_tables:
                 try:
                     # Get count before truncate
-                    count_result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                    count_sql = "SELECT COUNT(*) FROM " + table_name
+                    count_result = conn.execute(text(count_sql))
                     count = count_result.scalar()
 
                     # Use TRUNCATE with CASCADE to handle FK constraints
-                    conn.execute(text(f"TRUNCATE TABLE {table_name} CASCADE"))
+                    truncate_sql = "TRUNCATE TABLE " + table_name + " CASCADE"
+                    conn.execute(text(truncate_sql))
                     conn.commit()
                     deleted[table_name] = count
                 except SQLAlchemyError as e:
@@ -801,10 +803,12 @@ async def clear_demo_data(
             # Then clear child tables (many might already be empty due to CASCADE)
             for table_name in tables_to_truncate:
                 try:
-                    count_result = conn.execute(text(f"SELECT COUNT(*) FROM {table_name}"))
+                    child_count_sql = "SELECT COUNT(*) FROM " + table_name
+                    count_result = conn.execute(text(child_count_sql))
                     count = count_result.scalar()
                     if count > 0:
-                        conn.execute(text(f"TRUNCATE TABLE {table_name} CASCADE"))
+                        child_truncate_sql = "TRUNCATE TABLE " + table_name + " CASCADE"
+                        conn.execute(text(child_truncate_sql))
                         conn.commit()
                         deleted[table_name] = count
                 except SQLAlchemyError as e:

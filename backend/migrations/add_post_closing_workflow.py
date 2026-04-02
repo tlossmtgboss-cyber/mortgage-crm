@@ -36,12 +36,12 @@ def run_migration():
 
         for col_name, col_type in new_lead_columns:
             try:
-                check_sql = text(f"""
+                check_sql = text("""
                     SELECT column_name
                     FROM information_schema.columns
-                    WHERE table_name = 'leads' AND column_name = '{col_name}'
+                    WHERE table_name = 'leads' AND column_name = :col_name
                 """)
-                result = conn.execute(check_sql)
+                result = conn.execute(check_sql, {"col_name": col_name})
 
                 if result.fetchone() is None:
                     alter_sql = text(f"ALTER TABLE leads ADD COLUMN {col_name} {col_type}")

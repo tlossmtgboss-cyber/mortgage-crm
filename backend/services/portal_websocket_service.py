@@ -10,7 +10,7 @@ Manages WebSocket connections for:
 
 from fastapi import WebSocket, WebSocketDisconnect
 from typing import Dict, List, Optional, Set
-from datetime import datetime
+from datetime import datetime, timezone
 import asyncio
 import logging
 import json

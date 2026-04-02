@@ -8,7 +8,7 @@ This endpoint answers mortgage lending questions by searching guidelines and usi
 import os
 import logging
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session

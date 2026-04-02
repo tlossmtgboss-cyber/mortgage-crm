@@ -468,18 +468,19 @@ class ImportService:
                 params["org_id"] = self.organization_id
 
                 if hard_delete:
-                    result = self.db.execute(text(f"""
+                    query = f"""
                         DELETE FROM leads
                         WHERE id IN ({placeholders})
                           AND organization_id = :org_id
-                    """), params)
+                    """
+                    result = self.db.execute(text(query), params)
                 else:
                     rollback_note = (
                         f"[IMPORT ROLLBACK] Rolled back import {batch_id} "
                         f"at {now.isoformat()}"
                     )
                     params["note"] = rollback_note
-                    result = self.db.execute(text(f"""
+                    query = f"""
                         UPDATE leads
                         SET stage = 'Withdrawn',
                             notes = CASE
@@ -488,7 +489,8 @@ class ImportService:
                             END
                         WHERE id IN ({placeholders})
                           AND organization_id = :org_id
-                    """), params)
+                    """
+                    result = self.db.execute(text(query), params)
 
                 rolled_back_count += result.rowcount
 
@@ -545,12 +547,13 @@ class ImportService:
 
         where_clause = " AND ".join(filters)
 
-        count_row = self.db.execute(text(f"""
+        query = f"""
             SELECT COUNT(*) FROM import_jobs WHERE {where_clause}
-        """), params).fetchone()
+        """
+        count_row = self.db.execute(text(query), params).fetchone()
         total = count_row[0] if count_row else 0
 
-        rows = self.db.execute(text(f"""
+        query = f"""
             SELECT id, status, filename, total_rows, imported_rows,
                    skipped_rows, error_rows, updated_rows,
                    duplicate_strategy, started_at, completed_at,
@@ -559,7 +562,8 @@ class ImportService:
             WHERE {where_clause}
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
-        """), params).fetchall()
+        """
+        rows = self.db.execute(text(query), params).fetchall()
 
         return {
             "total": total,
@@ -962,11 +966,12 @@ class ImportService:
                 # Duplicate check (by email within org)
                 existing_id = None
                 if clean.get("email") and duplicate_strategy != "create":
-                    dup_row = self.db.execute(text(f"""
+                    query = f"""
                         SELECT id FROM {entity_type}
                         WHERE email = :email AND organization_id = :org_id
                         LIMIT 1
-                    """), {
+                    """
+                    dup_row = self.db.execute(text(query), {
                         "email": clean["email"],
                         "org_id": self.organization_id,
                     }).fetchone()
@@ -987,11 +992,12 @@ class ImportService:
                             f"{k} = :{k}" for k in update_fields
                         )
                         update_fields["_id"] = existing_id
-                        self.db.execute(text(f"""
+                        query = f"""
                             UPDATE {entity_type}
                             SET {set_clauses}
                             WHERE id = :_id
-                        """), update_fields)
+                        """
+                        self.db.execute(text(query), update_fields)
                     progress.add_updated(existing_id)
                     continue
 
@@ -1001,11 +1007,12 @@ class ImportService:
                 col_names = ", ".join(insert_cols)
                 col_params = ", ".join(f":{c}" for c in insert_cols)
 
-                result = self.db.execute(text(f"""
+                query = f"""
                     INSERT INTO {entity_type} ({col_names})
                     VALUES ({col_params})
                     RETURNING id
-                """), clean)
+                """
+                result = self.db.execute(text(query), clean)
                 new_id = result.fetchone()[0]
                 progress.add_imported(new_id)
 

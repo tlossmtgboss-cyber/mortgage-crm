@@ -7,7 +7,7 @@ CampaignAttribution - Revenue attribution tracking
 from sqlalchemy import Column, String, Integer, Numeric, DateTime, Boolean, ForeignKey, Index, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from enum import Enum
 

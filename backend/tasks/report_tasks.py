@@ -19,7 +19,7 @@ Usage:
 
 import json
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Optional
 
 logger = logging.getLogger(__name__)

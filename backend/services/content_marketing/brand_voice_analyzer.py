@@ -16,7 +16,7 @@ import socket
 import ipaddress
 from urllib.parse import urlparse
 from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import httpx
 from bs4 import BeautifulSoup
 from sqlalchemy.orm import Session

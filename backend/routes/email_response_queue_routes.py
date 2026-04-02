@@ -643,11 +643,8 @@ async def update_email_response_pattern(
 
         if updates:
             updates.append("updated_at = NOW()")
-            db.execute(text(f"""
-                UPDATE email_response_patterns
-                SET {", ".join(updates)}
-                WHERE id = :pattern_id
-            """), params)
+            sql = "UPDATE email_response_patterns SET " + ", ".join(updates) + " WHERE id = :pattern_id"
+            db.execute(text(sql), params)
             db.commit()
 
         return {

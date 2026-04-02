@@ -3,7 +3,7 @@ Salesforce Schema Discovery Service
 Auto-discovers the structure of each user's Salesforce org
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 import httpx
 

@@ -14,7 +14,7 @@ import io
 import json
 import hashlib
 import logging
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from decimal import Decimal
 from sqlalchemy.orm import Session

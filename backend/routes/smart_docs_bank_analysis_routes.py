@@ -1011,31 +1011,32 @@ async def get_bank_analysis_stats(
         params["org_id"] = org_id
 
     # Get aggregate stats from loans that have bank analysis results
+    summary_query = (
+        "SELECT"
+        " COUNT(*) AS total_analyzed,"
+        " AVG((bank_analysis_result->>'risk_score')::float) AS avg_risk_score,"
+        " COUNT(CASE"
+        "     WHEN (bank_analysis_result->>'risk_level') = 'high' THEN 1"
+        "     WHEN (bank_analysis_result->>'risk_level') = 'critical' THEN 1"
+        " END) AS high_risk_count,"
+        " AVG(jsonb_array_length("
+        "     COALESCE(bank_analysis_result->'large_deposits', '[]'::jsonb)"
+        " )) AS avg_large_deposits,"
+        " AVG(jsonb_array_length("
+        "     COALESCE(bank_analysis_result->'nsf_events', '[]'::jsonb)"
+        " )) AS avg_nsf_events,"
+        " AVG(jsonb_array_length("
+        "     COALESCE(bank_analysis_result->'irs_payments', '[]'::jsonb)"
+        " )) AS avg_irs_payments,"
+        " AVG(jsonb_array_length("
+        "     COALESCE(bank_analysis_result->'recurring_obligations', '[]'::jsonb)"
+        " )) AS avg_undisclosed_debts"
+        " FROM loans l"
+        " WHERE l.bank_analysis_result IS NOT NULL "
+        + org_filter
+    )
     summary = db.execute(
-        sa_text(f"""
-            SELECT
-                COUNT(*) AS total_analyzed,
-                AVG((bank_analysis_result->>'risk_score')::float) AS avg_risk_score,
-                COUNT(CASE
-                    WHEN (bank_analysis_result->>'risk_level') = 'high' THEN 1
-                    WHEN (bank_analysis_result->>'risk_level') = 'critical' THEN 1
-                END) AS high_risk_count,
-                AVG(jsonb_array_length(
-                    COALESCE(bank_analysis_result->'large_deposits', '[]'::jsonb)
-                )) AS avg_large_deposits,
-                AVG(jsonb_array_length(
-                    COALESCE(bank_analysis_result->'nsf_events', '[]'::jsonb)
-                )) AS avg_nsf_events,
-                AVG(jsonb_array_length(
-                    COALESCE(bank_analysis_result->'irs_payments', '[]'::jsonb)
-                )) AS avg_irs_payments,
-                AVG(jsonb_array_length(
-                    COALESCE(bank_analysis_result->'recurring_obligations', '[]'::jsonb)
-                )) AS avg_undisclosed_debts
-            FROM loans l
-            WHERE l.bank_analysis_result IS NOT NULL
-            {org_filter}
-        """),
+        sa_text(summary_query),
         params,
     ).first()
 

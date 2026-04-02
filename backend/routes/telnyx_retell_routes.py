@@ -7,7 +7,7 @@ API endpoints for connecting Telnyx phone numbers with Retell AI voice agents.
 import os
 import logging
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field

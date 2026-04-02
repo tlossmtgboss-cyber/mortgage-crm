@@ -609,13 +609,8 @@ class CapacityService:
             raise ValueError("No updates provided")
 
         update_sql = ", ".join(updates)
-        query = text(f"""
-            UPDATE mm_talent_capacity
-            SET {update_sql}, updated_at = CURRENT_TIMESTAMP
-            WHERE user_id = :user_id
-            AND (:org_id IS NULL OR organization_id = :org_id)
-            RETURNING *
-        """)
+        sql = "UPDATE mm_talent_capacity SET " + update_sql + ", updated_at = CURRENT_TIMESTAMP WHERE user_id = :user_id AND (:org_id IS NULL OR organization_id = :org_id) RETURNING *"
+        query = text(sql)
 
         result = self.db.execute(query, params).fetchone()
         self.db.commit()

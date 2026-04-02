@@ -233,7 +233,7 @@ async def get_pending_realtor_tasks(
 
         where_sql = " AND ".join(filters)
 
-        tasks = db.execute(text(f"""
+        query = """
             SELECT
                 t.id as task_id,
                 t.loan_id,
@@ -245,10 +245,11 @@ async def get_pending_realtor_tasks(
                 l.borrower_name
             FROM tasks t
             LEFT JOIN loans l ON l.id = t.loan_id
-            WHERE {where_sql}
+            WHERE """ + where_sql + """
             ORDER BY t.due_date ASC NULLS LAST, t.created_at DESC
             LIMIT :limit
-        """), params).fetchall()
+        """
+        tasks = db.execute(text(query), params).fetchall()
 
         return {
             "tasks": [

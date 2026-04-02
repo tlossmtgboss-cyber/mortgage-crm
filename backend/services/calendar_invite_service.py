@@ -8,7 +8,7 @@ This class delegates to those functions so that existing call sites using
 
 import base64
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from utils.ics_generator import (

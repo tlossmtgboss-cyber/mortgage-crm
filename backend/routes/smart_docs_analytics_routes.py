@@ -1471,56 +1471,60 @@ async def document_trends(
 
     try:
         if metric == "uploads":
-            rows = db.execute(sa_text(f"""
-                SELECT
-                    DATE_TRUNC('{trunc_unit}', sd.uploaded_at) AS period_start,
-                    COUNT(*)                                    AS value
-                FROM smart_documents sd
-                WHERE sd.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)
-                  AND sd.uploaded_at >= NOW() - INTERVAL '1 day' * :days
-                GROUP BY period_start
-                ORDER BY period_start
-            """), {"org_id": org_id, "days": days}).fetchall()
+            uploads_sql = (
+                "SELECT"
+                "    DATE_TRUNC('" + trunc_unit + "', sd.uploaded_at) AS period_start,"
+                "    COUNT(*) AS value"
+                " FROM smart_documents sd"
+                " WHERE sd.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)"
+                "   AND sd.uploaded_at >= NOW() - INTERVAL '1 day' * :days"
+                " GROUP BY period_start"
+                " ORDER BY period_start"
+            )
+            rows = db.execute(sa_text(uploads_sql), {"org_id": org_id, "days": days}).fetchall()
 
         elif metric == "approvals":
-            rows = db.execute(sa_text(f"""
-                SELECT
-                    DATE_TRUNC('{trunc_unit}', sd.reviewed_at) AS period_start,
-                    COUNT(*)                                    AS value
-                FROM smart_documents sd
-                WHERE sd.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)
-                  AND sd.status = 'APPROVED'
-                  AND sd.reviewed_at >= NOW() - INTERVAL '1 day' * :days
-                GROUP BY period_start
-                ORDER BY period_start
-            """), {"org_id": org_id, "days": days}).fetchall()
+            approvals_sql = (
+                "SELECT"
+                "    DATE_TRUNC('" + trunc_unit + "', sd.reviewed_at) AS period_start,"
+                "    COUNT(*) AS value"
+                " FROM smart_documents sd"
+                " WHERE sd.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)"
+                "   AND sd.status = 'APPROVED'"
+                "   AND sd.reviewed_at >= NOW() - INTERVAL '1 day' * :days"
+                " GROUP BY period_start"
+                " ORDER BY period_start"
+            )
+            rows = db.execute(sa_text(approvals_sql), {"org_id": org_id, "days": days}).fetchall()
 
         elif metric == "rejections":
-            rows = db.execute(sa_text(f"""
-                SELECT
-                    DATE_TRUNC('{trunc_unit}', sd.reviewed_at) AS period_start,
-                    COUNT(*)                                    AS value
-                FROM smart_documents sd
-                WHERE sd.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)
-                  AND sd.status = 'REJECTED'
-                  AND sd.reviewed_at >= NOW() - INTERVAL '1 day' * :days
-                GROUP BY period_start
-                ORDER BY period_start
-            """), {"org_id": org_id, "days": days}).fetchall()
+            rejections_sql = (
+                "SELECT"
+                "    DATE_TRUNC('" + trunc_unit + "', sd.reviewed_at) AS period_start,"
+                "    COUNT(*) AS value"
+                " FROM smart_documents sd"
+                " WHERE sd.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)"
+                "   AND sd.status = 'REJECTED'"
+                "   AND sd.reviewed_at >= NOW() - INTERVAL '1 day' * :days"
+                " GROUP BY period_start"
+                " ORDER BY period_start"
+            )
+            rows = db.execute(sa_text(rejections_sql), {"org_id": org_id, "days": days}).fetchall()
 
         elif metric == "completeness":
             # Average pipeline completeness over time (snapshot per period)
-            rows = db.execute(sa_text(f"""
-                SELECT
-                    DATE_TRUNC('{trunc_unit}', sdr.completed_at) AS period_start,
-                    COUNT(*)                                      AS value
-                FROM smart_document_requests sdr
-                WHERE sdr.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)
-                  AND sdr.status = 'ACCEPTED'
-                  AND sdr.completed_at >= NOW() - INTERVAL '1 day' * :days
-                GROUP BY period_start
-                ORDER BY period_start
-            """), {"org_id": org_id, "days": days}).fetchall()
+            completeness_sql = (
+                "SELECT"
+                "    DATE_TRUNC('" + trunc_unit + "', sdr.completed_at) AS period_start,"
+                "    COUNT(*) AS value"
+                " FROM smart_document_requests sdr"
+                " WHERE sdr.loan_id IN (SELECT id FROM loans WHERE organization_id = :org_id)"
+                "   AND sdr.status = 'ACCEPTED'"
+                "   AND sdr.completed_at >= NOW() - INTERVAL '1 day' * :days"
+                " GROUP BY period_start"
+                " ORDER BY period_start"
+            )
+            rows = db.execute(sa_text(completeness_sql), {"org_id": org_id, "days": days}).fetchall()
 
         data_points = [
             {

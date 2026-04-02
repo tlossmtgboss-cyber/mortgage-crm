@@ -13,7 +13,7 @@ This is the main entry point for document processing.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum

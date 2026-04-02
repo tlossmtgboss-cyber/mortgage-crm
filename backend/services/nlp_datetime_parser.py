@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, date, time, timedelta
+from datetime import datetime, date, time, timedelta, timezone
 from typing import List, Optional, Tuple
 from zoneinfo import ZoneInfo
 

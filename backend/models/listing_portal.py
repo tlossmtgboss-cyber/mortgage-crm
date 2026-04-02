@@ -5,7 +5,7 @@ Pydantic models for the transaction-scoped listing agent portal.
 
 from pydantic import BaseModel, Field, EmailStr, field_validator
 from typing import Optional, List, Dict, Any
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from enum import Enum
 
 

@@ -9,7 +9,7 @@ import logging
 import threading
 import time
 from typing import Set, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import text
 from database import SessionLocal

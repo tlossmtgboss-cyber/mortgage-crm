@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 import logging
 import httpx

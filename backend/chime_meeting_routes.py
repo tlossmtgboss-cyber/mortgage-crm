@@ -13,7 +13,7 @@ Follows the same dependency injection pattern as video_meeting_shared.py:
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel
 import logging

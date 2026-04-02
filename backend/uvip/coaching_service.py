@@ -5,7 +5,7 @@ Generates personalized coaching recommendations based on analytics.
 
 from sqlalchemy.orm import Session
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger(__name__)

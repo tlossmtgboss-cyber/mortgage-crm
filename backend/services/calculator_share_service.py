@@ -8,7 +8,7 @@ calculator results with borrowers during video calls.
 
 import logging
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Any, List
 
 from sqlalchemy.orm import Session

@@ -1,6 +1,6 @@
 """Call disposition model — structured disposition logging with reporting support."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Integer, Float, Text, JSON, ForeignKey, Index, Boolean
 from db import Base
 

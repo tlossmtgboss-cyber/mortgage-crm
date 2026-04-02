@@ -754,12 +754,13 @@ async def update_lead_condition(
             updates.append("due_date = :due_date")
             params["due_date"] = condition_update.due_date
 
-        result = db.execute(text(f"""
-            UPDATE lead_conditions
-            SET {', '.join(updates)}
-            WHERE id = :condition_id AND lead_id = :lead_id
-            RETURNING id, name, description, category, priority, due_date, status, is_new, created_at, updated_at
-        """), params)
+        update_sql = (
+            "UPDATE lead_conditions"
+            " SET " + ', '.join(updates) +
+            " WHERE id = :condition_id AND lead_id = :lead_id"
+            " RETURNING id, name, description, category, priority, due_date, status, is_new, created_at, updated_at"
+        )
+        result = db.execute(text(update_sql), params)
         db.commit()
 
         row = result.fetchone()
@@ -2020,19 +2021,20 @@ async def get_documents(
     where_clause = " AND ".join(conditions)
 
     # Get total count
-    count_query = text(f"SELECT COUNT(*) FROM documents WHERE {where_clause}")
-    total = db.execute(count_query, params).scalar() or 0
+    count_sql = "SELECT COUNT(*) FROM documents WHERE " + where_clause
+    total = db.execute(text(count_sql), params).scalar() or 0
 
     # Get documents
-    select_query = text(f"""
-        SELECT id, borrower_id, loan_id, doc_type, doc_category, filename,
-               file_size, mime_type, period_start_date, period_end_date,
-               source, uploaded_at, notes
-        FROM documents
-        WHERE {where_clause}
-        ORDER BY uploaded_at DESC NULLS LAST
-        LIMIT :limit_val OFFSET :offset_val
-    """)
+    select_sql = (
+        "SELECT id, borrower_id, loan_id, doc_type, doc_category, filename,"
+        "       file_size, mime_type, period_start_date, period_end_date,"
+        "       source, uploaded_at, notes"
+        " FROM documents"
+        " WHERE " + where_clause +
+        " ORDER BY uploaded_at DESC NULLS LAST"
+        " LIMIT :limit_val OFFSET :offset_val"
+    )
+    select_query = text(select_sql)
 
     result = db.execute(select_query, params)
     documents = []
@@ -2079,14 +2081,15 @@ async def get_document(
         params["org_id"] = org_id
 
     where_clause = " AND ".join(conditions)
-    query = text(f"""
-        SELECT id, borrower_id, loan_id, doc_type, doc_category, filename,
-               original_filename, file_size, mime_type, file_location,
-               period_start_date, period_end_date, source, source_email_intake_id,
-               status, notes, uploaded_at, updated_at
-        FROM documents
-        WHERE {where_clause}
-    """)
+    query_sql = (
+        "SELECT id, borrower_id, loan_id, doc_type, doc_category, filename,"
+        "       original_filename, file_size, mime_type, file_location,"
+        "       period_start_date, period_end_date, source, source_email_intake_id,"
+        "       status, notes, uploaded_at, updated_at"
+        " FROM documents"
+        " WHERE " + where_clause
+    )
+    query = text(query_sql)
 
     result = db.execute(query, params).first()
 

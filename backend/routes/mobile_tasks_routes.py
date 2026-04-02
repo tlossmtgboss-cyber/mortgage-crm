@@ -9,7 +9,7 @@ status filtering, overdue detection, and optional workflow metadata via
 LEFT JOIN on workflow_task_instances.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text

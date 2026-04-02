@@ -8,7 +8,7 @@ and document status management for borrower portal.
 import logging
 import os
 from typing import Optional, Dict, Any, List
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func

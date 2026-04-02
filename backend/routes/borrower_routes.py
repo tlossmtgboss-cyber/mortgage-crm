@@ -14,7 +14,7 @@ import uuid
 import json
 import base64
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Request
 from sqlalchemy.orm import Session
@@ -305,11 +305,8 @@ async def update_application(
         updates.append("declarations = :declarations")
         params["declarations"] = json.dumps(request.declarations)
 
-    db.execute(text(f"""
-        UPDATE borrower_applications
-        SET {", ".join(updates)}
-        WHERE id = :id
-    """), params)
+    query = "UPDATE borrower_applications SET " + ", ".join(updates) + " WHERE id = :id"
+    db.execute(text(query), params)
     db.commit()
 
     return {"success": True, "message": "Application updated"}

@@ -11,7 +11,7 @@ For app-only operations (shared mailboxes, tenant-wide), use:
 """
 
 import httpx
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from sqlalchemy.orm import Session

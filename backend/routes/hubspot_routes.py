@@ -5,7 +5,7 @@ Handles OAuth and CRM sync operations
 import os
 import logging
 from typing import Optional, Callable
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import RedirectResponse

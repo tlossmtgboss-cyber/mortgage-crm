@@ -242,13 +242,14 @@ async def get_pipeline_readiness(
     where_sql = " AND ".join(filters)
 
     try:
-        result = db.execute(text(f"""
+        query_sql = """
             SELECT id, loan_number, stage, loan_type, amount
             FROM loans
-            WHERE {where_sql}
+            WHERE """ + where_sql + """
             ORDER BY created_at DESC
             LIMIT :limit
-        """), params)
+        """
+        result = db.execute(text(query_sql), params)
 
         loans = [dict(row._mapping) for row in result.fetchall()]
     except Exception as e:

@@ -290,30 +290,26 @@ class WorkflowAIExecutor:
 
         where_clause = " AND ".join(filters)
 
-        results = self.db.execute(text(f"""
-            SELECT
-                wti.id,
-                wti.task_name,
-                wti.task_type,
-                wti.lead_id,
-                wti.loan_id,
-                wti.assigned_user_id,
-                wti.scheduled_date,
-                wac.confidence_score,
-                wac.recommendation,
-                COALESCE(l.first_name || ' ' || l.last_name, lo.borrower_name) as contact_name,
-                COALESCE(l.phone, lo.borrower_phone) as contact_phone,
-                COALESCE(l.email, lo.borrower_email) as contact_email
-            FROM workflow_task_instances wti
-            LEFT JOIN workflow_ai_confidence wac ON wac.task_instance_id = wti.id
-            LEFT JOIN leads l ON l.id = wti.lead_id
-            LEFT JOIN loans lo ON lo.id = wti.loan_id
-            WHERE {where_clause}
-            ORDER BY
-                CASE WHEN wac.confidence_score >= 0.95 THEN 0 ELSE 1 END,
-                wti.scheduled_date ASC
-            LIMIT :limit
-        """), params).fetchall()
+        exec_query = (
+            "SELECT"
+            " wti.id, wti.task_name, wti.task_type,"
+            " wti.lead_id, wti.loan_id, wti.assigned_user_id,"
+            " wti.scheduled_date,"
+            " wac.confidence_score, wac.recommendation,"
+            " COALESCE(l.first_name || ' ' || l.last_name, lo.borrower_name) as contact_name,"
+            " COALESCE(l.phone, lo.borrower_phone) as contact_phone,"
+            " COALESCE(l.email, lo.borrower_email) as contact_email"
+            " FROM workflow_task_instances wti"
+            " LEFT JOIN workflow_ai_confidence wac ON wac.task_instance_id = wti.id"
+            " LEFT JOIN leads l ON l.id = wti.lead_id"
+            " LEFT JOIN loans lo ON lo.id = wti.loan_id"
+            " WHERE " + where_clause
+            + " ORDER BY"
+            " CASE WHEN wac.confidence_score >= 0.95 THEN 0 ELSE 1 END,"
+            " wti.scheduled_date ASC"
+            " LIMIT :limit"
+        )
+        results = self.db.execute(text(exec_query), params).fetchall()
 
         tasks = []
         for row in results:

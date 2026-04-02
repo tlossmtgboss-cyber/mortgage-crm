@@ -5,7 +5,7 @@ Run with: python scripts/create_test_realtor.py
 import os
 import sys
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

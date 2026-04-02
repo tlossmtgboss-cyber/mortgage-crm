@@ -433,7 +433,7 @@ async def get_visitor_leads(
             status_filter = "AND status = :status"
             params["status"] = status
 
-        leads = db.execute(text(f"""
+        leads_sql = """
             SELECT
                 id, visitor_id, ip_address, source, status,
                 first_seen_at, last_seen_at, page_views,
@@ -442,10 +442,11 @@ async def get_visitor_leads(
                 email, name, phone, company,
                 notes, converted_lead_id
             FROM website_visitor_leads
-            WHERE first_seen_at >= :cutoff {status_filter}
+            WHERE first_seen_at >= :cutoff """ + status_filter + """
             ORDER BY last_seen_at DESC
             LIMIT :limit
-        """), params).fetchall()
+        """
+        leads = db.execute(text(leads_sql), params).fetchall()
 
         return {
             "count": len(leads),

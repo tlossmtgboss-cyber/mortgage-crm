@@ -9,7 +9,7 @@ Handles team collaboration features:
 
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from models.content_marketing import (

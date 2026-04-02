@@ -12,7 +12,7 @@ Uses historical data patterns and loan characteristics to predict:
 import os
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field, asdict
 from enum import Enum
@@ -248,12 +248,8 @@ class PipelineProbabilityService:
 
         where_clause = " AND ".join(filters)
 
-        result = self.db.execute(text(f"""
-            SELECT l.id
-            FROM loans l
-            WHERE {where_clause}
-            ORDER BY l.loan_amount DESC
-        """), params)
+        sql = "SELECT l.id FROM loans l WHERE " + where_clause + " ORDER BY l.loan_amount DESC"
+        result = self.db.execute(text(sql), params)
 
         loan_ids = [row[0] for row in result.fetchall()]
 
@@ -380,7 +376,7 @@ class PipelineProbabilityService:
         where_clause = " AND ".join(filters)
 
         # Get historical scores
-        result = self.db.execute(text(f"""
+        trend_sql = """
             SELECT
                 DATE(ps.calculated_at) as date,
                 AVG(ps.close_probability) as avg_probability,
@@ -388,10 +384,11 @@ class PipelineProbabilityService:
                 SUM(CASE WHEN ps.risk_level = 'critical' THEN 1 ELSE 0 END) as critical_count
             FROM pipeline_probability_scores ps
             JOIN loans l ON l.id = ps.loan_id
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             GROUP BY DATE(ps.calculated_at)
             ORDER BY date ASC
-        """), params)
+        """
+        result = self.db.execute(text(trend_sql), params)
 
         daily_trends = []
         for row in result.fetchall():

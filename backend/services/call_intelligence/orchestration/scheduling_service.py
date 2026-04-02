@@ -7,7 +7,7 @@ call intelligence results and orchestration decisions.
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 import uuid

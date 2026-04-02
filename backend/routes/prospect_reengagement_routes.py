@@ -109,11 +109,12 @@ def update_config(
                     params[f"val_{key}"] = value
             set_clauses.append("updated_at = NOW()")
 
-            db.execute(text(f"""
+            update_sql = """
                 UPDATE ai_reengagement_config
-                SET {', '.join(set_clauses)}
+                SET """ + ', '.join(set_clauses) + """
                 WHERE organization_id = :org_id
-            """), params)
+            """
+            db.execute(text(update_sql), params)
     else:
         import json
         db.execute(text("""
@@ -177,7 +178,7 @@ def list_conversations(
 
     where_sql = " AND ".join(filters)
 
-    conversations = db.execute(text(f"""
+    conversations_sql = """
         SELECT
             c.id, c.lead_id, c.lo_user_id, c.lead_phone,
             c.state, c.state_changed_at,
@@ -190,14 +191,14 @@ def list_conversations(
         FROM ai_prospect_conversations c
         LEFT JOIN leads l ON l.id = c.lead_id
         LEFT JOIN users u ON u.id = c.lo_user_id
-        WHERE {where_sql}
+        WHERE """ + where_sql + """
         ORDER BY c.created_at DESC
         LIMIT :limit OFFSET :offset
-    """), params).fetchall()
+    """
+    conversations = db.execute(text(conversations_sql), params).fetchall()
 
-    total = db.execute(text(f"""
-        SELECT COUNT(*) FROM ai_prospect_conversations c WHERE {where_sql}
-    """), params).scalar() or 0
+    total_sql = "SELECT COUNT(*) FROM ai_prospect_conversations c WHERE " + where_sql
+    total = db.execute(text(total_sql), params).scalar() or 0
 
     data = []
     for row in conversations:

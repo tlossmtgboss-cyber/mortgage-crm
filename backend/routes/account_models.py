@@ -84,9 +84,9 @@ def safe_delete_from_table(db: Session, table: str, where_clause: str = None, pa
     validated_table = validate_table_name(table)
 
     if where_clause:
-        sql = f"DELETE FROM {validated_table} WHERE {where_clause}"
+        sql = "DELETE FROM " + validated_table + " WHERE " + where_clause
     else:
-        sql = f"DELETE FROM {validated_table}"
+        sql = "DELETE FROM " + validated_table
 
     result = db.execute(text(sql), params or {})
     return result.rowcount
@@ -123,9 +123,9 @@ def safe_delete_with_column_condition(
         raise ValueError(f"Operator '{operator}' is not allowed")
 
     if 'IS' in operator.upper():
-        sql = f"DELETE FROM {validated_table} WHERE {validated_column} {operator}"
+        sql = "DELETE FROM " + validated_table + " WHERE " + validated_column + " " + operator
     else:
-        sql = f"DELETE FROM {validated_table} WHERE {validated_column} {operator} :{param_name}"
+        sql = "DELETE FROM " + validated_table + " WHERE " + validated_column + " " + operator + " :" + param_name
 
     result = db.execute(text(sql), params)
     return result.rowcount
@@ -486,12 +486,11 @@ async def _list_accounts_from_organizations(db: Session, status: str, search: st
         where_sql = " AND ".join(where_clauses)
 
         # Count total
-        count_result = db.execute(text(f"""
-            SELECT COUNT(*) FROM organizations o WHERE {where_sql}
-        """), params).scalar() or 0
+        count_sql = "SELECT COUNT(*) FROM organizations o WHERE " + where_sql
+        count_result = db.execute(text(count_sql), params).scalar() or 0
 
         # Get organizations with user metrics
-        query = f"""
+        query = """
             SELECT
                 o.id,
                 o.name,
@@ -505,7 +504,7 @@ async def _list_accounts_from_organizations(db: Session, status: str, search: st
                 (SELECT full_name FROM users WHERE organization_id = o.id AND role IN ('admin', 'master_admin', 'loan_officer') ORDER BY created_at LIMIT 1) as owner_name,
                 (SELECT id FROM users WHERE organization_id = o.id ORDER BY created_at LIMIT 1) as owner_id
             FROM organizations o
-            WHERE {where_sql}
+            WHERE """ + where_sql + """
             ORDER BY o.created_at DESC
             LIMIT :limit OFFSET :offset
         """

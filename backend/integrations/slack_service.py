@@ -5,7 +5,7 @@ Handles OAuth authentication and messaging operations for Slack
 import os
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import requests
 from urllib.parse import urlencode
 

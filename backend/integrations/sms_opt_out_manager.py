@@ -5,7 +5,7 @@ persist opt-out lists, validate before every send.
 import re
 import logging
 from typing import Optional, Dict, Any, List, Set
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 

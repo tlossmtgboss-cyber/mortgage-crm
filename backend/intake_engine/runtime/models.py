@@ -3,7 +3,7 @@ Intake Engine Data Models
 Party-aware session state with Redis/Postgres storage support
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel, Field

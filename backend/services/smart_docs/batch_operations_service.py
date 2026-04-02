@@ -1497,7 +1497,7 @@ class BatchOperationsService:
                     BatchJobStatus.FAILED.value,
                     BatchJobStatus.CANCELLED.value,
                 ]),
-                BatchJob.created_at >= text(f"CURRENT_TIMESTAMP - INTERVAL '{days} days'"),
+                BatchJob.created_at >= text("CURRENT_TIMESTAMP - INTERVAL '" + str(int(days)) + " days'"),
             )
         )
 

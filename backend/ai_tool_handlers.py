@@ -7,7 +7,7 @@ import os
 from typing import Dict, Any
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import openai
 
 from ai_models import ToolContext

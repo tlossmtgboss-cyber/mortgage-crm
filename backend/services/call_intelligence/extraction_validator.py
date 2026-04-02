@@ -18,7 +18,7 @@ import logging
 import time
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, List, Optional, Tuple
 from enum import Enum
 

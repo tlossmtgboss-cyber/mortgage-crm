@@ -754,10 +754,11 @@ async def _sync_salesforce_and_import_mum_inner(
                                     if not update_fields:
                                         results['salesforce_sync']['errors'].append(f"No valid fields to update for {sf_id}")
                                         continue
-                                    db.execute(text(f"""
-                                        UPDATE loans SET {update_fields}, updated_at = CURRENT_TIMESTAMP
-                                        WHERE salesforce_id = :salesforce_id
-                                    """), loan_data)
+                                    update_sql = (
+                                        "UPDATE loans SET " + update_fields + ", updated_at = CURRENT_TIMESTAMP"
+                                        " WHERE salesforce_id = :salesforce_id"
+                                    )
+                                    db.execute(text(update_sql), loan_data)
                                     results['salesforce_sync']['updated'] += 1
                                 else:
                                     # Get org_id from the authenticated user
@@ -766,11 +767,12 @@ async def _sync_salesforce_and_import_mum_inner(
                                     ), {"uid": user_id}).fetchone()
                                     loan_data['organization_id'] = _user_org[0] if _user_org and _user_org[0] else None
                                     columns = ", ".join(loan_data.keys())
-                                    placeholders = ", ".join([f":{k}" for k in loan_data.keys()])
-                                    db.execute(text(f"""
-                                        INSERT INTO loans ({columns}, created_at, updated_at)
-                                        VALUES ({placeholders}, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                                    """), loan_data)
+                                    placeholders = ", ".join([":" + k for k in loan_data.keys()])
+                                    insert_sql = (
+                                        "INSERT INTO loans (" + columns + ", created_at, updated_at)"
+                                        " VALUES (" + placeholders + ", CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                                    )
+                                    db.execute(text(insert_sql), loan_data)
                                     results['salesforce_sync']['created'] += 1
 
                             except SQLAlchemyError as e:
@@ -1246,12 +1248,13 @@ async def _sync_all_loans_inner(
                         loan_data["amount"] = 0  # Required field
 
                     fields = list(loan_data.keys())
-                    placeholders = [f":{f}" for f in fields]
+                    placeholders = [":" + f for f in fields]
 
-                    db.execute(text(f"""
-                        INSERT INTO loans ({', '.join(fields)})
-                        VALUES ({', '.join(placeholders)})
-                    """), loan_data)
+                    insert_sql = (
+                        "INSERT INTO loans (" + ', '.join(fields) + ")"
+                        " VALUES (" + ', '.join(placeholders) + ")"
+                    )
+                    db.execute(text(insert_sql), loan_data)
 
                     results['created'] += 1
                     results['details'].append(f"Created: {loan_number}")

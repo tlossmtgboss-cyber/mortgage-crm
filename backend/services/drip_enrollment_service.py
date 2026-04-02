@@ -1,7 +1,7 @@
 """Drip enrollment service — enroll, pause, resume, switch sequences for leads."""
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List
 
 from sqlalchemy.orm import Session

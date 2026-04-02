@@ -520,23 +520,24 @@ class W2PaystubCrossValidator:
             borrower_filter = "AND sd.borrower_id = :borrower_id"
             params["borrower_id"] = borrower_id
 
-        rows = self.db.execute(text(f"""
-            SELECT
-                sd.id AS doc_id,
-                sd.doc_type,
-                sd.uploaded_at,
-                sde.extracted_fields,
-                sde.confidence_scores,
-                sde.overall_confidence
-            FROM smart_documents sd
-            LEFT JOIN smart_document_extractions sde
-                ON sde.document_id = sd.id
-            WHERE sd.loan_id = :loan_id
-              AND sd.doc_type IN ('W2', 'PAYSTUB')
-              AND sd.status != 'REJECTED'
-              {borrower_filter}
-            ORDER BY sd.doc_type, sd.uploaded_at DESC
-        """), params).fetchall()
+        cross_val_query = (
+            "SELECT"
+            " sd.id AS doc_id,"
+            " sd.doc_type,"
+            " sd.uploaded_at,"
+            " sde.extracted_fields,"
+            " sde.confidence_scores,"
+            " sde.overall_confidence"
+            " FROM smart_documents sd"
+            " LEFT JOIN smart_document_extractions sde"
+            "     ON sde.document_id = sd.id"
+            " WHERE sd.loan_id = :loan_id"
+            "   AND sd.doc_type IN ('W2', 'PAYSTUB')"
+            "   AND sd.status != 'REJECTED'"
+            "   " + borrower_filter
+            + " ORDER BY sd.doc_type, sd.uploaded_at DESC"
+        )
+        rows = self.db.execute(text(cross_val_query), params).fetchall()
 
         w2_docs: List[Dict] = []
         paystub_docs: List[Dict] = []

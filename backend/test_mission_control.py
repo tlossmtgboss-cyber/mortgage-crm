@@ -6,7 +6,7 @@ Tests database tables, API endpoints, and data flow
 
 import os
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text, inspect
 

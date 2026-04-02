@@ -161,17 +161,18 @@ async def list_ivr_menus(
     try:
         where_clause = "" if include_inactive else "WHERE m.is_active = TRUE"
 
-        results = db.execute(text(f"""
-            SELECT m.id, m.name, m.description, m.is_default, m.is_active,
-                   m.greeting_text, m.greeting_audio_url, m.timeout_seconds,
-                   m.max_attempts, m.timeout_action, m.created_at,
-                   COUNT(o.id) as option_count
-            FROM ivr_menus m
-            LEFT JOIN ivr_menu_options o ON o.menu_id = m.id AND o.is_active = TRUE
-            {where_clause}
-            GROUP BY m.id
-            ORDER BY m.is_default DESC, m.name ASC
-        """)).fetchall()
+        sql = (
+            "SELECT m.id, m.name, m.description, m.is_default, m.is_active,"
+            " m.greeting_text, m.greeting_audio_url, m.timeout_seconds,"
+            " m.max_attempts, m.timeout_action, m.created_at,"
+            " COUNT(o.id) as option_count"
+            " FROM ivr_menus m"
+            " LEFT JOIN ivr_menu_options o ON o.menu_id = m.id AND o.is_active = TRUE"
+            " " + where_clause +
+            " GROUP BY m.id"
+            " ORDER BY m.is_default DESC, m.name ASC"
+        )
+        results = db.execute(text(sql)).fetchall()
 
         menus = []
         for row in results:
@@ -333,9 +334,8 @@ async def update_ivr_menu(
         updates.append("updated_at = CURRENT_TIMESTAMP")
 
         if updates:
-            db.execute(text(f"""
-                UPDATE ivr_menus SET {', '.join(updates)} WHERE id = :menu_id
-            """), params)
+            sql = "UPDATE ivr_menus SET " + ", ".join(updates) + " WHERE id = :menu_id"
+            db.execute(text(sql), params)
             db.commit()
 
         return {"success": True, "message": "Menu updated"}
@@ -490,9 +490,8 @@ async def update_ivr_option(
             params["display_order"] = option.display_order
 
         if updates:
-            db.execute(text(f"""
-                UPDATE ivr_menu_options SET {', '.join(updates)} WHERE id = :option_id
-            """), params)
+            sql = "UPDATE ivr_menu_options SET " + ", ".join(updates) + " WHERE id = :option_id"
+            db.execute(text(sql), params)
             db.commit()
 
         return {"success": True, "message": "Option updated"}

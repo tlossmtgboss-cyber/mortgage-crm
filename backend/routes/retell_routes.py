@@ -7,7 +7,7 @@ Replaces ElevenLabs and legacy telephony routes for voice functionality.
 
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -955,8 +955,8 @@ async def get_call_analytics(
     db: Session = Depends(get_db),
 ):
     """Get call analytics."""
-    filters = ["user_id = :user_id", f"created_at >= CURRENT_DATE - {days}"]
-    params = {"user_id": current_user["id"]}
+    filters = ["user_id = :user_id", "created_at >= CURRENT_DATE - :days"]
+    params = {"user_id": current_user["id"], "days": days}
 
     if agent_id:
         filters.append("retell_agent_id = :agent_id")
@@ -965,31 +965,32 @@ async def get_call_analytics(
     where_clause = " AND ".join(filters)
 
     # Get summary stats
-    stats = db.execute(
-        text(f"""
+    stats_sql = """
         SELECT
             COUNT(*) as total_calls,
             COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_calls,
             AVG(duration_seconds) as avg_duration,
             COUNT(CASE WHEN call_successful = TRUE THEN 1 END) as successful_calls
         FROM retell_calls
-        WHERE {where_clause}
-        """),
+        WHERE """ + where_clause
+    stats = db.execute(
+        text(stats_sql),
         params
     ).fetchone()
 
     # Get calls by day
-    daily = db.execute(
-        text(f"""
+    daily_sql = """
         SELECT
             DATE(created_at) as date,
             COUNT(*) as count
         FROM retell_calls
-        WHERE {where_clause}
+        WHERE """ + where_clause + """
         GROUP BY DATE(created_at)
         ORDER BY date DESC
         LIMIT 30
-        """),
+        """
+    daily = db.execute(
+        text(daily_sql),
         params
     ).fetchall()
 

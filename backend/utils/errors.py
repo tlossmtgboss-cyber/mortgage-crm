@@ -6,7 +6,7 @@ Custom exception classes for consistent error handling across the application.
 
 from enum import Enum
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 

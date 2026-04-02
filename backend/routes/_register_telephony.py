@@ -236,6 +236,14 @@ def register_telephony_routes(app, get_db, get_current_user, get_current_user_fl
     except Exception as e:
         logger.warning(f"Call Routing routes not loaded: {e}")
 
+    # Include Inbound AI Call Answering routes
+    try:
+        from routes.inbound_ai_routes import router as inbound_ai_router
+        app.include_router(inbound_ai_router, tags=["Inbound AI"])
+        logger.info("Inbound AI routes loaded")
+    except Exception as e:
+        logger.warning(f"Inbound AI routes not loaded: {e}")
+
     # Include Conversation Intelligence routes (unified AI for email + SMS)
     try:
         from routes.conversation_intelligence_routes import router as conversation_intelligence_router

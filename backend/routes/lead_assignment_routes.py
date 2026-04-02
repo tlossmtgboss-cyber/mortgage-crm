@@ -8,7 +8,7 @@ All endpoints require authentication and admin/manager role.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request

@@ -1365,11 +1365,12 @@ async def update_scheduler_settings(
             update_fields.append("updated_at = CURRENT_TIMESTAMP")
             update_params["config_id"] = config_id
 
-            db.execute(text(f"""
-                UPDATE scheduler_configs
-                SET {', '.join(update_fields)}
-                WHERE id = :config_id
-            """), update_params)
+            update_query = (
+                "UPDATE scheduler_configs SET "
+                + ", ".join(update_fields)
+                + " WHERE id = :config_id"
+            )
+            db.execute(text(update_query), update_params)
         else:
             # Create new config
             db.execute(text("""

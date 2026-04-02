@@ -7,7 +7,7 @@ import re
 import logging
 import hashlib
 import hmac
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List, Tuple
 from dataclasses import dataclass, field
 from enum import Enum
@@ -620,11 +620,12 @@ class SalesforceSyncService:
                             continue
 
                 if update_fields:
-                    self.db.execute(text(f"""
-                        UPDATE loans
-                        SET {", ".join(update_fields)}, updated_at = CURRENT_TIMESTAMP
-                        WHERE id = :loan_id
-                    """), params)
+                    query = (
+                        "UPDATE loans SET "
+                        + ", ".join(update_fields)
+                        + ", updated_at = CURRENT_TIMESTAMP WHERE id = :loan_id"
+                    )
+                    self.db.execute(text(query), params)
                     self.db.commit()
 
                 logger.info(f"Updated loan {loan_id} from Salesforce {salesforce_id}")
@@ -659,11 +660,14 @@ class SalesforceSyncService:
                     placeholders.append(":loan_officer_id")
                     validated_data["loan_officer_id"] = self.user_id
 
-                result = self.db.execute(text(f"""
-                    INSERT INTO loans ({", ".join(fields)})
-                    VALUES ({", ".join(placeholders)})
-                    RETURNING id
-                """), validated_data)
+                query = (
+                    "INSERT INTO loans ("
+                    + ", ".join(fields)
+                    + ") VALUES ("
+                    + ", ".join(placeholders)
+                    + ") RETURNING id"
+                )
+                result = self.db.execute(text(query), validated_data)
                 self.db.commit()
 
                 loan_id = result.fetchone()[0]

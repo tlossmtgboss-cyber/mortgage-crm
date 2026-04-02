@@ -688,18 +688,18 @@ class RecruitingEmailService:
             org_filter = "AND rt.organization_id = :org_id"
             params["org_id"] = organization_id
 
-        task = db_session.execute(
-            text(f"""
+        sql = """
                 SELECT rt.id, rt.candidate_id, rt.title, rt.description,
                        rt.assigned_to, rt.organization_id,
                        rc.first_name, rc.last_name, rc.email as candidate_email,
                        rc.phone as candidate_phone
                 FROM recruiting_tasks rt
                 JOIN mm_candidates rc ON rc.id = rt.candidate_id
-                WHERE rt.id = :task_id {org_filter}
-            """),
-            params
-        ).fetchone()
+                WHERE rt.id = :task_id
+        """
+        if org_filter:
+            sql += " " + org_filter
+        task = db_session.execute(text(sql), params).fetchone()
 
         if not task:
             return RecruitingEmailResult(
@@ -727,10 +727,10 @@ class RecruitingEmailService:
             recruiter_org_filter = "AND organization_id = :org_id"
             recruiter_params["org_id"] = task.organization_id
 
-        recruiter = db_session.execute(
-            text(f"SELECT full_name, email, phone FROM users WHERE id = :user_id {recruiter_org_filter}"),
-            recruiter_params
-        ).fetchone()
+        recruiter_sql = "SELECT full_name, email, phone FROM users WHERE id = :user_id"
+        if recruiter_org_filter:
+            recruiter_sql += " " + recruiter_org_filter
+        recruiter = db_session.execute(text(recruiter_sql), recruiter_params).fetchone()
 
         recruiter_name = recruiter.full_name if recruiter else "Recruiting Team"
         recruiter_email = recruiter.email if recruiter else "recruiting@perenniaai.com"

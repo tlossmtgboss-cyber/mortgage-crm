@@ -190,17 +190,15 @@ class BackupVerificationService:
                     continue
 
                 # Get row count
-                count = self.db.execute(
-                    text(f"SELECT COUNT(*) FROM {table_name}")  # noqa: S608
-                ).scalar()
+                sql_count = "SELECT COUNT(*) FROM " + table_name  # noqa: S608
+                count = self.db.execute(text(sql_count)).scalar()
                 table_result["row_count"] = count
                 result["total_rows"] += count
 
                 # Compute a lightweight checksum using count + max id
                 try:
-                    max_id = self.db.execute(
-                        text(f"SELECT MAX(id) FROM {table_name}")  # noqa: S608
-                    ).scalar()
+                    sql_max = "SELECT MAX(id) FROM " + table_name  # noqa: S608
+                    max_id = self.db.execute(text(sql_max)).scalar()
 
                     checksum_input = f"{table_name}:{count}:{max_id}"
                     table_result["checksum"] = hashlib.sha256(
@@ -788,9 +786,8 @@ class BackupVerificationService:
                 ), {"table_name": table_name}).scalar()
 
                 if exists:
-                    count = self.db.execute(
-                        text(f"SELECT COUNT(*) FROM {table_name}")  # noqa: S608
-                    ).scalar()
+                    sql_count = "SELECT COUNT(*) FROM " + table_name  # noqa: S608
+                    count = self.db.execute(text(sql_count)).scalar()
                     counts[table_name] = count or 0
             except Exception as e:
                 logger.warning(

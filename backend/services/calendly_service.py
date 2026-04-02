@@ -9,7 +9,7 @@ import os
 import logging
 import httpx
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from cryptography.fernet import Fernet
 from functools import lru_cache

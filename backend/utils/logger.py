@@ -4,7 +4,7 @@ Structured logging for cache operations and performance tracking.
 """
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
 # Configure logger

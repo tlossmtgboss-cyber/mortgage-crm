@@ -223,10 +223,8 @@ def _create_agent_task_if_needed(
                 vals.append(":lead_id")
                 params["lead_id"] = lead_id
 
-            session.execute(
-                text(f"INSERT INTO ai_tasks ({', '.join(cols)}) VALUES ({', '.join(vals)})"),
-                params,
-            )
+            sql = "INSERT INTO ai_tasks (" + ", ".join(cols) + ") VALUES (" + ", ".join(vals) + ")"
+            session.execute(text(sql), params)
             session.commit()
             logger.debug("[MSG-PROCESSOR] Created ai_task: %s", title[:80])
         except SQLAlchemyError as e:

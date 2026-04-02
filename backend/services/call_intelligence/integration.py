@@ -9,7 +9,7 @@ import asyncio
 import json
 import logging
 from contextlib import contextmanager
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from typing import Any, Dict, Generator, List, Optional, TYPE_CHECKING
 

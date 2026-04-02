@@ -489,16 +489,17 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
 
             where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
-            rows = db.execute(text(f"""
-                SELECT id, organization_id, request_type, requestor_email,
-                       requestor_name, status, submitted_at, due_date,
-                       handled_by_id, handled_at, notes, result_summary,
-                       identity_verified
-                FROM data_subject_requests
-                {where_sql}
-                ORDER BY submitted_at DESC
-                LIMIT :limit
-            """), params).fetchall()
+            sql = (
+                "SELECT id, organization_id, request_type, requestor_email,"
+                " requestor_name, status, submitted_at, due_date,"
+                " handled_by_id, handled_at, notes, result_summary,"
+                " identity_verified"
+                " FROM data_subject_requests"
+                " " + where_sql +
+                " ORDER BY submitted_at DESC"
+                " LIMIT :limit"
+            )
+            rows = db.execute(text(sql), params).fetchall()
 
             requests = []
             for row in rows:

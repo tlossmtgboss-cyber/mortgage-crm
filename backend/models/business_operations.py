@@ -6,7 +6,7 @@ for business decision-making.
 """
 
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from sqlalchemy import (
     Column, String, Integer, Boolean, DateTime, Date, Text,

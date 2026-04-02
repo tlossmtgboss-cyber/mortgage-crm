@@ -3,7 +3,7 @@ MUM (Mortgages Under Management) Database Models
 """
 from sqlalchemy import Column, Integer, String, Float, Date, Boolean, ForeignKey, Text, DECIMAL, DateTime
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from database import Base
 
 class MUMClient(Base):

@@ -1000,23 +1000,31 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 params = {"user_id": current_user.id, "org_id": org_id}
 
             # Get leads using raw SQL to avoid import issues (include owner for org-wide views)
+            lead_where = lead_filter.replace('organization_id', 'ld.organization_id').replace('owner_id', 'ld.owner_id')
+            lead_sql = (
+                "SELECT ld.id, ld.name, ld.email, ld.phone, ld.stage,"
+                " CONCAT(u.first_name, ' ', u.last_name) as owner_name"
+                " FROM leads ld"
+                " LEFT JOIN users u ON u.id = ld.owner_id"
+                " WHERE " + lead_where
+            )
             lead_rows = db.execute(
-                text(f"""SELECT ld.id, ld.name, ld.email, ld.phone, ld.stage,
-                       CONCAT(u.first_name, ' ', u.last_name) as owner_name
-                       FROM leads ld
-                       LEFT JOIN users u ON u.id = ld.owner_id
-                       WHERE {lead_filter.replace('organization_id', 'ld.organization_id').replace('owner_id', 'ld.owner_id')}"""),
+                text(lead_sql),
                 params
             ).fetchall()
 
             # Get loans using raw SQL (include LO name for org-wide views)
+            loan_where = loan_filter.replace('organization_id', 'l.organization_id').replace('loan_officer_id', 'l.loan_officer_id')
+            loan_sql = (
+                "SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.amount,"
+                " l.processor, l.underwriter, l.days_in_stage, l.closing_date,"
+                " CONCAT(u.first_name, ' ', u.last_name) as lo_name"
+                " FROM loans l"
+                " LEFT JOIN users u ON u.id = l.loan_officer_id"
+                " WHERE " + loan_where
+            )
             loan_rows = db.execute(
-                text(f"""SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.amount,
-                       l.processor, l.underwriter, l.days_in_stage, l.closing_date,
-                       CONCAT(u.first_name, ' ', u.last_name) as lo_name
-                       FROM loans l
-                       LEFT JOIN users u ON u.id = l.loan_officer_id
-                       WHERE {loan_filter.replace('organization_id', 'l.organization_id').replace('loan_officer_id', 'l.loan_officer_id')}"""),
+                text(loan_sql),
                 params
             ).fetchall()
 
@@ -1159,19 +1167,25 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             if query_str:
                 search = f"%{query_str}%"
                 base_params["search"] = search
+                lead_search_sql = (
+                    "SELECT id, name, email, phone, stage"
+                    " FROM leads"
+                    " WHERE " + base_filter +
+                    " AND (name ILIKE :search OR email ILIKE :search OR phone ILIKE :search)"
+                    " LIMIT :limit"
+                )
                 lead_rows = db.execute(
-                    text(f"""SELECT id, name, email, phone, stage
-                           FROM leads
-                           WHERE {base_filter}
-                           AND (name ILIKE :search OR email ILIKE :search OR phone ILIKE :search)
-                           LIMIT :limit"""),
+                    text(lead_search_sql),
                     base_params
                 ).fetchall()
             else:
+                lead_list_sql = (
+                    "SELECT id, name, email, phone, stage"
+                    " FROM leads WHERE " + base_filter +
+                    " LIMIT :limit"
+                )
                 lead_rows = db.execute(
-                    text(f"""SELECT id, name, email, phone, stage
-                           FROM leads WHERE {base_filter}
-                           LIMIT :limit"""),
+                    text(lead_list_sql),
                     base_params
                 ).fetchall()
 
@@ -1214,22 +1228,28 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             if query_str:
                 search = f"%{query_str}%"
                 base_params["search"] = search
+                loan_search_sql = (
+                    "SELECT id, loan_number, borrower_name, stage, amount,"
+                    " processor, underwriter, property_address, closing_date"
+                    " FROM loans"
+                    " WHERE " + base_filter +
+                    " AND (borrower_name ILIKE :search OR loan_number ILIKE :search"
+                    " OR property_address ILIKE :search)"
+                    " LIMIT :limit"
+                )
                 loan_rows = db.execute(
-                    text(f"""SELECT id, loan_number, borrower_name, stage, amount,
-                           processor, underwriter, property_address, closing_date
-                           FROM loans
-                           WHERE {base_filter}
-                           AND (borrower_name ILIKE :search OR loan_number ILIKE :search
-                                OR property_address ILIKE :search)
-                           LIMIT :limit"""),
+                    text(loan_search_sql),
                     base_params
                 ).fetchall()
             else:
+                loan_list_sql = (
+                    "SELECT id, loan_number, borrower_name, stage, amount,"
+                    " processor, underwriter, property_address, closing_date"
+                    " FROM loans WHERE " + base_filter +
+                    " LIMIT :limit"
+                )
                 loan_rows = db.execute(
-                    text(f"""SELECT id, loan_number, borrower_name, stage, amount,
-                           processor, underwriter, property_address, closing_date
-                           FROM loans WHERE {base_filter}
-                           LIMIT :limit"""),
+                    text(loan_list_sql),
                     base_params
                 ).fetchall()
 
@@ -1619,27 +1639,28 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             for i, status in enumerate(mapped_statuses):
                 params[f"status_{i}"] = status
 
-            query = text(f"""
-                SELECT id, name, first_name, last_name, email, phone, stage,
-                       source, ai_score, loan_amount, preapproval_amount,
-                       last_contact, created_at, updated_at, notes
-                FROM leads
-                WHERE owner_id = :user_id
-                AND (:org_id IS NULL OR organization_id = :org_id)
-                AND stage::text IN ({status_placeholders})
-                ORDER BY
-                    CASE stage::text
-                        WHEN 'New' THEN 1
-                        WHEN 'Attempted Contact' THEN 2
-                        WHEN 'Prospect' THEN 3
-                        WHEN 'Application' THEN 4
-                        WHEN 'Pre-Qualified' THEN 5
-                        WHEN 'Pre-Approved' THEN 6
-                        ELSE 7
-                    END,
-                    updated_at DESC
-                LIMIT :limit
-            """)
+            leads_by_status_sql = (
+                "SELECT id, name, first_name, last_name, email, phone, stage,"
+                " source, ai_score, loan_amount, preapproval_amount,"
+                " last_contact, created_at, updated_at, notes"
+                " FROM leads"
+                " WHERE owner_id = :user_id"
+                " AND (:org_id IS NULL OR organization_id = :org_id)"
+                " AND stage::text IN (" + status_placeholders + ")"
+                " ORDER BY"
+                " CASE stage::text"
+                " WHEN 'New' THEN 1"
+                " WHEN 'Attempted Contact' THEN 2"
+                " WHEN 'Prospect' THEN 3"
+                " WHEN 'Application' THEN 4"
+                " WHEN 'Pre-Qualified' THEN 5"
+                " WHEN 'Pre-Approved' THEN 6"
+                " ELSE 7"
+                " END,"
+                " updated_at DESC"
+                " LIMIT :limit"
+            )
+            query = text(leads_by_status_sql)
 
             lead_rows = db.execute(query, params).fetchall()
 

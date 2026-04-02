@@ -6,7 +6,7 @@ Comprehensive email tracking with parsed data and AI analysis
 from sqlalchemy import Column, String, Integer, DateTime, Text, ARRAY, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from database import Base

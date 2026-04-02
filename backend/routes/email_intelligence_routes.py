@@ -1246,17 +1246,18 @@ async def get_conversation_log(
     else:
         filter_col = "lead_id"
 
-    result = db.execute(text(f"""
-        SELECT id, contact_id, loan_id, lead_id,
-               email_subject, email_date, direction,
-               summary, key_points, action_items, next_steps,
-               documents_requested, documents_received,
-               sentiment, urgency_level, created_by, created_at
-        FROM email_conversation_log
-        WHERE {filter_col} = :entity_id AND user_id = :user_id
-        ORDER BY email_date DESC
-        LIMIT :limit
-    """), {"entity_id": entity_id, "user_id": user_id, "limit": limit}).fetchall()
+    query = (
+        "SELECT id, contact_id, loan_id, lead_id,"
+        " email_subject, email_date, direction,"
+        " summary, key_points, action_items, next_steps,"
+        " documents_requested, documents_received,"
+        " sentiment, urgency_level, created_by, created_at"
+        " FROM email_conversation_log"
+        " WHERE " + filter_col + " = :entity_id AND user_id = :user_id"
+        " ORDER BY email_date DESC"
+        " LIMIT :limit"
+    )
+    result = db.execute(text(query), {"entity_id": entity_id, "user_id": user_id, "limit": limit}).fetchall()
 
     entries = []
     for row in result:
@@ -3332,10 +3333,8 @@ async def debug_add_missing_columns(
         added = []
         for col_name, col_type in columns_to_add:
             try:
-                db.execute(text(f"""
-                    ALTER TABLE email_reconciliation_queue
-                    ADD COLUMN IF NOT EXISTS {col_name} {col_type}
-                """))
+                alter_sql = "ALTER TABLE email_reconciliation_queue ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
+                db.execute(text(alter_sql))
                 added.append(col_name)
             except SQLAlchemyError as e:
                 logger.warning(f"Could not add column {col_name}: {e}")

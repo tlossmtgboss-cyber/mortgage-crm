@@ -86,7 +86,8 @@ async def run_account_management_migration(
                 for table in ['tasks', 'task_instances', 'purl_tasks']:
                     try:
                         validated_table = validate_table_name(table)
-                        result = conn.execute(text(f"DELETE FROM {validated_table}"))
+                        delete_sql = "DELETE FROM " + validated_table
+                        result = conn.execute(text(delete_sql))
                         results['deleted'][table] = result.rowcount
                     except SQLAlchemyError as e:
                         results['errors'].append(f"{table}: cleanup failed")
@@ -95,7 +96,8 @@ async def run_account_management_migration(
                 for table in ['team_members', 'team_member_profiles', 'extracted_data', 'referral_partners']:
                     try:
                         validated_table = validate_table_name(table)
-                        result = conn.execute(text(f"DELETE FROM {validated_table}"))
+                        delete_sql = "DELETE FROM " + validated_table
+                        result = conn.execute(text(delete_sql))
                         results['deleted'][table] = result.rowcount
                     except Exception as e:
                         logger.error(f"Error in run_account_management_migration (delete team tables): {e}")
@@ -654,10 +656,12 @@ async def cleanup_users(
                 # Whitelist-validated table and column names
                 validated_table = validate_table_name(table)
                 validated_column = validate_column_name(column)
-                result = db.execute(text(f"""
-                    DELETE FROM {validated_table}
-                    WHERE {validated_column} IS NOT NULL AND {validated_column} != :admin_id
-                """), {'admin_id': admin_id})
+                delete_sql = (
+                    "DELETE FROM " + validated_table
+                    + " WHERE " + validated_column + " IS NOT NULL AND "
+                    + validated_column + " != :admin_id"
+                )
+                result = db.execute(text(delete_sql), {'admin_id': admin_id})
                 deleted_counts[f"{table}.{column}"] = result.rowcount
             except SQLAlchemyError as e:
                 logger.warning(f"Could not clean {table}.{column}: {e}")
@@ -1089,9 +1093,8 @@ async def cleanup_account_by_api_key(
             for table_name, column_name in dependent_tables:
                 try:
                     savepoint = db.begin_nested()
-                    result = db.execute(text(f"""
-                        DELETE FROM {table_name} WHERE {column_name} IN :user_ids
-                    """), {'user_ids': tuple(user_ids)})
+                    delete_sql = "DELETE FROM " + table_name + " WHERE " + column_name + " IN :user_ids"
+                    result = db.execute(text(delete_sql), {'user_ids': tuple(user_ids)})
                     if result.rowcount > 0:
                         deleted_from.append(f"{table_name}.{column_name}: {result.rowcount}")
                     savepoint.commit()

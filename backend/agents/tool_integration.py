@@ -7,7 +7,7 @@ Provides tool binding, execution management, and result processing.
 
 from typing import Any, Callable, Dict, List, Optional, Union
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import asyncio
 import json

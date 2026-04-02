@@ -251,10 +251,10 @@ def check_status():
         tables = ['onboarding_roles', 'user_assigned_roles', 'user_active_role']
         print("\nTables:")
         for table in tables:
-            result = conn.execute(text(f"""
+            result = conn.execute(text("""
                 SELECT table_name FROM information_schema.tables
-                WHERE table_schema = 'public' AND table_name = '{table}'
-            """))
+                WHERE table_schema = 'public' AND table_name = :table_name
+            """), {"table_name": table})
             exists = result.fetchone() is not None
             status = "EXISTS" if exists else "MISSING"
             print(f"  {table}: {status}")

@@ -35,7 +35,7 @@ Organized by functional area:
 
 from __future__ import annotations
 
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
 

@@ -6,7 +6,7 @@ Also includes data extraction, field comparison, and apply-fields endpoints.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -749,9 +749,8 @@ async def apply_extracted_fields(
 
         # Update profile using whitelisted table and column names
         try:
-            db.execute(text(f"""
-                UPDATE {table} SET {profile_field} = :value WHERE id = :id
-            """), {"value": str(value), "id": body.profile_id})
+            update_query = "UPDATE " + table + " SET " + profile_field + " = :value WHERE id = :id"
+            db.execute(text(update_query), {"value": str(value), "id": body.profile_id})
 
             applied.append({
                 "field_name": field_req.field_name,
@@ -904,9 +903,8 @@ async def approve_document_with_review(
                 continue
 
             try:
-                db.execute(text(f"""
-                    UPDATE {apply_table} SET {profile_field} = :value WHERE id = :id
-                """), {"value": str(value), "id": body.apply_fields.profile_id})
+                apply_query = "UPDATE " + apply_table + " SET " + profile_field + " = :value WHERE id = :id"
+                db.execute(text(apply_query), {"value": str(value), "id": body.apply_fields.profile_id})
                 applied.append(field_req.field_name)
             except SQLAlchemyError as e:
                 logger.warning(f"Failed to apply field: {e}")

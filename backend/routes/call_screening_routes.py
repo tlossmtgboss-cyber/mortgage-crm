@@ -83,16 +83,17 @@ async def get_blocklist(
 
         where_clause = " AND ".join(filters) if filters else "1=1"
 
-        result = db.execute(text(f"""
+        sql = """
             SELECT
                 id, phone_number, reason, source, spam_score,
                 blocked_at, blocked_by, expires_at, is_active,
                 call_attempts_since_block, created_at
             FROM phone_blocklist
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY blocked_at DESC
             LIMIT :limit OFFSET :offset
-        """), {"limit": limit, "offset": offset})
+        """
+        result = db.execute(text(sql), {"limit": limit, "offset": offset})
 
         entries = []
         for row in result.fetchall():
@@ -111,9 +112,8 @@ async def get_blocklist(
             })
 
         # Get total count
-        count_result = db.execute(text(f"""
-            SELECT COUNT(*) FROM phone_blocklist WHERE {where_clause}
-        """))
+        count_sql = "SELECT COUNT(*) FROM phone_blocklist WHERE " + where_clause
+        count_result = db.execute(text(count_sql))
         total = count_result.scalar()
 
         return {
@@ -221,16 +221,17 @@ async def get_whitelist(
 
         where_clause = " AND ".join(filters)
 
-        result = db.execute(text(f"""
+        sql = """
             SELECT
                 id, phone_number, name, category, source,
                 lead_id, user_id, added_at, added_by,
                 notes, priority, created_at
             FROM phone_whitelist
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY priority DESC, added_at DESC
             LIMIT :limit OFFSET :offset
-        """), params)
+        """
+        result = db.execute(text(sql), params)
 
         entries = []
         for row in result.fetchall():
@@ -250,9 +251,8 @@ async def get_whitelist(
             })
 
         # Get total count
-        count_result = db.execute(text(f"""
-            SELECT COUNT(*) FROM phone_whitelist WHERE {where_clause}
-        """), params)
+        count_sql = "SELECT COUNT(*) FROM phone_whitelist WHERE " + where_clause
+        count_result = db.execute(text(count_sql), params)
         total = count_result.scalar()
 
         return {
@@ -402,17 +402,18 @@ async def get_screening_log(
 
         where_clause = " AND ".join(filters)
 
-        result = db.execute(text(f"""
+        sql = """
             SELECT
                 id, call_sid, phone_number, screening_decision,
                 decision_reason, lookup_performed, lookup_cost_cents,
                 screening_duration_ms, caller_stated_name, caller_stated_reason,
                 connected_to_ai, created_at
             FROM call_screening_log
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
-        """), params)
+        """
+        result = db.execute(text(sql), params)
 
         entries = []
         for row in result.fetchall():
@@ -432,9 +433,8 @@ async def get_screening_log(
             })
 
         # Get total count
-        count_result = db.execute(text(f"""
-            SELECT COUNT(*) FROM call_screening_log WHERE {where_clause}
-        """), params)
+        count_sql = "SELECT COUNT(*) FROM call_screening_log WHERE " + where_clause
+        count_result = db.execute(text(count_sql), params)
         total = count_result.scalar()
 
         return {

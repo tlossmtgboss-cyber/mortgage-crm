@@ -24,7 +24,7 @@ import logging
 import yaml
 from pathlib import Path
 from typing import Any, Dict, Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -290,7 +290,8 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
         params["dedup_category"] = category
 
     where = " AND ".join(conditions)
-    existing = db.execute(text(f"SELECT id FROM ai_tasks WHERE {where} LIMIT 1"), params).fetchone()
+    dedup_sql = "SELECT id FROM ai_tasks WHERE " + where + " LIMIT 1"
+    existing = db.execute(text(dedup_sql), params).fetchone()
 
     if existing:
         return False
@@ -338,7 +339,8 @@ def _dedup_and_create_task(db, title: str, description: str, priority: str,
 
     cols_sql = ", ".join(insert_cols)
     vals_sql = ", ".join(insert_vals)
-    db.execute(text(f"INSERT INTO ai_tasks ({cols_sql}) VALUES ({vals_sql})"), insert_params)
+    insert_sql = "INSERT INTO ai_tasks (" + cols_sql + ") VALUES (" + vals_sql + ")"
+    db.execute(text(insert_sql), insert_params)
     return True
 
 
@@ -557,15 +559,16 @@ class OpsManagerAgent(SpecializedAgent):
         cats_placeholder = ", ".join(f"'{c}'" for c in ALL_OPS_CATEGORIES)
 
         # Fetch all open ops tasks
-        open_tasks = db.execute(text(f"""
-            SELECT t.id, t.category, t.loan_id, t.lead_id, t.created_at, t.title
-            FROM ai_tasks t
-            WHERE t.type::text NOT ILIKE '%completed%'
-                AND t.category IN ({cats_placeholder})
-                {org_filter}
-            ORDER BY t.created_at ASC
-            LIMIT 500
-        """), params).fetchall()
+        open_tasks_sql = (
+            "SELECT t.id, t.category, t.loan_id, t.lead_id, t.created_at, t.title"
+            " FROM ai_tasks t"
+            " WHERE t.type::text NOT ILIKE '%completed%'"
+            " AND t.category IN (" + cats_placeholder + ")"
+            " " + org_filter +
+            " ORDER BY t.created_at ASC"
+            " LIMIT 500"
+        )
+        open_tasks = db.execute(text(open_tasks_sql), params).fetchall()
 
         resolved_count = 0
 
@@ -877,18 +880,19 @@ class OpsManagerAgent(SpecializedAgent):
         if org_id:
             params["org_id"] = org_id
 
-        recent_tasks = db.execute(text(f"""
-            SELECT t.id, t.title, t.assigned_to_id, t.organization_id, t.loan_id, t.lead_id, t.category
-            FROM ai_tasks t
-            WHERE t.priority = 'high'
-                AND t.category IN ({cats_placeholder})
-                AND t.created_at >= NOW() - INTERVAL '5 minutes'
-                AND t.assigned_to_id IS NOT NULL
-                AND t.type::text NOT ILIKE '%completed%'
-                {org_filter}
-            ORDER BY t.created_at DESC
-            LIMIT 50
-        """), params).fetchall()
+        recent_tasks_sql = (
+            "SELECT t.id, t.title, t.assigned_to_id, t.organization_id, t.loan_id, t.lead_id, t.category"
+            " FROM ai_tasks t"
+            " WHERE t.priority = 'high'"
+            " AND t.category IN (" + cats_placeholder + ")"
+            " AND t.created_at >= NOW() - INTERVAL '5 minutes'"
+            " AND t.assigned_to_id IS NOT NULL"
+            " AND t.type::text NOT ILIKE '%completed%'"
+            " " + org_filter +
+            " ORDER BY t.created_at DESC"
+            " LIMIT 50"
+        )
+        recent_tasks = db.execute(text(recent_tasks_sql), params).fetchall()
 
         # --- In-app notifications (existing behavior) ---
         for task in recent_tasks:
@@ -1021,17 +1025,18 @@ class OpsManagerAgent(SpecializedAgent):
             tasks_skipped = 0
 
             # --- LEAD_STALE: leads with no contact past threshold ---
-            stale_leads = db.execute(text(f"""
-                SELECT l.id, l.first_name, l.last_name, l.owner_id, l.organization_id,
-                       l.last_contact,
-                       EXTRACT(EPOCH FROM (NOW() - COALESCE(l.last_contact, l.created_at))) / 86400 AS days_no_contact
-                FROM leads l
-                WHERE l.stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call')
-                    AND COALESCE(l.last_contact, l.created_at) < NOW() - (CAST(:stale_days AS INTEGER) * INTERVAL '1 day')
-                    {org_filter}
-                ORDER BY days_no_contact DESC
-                LIMIT :limit
-            """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            stale_sql = (
+                "SELECT l.id, l.first_name, l.last_name, l.owner_id, l.organization_id,"
+                " l.last_contact,"
+                " EXTRACT(EPOCH FROM (NOW() - COALESCE(l.last_contact, l.created_at))) / 86400 AS days_no_contact"
+                " FROM leads l"
+                " WHERE l.stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call')"
+                " AND COALESCE(l.last_contact, l.created_at) < NOW() - (CAST(:stale_days AS INTEGER) * INTERVAL '1 day')"
+                " " + org_filter +
+                " ORDER BY days_no_contact DESC"
+                " LIMIT :limit"
+            )
+            stale_leads = db.execute(text(stale_sql), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             by_category["LEAD_STALE"] = len(stale_leads)
             for lead in stale_leads:
@@ -1054,15 +1059,16 @@ class OpsManagerAgent(SpecializedAgent):
                         tasks_skipped += 1
 
             # --- LEAD_UNASSIGNED: unassigned leads ---
-            unassigned = db.execute(text(f"""
-                SELECT l.id, l.first_name, l.last_name, l.organization_id, l.created_at
-                FROM leads l
-                WHERE l.owner_id IS NULL
-                    AND l.stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call')
-                    {org_filter}
-                ORDER BY l.created_at ASC
-                LIMIT :limit
-            """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            unassigned_sql = (
+                "SELECT l.id, l.first_name, l.last_name, l.organization_id, l.created_at"
+                " FROM leads l"
+                " WHERE l.owner_id IS NULL"
+                " AND l.stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call')"
+                " " + org_filter +
+                " ORDER BY l.created_at ASC"
+                " LIMIT :limit"
+            )
+            unassigned = db.execute(text(unassigned_sql), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             by_category["LEAD_UNASSIGNED"] = len(unassigned)
             for lead in unassigned:
@@ -1084,11 +1090,12 @@ class OpsManagerAgent(SpecializedAgent):
             if not dry_run:
                 db.commit()
 
-            scanned_row = db.execute(text(f"""
-                SELECT COUNT(*) as cnt FROM leads l
-                WHERE l.stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call')
-                {org_filter}
-            """), params).fetchone()
+            lead_count_sql = (
+                "SELECT COUNT(*) as cnt FROM leads l"
+                " WHERE l.stage NOT IN ('Closed', 'Funded', 'Withdrawn', 'Does Not Qualify', 'Do Not Call')"
+                " " + org_filter
+            )
+            scanned_row = db.execute(text(lead_count_sql), params).fetchone()
             scanned = scanned_row.cnt if scanned_row else 0
 
             return ToolResult(
@@ -1147,20 +1154,21 @@ class OpsManagerAgent(SpecializedAgent):
             sla_cases = " ".join(
                 f"WHEN '{stage}' THEN {days}" for stage, days in STAGE_SLA_DAYS.items()
             )
-            sla_loans = db.execute(text(f"""
-                SELECT l.id, l.loan_number, l.borrower_name, l.stage,
-                       l.loan_officer_id, l.organization_id,
-                       EXTRACT(EPOCH FROM (NOW() - l.stage_changed_at)) / 86400 AS days_in_stage,
-                       CASE l.stage {sla_cases} ELSE 10 END AS sla_target
-                FROM loans l
-                WHERE l.stage NOT IN ({terminal_list})
-                    AND l.stage_changed_at IS NOT NULL
-                    AND EXTRACT(EPOCH FROM (NOW() - l.stage_changed_at)) / 86400 >
-                        CASE l.stage {sla_cases} ELSE 10 END
-                    {org_filter}
-                ORDER BY days_in_stage DESC
-                LIMIT :limit
-            """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            sla_sql = (
+                "SELECT l.id, l.loan_number, l.borrower_name, l.stage,"
+                " l.loan_officer_id, l.organization_id,"
+                " EXTRACT(EPOCH FROM (NOW() - l.stage_changed_at)) / 86400 AS days_in_stage,"
+                " CASE l.stage " + sla_cases + " ELSE 10 END AS sla_target"
+                " FROM loans l"
+                " WHERE l.stage NOT IN (" + terminal_list + ")"
+                " AND l.stage_changed_at IS NOT NULL"
+                " AND EXTRACT(EPOCH FROM (NOW() - l.stage_changed_at)) / 86400 >"
+                " CASE l.stage " + sla_cases + " ELSE 10 END"
+                " " + org_filter +
+                " ORDER BY days_in_stage DESC"
+                " LIMIT :limit"
+            )
+            sla_loans = db.execute(text(sla_sql), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             by_category["SLA_BREACH"] = len(sla_loans)
             for loan in sla_loans:
@@ -1179,19 +1187,20 @@ class OpsManagerAgent(SpecializedAgent):
                     tasks_skipped += 0 if created else 1
 
             # --- LOCK_EXPIRING: rate locks expiring soon ---
-            lock_loans = db.execute(text(f"""
-                SELECT l.id, l.loan_number, l.borrower_name, l.lock_expiration_date,
-                       l.loan_officer_id, l.organization_id,
-                       EXTRACT(EPOCH FROM (l.lock_expiration_date - NOW())) / 86400 AS days_until_expiry
-                FROM loans l
-                WHERE l.stage NOT IN ({terminal_list})
-                    AND l.lock_expiration_date IS NOT NULL
-                    AND l.lock_expiration_date <= NOW() + (CAST(:lock_days AS INTEGER) * INTERVAL '1 day')
-                    AND l.lock_expiration_date > NOW() - INTERVAL '30 days'
-                    {org_filter}
-                ORDER BY l.lock_expiration_date ASC
-                LIMIT :limit
-            """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            lock_sql = (
+                "SELECT l.id, l.loan_number, l.borrower_name, l.lock_expiration_date,"
+                " l.loan_officer_id, l.organization_id,"
+                " EXTRACT(EPOCH FROM (l.lock_expiration_date - NOW())) / 86400 AS days_until_expiry"
+                " FROM loans l"
+                " WHERE l.stage NOT IN (" + terminal_list + ")"
+                " AND l.lock_expiration_date IS NOT NULL"
+                " AND l.lock_expiration_date <= NOW() + (CAST(:lock_days AS INTEGER) * INTERVAL '1 day')"
+                " AND l.lock_expiration_date > NOW() - INTERVAL '30 days'"
+                " " + org_filter +
+                " ORDER BY l.lock_expiration_date ASC"
+                " LIMIT :limit"
+            )
+            lock_loans = db.execute(text(lock_sql), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             by_category["LOCK_EXPIRING"] = len(lock_loans)
             for loan in lock_loans:
@@ -1212,18 +1221,19 @@ class OpsManagerAgent(SpecializedAgent):
                     tasks_skipped += 0 if created else 1
 
             # --- DOC_EXPIRING: credit or appraisal docs expiring ---
-            doc_loans = db.execute(text(f"""
-                SELECT l.id, l.loan_number, l.borrower_name, l.loan_officer_id, l.organization_id,
-                       l.credit_docs_expire_date, l.appraisal_docs_expire_date
-                FROM loans l
-                WHERE l.stage NOT IN ({terminal_list})
-                    AND (
-                        (l.credit_docs_expire_date IS NOT NULL AND l.credit_docs_expire_date <= NOW() + (CAST(:doc_days AS INTEGER) * INTERVAL '1 day'))
-                        OR (l.appraisal_docs_expire_date IS NOT NULL AND l.appraisal_docs_expire_date <= NOW() + (CAST(:doc_days AS INTEGER) * INTERVAL '1 day'))
-                    )
-                    {org_filter}
-                LIMIT :limit
-            """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            doc_sql = (
+                "SELECT l.id, l.loan_number, l.borrower_name, l.loan_officer_id, l.organization_id,"
+                " l.credit_docs_expire_date, l.appraisal_docs_expire_date"
+                " FROM loans l"
+                " WHERE l.stage NOT IN (" + terminal_list + ")"
+                " AND ("
+                " (l.credit_docs_expire_date IS NOT NULL AND l.credit_docs_expire_date <= NOW() + (CAST(:doc_days AS INTEGER) * INTERVAL '1 day'))"
+                " OR (l.appraisal_docs_expire_date IS NOT NULL AND l.appraisal_docs_expire_date <= NOW() + (CAST(:doc_days AS INTEGER) * INTERVAL '1 day'))"
+                " )"
+                " " + org_filter +
+                " LIMIT :limit"
+            )
+            doc_loans = db.execute(text(doc_sql), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             docs_count = 0
             for loan in doc_loans:
@@ -1247,18 +1257,19 @@ class OpsManagerAgent(SpecializedAgent):
 
             # --- COMPLIANCE_OPEN: critical/high compliance alerts ---
             try:
-                compliance_alerts = db.execute(text(f"""
-                    SELECT ca.id, ca.title as alert_title, ca.severity, ca.loan_id,
-                           l.loan_number, l.borrower_name, l.loan_officer_id, l.organization_id
-                    FROM compliance_alerts ca
-                    JOIN loans l ON l.id = ca.loan_id
-                    WHERE ca.status = 'open'
-                        AND ca.severity IN ('critical', 'high')
-                        AND l.stage NOT IN ({terminal_list})
-                        {org_filter}
-                    ORDER BY CASE ca.severity WHEN 'critical' THEN 1 ELSE 2 END
-                    LIMIT :limit
-                """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+                compliance_sql = (
+                    "SELECT ca.id, ca.title as alert_title, ca.severity, ca.loan_id,"
+                    " l.loan_number, l.borrower_name, l.loan_officer_id, l.organization_id"
+                    " FROM compliance_alerts ca"
+                    " JOIN loans l ON l.id = ca.loan_id"
+                    " WHERE ca.status = 'open'"
+                    " AND ca.severity IN ('critical', 'high')"
+                    " AND l.stage NOT IN (" + terminal_list + ")"
+                    " " + org_filter +
+                    " ORDER BY CASE ca.severity WHEN 'critical' THEN 1 ELSE 2 END"
+                    " LIMIT :limit"
+                )
+                compliance_alerts = db.execute(text(compliance_sql), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
                 by_category["COMPLIANCE_OPEN"] = len(compliance_alerts)
                 for alert in compliance_alerts:
@@ -1284,18 +1295,19 @@ class OpsManagerAgent(SpecializedAgent):
 
             # --- DOC_MISSING: loans past PROCESSING with <3 active documents ---
             try:
-                missing_doc_loans = db.execute(text(f"""
-                    SELECT l.id, l.loan_number, l.borrower_name, l.stage,
-                           l.loan_officer_id, l.organization_id,
-                           COUNT(d.id) FILTER (WHERE d.status = 'active') as active_doc_count
-                    FROM loans l
-                    LEFT JOIN documents d ON d.loan_id = l.id
-                    WHERE l.stage NOT IN ({terminal_list}, 'APPLICATION', 'DISCLOSED')
-                        {org_filter}
-                    GROUP BY l.id, l.loan_number, l.borrower_name, l.stage, l.loan_officer_id, l.organization_id
-                    HAVING COUNT(d.id) FILTER (WHERE d.status = 'active') < 3
-                    LIMIT :limit
-                """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+                missing_doc_sql = (
+                    "SELECT l.id, l.loan_number, l.borrower_name, l.stage,"
+                    " l.loan_officer_id, l.organization_id,"
+                    " COUNT(d.id) FILTER (WHERE d.status = 'active') as active_doc_count"
+                    " FROM loans l"
+                    " LEFT JOIN documents d ON d.loan_id = l.id"
+                    " WHERE l.stage NOT IN (" + terminal_list + ", 'APPLICATION', 'DISCLOSED')"
+                    " " + org_filter +
+                    " GROUP BY l.id, l.loan_number, l.borrower_name, l.stage, l.loan_officer_id, l.organization_id"
+                    " HAVING COUNT(d.id) FILTER (WHERE d.status = 'active') < 3"
+                    " LIMIT :limit"
+                )
+                missing_doc_loans = db.execute(text(missing_doc_sql), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
                 by_category["DOC_MISSING"] = len(missing_doc_loans)
                 for loan in missing_doc_loans:
@@ -1381,10 +1393,11 @@ class OpsManagerAgent(SpecializedAgent):
                 except Exception as push_err:
                     logger.debug(f"Loan sweep push notifications failed (non-blocking): {push_err}")
 
-            scanned_row = db.execute(text(f"""
-                SELECT COUNT(*) as cnt FROM loans l
-                WHERE l.stage NOT IN ({terminal_list}) {org_filter}
-            """), params).fetchone()
+            loan_count_sql = (
+                "SELECT COUNT(*) as cnt FROM loans l"
+                " WHERE l.stage NOT IN (" + terminal_list + ") " + org_filter
+            )
+            scanned_row = db.execute(text(loan_count_sql), params).fetchone()
             scanned = scanned_row.cnt if scanned_row else 0
 
             return ToolResult(
@@ -1439,22 +1452,23 @@ class OpsManagerAgent(SpecializedAgent):
 
             # MUM clients = funded loans where borrower needs ongoing touchpoints
             # C2: Replaced correlated subqueries with LEFT JOIN LATERAL
-            mum_clients = db.execute(text(f"""
-                SELECT l.id, l.loan_number, l.borrower_name, l.borrower_email,
-                       l.loan_officer_id, l.organization_id, l.funded_date,
-                       COALESCE(la.last_activity, l.funded_date) as last_activity,
-                       EXTRACT(EPOCH FROM (NOW() - COALESCE(la.last_activity, l.funded_date))) / 86400 AS days_since_contact
-                FROM loans l
-                LEFT JOIN LATERAL (
-                    SELECT MAX(a.created_at) as last_activity FROM activities a WHERE a.loan_id = l.id
-                ) la ON true
-                WHERE l.stage = 'FUNDED'
-                    AND l.funded_date IS NOT NULL
-                    AND COALESCE(la.last_activity, l.funded_date) < NOW() - (CAST(:overdue_days AS INTEGER) * INTERVAL '1 day')
-                    {org_filter}
-                ORDER BY days_since_contact DESC
-                LIMIT :limit
-            """), {**params, "overdue_days": overdue_days, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            mum_sql = (
+                "SELECT l.id, l.loan_number, l.borrower_name, l.borrower_email,"
+                " l.loan_officer_id, l.organization_id, l.funded_date,"
+                " COALESCE(la.last_activity, l.funded_date) as last_activity,"
+                " EXTRACT(EPOCH FROM (NOW() - COALESCE(la.last_activity, l.funded_date))) / 86400 AS days_since_contact"
+                " FROM loans l"
+                " LEFT JOIN LATERAL ("
+                " SELECT MAX(a.created_at) as last_activity FROM activities a WHERE a.loan_id = l.id"
+                " ) la ON true"
+                " WHERE l.stage = 'FUNDED'"
+                " AND l.funded_date IS NOT NULL"
+                " AND COALESCE(la.last_activity, l.funded_date) < NOW() - (CAST(:overdue_days AS INTEGER) * INTERVAL '1 day')"
+                " " + org_filter +
+                " ORDER BY days_since_contact DESC"
+                " LIMIT :limit"
+            )
+            mum_clients = db.execute(text(mum_sql), {**params, "overdue_days": overdue_days, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             by_category["MUM_OVERDUE"] = len(mum_clients)
             for client in mum_clients:
@@ -1477,10 +1491,11 @@ class OpsManagerAgent(SpecializedAgent):
             if not dry_run:
                 db.commit()
 
-            scanned_row = db.execute(text(f"""
-                SELECT COUNT(*) as cnt FROM loans l
-                WHERE l.stage = 'FUNDED' AND l.funded_date IS NOT NULL {org_filter}
-            """), params).fetchone()
+            mum_count_sql = (
+                "SELECT COUNT(*) as cnt FROM loans l"
+                " WHERE l.stage = 'FUNDED' AND l.funded_date IS NOT NULL " + org_filter
+            )
+            scanned_row = db.execute(text(mum_count_sql), params).fetchone()
             scanned = scanned_row.cnt if scanned_row else 0
 
             return ToolResult(
@@ -1534,14 +1549,15 @@ class OpsManagerAgent(SpecializedAgent):
             tasks_skipped = 0
 
             # --- LOAN_MISSING_LO: loans with no loan officer ---
-            no_lo = db.execute(text(f"""
-                SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.organization_id
-                FROM loans l
-                WHERE l.loan_officer_id IS NULL
-                    AND l.stage NOT IN ({terminal_list})
-                    {org_filter}
-                LIMIT :limit
-            """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            no_lo_sql = (
+                "SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.organization_id"
+                " FROM loans l"
+                " WHERE l.loan_officer_id IS NULL"
+                " AND l.stage NOT IN (" + terminal_list + ")"
+                " " + org_filter +
+                " LIMIT :limit"
+            )
+            no_lo = db.execute(text(no_lo_sql), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             by_category["LOAN_MISSING_LO"] = len(no_lo)
             for loan in no_lo:
@@ -1563,16 +1579,17 @@ class OpsManagerAgent(SpecializedAgent):
                 col_name = role  # processor, closer, production_assistant
 
                 try:
-                    gaps = db.execute(text(f"""
-                        SELECT l.id, l.loan_number, l.borrower_name, l.stage,
-                               l.loan_officer_id, l.organization_id
-                        FROM loans l
-                        WHERE l.stage IN ({stages_list})
-                            AND (l.{col_name} IS NULL OR TRIM(l.{col_name}) = '')
-                            AND l.stage NOT IN ({terminal_list})
-                            {org_filter}
-                        LIMIT :limit
-                    """), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
+                    gaps_sql = (
+                        "SELECT l.id, l.loan_number, l.borrower_name, l.stage,"
+                        " l.loan_officer_id, l.organization_id"
+                        " FROM loans l"
+                        " WHERE l.stage IN (" + stages_list + ")"
+                        " AND (l." + col_name + " IS NULL OR TRIM(l." + col_name + ") = '')"
+                        " AND l.stage NOT IN (" + terminal_list + ")"
+                        " " + org_filter +
+                        " LIMIT :limit"
+                    )
+                    gaps = db.execute(text(gaps_sql), {**params, "limit": IMPEDIMENT_LIMIT}).fetchall()
                 except Exception:
                     # Column may not exist — skip this role
                     gaps = []
@@ -1644,21 +1661,22 @@ class OpsManagerAgent(SpecializedAgent):
                 params["org_id"] = org_id
 
             # C2: Replaced correlated subqueries with LEFT JOIN LATERAL
-            stalled = db.execute(text(f"""
-                SELECT l.id, l.loan_number, l.borrower_name, l.stage,
-                       l.loan_officer_id, l.organization_id,
-                       COALESCE(la.last_activity, l.stage_changed_at, l.created_at) as last_activity,
-                       EXTRACT(EPOCH FROM (NOW() - COALESCE(la.last_activity, l.stage_changed_at, l.created_at))) / 86400 AS days_stalled
-                FROM loans l
-                LEFT JOIN LATERAL (
-                    SELECT MAX(a.created_at) as last_activity FROM activities a WHERE a.loan_id = l.id
-                ) la ON true
-                WHERE l.stage NOT IN ({terminal_list})
-                    AND COALESCE(la.last_activity, l.stage_changed_at, l.created_at) < NOW() - (CAST(:stalled_days AS INTEGER) * INTERVAL '1 day')
-                    {org_filter}
-                ORDER BY days_stalled DESC
-                LIMIT :limit
-            """), {**params, "stalled_days": stalled_days, "limit": IMPEDIMENT_LIMIT}).fetchall()
+            stalled_sql = (
+                "SELECT l.id, l.loan_number, l.borrower_name, l.stage,"
+                " l.loan_officer_id, l.organization_id,"
+                " COALESCE(la.last_activity, l.stage_changed_at, l.created_at) as last_activity,"
+                " EXTRACT(EPOCH FROM (NOW() - COALESCE(la.last_activity, l.stage_changed_at, l.created_at))) / 86400 AS days_stalled"
+                " FROM loans l"
+                " LEFT JOIN LATERAL ("
+                " SELECT MAX(a.created_at) as last_activity FROM activities a WHERE a.loan_id = l.id"
+                " ) la ON true"
+                " WHERE l.stage NOT IN (" + terminal_list + ")"
+                " AND COALESCE(la.last_activity, l.stage_changed_at, l.created_at) < NOW() - (CAST(:stalled_days AS INTEGER) * INTERVAL '1 day')"
+                " " + org_filter +
+                " ORDER BY days_stalled DESC"
+                " LIMIT :limit"
+            )
+            stalled = db.execute(text(stalled_sql), {**params, "stalled_days": stalled_days, "limit": IMPEDIMENT_LIMIT}).fetchall()
 
             impediments = []
             tasks_created = 0
@@ -1738,16 +1756,17 @@ class OpsManagerAgent(SpecializedAgent):
             # Use the standardized category column (I9) instead of LIKE-based title parsing
             cats_placeholder = ", ".join(f"'{c}'" for c in ALL_OPS_CATEGORIES)
 
-            summary = db.execute(text(f"""
-                SELECT category, priority, COUNT(*) as count
-                FROM ai_tasks t
-                WHERE t.type::text NOT ILIKE '%completed%'
-                    AND t.category IN ({cats_placeholder})
-                    {category_filter}
-                    {org_filter}
-                GROUP BY category, t.priority
-                ORDER BY category, t.priority
-            """), params).fetchall()
+            summary_sql = (
+                "SELECT category, priority, COUNT(*) as count"
+                " FROM ai_tasks t"
+                " WHERE t.type::text NOT ILIKE '%completed%'"
+                " AND t.category IN (" + cats_placeholder + ")"
+                " " + category_filter +
+                " " + org_filter +
+                " GROUP BY category, t.priority"
+                " ORDER BY category, t.priority"
+            )
+            summary = db.execute(text(summary_sql), params).fetchall()
 
             # Pivot into category -> {priority: count}
             categories = {}
@@ -1817,16 +1836,17 @@ class OpsManagerAgent(SpecializedAgent):
             if org_id:
                 params["org_id"] = org_id
 
-            sweeps = db.execute(text(f"""
-                SELECT id, organization_id, sweep_type, started_at, completed_at,
-                       duration_seconds, leads_scanned, loans_scanned, mum_scanned,
-                       impediments_found, tasks_created, tasks_skipped_dedup,
-                       impediment_breakdown, dry_run
-                FROM ops_sweep_results
-                {org_filter}
-                ORDER BY started_at DESC
-                LIMIT :limit
-            """), params).fetchall()
+            sweeps_sql = (
+                "SELECT id, organization_id, sweep_type, started_at, completed_at,"
+                " duration_seconds, leads_scanned, loans_scanned, mum_scanned,"
+                " impediments_found, tasks_created, tasks_skipped_dedup,"
+                " impediment_breakdown, dry_run"
+                " FROM ops_sweep_results"
+                " " + org_filter +
+                " ORDER BY started_at DESC"
+                " LIMIT :limit"
+            )
+            sweeps = db.execute(text(sweeps_sql), params).fetchall()
 
             results = []
             for s in sweeps:
@@ -1892,21 +1912,22 @@ class OpsManagerAgent(SpecializedAgent):
             if assigned_to_id:
                 params["assigned_to_id"] = assigned_to_id
 
-            tasks = db.execute(text(f"""
-                SELECT t.id, t.title, t.category, t.priority, t.loan_id, t.lead_id,
-                       t.assigned_to_id, t.organization_id, t.created_at, t.due_date,
-                       t.borrower_name,
-                       l.closing_date, l.lock_expiration_date, l.stage as loan_stage,
-                       l.loan_number
-                FROM ai_tasks t
-                LEFT JOIN loans l ON l.id = t.loan_id
-                WHERE t.type::text NOT ILIKE '%completed%'
-                    AND t.category IN ({cats_placeholder})
-                    {org_filter}
-                    {user_filter}
-                ORDER BY t.created_at ASC
-                LIMIT 200
-            """), params).fetchall()
+            priority_queue_sql = (
+                "SELECT t.id, t.title, t.category, t.priority, t.loan_id, t.lead_id,"
+                " t.assigned_to_id, t.organization_id, t.created_at, t.due_date,"
+                " t.borrower_name,"
+                " l.closing_date, l.lock_expiration_date, l.stage as loan_stage,"
+                " l.loan_number"
+                " FROM ai_tasks t"
+                " LEFT JOIN loans l ON l.id = t.loan_id"
+                " WHERE t.type::text NOT ILIKE '%completed%'"
+                " AND t.category IN (" + cats_placeholder + ")"
+                " " + org_filter +
+                " " + user_filter +
+                " ORDER BY t.created_at ASC"
+                " LIMIT 200"
+            )
+            tasks = db.execute(text(priority_queue_sql), params).fetchall()
 
             buckets = {"must_today": [], "should_today": [], "strategic": []}
 

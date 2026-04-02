@@ -297,11 +297,8 @@ class DateReconciliationService:
         mum_field = mum_date_mappings.get(update.field_name)
 
         if mum_field:
-            self.db.execute(text(f"""
-                UPDATE mum_clients
-                SET {mum_field} = :new_value, updated_at = NOW()
-                WHERE id = :mum_id
-            """), {
+            sql = "UPDATE mum_clients SET " + mum_field + " = :new_value, updated_at = NOW() WHERE id = :mum_id"
+            self.db.execute(text(sql), {
                 "new_value": update.new_value,
                 "mum_id": mum_client[0],
             })

@@ -8,7 +8,7 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 
 def main():
     from db import SessionLocal

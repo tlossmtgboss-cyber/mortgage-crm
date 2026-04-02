@@ -920,17 +920,18 @@ async def predict_appointment_duration(
     where_sql = " AND ".join(filters)
 
     # Try outcomes table first (has actual duration)
-    stats = db.execute(text(f"""
-        SELECT
-            COUNT(*) AS sample_count,
-            AVG(ao.actual_duration_minutes) AS avg_duration,
-            PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ao.actual_duration_minutes) AS median_duration,
-            MIN(ao.actual_duration_minutes) AS min_duration,
-            MAX(ao.actual_duration_minutes) AS max_duration,
-            STDDEV(ao.actual_duration_minutes) AS stddev_duration
-        FROM appointment_outcomes ao
-        WHERE {where_sql}
-    """), params).fetchone()
+    stats_query = (
+        "SELECT"
+        " COUNT(*) AS sample_count,"
+        " AVG(ao.actual_duration_minutes) AS avg_duration,"
+        " PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY ao.actual_duration_minutes) AS median_duration,"
+        " MIN(ao.actual_duration_minutes) AS min_duration,"
+        " MAX(ao.actual_duration_minutes) AS max_duration,"
+        " STDDEV(ao.actual_duration_minutes) AS stddev_duration"
+        " FROM appointment_outcomes ao"
+        " WHERE " + where_sql
+    )
+    stats = db.execute(text(stats_query), params).fetchone()
 
     if stats and stats.sample_count and stats.sample_count >= 5:
         predicted = round(_safe_float(stats.median_duration, 30))
@@ -1390,20 +1391,21 @@ async def get_conversion_trends(
     trunc = "week" if granularity == "week" else "month"
     params = {"org_id": org_id, "days": days}
 
-    trends = db.execute(text(f"""
-        SELECT
-            DATE_TRUNC('{trunc}', sa.scheduled_start)::date AS period_start,
-            COUNT(*) AS total,
-            COUNT(CASE WHEN sa.status = 'completed' THEN 1 END) AS showed,
-            COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) AS no_shows,
-            COUNT(CASE WHEN sa.status = 'cancelled' THEN 1 END) AS cancelled,
-            COUNT(CASE WHEN sa.status = 'booked' THEN 1 END) AS upcoming
-        FROM scheduler_appointments sa
-        WHERE sa.organization_id = :org_id
-          AND sa.scheduled_start >= CURRENT_DATE - :days
-        GROUP BY DATE_TRUNC('{trunc}', sa.scheduled_start)
-        ORDER BY period_start
-    """), params).fetchall()
+    trends_query = (
+        "SELECT"
+        " DATE_TRUNC('" + trunc + "', sa.scheduled_start)::date AS period_start,"
+        " COUNT(*) AS total,"
+        " COUNT(CASE WHEN sa.status = 'completed' THEN 1 END) AS showed,"
+        " COUNT(CASE WHEN sa.status = 'no_show' THEN 1 END) AS no_shows,"
+        " COUNT(CASE WHEN sa.status = 'cancelled' THEN 1 END) AS cancelled,"
+        " COUNT(CASE WHEN sa.status = 'booked' THEN 1 END) AS upcoming"
+        " FROM scheduler_appointments sa"
+        " WHERE sa.organization_id = :org_id"
+        "   AND sa.scheduled_start >= CURRENT_DATE - :days"
+        " GROUP BY DATE_TRUNC('" + trunc + "', sa.scheduled_start)"
+        " ORDER BY period_start"
+    )
+    trends = db.execute(text(trends_query), params).fetchall()
 
     periods = []
     for row in trends:

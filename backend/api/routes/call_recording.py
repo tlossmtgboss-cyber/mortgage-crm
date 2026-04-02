@@ -10,7 +10,7 @@ Call Recording Processing API
 from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import Optional, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import base64
 import tempfile
 import os

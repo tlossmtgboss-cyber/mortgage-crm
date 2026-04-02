@@ -14,7 +14,7 @@ from sqlalchemy import (
     ForeignKey, JSON, Enum as SQLEnum, func, Numeric, Index, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import enum
 
 # Import Base from the main database module

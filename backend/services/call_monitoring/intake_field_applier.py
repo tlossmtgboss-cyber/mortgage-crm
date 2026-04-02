@@ -274,20 +274,15 @@ class IntakeFieldApplier:
 
         # Get current value for audit trail
         record_id = loan_id if table == "loans" else lead_id
-        current = self.db.execute(text(f"""
-            SELECT {column} FROM {table}
-            WHERE id = :record_id AND organization_id = :org_id
-        """), {"record_id": record_id, "org_id": self.organization_id}).fetchone()
+        select_sql = "SELECT " + column + " FROM " + table + " WHERE id = :record_id AND organization_id = :org_id"
+        current = self.db.execute(text(select_sql), {"record_id": record_id, "org_id": self.organization_id}).fetchone()
 
         old_value = getattr(current, column, None) if current else None
 
         # Apply update
         try:
-            self.db.execute(text(f"""
-                UPDATE {table}
-                SET {column} = :new_value, updated_at = NOW()
-                WHERE id = :record_id AND organization_id = :org_id
-            """), {
+            update_sql = "UPDATE " + table + " SET " + column + " = :new_value, updated_at = NOW() WHERE id = :record_id AND organization_id = :org_id"
+            self.db.execute(text(update_sql), {
                 "new_value": coerced,
                 "record_id": record_id,
                 "org_id": self.organization_id,

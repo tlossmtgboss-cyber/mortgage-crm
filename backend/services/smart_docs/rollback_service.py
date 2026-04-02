@@ -434,8 +434,9 @@ class SmartDocsRollbackService:
         if not self._table_exists(table_name):
             return 0
         try:
+            query = f'SELECT COUNT(*) FROM "{table_name}"'  # noqa: S608
             result = self.db.execute(
-                text(f'SELECT COUNT(*) FROM "{table_name}"')  # noqa: S608
+                text(query)
             ).scalar()
             return result or 0
         except Exception as e:
@@ -743,8 +744,9 @@ class SmartDocsRollbackService:
             all_rows = []
 
             while True:
+                query = f'SELECT * FROM "{table_name}" LIMIT :limit OFFSET :offset'  # noqa: S608
                 rows = self.db.execute(
-                    text(f'SELECT * FROM "{table_name}" LIMIT :limit OFFSET :offset'),  # noqa: S608
+                    text(query),
                     {"limit": chunk_size, "offset": offset},
                 ).fetchall()
 
@@ -753,8 +755,9 @@ class SmartDocsRollbackService:
 
                 # Get column names from the first result
                 if offset == 0:
+                    query = f'SELECT * FROM "{table_name}" LIMIT 1'  # noqa: S608
                     columns = list(self.db.execute(
-                        text(f'SELECT * FROM "{table_name}" LIMIT 1')  # noqa: S608
+                        text(query)
                     ).keys())
 
                 for row in rows:
@@ -899,7 +902,8 @@ class SmartDocsRollbackService:
                 continue
 
             try:
-                self.db.execute(text(f'DROP TABLE IF EXISTS "{table_name}" CASCADE'))  # noqa: S608
+                query = f'DROP TABLE IF EXISTS "{table_name}" CASCADE'  # noqa: S608
+                self.db.execute(text(query))
                 result.tables_dropped.append(table_name)
                 logger.info("Dropped table: %s", table_name)
             except Exception as e:

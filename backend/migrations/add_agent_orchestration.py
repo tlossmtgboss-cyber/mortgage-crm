@@ -369,17 +369,17 @@ def check_tables_exist():
     with engine.connect() as conn:
         for table in tables:
             if IS_SQLITE:
-                result = conn.execute(text(f"""
-                    SELECT name FROM sqlite_master
-                    WHERE type='table' AND name='{table}';
-                """))
+                result = conn.execute(text(
+                    "SELECT name FROM sqlite_master"
+                    " WHERE type='table' AND name=:table_name"
+                ), {"table_name": table})
             else:
-                result = conn.execute(text(f"""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables
-                        WHERE table_name = '{table}'
-                    );
-                """))
+                result = conn.execute(text(
+                    "SELECT EXISTS ("
+                    " SELECT FROM information_schema.tables"
+                    " WHERE table_name = :table_name"
+                    ")"
+                ), {"table_name": table})
 
             if result.scalar():
                 existing.append(table)

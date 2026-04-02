@@ -1136,25 +1136,21 @@ class DocumentComparisonService:
 
         where_sql = " AND ".join(filters)
 
-        count_row = self.db.execute(
-            text(f"SELECT COUNT(*) as cnt FROM document_comparisons dc WHERE {where_sql}"),
-            params,
-        ).fetchone()
+        count_q = "SELECT COUNT(*) as cnt FROM document_comparisons dc WHERE " + where_sql
+        count_row = self.db.execute(text(count_q), params).fetchone()
         total = count_row[0] if count_row else 0
 
-        rows = self.db.execute(
-            text(f"""
-                SELECT
-                    dc.comparison_id, dc.doc_id_1, dc.doc_id_2,
-                    dc.comparison_type, dc.risk_score, dc.risk_level,
-                    dc.status, dc.performed_at, dc.performed_by
-                FROM document_comparisons dc
-                WHERE {where_sql}
-                ORDER BY dc.performed_at DESC
-                LIMIT :limit OFFSET :offset
-            """),
-            params,
-        ).fetchall()
+        list_q = (
+            "SELECT"
+            " dc.comparison_id, dc.doc_id_1, dc.doc_id_2,"
+            " dc.comparison_type, dc.risk_score, dc.risk_level,"
+            " dc.status, dc.performed_at, dc.performed_by"
+            " FROM document_comparisons dc"
+            " WHERE " + where_sql
+            + " ORDER BY dc.performed_at DESC"
+            " LIMIT :limit OFFSET :offset"
+        )
+        rows = self.db.execute(text(list_q), params).fetchall()
 
         columns = [
             "comparison_id", "doc_id_1", "doc_id_2",
@@ -1194,23 +1190,21 @@ class DocumentComparisonService:
             """
             params["org_id"] = org_id
 
-        row = self.db.execute(
-            text(f"""
-                SELECT
-                    sd.id, sd.loan_id, sd.borrower_id,
-                    sd.file_name, sd.original_filename, sd.mime_type,
-                    sd.file_size, sd.storage_key, sd.page_count,
-                    sd.doc_type, sd.detected_doc_type,
-                    sd.ocr_text, sd.extracted_dates, sd.extracted_names,
-                    sd.extracted_employer, sd.extracted_amount,
-                    sd.extraction_confidence,
-                    sd.doc_date, sd.status, sd.decision,
-                    sd.uploaded_at, sd.created_at, sd.updated_at
-                FROM smart_documents sd
-                WHERE sd.id = :doc_id {org_filter}
-            """),
-            params,
-        ).fetchone()
+        load_doc_query = (
+            "SELECT"
+            " sd.id, sd.loan_id, sd.borrower_id,"
+            " sd.file_name, sd.original_filename, sd.mime_type,"
+            " sd.file_size, sd.storage_key, sd.page_count,"
+            " sd.doc_type, sd.detected_doc_type,"
+            " sd.ocr_text, sd.extracted_dates, sd.extracted_names,"
+            " sd.extracted_employer, sd.extracted_amount,"
+            " sd.extraction_confidence,"
+            " sd.doc_date, sd.status, sd.decision,"
+            " sd.uploaded_at, sd.created_at, sd.updated_at"
+            " FROM smart_documents sd"
+            " WHERE sd.id = :doc_id " + org_filter
+        )
+        row = self.db.execute(text(load_doc_query), params).fetchone()
 
         if not row:
             raise EntityNotFoundError("SmartDocument", doc_id)
@@ -1953,18 +1947,16 @@ class DocumentComparisonService:
             org_filter = "AND dc.organization_id = :org_id"
             params["org_id"] = org_id
 
-        row = self.db.execute(
-            text(f"""
-                SELECT
-                    dc.comparison_id, dc.doc_id_1, dc.doc_id_2,
-                    dc.comparison_type, dc.risk_score, dc.risk_level,
-                    dc.status, dc.comparison_data, dc.performed_at,
-                    dc.performed_by
-                FROM document_comparisons dc
-                WHERE dc.comparison_id = :comparison_id {org_filter}
-            """),
-            params,
-        ).fetchone()
+        detail_query = (
+            "SELECT"
+            " dc.comparison_id, dc.doc_id_1, dc.doc_id_2,"
+            " dc.comparison_type, dc.risk_score, dc.risk_level,"
+            " dc.status, dc.comparison_data, dc.performed_at,"
+            " dc.performed_by"
+            " FROM document_comparisons dc"
+            " WHERE dc.comparison_id = :comparison_id " + org_filter
+        )
+        row = self.db.execute(text(detail_query), params).fetchone()
 
         if not row:
             return None

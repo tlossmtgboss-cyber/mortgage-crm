@@ -16,7 +16,7 @@ Estimated savings: $10k-15k/month at scale
 
 import os
 import json
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 import anthropic

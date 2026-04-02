@@ -21,18 +21,14 @@ async def engagement_summary(
     """Get engagement summary metrics across all channels."""
     from sqlalchemy import text
     params = {"days": days}
-    lo_filter = ""
-    org_filter = ""
 
     if lo_id:
-        lo_filter = "AND a.user_id = :lo_id"
         params["lo_id"] = lo_id
     if organization_id:
-        org_filter = "AND a.organization_id = :org_id"
         params["org_id"] = organization_id
 
     try:
-        result = db.execute(text(f"""
+        sql = """
             SELECT
                 COUNT(*) as total_activities,
                 COUNT(CASE WHEN a.type = 'Call' THEN 1 END) as calls,
@@ -42,8 +38,12 @@ async def engagement_summary(
                 COUNT(DISTINCT a.lead_id) as unique_leads
             FROM activities a
             WHERE a.created_at >= CURRENT_DATE - :days
-            {lo_filter} {org_filter}
-        """), params).mappings().first()
+        """
+        if lo_id:
+            sql += " AND a.user_id = :lo_id"
+        if organization_id:
+            sql += " AND a.organization_id = :org_id"
+        result = db.execute(text(sql), params).mappings().first()
 
         return {
             "period_days": days,
@@ -83,7 +83,7 @@ async def activity_feed(
     where_sql = " AND ".join(filters) if filters else "1=1"
 
     try:
-        rows = db.execute(text(f"""
+        sql = """
             SELECT
                 a.id, a.type, a.content, a.sentiment,
                 a.created_at,
@@ -92,10 +92,11 @@ async def activity_feed(
             FROM activities a
             LEFT JOIN leads l ON l.id = a.lead_id
             LEFT JOIN users u ON u.id = a.user_id
-            WHERE {where_sql}
+            WHERE """ + where_sql + """
             ORDER BY a.created_at DESC
             LIMIT :limit
-        """), params).mappings().all()
+        """
+        rows = db.execute(text(sql), params).mappings().all()
 
         return {
             "count": len(rows),
@@ -126,13 +127,11 @@ async def channel_comparison(
     """Compare engagement effectiveness across channels."""
     from sqlalchemy import text
     params = {"days": days}
-    org_filter = ""
     if organization_id:
-        org_filter = "AND a.organization_id = :org_id"
         params["org_id"] = organization_id
 
     try:
-        rows = db.execute(text(f"""
+        sql = """
             SELECT
                 a.type as channel,
                 COUNT(*) as total,
@@ -141,10 +140,14 @@ async def channel_comparison(
                 COUNT(CASE WHEN a.sentiment = 'negative' THEN 1 END) as negative
             FROM activities a
             WHERE a.created_at >= CURRENT_DATE - :days
-            {org_filter}
+        """
+        if organization_id:
+            sql += " AND a.organization_id = :org_id"
+        sql += """
             GROUP BY a.type
             ORDER BY total DESC
-        """), params).mappings().all()
+        """
+        rows = db.execute(text(sql), params).mappings().all()
 
         return {
             "period_days": days,
@@ -173,13 +176,11 @@ async def lo_leaderboard(
     """Get LO engagement leaderboard."""
     from sqlalchemy import text
     params = {"days": days}
-    org_filter = ""
     if organization_id:
-        org_filter = "AND a.organization_id = :org_id"
         params["org_id"] = organization_id
 
     try:
-        rows = db.execute(text(f"""
+        sql = """
             SELECT
                 u.id as lo_id,
                 CONCAT(u.first_name, ' ', u.last_name) as lo_name,
@@ -191,11 +192,15 @@ async def lo_leaderboard(
             FROM activities a
             JOIN users u ON u.id = a.user_id
             WHERE a.created_at >= CURRENT_DATE - :days
-            {org_filter}
+        """
+        if organization_id:
+            sql += " AND a.organization_id = :org_id"
+        sql += """
             GROUP BY u.id, u.first_name, u.last_name
             ORDER BY total_activities DESC
             LIMIT 20
-        """), params).mappings().all()
+        """
+        rows = db.execute(text(sql), params).mappings().all()
 
         return {
             "period_days": days,
@@ -226,23 +231,25 @@ async def hourly_heatmap(
     """Get hourly activity heatmap (hour-of-day x day-of-week)."""
     from sqlalchemy import text
     params = {"days": days}
-    org_filter = ""
     if organization_id:
-        org_filter = "AND a.organization_id = :org_id"
         params["org_id"] = organization_id
 
     try:
-        rows = db.execute(text(f"""
+        sql = """
             SELECT
                 EXTRACT(DOW FROM a.created_at) as day_of_week,
                 EXTRACT(HOUR FROM a.created_at) as hour,
                 COUNT(*) as count
             FROM activities a
             WHERE a.created_at >= CURRENT_DATE - :days
-            {org_filter}
+        """
+        if organization_id:
+            sql += " AND a.organization_id = :org_id"
+        sql += """
             GROUP BY day_of_week, hour
             ORDER BY day_of_week, hour
-        """), params).mappings().all()
+        """
+        rows = db.execute(text(sql), params).mappings().all()
 
         day_names = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
         heatmap = {}
@@ -265,30 +272,54 @@ async def conversion_funnel(
     days: int = 90,
     db=Depends(get_db),
 ):
-    """Get lead conversion funnel metrics."""
+    """Get lead-to-funded conversion funnel using actual loan pipeline stages.
+
+    Funnel: Lead → Contacted → Qualified → Application → Approved → Closed(Funded)
+    """
     from sqlalchemy import text
     params = {"days": days}
-    org_filter = ""
     if organization_id:
-        org_filter = "AND l.organization_id = :org_id"
         params["org_id"] = organization_id
 
     try:
-        result = db.execute(text(f"""
+        # Lead-side funnel (from leads table)
+        lead_sql = """
             SELECT
                 COUNT(*) as total_leads,
                 COUNT(CASE WHEN l.last_contact IS NOT NULL THEN 1 END) as contacted,
-                COUNT(CASE WHEN l.ai_score >= 60 THEN 1 END) as qualified,
-                COUNT(CASE WHEN l.loan_number IS NOT NULL THEN 1 END) as converted
+                COUNT(CASE WHEN l.stage IN ('Qualified', 'Application', 'Pre-Approved', 'Converted') THEN 1 END) as qualified,
+                COUNT(CASE WHEN l.loan_number IS NOT NULL THEN 1 END) as has_loan
             FROM leads l
             WHERE l.created_at >= CURRENT_DATE - :days
-            {org_filter}
-        """), params).mappings().first()
+        """
+        if organization_id:
+            lead_sql += " AND l.organization_id = :org_id"
+        lead_result = db.execute(text(lead_sql), params).mappings().first()
 
-        total = result["total_leads"] or 0
-        contacted = result["contacted"] or 0
-        qualified = result["qualified"] or 0
-        converted = result["converted"] or 0
+        # Loan-side funnel (actual pipeline stages from loans table)
+        loan_sql = """
+            SELECT
+                COUNT(*) as total_loans,
+                COUNT(CASE WHEN lo.application_date IS NOT NULL THEN 1 END) as applications,
+                COUNT(CASE WHEN lo.stage IN ('SUBMITTED','UNDERWRITING','UW_RECEIVED','CONDITIONAL_APPROVAL','APPROVED','CTC','CLEAR_TO_CLOSE','CLOSING','DOCS','DOCS_OUT','FUNDED') THEN 1 END) as submitted,
+                COUNT(CASE WHEN lo.stage IN ('APPROVED','CTC','CLEAR_TO_CLOSE','CLOSING','DOCS','DOCS_OUT','FUNDED') THEN 1 END) as approved,
+                COUNT(CASE WHEN lo.stage IN ('CTC','CLEAR_TO_CLOSE','CLOSING','DOCS','DOCS_OUT','FUNDED') THEN 1 END) as clear_to_close,
+                COUNT(CASE WHEN lo.stage = 'FUNDED' THEN 1 END) as funded
+            FROM loans lo
+            WHERE lo.created_at >= CURRENT_DATE - :days
+        """
+        if organization_id:
+            loan_sql += " AND lo.organization_id = :org_id"
+        loan_result = db.execute(text(loan_sql), params).mappings().first()
+
+        total = lead_result["total_leads"] or 0
+        contacted = lead_result["contacted"] or 0
+        qualified = lead_result["qualified"] or 0
+        applications = loan_result["applications"] or 0
+        submitted = loan_result["submitted"] or 0
+        approved = loan_result["approved"] or 0
+        ctc = loan_result["clear_to_close"] or 0
+        funded = loan_result["funded"] or 0
 
         def pct(num, denom):
             return round((num / denom) * 100, 1) if denom > 0 else 0
@@ -299,13 +330,22 @@ async def conversion_funnel(
                 "total_leads": total,
                 "contacted": contacted,
                 "qualified": qualified,
-                "converted": converted,
+                "applications": applications,
+                "submitted": submitted,
+                "approved": approved,
+                "clear_to_close": ctc,
+                "funded": funded,
             },
             "rates": {
                 "contact_rate": pct(contacted, total),
                 "qualification_rate": pct(qualified, contacted),
-                "conversion_rate": pct(converted, qualified),
-                "overall": pct(converted, total),
+                "app_rate": pct(applications, qualified),
+                "submit_rate": pct(submitted, applications),
+                "approval_rate": pct(approved, submitted),
+                "ctc_rate": pct(ctc, approved),
+                "fund_rate": pct(funded, ctc),
+                "overall_pull_through": pct(funded, applications),
+                "lead_to_fund": pct(funded, total),
             },
         }
     except Exception as e:

@@ -76,16 +76,14 @@ async def get_lead_context_for_ai(
     if org_id:
         activity_org_filter = "AND organization_id = :org_id"
         activity_params["org_id"] = org_id
-    activities = db.execute(
-        text(f"""
+    sql = """
             SELECT type, content, created_at
             FROM activities
-            WHERE lead_id = :lead_id {activity_org_filter}
+            WHERE lead_id = :lead_id """ + activity_org_filter + """
             ORDER BY created_at DESC
             LIMIT 20
-        """),
-        activity_params
-    ).fetchall()
+        """
+    activities = db.execute(text(sql), activity_params).fetchall()
 
     # Get tasks for this lead (tenant-scoped via owner_id)
     tasks = db.execute(
@@ -163,16 +161,14 @@ async def get_loan_context_for_ai(
     if org_id:
         activity_org_filter = "AND organization_id = :org_id"
         activity_params["org_id"] = org_id
-    activities = db.execute(
-        text(f"""
+    sql = """
             SELECT type, content, created_at
             FROM activities
-            WHERE loan_id = :loan_id {activity_org_filter}
+            WHERE loan_id = :loan_id """ + activity_org_filter + """
             ORDER BY created_at DESC
             LIMIT 20
-        """),
-        activity_params
-    ).fetchall()
+        """
+    activities = db.execute(text(sql), activity_params).fetchall()
 
     # Get loan tasks
     tasks = db.execute(
@@ -274,16 +270,14 @@ async def get_client_context_for_ai(
     if org_id:
         activity_org_filter = "AND organization_id = :org_id"
         activity_params["org_id"] = org_id
-    activities = db.execute(
-        text(f"""
+    sql = """
             SELECT type, content, created_at
             FROM activities
-            WHERE mum_client_id = :client_id {activity_org_filter}
+            WHERE mum_client_id = :client_id """ + activity_org_filter + """
             ORDER BY created_at DESC
             LIMIT 20
-        """),
-        activity_params
-    ).fetchall()
+        """
+    activities = db.execute(text(sql), activity_params).fetchall()
 
     # Get tasks for this client
     tasks = db.execute(
@@ -362,52 +356,43 @@ async def get_ai_context_summary(
         base_params["org_id"] = org_id
 
     # Count leads by stage
-    lead_counts = db.execute(
-        text(f"""
+    sql = """
             SELECT stage, COUNT(*) as count
             FROM leads
-            WHERE owner_id = :user_id {org_filter}
+            WHERE owner_id = :user_id """ + org_filter + """
             GROUP BY stage
-        """),
-        base_params
-    ).fetchall()
+        """
+    lead_counts = db.execute(text(sql), base_params).fetchall()
 
     # Count active loans by stage
-    loan_counts = db.execute(
-        text(f"""
+    sql = """
             SELECT stage, COUNT(*) as count
             FROM loans
-            WHERE loan_officer_id = :user_id {org_filter}
+            WHERE loan_officer_id = :user_id """ + org_filter + """
             GROUP BY stage
-        """),
-        base_params
-    ).fetchall()
+        """
+    loan_counts = db.execute(text(sql), base_params).fetchall()
 
     # Get pending tasks count (ai_tasks table may not exist)
     try:
-        pending_tasks = db.execute(
-            text(f"""
+        sql = """
                 SELECT COUNT(*) FROM ai_tasks
-                WHERE user_id = :user_id {org_filter} AND status != 'completed'
-            """),
-            base_params
-        ).scalar()
+                WHERE user_id = :user_id """ + org_filter + """ AND status != 'completed'
+            """
+        pending_tasks = db.execute(text(sql), base_params).scalar()
     except Exception as e:
         logger.error(f"Error fetching pending tasks in get_ai_context_summary: {e}")
         pending_tasks = 0
 
     # Get MUM client count and total equity
     try:
-        mum_stats = db.execute(
-            text(f"""
+        sql = """
                 SELECT
                     COUNT(*) as total_clients,
                     SUM(COALESCE(loan_balance, 0)) as total_balance
                 FROM mum_clients
-                WHERE user_id = :user_id {org_filter}
-            """),
-            base_params
-        ).fetchone()
+                WHERE user_id = :user_id """ + org_filter
+        mum_stats = db.execute(text(sql), base_params).fetchone()
     except Exception as e:
         logger.error(f"Error fetching MUM stats in get_ai_context_summary: {e}")
         mum_stats = (0, 0)
@@ -510,18 +495,15 @@ async def get_user_profile_context_for_ai(
 
     # Get task stats
     try:
-        task_stats = db.execute(
-            text(f"""
+        sql = """
                 SELECT
                     COUNT(*) FILTER (WHERE status = 'pending') as pending,
                     COUNT(*) FILTER (WHERE status = 'completed') as completed,
                     COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
                     COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') as overdue
                 FROM tasks
-                WHERE owner_id = :user_id {org_filter}
-            """),
-            base_params
-        ).fetchone()
+                WHERE owner_id = :user_id """ + org_filter
+        task_stats = db.execute(text(sql), base_params).fetchone()
     except Exception as e:
         logger.error(f"Error fetching task stats in get_user_profile_context_for_ai: {e}")
         db.rollback()
@@ -529,16 +511,13 @@ async def get_user_profile_context_for_ai(
 
     # Get lead stats
     try:
-        lead_stats = db.execute(
-            text(f"""
+        sql = """
                 SELECT
                     COUNT(*) as total,
                     COUNT(*) FILTER (WHERE created_at > CURRENT_DATE - INTERVAL '30 days') as new_this_month
                 FROM leads
-                WHERE owner_id = :user_id {org_filter}
-            """),
-            base_params
-        ).fetchone()
+                WHERE owner_id = :user_id """ + org_filter
+        lead_stats = db.execute(text(sql), base_params).fetchone()
     except Exception as e:
         logger.error(f"Error fetching lead stats in get_user_profile_context_for_ai: {e}")
         db.rollback()
@@ -546,17 +525,14 @@ async def get_user_profile_context_for_ai(
 
     # Get loan stats
     try:
-        loan_stats = db.execute(
-            text(f"""
+        sql = """
                 SELECT
                     COUNT(*) as total,
                     COALESCE(SUM(amount), 0) as total_volume,
                     COUNT(*) FILTER (WHERE stage::text LIKE '%FUNDED%' OR stage::text LIKE '%Funded%') as funded_count
                 FROM loans
-                WHERE loan_officer_id = :user_id {org_filter}
-            """),
-            base_params
-        ).fetchone()
+                WHERE loan_officer_id = :user_id """ + org_filter
+        loan_stats = db.execute(text(sql), base_params).fetchone()
     except Exception as e:
         logger.error(f"Error fetching loan stats in get_user_profile_context_for_ai: {e}")
         db.rollback()
@@ -564,13 +540,11 @@ async def get_user_profile_context_for_ai(
 
     # Get recent activities count
     try:
-        recent_activities = db.execute(
-            text(f"""
+        sql = """
                 SELECT COUNT(*) FROM activities
-                WHERE user_id = :user_id {org_filter} AND created_at > CURRENT_DATE - INTERVAL '7 days'
-            """),
-            base_params
-        ).scalar()
+                WHERE user_id = :user_id """ + org_filter + """ AND created_at > CURRENT_DATE - INTERVAL '7 days'
+            """
+        recent_activities = db.execute(text(sql), base_params).scalar()
     except Exception as e:
         logger.error(f"Error fetching recent activities in get_user_profile_context_for_ai: {e}")
         db.rollback()
@@ -625,28 +599,23 @@ async def get_referral_partner_context_for_ai(
     if org_id:
         lead_org_filter = "AND organization_id = :org_id"
         lead_params["org_id"] = org_id
-    lead_stats = db.execute(
-        text(f"""
+    sql = """
             SELECT
                 COUNT(*) as total_leads,
                 COUNT(*) FILTER (WHERE stage IN ('Application', 'PRE_APPROVED', 'CLOSED')) as converted
             FROM leads
-            WHERE referral_partner_id = :partner_id AND owner_id = :user_id {lead_org_filter}
-        """),
-        lead_params
-    ).fetchone()
+            WHERE referral_partner_id = :partner_id AND owner_id = :user_id """ + lead_org_filter
+    lead_stats = db.execute(text(sql), lead_params).fetchone()
 
     # Get recent leads from this partner
-    recent_leads = db.execute(
-        text(f"""
+    sql = """
             SELECT id, name, stage, created_at
             FROM leads
-            WHERE referral_partner_id = :partner_id AND owner_id = :user_id {lead_org_filter}
+            WHERE referral_partner_id = :partner_id AND owner_id = :user_id """ + lead_org_filter + """
             ORDER BY created_at DESC
             LIMIT 5
-        """),
-        lead_params
-    ).fetchall()
+        """
+    recent_leads = db.execute(text(sql), lead_params).fetchall()
 
     return {
         "partner_id": partner.id,
@@ -867,72 +836,62 @@ async def get_pipeline_context_for_ai(
         base_params["org_id"] = org_id
 
     # Lead pipeline by stage with values
-    lead_pipeline = db.execute(
-        text(f"""
+    sql = """
             SELECT
                 stage,
                 COUNT(*) as count,
                 COALESCE(SUM(preapproval_amount), 0) as total_value,
                 AVG(ai_score) as avg_score
             FROM leads
-            WHERE owner_id = :user_id {org_filter}
+            WHERE owner_id = :user_id """ + org_filter + """
             GROUP BY stage
             ORDER BY count DESC
-        """),
-        base_params
-    ).fetchall()
+        """
+    lead_pipeline = db.execute(text(sql), base_params).fetchall()
 
     # Loan pipeline by stage
-    loan_pipeline = db.execute(
-        text(f"""
+    sql = """
             SELECT
                 stage,
                 COUNT(*) as count,
                 COALESCE(SUM(amount), 0) as total_value,
                 AVG(days_in_stage) as avg_days
             FROM loans
-            WHERE loan_officer_id = :user_id {org_filter}
+            WHERE loan_officer_id = :user_id """ + org_filter + """
             GROUP BY stage
             ORDER BY count DESC
-        """),
-        base_params
-    ).fetchall()
+        """
+    loan_pipeline = db.execute(text(sql), base_params).fetchall()
 
     # At-risk loans (high days in stage)
-    at_risk_loans = db.execute(
-        text(f"""
+    sql = """
             SELECT id, loan_number, borrower_name, stage, days_in_stage, amount
             FROM loans
-            WHERE loan_officer_id = :user_id {org_filter} AND days_in_stage > 7
+            WHERE loan_officer_id = :user_id """ + org_filter + """ AND days_in_stage > 7
             ORDER BY days_in_stage DESC
             LIMIT 5
-        """),
-        base_params
-    ).fetchall()
+        """
+    at_risk_loans = db.execute(text(sql), base_params).fetchall()
 
     # Hot leads (high AI score)
-    hot_leads = db.execute(
-        text(f"""
+    sql = """
             SELECT id, name, stage, ai_score, preapproval_amount, last_contact
             FROM leads
-            WHERE owner_id = :user_id {org_filter} AND ai_score >= 70
+            WHERE owner_id = :user_id """ + org_filter + """ AND ai_score >= 70
             ORDER BY ai_score DESC
             LIMIT 5
-        """),
-        base_params
-    ).fetchall()
+        """
+    hot_leads = db.execute(text(sql), base_params).fetchall()
 
     # Closing this week
-    closing_soon = db.execute(
-        text(f"""
+    sql = """
             SELECT id, loan_number, borrower_name, amount, closing_date, stage
             FROM loans
-            WHERE loan_officer_id = :user_id {org_filter}
+            WHERE loan_officer_id = :user_id """ + org_filter + """
             AND closing_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days'
             ORDER BY closing_date ASC
-        """),
-        base_params
-    ).fetchall()
+        """
+    closing_soon = db.execute(text(sql), base_params).fetchall()
 
     return {
         "lead_pipeline": [
@@ -1004,19 +963,17 @@ async def get_activity_feed_context_for_ai(
         org_filter = "AND a.organization_id = :org_id"
         activity_params["org_id"] = org_id
 
-    activities = db.execute(
-        text(f"""
+    sql = """
             SELECT a.id, a.type, a.content, a.created_at, a.lead_id, a.loan_id,
                    l.name as lead_name, lo.loan_number, lo.borrower_name
             FROM activities a
             LEFT JOIN leads l ON a.lead_id = l.id
             LEFT JOIN loans lo ON a.loan_id = lo.id
-            WHERE a.user_id = :user_id {org_filter}
+            WHERE a.user_id = :user_id """ + org_filter + """
             ORDER BY a.created_at DESC
             LIMIT :limit
-        """),
-        activity_params
-    ).fetchall()
+        """
+    activities = db.execute(text(sql), activity_params).fetchall()
 
     return {
         "activities": [
@@ -1062,16 +1019,14 @@ async def get_mum_client_context_for_ai(
     if org_id:
         activity_org_filter = "AND organization_id = :org_id"
         activity_params["org_id"] = org_id
-    activities = db.execute(
-        text(f"""
+    sql = """
             SELECT type, content, created_at
             FROM activities
-            WHERE mum_client_id = :client_id {activity_org_filter}
+            WHERE mum_client_id = :client_id """ + activity_org_filter + """
             ORDER BY created_at DESC
             LIMIT 10
-        """),
-        activity_params
-    ).fetchall()
+        """
+    activities = db.execute(text(sql), activity_params).fetchall()
 
     return {
         "client_id": client.id,
@@ -1149,18 +1104,15 @@ async def get_all_tasks_context_for_ai(
     if org_id:
         stats_org_filter = "AND organization_id = :org_id"
         stats_params["org_id"] = org_id
-    task_stats = db.execute(
-        text(f"""
+    sql = """
             SELECT
                 COUNT(*) FILTER (WHERE status = 'pending') as pending,
                 COUNT(*) FILTER (WHERE status = 'completed') as completed,
                 COUNT(*) FILTER (WHERE status = 'in_progress') as in_progress,
                 COUNT(*) FILTER (WHERE due_date < CURRENT_DATE AND status != 'completed') as overdue
             FROM tasks
-            WHERE owner_id = :user_id {stats_org_filter}
-        """),
-        stats_params
-    ).fetchone()
+            WHERE owner_id = :user_id """ + stats_org_filter
+    task_stats = db.execute(text(sql), stats_params).fetchone()
 
     return {
         "tasks": [

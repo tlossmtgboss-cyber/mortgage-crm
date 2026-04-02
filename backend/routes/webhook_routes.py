@@ -545,10 +545,11 @@ async def _handle_document_received(payload: Dict, db: Session) -> Dict:
     field = field_map.get(document_type.lower())
     if field:
         try:
-            db.execute(text(f"""
-                UPDATE loans SET {field} = NOW(), updated_at = NOW()
-                WHERE id = :loan_id AND {field} IS NULL
-            """), {"loan_id": loan_id})
+            update_sql = (
+                "UPDATE loans SET " + field + " = NOW(), updated_at = NOW()"
+                " WHERE id = :loan_id AND " + field + " IS NULL"
+            )
+            db.execute(text(update_sql), {"loan_id": loan_id})
             db.commit()
         except Exception as e:
             logger.warning(f"Could not update loan document field {field}: {e}")

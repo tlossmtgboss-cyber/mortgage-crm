@@ -173,7 +173,7 @@ class ProductionPredictorService:
                     entity_filter = ""  # Company-wide
 
                 # Query monthly aggregations - use correct column names (amount, stage, funded_date)
-                result = self.db.execute(text(f"""
+                sql = """
                     SELECT
                         DATE_TRUNC('month', l.funded_date) as month,
                         COUNT(*) as units,
@@ -182,10 +182,14 @@ class ProductionPredictorService:
                     LEFT JOIN users u ON l.loan_officer_id = u.id
                     WHERE l.funded_date >= CURRENT_DATE - INTERVAL ':months months'
                         AND UPPER(l.stage::text) = 'FUNDED'
-                        {entity_filter}
-                    GROUP BY DATE_TRUNC('month', l.funded_date)
+                """
+                if entity_filter:
+                    sql += "                        " + entity_filter + "\n"
+                sql += """                    GROUP BY DATE_TRUNC('month', l.funded_date)
                     ORDER BY month ASC
-                """.replace(':months', str(months))), {"entity_id": entity_id})
+                """
+                sql = sql.replace(':months', str(months))
+                result = self.db.execute(text(sql), {"entity_id": entity_id})
 
                 rows = result.fetchall()
 

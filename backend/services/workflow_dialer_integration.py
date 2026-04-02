@@ -75,29 +75,27 @@ class WorkflowDialerIntegration:
 
         where_clause = " AND ".join(filters)
 
-        results = self.db.execute(text(f"""
-            SELECT
-                wti.id as workflow_task_id,
-                wti.task_name,
-                wti.task_type,
-                wti.lead_id,
-                wti.loan_id,
-                wti.assigned_user_id,
-                wti.scheduled_date,
-                wti.task_group_key,
-                COALESCE(l.phone, lo.borrower_phone) as contact_phone,
-                COALESCE(
-                    CONCAT(l.first_name, ' ', l.last_name),
-                    CONCAT(lo.borrower_first_name, ' ', lo.borrower_last_name)
-                ) as contact_name
-            FROM workflow_task_instances wti
-            LEFT JOIN leads l ON l.id = wti.lead_id
-            LEFT JOIN loans lo ON lo.id = wti.loan_id
-            WHERE {where_clause}
-            AND COALESCE(l.phone, lo.borrower_phone) IS NOT NULL
-            ORDER BY wti.scheduled_date ASC, wti.id ASC
-            LIMIT :limit
-        """), params).fetchall()
+        dialer_query = (
+            "SELECT"
+            " wti.id as workflow_task_id,"
+            " wti.task_name, wti.task_type,"
+            " wti.lead_id, wti.loan_id,"
+            " wti.assigned_user_id, wti.scheduled_date,"
+            " wti.task_group_key,"
+            " COALESCE(l.phone, lo.borrower_phone) as contact_phone,"
+            " COALESCE("
+            "     CONCAT(l.first_name, ' ', l.last_name),"
+            "     CONCAT(lo.borrower_first_name, ' ', lo.borrower_last_name)"
+            " ) as contact_name"
+            " FROM workflow_task_instances wti"
+            " LEFT JOIN leads l ON l.id = wti.lead_id"
+            " LEFT JOIN loans lo ON lo.id = wti.loan_id"
+            " WHERE " + where_clause
+            + " AND COALESCE(l.phone, lo.borrower_phone) IS NOT NULL"
+            " ORDER BY wti.scheduled_date ASC, wti.id ASC"
+            " LIMIT :limit"
+        )
+        results = self.db.execute(text(dialer_query), params).fetchall()
 
         return [
             {
@@ -451,18 +449,19 @@ class WorkflowDialerIntegration:
         due_filter = "AND wti.scheduled_date <= NOW()" if include_due_only else ""
 
         # Get summary counts
-        summary = self.db.execute(text(f"""
-            SELECT
-                COUNT(*) as total,
-                COUNT(CASE WHEN wti.task_type = 'phone' THEN 1 END) as phone,
-                COUNT(CASE WHEN wti.task_type IN ('phone_am', 'phone_pm') THEN 1 END) as phone_scheduled,
-                COUNT(CASE WHEN wti.task_type = 'dialer' THEN 1 END) as dialer
-            FROM workflow_task_instances wti
-            WHERE wti.assigned_user_id = :user_id
-            AND wti.task_type IN ('phone', 'phone_am', 'phone_pm', 'dialer')
-            AND wti.status IN ('scheduled', 'pending')
-            {due_filter}
-        """), {"user_id": user_id}).fetchone()
+        summary_query = (
+            "SELECT"
+            " COUNT(*) as total,"
+            " COUNT(CASE WHEN wti.task_type = 'phone' THEN 1 END) as phone,"
+            " COUNT(CASE WHEN wti.task_type IN ('phone_am', 'phone_pm') THEN 1 END) as phone_scheduled,"
+            " COUNT(CASE WHEN wti.task_type = 'dialer' THEN 1 END) as dialer"
+            " FROM workflow_task_instances wti"
+            " WHERE wti.assigned_user_id = :user_id"
+            " AND wti.task_type IN ('phone', 'phone_am', 'phone_pm', 'dialer')"
+            " AND wti.status IN ('scheduled', 'pending')"
+            " " + due_filter
+        )
+        summary = self.db.execute(text(summary_query), {"user_id": user_id}).fetchone()
 
         # Get tasks
         tasks = self.get_phone_tasks_for_dialer(user_id=user_id, limit=100)

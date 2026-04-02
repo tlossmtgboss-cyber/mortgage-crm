@@ -211,10 +211,11 @@ def register_legal_document_routes(app, get_db, get_current_user, **kwargs):
         if existing[1]:
             updates.append("is_published = false")
 
-        db.execute(text(f"""
-            UPDATE tenant_legal_documents SET {', '.join(updates)}
-            WHERE id = :id AND organization_id = :org_id
-        """), params)
+        sql = (
+            "UPDATE tenant_legal_documents SET " + ", ".join(updates)
+            + " WHERE id = :id AND organization_id = :org_id"
+        )
+        db.execute(text(sql), params)
         db.commit()
 
         return {"id": doc_id, "message": "Legal document updated"}

@@ -9,7 +9,7 @@ import json
 import asyncio
 import logging
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, HTTPException, Depends, Query
 from pydantic import BaseModel, Field

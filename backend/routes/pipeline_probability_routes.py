@@ -6,7 +6,7 @@ Part of the Advanced Analytics module.
 """
 
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field

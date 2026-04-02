@@ -55,10 +55,10 @@ class RecruitPortalService:
             params = {"id": candidate_id}
             if organization_id:
                 params["org_id"] = organization_id
-            result = conn.execute(
-                text(f"SELECT first_name, last_name FROM mm_candidates WHERE id = :id AND is_active = true {org_filter}"),
-                params
-            )
+            sql = "SELECT first_name, last_name FROM mm_candidates WHERE id = :id AND is_active = true"
+            if org_filter:
+                sql += " " + org_filter
+            result = conn.execute(text(sql), params)
             candidate = result.fetchone()
 
             if not candidate:
@@ -223,19 +223,20 @@ class RecruitPortalService:
             params["org_id"] = organization_id
 
         with SessionLocal() as conn:
-            result = conn.execute(
-                text(f"""
+            sql = """
                     SELECT id, title, content, media_url, category,
                            is_featured, published_at
                     FROM recruit_company_updates
                     WHERE published_at IS NOT NULL
-                    {category_filter}
-                    {org_filter}
-                    ORDER BY is_featured DESC, published_at DESC
+            """
+            if category_filter:
+                sql += "                    " + category_filter + "\n"
+            if org_filter:
+                sql += "                    " + org_filter + "\n"
+            sql += """                    ORDER BY is_featured DESC, published_at DESC
                     LIMIT :limit
-                """),
-                params
-            )
+            """
+            result = conn.execute(text(sql), params)
             rows = result.fetchall()
 
         return [
@@ -706,18 +707,20 @@ Candidate's current status: {candidate.status}
             if organization_id:
                 org_filter = "AND c.organization_id = :org_id"
                 params["org_id"] = organization_id
-            result = conn.execute(
-                text(f"""
+            sql = """
                     SELECT w.id, w.slug, w.is_active, w.created_at,
                            c.first_name, c.last_name, c.email
                     FROM recruit_portal_workspaces w
                     JOIN mm_candidates c ON c.id = w.candidate_id
-                    WHERE 1=1 {org_filter}
+                    WHERE 1=1
+            """
+            if org_filter:
+                sql += " " + org_filter
+            sql += """
                     ORDER BY w.created_at DESC
                     LIMIT :limit OFFSET :offset
-                """),
-                params
-            )
+            """
+            result = conn.execute(text(sql), params)
             return [dict(row._mapping) for row in result.fetchall()]
 
     def create_portal_token(self, workspace_id: int, scope: str = "full",
@@ -760,10 +763,10 @@ Candidate's current status: {candidate.status}
             if organization_id:
                 org_filter = "AND organization_id = :org_id"
                 params["org_id"] = organization_id
-            result = conn.execute(
-                text(f"DELETE FROM recruit_company_updates WHERE id = :id {org_filter}"),
-                params
-            )
+            sql = "DELETE FROM recruit_company_updates WHERE id = :id"
+            if org_filter:
+                sql += " " + org_filter
+            result = conn.execute(text(sql), params)
             conn.commit()
             return result.rowcount > 0
 

@@ -328,7 +328,7 @@ class CommunicationAnalyticsService:
             params["loan_type"] = loan_type
 
         # Get time-to-upload for each fulfilled request
-        rows = self.db.execute(sa_text(f"""
+        query = f"""
             SELECT
                 sdr.id AS request_id,
                 sdr.doc_type,
@@ -348,7 +348,8 @@ class CommunicationAnalyticsService:
               {lo_filter}
               {lt_filter}
             GROUP BY sdr.id, sdr.doc_type, sdr.created_at
-        """), params).fetchall()
+        """
+        rows = self.db.execute(sa_text(query), params).fetchall()
 
         total_requests = len(rows)
         fulfilled = [r for r in rows if r.first_upload_at is not None]
@@ -430,7 +431,7 @@ class CommunicationAnalyticsService:
             params["loan_id"] = loan_id
 
         # -- Portal engagement (portal notifications opened / sent) --
-        portal_stats = self.db.execute(sa_text(f"""
+        query = f"""
             SELECT
                 COUNT(*) FILTER (WHERE fe.event_type = 'portal_notification') AS sent,
                 COUNT(*) FILTER (
@@ -442,7 +443,8 @@ class CommunicationAnalyticsService:
             WHERE fc.organization_id = :org_id
               AND fc.borrower_id = :borrower_id
               {loan_filter}
-        """), params).fetchone()
+        """
+        portal_stats = self.db.execute(sa_text(query), params).fetchone()
 
         portal_sent = portal_stats.sent or 0 if portal_stats else 0
         portal_opened = portal_stats.opened or 0 if portal_stats else 0
@@ -452,7 +454,7 @@ class CommunicationAnalyticsService:
         portal_login_score = min(25, int(portal_rate * 100 * 25 / 80))
 
         # -- Upload promptness vs SLA --
-        promptness_rows = self.db.execute(sa_text(f"""
+        query = f"""
             SELECT
                 sdr.sla_due_at,
                 sdr.completed_at
@@ -467,7 +469,8 @@ class CommunicationAnalyticsService:
                   WHERE borrower_id = :borrower_id
               )
               {loan_filter.replace("fc.loan_id", "l.id") if loan_filter else ""}
-        """), params).fetchall()
+        """
+        promptness_rows = self.db.execute(sa_text(query), params).fetchall()
 
         on_time_count = 0
         total_completed = len(promptness_rows)
@@ -482,7 +485,7 @@ class CommunicationAnalyticsService:
         upload_promptness_score = min(25, int(on_time_rate * 25))
 
         # -- Response time (borrower_responded events) --
-        response_rows = self.db.execute(sa_text(f"""
+        query = f"""
             SELECT
                 AVG(
                     EXTRACT(EPOCH FROM (fe_resp.created_at - fe_out.created_at)) / 3600.0
@@ -502,7 +505,8 @@ class CommunicationAnalyticsService:
               AND fc.borrower_id = :borrower_id
               AND fe_resp.event_type IN ('borrower_responded', 'document_uploaded')
               {loan_filter}
-        """), params).fetchone()
+        """
+        response_rows = self.db.execute(sa_text(query), params).fetchone()
 
         avg_resp_hours = float(response_rows.avg_response_hours or 168) if response_rows else 168.0
         # Score: 25 if <4h, 20 if <12h, 15 if <24h, 10 if <48h, 5 if <96h, 0 beyond
@@ -520,7 +524,7 @@ class CommunicationAnalyticsService:
             response_time_score = 0
 
         # -- Communication engagement (total interactions) --
-        comm_stats = self.db.execute(sa_text(f"""
+        query = f"""
             SELECT
                 COUNT(*) FILTER (
                     WHERE fe.event_type IN ('borrower_responded', 'document_uploaded')
@@ -534,7 +538,8 @@ class CommunicationAnalyticsService:
             WHERE fc.organization_id = :org_id
               AND fc.borrower_id = :borrower_id
               {loan_filter}
-        """), params).fetchone()
+        """
+        comm_stats = self.db.execute(sa_text(query), params).fetchone()
 
         borrower_actions = comm_stats.borrower_actions or 0 if comm_stats else 0
         total_events = comm_stats.total_events or 0 if comm_stats else 0
@@ -720,7 +725,7 @@ class CommunicationAnalyticsService:
             params["lo_id"] = lo_id
 
         # Documents collected (accepted in period)
-        doc_stats = self.db.execute(sa_text(f"""
+        query = f"""
             SELECT
                 COUNT(*) AS docs_collected,
                 COUNT(*) FILTER (
@@ -740,14 +745,15 @@ class CommunicationAnalyticsService:
               AND sd.reviewed_at >= :start_date
               AND sd.reviewed_at <= :end_date + INTERVAL '1 day'
               {lo_filter}
-        """), params).fetchone()
+        """
+        doc_stats = self.db.execute(sa_text(query), params).fetchone()
 
         docs_collected = doc_stats.docs_collected or 0 if doc_stats else 0
         first_time_accepts = doc_stats.first_time_accepts or 0 if doc_stats else 0
         unique_requests = doc_stats.unique_requests or 0 if doc_stats else 0
 
         # Average touches per document (events per campaign that resulted in upload)
-        touches_result = self.db.execute(sa_text(f"""
+        query = f"""
             SELECT
                 AVG(event_count) AS avg_touches
             FROM (
@@ -764,12 +770,13 @@ class CommunicationAnalyticsService:
                   {lo_filter}
                 GROUP BY fc.id
             ) sub
-        """), params).fetchone()
+        """
+        touches_result = self.db.execute(sa_text(query), params).fetchone()
 
         avg_touches = float(touches_result.avg_touches or 0) if touches_result else 0.0
 
         # Condition clearance speed (time from request creation to acceptance)
-        clearance_result = self.db.execute(sa_text(f"""
+        query = f"""
             SELECT
                 AVG(
                     EXTRACT(EPOCH FROM (sdr.completed_at - sdr.created_at)) / 3600.0
@@ -782,12 +789,13 @@ class CommunicationAnalyticsService:
               AND sdr.completed_at >= :start_date
               AND sdr.completed_at <= :end_date + INTERVAL '1 day'
               {lo_filter}
-        """), params).fetchone()
+        """
+        clearance_result = self.db.execute(sa_text(query), params).fetchone()
 
         avg_clearance_hours = float(clearance_result.avg_clearance_hours or 0) if clearance_result else 0.0
 
         # Campaign counts
-        campaign_stats = self.db.execute(sa_text(f"""
+        query = f"""
             SELECT
                 COUNT(*) FILTER (WHERE fc.status = 'completed') AS completed,
                 COUNT(*) FILTER (WHERE fc.status = 'active') AS active
@@ -797,7 +805,8 @@ class CommunicationAnalyticsService:
               AND fc.created_at >= :start_date
               AND fc.created_at <= :end_date + INTERVAL '1 day'
               {lo_filter}
-        """), params).fetchone()
+        """
+        campaign_stats = self.db.execute(sa_text(query), params).fetchone()
 
         span_days = dr.span_days
 
@@ -961,7 +970,7 @@ class CommunicationAnalyticsService:
             trunc = "week"
 
         # Communication volume by period
-        volume_rows = self.db.execute(sa_text(f"""
+        query = f"""
             SELECT
                 DATE_TRUNC(:trunc, fe.created_at)::date AS period,
                 COUNT(*) FILTER (
@@ -978,7 +987,8 @@ class CommunicationAnalyticsService:
               AND fe.created_at <= :end_date + INTERVAL '1 day'
             GROUP BY DATE_TRUNC(:trunc, fe.created_at)::date
             ORDER BY period
-        """), {**params, "trunc": trunc}).fetchall()
+        """
+        volume_rows = self.db.execute(sa_text(query), {**params, "trunc": trunc}).fetchall()
 
         trends = []
         for i, row in enumerate(volume_rows):
@@ -1063,7 +1073,7 @@ class CommunicationAnalyticsService:
         else:
             return {"error": f"Invalid cohort_type: {cohort_type}"}
 
-        rows = self.db.execute(sa_text(f"""
+        query = f"""
             SELECT
                 {group_col} AS cohort_id,
                 {name_select},
@@ -1094,7 +1104,8 @@ class CommunicationAnalyticsService:
             GROUP BY {group_col}, {name_select.split(' AS ')[0]}
             ORDER BY COUNT(DISTINCT sdr.id) FILTER (WHERE sdr.status = 'ACCEPTED') DESC
             LIMIT :limit
-        """), params).fetchall()
+        """
+        rows = self.db.execute(sa_text(query), params).fetchall()
 
         cohorts = []
         for row in rows:

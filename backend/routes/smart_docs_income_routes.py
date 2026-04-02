@@ -1087,36 +1087,38 @@ async def get_income_stats(
         params["org_id"] = org_id
 
     # Aggregate income metrics
+    summary_query = (
+        "SELECT"
+        " COUNT(*) AS total_calculations,"
+        " COUNT(CASE WHEN ic.status = 'approved' THEN 1 END) AS approved_count,"
+        " COUNT(CASE WHEN ic.status = 'rejected' THEN 1 END) AS rejected_count,"
+        " COUNT(CASE WHEN ic.status = 'completed' THEN 1 END) AS completed_count,"
+        " COUNT(CASE WHEN ic.status = 'needs_review' THEN 1 END) AS needs_review_count,"
+        " AVG(ic.total_qualifying_monthly_income) AS avg_qualifying_monthly,"
+        " AVG(ic.total_qualifying_annual_income) AS avg_qualifying_annual,"
+        " AVG(ic.dti_front_end) AS avg_dti_front_end,"
+        " AVG(ic.dti_back_end) AS avg_dti_back_end,"
+        " AVG(ic.ai_confidence_score) AS avg_confidence"
+        " FROM income_calculations ic"
+        " WHERE 1=1 " + org_filter
+    )
     summary = db.execute(
-        sa_text(f"""
-            SELECT
-                COUNT(*) AS total_calculations,
-                COUNT(CASE WHEN ic.status = 'approved' THEN 1 END) AS approved_count,
-                COUNT(CASE WHEN ic.status = 'rejected' THEN 1 END) AS rejected_count,
-                COUNT(CASE WHEN ic.status = 'completed' THEN 1 END) AS completed_count,
-                COUNT(CASE WHEN ic.status = 'needs_review' THEN 1 END) AS needs_review_count,
-                AVG(ic.total_qualifying_monthly_income) AS avg_qualifying_monthly,
-                AVG(ic.total_qualifying_annual_income) AS avg_qualifying_annual,
-                AVG(ic.dti_front_end) AS avg_dti_front_end,
-                AVG(ic.dti_back_end) AS avg_dti_back_end,
-                AVG(ic.ai_confidence_score) AS avg_confidence
-            FROM income_calculations ic
-            WHERE 1=1 {org_filter}
-        """),
+        sa_text(summary_query),
         params,
     ).first()
 
     # DTI distribution buckets
+    dti_query = (
+        "SELECT"
+        " COUNT(CASE WHEN ic.dti_back_end < 36 THEN 1 END) AS under_36,"
+        " COUNT(CASE WHEN ic.dti_back_end >= 36 AND ic.dti_back_end < 43 THEN 1 END) AS range_36_43,"
+        " COUNT(CASE WHEN ic.dti_back_end >= 43 AND ic.dti_back_end < 50 THEN 1 END) AS range_43_50,"
+        " COUNT(CASE WHEN ic.dti_back_end >= 50 THEN 1 END) AS over_50"
+        " FROM income_calculations ic"
+        " WHERE ic.dti_back_end IS NOT NULL " + org_filter
+    )
     dti_dist = db.execute(
-        sa_text(f"""
-            SELECT
-                COUNT(CASE WHEN ic.dti_back_end < 36 THEN 1 END) AS under_36,
-                COUNT(CASE WHEN ic.dti_back_end >= 36 AND ic.dti_back_end < 43 THEN 1 END) AS range_36_43,
-                COUNT(CASE WHEN ic.dti_back_end >= 43 AND ic.dti_back_end < 50 THEN 1 END) AS range_43_50,
-                COUNT(CASE WHEN ic.dti_back_end >= 50 THEN 1 END) AS over_50
-            FROM income_calculations ic
-            WHERE ic.dti_back_end IS NOT NULL {org_filter}
-        """),
+        sa_text(dti_query),
         params,
     ).first()
 

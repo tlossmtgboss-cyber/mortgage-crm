@@ -11,7 +11,7 @@ Handles SEO keyword research, tracking, and rankings:
 import os
 import logging
 from typing import Dict, List, Optional, Any
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 import httpx

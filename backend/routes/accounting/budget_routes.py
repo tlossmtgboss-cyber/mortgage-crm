@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from typing import Optional, List
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pydantic import BaseModel, Field
 import uuid

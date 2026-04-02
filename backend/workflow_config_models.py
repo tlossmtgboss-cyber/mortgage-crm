@@ -12,7 +12,7 @@ Role responsibilities are stored as JSON: {"role_id": true/false, ...}
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text, Enum as SQLEnum
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 
 

@@ -7,7 +7,7 @@ import os
 import logging
 from typing import Dict, Any, List, Optional
 from anthropic import Anthropic
-from datetime import datetime
+from datetime import datetime, timezone
 
 logger = logging.getLogger(__name__)
 

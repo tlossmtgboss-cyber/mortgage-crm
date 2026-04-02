@@ -8,7 +8,7 @@ period closing, and lock functionality.
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional, List
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from dateutil.relativedelta import relativedelta
 from pydantic import BaseModel, Field
 import uuid

@@ -14,7 +14,7 @@ Date: 2025-11-15
 """
 
 from typing import Optional, Dict, Any, List, Set
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status, Depends
@@ -383,11 +383,8 @@ class PermissionService:
         if not table:
             return False
 
-        result = self.db.execute(text(f"""
-            SELECT COUNT(*) FROM {table}
-            WHERE id = :resource_id
-              AND team_id = :team_id
-        """), {
+        sql = "SELECT COUNT(*) FROM " + table + " WHERE id = :resource_id AND team_id = :team_id"
+        result = self.db.execute(text(sql), {
             'resource_id': resource_id,
             'team_id': team_id
         }).fetchone()
@@ -411,11 +408,8 @@ class PermissionService:
         if not table:
             return False
 
-        result = self.db.execute(text(f"""
-            SELECT COUNT(*) FROM {table}
-            WHERE id = :resource_id
-              AND territory_id = :territory_id
-        """), {
+        sql = "SELECT COUNT(*) FROM " + table + " WHERE id = :resource_id AND territory_id = :territory_id"
+        result = self.db.execute(text(sql), {
             'resource_id': resource_id,
             'territory_id': territory_id
         }).fetchone()
@@ -439,11 +433,8 @@ class PermissionService:
         if not table:
             return False
 
-        result = self.db.execute(text(f"""
-            SELECT COUNT(*) FROM {table}
-            WHERE id = :resource_id
-              AND assigned_to = :employee_id
-        """), {
+        sql = "SELECT COUNT(*) FROM " + table + " WHERE id = :resource_id AND assigned_to = :employee_id"
+        result = self.db.execute(text(sql), {
             'resource_id': resource_id,
             'employee_id': employee_id
         }).fetchone()

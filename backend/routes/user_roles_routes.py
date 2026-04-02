@@ -422,9 +422,8 @@ async def assign_user_roles(
     placeholders = ", ".join([f":role_id_{i}" for i in range(len(request.role_ids))])
     params = {f"role_id_{i}": role_id for i, role_id in enumerate(request.role_ids)}
 
-    role_check = db.execute(text(f"""
-        SELECT id, name FROM onboarding_roles WHERE id IN ({placeholders})
-    """), params)
+    query = "SELECT id, name FROM onboarding_roles WHERE id IN (" + placeholders + ")"
+    role_check = db.execute(text(query), params)
 
     valid_roles = {row.id: row.name for row in role_check}
     invalid_ids = set(request.role_ids) - set(valid_roles.keys())

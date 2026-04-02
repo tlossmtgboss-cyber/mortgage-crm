@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, validator, EmailStr
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlparse
 from sqlalchemy.orm import Session
 from sqlalchemy import text

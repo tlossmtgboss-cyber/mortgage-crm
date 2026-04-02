@@ -35,7 +35,7 @@ import time
 import logging
 import asyncio
 from collections import deque
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List, Deque
 from dataclasses import dataclass, field
 from sqlalchemy.orm import Session

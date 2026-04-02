@@ -306,76 +306,63 @@ async def get_workflow_dashboard(
     params = {"org_id": current_user.organization_id}
     user_filter = ""
     if assigned_to:
-        user_filter = "AND assigned_to = :assigned_to"
+        user_filter = " AND assigned_to = :assigned_to"
         params["assigned_to"] = assigned_to
 
     with engine.connect() as conn:
         # Get task counts by status
-        result = conn.execute(
-            text(f"""
-                SELECT status, COUNT(*) as count
-                FROM recruiting_tasks
-                WHERE organization_id = :org_id {user_filter}
-                GROUP BY status
-            """),
-            params
-        )
+        sql = """
+            SELECT status, COUNT(*) as count
+            FROM recruiting_tasks
+            WHERE organization_id = :org_id
+        """ + user_filter + """
+            GROUP BY status
+        """
+        result = conn.execute(text(sql), params)
         status_counts = {row.status: row.count for row in result.fetchall()}
 
         # Get overdue count
-        result = conn.execute(
-            text(f"""
-                SELECT COUNT(*) as count
-                FROM recruiting_tasks
-                WHERE organization_id = :org_id
-                    AND status = 'pending'
-                    AND due_date < NOW()
-                    {user_filter}
-            """),
-            params
-        )
+        sql = """
+            SELECT COUNT(*) as count
+            FROM recruiting_tasks
+            WHERE organization_id = :org_id
+                AND status = 'pending'
+                AND due_date < NOW()
+        """ + user_filter
+        result = conn.execute(text(sql), params)
         overdue_count = result.fetchone().count
 
         # Get today's tasks
-        result = conn.execute(
-            text(f"""
-                SELECT COUNT(*) as count
-                FROM recruiting_tasks
-                WHERE organization_id = :org_id
-                    AND status = 'pending'
-                    AND DATE(due_date) = CURRENT_DATE
-                    {user_filter}
-            """),
-            params
-        )
+        sql = """
+            SELECT COUNT(*) as count
+            FROM recruiting_tasks
+            WHERE organization_id = :org_id
+                AND status = 'pending'
+                AND DATE(due_date) = CURRENT_DATE
+        """ + user_filter
+        result = conn.execute(text(sql), params)
         today_count = result.fetchone().count
 
         # Get dialer queue count
-        result = conn.execute(
-            text(f"""
-                SELECT COUNT(*) as count
-                FROM recruiting_tasks
-                WHERE organization_id = :org_id
-                    AND status = 'pending'
-                    AND route_to = 'dialer_queue'
-                    {user_filter}
-            """),
-            params
-        )
+        sql = """
+            SELECT COUNT(*) as count
+            FROM recruiting_tasks
+            WHERE organization_id = :org_id
+                AND status = 'pending'
+                AND route_to = 'dialer_queue'
+        """ + user_filter
+        result = conn.execute(text(sql), params)
         dialer_count = result.fetchone().count
 
         # Get email queue count
-        result = conn.execute(
-            text(f"""
-                SELECT COUNT(*) as count
-                FROM recruiting_tasks
-                WHERE organization_id = :org_id
-                    AND status = 'pending'
-                    AND route_to = 'email_automation'
-                    {user_filter}
-            """),
-            params
-        )
+        sql = """
+            SELECT COUNT(*) as count
+            FROM recruiting_tasks
+            WHERE organization_id = :org_id
+                AND status = 'pending'
+                AND route_to = 'email_automation'
+        """ + user_filter
+        result = conn.execute(text(sql), params)
         email_count = result.fetchone().count
 
     return {
@@ -423,23 +410,21 @@ async def get_email_queue(
     where_sql = " AND ".join(filters)
 
     with engine.connect() as conn:
-        result = conn.execute(
-            text(f"""
-                SELECT rt.id, rt.candidate_id, rt.title, rt.description,
-                       rt.due_date, rt.priority, rt.assigned_to,
-                       rc.first_name, rc.last_name, rc.email
-                FROM recruiting_tasks rt
-                JOIN mm_candidates rc ON rc.id = rt.candidate_id
-                WHERE {where_sql}
-                ORDER BY rt.due_date ASC,
-                         CASE rt.priority
-                            WHEN 'high' THEN 1
-                            WHEN 'medium' THEN 2
-                            ELSE 3
-                         END
-            """),
-            params
-        )
+        sql = """
+            SELECT rt.id, rt.candidate_id, rt.title, rt.description,
+                   rt.due_date, rt.priority, rt.assigned_to,
+                   rc.first_name, rc.last_name, rc.email
+            FROM recruiting_tasks rt
+            JOIN mm_candidates rc ON rc.id = rt.candidate_id
+            WHERE """ + where_sql + """
+            ORDER BY rt.due_date ASC,
+                     CASE rt.priority
+                        WHEN 'high' THEN 1
+                        WHEN 'medium' THEN 2
+                        ELSE 3
+                     END
+        """
+        result = conn.execute(text(sql), params)
         rows = result.fetchall()
 
     queue = [

@@ -19,7 +19,7 @@ When run as a CLI script, iterates over all organizations automatically.
 import os
 import sys
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal
 from typing import Dict, List, Any, Optional
 from collections import defaultdict

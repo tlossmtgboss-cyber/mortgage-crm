@@ -13,7 +13,7 @@ Central orchestrator that:
 import os
 import logging
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
@@ -257,14 +257,15 @@ class CallMonitoringOrchestrator:
         params = {"id": session_id}
         if self.organization_id:
             params["org_id"] = self.organization_id
-        result = self.db.execute(text(f"""
+        query = f"""
             SELECT id, capture_mode, recording_id, loan_id, lead_id, contact_id,
                    user_id, status, transcript_state, full_transcript, participants,
                    metadata, tags, overall_confidence, started_at, ended_at,
                    duration_seconds, created_at
             FROM call_sessions
             WHERE id = :id {org_filter}
-        """), params).fetchone()
+        """
+        result = self.db.execute(text(query), params).fetchone()
 
         if not result:
             return None
@@ -317,11 +318,12 @@ class CallMonitoringOrchestrator:
         org_filter = "AND organization_id = :org_id" if self.organization_id else ""
         if self.organization_id:
             params["org_id"] = self.organization_id
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE call_sessions
             SET {', '.join(updates)}, updated_at = NOW()
             WHERE id = :id {org_filter}
-        """), params)
+        """
+        self.db.execute(text(query), params)
         self.db.commit()
 
         return True
@@ -347,14 +349,15 @@ class CallMonitoringOrchestrator:
         }
         if self.organization_id:
             params["org_id"] = self.organization_id
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE call_sessions
             SET full_transcript = COALESCE(full_transcript, '') || :chunk,
                 transcript_state = 'partial',
                 transcript_word_count = COALESCE(transcript_word_count, 0) + :word_count,
                 updated_at = NOW()
             WHERE id = :id {org_filter}
-        """), params)
+        """
+        self.db.execute(text(query), params)
         self.db.commit()
 
         # Log event
@@ -382,7 +385,7 @@ class CallMonitoringOrchestrator:
         }
         if self.organization_id:
             params["org_id"] = self.organization_id
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE call_sessions
             SET full_transcript = :transcript,
                 transcript_state = 'complete',
@@ -390,7 +393,8 @@ class CallMonitoringOrchestrator:
                 overall_confidence = :confidence,
                 updated_at = NOW()
             WHERE id = :id {org_filter}
-        """), params)
+        """
+        self.db.execute(text(query), params)
         self.db.commit()
 
         self._log_event(session_id, 'transcript_complete', {
@@ -406,11 +410,12 @@ class CallMonitoringOrchestrator:
         params = {"id": session_id}
         if self.organization_id:
             params["org_id"] = self.organization_id
-        result = self.db.execute(text(f"""
+        query = f"""
             SELECT full_transcript, transcript_state, transcript_word_count, overall_confidence
             FROM call_sessions
             WHERE id = :id {org_filter}
-        """), params).fetchone()
+        """
+        result = self.db.execute(text(query), params).fetchone()
 
         if not result:
             return None
@@ -461,9 +466,10 @@ class CallMonitoringOrchestrator:
         processing_params = {"id": session_id}
         if self.organization_id:
             processing_params["org_id"] = self.organization_id
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE call_sessions SET processing_started_at = NOW() WHERE id = :id {org_filter}
-        """), processing_params)
+        """
+        self.db.execute(text(query), processing_params)
         self.db.commit()
 
         # Determine which agents to run
@@ -529,13 +535,14 @@ class CallMonitoringOrchestrator:
         review_params = {"id": session_id}
         if self.organization_id:
             review_params["org_id"] = self.organization_id
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE call_sessions
             SET status = 'review_pending',
                 processing_completed_at = NOW(),
                 updated_at = NOW()
             WHERE id = :id {org_filter2}
-        """), review_params)
+        """
+        self.db.execute(text(query), review_params)
         self.db.commit()
 
         self._log_event(session_id, 'processing_completed', {
@@ -660,7 +667,7 @@ class CallMonitoringOrchestrator:
             }
             if self.organization_id:
                 run_update_params["org_id"] = self.organization_id
-            self.db.execute(text(f"""
+            query = f"""
                 UPDATE agent_runs
                 SET status = 'completed',
                     artifacts = :artifacts,
@@ -673,7 +680,8 @@ class CallMonitoringOrchestrator:
                     completed_at = :completed_at,
                     updated_at = NOW()
                 WHERE id = :id {run_org_filter}
-            """), run_update_params)
+            """
+            self.db.execute(text(query), run_update_params)
             self.db.commit()
 
             self._log_event(session_id, 'agent_completed', {
@@ -699,14 +707,15 @@ class CallMonitoringOrchestrator:
             run_fail_params = {"id": run_id, "error": "Internal server error"}
             if self.organization_id:
                 run_fail_params["org_id"] = self.organization_id
-            self.db.execute(text(f"""
+            query = f"""
                 UPDATE agent_runs
                 SET status = 'failed',
                     error_message = :error,
                     completed_at = NOW(),
                     updated_at = NOW()
                 WHERE id = :id {run_fail_org_filter}
-            """), run_fail_params)
+            """
+            self.db.execute(text(query), run_fail_params)
             self.db.commit()
 
             self._log_event(session_id, 'agent_failed', {
@@ -728,12 +737,13 @@ class CallMonitoringOrchestrator:
             loan_params = {"id": context['loan_id']}
             if self.organization_id:
                 loan_params["org_id"] = self.organization_id
-            loan_data = self.db.execute(text(f"""
+            query = f"""
                 SELECT id, loan_number, borrower_name, loan_amount, loan_type,
                        property_address, status, credit_score
                 FROM loans
                 WHERE id = :id {org_filter}
-            """), loan_params).fetchone()
+            """
+            loan_data = self.db.execute(text(query), loan_params).fetchone()
 
             if loan_data:
                 context['loan'] = {
@@ -752,11 +762,12 @@ class CallMonitoringOrchestrator:
             lead_params = {"id": context['lead_id']}
             if self.organization_id:
                 lead_params["org_id"] = self.organization_id
-            lead_data = self.db.execute(text(f"""
+            query = f"""
                 SELECT id, first_name, last_name, email, phone, stage, source
                 FROM leads
                 WHERE id = :id {lead_org_filter}
-            """), lead_params).fetchone()
+            """
+            lead_data = self.db.execute(text(query), lead_params).fetchone()
 
             if lead_data:
                 context['lead'] = {
@@ -795,7 +806,7 @@ class CallMonitoringOrchestrator:
             lo_params = {"id": user_id}
             if self.organization_id:
                 lo_params["org_id"] = self.organization_id
-            lo_pa_data = self.db.execute(text(f"""
+            query = f"""
                 SELECT
                     lo.id, lo.name, lo.email, lo.phone, lo.calendar_link,
                     pa.id as pa_id, pa.name as pa_name, pa.email as pa_email, pa.phone as pa_phone
@@ -803,7 +814,8 @@ class CallMonitoringOrchestrator:
                 LEFT JOIN user_assignments ua ON ua.loan_officer_id = lo.id AND ua.role = 'production_assistant'
                 LEFT JOIN users pa ON pa.id = ua.assistant_id
                 WHERE lo.id = :id {lo_org_filter}
-            """), lo_params).fetchone()
+            """
+            lo_pa_data = self.db.execute(text(query), lo_params).fetchone()
 
             if lo_pa_data:
                 team['loan_officer'] = {
@@ -830,13 +842,14 @@ class CallMonitoringOrchestrator:
             borrower_params = {"loan_id": loan_id}
             if self.organization_id:
                 borrower_params["org_id"] = self.organization_id
-            borrower_data = self.db.execute(text(f"""
+            query = f"""
                 SELECT c.id, c.first_name, c.last_name, c.email, c.phone,
                        c.preferred_contact_time
                 FROM contacts c
                 JOIN loans l ON l.borrower_id = c.id OR l.co_borrower_id = c.id
                 WHERE l.id = :loan_id {borrower_org_filter}
-            """), borrower_params).fetchall()
+            """
+            borrower_data = self.db.execute(text(query), borrower_params).fetchall()
 
             for i, bd in enumerate(borrower_data):
                 borrowers.append({
@@ -854,11 +867,12 @@ class CallMonitoringOrchestrator:
             lead_team_params = {"lead_id": lead_id}
             if self.organization_id:
                 lead_team_params["org_id"] = self.organization_id
-            lead_data = self.db.execute(text(f"""
+            query = f"""
                 SELECT id, first_name, last_name, email, phone, preferred_contact_time
                 FROM leads
                 WHERE id = :lead_id {lead_org_filter}
-            """), lead_team_params).fetchone()
+            """
+            lead_data = self.db.execute(text(query), lead_team_params).fetchone()
 
             if lead_data:
                 borrowers.append({
@@ -879,7 +893,7 @@ class CallMonitoringOrchestrator:
             loan_team_params = {"loan_id": loan_id}
             if self.organization_id:
                 loan_team_params["org_id"] = self.organization_id
-            loan_team = self.db.execute(text(f"""
+            query = f"""
                 SELECT
                     proc.id as proc_id, proc.name as proc_name, proc.email as proc_email,
                     tc.id as tc_id, tc.name as tc_name, tc.contact_name as tc_contact,
@@ -897,7 +911,8 @@ class CallMonitoringOrchestrator:
                 LEFT JOIN realtor_assignments ba ON ba.loan_id = l.id AND ba.role = 'buyer_agent'
                 LEFT JOIN realtor_assignments la ON la.loan_id = l.id AND la.role = 'listing_agent'
                 WHERE l.id = :loan_id {loan_team_org_filter}
-            """), loan_team_params).fetchone()
+            """
+            loan_team = self.db.execute(text(query), loan_team_params).fetchone()
 
             if loan_team:
                 if loan_team[0]:  # proc_id
@@ -960,7 +975,7 @@ class CallMonitoringOrchestrator:
         if self.organization_id:
             story_params["org_id"] = self.organization_id
 
-        prior_notes = self.db.execute(text(f"""
+        query = f"""
             SELECT ca.content, ca.structured_data, ca.created_at
             FROM call_artifacts ca
             JOIN call_sessions cs ON cs.id = ca.session_id
@@ -969,7 +984,8 @@ class CallMonitoringOrchestrator:
               {org_filter}
             ORDER BY ca.created_at DESC
             LIMIT 10
-        """), story_params).fetchall()
+        """
+        prior_notes = self.db.execute(text(query), story_params).fetchall()
 
         return [
             {
@@ -1082,9 +1098,10 @@ class CallMonitoringOrchestrator:
         runs_params = {"session_id": session_id}
         if self.organization_id:
             runs_params["org_id"] = self.organization_id
-        runs = self.db.execute(text(f"""
+        query = f"""
             SELECT id, agent_type FROM agent_runs WHERE session_id = :session_id {runs_org_filter}
-        """), runs_params).fetchall()
+        """
+        runs = self.db.execute(text(query), runs_params).fetchall()
         for run in runs:
             run_ids[run[1]] = str(run[0])
 
@@ -1309,7 +1326,7 @@ class CallMonitoringOrchestrator:
 
         where_clause = " AND ".join(filters)
 
-        results = self.db.execute(text(f"""
+        query = f"""
             SELECT id, session_id, run_id, artifact_type, title, content,
                    structured_data, approval_status, requires_approval,
                    approved_by, approved_at, execution_status, executed_at,
@@ -1318,7 +1335,8 @@ class CallMonitoringOrchestrator:
             FROM call_artifacts
             WHERE {where_clause}
             ORDER BY created_at ASC
-        """), params).fetchall()
+        """
+        results = self.db.execute(text(query), params).fetchall()
 
         return [
             {
@@ -1367,14 +1385,15 @@ class CallMonitoringOrchestrator:
             }
             if self.organization_id:
                 approve_params["org_id"] = self.organization_id
-            self.db.execute(text(f"""
+            query = f"""
                 UPDATE call_artifacts
                 SET approval_status = 'approved',
                     approved_by = :user_id,
                     approved_at = :now,
                     updated_at = NOW()
                 WHERE id = ANY(:ids) AND session_id = :session_id {approve_org_filter}
-            """), approve_params)
+            """
+            self.db.execute(text(query), approve_params)
         else:
             reject_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
             reject_params = {
@@ -1384,13 +1403,14 @@ class CallMonitoringOrchestrator:
             }
             if self.organization_id:
                 reject_params["org_id"] = self.organization_id
-            self.db.execute(text(f"""
+            query = f"""
                 UPDATE call_artifacts
                 SET approval_status = 'rejected',
                     rejection_reason = :reason,
                     updated_at = NOW()
                 WHERE id = ANY(:ids) AND session_id = :session_id {reject_org_filter}
-            """), reject_params)
+            """
+            self.db.execute(text(query), reject_params)
 
         self.db.commit()
 
@@ -1416,14 +1436,15 @@ class CallMonitoringOrchestrator:
         exec_params = {"session_id": session_id}
         if self.organization_id:
             exec_params["org_id"] = self.organization_id
-        artifacts = self.db.execute(text(f"""
+        query = f"""
             SELECT id, artifact_type, title, content, structured_data, metadata
             FROM call_artifacts
             WHERE session_id = :session_id
               AND approval_status = 'approved'
               AND execution_status = 'pending'
               {exec_org_filter}
-        """), exec_params).fetchall()
+        """
+        artifacts = self.db.execute(text(query), exec_params).fetchall()
 
         results = {
             "executed": [],
@@ -1458,7 +1479,7 @@ class CallMonitoringOrchestrator:
                 }
                 if self.organization_id:
                     exec_done_params["org_id"] = self.organization_id
-                self.db.execute(text(f"""
+                query = f"""
                     UPDATE call_artifacts
                     SET execution_status = 'executed',
                         executed_at = NOW(),
@@ -1467,7 +1488,8 @@ class CallMonitoringOrchestrator:
                         execution_result = :result,
                         updated_at = NOW()
                     WHERE id = :id {exec_done_org_filter}
-                """), exec_done_params)
+                """
+                self.db.execute(text(query), exec_done_params)
 
                 results["executed"].append({
                     "artifact_id": artifact_id,
@@ -1485,13 +1507,14 @@ class CallMonitoringOrchestrator:
                 }
                 if self.organization_id:
                     exec_fail_params["org_id"] = self.organization_id
-                self.db.execute(text(f"""
+                query = f"""
                     UPDATE call_artifacts
                     SET execution_status = 'failed',
                         execution_result = :result,
                         updated_at = NOW()
                     WHERE id = :id {exec_fail_org_filter}
-                """), exec_fail_params)
+                """
+                self.db.execute(text(query), exec_fail_params)
 
                 results["failed"].append({
                     "artifact_id": artifact_id,
@@ -1506,11 +1529,12 @@ class CallMonitoringOrchestrator:
         pending_params = {"session_id": session_id}
         if self.organization_id:
             pending_params["org_id"] = self.organization_id
-        pending_count = self.db.execute(text(f"""
+        query = f"""
             SELECT COUNT(*) FROM call_artifacts
             WHERE session_id = :session_id AND approval_status = 'pending'
             {pending_org_filter}
-        """), pending_params).scalar()
+        """
+        pending_count = self.db.execute(text(query), pending_params).scalar()
 
         if pending_count == 0:
             self.update_session(session_id, status='completed')
@@ -1813,14 +1837,15 @@ class CallMonitoringOrchestrator:
         pa_params = {"lo_id": lo_id}
         if self.organization_id:
             pa_params["org_id"] = self.organization_id
-        pa_data = self.db.execute(text(f"""
+        query = f"""
             SELECT u.id
             FROM users u
             JOIN user_assignments ua ON ua.assistant_id = u.id
             WHERE ua.loan_officer_id = :lo_id AND ua.role = 'production_assistant'
             {pa_org_filter}
             LIMIT 1
-        """), pa_params).fetchone()
+        """
+        pa_data = self.db.execute(text(query), pa_params).fetchone()
 
         pa_id = str(pa_data[0]) if pa_data else lo_id  # Fallback to LO if no PA
 
@@ -1934,11 +1959,12 @@ class CallMonitoringOrchestrator:
         ifu_params = {"artifact_id": artifact_id}
         if self.organization_id:
             ifu_params["org_id"] = self.organization_id
-        field_update = self.db.execute(text(f"""
+        query = f"""
             SELECT id, entity_type, entity_id, field_path, proposed_value
             FROM intake_field_updates
             WHERE artifact_id = :artifact_id {ifu_org_filter}
-        """), ifu_params).fetchone()
+        """
+        field_update = self.db.execute(text(query), ifu_params).fetchone()
 
         if not field_update:
             return None
@@ -1955,24 +1981,27 @@ class CallMonitoringOrchestrator:
         if self.organization_id:
             entity_params["org_id"] = self.organization_id
         if entity_type == 'loan' and field_path:
-            self.db.execute(text(f"""
+            query = f"""
                 UPDATE loans SET {field_path} = :value WHERE id = :id {entity_org_filter}
-            """), entity_params)
+            """
+            self.db.execute(text(query), entity_params)
         elif entity_type == 'lead' and field_path:
-            self.db.execute(text(f"""
+            query = f"""
                 UPDATE leads SET {field_path} = :value WHERE id = :id {entity_org_filter}
-            """), entity_params)
+            """
+            self.db.execute(text(query), entity_params)
 
         # Update intake field status
         ifu_update_org_filter = "AND organization_id = :org_id" if self.organization_id else ""
         ifu_update_params = {"id": str(field_update[0]), "user_id": user_id}
         if self.organization_id:
             ifu_update_params["org_id"] = self.organization_id
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE intake_field_updates
             SET status = 'applied', applied_by = :user_id, applied_at = NOW()
             WHERE id = :id {ifu_update_org_filter}
-        """), ifu_update_params)
+        """
+        self.db.execute(text(query), ifu_update_params)
 
         return str(field_update[0])
 
@@ -1994,11 +2023,12 @@ class CallMonitoringOrchestrator:
         risk_params = {"artifact_id": artifact_id}
         if self.organization_id:
             risk_params["org_id"] = self.organization_id
-        risk_flag = self.db.execute(text(f"""
+        query = f"""
             SELECT id, title, description, risk_category, severity, condition_type
             FROM call_risk_flags
             WHERE artifact_id = :artifact_id {risk_org_filter}
-        """), risk_params).fetchone()
+        """
+        risk_flag = self.db.execute(text(query), risk_params).fetchone()
 
         if not risk_flag:
             return None
@@ -2031,9 +2061,10 @@ class CallMonitoringOrchestrator:
         risk_update_params = {"id": str(risk_flag[0]), "condition_id": condition_id}
         if self.organization_id:
             risk_update_params["org_id"] = self.organization_id
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE call_risk_flags SET condition_id = :condition_id WHERE id = :id {risk_update_org_filter}
-        """), risk_update_params)
+        """
+        self.db.execute(text(query), risk_update_params)
 
         return condition_id
 
@@ -2052,19 +2083,21 @@ class CallMonitoringOrchestrator:
         review_params = {"session_id": session_id}
         if self.organization_id:
             review_params["org_id"] = self.organization_id
-        participants = self.db.execute(text(f"""
+        query = f"""
             SELECT id, role, name, phone, email, speaker_label, talk_time_seconds
             FROM call_participants
             WHERE session_id = :session_id {review_org_filter}
-        """), review_params).fetchall()
+        """
+        participants = self.db.execute(text(query), review_params).fetchall()
 
         # Get agent runs
-        runs = self.db.execute(text(f"""
+        query = f"""
             SELECT id, agent_type, status, artifacts, tokens_used,
                    processing_time_ms, started_at, completed_at
             FROM agent_runs
             WHERE session_id = :session_id {review_org_filter}
-        """), review_params).fetchall()
+        """
+        runs = self.db.execute(text(query), review_params).fetchall()
 
         # Get artifacts
         artifacts = self.get_artifacts(session_id)
@@ -2199,12 +2232,13 @@ class CallMonitoringOrchestrator:
         }
         if self.organization_id:
             part_params["org_id"] = self.organization_id
-        self.db.execute(text(f"""
+        query = f"""
             UPDATE call_sessions
             SET participants = COALESCE(participants, '[]'::jsonb) || :participant::jsonb,
                 updated_at = NOW()
             WHERE id = :session_id {part_org_filter}
-        """), part_params)
+        """
+        self.db.execute(text(query), part_params)
 
         self.db.commit()
 

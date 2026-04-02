@@ -1,6 +1,6 @@
 """SMS Dead Letter — persists failed SMS messages for retry and monitoring."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Text, DateTime, Index, ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from db import Base

@@ -236,22 +236,24 @@ async def list_pending_invites(
             params['search'] = f"%{search}%"
 
         # Get total count
-        count_result = db.execute(text(f"""
+        count_sql = """
             SELECT COUNT(*) as total
             FROM subscriber_invitations
-            WHERE status = 'pending' {search_filter}
-        """), params).fetchone()
+            WHERE status = 'pending' """ + search_filter + """
+        """
+        count_result = db.execute(text(count_sql), params).fetchone()
         total = count_result.total if count_result else 0
 
         # Get invitations
-        invitations = db.execute(text(f"""
+        invitations_sql = """
             SELECT id, token, email, company_name, contact_name, plan, seats,
                    promo_code, status, invited_by_name, expires_at, created_at
             FROM subscriber_invitations
-            WHERE status = 'pending' {search_filter}
+            WHERE status = 'pending' """ + search_filter + """
             ORDER BY created_at DESC
             OFFSET :offset LIMIT :limit
-        """), params).fetchall()
+        """
+        invitations = db.execute(text(invitations_sql), params).fetchall()
 
         invite_list = []
         now = datetime.now(timezone.utc)

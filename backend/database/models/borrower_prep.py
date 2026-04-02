@@ -1,6 +1,6 @@
 """Borrower prep sequence models for pre-appointment preparation."""
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Text, ForeignKey, Index
 from db import Base
 

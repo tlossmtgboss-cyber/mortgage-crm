@@ -11,7 +11,7 @@ Features:
 
 import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional, List
 from decimal import Decimal
 from sqlalchemy.orm import Session

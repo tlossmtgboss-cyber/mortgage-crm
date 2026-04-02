@@ -7,7 +7,7 @@ import os
 import random
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from database import SessionLocal
 from models.agent_governance import (
     AgentProfile, AgentExecution, AgentAlert, AgentMetricsTimeseries,

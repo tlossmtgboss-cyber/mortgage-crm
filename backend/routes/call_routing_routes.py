@@ -136,14 +136,15 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
 
     # 1. Check MUM clients first (highest priority - past clients)
     try:
-        mum_result = db.execute(text(f"""
+        mum_query = """
             SELECT id, first_name, last_name, phone, status, loan_id
             FROM mum_clients
             WHERE phone LIKE :phone_pattern
             AND status IN ('active', 'paid_off', 'refinance_opportunity')
-            {org_filter}
+            """ + org_filter + """
             LIMIT 1
-        """), params).fetchone()
+        """
+        mum_result = db.execute(text(mum_query), params).fetchone()
 
         if mum_result:
             return {
@@ -163,16 +164,18 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
 
     # 2. Check active loans
     try:
-        loan_result = db.execute(text(f"""
+        loan_org_filter = org_filter.replace('organization_id', 'l.organization_id')
+        loan_query = """
             SELECT l.id, l.borrower_name, l.borrower_phone, l.stage, l.loan_number,
                    l.expected_close_date, l.property_address
             FROM loans l
             WHERE (l.borrower_phone LIKE :phone_pattern OR l.coborrower_phone LIKE :phone_pattern)
             AND l.stage NOT IN ('funded', 'cancelled', 'denied', 'withdrawn')
-            {org_filter.replace('organization_id', 'l.organization_id')}
+            """ + loan_org_filter + """
             ORDER BY l.created_at DESC
             LIMIT 1
-        """), params).fetchone()
+        """
+        loan_result = db.execute(text(loan_query), params).fetchone()
 
         if loan_result:
             return {
@@ -194,15 +197,16 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
 
     # 3. Check leads
     try:
-        lead_result = db.execute(text(f"""
+        lead_query = """
             SELECT id, first_name, last_name, name, phone, stage, loan_type, preapproval_amount
             FROM leads
             WHERE phone LIKE :phone_pattern
             AND stage NOT IN ('withdrawn', 'does_not_qualify', 'converted')
-            {org_filter}
+            """ + org_filter + """
             ORDER BY created_at DESC
             LIMIT 1
-        """), params).fetchone()
+        """
+        lead_result = db.execute(text(lead_query), params).fetchone()
 
         if lead_result:
             caller_name = lead_result.name or f"{lead_result.first_name or ''} {lead_result.last_name or ''}".strip()

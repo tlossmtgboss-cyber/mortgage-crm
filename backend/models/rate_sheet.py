@@ -8,7 +8,7 @@ from sqlalchemy import (
     Boolean, ForeignKey, Index, JSON
 )
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, Any, Optional, List
 

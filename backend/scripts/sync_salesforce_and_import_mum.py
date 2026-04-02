@@ -8,7 +8,7 @@ Run: python scripts/sync_salesforce_and_import_mum.py
 """
 import os
 import sys
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

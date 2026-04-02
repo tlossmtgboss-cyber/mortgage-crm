@@ -7,7 +7,7 @@ Total fields: 22
 from sqlalchemy import Column, String, Integer, Numeric, Date, DateTime, Text, Boolean, ARRAY, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from database import Base

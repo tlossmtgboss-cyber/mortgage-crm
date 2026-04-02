@@ -289,7 +289,7 @@ class CallSummaryService:
             agent_filter = "AND r.agent_user_id = :agent_id"
             params["agent_id"] = agent_id
 
-        result = self.db.execute(text(f"""
+        sql = """
             SELECT s.id, s.recording_id, s.one_liner, s.call_outcome,
                    s.customer_sentiment, s.generated_at,
                    r.agent_user_id, r.duration_seconds, r.direction,
@@ -298,10 +298,13 @@ class CallSummaryService:
             JOIN ci_call_recordings r ON r.id = s.recording_id
             LEFT JOIN users u ON u.id = r.agent_user_id
             WHERE s.generated_at >= CURRENT_DATE - :days
-            {agent_filter}
-            ORDER BY s.generated_at DESC
+        """
+        if agent_filter:
+            sql += "            " + agent_filter + "\n"
+        sql += """            ORDER BY s.generated_at DESC
             LIMIT :limit
-        """), params)
+        """
+        result = self.db.execute(text(sql), params)
 
         summaries = []
         for row in result.fetchall():
@@ -333,7 +336,7 @@ class CallSummaryService:
             agent_filter = "AND r.agent_user_id = :agent_id"
             params["agent_id"] = agent_id
 
-        result = self.db.execute(text(f"""
+        stats_sql = """
             SELECT
                 COUNT(*) as total_calls,
                 COUNT(CASE WHEN s.call_outcome = 'successful' THEN 1 END) as successful,
@@ -345,8 +348,10 @@ class CallSummaryService:
             FROM ci_call_summaries s
             JOIN ci_call_recordings r ON r.id = s.recording_id
             WHERE s.generated_at >= CURRENT_DATE - :days
-            {agent_filter}
-        """), params)
+        """
+        if agent_filter:
+            stats_sql += "            " + agent_filter + "\n"
+        result = self.db.execute(text(stats_sql), params)
 
         row = result.fetchone()
         if not row or not row[0]:

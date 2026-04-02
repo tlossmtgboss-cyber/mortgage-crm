@@ -623,7 +623,7 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                 ).scalar()
                 if org_id:
                     try:
-                        db.execute(text(f"SET app.current_organization_id = '{org_id}'"))
+                        db.execute(text("SET app.current_organization_id = :org_id"), {"org_id": str(org_id)})
                     except Exception as rls_err:
                         logger.warning(f"Could not set RLS context for background job: {rls_err}")
 
@@ -636,7 +636,7 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                     org_filter = "AND l.organization_id = :org_id"
                     mum_params['org_id'] = org_id
 
-                mum_result = db.execute(text(f"""
+                mum_sql = """
                     INSERT INTO mum_clients (
                         client_name, loan_number, original_close_date,
                         original_rate, loan_balance,
@@ -678,12 +678,13 @@ async def _run_import_job(job_id: str, user_id: int, also_import_to_mum: bool):
                            OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
                            OR l.funded_date IS NOT NULL)
                     AND l.loan_number IS NOT NULL
-                    {org_filter}
+                    """ + org_filter + """
                     AND NOT EXISTS (
                         SELECT 1 FROM mum_clients m
                         WHERE m.loan_number = l.loan_number
                     )
-                """), mum_params)
+                """
+                mum_result = db.execute(text(mum_sql), mum_params)
 
                 mum_results['imported'] = mum_result.rowcount
                 db.commit()

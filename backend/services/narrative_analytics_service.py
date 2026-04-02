@@ -55,7 +55,7 @@ class NarrativeAnalyticsService:
             params["org_id"] = organization_id
 
         # Current period metrics
-        current = self.db.execute(text(f"""
+        current_sql = """
             SELECT
                 COUNT(*) as total_count,
                 COALESCE(SUM(loan_amount), 0) as total_volume,
@@ -63,29 +63,35 @@ class NarrativeAnalyticsService:
                 COUNT(CASE WHEN status IN ('PROCESSING', 'SUBMITTED', 'UNDERWRITING') THEN 1 END) as in_processing
             FROM loans l
             WHERE l.status NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN')
-            {user_filter}
-        """), params).mappings().first()
+        """
+        if user_filter:
+            current_sql += "            " + user_filter + "\n"
+        current = self.db.execute(text(current_sql), params).mappings().first()
 
         # Previous period for comparison
         params["prev_start"] = period_days * 2
-        prev = self.db.execute(text(f"""
+        prev_sql = """
             SELECT
                 COUNT(*) as funded_count,
                 COALESCE(SUM(loan_amount), 0) as funded_volume
             FROM loans l
             WHERE l.funded_at >= CURRENT_DATE - :period_days
-            {user_filter}
-        """), params).mappings().first()
+        """
+        if user_filter:
+            prev_sql += "            " + user_filter + "\n"
+        prev = self.db.execute(text(prev_sql), params).mappings().first()
 
-        prev_period = self.db.execute(text(f"""
+        prev_period_sql = """
             SELECT
                 COUNT(*) as funded_count,
                 COALESCE(SUM(loan_amount), 0) as funded_volume
             FROM loans l
             WHERE l.funded_at >= CURRENT_DATE - :prev_start
                 AND l.funded_at < CURRENT_DATE - :period_days
-            {user_filter}
-        """), params).mappings().first()
+        """
+        if user_filter:
+            prev_period_sql += "            " + user_filter + "\n"
+        prev_period = self.db.execute(text(prev_period_sql), params).mappings().first()
 
         # Build narrative
         total = current["total_count"] or 0

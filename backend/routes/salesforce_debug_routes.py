@@ -9,7 +9,7 @@ SECURITY: All endpoints require platform_admin or site_admin role.
 All database queries are tenant-scoped. PII is masked in responses.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -232,62 +232,62 @@ async def get_db_stats(
             params["org_id"] = organization_id
 
         # Count total loans (tenant-scoped)
-        total_loans = db.execute(text(
-            f"SELECT COUNT(*) FROM loans l WHERE 1=1 {org_filter}"
-        ), params).scalar() or 0
+        total_loans_sql = "SELECT COUNT(*) FROM loans l WHERE 1=1 " + org_filter
+        total_loans = db.execute(text(total_loans_sql), params).scalar() or 0
 
         # Count salesforce loans (tenant-scoped)
-        sf_loans = db.execute(text(
-            f"SELECT COUNT(*) FROM loans l WHERE l.salesforce_id IS NOT NULL {org_filter}"
-        ), params).scalar() or 0
+        sf_loans_sql = "SELECT COUNT(*) FROM loans l WHERE l.salesforce_id IS NOT NULL " + org_filter
+        sf_loans = db.execute(text(sf_loans_sql), params).scalar() or 0
 
         # Count MUM clients (tenant-scoped via loan join)
-        mum_clients = db.execute(text(f"""
-            SELECT COUNT(DISTINCT m.id) FROM mum_clients m
-            JOIN loans l ON l.loan_number = m.loan_number
-            WHERE 1=1 {org_filter}
-        """), params).scalar() or 0
+        mum_clients_sql = (
+            "SELECT COUNT(DISTINCT m.id) FROM mum_clients m"
+            " JOIN loans l ON l.loan_number = m.loan_number"
+            " WHERE 1=1 " + org_filter
+        )
+        mum_clients = db.execute(text(mum_clients_sql), params).scalar() or 0
 
         # Get sample of recent loans with their stage (tenant-scoped, PII masked)
-        sample_loans = db.execute(text(f"""
-            SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.salesforce_id, l.created_at
-            FROM loans l
-            WHERE 1=1 {org_filter}
-            ORDER BY l.created_at DESC
-            LIMIT 10
-        """), params).fetchall()
+        sample_loans_sql = (
+            "SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.salesforce_id, l.created_at"
+            " FROM loans l"
+            " WHERE 1=1 " + org_filter +
+            " ORDER BY l.created_at DESC"
+            " LIMIT 10"
+        )
+        sample_loans = db.execute(text(sample_loans_sql), params).fetchall()
 
         # Count loans that should be in MUM (tenant-scoped)
-        should_be_mum = db.execute(text(f"""
-            SELECT COUNT(*) FROM loans l
-            WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
-                   OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
-                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
-                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
-                   OR l.funded_date IS NOT NULL)
-            AND NOT EXISTS (
-                SELECT 1 FROM mum_clients m
-                WHERE m.loan_number = l.loan_number
-            )
-            {org_filter}
-        """), params).scalar() or 0
+        should_be_mum_sql = (
+            "SELECT COUNT(*) FROM loans l"
+            " WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'"
+            "        OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')"
+            "        OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'"
+            "        OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'"
+            "        OR l.funded_date IS NOT NULL)"
+            " AND NOT EXISTS ("
+            "     SELECT 1 FROM mum_clients m"
+            "     WHERE m.loan_number = l.loan_number"
+            " ) " + org_filter
+        )
+        should_be_mum = db.execute(text(should_be_mum_sql), params).scalar() or 0
 
         # Get details of loans that should be in MUM (tenant-scoped, PII masked)
-        mum_candidates = db.execute(text(f"""
-            SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.funded_date
-            FROM loans l
-            WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
-                   OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
-                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
-                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
-                   OR l.funded_date IS NOT NULL)
-            AND NOT EXISTS (
-                SELECT 1 FROM mum_clients m
-                WHERE m.loan_number = l.loan_number
-            )
-            {org_filter}
-            LIMIT 20
-        """), params).fetchall()
+        mum_candidates_sql = (
+            "SELECT l.id, l.loan_number, l.borrower_name, l.stage, l.funded_date"
+            " FROM loans l"
+            " WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'"
+            "        OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')"
+            "        OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'"
+            "        OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'"
+            "        OR l.funded_date IS NOT NULL)"
+            " AND NOT EXISTS ("
+            "     SELECT 1 FROM mum_clients m"
+            "     WHERE m.loan_number = l.loan_number"
+            " ) " + org_filter +
+            " LIMIT 20"
+        )
+        mum_candidates = db.execute(text(mum_candidates_sql), params).fetchall()
 
         return {
             "total_loans": total_loans,
@@ -516,24 +516,24 @@ async def debug_import_to_mum(
             params["org_id"] = organization_id
 
         # Get funded loans not already in mum_clients (tenant-scoped)
-        funded_loans = db.execute(text(f"""
-            SELECT l.id, l.loan_number, l.borrower_name,
-                   l.borrower_email, l.borrower_phone, l.amount, l.rate,
-                   l.funded_date, l.closing_date, l.property_address,
-                   l.property_city, l.property_state, l.property_zip,
-                   l.loan_type, l.stage
-            FROM loans l
-            WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'
-                   OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')
-                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'
-                   OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'
-                   OR l.funded_date IS NOT NULL)
-            AND NOT EXISTS (
-                SELECT 1 FROM mum_clients m
-                WHERE m.loan_number = l.loan_number
-            )
-            {org_filter}
-        """), params).fetchall()
+        funded_loans_sql = (
+            "SELECT l.id, l.loan_number, l.borrower_name,"
+            "       l.borrower_email, l.borrower_phone, l.amount, l.rate,"
+            "       l.funded_date, l.closing_date, l.property_address,"
+            "       l.property_city, l.property_state, l.property_zip,"
+            "       l.loan_type, l.stage"
+            " FROM loans l"
+            " WHERE (LOWER(CAST(l.stage AS TEXT)) LIKE '%fund%'"
+            "        OR (LOWER(CAST(l.stage AS TEXT)) LIKE '%closed%' AND LOWER(CAST(l.stage AS TEXT)) NOT LIKE '%disclosed%')"
+            "        OR LOWER(CAST(l.stage AS TEXT)) LIKE '%won%'"
+            "        OR LOWER(CAST(l.stage AS TEXT)) LIKE '%ship%'"
+            "        OR l.funded_date IS NOT NULL)"
+            " AND NOT EXISTS ("
+            "     SELECT 1 FROM mum_clients m"
+            "     WHERE m.loan_number = l.loan_number"
+            " ) " + org_filter
+        )
+        funded_loans = db.execute(text(funded_loans_sql), params).fetchall()
 
         logger.info(f"Debug: Found {len(funded_loans)} funded loans to import to MUM clients (admin user_id={user_id})")
 

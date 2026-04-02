@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional, List
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from pydantic import BaseModel, Field, field_validator
 import uuid

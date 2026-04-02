@@ -257,16 +257,17 @@ async def list_transcripts(
 
         where_clause = " AND ".join(conditions)
 
-        result = db.execute(text(f"""
+        query = """
             SELECT
                 id, transcript_sid, status, duration_seconds,
                 full_text, sentiment, summary, entities,
                 topics, action_items, pii_detected, created_at
             FROM call_transcripts
-            WHERE {where_clause}
+            WHERE """ + where_clause + """
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :offset
-        """), params)
+        """
+        result = db.execute(text(query), params)
 
         transcripts = []
         for row in result.fetchall():

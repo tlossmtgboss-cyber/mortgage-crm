@@ -1,7 +1,7 @@
 """SMS conversation threading — maintains multi-turn context for AI SMS conversations."""
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Dict, List
 
 from sqlalchemy.orm import Session

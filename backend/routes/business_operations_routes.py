@@ -9,7 +9,7 @@ Provides endpoints for:
 - P&L and business KPIs
 """
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 from uuid import UUID

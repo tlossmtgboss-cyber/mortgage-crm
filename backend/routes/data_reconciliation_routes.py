@@ -1028,7 +1028,7 @@ async def approve_reconciliation(
                     db.add(new_lead)
                     db.flush()
 
-                    db.execute(text(f"UPDATE leads SET stage = :stage WHERE id = :id"),
+                    db.execute(text("UPDATE leads SET stage = :stage WHERE id = :id"),
                                {"stage": lead_stage_enum.name, "id": new_lead.id})
                     db.flush()
 

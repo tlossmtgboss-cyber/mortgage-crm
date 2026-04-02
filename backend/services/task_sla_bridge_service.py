@@ -371,14 +371,15 @@ class TaskSLABridgeService:
                 loan_filter = "AND loan_id = :loan_id"
                 params["loan_id"] = loan_id
 
-            tasks = self.db.execute(text(f"""
+            query = f"""
                 SELECT id, sla_milestone_type, sla_date_field,
                        milestone_date, sla_status, loan_id
                 FROM tasks
                 WHERE sla_milestone_type IS NOT NULL
                 AND status NOT IN ('completed', 'cancelled')
                 {loan_filter}
-            """), params).fetchall()
+            """
+            tasks = self.db.execute(text(query), params).fetchall()
 
             updated_count = 0
             for task in tasks:
@@ -458,7 +459,7 @@ class TaskSLABridgeService:
             where_clause = " AND ".join(filters)
 
             # Get counts by status
-            status_counts = self.db.execute(text(f"""
+            query = f"""
                 SELECT
                     t.sla_status,
                     COUNT(*) as count
@@ -467,10 +468,11 @@ class TaskSLABridgeService:
                 WHERE {where_clause}
                 AND t.status NOT IN ('completed', 'cancelled')
                 GROUP BY t.sla_status
-            """), params).fetchall()
+            """
+            status_counts = self.db.execute(text(query), params).fetchall()
 
             # Get counts by milestone type
-            milestone_counts = self.db.execute(text(f"""
+            query = f"""
                 SELECT
                     t.sla_milestone_type,
                     t.sla_status,
@@ -480,7 +482,8 @@ class TaskSLABridgeService:
                 WHERE {where_clause}
                 AND t.status NOT IN ('completed', 'cancelled')
                 GROUP BY t.sla_milestone_type, t.sla_status
-            """), params).fetchall()
+            """
+            milestone_counts = self.db.execute(text(query), params).fetchall()
 
             # Build summary
             by_status = {row[0]: row[1] for row in status_counts}
@@ -541,7 +544,7 @@ class TaskSLABridgeService:
 
             where_clause = " AND ".join(filters)
 
-            tasks = self.db.execute(text(f"""
+            query = f"""
                 SELECT
                     t.id, t.title, t.sla_milestone_type, t.sla_status,
                     t.milestone_date, t.owner_id, t.loan_id,
@@ -553,7 +556,8 @@ class TaskSLABridgeService:
                 WHERE {where_clause}
                 ORDER BY t.milestone_date ASC
                 LIMIT :limit
-            """), params).fetchall()
+            """
+            tasks = self.db.execute(text(query), params).fetchall()
 
             now = datetime.now(timezone.utc)
 
@@ -760,9 +764,10 @@ class TaskSLABridgeService:
     def _get_trigger_date(self, loan_id: int, date_field: str) -> Optional[datetime]:
         """Get the trigger date from a loan."""
         try:
-            result = self.db.execute(text(f"""
+            query = f"""
                 SELECT {date_field} FROM loans WHERE id = :loan_id
-            """), {"loan_id": loan_id}).fetchone()
+            """
+            result = self.db.execute(text(query), {"loan_id": loan_id}).fetchone()
 
             if result and result[0]:
                 trigger_date = result[0]

@@ -75,10 +75,10 @@ def run_migration():
                 try:
                     # Check if column already exists
                     if is_postgres:
-                        result = conn.execute(text(f"""
+                        result = conn.execute(text("""
                             SELECT column_name FROM information_schema.columns
-                            WHERE table_name = '{table}' AND column_name = 'organization_id'
-                        """))
+                            WHERE table_name = :table_name AND column_name = 'organization_id'
+                        """), {"table_name": table})
                     else:
                         result = conn.execute(text(f"PRAGMA table_info({table})"))
                         columns = [row[1] for row in result.fetchall()]

@@ -6,7 +6,7 @@ and Microsoft Graph email notifications.
 import os
 import logging
 import httpx
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Header, HTTPException, Request, Query, BackgroundTasks
 from fastapi.responses import PlainTextResponse

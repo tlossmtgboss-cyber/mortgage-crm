@@ -10,7 +10,7 @@ This module contains email-related API endpoints for the AI command system:
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from typing import Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import os
 import json

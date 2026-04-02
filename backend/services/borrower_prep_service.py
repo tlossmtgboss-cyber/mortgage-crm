@@ -1,6 +1,6 @@
 """Borrower prep sequence service — pre-appointment document and reminder sequences."""
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, List
 
 from sqlalchemy.orm import Session

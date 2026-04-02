@@ -100,10 +100,10 @@ def create_indexes(engine):
         for index_name, table_name, column_name in indexes:
             try:
                 # Check if index exists first (PostgreSQL)
-                result = conn.execute(text(f"""
+                result = conn.execute(text("""
                     SELECT 1 FROM pg_indexes
-                    WHERE indexname = '{index_name}'
-                """))
+                    WHERE indexname = :index_name
+                """), {"index_name": index_name})
                 if result.fetchone():
                     print(f"  Index '{index_name}' already exists, skipping...")
                     continue

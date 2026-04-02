@@ -8,7 +8,7 @@ import secrets
 import hashlib
 import logging
 from typing import Optional, List, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
@@ -721,14 +721,8 @@ class ListingPortalService:
                 reader_clause = "read_by_user_id = :reader_id"
                 reader_id = reader_user_id
 
-            result = db.execute(text(f"""
-                UPDATE listing_portal_messages
-                SET read_at = CURRENT_TIMESTAMP,
-                    {reader_clause}
-                WHERE transaction_id = :txn_id
-                  AND {filter_clause}
-                  AND read_at IS NULL
-            """), {"txn_id": transaction_id, "reader_id": reader_id})
+            sql = "UPDATE listing_portal_messages SET read_at = CURRENT_TIMESTAMP, " + reader_clause + " WHERE transaction_id = :txn_id AND " + filter_clause + " AND read_at IS NULL"
+            result = db.execute(text(sql), {"txn_id": transaction_id, "reader_id": reader_id})
             db.commit()
 
             return result.rowcount
@@ -750,12 +744,8 @@ class ListingPortalService:
             # If for LO, count unread party messages
             filter_clause = "sender_user_id IS NOT NULL" if for_party else "sender_party_id IS NOT NULL"
 
-            result = db.execute(text(f"""
-                SELECT COUNT(*) as cnt FROM listing_portal_messages
-                WHERE transaction_id = :txn_id
-                  AND {filter_clause}
-                  AND read_at IS NULL
-            """), {"txn_id": transaction_id})
+            sql = "SELECT COUNT(*) as cnt FROM listing_portal_messages WHERE transaction_id = :txn_id AND " + filter_clause + " AND read_at IS NULL"
+            result = db.execute(text(sql), {"txn_id": transaction_id})
             row = result.fetchone()
 
             return row.cnt if row else 0

@@ -92,21 +92,21 @@ async def list_partner_recruits(
     where_sql = " AND ".join(filters)
 
     # Use a simpler query that only selects columns that definitely exist
-    results = db.execute(text(f"""
+    select_sql = """
         SELECT
             id, name, contact_name, business_name, company,
             email, phone, license_number, notes,
             category, type, status, created_at
         FROM referral_partners
-        WHERE {where_sql}
+        WHERE """ + where_sql + """
         ORDER BY created_at DESC NULLS LAST
         LIMIT :limit OFFSET :offset
-    """), params).fetchall()
+    """
+    results = db.execute(text(select_sql), params).fetchall()
 
     # Get total count
-    count_result = db.execute(text(f"""
-        SELECT COUNT(*) FROM referral_partners WHERE {where_sql}
-    """), {k: v for k, v in params.items() if k not in ['limit', 'offset']}).fetchone()
+    count_sql = "SELECT COUNT(*) FROM referral_partners WHERE " + where_sql
+    count_result = db.execute(text(count_sql), {k: v for k, v in params.items() if k not in ['limit', 'offset']}).fetchone()
 
     partners = []
     for r in results:
@@ -693,13 +693,14 @@ async def update_job_posting(
 
     update_fields.append("updated_at = CURRENT_TIMESTAMP")
 
-    query = text(f"""
+    update_sql = """
         UPDATE mm_job_postings
-        SET {', '.join(update_fields)}
+        SET """ + ', '.join(update_fields) + """
         WHERE id = :id
         AND organization_id = :org_id
         RETURNING id
-    """)
+    """
+    query = text(update_sql)
 
     result = db.execute(query, params).fetchone()
     if not result:

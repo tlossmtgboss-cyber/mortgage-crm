@@ -7,7 +7,7 @@ State machine manages the lifecycle from initial outreach to appointment booking
 
 import enum
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Text, Index,

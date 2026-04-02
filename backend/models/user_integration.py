@@ -5,7 +5,7 @@ Stores OAuth tokens and integration credentials for external services
 (Microsoft Graph, Google, etc.) linked to individual users.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Index, UniqueConstraint
 )

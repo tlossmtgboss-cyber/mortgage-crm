@@ -904,7 +904,7 @@ class AIOutboundScheduler:
 
         try:
             # Overall stats
-            row = self.db.execute(text(f"""
+            query = f"""
                 SELECT
                     COUNT(*) as total,
                     COUNT(CASE WHEN outcome = 'connected' THEN 1 END) as connected,
@@ -915,7 +915,8 @@ class AIOutboundScheduler:
                     COUNT(CASE WHEN outcome = 'not_interested' THEN 1 END) as not_interested
                 FROM ai_outbound_calls
                 WHERE {where_sql}
-            """), params).fetchone()
+            """
+            row = self.db.execute(text(query), params).fetchone()
 
             if not row:
                 return ConversionStats()
@@ -937,7 +938,7 @@ class AIOutboundScheduler:
             )
 
             # By caller type
-            type_rows = self.db.execute(text(f"""
+            query = f"""
                 SELECT
                     caller_type,
                     COUNT(*) as total,
@@ -945,7 +946,8 @@ class AIOutboundScheduler:
                 FROM ai_outbound_calls
                 WHERE {where_sql}
                 GROUP BY caller_type
-            """), params).fetchall()
+            """
+            type_rows = self.db.execute(text(query), params).fetchall()
 
             for tr in type_rows:
                 t_total = tr[1] or 0
@@ -957,7 +959,7 @@ class AIOutboundScheduler:
                 }
 
             # By time of day (hour buckets)
-            hour_rows = self.db.execute(text(f"""
+            query = f"""
                 SELECT
                     EXTRACT(HOUR FROM created_at) as hour,
                     COUNT(*) as total,
@@ -967,7 +969,8 @@ class AIOutboundScheduler:
                 WHERE {where_sql}
                 GROUP BY EXTRACT(HOUR FROM created_at)
                 ORDER BY hour
-            """), params).fetchall()
+            """
+            hour_rows = self.db.execute(text(query), params).fetchall()
 
             for hr in hour_rows:
                 hour_label = f"{int(hr[0]):02d}:00"
@@ -1412,7 +1415,7 @@ class AIOutboundScheduler:
             if segment == "new_leads":
                 lo_filter = "AND l.owner_id = :lo_id" if lo_id else ""
                 org_filter = "AND l.organization_id = :org_id" if organization_id else ""
-                rows = self.db.execute(text(f"""
+                query = f"""
                     SELECT 'lead', l.id
                     FROM leads l
                     WHERE l.phone IS NOT NULL AND l.phone != ''
@@ -1422,12 +1425,13 @@ class AIOutboundScheduler:
                         {lo_filter} {org_filter}
                     ORDER BY l.ai_score DESC NULLS LAST, l.created_at DESC
                     LIMIT :limit
-                """), params).fetchall()
+                """
+                rows = self.db.execute(text(query), params).fetchall()
 
             elif segment == "stale_leads":
                 lo_filter = "AND l.owner_id = :lo_id" if lo_id else ""
                 org_filter = "AND l.organization_id = :org_id" if organization_id else ""
-                rows = self.db.execute(text(f"""
+                query = f"""
                     SELECT 'lead', l.id
                     FROM leads l
                     WHERE l.phone IS NOT NULL AND l.phone != ''
@@ -1439,12 +1443,13 @@ class AIOutboundScheduler:
                         {lo_filter} {org_filter}
                     ORDER BY l.ai_score DESC NULLS LAST
                     LIMIT :limit
-                """), params).fetchall()
+                """
+                rows = self.db.execute(text(query), params).fetchall()
 
             elif segment == "active_pipeline":
                 lo_loan_filter = "AND lo.loan_officer_id = :lo_id" if lo_id else ""
                 org_loan_filter = "AND lo.organization_id = :org_id" if organization_id else ""
-                rows = self.db.execute(text(f"""
+                query = f"""
                     SELECT 'loan', lo.id
                     FROM loans lo
                     WHERE lo.borrower_phone IS NOT NULL AND lo.borrower_phone != ''
@@ -1456,12 +1461,13 @@ class AIOutboundScheduler:
                         {lo_loan_filter} {org_loan_filter}
                     ORDER BY lo.stage_changed_at ASC
                     LIMIT :limit
-                """), params).fetchall()
+                """
+                rows = self.db.execute(text(query), params).fetchall()
 
             elif segment == "mum_due":
                 mum_user_filter = "AND m.user_id = :lo_id" if lo_id else ""
                 mum_org_filter = "AND m.organization_id = :org_id" if organization_id else ""
-                rows = self.db.execute(text(f"""
+                query = f"""
                     SELECT 'mum_client', m.id
                     FROM mum_clients m
                     WHERE m.phone IS NOT NULL AND m.phone != ''
@@ -1470,12 +1476,13 @@ class AIOutboundScheduler:
                         {mum_user_filter} {mum_org_filter}
                     ORDER BY m.last_contact ASC NULLS FIRST
                     LIMIT :limit
-                """), params).fetchall()
+                """
+                rows = self.db.execute(text(query), params).fetchall()
 
             elif segment == "refi_opportunity":
                 mum_user_filter = "AND m.user_id = :lo_id" if lo_id else ""
                 mum_org_filter = "AND m.organization_id = :org_id" if organization_id else ""
-                rows = self.db.execute(text(f"""
+                query = f"""
                     SELECT 'mum_client', m.id
                     FROM mum_clients m
                     WHERE m.phone IS NOT NULL AND m.phone != ''
@@ -1484,7 +1491,8 @@ class AIOutboundScheduler:
                         {mum_user_filter} {mum_org_filter}
                     ORDER BY m.refi_score DESC NULLS LAST
                     LIMIT :limit
-                """), params).fetchall()
+                """
+                rows = self.db.execute(text(query), params).fetchall()
 
             else:
                 logger.warning(f"Unknown segment: {segment}")

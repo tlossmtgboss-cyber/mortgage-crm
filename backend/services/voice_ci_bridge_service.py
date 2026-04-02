@@ -210,15 +210,16 @@ class VoiceCIBridgeService:
             type_filter = "AND artifact_type = :artifact_type"
             params["artifact_type"] = artifact_type
 
-        rows = self.db.execute(text(f"""
-            SELECT id, artifact_type, title, content, confidence,
-                   approval_status, execution_status, priority, created_at
-            FROM call_artifacts
-            WHERE session_id = :session_id
-                AND organization_id = :org_id
-                {type_filter}
-            ORDER BY created_at DESC
-        """), params).fetchall()
+        artifacts_query = (
+            "SELECT id, artifact_type, title, content, confidence,"
+            " approval_status, execution_status, priority, created_at"
+            " FROM call_artifacts"
+            " WHERE session_id = :session_id"
+            "     AND organization_id = :org_id"
+            "     " + type_filter
+            + " ORDER BY created_at DESC"
+        )
+        rows = self.db.execute(text(artifacts_query), params).fetchall()
 
         return [
             {

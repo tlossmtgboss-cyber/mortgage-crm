@@ -5,7 +5,7 @@
 import logging
 import random
 import time as time_module
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List
 
 from sqlalchemy.orm import Session

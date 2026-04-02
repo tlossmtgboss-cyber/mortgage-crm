@@ -404,17 +404,18 @@ async def get_workspace_document_status(
         )
 
     # Get document requests with counts
-    requests = db.execute(text(f"""
+    requests_sql = """
         SELECT
             dr.id, dr.doc_type, dr.title, dr.status, dr.priority, dr.quantity,
             COUNT(d.id) as documents_count,
             COUNT(d.id) FILTER (WHERE d.status = 'approved') as approved_count
         FROM perennia_document_requests dr
         LEFT JOIN perennia_documents d ON d.request_id = dr.id
-        WHERE {loan_filter} AND dr.status != 'cancelled'
+        WHERE """ + loan_filter + """ AND dr.status != 'cancelled'
         GROUP BY dr.id
         ORDER BY dr.priority DESC, dr.created_at
-    """), params).fetchall()
+    """
+    requests = db.execute(text(requests_sql), params).fetchall()
 
     request_summaries = []
     completed = 0
@@ -520,7 +521,7 @@ async def get_unified_activity_feed(
         doc_filter = "loan_id = :loan_id" if loan_id else "lead_id = :lead_id"
         params = {"loan_id": loan_id, "lead_id": lead_id, "limit": limit}
 
-        doc_events = db.execute(text(f"""
+        doc_events_sql = """
             SELECT
                 'docs_' || id::text as id,
                 'perennia_docs' as source,
@@ -529,10 +530,11 @@ async def get_unified_activity_feed(
                 event_data,
                 created_at
             FROM perennia_document_events
-            WHERE {doc_filter}
+            WHERE """ + doc_filter + """
             ORDER BY created_at DESC
             LIMIT :limit
-        """), params).fetchall()
+        """
+        doc_events = db.execute(text(doc_events_sql), params).fetchall()
 
         for event in doc_events:
             activities.append({
@@ -804,7 +806,7 @@ async def get_workspace_notifications(
     # Get unread messages
     unread_filter = "AND m.is_read_by_borrower = false" if unread_only else ""
 
-    messages = db.execute(text(f"""
+    messages_sql = """
         SELECT
             m.id,
             'message' as notification_type,
@@ -818,10 +820,11 @@ async def get_workspace_notifications(
         FROM purl_messages m
         WHERE m.workspace_id = :workspace_id
             AND m.sender_type != 'contact'
-            {unread_filter}
+            """ + unread_filter + """
         ORDER BY m.created_at DESC
         LIMIT :limit
-    """), {"workspace_id": workspace_id, "limit": limit}).fetchall()
+    """
+    messages = db.execute(text(messages_sql), {"workspace_id": workspace_id, "limit": limit}).fetchall()
 
     notifications = []
     for msg in messages:

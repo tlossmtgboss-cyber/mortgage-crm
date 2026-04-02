@@ -14,7 +14,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import func, text
 from typing import Optional, List, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel
 import logging
 

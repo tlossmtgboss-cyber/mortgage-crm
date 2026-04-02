@@ -5,7 +5,7 @@ Stores conflicts that require manual review
 
 from sqlalchemy import Column, String, Integer, DateTime, Text, Boolean, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 
 from database import Base

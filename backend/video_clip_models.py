@@ -12,7 +12,7 @@ Database models for async video clip management including:
 """
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text, Float, Index
-from datetime import datetime
+from datetime import datetime, timezone
 import enum
 import secrets
 

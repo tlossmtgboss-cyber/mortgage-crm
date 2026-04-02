@@ -383,22 +383,22 @@ async def list_document_requests(
 
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
-    result = db.execute(text(f"""
+    sql = """
         SELECT id, loan_id, lead_id, doc_type, doc_subtype, title, description,
                quantity, status, priority, expiration_date, expiration_threshold,
                reminder_count, created_at, updated_at
         FROM perennia_document_requests
-        {where_clause}
+        """ + where_clause + """
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
-    """), params)
+    """
+    result = db.execute(text(sql), params)
 
     requests = [dict(row._mapping) for row in result]
 
     # Get total count
-    count_result = db.execute(text(f"""
-        SELECT COUNT(*) FROM perennia_document_requests {where_clause}
-    """), params)
+    sql = "SELECT COUNT(*) FROM perennia_document_requests " + where_clause
+    count_result = db.execute(text(sql), params)
     total = count_result.scalar()
 
     return {
@@ -484,12 +484,13 @@ async def update_document_request(
     updates.append("updated_at = NOW()")
 
     try:
-        result = db.execute(text(f"""
+        sql = """
             UPDATE perennia_document_requests
-            SET {', '.join(updates)}
+            SET """ + ', '.join(updates) + """
             WHERE id = :id
             RETURNING id
-        """), params)
+        """
+        result = db.execute(text(sql), params)
 
         if not result.fetchone():
             raise HTTPException(status_code=404, detail="Document request not found")
@@ -553,14 +554,15 @@ async def list_template_packs(
 
     where_clause = " AND ".join(filters)
 
-    result = db.execute(text(f"""
+    sql = """
         SELECT id, name, slug, description, version,
                loan_programs, employment_types, property_types,
                is_active, created_at
         FROM perennia_template_packs
-        WHERE {where_clause}
+        WHERE """ + where_clause + """
         ORDER BY name
-    """), params)
+    """
+    result = db.execute(text(sql), params)
 
     templates = [dict(row._mapping) for row in result]
     return {"templates": templates, "count": len(templates)}
@@ -662,12 +664,13 @@ async def update_template_pack(
     updates.append("updated_at = NOW()")
 
     try:
-        result = db.execute(text(f"""
+        sql = """
             UPDATE perennia_template_packs
-            SET {', '.join(updates)}
+            SET """ + ', '.join(updates) + """
             WHERE id = :id
             RETURNING id
-        """), params)
+        """
+        result = db.execute(text(sql), params)
 
         if not result.fetchone():
             raise HTTPException(status_code=404, detail="Template pack not found")
@@ -816,17 +819,18 @@ async def list_documents(
 
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
-    result = db.execute(text(f"""
+    sql = """
         SELECT id, loan_id, lead_id, request_id, file_name, file_size, mime_type,
                status, rejection_reason, classification_status,
                doc_type, doc_subtype, classification_confidence,
                virus_scan_status, document_date, expires_at,
                created_at, updated_at
         FROM perennia_documents
-        {where_clause}
+        """ + where_clause + """
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
-    """), params)
+    """
+    result = db.execute(text(sql), params)
 
     documents = [dict(row._mapping) for row in result]
 
@@ -866,7 +870,7 @@ async def get_review_queue(
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
     # Query with JOINs to get borrower and loan info
-    result = db.execute(text(f"""
+    sql = """
         SELECT
             d.id, d.file_name, d.doc_type as document_type, d.status,
             d.file_size, d.mime_type as file_type, d.rejection_reason,
@@ -878,21 +882,22 @@ async def get_review_queue(
         FROM perennia_documents d
         LEFT JOIN loans l ON d.loan_id = l.id
         LEFT JOIN contacts c ON l.borrower_id = c.id OR d.lead_id = c.lead_id
-        {where_clause}
+        """ + where_clause + """
         ORDER BY d.created_at DESC
         LIMIT :limit OFFSET :offset
-    """), params)
+    """
+    result = db.execute(text(sql), params)
 
     documents = [dict(row._mapping) for row in result]
 
     # Get total count
-    count_result = db.execute(text(f"""
+    sql = """
         SELECT COUNT(*) as total
         FROM perennia_documents d
         LEFT JOIN loans l ON d.loan_id = l.id
         LEFT JOIN contacts c ON l.borrower_id = c.id OR d.lead_id = c.lead_id
-        {where_clause}
-    """), {k: v for k, v in params.items() if k not in ['limit', 'offset']})
+        """ + where_clause
+    count_result = db.execute(text(sql), {k: v for k, v in params.items() if k not in ['limit', 'offset']})
     total = count_result.fetchone()[0]
 
     return {
@@ -1476,14 +1481,15 @@ async def list_document_events(
 
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
-    result = db.execute(text(f"""
+    sql = """
         SELECT id, loan_id, lead_id, request_id, document_id,
                event_type, event_data, actor_type, actor_id, created_at
         FROM perennia_document_events
-        {where_clause}
+        """ + where_clause + """
         ORDER BY created_at DESC
         LIMIT :limit OFFSET :offset
-    """), params)
+    """
+    result = db.execute(text(sql), params)
 
     events = [dict(row._mapping) for row in result]
 
@@ -1524,16 +1530,17 @@ async def list_notifications(
 
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
-    result = db.execute(text(f"""
+    sql = """
         SELECT id, loan_id, lead_id, channel, template,
                recipient_email, recipient_phone, subject,
                status, scheduled_for, sent_at, failure_reason,
                created_at
         FROM perennia_notifications
-        {where_clause}
+        """ + where_clause + """
         ORDER BY created_at DESC
         LIMIT :limit
-    """), params)
+    """
+    result = db.execute(text(sql), params)
 
     notifications = [dict(row._mapping) for row in result]
     return {"notifications": notifications, "count": len(notifications)}
@@ -1601,14 +1608,15 @@ async def list_document_rules(
 
     where_clause = " AND ".join(filters)
 
-    result = db.execute(text(f"""
+    sql = """
         SELECT id, name, description, trigger,
                conditions, actions, priority, is_active,
                created_at, updated_at
         FROM perennia_document_rules
-        WHERE {where_clause}
+        WHERE """ + where_clause + """
         ORDER BY priority ASC
-    """), params)
+    """
+    result = db.execute(text(sql), params)
 
     rules = [dict(row._mapping) for row in result]
     return {"rules": rules, "count": len(rules)}
@@ -1705,7 +1713,9 @@ async def get_docs_system_summary(
 
         for table in tables:
             try:
-                count = db.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
+                # Table name comes from hardcoded allowlist above, not user input
+                sql = "SELECT COUNT(*) FROM " + table
+                count = db.execute(text(sql)).scalar()
                 summary[table] = count
             except Exception as e:
                 logger.error(f"Error querying table {table} in system_summary: {e}")

@@ -8,7 +8,7 @@ Manages email templates, SMS templates, notification preferences, and outreach r
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, validator
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 import logging
 import re
 from routes.auth_deps import current_user_dep

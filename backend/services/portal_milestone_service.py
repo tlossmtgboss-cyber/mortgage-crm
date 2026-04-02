@@ -7,7 +7,7 @@ and milestone visualization data for the loan journey.
 
 import logging
 from typing import Optional, Dict, Any, List
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 

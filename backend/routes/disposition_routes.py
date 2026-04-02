@@ -81,17 +81,16 @@ async def disposition_summary(
     where_sql = " AND ".join(filters)
 
     try:
-        rows = db.execute(text(f"""
-            SELECT
-                d.disposition,
-                COUNT(*) as count,
-                AVG(d.call_duration_seconds) as avg_duration,
-                COUNT(CASE WHEN d.follow_up_required THEN 1 END) as follow_ups
-            FROM call_dispositions d
-            WHERE {where_sql}
-            GROUP BY d.disposition
-            ORDER BY count DESC
-        """), params).mappings().all()
+        query = (
+            "SELECT d.disposition, COUNT(*) as count,"
+            " AVG(d.call_duration_seconds) as avg_duration,"
+            " COUNT(CASE WHEN d.follow_up_required THEN 1 END) as follow_ups"
+            " FROM call_dispositions d"
+            " WHERE " + where_sql +
+            " GROUP BY d.disposition"
+            " ORDER BY count DESC"
+        )
+        rows = db.execute(text(query), params).mappings().all()
 
         total = sum(r["count"] for r in rows)
 
@@ -135,16 +134,16 @@ async def contact_rate(
     where_sql = " AND ".join(filters)
 
     try:
-        result = db.execute(text(f"""
-            SELECT
-                COUNT(*) as total,
-                COUNT(CASE WHEN d.disposition = 'answered' THEN 1 END) as answered,
-                COUNT(CASE WHEN d.disposition = 'voicemail' THEN 1 END) as voicemail,
-                COUNT(CASE WHEN d.disposition = 'no_answer' THEN 1 END) as no_answer,
-                COUNT(CASE WHEN d.disposition = 'transferred' THEN 1 END) as transferred
-            FROM call_dispositions d
-            WHERE {where_sql}
-        """), params).mappings().first()
+        query = (
+            "SELECT COUNT(*) as total,"
+            " COUNT(CASE WHEN d.disposition = 'answered' THEN 1 END) as answered,"
+            " COUNT(CASE WHEN d.disposition = 'voicemail' THEN 1 END) as voicemail,"
+            " COUNT(CASE WHEN d.disposition = 'no_answer' THEN 1 END) as no_answer,"
+            " COUNT(CASE WHEN d.disposition = 'transferred' THEN 1 END) as transferred"
+            " FROM call_dispositions d"
+            " WHERE " + where_sql
+        )
+        result = db.execute(text(query), params).mappings().first()
 
         total = result["total"] or 0
         answered = result["answered"] or 0
@@ -177,16 +176,16 @@ async def dispositions_by_hour(
         params["org_id"] = organization_id
 
     try:
-        rows = db.execute(text(f"""
-            SELECT
-                EXTRACT(HOUR FROM d.created_at) as hour,
-                COUNT(*) as total,
-                COUNT(CASE WHEN d.disposition = 'answered' THEN 1 END) as answered
-            FROM call_dispositions d
-            WHERE d.created_at >= CURRENT_DATE - :days {org_filter}
-            GROUP BY hour
-            ORDER BY hour
-        """), params).mappings().all()
+        query = (
+            "SELECT EXTRACT(HOUR FROM d.created_at) as hour,"
+            " COUNT(*) as total,"
+            " COUNT(CASE WHEN d.disposition = 'answered' THEN 1 END) as answered"
+            " FROM call_dispositions d"
+            " WHERE d.created_at >= CURRENT_DATE - :days " + org_filter +
+            " GROUP BY hour"
+            " ORDER BY hour"
+        )
+        rows = db.execute(text(query), params).mappings().all()
 
         return {
             "period_days": days,

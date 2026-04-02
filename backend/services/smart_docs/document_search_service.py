@@ -1140,7 +1140,7 @@ class DocumentSearchService:
 
         base_filter = and_(
             SearchAnalyticsEvent.organization_id == org_id,
-            SearchAnalyticsEvent.searched_at >= func.current_timestamp() - text(f"INTERVAL '{days} days'"),
+            SearchAnalyticsEvent.searched_at >= func.current_timestamp() - text("INTERVAL '" + str(int(days)) + " days'"),
         )
 
         # Total searches

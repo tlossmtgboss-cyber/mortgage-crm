@@ -890,12 +890,11 @@ async def ensure_tasks_table_columns(
 
     for col_name, col_type in columns_to_add:
         try:
-            result = db.execute(text(f"""
-                SELECT column_name FROM information_schema.columns
-                WHERE table_name = 'tasks' AND column_name = '{col_name}'
-            """))
+            check_sql = "SELECT column_name FROM information_schema.columns WHERE table_name = 'tasks' AND column_name = :col_name"
+            result = db.execute(text(check_sql), {"col_name": col_name})
             if not result.fetchone():
-                db.execute(text(f"ALTER TABLE tasks ADD COLUMN {col_name} {col_type}"))
+                alter_sql = "ALTER TABLE tasks ADD COLUMN " + col_name + " " + col_type
+                db.execute(text(alter_sql))
                 db.commit()
                 added.append(col_name)
                 logger.info(f"✅ Added '{col_name}' column to tasks table")
@@ -1214,13 +1213,12 @@ async def repair_workflow_tables(
         for col_name, col_def in columns:
             try:
                 # Check if column exists
-                result = db.execute(text(f"""
-                    SELECT column_name FROM information_schema.columns
-                    WHERE table_name = '{table_name}' AND column_name = '{col_name}'
-                """))
+                check_sql = "SELECT column_name FROM information_schema.columns WHERE table_name = :table_name AND column_name = :col_name"
+                result = db.execute(text(check_sql), {"table_name": table_name, "col_name": col_name})
                 if not result.fetchone():
                     # Add the column
-                    db.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_def}"))
+                    alter_sql = "ALTER TABLE " + table_name + " ADD COLUMN " + col_name + " " + col_def
+                    db.execute(text(alter_sql))
                     db.commit()
                     results[table_name].append({"column": col_name, "status": "added"})
                     logger.info(f"✅ Added column {col_name} to {table_name}")
@@ -1300,10 +1298,8 @@ async def repair_workflow_tables(
         db.commit()
         # Check which tables were created
         for table_name in ['lead_workflow_role_assignments', 'loan_workflow_role_assignments']:
-            result = db.execute(text(f"""
-                SELECT 1 FROM information_schema.tables
-                WHERE table_name = '{table_name}' AND table_schema = 'public'
-            """))
+            check_sql = "SELECT 1 FROM information_schema.tables WHERE table_name = :table_name AND table_schema = 'public'"
+            result = db.execute(text(check_sql), {"table_name": table_name})
             if result.fetchone():
                 role_tables_created.append(table_name)
         logger.info(f"Role assignment tables created: {role_tables_created}")

@@ -9,7 +9,7 @@ SQLAlchemy models for the intelligent document collection system:
 """
 
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, List
 

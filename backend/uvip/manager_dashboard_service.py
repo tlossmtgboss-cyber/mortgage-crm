@@ -9,7 +9,7 @@ Provides insights for managers including:
 - Best practices identification
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional
 from sqlalchemy import func, desc, and_
 from sqlalchemy.orm import Session

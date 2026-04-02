@@ -13,7 +13,7 @@ Database models for AI-powered video meeting management including:
 
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Text, Float, Time, Date, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 import enum
 
 
