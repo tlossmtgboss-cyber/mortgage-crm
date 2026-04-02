@@ -139,78 +139,106 @@ async def create_demo_user(
     db: Session = Depends(get_db),
 ):
     """
-    Create or reset a demo user for testing. Requires ADMIN_API_KEY.
-    Password is read from DEMO_USER_PASSWORD env var (defaults to random).
+    Create or reset the demo@perenniaai.com account for App Store review.
+    Requires ADMIN_API_KEY. Password is read from DEMO_USER_PASSWORD env var.
+    Returns actual error details (bypasses production error sanitizer).
     """
     import os as _os
-    import secrets as _secrets
+    import traceback as _tb
+    from fastapi.responses import JSONResponse as _JSONResponse
     _admin_api_key = _os.getenv("ADMIN_API_KEY")
     if not _admin_api_key or admin_key != _admin_api_key:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    # Lazy imports to avoid circular dependency
-    from database.models import User, Subscription, OnboardingProgress
-    from main import get_password_hash
+    try:
+        from database.models import User, Subscription, OnboardingProgress, Organization
+        from main import get_password_hash
 
-    demo_email = "demo@test.com"
-    demo_password = _os.getenv("DEMO_USER_PASSWORD") or _secrets.token_urlsafe(16)
+        demo_email = "demo@perenniaai.com"
+        demo_password = _os.getenv("DEMO_USER_PASSWORD", "demo123!")
+        now = datetime.now(timezone.utc)
 
-    # Delete existing demo user if exists
-    existing = db.query(User).filter(User.email == demo_email).first()
-    if existing:
-        db.delete(existing)
+        # Ensure org exists
+        org = db.query(Organization).filter(Organization.slug == "summit-peak-demo-appstore").first()
+        if not org:
+            org = Organization(
+                name="Summit Peak Mortgage",
+                slug="summit-peak-demo-appstore",
+                domain="summitpeakdemo.com",
+                subscription_tier="professional",
+                is_active=True,
+                timezone="America/Chicago",
+                created_at=now,
+            )
+            db.add(org)
+            db.flush()
+
+        # Create or update demo user
+        existing = db.query(User).filter(User.email == demo_email).first()
+        if existing:
+            existing.hashed_password = get_password_hash(demo_password)
+            existing.organization_id = org.id
+            existing.is_active = True
+            existing.email_verified = True
+            db.commit()
+            return {"status": "updated", "email": demo_email, "org_id": org.id}
+
+        demo_user = User(
+            email=demo_email,
+            hashed_password=get_password_hash(demo_password),
+            first_name="Demo",
+            last_name="User",
+            email_verified=True,
+            is_active=True,
+            role="admin",
+            organization_id=org.id,
+            user_metadata={
+                "company_name": "Summit Peak Mortgage",
+                "phone": "555-0000",
+                "plan": "professional",
+                "demo_mode": True,
+            },
+        )
+        db.add(demo_user)
+        db.flush()
+
+        # Create demo subscription
+        demo_subscription = Subscription(
+            user_id=demo_user.id,
+            stripe_customer_id="demo_customer",
+            stripe_subscription_id="demo_subscription",
+            status="active",
+            current_period_start=now,
+            current_period_end=now + timedelta(days=365),
+            trial_end=None,
+        )
+        db.add(demo_subscription)
+
+        # Create onboarding progress (completed)
+        onboarding = OnboardingProgress(
+            user_id=demo_user.id,
+            current_step=5,
+            steps_completed=[1, 2, 3, 4, 5],
+            is_complete=True,
+            completed_at=now,
+        )
+        db.add(onboarding)
+
         db.commit()
 
-    # Create demo user
-    demo_user = User(
-        email=demo_email,
-        hashed_password=get_password_hash(demo_password),
-        first_name="Demo",
-        last_name="User",
-        email_verified=True,
-        is_active=True,
-        role="loan_officer",
-        user_metadata={
-            "company_name": "Demo Company",
-            "phone": "555-0000",
-            "plan": "professional",
-            "demo_mode": True
+        return {
+            "status": "created",
+            "email": demo_email,
+            "org_id": org.id,
+            "user_id": demo_user.id,
         }
-    )
-    db.add(demo_user)
-    db.commit()
-    db.refresh(demo_user)
-
-    # Create demo subscription
-    demo_subscription = Subscription(
-        user_id=demo_user.id,
-        stripe_customer_id="demo_customer",
-        stripe_subscription_id="demo_subscription",
-        status="active",
-        current_period_start=datetime.now(timezone.utc),
-        current_period_end=datetime.now(timezone.utc) + timedelta(days=365),
-        trial_end=None
-    )
-    db.add(demo_subscription)
-
-    # Create onboarding progress (completed)
-    onboarding = OnboardingProgress(
-        user_id=demo_user.id,
-        current_step=5,
-        steps_completed=[1, 2, 3, 4, 5],
-        is_complete=True,
-        completed_at=datetime.now(timezone.utc)
-    )
-    db.add(onboarding)
-
-    db.commit()
-
-    return {
-        "message": "Demo user created successfully",
-        "email": demo_email,
-        "password": demo_password,
-        "note": "Use these credentials to login"
-    }
+    except Exception as e:
+        db.rollback()
+        return _JSONResponse(status_code=500, content={
+            "status": "error",
+            "error": str(e),
+            "traceback": _tb.format_exc(),
+        })
 
 
 # ============================================================================
