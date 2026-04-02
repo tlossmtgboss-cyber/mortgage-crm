@@ -269,14 +269,14 @@ async def seed_demo_data(
             ("loan_fees", "tolerance_category", "tolerancecategory"),
             ("availability_slots", "day_of_week", "dayofweek"),
             ("availability_slots", "priority", "slotpriority"),
-            ("appointments", "meeting_mode", "meetingmode"),
-            ("appointments", "meeting_type", "meetingtype"),
-            ("appointments", "status", "appointmentstatus"),
+            ("scheduler_appointments", "meeting_mode", "meetingmode"),
+            ("scheduler_appointments", "meeting_type", "meetingtype"),
+            ("scheduler_appointments", "status", "appointmentstatus"),
             ("scheduler_configs", "default_meeting_mode", None),
             ("scheduler_configs", "routing_strategy", None),
-            ("scheduler_appointment_types", "meeting_type", None),
-            ("scheduler_appointment_types", "default_mode", None),
-            ("scheduler_appointment_types", "routing_strategy", None),
+            ("appointment_types", "meeting_type", None),
+            ("appointment_types", "default_mode", None),
+            ("appointment_types", "routing_strategy", None),
             ("tasks", "type", "tasktype"),
             ("compliance_alerts", "severity", None),
             ("compliance_alerts", "status", None),
@@ -306,8 +306,8 @@ async def seed_demo_data(
         # Clean existing demo data (order matters for FKs)
         for table in [
             "morning_briefings", "stage_history", "disclosure_events", "loan_fees",
-            "compliance_alerts", "appointments", "availability_slots",
-            "scheduler_appointment_types", "scheduler_configs",
+            "compliance_alerts", "scheduler_appointments", "availability_slots",
+            "appointment_types", "scheduler_configs",
             "loan_team_members", "mum_clients",
             "ai_tasks", "tasks", "activities", "documents",
             "email_intakes", "attachment_intakes",
@@ -376,7 +376,7 @@ async def seed_demo_data(
         # ── FORCE-CLEAN EXISTING LOANS by loan_number pattern ──
         _loan_subq = "SELECT id FROM loans WHERE loan_number LIKE 'SP-2026-%'"
         for fk_table in ["stage_history", "disclosure_events", "loan_fees", "compliance_alerts",
-                         "documents", "activities", "loan_team_members", "appointments"]:
+                         "documents", "activities", "loan_team_members", "scheduler_appointments"]:
             try:
                 sp = db.begin_nested()
                 db.execute(_text(f"DELETE FROM {fk_table} WHERE loan_id IN ({_loan_subq})"))
@@ -560,13 +560,13 @@ async def seed_demo_data(
                     if _random.random() < 0.75:
                         db.execute(_text("""
                             INSERT INTO documents (organization_id, loan_id, doc_type, doc_category, status,
-                                filename, uploaded_at, source, created_at)
-                            VALUES (:oid, :lid, :dt, :cat, :status, :fn, :uploaded, :src, :created)
+                                filename, file_location, uploaded_at, source)
+                            VALUES (:oid, :lid, :dt, :cat, :status, :fn, :floc, :uploaded, :src)
                         """), {"oid": org_id, "lid": loan_id, "dt": dt, "cat": cat,
                                "status": "active", "fn": f"{dt}_{loan_id}.pdf",
+                               "floc": f"/docs/{org_id}/{loan_id}/{dt}.pdf",
                                "uploaded": now - timedelta(days=_random.randint(1, 20)),
-                               "src": _random.choice(["borrower_upload", "email_intake", "los_sync"]),
-                               "created": now - timedelta(days=_random.randint(1, 20))})
+                               "src": _random.choice(["borrower_upload", "email_intake", "los_sync"])})
                         doc_count += 1
 
         # ── COMPLIANCE ALERTS ──
@@ -628,18 +628,18 @@ async def seed_demo_data(
                 INSERT INTO mum_clients (organization_id, client_name, email, phone, loan_number,
                     original_close_date, closing_date, first_payment_date, days_since_funding,
                     original_rate, current_rate, original_loan_amount, current_loan_amount,
-                    engagement_score, status, last_contact, owner_id, created_at, updated_at)
+                    engagement_score, status, last_contact, user_id, created_at)
                 VALUES (:oid, :name, :email, :phone, :ln,
                     :close, :close, :fpp, :dsf,
                     :rate, :crate, :amt, :camt,
-                    :escore, :status, :lc, :owner, :created, :updated)
+                    :escore, :status, :lc, :uid, :created)
             """), {"oid": org_id, "name": name, "email": email, "phone": phone, "ln": ln,
                    "close": close_date, "fpp": close_date + timedelta(days=30),
                    "dsf": days_since, "rate": rate, "crate": 6.750,
                    "amt": amt, "camt": int(amt * 0.98),
                    "escore": _random.randint(60, 95), "status": "active",
                    "lc": now - timedelta(days=_random.randint(5, 60)),
-                   "owner": demo_user_id, "created": now - timedelta(days=days_since), "updated": now})
+                   "uid": demo_user_id, "created": now - timedelta(days=days_since)})
 
         # ── SCHEDULER CONFIG & APPOINTMENTS ──
         db.execute(_text("""
@@ -653,7 +653,7 @@ async def seed_demo_data(
             "SELECT id FROM scheduler_configs WHERE user_id = :uid ORDER BY id DESC LIMIT 1"
         ), {"uid": demo_user_id}).scalar()
 
-        for dow in range(1, 6):
+        for dow in ["monday", "tuesday", "wednesday", "thursday", "friday"]:
             db.execute(_text("""
                 INSERT INTO availability_slots (organization_id, config_id, user_id,
                     day_of_week, start_time, end_time, priority, is_active, created_at)
@@ -673,12 +673,12 @@ async def seed_demo_data(
         appt_type_ids = {}
         for key, name, dur in appt_types:
             db.execute(_text("""
-                INSERT INTO scheduler_appointment_types (organization_id, config_id, type_key, type_name,
+                INSERT INTO appointment_types (organization_id, config_id, type_key, type_name,
                     default_duration_minutes, is_public, created_at)
                 VALUES (:oid, :cid, :key, :name, :dur, TRUE, :now)
             """), {"oid": org_id, "cid": config_id, "key": key, "name": name, "dur": dur, "now": now})
             atid = db.execute(_text(
-                "SELECT id FROM scheduler_appointment_types WHERE config_id = :cid AND type_key = :key"
+                "SELECT id FROM appointment_types WHERE config_id = :cid AND type_key = :key"
             ), {"cid": config_id, "key": key}).scalar()
             appt_type_ids[key] = atid
 
@@ -702,7 +702,7 @@ async def seed_demo_data(
             sched_end = sched_start + timedelta(minutes=dur)
             completed_at = sched_end if status == "completed" else None
             db.execute(_text("""
-                INSERT INTO appointments (organization_id, appointment_type_id, assigned_user_id,
+                INSERT INTO scheduler_appointments (organization_id, appointment_type_id, assigned_user_id,
                     title, scheduled_start, scheduled_end, duration_minutes, timezone,
                     meeting_mode, attendee_name, attendee_email, attendee_phone,
                     status, completed_at, created_at, updated_at)
@@ -2189,3 +2189,113 @@ async def public_sms_opt_in(request: SMSOptInRequest, req: Request, db: Session 
         logger.exception(f"SMS opt-in error: {e}")
         raise HTTPException(status_code=500, detail="Unable to process your request. Please try again.")
 # token metadata (workspace, scope, expiry) to anyone with a token value.
+
+
+# ─── Contact Form ────────────────────────────────────────────────────────────
+
+class ContactFormRequest(BaseModel):
+    first_name: str
+    last_name: str
+    email: EmailStr
+    phone: Optional[str] = None
+    company: Optional[str] = None
+    subject: str = "other"
+    message: str
+
+
+@router.post("/api/v1/public/contact")
+async def public_contact_form(request: ContactFormRequest, req: Request, db: Session = Depends(get_db)):
+    """
+    Public endpoint for the website contact form.
+    Sends notification to admin@perenniaai.com and creates a lead record.
+    """
+    import re
+
+    # Basic validation
+    if len(request.message.strip()) < 5:
+        raise HTTPException(status_code=400, detail="Please provide a message.")
+
+    # Sanitize phone if provided
+    e164_phone = None
+    if request.phone:
+        phone_digits = re.sub(r"\D", "", request.phone)
+        if len(phone_digits) == 11 and phone_digits.startswith("1"):
+            phone_digits = phone_digits[1:]
+        if len(phone_digits) == 10:
+            e164_phone = f"+1{phone_digits}"
+
+    subject_labels = {
+        "demo": "Demo Request",
+        "pricing": "Pricing Inquiry",
+        "support": "Support Request",
+        "partnership": "Partnership Inquiry",
+        "other": "General Inquiry",
+    }
+    subject_label = subject_labels.get(request.subject, "General Inquiry")
+
+    try:
+        # Send notification email to admin
+        try:
+            email_service = EmailService()
+            admin_email = os.getenv("CONTACT_FORM_EMAIL", "admin@perenniaai.com")
+
+            email_body = f"""
+New contact form submission from www.perenniaai.com:
+
+Name: {request.first_name} {request.last_name}
+Email: {request.email}
+Phone: {e164_phone or 'Not provided'}
+Company: {request.company or 'Not provided'}
+Subject: {subject_label}
+
+Message:
+{request.message}
+
+---
+Submitted from: {req.headers.get('referer', 'Unknown')}
+IP: {req.client.host if req.client else 'Unknown'}
+"""
+
+            await email_service.send_email(
+                to_email=admin_email,
+                subject=f"[Perennia AI] {subject_label} from {request.first_name} {request.last_name}",
+                body=email_body,
+            )
+        except Exception as e:
+            logger.warning(f"Failed to send contact form notification email: {e}")
+
+        # Create a lead record
+        try:
+            from sqlalchemy import text
+
+            db.execute(
+                text("""
+                    INSERT INTO leads (first_name, last_name, email, phone, source, stage, notes, created_at)
+                    VALUES (:first_name, :last_name, :email, :phone, 'website_contact', 'New', :notes, :now)
+                    ON CONFLICT DO NOTHING
+                """),
+                {
+                    "first_name": request.first_name,
+                    "last_name": request.last_name,
+                    "email": request.email,
+                    "phone": e164_phone,
+                    "notes": f"[{subject_label}] {request.message[:500]}",
+                    "now": datetime.now(timezone.utc),
+                },
+            )
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Lead create during contact form failed (non-blocking): {e}")
+
+        logger.info(f"Contact form submission from {request.email} ({subject_label})")
+
+        return {
+            "status": "success",
+            "message": "Thank you for reaching out. We'll get back to you within one business day.",
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Contact form error: {e}")
+        raise HTTPException(status_code=500, detail="Unable to process your request. Please try again.")
