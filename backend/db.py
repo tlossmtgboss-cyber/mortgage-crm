@@ -173,36 +173,58 @@ def cleanup_idle_connections():
 
     Railway PostgreSQL has a ~97 connection limit. After crashes or restarts,
     stale connections from previous instances can linger, preventing new
-    connections. This function terminates idle connections older than 5 minutes
-    that aren't the current connection.
+    connections. Uses raw psycopg2 (bypassing SQLAlchemy pool) with retries
+    since the pool itself may be unable to connect during exhaustion.
     """
-    try:
-        with engine.connect() as conn:
-            result = conn.execute(text("""
+    import re
+    m = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', DATABASE_URL)
+    if not m:
+        logger.warning("Connection cleanup skipped: cannot parse DATABASE_URL")
+        return
+
+    user, password, host, port, dbname = m.groups()
+
+    for attempt in range(5):
+        try:
+            import psycopg2
+            conn = psycopg2.connect(
+                host=host, port=int(port), user=user, password=password,
+                dbname=dbname, connect_timeout=5
+            )
+            conn.autocommit = True
+            cur = conn.cursor()
+
+            cur.execute("""
                 SELECT count(*) as total,
                        count(*) FILTER (WHERE state = 'idle') as idle,
                        count(*) FILTER (WHERE state = 'active') as active
                 FROM pg_stat_activity
                 WHERE datname = current_database()
-            """))
-            row = result.fetchone()
-            logger.info(f"DB connections at startup: total={row[0]}, idle={row[1]}, active={row[2]}")
+            """)
+            total, idle, active = cur.fetchone()
+            logger.info(f"DB connections at startup: total={total}, idle={idle}, active={active}")
 
-            if row[0] > 50:  # More than half the limit
-                # Terminate idle connections older than 2 minutes (not our own)
-                terminated = conn.execute(text("""
+            if total > 20:
+                # Terminate ALL idle connections except ours — aggressive cleanup
+                cur.execute("""
                     SELECT pg_terminate_backend(pid)
                     FROM pg_stat_activity
                     WHERE datname = current_database()
                       AND state = 'idle'
                       AND pid != pg_backend_pid()
-                      AND state_change < now() - interval '2 minutes'
-                """))
-                count = terminated.rowcount
+                """)
+                count = cur.rowcount
                 logger.warning(f"Terminated {count} idle DB connections to prevent exhaustion")
-                conn.commit()
-    except Exception as e:
-        logger.warning(f"Connection cleanup skipped: {e}")
+
+            cur.close()
+            conn.close()
+            return
+        except Exception as e:
+            logger.warning(f"Connection cleanup attempt {attempt + 1}/5 failed: {e}")
+            if attempt < 4:
+                import time as _time
+                _time.sleep(2 * (attempt + 1))  # Back off: 2, 4, 6, 8 seconds
+    logger.error("Connection cleanup failed after 5 attempts — DB may be fully exhausted")
 
 
 # Run cleanup on module load (runs once at startup)
