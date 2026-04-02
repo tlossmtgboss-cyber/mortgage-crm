@@ -2159,7 +2159,7 @@ async def public_sms_opt_in(request: SMSOptInRequest, req: Request, db: Session 
     e164_phone = f"+1{phone_digits}"
 
     try:
-        from database.models.tcpa_consent import TCPAConsentCertificate
+        from database.models.tcpa_consent import TCPAConsent as TCPAConsentCertificate
         from sqlalchemy import text
 
         # Check for existing active consent

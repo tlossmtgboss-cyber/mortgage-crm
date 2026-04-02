@@ -405,6 +405,9 @@ from .decision_audit import (
     ArchivedDecisionAuditLog,
 )
 
+# TCPA consent records
+from .tcpa_consent import TCPAConsent
+
 # TCPA Smart Docs consent & DNC models
 from .tcpa_smart_docs import (
     SmartDocsConsentRecord,

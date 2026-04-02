@@ -1920,6 +1920,13 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"API key hash migration skipped or failed: {e}")
 
+    # Ensure tcpa_consents table exists (needed for SMS opt-in form)
+    try:
+        from migrations.add_tcpa_consents_table import run_migration as _run_tcpa_migration
+        _run_tcpa_migration()
+    except Exception as e:
+        logger.warning(f"TCPA consents table migration skipped: {e}")
+
     # Run critical schema migrations (missing columns that break page loads)
     try:
         _run_critical_schema_migrations()
