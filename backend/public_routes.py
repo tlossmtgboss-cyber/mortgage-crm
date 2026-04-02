@@ -570,6 +570,7 @@ async def seed_demo_data(
                         doc_count += 1
 
         # ── COMPLIANCE ALERTS (table may not exist in production) ──
+        alerts_count = 0
         try:
             _sp_ca = db.begin_nested()
             alerts_data = [
@@ -592,11 +593,13 @@ async def seed_demo_data(
                 """), {"oid": org_id, "lid": lid, "atype": atype, "sev": severity, "title": title,
                        "desc": desc, "status": status, "deadline": deadline,
                        "created": now - timedelta(days=_random.randint(1, 10)), "resolved": resolved_at})
+                alerts_count += 1
             _sp_ca.commit()
         except Exception:
             _sp_ca.rollback()
 
         # ── REFERRAL PARTNERS (table may not exist) ──
+        partners_count = 0
         try:
             _sp_rp = db.begin_nested()
             partners_data = [
@@ -620,11 +623,13 @@ async def seed_demo_data(
                        "phone": phone, "ri": ri, "ro": ro, "cl": cl, "vol": vol,
                        "status": "active", "tier": tier, "owner": demo_user_id,
                        "created": now - timedelta(days=_random.randint(30, 365))})
+                partners_count += 1
             _sp_rp.commit()
         except Exception:
             _sp_rp.rollback()
 
         # ── MUM CLIENTS (Portfolio — table may not exist) ──
+        mum_count = 0
         try:
             _sp_mum = db.begin_nested()
             mum_data = [
@@ -652,11 +657,13 @@ async def seed_demo_data(
                        "escore": _random.randint(60, 95), "status": "active",
                        "lc": now - timedelta(days=_random.randint(5, 60)),
                        "uid": demo_user_id, "created": now - timedelta(days=days_since)})
+                mum_count += 1
             _sp_mum.commit()
         except Exception:
             _sp_mum.rollback()
 
         # ── SCHEDULER CONFIG & APPOINTMENTS (tables may not exist) ──
+        appts_count = 0
         try:
             _sp_sched = db.begin_nested()
             db.execute(_text("""
@@ -729,6 +736,7 @@ async def seed_demo_data(
                        "aemail": email, "aphone": phone, "status": status,
                        "completed": completed_at,
                        "created": sched_start - timedelta(days=_random.randint(1, 5)), "updated": now})
+                appts_count += 1
             _sp_sched.commit()
         except Exception:
             _sp_sched.rollback()
@@ -830,10 +838,10 @@ async def seed_demo_data(
                 "activities": act_count,
                 "tasks": len(tasks_data),
                 "documents": doc_count,
-                "compliance_alerts": len(alerts_data),
-                "referral_partners": len(partners_data),
-                "mum_clients": len(mum_data),
-                "appointments": len(appointments_data),
+                "compliance_alerts": alerts_count,
+                "referral_partners": partners_count,
+                "mum_clients": mum_count,
+                "appointments": appts_count,
                 "stage_history": sh_count,
                 "disclosure_events": disc_count,
                 "loan_fees": fee_count,
