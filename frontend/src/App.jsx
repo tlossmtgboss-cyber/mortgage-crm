@@ -35,6 +35,12 @@ import ResetPassword from './pages/ResetPassword';
 import AdminOnboarding from './pages/AdminOnboarding';
 import ApplicationSubmitted from './pages/ApplicationSubmitted';
 
+// Redirect to an external URL (outside React Router)
+function ExternalRedirect({ to }) {
+  useEffect(() => { window.location.href = to; }, [to]);
+  return null;
+}
+
 // Retry dynamic imports on failure (handles stale chunks after deploys)
 function lazyRetry(importFn) {
   return lazy(() =>
@@ -612,9 +618,9 @@ function App() {
           {/* Public routes - Mobile app launches Aria voice assistant */}
           {/* Check for native platform OR loading from local IP (dev mode on device) */}
           <Route path="/" element={
-            (Capacitor.isNativePlatform() || window.location.hostname.startsWith('192.168.'))
+            Capacitor.isNativePlatform() || window.location.hostname.startsWith('192.168.')
               ? <Navigate to="/aria" />
-              : <LandingPage />
+              : <ExternalRedirect to="https://www.perenniaai.com" />
           } />
           <Route path="/apply" element={<BuyerIntake />} />
           <Route path="/apply/preview" element={<LazyPage><ApplicationPreview /></LazyPage>} />
