@@ -9,6 +9,7 @@ import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { PermissionProvider, usePermissions } from './contexts/PermissionContext';
 import { ModuleProvider, useModules } from './contexts/ModuleContext';
 import { BrandingProvider } from './contexts/BrandingContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { getUserEffectiveRole, getDefaultRouteForRole } from './config/roleConfig';
 import Navigation from './components/Navigation';
 import AIAssistant from './components/AIAssistant';
@@ -587,6 +588,7 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <ThemeProvider>
       <ErrorBoundary>
         <OfflineIndicator />
         {/* Optional update banner (dismissible) */}
@@ -4666,6 +4668,7 @@ function App() {
         </PermissionProvider>
         </ImpersonationProvider>
       </ErrorBoundary>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }
