@@ -3,15 +3,16 @@ import { Capacitor } from '@capacitor/core';
 import { ensureArray } from '../utils/arrayHelpers';
 import { getCSRFTokenFromCookie } from '../utils/security';
 
-// Use direct Railway URL for production, localhost for development
-// Bypassing Vercel proxy due to POST request issues
-// Also use production URL for native mobile apps (Capacitor)
-const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const isNativeApp = Capacitor.isNativePlatform() && !isLocalhost; // Don't treat web browser as native
+// Detect native mobile app FIRST — Capacitor serves from localhost,
+// so we must check isNativePlatform() before the hostname check.
+const isNativeApp = Capacitor.isNativePlatform();
+const isLocalhost = !isNativeApp && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-export const API_BASE_URL = isLocalhost
-  ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-  : 'https://api.perenniaai.com'; // Production Railway API
+export const API_BASE_URL = isNativeApp
+  ? 'https://api.perenniaai.com'  // Native iOS/Android — always production
+  : isLocalhost
+    ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
+    : 'https://api.perenniaai.com'; // Production web
 
 // Create axios instance with mobile app identification
 const api = axios.create({
