@@ -327,6 +327,7 @@ class Loan(Base):
     preferred_communication = Column(String)
     coborrower_name = Column(String)
     co_borrower_email = Column(String)
+    co_borrower_phone = Column(String)
 
     # Pipeline status
     stage = Column(String, default="DISCLOSED")

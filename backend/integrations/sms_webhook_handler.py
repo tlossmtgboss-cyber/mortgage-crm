@@ -178,11 +178,25 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
 
         # Store inbound message for conversation threading
         _store_inbound_message(db, from_phone, body, record)
+        # Also store in panel messages table for the two-way SMS panel
+        _store_panel_inbound(db, from_phone, body, record.get("id", ""))
         try:
             db.commit()
         except Exception as commit_err:
             db.rollback()
             logger.error(f"Failed to commit inbound message: {commit_err}")
+
+        # Push to WebSocket clients watching this phone number
+        try:
+            import asyncio
+            from routes.sms_conversation_routes import notify_inbound_sms
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                asyncio.ensure_future(notify_inbound_sms(from_phone, body, record.get("id", "")))
+            else:
+                loop.run_until_complete(notify_inbound_sms(from_phone, body, record.get("id", "")))
+        except Exception as ws_err:
+            logger.debug(f"WebSocket push skipped: {ws_err}")
 
         return {
             "status": "processed",
@@ -236,6 +250,30 @@ def _store_inbound_message(db: Session, from_phone: str, body: str, record: dict
         db.flush()
     except Exception as e:
         logger.error(f"Failed to store inbound message: {e}")
+
+
+def _store_panel_inbound(db: Session, from_phone: str, body: str, telnyx_msg_id: str):
+    """Store inbound message in the sms_panel_messages table for the two-way panel."""
+    try:
+        import uuid
+        from sqlalchemy import text as _text
+        db.execute(
+            _text("""
+                INSERT INTO sms_panel_messages
+                  (id, phone, direction, body, sender_name, status, telnyx_message_id, created_at)
+                VALUES (:id, :phone, 'inbound', :body, 'Customer', 'delivered', :msg_id, NOW())
+                ON CONFLICT (id) DO NOTHING
+            """),
+            {
+                "id": telnyx_msg_id or str(uuid.uuid4()),
+                "phone": from_phone,
+                "body": body[:2000],
+                "msg_id": telnyx_msg_id,
+            },
+        )
+        db.flush()
+    except Exception as e:
+        logger.debug(f"Panel inbound store skipped: {e}")
 
 
 def _send_auto_response(to_phone: str, message: str):

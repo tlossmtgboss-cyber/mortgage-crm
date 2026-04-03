@@ -30,6 +30,7 @@ import SendVideoModal from '../components/video/SendVideoModal';
 import SalesforceConnectionBadge from '../components/SalesforceConnectionBadge';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import CurrencyInput from '../components/common/CurrencyInput';
+import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import './LeadDetail.css';
 import { toast } from '../utils/toast';
 
@@ -5065,6 +5066,21 @@ function LeadDetail() {
         </div>
       </div>
     </CalendarSidebar>
+      {lead && lead.phone && (
+        <SMSAccordionPanel
+          contactId={lead.id}
+          contactName={lead.name || `${lead.first_name || ''} ${lead.last_name || ''}`.trim()}
+          phone={lead.phone}
+          pageType="client"
+          assignedUser={lead.owner_id}
+          borrowers={borrowers.filter(b => b.data?.phone).map(b => ({
+            id: b.id,
+            name: b.name,
+            phone: b.data.phone,
+            type: b.type,
+          }))}
+        />
+      )}
     </div>
   );
 }

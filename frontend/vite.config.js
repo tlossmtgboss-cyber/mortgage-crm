@@ -10,7 +10,10 @@ export default defineConfig({
     babel({
       filter: /\.[jt]sx?$/,
       babelConfig: {
-        presets: [['@babel/preset-react', { runtime: 'automatic' }]],
+        presets: [
+          ['@babel/preset-react', { runtime: 'automatic' }],
+          ['@babel/preset-typescript', { isTSX: true, allExtensions: true }],
+        ],
       },
     }),
     react(),

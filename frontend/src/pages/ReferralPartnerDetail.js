@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { partnersAPI, leadsAPI } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
+import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import './ReferralPartnerDetail.css';
 import { toast } from '../utils/toast';
 
@@ -1049,6 +1050,14 @@ function ReferralPartnerDetail() {
             </div>
           </div>
         </div>
+      )}
+      {partner && partner.phone && (
+        <SMSAccordionPanel
+          contactId={partner.id}
+          contactName={partner.name || partner.company}
+          phone={partner.phone}
+          pageType="partner"
+        />
       )}
     </div>
   );

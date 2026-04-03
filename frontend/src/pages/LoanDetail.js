@@ -26,6 +26,7 @@ import WorkflowRoleAssignment from '../components/WorkflowRoleAssignment';
 import SalesforceConnectionBadge from '../components/SalesforceConnectionBadge';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import CurrencyInput from '../components/common/CurrencyInput';
+import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -570,6 +571,8 @@ function LoanDetail() {
           type: 'co-borrower',
           data: {
             name: loanData.coborrower_name,
+            email: loanData.co_borrower_email || '',
+            phone: loanData.co_borrower_phone || '',
           }
         });
       }
@@ -4295,6 +4298,21 @@ function LoanDetail() {
         </div>
       </div>
     </CalendarSidebar>
+      {loan && (loan.borrower_phone || formData.borrower_phone) && (
+        <SMSAccordionPanel
+          contactId={loan.id}
+          contactName={loan.borrower_name || loan.borrower || formData.borrower_name}
+          phone={loan.borrower_phone || formData.borrower_phone}
+          pageType="client"
+          assignedUser={loan.loan_officer_id}
+          borrowers={borrowers.filter(b => b.data?.phone).map(b => ({
+            id: b.id,
+            name: b.name,
+            phone: b.data.phone,
+            type: b.type,
+          }))}
+        />
+      )}
     </div>
   );
 }

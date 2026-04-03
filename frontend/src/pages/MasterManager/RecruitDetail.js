@@ -28,6 +28,7 @@ import ScheduleInterviewModal from '../../components/recruiting/ScheduleIntervie
 import EditScoreCategoryModal from '../../components/recruiting/EditScoreCategoryModal';
 import VideoRecorder from '../../components/recruiting/VideoRecorder';
 import { usePermissions } from '../../contexts/PermissionContext';
+import SMSAccordionPanel from '../../components/sms/SMSAccordionPanel';
 import './MasterManager.css';
 import './RecruitDetail.css';
 
@@ -1998,6 +1999,14 @@ const RecruitDetail = () => {
             </div>
           </div>
         </div>
+      )}
+      {candidate && candidate.phone && (
+        <SMSAccordionPanel
+          contactId={candidate.id || candidateId}
+          contactName={candidate.name || `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim()}
+          phone={candidate.phone}
+          pageType="recruit"
+        />
       )}
     </div>
   );

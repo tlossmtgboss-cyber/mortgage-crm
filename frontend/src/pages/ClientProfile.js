@@ -20,6 +20,7 @@ import NeedsListView from '../components/smart-docs/NeedsListView';
 import CreditTab from '../components/CreditTab';
 import SalesforceConnectionBadge from '../components/SalesforceConnectionBadge';
 import CallIntelligenceTab from '../components/call-intelligence/CallIntelligenceTab';
+import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import './LeadDetail.css';
 
 // Mock lead data generator (same as Leads.js)
@@ -2689,6 +2690,21 @@ function ClientProfile() {
             </div>
           </div>
         </div>
+      )}
+      {client && (client.borrower_phone || client.phone) && (
+        <SMSAccordionPanel
+          contactId={client.id}
+          contactName={client.borrower_name || client.name || `${client.first_name || ''} ${client.last_name || ''}`.trim()}
+          phone={client.borrower_phone || client.phone}
+          pageType="client"
+          assignedUser={client.owner_id || client.loan_officer_id}
+          borrowers={borrowers.filter(b => b.data?.phone).map(b => ({
+            id: b.id,
+            name: b.name,
+            phone: b.data.phone,
+            type: b.type,
+          }))}
+        />
       )}
     </div>
   );

@@ -16,6 +16,7 @@ import EmailComposerModal from '../components/EmailComposerModal';
 import EscalationModal from '../components/EscalationModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import RateMonitorWidget from '../components/RateMonitorWidget';
+import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import './LeadDetail.css';
 import { toast } from '../utils/toast';
 
@@ -3029,6 +3030,21 @@ function MumClientDetail() {
         </div>
       </div>
     </CalendarSidebar>
+      {client && client.phone && (
+        <SMSAccordionPanel
+          contactId={client.id}
+          contactName={client.name || `${client.first_name || ''} ${client.last_name || ''}`.trim()}
+          phone={client.phone}
+          pageType="client"
+          assignedUser={client.owner_id}
+          borrowers={borrowers.filter(b => b.data?.phone).map(b => ({
+            id: b.id,
+            name: b.name,
+            phone: b.data.phone,
+            type: b.type,
+          }))}
+        />
+      )}
     </div>
   );
 }
