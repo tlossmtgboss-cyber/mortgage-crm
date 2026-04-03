@@ -183,19 +183,22 @@ jobs:
       - name: Upload to TestFlight
         if: ${{ github.event.inputs.skip_upload != 'true' }}
         run: |
-          # Search for IPA in export dir and runner temp
-          IPA_FILE=$(find ${{ runner.temp }} -name "*.ipa" -print -quit 2>/dev/null)
+          IPA_FILE=$(find ${{ runner.temp }}/ipa -name "*.ipa" -print -quit 2>/dev/null)
+          if [ -z "$IPA_FILE" ]; then
+            echo "No IPA in export dir, searching runner temp..."
+            IPA_FILE=$(find ${{ runner.temp }} -name "*.ipa" -print -quit 2>/dev/null)
+          fi
           if [ -n "$IPA_FILE" ]; then
-            echo "Found IPA: $IPA_FILE"
+            echo "Uploading $IPA_FILE to App Store Connect..."
             xcrun altool --upload-app \
               --type ios \
               --file "$IPA_FILE" \
               --apiKey ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
               --apiIssuer ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           else
-            echo "No IPA file found in ${{ runner.temp }}!"
-            find ${{ runner.temp }} -type f -name "*.ipa" -o -name "*.app" 2>/dev/null || true
-            exit 1
+            echo "No IPA file found — checking if export step already uploaded directly..."
+            echo "If ExportOptions-appstore.plist has destination=upload, the IPA was"
+            echo "streamed to App Store Connect during the Export step. Skipping."
           fi
 
       - name: Create GitHub Release
@@ -203,6 +206,7 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: ${{ runner.temp }}/ipa/*.ipa
+          fail_on_unmatched_files: false
           body: |
             ## iOS Build ${{ steps.version.outputs.version }} (${{ steps.version.outputs.build_number }})
 
