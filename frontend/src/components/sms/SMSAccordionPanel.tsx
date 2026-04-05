@@ -80,9 +80,9 @@ export interface SMSAccordionPanelProps {
   borrowers?: BorrowerOption[]
   /** Pass existing messages for SSR/initial load; panel also fetches from API */
   initialMessages?: SmsMessage[]
-  /** Override the API base path */
+  /** Override the full API base URL (e.g. https://api.perenniaai.com). Auto-detected if omitted. */
   apiBase?: string
-  /** WebSocket URL override */
+  /** WebSocket base URL override (e.g. wss://api.perenniaai.com). Auto-detected if omitted. */
   wsUrl?: string
   /** Called when panel opens/closes */
   onToggle?: (isOpen: boolean) => void
@@ -151,12 +151,24 @@ function DocBubble({ attach }: { attach: MediaAttachment }) {
 function VideoBubble({ attach }: { attach: MediaAttachment }) {
   return (
     <div style={styles.videoBubble}>
-      <div style={styles.videoThumb}>
-        <div style={styles.playBtn}>
-          <svg width="14" height="14" viewBox="0 0 16 16">
-            <polygon points="5,3 13,8 5,13" fill="#7EB8F7" />
-          </svg>
+      {attach.url ? (
+        <video
+          src={attach.url}
+          controls
+          playsInline
+          preload="metadata"
+          style={{ width: '100%', maxHeight: 180, display: 'block', background: '#000' }}
+        />
+      ) : (
+        <div style={styles.videoThumb}>
+          <div style={styles.playBtn}>
+            <svg width="14" height="14" viewBox="0 0 16 16">
+              <polygon points="5,3 13,8 5,13" fill="#218d8d" />
+            </svg>
+          </div>
         </div>
+      )}
+      <div style={styles.videoMeta}>
         <span style={styles.videoLabel}>{attach.filename}</span>
         {attach.durationLabel && (
           <span style={styles.videoDuration}>{attach.durationLabel}</span>
@@ -175,7 +187,7 @@ function MessageBubble({ msg }: { msg: SmsMessage }) {
 
   return (
     <div style={rowStyle}>
-      <span style={{ ...styles.msgSender, color: isOut ? '#5A9ED4' : '#7EB8F7' }}>
+      <span style={{ ...styles.msgSender, color: isOut ? '#218d8d' : '#666666' }}>
         {msg.senderName}{msg.senderRole ? ` · ${msg.senderRole}` : ''}
       </span>
 
@@ -293,13 +305,13 @@ function VideoRecorder({ onAttach, onClose }: VideoRecorderProps) {
         />
         {phase === 'idle' && !error && (
           <div style={styles.recPlaceholder}>
-            <VideoIcon color="#7EB8F7" />
+            <VideoIcon color="#218d8d" />
             <span style={styles.recHint}>Initializing camera…</span>
           </div>
         )}
         {error && (
           <div style={styles.recPlaceholder}>
-            <span style={{ ...styles.recHint, color: '#E87070' }}>{error}</span>
+            <span style={{ ...styles.recHint, color: '#C0152F' }}>{error}</span>
           </div>
         )}
         {phase === 'recording' && (
@@ -310,7 +322,7 @@ function VideoRecorder({ onAttach, onClose }: VideoRecorderProps) {
         )}
         {phase === 'done' && (
           <div style={styles.recDoneOverlay}>
-            <span style={{ fontSize: 12, color: '#7EB8F7', fontFamily: 'DM Mono, monospace' }}>
+            <span style={{ fontSize: 12, color: '#218d8d', fontFamily: FONT_MONO }}>
               Recording complete · {fmtTime(seconds)}
             </span>
           </div>
@@ -366,14 +378,14 @@ function AttachTray({ onFilePick, onRecordVideo }: AttachTrayProps) {
       </div>
       <div style={styles.attachRow}>
         <AttachOption
-          icon={<VideoIcon color="#E87070" />}
+          icon={<VideoIcon color="#C0152F" />}
           label="Record Video"
-          labelColor="#E8A0A0"
+          labelColor="#C0152F"
           sub="Shoot now · MMS"
           onClick={onRecordVideo}
         />
         <AttachOption
-          icon={<VideoIcon color="#7EB8F7" />}
+          icon={<VideoIcon color="#218d8d" />}
           label="Upload Video"
           sub="MP4, MOV · from library"
           onClick={() => onFilePick('video')}
@@ -384,14 +396,14 @@ function AttachTray({ onFilePick, onRecordVideo }: AttachTrayProps) {
 }
 
 function AttachOption({
-  icon, label, sub, onClick, labelColor = '#A8C0D8',
+  icon, label, sub, onClick, labelColor = '#1a1a1a',
 }: {
   icon: ReactNode
   label: string
   sub: string
   onClick: () => void
   labelColor?: string
-}) {
+  }) {
   const [hov, setHov] = useState(false)
   return (
     <div
@@ -402,7 +414,7 @@ function AttachOption({
     >
       <div style={styles.attachOptIcon}>{icon}</div>
       <div>
-        <div style={{ ...styles.attachOptLabel, color: labelColor }}>{label}</div>
+        <div style={{ ...styles.attachOptLabel, color: labelColor || '#1a1a1a' }}>{label}</div>
         <div style={styles.attachOptSub}>{sub}</div>
       </div>
     </div>
@@ -416,14 +428,28 @@ function StagedFiles({ files, onRemove }: { files: StagedFile[]; onRemove: (id: 
   return (
     <div style={styles.stagedArea}>
       {files.map(f => (
-        <div key={f.id} style={styles.stagedFile}>
-          {(f.type === 'video' || f.type === 'recorded-video')
-            ? <VideoIcon color="#7EB8F7" size={14} />
-            : <FileIcon size={14} />
-          }
-          <span style={styles.stagedName}>{f.name}</span>
-          <span style={styles.stagedSize}>{f.sizeLabel}</span>
-          <span style={styles.stagedRemove} onClick={() => onRemove(f.id)}>×</span>
+        <div key={f.id}>
+          {/* Show video preview for staged videos */}
+          {(f.type === 'video' || f.type === 'recorded-video') && f.blobUrl && (
+            <div style={styles.stagedVideoPreview}>
+              <video
+                src={f.blobUrl}
+                controls
+                playsInline
+                preload="metadata"
+                style={{ width: '100%', maxHeight: 120, display: 'block', borderRadius: 6, background: '#000' }}
+              />
+            </div>
+          )}
+          <div style={styles.stagedFile}>
+            {(f.type === 'video' || f.type === 'recorded-video')
+              ? <VideoIcon color="#218d8d" size={14} />
+              : <FileIcon size={14} />
+            }
+            <span style={styles.stagedName}>{f.name}</span>
+            <span style={styles.stagedSize}>{f.sizeLabel}</span>
+            <span style={styles.stagedRemove} onClick={() => onRemove(f.id)}>×</span>
+          </div>
         </div>
       ))}
     </div>
@@ -434,7 +460,7 @@ function StagedFiles({ files, onRemove }: { files: StagedFile[]; onRemove: (id: 
 
 function FileIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="#7EB8F7" strokeWidth="1.5">
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="#218d8d" strokeWidth="1.5">
       <rect x="3" y="1" width="10" height="14" rx="1.5" />
       <path d="M6 5h4M6 8h4M6 11h2" />
     </svg>
@@ -443,7 +469,7 @@ function FileIcon({ size = 16 }: { size?: number }) {
 
 function ImageIcon({ size = 16 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="#7EB8F7" strokeWidth="1.5">
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="#218d8d" strokeWidth="1.5">
       <rect x="2" y="3" width="12" height="10" rx="1.5" />
       <circle cx="5.5" cy="6.5" r="1" />
       <path d="M2 10l3.5-3 3 3 2-2 3 2" />
@@ -451,7 +477,7 @@ function ImageIcon({ size = 16 }: { size?: number }) {
   )
 }
 
-function VideoIcon({ color = '#7EB8F7', size = 16 }: { color?: string; size?: number }) {
+function VideoIcon({ color = '#218d8d', size = 16 }: { color?: string; size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke={color} strokeWidth="1.5">
       <rect x="2" y="4" width="9" height="8" rx="1.5" />
@@ -462,7 +488,7 @@ function VideoIcon({ color = '#7EB8F7', size = 16 }: { color?: string; size?: nu
 
 function AttachIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#7EB8F7" strokeWidth="1.5">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#218d8d" strokeWidth="1.5">
       <path d="M13 7.5l-5.5 5.5a3.5 3.5 0 01-4.95-4.95l5.5-5.5a2 2 0 012.83 2.83L5.38 10.9a.5.5 0 01-.7-.7l4.24-4.25" />
     </svg>
   )
@@ -472,7 +498,7 @@ function ChevronIcon({ up }: { up: boolean }) {
   return (
     <svg
       width="16" height="16" viewBox="0 0 16 16" fill="none"
-      stroke="#6B7A99" strokeWidth="1.5"
+      stroke="#999999" strokeWidth="1.5"
       style={{ transition: 'transform 0.3s ease', transform: up ? 'rotate(180deg)' : 'none' }}
     >
       <path d="M4 6l4 4 4-4" />
@@ -490,10 +516,26 @@ export default function SMSAccordionPanel({
   assignedUser,
   borrowers,
   initialMessages = [],
-  apiBase = '/api',
+  apiBase,
   wsUrl,
   onToggle,
 }: SMSAccordionPanelProps) {
+  // ── API base: always route to the backend API domain ──
+  const resolvedApiBase = apiBase || (() => {
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+    return isLocalhost
+      ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
+      : 'https://api.perenniaai.com'
+  })()
+
+  // ── Auth helper: read JWT from localStorage (same pattern as rest of app) ──
+  function getAuthHeaders(): Record<string, string> {
+    const token = localStorage.getItem('token')
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (token) headers['Authorization'] = `Bearer ${token}`
+    return headers
+  }
+
   // Borrower selection — default to primary phone/name
   const [selectedBorrowerIdx, setSelectedBorrowerIdx] = useState(0)
   const hasBorrowerChoice = borrowers && borrowers.length > 1
@@ -542,7 +584,9 @@ export default function SMSAccordionPanel({
   async function fetchHistory() {
     try {
       const phoneParam = encodeURIComponent(activePhone)
-      const res = await fetch(`${apiBase}/v1/sms/conversations/${phoneParam}`)
+      const res = await fetch(`${resolvedApiBase}/api/v1/sms/conversations/${phoneParam}`, {
+        headers: getAuthHeaders(),
+      })
       if (!res.ok) return
       const data: SmsMessage[] = await res.json()
       setMessages(data)
@@ -552,13 +596,54 @@ export default function SMSAccordionPanel({
   }
 
   function connectWS() {
+    // Build WS URL pointing to the API domain (not frontend domain)
     const phoneParam = encodeURIComponent(activePhone)
-    const url = wsUrl || `${window.location.origin.replace(/^http/, 'ws')}/ws/sms/${phoneParam}`
-    const ws = new WebSocket(url)
+    const token = localStorage.getItem('token') || ''
+    const apiWsBase = wsUrl || (() => {
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+      return isLocalhost ? 'ws://localhost:8000' : 'wss://api.perenniaai.com'
+    })()
+    const ws = new WebSocket(`${apiWsBase}/ws/sms/${phoneParam}?token=${encodeURIComponent(token)}`)
+
     ws.onmessage = e => {
-      const msg: SmsMessage = JSON.parse(e.data)
-      setMessages(prev => [...prev, msg])
-      if (msg.direction === 'inbound') scrollToBottom()
+      try {
+        const data = JSON.parse(e.data)
+
+        // Handle status updates (delivered, failed) for existing messages
+        if (data.type === 'status_update' && data.messageId) {
+          setMessages(prev =>
+            prev.map(m =>
+              (m.id === data.messageId) ? { ...m, status: data.status } : m
+            )
+          )
+          return
+        }
+
+        // Handle new messages (inbound or outbound from another tab)
+        if (data.type === 'new_message' || data.direction) {
+          const msg: SmsMessage = {
+            id: data.id,
+            direction: data.direction,
+            body: data.body,
+            senderName: data.senderName || (data.direction === 'inbound' ? 'Customer' : 'System'),
+            senderRole: data.senderRole,
+            timestamp: data.timestamp,
+            status: data.status || 'delivered',
+            mediaUrls: data.mediaUrls || [],
+          }
+          setMessages(prev => {
+            // Avoid duplicates (may already exist from optimistic update)
+            if (prev.some(m => m.id === msg.id)) return prev
+            return [...prev, msg]
+          })
+          if (data.direction === 'inbound') {
+            scrollToBottom()
+            if (!open) setUnreadCount(c => c + 1)
+          }
+        }
+      } catch {
+        // ignore parse errors
+      }
     }
     ws.onerror = () => { /* silent — WS optional for real-time */ }
     wsRef.current = ws
@@ -638,12 +723,19 @@ export default function SMSAccordionPanel({
     try {
       // Upload media files first → get public URLs for Telnyx
       const mediaUrls: string[] = []
+      const token = localStorage.getItem('token')
       for (const sf of staged) {
         if (sf.file) {
           const form = new FormData()
           form.append('file', sf.file)
           form.append('contactId', contactId)
-          const res = await fetch(`${apiBase}/v1/sms/upload-media`, { method: 'POST', body: form })
+          const uploadHeaders: Record<string, string> = {}
+          if (token) uploadHeaders['Authorization'] = `Bearer ${token}`
+          const res = await fetch(`${resolvedApiBase}/api/v1/sms/upload-media`, {
+            method: 'POST',
+            headers: uploadHeaders,
+            body: form,
+          })
           if (res.ok) {
             const { url } = await res.json()
             mediaUrls.push(url)
@@ -652,9 +744,9 @@ export default function SMSAccordionPanel({
       }
 
       // Send via FastAPI → Telnyx endpoint
-      const res = await fetch(`${apiBase}/v1/sms/send`, {
+      const res = await fetch(`${resolvedApiBase}/api/v1/sms/send`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           contactId,
           to: activePhone,
@@ -763,7 +855,7 @@ export default function SMSAccordionPanel({
           {/* Top bar */}
           <div style={styles.topBar}>
             <span style={styles.topContact}>
-              To: <span style={{ color: '#7EB8F7' }}>{activePhone}</span> · {activeName}
+              To: <span style={{ color: '#218d8d' }}>{activePhone}</span> · {activeName}
             </span>
             <div style={styles.topActions}>
               <button style={styles.iconBtn}>Call</button>
@@ -828,7 +920,7 @@ export default function SMSAccordionPanel({
                 title="Record video"
                 onClick={() => setTray(t => t === 'recorder' ? 'none' : 'recorder')}
               >
-                <VideoIcon color={tray === 'recorder' ? '#E87070' : '#7EB8F7'} size={14} />
+                <VideoIcon color={tray === 'recorder' ? '#C0152F' : '#218d8d'} size={14} />
               </button>
               <div style={{ flex: 1 }} />
               {isMMS && <span style={styles.mmsBadge}>MMS</span>}
@@ -876,6 +968,21 @@ export default function SMSAccordionPanel({
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
+// Uses the site's CSS custom properties from index.css for theme consistency.
+// Teal primary (#218d8d), warm borders, light surface, system font stack.
+
+const TEAL = '#218d8d'
+const TEAL_HOVER = '#1a6670'
+const BORDER = 'rgba(139,92,68,0.15)'
+const BORDER_LIGHT = 'rgba(139,92,68,0.08)'
+const TEXT_PRI = '#1a1a1a'
+const TEXT_SEC = '#666666'
+const TEXT_TER = '#999999'
+const BG_BASE = '#FCFCF9'
+const BG_SURFACE = '#FFFFFF'
+const BG_HOVER = 'rgba(139,92,68,0.08)'
+const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Inter', sans-serif"
+const FONT_MONO = "'Berkeley Mono', 'Courier New', monospace"
 
 const styles = {
   panel: {
@@ -885,14 +992,14 @@ const styles = {
     right: 0,
     transition: 'transform 0.35s cubic-bezier(0.4, 0, 0.2, 1)',
     zIndex: 100,
-    fontFamily: "'DM Sans', sans-serif",
+    fontFamily: FONT,
   },
   handle: {
-    background: 'rgba(10, 18, 32, 0.97)',
+    background: BG_SURFACE,
     backdropFilter: 'blur(12px)',
-    borderTop: '1px solid rgba(126, 184, 247, 0.25)',
-    borderLeft: '0.5px solid rgba(126, 184, 247, 0.1)',
-    borderRight: '0.5px solid rgba(126, 184, 247, 0.1)',
+    borderTop: `1px solid ${BORDER}`,
+    borderLeft: `0.5px solid ${BORDER_LIGHT}`,
+    borderRight: `0.5px solid ${BORDER_LIGHT}`,
     borderRadius: '12px 12px 0 0',
     padding: '0 16px',
     cursor: 'pointer',
@@ -900,6 +1007,7 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
+    boxShadow: '0 -2px 8px rgba(0,0,0,0.06)',
   },
   handleLeft: {
     display: 'flex',
@@ -910,39 +1018,39 @@ const styles = {
     width: 8,
     height: 8,
     borderRadius: '50%',
-    background: '#7EB8F7',
+    background: TEAL,
     flexShrink: 0,
   },
   handleTitle: {
     fontSize: 13,
     fontWeight: 500,
-    color: '#E8EEF7',
+    color: TEXT_PRI,
   },
   handleSub: {
     fontSize: 12,
-    color: '#6B7A99',
+    color: TEXT_TER,
     fontWeight: 400,
   },
   unreadBadge: {
-    background: 'rgba(126, 184, 247, 0.15)',
-    border: '0.5px solid rgba(126, 184, 247, 0.4)',
+    background: 'rgba(33,141,141,0.1)',
+    border: `0.5px solid rgba(33,141,141,0.35)`,
     borderRadius: 20,
     padding: '2px 9px',
     fontSize: 11,
-    color: '#7EB8F7',
-    fontFamily: "'DM Mono', monospace",
+    color: TEAL,
+    fontFamily: FONT_MONO,
   },
   body: {
-    background: 'rgba(8, 14, 26, 0.98)',
-    height: 460,
+    background: BG_BASE,
+    height: '12.5vh',
     display: 'flex',
     flexDirection: 'column' as const,
-    borderLeft: '0.5px solid rgba(126, 184, 247, 0.1)',
-    borderRight: '0.5px solid rgba(126, 184, 247, 0.1)',
+    borderLeft: `0.5px solid ${BORDER_LIGHT}`,
+    borderRight: `0.5px solid ${BORDER_LIGHT}`,
   },
   borrowerSelector: {
     padding: '8px 16px',
-    borderBottom: '0.5px solid rgba(126, 184, 247, 0.12)',
+    borderBottom: `0.5px solid ${BORDER_LIGHT}`,
     display: 'flex',
     alignItems: 'center',
     gap: 10,
@@ -950,8 +1058,8 @@ const styles = {
   },
   borrowerLabel: {
     fontSize: 11,
-    color: '#4A6080',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_TER,
+    fontFamily: FONT_MONO,
     whiteSpace: 'nowrap' as const,
   },
   borrowerPills: {
@@ -961,8 +1069,8 @@ const styles = {
     overflow: 'auto' as const,
   },
   borrowerPill: {
-    background: 'rgba(126,184,247,0.06)',
-    border: '0.5px solid rgba(126,184,247,0.18)',
+    background: 'rgba(33,141,141,0.05)',
+    border: `0.5px solid ${BORDER}`,
     borderRadius: 8,
     padding: '5px 10px',
     cursor: 'pointer',
@@ -974,23 +1082,23 @@ const styles = {
     transition: 'all 0.2s',
   },
   borrowerPillActive: {
-    background: 'rgba(126,184,247,0.18)',
-    borderColor: 'rgba(126,184,247,0.5)',
+    background: 'rgba(33,141,141,0.12)',
+    borderColor: TEAL,
   },
   borrowerPillName: {
     fontSize: 12,
     fontWeight: 500,
-    color: '#B8D8F5',
+    color: TEXT_PRI,
     whiteSpace: 'nowrap' as const,
   },
   borrowerPillType: {
     fontSize: 10,
-    color: '#4A6080',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_TER,
+    fontFamily: FONT_MONO,
   },
   topBar: {
     padding: '10px 16px',
-    borderBottom: '0.5px solid rgba(255, 255, 255, 0.07)',
+    borderBottom: `0.5px solid ${BORDER_LIGHT}`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -998,22 +1106,22 @@ const styles = {
   },
   topContact: {
     fontSize: 12,
-    color: '#6B7A99',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_SEC,
+    fontFamily: FONT_MONO,
   },
   topActions: {
     display: 'flex',
     gap: 8,
   },
   iconBtn: {
-    background: 'rgba(126, 184, 247, 0.07)',
-    border: '0.5px solid rgba(126, 184, 247, 0.2)',
+    background: 'rgba(33,141,141,0.06)',
+    border: `0.5px solid ${BORDER}`,
     borderRadius: 6,
     padding: '4px 8px',
     fontSize: 11,
-    color: '#7EB8F7',
+    color: TEAL,
     cursor: 'pointer',
-    fontFamily: "'DM Mono', monospace",
+    fontFamily: FONT_MONO,
   },
   thread: {
     flex: 1,
@@ -1027,21 +1135,21 @@ const styles = {
   emptyThread: {
     textAlign: 'center' as const,
     fontSize: 12,
-    color: '#3D4E66',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_TER,
+    fontFamily: FONT_MONO,
     marginTop: 40,
   },
   dateDivider: {
     textAlign: 'center' as const,
     fontSize: 10,
-    color: '#3D4E66',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_TER,
+    fontFamily: FONT_MONO,
     padding: '4px 0',
     position: 'relative' as const,
-    borderTop: '0.5px solid rgba(255,255,255,0.06)',
+    borderTop: `0.5px solid ${BORDER_LIGHT}`,
   },
   dateDividerSpan: {
-    background: '#08101A',
+    background: BG_BASE,
     padding: '0 12px',
     position: 'relative' as const,
     top: -8,
@@ -1053,7 +1161,7 @@ const styles = {
   },
   msgSender: {
     fontSize: 10,
-    fontFamily: "'DM Mono', monospace",
+    fontFamily: FONT_MONO,
     fontWeight: 500,
   },
   msgBubble: {
@@ -1064,24 +1172,24 @@ const styles = {
     lineHeight: 1.5,
   },
   msgBubbleIn: {
-    background: 'rgba(255,255,255,0.07)',
-    border: '0.5px solid rgba(255,255,255,0.1)',
-    color: '#C8D4E8',
+    background: BG_SURFACE,
+    border: `0.5px solid ${BORDER}`,
+    color: TEXT_PRI,
     borderBottomLeftRadius: 3,
   },
   msgBubbleOut: {
-    background: 'rgba(126,184,247,0.12)',
-    border: '0.5px solid rgba(126,184,247,0.25)',
-    color: '#B8D8F5',
+    background: 'rgba(33,141,141,0.08)',
+    border: '0.5px solid rgba(33,141,141,0.25)',
+    color: TEXT_PRI,
     borderBottomRightRadius: 3,
   },
   msgBubbleUnread: {
-    borderColor: 'rgba(126,184,247,0.45)',
+    borderColor: TEAL,
   },
   msgMeta: {
     fontSize: 10,
-    color: '#4A5568',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_TER,
+    fontFamily: FONT_MONO,
     padding: '0 4px',
   },
   docBubble: {
@@ -1089,8 +1197,8 @@ const styles = {
     padding: '10px 13px',
     borderRadius: 12,
     borderBottomRightRadius: 3,
-    background: 'rgba(126,184,247,0.08)',
-    border: '0.5px solid rgba(126,184,247,0.25)',
+    background: 'rgba(33,141,141,0.05)',
+    border: `0.5px solid ${BORDER}`,
     display: 'flex',
     alignItems: 'center',
     gap: 10,
@@ -1099,7 +1207,7 @@ const styles = {
     width: 32,
     height: 32,
     borderRadius: 6,
-    background: 'rgba(126,184,247,0.15)',
+    background: 'rgba(33,141,141,0.1)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1111,16 +1219,16 @@ const styles = {
   },
   docName: {
     fontSize: 12,
-    color: '#B8D8F5',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_PRI,
+    fontFamily: FONT_MONO,
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
   docSize: {
     fontSize: 10,
-    color: '#4A6080',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_TER,
+    fontFamily: FONT_MONO,
     marginTop: 2,
   },
   videoBubble: {
@@ -1128,13 +1236,12 @@ const styles = {
     borderRadius: 12,
     borderBottomRightRadius: 3,
     overflow: 'hidden',
-    border: '0.5px solid rgba(126,184,247,0.3)',
-    cursor: 'pointer',
+    border: `0.5px solid ${BORDER}`,
   },
   videoThumb: {
-    width: 220,
-    height: 124,
-    background: 'linear-gradient(135deg,#0d1f35,#152d4a)',
+    width: '100%',
+    height: 100,
+    background: '#f0efec',
     display: 'flex',
     flexDirection: 'column' as const,
     alignItems: 'center',
@@ -1145,63 +1252,78 @@ const styles = {
     width: 36,
     height: 36,
     borderRadius: '50%',
-    background: 'rgba(126,184,247,0.2)',
-    border: '1.5px solid rgba(126,184,247,0.5)',
+    background: 'rgba(33,141,141,0.15)',
+    border: `1.5px solid ${TEAL}`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  videoMeta: {
+    padding: '4px 10px 6px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    background: BG_SURFACE,
+  },
   videoLabel: {
     fontSize: 10,
-    color: '#6B8AAA',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_SEC,
+    fontFamily: FONT_MONO,
   },
   videoDuration: {
     fontSize: 10,
-    color: '#7EB8F7',
-    fontFamily: "'DM Mono', monospace",
+    color: TEAL,
+    fontFamily: FONT_MONO,
   },
   stagedArea: {
     padding: '6px 14px',
-    borderTop: '0.5px solid rgba(126,184,247,0.1)',
+    borderTop: `0.5px solid ${BORDER_LIGHT}`,
     display: 'flex',
     flexDirection: 'column' as const,
     gap: 5,
     flexShrink: 0,
+    maxHeight: 160,
+    overflowY: 'auto' as const,
+  },
+  stagedVideoPreview: {
+    marginBottom: 4,
+    borderRadius: 6,
+    overflow: 'hidden',
+    border: `0.5px solid ${BORDER}`,
   },
   stagedFile: {
     display: 'flex',
     alignItems: 'center',
     gap: 8,
-    background: 'rgba(126,184,247,0.06)',
-    border: '0.5px solid rgba(126,184,247,0.2)',
+    background: 'rgba(33,141,141,0.04)',
+    border: `0.5px solid ${BORDER}`,
     borderRadius: 7,
     padding: '7px 10px',
   },
   stagedName: {
     flex: 1,
     fontSize: 11,
-    color: '#7EB8F7',
-    fontFamily: "'DM Mono', monospace",
+    color: TEAL,
+    fontFamily: FONT_MONO,
     whiteSpace: 'nowrap' as const,
     overflow: 'hidden',
     textOverflow: 'ellipsis',
   },
   stagedSize: {
     fontSize: 10,
-    color: '#4A6080',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_TER,
+    fontFamily: FONT_MONO,
   },
   stagedRemove: {
     cursor: 'pointer',
-    color: '#4A6080',
+    color: TEXT_TER,
     fontSize: 16,
     lineHeight: 1,
     padding: '0 2px',
   },
   attachTray: {
-    background: 'rgba(6,12,22,0.95)',
-    borderTop: '0.5px solid rgba(126,184,247,0.15)',
+    background: BG_SURFACE,
+    borderTop: `0.5px solid ${BORDER}`,
     padding: '10px 14px',
     display: 'flex',
     flexDirection: 'column' as const,
@@ -1214,8 +1336,8 @@ const styles = {
   },
   attachOpt: {
     flex: 1,
-    background: 'rgba(126,184,247,0.06)',
-    border: '0.5px solid rgba(126,184,247,0.18)',
+    background: 'rgba(33,141,141,0.04)',
+    border: `0.5px solid ${BORDER}`,
     borderRadius: 8,
     padding: '10px 12px',
     cursor: 'pointer',
@@ -1225,13 +1347,13 @@ const styles = {
     transition: 'background 0.2s',
   },
   attachOptHov: {
-    background: 'rgba(126,184,247,0.12)',
+    background: BG_HOVER,
   },
   attachOptIcon: {
     width: 28,
     height: 28,
     borderRadius: 6,
-    background: 'rgba(126,184,247,0.12)',
+    background: 'rgba(33,141,141,0.08)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1243,24 +1365,26 @@ const styles = {
   },
   attachOptSub: {
     fontSize: 10,
-    color: '#4A6080',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_TER,
+    fontFamily: FONT_MONO,
     marginTop: 1,
   },
   recorderPanel: {
-    background: 'rgba(6,10,18,0.98)',
-    borderTop: '0.5px solid rgba(126,184,247,0.15)',
-    padding: '12px 14px',
+    background: BG_SURFACE,
+    borderTop: `0.5px solid ${BORDER}`,
+    padding: '8px 14px',
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: 10,
-    flexShrink: 0,
+    gap: 6,
+    flex: 1,
+    minHeight: 0,
   },
   recPreview: {
     width: '100%',
-    height: 140,
-    background: '#050C18',
-    border: '0.5px solid rgba(126,184,247,0.2)',
+    flex: 1,
+    minHeight: 80,
+    background: '#f0efec',
+    border: `0.5px solid ${BORDER}`,
     borderRadius: 8,
     overflow: 'hidden',
     position: 'relative' as const,
@@ -1276,8 +1400,8 @@ const styles = {
   },
   recHint: {
     fontSize: 11,
-    color: '#4A6080',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_TER,
+    fontFamily: FONT_MONO,
   },
   recTimer: {
     position: 'absolute' as const,
@@ -1288,15 +1412,15 @@ const styles = {
     gap: 6,
     fontSize: 14,
     fontWeight: 500,
-    color: '#E87070',
-    fontFamily: "'DM Mono', monospace",
+    color: '#C0152F',
+    fontFamily: FONT_MONO,
   },
   recDot: {
     display: 'inline-block',
     width: 7,
     height: 7,
     borderRadius: '50%',
-    background: '#E87070',
+    background: '#C0152F',
   },
   recDoneOverlay: {
     position: 'absolute' as const,
@@ -1313,40 +1437,40 @@ const styles = {
   },
   recBtn: {
     flex: 1,
-    padding: '8px 0',
-    borderRadius: 8,
-    fontSize: 12,
-    fontFamily: "'DM Mono', monospace",
+    padding: '6px 0',
+    borderRadius: 6,
+    fontSize: 11,
+    fontFamily: FONT_MONO,
     cursor: 'pointer',
     textAlign: 'center' as const,
     border: 'none',
   },
   recBtnStart: {
-    background: 'rgba(232,112,112,0.12)',
-    border: '0.5px solid rgba(232,112,112,0.35)',
-    color: '#E87070',
+    background: 'rgba(192,21,47,0.08)',
+    border: '0.5px solid rgba(192,21,47,0.3)',
+    color: '#C0152F',
   },
   recBtnStop: {
-    background: 'rgba(232,112,112,0.2)',
-    border: '0.5px solid rgba(232,112,112,0.5)',
-    color: '#F09090',
+    background: 'rgba(192,21,47,0.12)',
+    border: '0.5px solid rgba(192,21,47,0.4)',
+    color: '#C0152F',
   },
   recBtnAttach: {
-    background: 'rgba(126,184,247,0.12)',
-    border: '0.5px solid rgba(126,184,247,0.35)',
-    color: '#7EB8F7',
+    background: 'rgba(33,141,141,0.08)',
+    border: `0.5px solid rgba(33,141,141,0.3)`,
+    color: TEAL,
   },
   recBtnCancel: {
-    background: 'rgba(255,255,255,0.04)',
-    border: '0.5px solid rgba(255,255,255,0.12)',
-    color: '#6B7A99',
+    background: 'rgba(139,92,68,0.05)',
+    border: `0.5px solid ${BORDER}`,
+    color: TEXT_SEC,
   },
   compose: {
-    padding: '10px 14px',
-    borderTop: '0.5px solid rgba(255,255,255,0.07)',
+    padding: '6px 14px 8px',
+    borderTop: `0.5px solid ${BORDER_LIGHT}`,
     display: 'flex',
     flexDirection: 'column' as const,
-    gap: 7,
+    gap: 4,
     flexShrink: 0,
   },
   toolbar: {
@@ -1358,8 +1482,8 @@ const styles = {
     width: 30,
     height: 30,
     borderRadius: 7,
-    background: 'rgba(126,184,247,0.07)',
-    border: '0.5px solid rgba(126,184,247,0.18)',
+    background: 'rgba(33,141,141,0.06)',
+    border: `0.5px solid ${BORDER}`,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1367,22 +1491,22 @@ const styles = {
     flexShrink: 0,
   },
   toolBtnActive: {
-    background: 'rgba(126,184,247,0.2)',
-    borderColor: 'rgba(126,184,247,0.45)',
+    background: 'rgba(33,141,141,0.15)',
+    borderColor: TEAL,
   },
   mmsBadge: {
     fontSize: 10,
-    color: '#A87040',
-    background: 'rgba(168,112,64,0.1)',
-    border: '0.5px solid rgba(168,112,64,0.3)',
+    color: '#A84B2F',
+    background: 'rgba(168,75,47,0.08)',
+    border: '0.5px solid rgba(168,75,47,0.25)',
     borderRadius: 4,
     padding: '1px 6px',
-    fontFamily: "'DM Mono', monospace",
+    fontFamily: FONT_MONO,
   },
   charCount: {
     fontSize: 10,
-    color: '#3D4E66',
-    fontFamily: "'DM Mono', monospace",
+    color: TEXT_TER,
+    fontFamily: FONT_MONO,
   },
   composeRow: {
     display: 'flex',
@@ -1391,26 +1515,26 @@ const styles = {
   },
   textarea: {
     flex: 1,
-    background: 'rgba(255,255,255,0.05)',
-    border: '0.5px solid rgba(126,184,247,0.2)',
+    background: BG_SURFACE,
+    border: `0.5px solid ${BORDER}`,
     borderRadius: 10,
     padding: '9px 13px',
-    color: '#C8D4E8',
+    color: TEXT_PRI,
     fontSize: 13,
-    fontFamily: "'DM Sans', sans-serif",
+    fontFamily: FONT,
     resize: 'none' as const,
     outline: 'none',
     minHeight: 38,
     maxHeight: 80,
   },
   sendBtn: {
-    background: 'rgba(126,184,247,0.15)',
-    border: '0.5px solid rgba(126,184,247,0.35)',
+    background: TEAL,
+    border: 'none',
     borderRadius: 8,
     padding: '8px 16px',
-    color: '#7EB8F7',
+    color: '#FFFFFF',
     fontSize: 12,
-    fontFamily: "'DM Mono', monospace",
+    fontFamily: FONT_MONO,
     whiteSpace: 'nowrap' as const,
     height: 38,
   },
