@@ -12,7 +12,7 @@ Features:
 - API documentation endpoints
 """
 
-from fastapi import Depends, HTTPException, Query, BackgroundTasks
+from fastapi import Depends, HTTPException, Query, BackgroundTasks, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, or_, and_, func
 from pydantic import BaseModel, Field, validator, HttpUrl
@@ -380,6 +380,7 @@ def register_api_gateway_routes(app, get_db, get_current_user, **kwargs):
         description="Generate a new API key with specified scopes and permissions. The full key is only shown once."
     )
     async def create_api_key(
+        http_request: Request,
         request: ApiKeyCreateRequest,
         db: Session = Depends(get_db),
         current_user: User = Depends(get_current_user)
@@ -391,6 +392,16 @@ def register_api_gateway_routes(app, get_db, get_current_user, **kwargs):
 
         The generated key is hashed at rest and only shown in full at creation time.
         """
+        # Rate limit API key creation — 5/hour per user
+        from routes.auth_routes import (
+            _check_auth_rate_limit, _raise_rate_limit,
+            _AUTH_RATE_MAX_API_KEY_CREATE_HOUR, _AUTH_RATE_WINDOW_HOUR,
+        )
+        user_key = f"user:{current_user.id}"
+        if not _check_auth_rate_limit(user_key, _AUTH_RATE_MAX_API_KEY_CREATE_HOUR, _AUTH_RATE_WINDOW_HOUR, "apikey_create"):
+            logger.warning(f"API key creation rate limit exceeded for user {current_user.id}")
+            _raise_rate_limit(_AUTH_RATE_WINDOW_HOUR, "Too many API key creation requests. Please try again later.")
+
         try:
             # Generate API key
             api_key, key_hash = generate_api_key()

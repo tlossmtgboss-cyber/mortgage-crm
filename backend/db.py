@@ -84,16 +84,16 @@ elif USE_PGBOUNCER:
     )
 else:
     # Direct PostgreSQL connection with SQLAlchemy pooling
-    # Railway has 97 connections max; conservative pool to prevent exhaustion
-    # Key: pool_size + max_overflow should not exceed ~50% of Railway's limit
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=3, max_overflow=5, max=8)")
+    # Railway has 97 connections max; pool_size + max_overflow = 15 (~15% of limit)
+    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=5, max_overflow=10, max=15)")
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,           # CRITICAL: Verify connections before use (catches stale/dead connections)
-        pool_size=3,                  # Permanent connections (reduced to stay under Railway limits)
-        max_overflow=5,               # Additional connections under load (total max: 8)
-        pool_recycle=900,             # Recycle connections every 15 min (was 30 - faster recycling prevents stale connections)
+        pool_size=5,                  # Permanent connections (5 warm connections ready)
+        max_overflow=10,              # Additional connections under load (total max: 15)
+        pool_recycle=900,             # Recycle connections every 15 min
         pool_timeout=20,              # Wait max 20s for a connection (fail fast if pool exhaustion)
+        pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)
         echo=False,                   # Set True for SQL debugging
         connect_args={
             "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}",

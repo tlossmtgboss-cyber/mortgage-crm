@@ -8,7 +8,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -230,6 +230,7 @@ class MFALoginVerifyRequest(BaseModel):
 
 @router.post("/login-verify")
 async def verify_mfa_login(
+    http_request: Request,
     request: MFALoginVerifyRequest,
     db: Session = Depends(get_db),
 ):
@@ -242,6 +243,21 @@ async def verify_mfa_login(
 
     This endpoint accepts either a 6-digit TOTP code or a backup code.
     """
+    # Rate limit MFA verification — 5/minute and 15/hour per IP to prevent brute force
+    from routes.auth_routes import (
+        _get_real_client_ip, _check_auth_rate_limit_multi, _raise_rate_limit,
+        _AUTH_RATE_MAX_MFA_VERIFY, _AUTH_RATE_WINDOW,
+        _AUTH_RATE_MAX_MFA_VERIFY_HOUR, _AUTH_RATE_WINDOW_HOUR,
+    )
+    client_ip = _get_real_client_ip(http_request)
+    allowed, retry_after = _check_auth_rate_limit_multi(client_ip, [
+        (_AUTH_RATE_MAX_MFA_VERIFY, _AUTH_RATE_WINDOW, "mfa_verify"),
+        (_AUTH_RATE_MAX_MFA_VERIFY_HOUR, _AUTH_RATE_WINDOW_HOUR, "mfa_verify_hour"),
+    ])
+    if not allowed:
+        logger.warning(f"MFA verify rate limit exceeded for {client_ip}")
+        _raise_rate_limit(retry_after, "Too many MFA verification attempts. Please try again later.")
+
     from auth.mfa import verify_mfa_token, verify_backup_code
 
     # Lazy imports for auth functions

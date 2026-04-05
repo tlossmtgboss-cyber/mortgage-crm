@@ -77,7 +77,8 @@ def update_delivery_status(
     carrier_name: Optional[str] = None,
     delivered_at: Optional[datetime] = None,
 ) -> bool:
-    """Update delivery status from Telnyx webhook payload."""
+    """Update delivery status from Telnyx webhook payload.
+    Also syncs status to sms_panel_messages for the two-way panel."""
     normalized_status = STATUS_MAP.get(status, status)
     try:
         db.execute(
@@ -98,8 +99,36 @@ def update_delivery_status(
                 "msg_id": telnyx_message_id,
             },
         )
+
+        # Sync status to sms_panel_messages (for the two-way SMS panel)
+        try:
+            from routes.sms_conversation_routes import update_panel_message_status
+            update_panel_message_status(db, telnyx_message_id, normalized_status)
+        except Exception as panel_err:
+            logger.debug(f"Panel status sync skipped: {panel_err}")
+
         db.commit()
         logger.info(f"Delivery status updated: {telnyx_message_id} -> {normalized_status}")
+
+        # Push status change to WebSocket (non-blocking)
+        try:
+            import asyncio
+            from routes.sms_conversation_routes import notify_status_update
+
+            # Look up the phone number for this message
+            phone_row = db.execute(
+                text("SELECT to_phone FROM sms_delivery_log WHERE telnyx_message_id = :msg_id"),
+                {"msg_id": telnyx_message_id},
+            ).fetchone()
+            if phone_row:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    asyncio.ensure_future(
+                        notify_status_update(phone_row[0], telnyx_message_id, normalized_status)
+                    )
+        except Exception as ws_err:
+            logger.debug(f"WebSocket status push skipped: {ws_err}")
+
         return True
     except Exception as e:
         db.rollback()

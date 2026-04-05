@@ -47,9 +47,11 @@ class SMSClient:
         organization_id: Optional[int] = None,
         bypass_compliance: bool = False,
         schedule_at: Optional[datetime] = None,
+        media_urls: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
-        Send SMS with full compliance and rate limiting stack.
+        Send SMS/MMS with full compliance and rate limiting stack.
+        Pass media_urls (list of public URLs) to send MMS via Telnyx.
         """
         if not self.enabled:
             return {"success": False, "error": "Client not configured"}
@@ -85,8 +87,11 @@ class SMSClient:
                 "from": self.from_number,
                 "to": to_phone,
                 "text": message,
-                "messaging_profile_id": self.profile_id
+                "messaging_profile_id": self.profile_id,
             }
+            # MMS: include media URLs for Telnyx to fetch and attach
+            if media_urls:
+                payload["media_urls"] = media_urls
 
             response = requests.post(
                 "https://api.telnyx.com/v2/messages",

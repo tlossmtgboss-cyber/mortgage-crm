@@ -18,7 +18,7 @@ import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Header, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, Header, WebSocket, WebSocketDisconnect, BackgroundTasks, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
@@ -143,6 +143,7 @@ async def debug_notes_version():
 
 @router.post("/auth/login", response_model=RealtorLoginResponse)
 async def realtor_login(
+    http_request: Request,
     request: RealtorLoginRequest,
     db: Session = Depends(get_db)
 ):
@@ -153,6 +154,21 @@ async def realtor_login(
     - Email/password authentication
     - Magic link token verification
     """
+    # Rate limit realtor login — 5/minute and 20/hour per IP
+    from routes.auth_routes import (
+        _get_real_client_ip, _check_auth_rate_limit_multi, _raise_rate_limit,
+        _AUTH_RATE_MAX_LOGIN, _AUTH_RATE_WINDOW,
+        _AUTH_RATE_MAX_LOGIN_HOUR, _AUTH_RATE_WINDOW_HOUR,
+    )
+    client_ip = _get_real_client_ip(http_request)
+    allowed, retry_after = _check_auth_rate_limit_multi(client_ip, [
+        (_AUTH_RATE_MAX_LOGIN, _AUTH_RATE_WINDOW, "realtor_login"),
+        (_AUTH_RATE_MAX_LOGIN_HOUR, _AUTH_RATE_WINDOW_HOUR, "realtor_login_hour"),
+    ])
+    if not allowed:
+        logger.warning(f"Realtor login rate limit exceeded for {client_ip}")
+        _raise_rate_limit(retry_after, "Too many login attempts. Please try again later.")
+
     if request.magic_link_token:
         # Verify magic link
         result = db.execute(text("""

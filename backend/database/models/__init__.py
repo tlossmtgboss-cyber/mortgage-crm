@@ -178,6 +178,9 @@ from .microsoft import (
     MicrosoftAppConfig,
 )
 
+# Unified OAuth token storage (consolidates microsoft_tokens, microsoft_oauth_tokens, integration_profiles)
+from .oauth_token import OAuthToken
+
 # Data reconciliation engine models
 from .data_reconciliation import (
     IncomingDataEvent,
@@ -657,6 +660,22 @@ from .borrower_prep import BorrowerPrepSequence, BorrowerPrepStep
 
 # Call Disposition (structured call outcome logging)
 from .call_disposition import CallDisposition
+
+# Autonomous Task Scheduler (proactive AI agent scheduling & execution)
+from .autonomous_task import AutonomousTask, TaskExecution, AgentAction
+from .action_type_confidence import ActionTypeConfidence
+
+# Agent Feedback (user ratings on AI responses)
+from .agent_feedback import AgentFeedback, AgentFeedbackSummary
+
+# Learning Examples (persistent training data for AI improvement)
+from .learning_example import LearningExample, LearningPattern, PromptOptimization
+
+# Agent Memory (conversation memory, context, facts)
+from .agent_memory import AgentConversation, AgentMemory, AgentContext
+
+# Webhook Idempotency (duplicate callback prevention for Vapi/Telnyx/Stripe)
+from .webhook_idempotency import WebhookIdempotencyRecord
 
 
 __all__ = [
@@ -1352,4 +1371,37 @@ __all__ = [
     # Call Disposition
     # =====================
     "CallDisposition",
+
+    # =====================
+    # Autonomous Task Scheduler
+    # =====================
+    "AutonomousTask",
+    "TaskExecution",
+    "AgentAction",
+    "ActionTypeConfidence",
+
+    # =====================
+    # Agent Feedback
+    # =====================
+    "AgentFeedback",
+    "AgentFeedbackSummary",
+
+    # =====================
+    # Learning Examples
+    # =====================
+    "LearningExample",
+    "LearningPattern",
+    "PromptOptimization",
+
+    # =====================
+    # Agent Memory
+    # =====================
+    "AgentConversation",
+    "AgentMemory",
+    "AgentContext",
+
+    # =====================
+    # Webhook Idempotency
+    # =====================
+    "WebhookIdempotencyRecord",
 ]

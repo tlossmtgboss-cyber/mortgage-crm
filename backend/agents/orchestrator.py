@@ -14,7 +14,7 @@ import asyncio
 import logging
 import os
 from typing import Any, Callable, Dict, Optional, Literal
-from datetime import datetime
+from datetime import datetime, timezone
 
 from langgraph.graph import StateGraph, END
 from anthropic import Anthropic
@@ -33,6 +33,7 @@ from .nodes.execute import execute_actions
 from .nodes.respond import generate_response, format_structured_response
 from .nodes.reason_and_respond import reason_and_respond
 from .hallucination_verifier import get_hallucination_verifier
+from .orchestration.quality_analyzer import QualityAnalyzer
 
 # Enterprise modules: budget, rate limiting, audit, correlation IDs
 from .token_budget import get_token_budget, get_rate_limiter
@@ -291,22 +292,112 @@ def create_orchestrator(
         """Unified reasoning + response node (optimized - saves ~5-7s)"""
         return await reason_and_respond(state, anthropic_client)
 
+    async def verify_and_score_node(state: AgentState) -> AgentState:
+        """
+        Post-response verification and quality scoring node.
+
+        Runs hallucination verification (comparing response against gathered data)
+        and quality analysis (scoring the prompt/response quality) in parallel.
+        Never blocks the pipeline — failures result in missing metadata, not errors.
+        """
+        import time as _time
+        node_start = _time.perf_counter()
+        state = add_node_trace(state, "verify_and_score")
+
+        response_text = state.get("response", "")
+        gathered_data = state.get("gathered_data", {})
+        tool_calls = state.get("tool_calls", [])
+        tools_used = [tc.tool_name for tc in tool_calls] if tool_calls else []
+
+        updates = {}
+
+        # --- Hallucination Verification ---
+        verification_enabled = os.getenv("ENABLE_HALLUCINATION_VERIFICATION", "true").lower() == "true"
+        if verification_enabled and response_text and gathered_data:
+            try:
+                verifier = get_hallucination_verifier()
+                # Use rule-based verification in the pipeline node to avoid
+                # adding LLM latency; the full LLM-based check still runs
+                # post-response (blocking for compliance intents, background
+                # for others) in run_orchestrator.
+                report = await verifier.generate_report(
+                    session_id=state.get("conversation_id") or "pipeline",
+                    message_id=f"node_{datetime.now(timezone.utc).timestamp():.0f}",
+                    response_text=response_text,
+                    source_data=gathered_data,
+                    tools_used=tools_used,
+                    use_llm=False,  # Rule-based only — fast, no extra API call
+                )
+
+                verification_summary = {
+                    "faithfulness_score": report.faithfulness_score,
+                    "hallucination_rate": report.hallucination_rate,
+                    "total_claims": report.total_claims,
+                    "verified_claims": report.verified_claims,
+                    "contradicted_claims": report.contradicted_claims,
+                    "unsupported_claims": report.unsupported_claims,
+                    "analysis_time_ms": report.analysis_time_ms,
+                }
+                updates["verification_report"] = verification_summary
+
+                # Flag if high-confidence hallucinations detected
+                if report.contradicted_claims > 0 and report.hallucination_rate > 0.3:
+                    updates["verification_passed"] = False
+                    logger.warning(
+                        f"[VERIFY] High hallucination rate ({report.hallucination_rate:.0%}) "
+                        f"— {report.contradicted_claims} contradicted claims"
+                    )
+                else:
+                    updates["verification_passed"] = True
+
+                logger.info(
+                    f"[VERIFY] Hallucination check: faithfulness={report.faithfulness_score:.0%}, "
+                    f"claims={report.total_claims}, contradicted={report.contradicted_claims}, "
+                    f"time={report.analysis_time_ms:.0f}ms"
+                )
+            except Exception as e:
+                logger.warning(f"[VERIFY] Hallucination verification failed (graceful): {e}")
+                updates["verification_passed"] = True  # Don't block on failure
+
+        # --- Quality Analysis ---
+        try:
+            analyzer = QualityAnalyzer()
+            # Score the response as a proxy for quality — the analyzer is designed
+            # for prompts but works on any text with role/objective language.
+            quick_score = analyzer.get_quick_score(response_text)
+            updates["quality_score"] = {
+                "response_quality": quick_score,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+            }
+            logger.info(f"[VERIFY] Quality score: {quick_score}/100")
+        except Exception as e:
+            logger.warning(f"[VERIFY] Quality analysis failed (graceful): {e}")
+
+        elapsed_ms = (_time.perf_counter() - node_start) * 1000
+        logger.info(f"[VERIFY] verify_and_score completed in {elapsed_ms:.1f}ms")
+
+        if updates:
+            state = update_state(state, updates)
+        return state
+
     # Build the graph
     workflow = StateGraph(AgentState)
 
     if use_unified_mode:
         # OPTIMIZED: Unified mode - 2 LLM calls instead of 3
+        # Flow: analyze → gather → reason_and_respond → verify_and_score → execute|END
         logger.info("[ORCHESTRATOR] Using UNIFIED mode (reason+respond combined)")
 
         # Add nodes
         workflow.add_node("analyze", analyze_node)
         workflow.add_node("gather", gather_node)
         workflow.add_node("reason_and_respond", unified_reason_respond_node)
+        workflow.add_node("verify_and_score", verify_and_score_node)
         workflow.add_node("execute", execute_node)
 
         # Define routing logic for unified mode
-        def should_execute_after_unified(state: AgentState) -> Literal["execute", "end"]:
-            """Determine if we should execute actions after unified response."""
+        def should_execute_after_verify(state: AgentState) -> Literal["execute", "end"]:
+            """Determine if we should execute actions after verification."""
             requires_action = state.get("requires_action", False)
             query_intent = state.get("query_intent", QueryIntent.GENERAL_QUERY)
 
@@ -314,15 +405,16 @@ def create_orchestrator(
                 return "execute"
             return "end"
 
-        # Define edges - simplified flow
+        # Define edges: analyze → gather → reason_and_respond → verify_and_score → execute|END
         workflow.set_entry_point("analyze")
         workflow.add_edge("analyze", "gather")
         workflow.add_edge("gather", "reason_and_respond")
+        workflow.add_edge("reason_and_respond", "verify_and_score")
 
-        # After unified node, check if we need to execute actions
+        # After verification, check if we need to execute actions
         workflow.add_conditional_edges(
-            "reason_and_respond",
-            should_execute_after_unified,
+            "verify_and_score",
+            should_execute_after_verify,
             {
                 "execute": "execute",
                 "end": END
@@ -641,7 +733,11 @@ async def run_orchestrator(
                 "intent_agents": final_state.get("intent_agents", []),
                 "tools_used": [tc.tool_name for tc in final_state.get("tool_calls", [])],
                 "tool_count": tool_count,
-            }
+            },
+            # Verification & quality metadata from pipeline node
+            "verification": final_state.get("verification_report"),
+            "verification_passed": final_state.get("verification_passed", True),
+            "quality_score": final_state.get("quality_score"),
         }
         timing["build_response"] = (time.perf_counter() - step_start) * 1000
 

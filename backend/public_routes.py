@@ -2339,3 +2339,86 @@ IP: {req.client.host if req.client else 'Unknown'}
     except Exception as e:
         logger.exception(f"Contact form error: {e}")
         raise HTTPException(status_code=500, detail="Unable to process your request. Please try again.")
+
+
+# =============================================================================
+# NEWSLETTER SUBSCRIPTION
+# =============================================================================
+
+class NewsletterRequest(BaseModel):
+    email: EmailStr
+
+
+@router.post("/api/v1/public/newsletter")
+async def public_newsletter_subscribe(request: NewsletterRequest, req: Request, db: Session = Depends(get_db)):
+    """
+    Public endpoint for newsletter subscription from the website footer.
+    Stores the subscriber email and sends a welcome confirmation.
+    """
+    try:
+        from sqlalchemy import text
+
+        # Upsert into newsletter_subscribers table (create if not exists)
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+                id SERIAL PRIMARY KEY,
+                email TEXT UNIQUE NOT NULL,
+                subscribed_at TIMESTAMPTZ DEFAULT NOW(),
+                unsubscribed_at TIMESTAMPTZ,
+                source TEXT DEFAULT 'website_footer',
+                is_active BOOLEAN DEFAULT TRUE
+            )
+        """))
+
+        db.execute(
+            text("""
+                INSERT INTO newsletter_subscribers (email, subscribed_at, source, is_active)
+                VALUES (:email, :now, 'website_footer', TRUE)
+                ON CONFLICT (email) DO UPDATE SET
+                    is_active = TRUE,
+                    subscribed_at = :now,
+                    unsubscribed_at = NULL
+            """),
+            {"email": request.email, "now": datetime.now(timezone.utc)},
+        )
+        db.commit()
+
+        # Send welcome email (non-blocking)
+        try:
+            email_service = EmailService()
+            await email_service.send_email(
+                to_email=request.email,
+                subject="Welcome to Perennia AI Updates",
+                body=f"""Thanks for subscribing to Perennia AI updates!
+
+You'll receive the latest mortgage industry insights, product updates, and tips for loan officers.
+
+If you ever want to unsubscribe, just reply to any email or contact us at admin@perenniaai.com.
+
+— The Perennia AI Team
+www.perenniaai.com
+""",
+            )
+        except Exception as e:
+            logger.debug(f"Newsletter welcome email skipped: {e}")
+
+        # Also notify admin
+        try:
+            admin_email = os.getenv("CONTACT_FORM_EMAIL", "admin@perenniaai.com")
+            email_service = EmailService()
+            await email_service.send_email(
+                to_email=admin_email,
+                subject=f"[Perennia AI] New newsletter subscriber: {request.email}",
+                body=f"New newsletter subscription from {request.email}\nSource: website footer\nIP: {req.client.host if req.client else 'Unknown'}",
+            )
+        except Exception:
+            pass
+
+        logger.info(f"Newsletter subscription: {request.email}")
+        return {"status": "success", "message": "You're subscribed!"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Newsletter subscription error: {e}")
+        raise HTTPException(status_code=500, detail="Unable to subscribe. Please try again.")

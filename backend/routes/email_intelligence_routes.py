@@ -1690,47 +1690,45 @@ async def sync_known_client_emails(
 
     synced = 0
 
-    # Get emails from leads
+    # Get emails from leads — scope to this user's leads for proper user_id
     leads = db.execute(text("""
-        SELECT id, email, name FROM leads WHERE email IS NOT NULL
-    """)).fetchall()
+        SELECT id, email, name FROM leads
+        WHERE email IS NOT NULL AND owner_id = :user_id
+    """), {"user_id": user_id}).fetchall()
 
-    for lead in leads:
-        if lead[1]:
-            db.execute(text("""
-                INSERT INTO known_client_emails (email_address, lead_id, client_name, source_type, source_id, user_id)
-                VALUES (:email, :lead_id, :name, 'lead', :lead_id, :user_id)
-                ON CONFLICT (email_address, user_id) DO UPDATE SET
-                    lead_id = COALESCE(known_client_emails.lead_id, :lead_id),
-                    updated_at = CURRENT_TIMESTAMP
-            """), {
-                "email": lead[1].lower(),
-                "lead_id": lead[0],
-                "name": lead[2],
-                "user_id": user_id
-            })
-            synced += 1
+    lead_params = [
+        {"email": lead[1].lower(), "lead_id": lead[0], "name": lead[2], "user_id": user_id}
+        for lead in leads if lead[1]
+    ]
+    if lead_params:
+        db.execute(text("""
+            INSERT INTO known_client_emails (email_address, lead_id, client_name, source_type, source_id, user_id)
+            VALUES (:email, :lead_id, :name, 'lead', :lead_id, :user_id)
+            ON CONFLICT (email_address, user_id) DO UPDATE SET
+                lead_id = COALESCE(known_client_emails.lead_id, EXCLUDED.lead_id),
+                updated_at = CURRENT_TIMESTAMP
+        """), lead_params)
+    synced += len(lead_params)
 
-    # Get emails from loans
+    # Get emails from loans — scope to this user's loans
     loans = db.execute(text("""
-        SELECT id, borrower_email, borrower_name FROM loans WHERE borrower_email IS NOT NULL
-    """)).fetchall()
+        SELECT id, borrower_email, borrower_name FROM loans
+        WHERE borrower_email IS NOT NULL AND loan_officer_id = :user_id
+    """), {"user_id": user_id}).fetchall()
 
-    for loan in loans:
-        if loan[1]:
-            db.execute(text("""
-                INSERT INTO known_client_emails (email_address, loan_id, client_name, source_type, source_id, user_id)
-                VALUES (:email, :loan_id, :name, 'loan', :loan_id, :user_id)
-                ON CONFLICT (email_address, user_id) DO UPDATE SET
-                    loan_id = COALESCE(known_client_emails.loan_id, :loan_id),
-                    updated_at = CURRENT_TIMESTAMP
-            """), {
-                "email": loan[1].lower(),
-                "loan_id": loan[0],
-                "name": loan[2],
-                "user_id": user_id
-            })
-            synced += 1
+    loan_params = [
+        {"email": loan[1].lower(), "loan_id": loan[0], "name": loan[2], "user_id": user_id}
+        for loan in loans if loan[1]
+    ]
+    if loan_params:
+        db.execute(text("""
+            INSERT INTO known_client_emails (email_address, loan_id, client_name, source_type, source_id, user_id)
+            VALUES (:email, :loan_id, :name, 'loan', :loan_id, :user_id)
+            ON CONFLICT (email_address, user_id) DO UPDATE SET
+                loan_id = COALESCE(known_client_emails.loan_id, EXCLUDED.loan_id),
+                updated_at = CURRENT_TIMESTAMP
+        """), loan_params)
+    synced += len(loan_params)
 
     db.commit()
 
@@ -2223,56 +2221,44 @@ async def cron_sync_emails_to_queue(
     try:
         from sqlalchemy import text
 
-        # Get all users
-        users = db.execute(text("SELECT id FROM users")).fetchall()
+        # Bulk sync all leads and loans in 2 SELECT + 2 batch INSERT (instead of 2*N queries)
+        leads = db.execute(text("""
+            SELECT id, email, name, owner_id FROM leads
+            WHERE email IS NOT NULL AND owner_id IS NOT NULL
+        """)).fetchall()
 
-        total_synced = 0
-        for user_row in users:
-            user_id = user_row[0]
+        lead_params = [
+            {"email": lead[1].lower(), "lead_id": lead[0], "name": lead[2], "user_id": lead[3]}
+            for lead in leads if lead[1]
+        ]
+        if lead_params:
+            db.execute(text("""
+                INSERT INTO known_client_emails (email_address, lead_id, client_name, source_type, source_id, user_id)
+                VALUES (:email, :lead_id, :name, 'lead', :lead_id, :user_id)
+                ON CONFLICT (email_address, user_id) DO UPDATE SET
+                    lead_id = COALESCE(known_client_emails.lead_id, EXCLUDED.lead_id),
+                    updated_at = CURRENT_TIMESTAMP
+            """), lead_params)
 
-            # Sync leads
-            leads = db.execute(text("""
-                SELECT id, email, name FROM leads
-                WHERE email IS NOT NULL AND loan_officer_id = :user_id
-            """), {"user_id": user_id}).fetchall()
+        loans = db.execute(text("""
+            SELECT id, borrower_email, borrower_name, loan_officer_id FROM loans
+            WHERE borrower_email IS NOT NULL AND loan_officer_id IS NOT NULL
+        """)).fetchall()
 
-            for lead in leads:
-                if lead[1]:
-                    db.execute(text("""
-                        INSERT INTO known_client_emails (email_address, lead_id, client_name, source_type, source_id, user_id)
-                        VALUES (:email, :lead_id, :name, 'lead', :lead_id, :user_id)
-                        ON CONFLICT (email_address, user_id) DO UPDATE SET
-                            lead_id = COALESCE(known_client_emails.lead_id, :lead_id),
-                            updated_at = CURRENT_TIMESTAMP
-                    """), {
-                        "email": lead[1].lower(),
-                        "lead_id": lead[0],
-                        "name": lead[2],
-                        "user_id": user_id
-                    })
+        loan_params = [
+            {"email": loan[1].lower(), "loan_id": loan[0], "name": loan[2], "user_id": loan[3]}
+            for loan in loans if loan[1]
+        ]
+        if loan_params:
+            db.execute(text("""
+                INSERT INTO known_client_emails (email_address, loan_id, client_name, source_type, source_id, user_id)
+                VALUES (:email, :loan_id, :name, 'loan', :loan_id, :user_id)
+                ON CONFLICT (email_address, user_id) DO UPDATE SET
+                    loan_id = COALESCE(known_client_emails.loan_id, EXCLUDED.loan_id),
+                    updated_at = CURRENT_TIMESTAMP
+            """), loan_params)
 
-            # Sync loans
-            loans = db.execute(text("""
-                SELECT id, borrower_email, borrower_name FROM loans
-                WHERE borrower_email IS NOT NULL AND loan_officer_id = :user_id
-            """), {"user_id": user_id}).fetchall()
-
-            for loan in loans:
-                if loan[1]:
-                    db.execute(text("""
-                        INSERT INTO known_client_emails (email_address, loan_id, client_name, source_type, source_id, user_id)
-                        VALUES (:email, :loan_id, :name, 'loan', :loan_id, :user_id)
-                        ON CONFLICT (email_address, user_id) DO UPDATE SET
-                            loan_id = COALESCE(known_client_emails.loan_id, :loan_id),
-                            updated_at = CURRENT_TIMESTAMP
-                    """), {
-                        "email": loan[1].lower(),
-                        "loan_id": loan[0],
-                        "name": loan[2],
-                        "user_id": user_id
-                    })
-
-            total_synced += len(leads) + len(loans)
+        total_synced = len(lead_params) + len(loan_params)
 
         db.commit()
 

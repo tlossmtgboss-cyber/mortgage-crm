@@ -365,21 +365,24 @@ def _ensure_loans_columns():
                 if eligible:
                     logger.info(f"🔄 Found {len(eligible)} funded loans without MUM clients — promoting...")
                     promoted = 0
-                    for row in eligible:
-                        loan_id, loan_number, lo_id = row[0], row[1], row[2]
+                    try:
+                        from services.mum_promotion_service import maybe_promote_loan_to_mum
+                        from database import SessionLocal
+                        session = SessionLocal()
                         try:
-                            from services.mum_promotion_service import maybe_promote_loan_to_mum
-                            from database import SessionLocal
-                            session = SessionLocal()
-                            try:
-                                mum_id = maybe_promote_loan_to_mum(session, loan_id, lo_id or 1)
-                                if mum_id:
-                                    promoted += 1
-                                session.commit()
-                            finally:
-                                session.close()
-                        except Exception as promo_err:
-                            logger.warning(f"⚠️ Could not promote loan {loan_id}: {promo_err}")
+                            for row in eligible:
+                                loan_id, loan_number, lo_id = row[0], row[1], row[2]
+                                try:
+                                    mum_id = maybe_promote_loan_to_mum(session, loan_id, lo_id or 1)
+                                    if mum_id:
+                                        promoted += 1
+                                except Exception as promo_err:
+                                    logger.warning(f"⚠️ Could not promote loan {loan_id}: {promo_err}")
+                            session.commit()
+                        finally:
+                            session.close()
+                    except Exception as promo_err:
+                        logger.warning(f"⚠️ MUM promotion batch failed: {promo_err}")
                     if promoted:
                         logger.info(f"✅ Auto-promoted {promoted} funded loans to MUM clients")
             except Exception as promo_err:
@@ -409,6 +412,59 @@ async def create_loan(
         logger.error(f"Failed to import models: {e}")
         return JSONResponse(status_code=422, content={"detail": "Model import error"})
 
+    # ---- Input validation (contact info, amounts, rates) ----
+    try:
+        from validation.common import (
+            validate_email_format,
+            validate_phone_format,
+            validate_loan_amount_decimal,
+            validate_interest_rate,
+            sanitize_string,
+            sanitize_text,
+        )
+
+        # Validate and normalize borrower email (optional field)
+        if loan_data.get("borrower_email"):
+            try:
+                loan_data["borrower_email"] = validate_email_format(loan_data["borrower_email"])
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=f"Invalid borrower email: {e}")
+
+        # Validate and normalize borrower phone (optional field)
+        if loan_data.get("borrower_phone"):
+            try:
+                loan_data["borrower_phone"] = validate_phone_format(loan_data["borrower_phone"])
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=f"Invalid borrower phone: {e}")
+
+        # Validate loan amount if provided and non-zero
+        raw_amount = loan_data.get("amount")
+        if raw_amount and raw_amount != 0:
+            try:
+                validated_amount = float(validate_loan_amount_decimal(raw_amount))
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=f"Invalid loan amount: {e}")
+        else:
+            validated_amount = None  # will be handled below
+
+        # Validate interest rate if provided
+        if loan_data.get("rate"):
+            try:
+                loan_data["rate"] = float(validate_interest_rate(loan_data["rate"]))
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=f"Invalid interest rate: {e}")
+
+        # Sanitize free-text fields
+        for text_field in ("borrower_name", "property_address", "ai_insights",
+                           "coborrower_name", "realtor_agent", "title_company", "lender"):
+            if loan_data.get(text_field):
+                loan_data[text_field] = sanitize_string(loan_data[text_field], max_length=500)
+    except HTTPException:
+        raise
+    except Exception as val_err:
+        logger.warning(f"Loan input validation error: {val_err}")
+        raise HTTPException(status_code=422, detail=str(val_err))
+
     try:
         # Check for duplicate loan number unless explicitly skipped
         if not skip_duplicate_check and loan_data.get("loan_number"):
@@ -427,11 +483,14 @@ async def create_loan(
             import uuid
             loan_number = f"LOAN-{uuid.uuid4().hex[:8].upper()}"
 
-        # Safely parse amount
-        try:
-            amount = float(loan_data.get("amount") or 0) or 1.0
-        except (ValueError, TypeError):
-            amount = 1.0
+        # Use validated amount, or fall back to 1.0 for conversion loans
+        if validated_amount is not None:
+            amount = validated_amount
+        else:
+            try:
+                amount = float(loan_data.get("amount") or 0) or 1.0
+            except (ValueError, TypeError):
+                amount = 1.0
 
         # Build the loan object with only fields that exist on the model
         loan_fields = {
@@ -677,6 +736,60 @@ async def update_loan(
         if transition_error:
             raise HTTPException(status_code=422, detail=transition_error)
 
+    # ========================================================================
+    # Input validation for updated fields (contact info, amounts, rates)
+    # ========================================================================
+    try:
+        from validation.common import (
+            validate_email_format as _val_email,
+            validate_phone_format as _val_phone,
+            validate_loan_amount_decimal as _val_amount,
+            validate_interest_rate as _val_rate,
+            sanitize_string as _san_str,
+        )
+
+        # Validate email fields
+        for email_field in ("borrower_email", "co_borrower_email",
+                            "processor_email", "underwriter_email",
+                            "closer_email", "loan_officer_email"):
+            if update_data.get(email_field):
+                try:
+                    update_data[email_field] = _val_email(update_data[email_field])
+                except ValueError as e:
+                    raise HTTPException(status_code=422, detail=f"Invalid {email_field}: {e}")
+
+        # Validate phone field
+        if update_data.get("borrower_phone"):
+            try:
+                update_data["borrower_phone"] = _val_phone(update_data["borrower_phone"])
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=f"Invalid borrower_phone: {e}")
+
+        # Validate loan amount
+        if "amount" in update_data and update_data["amount"]:
+            try:
+                update_data["amount"] = float(_val_amount(update_data["amount"]))
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=f"Invalid loan amount: {e}")
+
+        # Validate interest rate
+        if "rate" in update_data and update_data["rate"]:
+            try:
+                update_data["rate"] = float(_val_rate(update_data["rate"]))
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=f"Invalid interest rate: {e}")
+
+        # Sanitize free-text fields
+        for text_field in ("borrower_name", "property_address", "coborrower_name",
+                           "realtor_agent", "title_company", "lender",
+                           "loan_officer_name", "ai_insights"):
+            if update_data.get(text_field):
+                update_data[text_field] = _san_str(update_data[text_field], max_length=500)
+    except HTTPException:
+        raise
+    except Exception as val_err:
+        logger.warning(f"Loan update validation error: {val_err}")
+
     # Fields that can be updated
     updatable_fields = [
         "loan_number", "borrower_name", "borrower_email", "borrower_phone",
@@ -774,6 +887,19 @@ async def update_loan(
                         logger.info(f"ACO review queued for loan {loan.id} on stage {new_stage}")
                     except Exception as e:
                         logger.warning(f"ACO review trigger failed for loan {loan.id}: {e}")
+
+                # Calendar-Pipeline Bridge: suggest closing appointment on conditional approval
+                try:
+                    from services.calendar_pipeline_bridge import on_loan_stage_change
+                    bridge_result = on_loan_stage_change(
+                        db, loan.id, new_stage,
+                        organization_id=getattr(loan, "organization_id", None),
+                    )
+                    if bridge_result.get("action") == "task_created":
+                        db.commit()
+                        logger.info(f"Calendar-Pipeline Bridge: {bridge_result}")
+                except Exception as e:
+                    logger.warning(f"Calendar-Pipeline Bridge failed for loan {loan.id}: {e}")
 
         result = _loan_to_dict(loan)
 

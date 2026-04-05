@@ -38,11 +38,23 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Authentication"])
 
-# Rate limiter constants
+# Rate limiter constants — per-minute windows
 _AUTH_RATE_WINDOW = 60  # seconds
-_AUTH_RATE_MAX_LOGIN = 5  # max login attempts per window per IP
-_AUTH_RATE_MAX_RESET = 3  # max password reset requests per window per IP
-_AUTH_RATE_MAX_REGISTER = 3  # max registration attempts per window per IP
+_AUTH_RATE_MAX_LOGIN = 5  # max login attempts per minute per IP
+_AUTH_RATE_MAX_RESET = 3  # max password reset requests per minute per IP
+_AUTH_RATE_MAX_REGISTER = 3  # max registration attempts per minute per IP
+
+# Rate limiter constants — per-hour windows (brute force protection)
+_AUTH_RATE_WINDOW_HOUR = 3600  # seconds
+_AUTH_RATE_MAX_LOGIN_HOUR = 20  # max login attempts per hour per IP
+_AUTH_RATE_MAX_RESET_HOUR = 3  # max password reset requests per hour per IP
+_AUTH_RATE_MAX_REGISTER_HOUR = 3  # max registration attempts per hour per IP
+_AUTH_RATE_MAX_REFRESH = 30  # max token refreshes per minute per IP
+_AUTH_RATE_MAX_MFA_VERIFY = 5  # max MFA verify attempts per minute per IP
+_AUTH_RATE_MAX_MFA_VERIFY_HOUR = 15  # max MFA verify attempts per hour per IP
+_AUTH_RATE_MAX_API_KEY_CREATE_HOUR = 5  # max API key creations per hour per user
+_AUTH_RATE_MAX_ADMIN_RESET_HOUR = 5  # max admin password resets per hour per IP
+_AUTH_RATE_MAX_SETUP_ADMIN = 3  # max setup-admin attempts per hour per IP
 
 # Redis-backed rate limiter (falls back to in-memory if Redis unavailable)
 _redis_client = None
@@ -83,18 +95,24 @@ def _get_real_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def _check_auth_rate_limit(client_ip: str, max_requests: int) -> bool:
-    """Check if client IP is within auth rate limit. Returns True if allowed.
+def _check_auth_rate_limit(client_id: str, max_requests: int, window: int = _AUTH_RATE_WINDOW, bucket: str = "auth") -> bool:
+    """Check if client is within auth rate limit. Returns True if allowed.
+
+    Args:
+        client_id: IP address or user identifier for rate limiting.
+        max_requests: Maximum allowed requests in the window.
+        window: Time window in seconds (default 60).
+        bucket: Key prefix to separate different limit types (e.g. 'auth', 'login_hour').
 
     Uses Redis if available (shared across workers/restarts), falls back to in-memory.
     """
     r = _get_redis_client()
     if r is not None:
         try:
-            key = f"auth_rl:{client_ip}"
+            key = f"{bucket}_rl:{client_id}"
             current = r.get(key)
             if current is None:
-                r.setex(key, _AUTH_RATE_WINDOW, 1)
+                r.setex(key, window, 1)
                 return True
             current = int(current)
             if current >= max_requests:
@@ -106,16 +124,52 @@ def _check_auth_rate_limit(client_ip: str, max_requests: int) -> bool:
 
     # In-memory fallback
     now = time.time()
-    key = f"auth:{client_ip}"
-    _auth_rate_store[key] = [t for t in _auth_rate_store[key] if now - t < _AUTH_RATE_WINDOW]
+    key = f"{bucket}:{client_id}"
+    _auth_rate_store[key] = [t for t in _auth_rate_store[key] if now - t < window]
     if len(_auth_rate_store) > _AUTH_RATE_MAX_KEYS:
-        stale = [k for k, v in _auth_rate_store.items() if not v or now - v[-1] > _AUTH_RATE_WINDOW]
+        stale = [k for k, v in _auth_rate_store.items() if not v or now - v[-1] > max(window, _AUTH_RATE_WINDOW)]
         for k in stale:
             del _auth_rate_store[k]
     if len(_auth_rate_store[key]) >= max_requests:
         return False
     _auth_rate_store[key].append(now)
     return True
+
+
+def _check_auth_rate_limit_multi(client_id: str, limits: list) -> tuple:
+    """Check multiple rate limit windows. Returns (allowed: bool, retry_after: int).
+
+    Args:
+        client_id: IP address or user identifier.
+        limits: List of (max_requests, window_seconds, bucket_name) tuples.
+
+    Returns:
+        (True, 0) if all limits pass, or (False, retry_after_seconds) on first failure.
+    """
+    for max_req, window, bucket in limits:
+        if not _check_auth_rate_limit(client_id, max_req, window, bucket):
+            # Estimate retry-after from the window
+            r = _get_redis_client()
+            retry_after = window
+            if r is not None:
+                try:
+                    key = f"{bucket}_rl:{client_id}"
+                    ttl = r.ttl(key)
+                    if ttl and ttl > 0:
+                        retry_after = ttl
+                except Exception:
+                    pass
+            return False, retry_after
+    return True, 0
+
+
+def _raise_rate_limit(retry_after: int, detail: str = "Too many requests. Please try again later."):
+    """Raise a 429 HTTPException with proper Retry-After header."""
+    raise HTTPException(
+        status_code=429,
+        detail=detail,
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 def _log_access_event_bg(
@@ -344,11 +398,15 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
 
 
 async def _login_impl(http_request: Request, form_data, db: Session):
-    # Rate limit login attempts
+    # Rate limit login attempts — per-minute AND per-hour windows
     client_ip = _get_real_client_ip(http_request)
-    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_LOGIN):
+    allowed, retry_after = _check_auth_rate_limit_multi(client_ip, [
+        (_AUTH_RATE_MAX_LOGIN, _AUTH_RATE_WINDOW, "login"),
+        (_AUTH_RATE_MAX_LOGIN_HOUR, _AUTH_RATE_WINDOW_HOUR, "login_hour"),
+    ])
+    if not allowed:
         logger.warning(f"Login rate limit exceeded for {client_ip}")
-        raise HTTPException(status_code=429, detail="Too many login attempts. Please try again later.")
+        _raise_rate_limit(retry_after, "Too many login attempts. Please try again later.")
 
     try:
         models = get_models()
@@ -607,6 +665,7 @@ async def _login_impl(http_request: Request, form_data, db: Session):
 
 @router.post("/token/refresh")
 async def refresh_access_token(
+    http_request: Request,
     refresh_token: str = Body(..., embed=True),
     db: Session = Depends(get_db)
 ):
@@ -616,6 +675,12 @@ async def refresh_access_token(
     This allows clients to get new access tokens without re-authenticating.
     The refresh token must be valid and not blacklisted.
     """
+    # Rate limit token refresh — 30/minute per IP
+    client_ip = _get_real_client_ip(http_request)
+    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_REFRESH, _AUTH_RATE_WINDOW, "refresh"):
+        logger.warning(f"Token refresh rate limit exceeded for {client_ip}")
+        _raise_rate_limit(_AUTH_RATE_WINDOW, "Too many refresh requests. Please try again later.")
+
     models = get_models()
     User = models['User']
     auth_funcs = get_auth_functions()
@@ -756,11 +821,15 @@ async def forgot_password(http_request: Request, request: ForgotPasswordRequest,
     Request a password reset email.
     Always returns success to prevent email enumeration attacks.
     """
-    # Rate limit password reset requests
+    # Rate limit password reset requests — per-minute AND per-hour windows
     client_ip = _get_real_client_ip(http_request)
-    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_RESET):
+    allowed, retry_after = _check_auth_rate_limit_multi(client_ip, [
+        (_AUTH_RATE_MAX_RESET, _AUTH_RATE_WINDOW, "reset"),
+        (_AUTH_RATE_MAX_RESET_HOUR, _AUTH_RATE_WINDOW_HOUR, "reset_hour"),
+    ])
+    if not allowed:
         logger.warning(f"Forgot-password rate limit exceeded for {client_ip}")
-        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+        _raise_rate_limit(retry_after, "Too many requests. Please try again later.")
 
     try:
         models = get_models()
@@ -855,11 +924,15 @@ async def reset_password(http_request: Request, request: ResetPasswordRequest, d
     """
     Reset password using a valid reset token.
     """
-    # Rate limit password reset attempts
+    # Rate limit password reset attempts — per-minute AND per-hour windows
     client_ip = _get_real_client_ip(http_request)
-    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_RESET):
+    allowed, retry_after = _check_auth_rate_limit_multi(client_ip, [
+        (_AUTH_RATE_MAX_RESET, _AUTH_RATE_WINDOW, "resetpw"),
+        (_AUTH_RATE_MAX_RESET_HOUR, _AUTH_RATE_WINDOW_HOUR, "resetpw_hour"),
+    ])
+    if not allowed:
         logger.warning(f"Reset-password rate limit exceeded for {client_ip}")
-        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+        _raise_rate_limit(retry_after, "Too many requests. Please try again later.")
     try:
         models = get_models()
         User = models['User']
@@ -933,11 +1006,17 @@ async def reset_password(http_request: Request, request: ResetPasswordRequest, d
 
 
 @router.post("/api/v1/admin/force-password-reset")
-async def admin_force_password_reset(request: AdminPasswordResetRequest, db: Session = Depends(get_db)):
+async def admin_force_password_reset(http_request: Request, request: AdminPasswordResetRequest, db: Session = Depends(get_db)):
     """
     Admin endpoint to force reset a user's password.
     Requires ADMIN_RESET_KEY environment variable to be set.
     """
+    # Rate limit admin password resets — 5/hour per IP
+    client_ip = _get_real_client_ip(http_request)
+    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_ADMIN_RESET_HOUR, _AUTH_RATE_WINDOW_HOUR, "admin_reset"):
+        logger.warning(f"Admin force-password-reset rate limit exceeded for {client_ip}")
+        _raise_rate_limit(_AUTH_RATE_WINDOW_HOUR, "Too many requests. Please try again later.")
+
     models = get_models()
     User = models['User']
     auth_funcs = get_auth_functions()
@@ -983,11 +1062,17 @@ class AdminUnlockRequest(BaseModel):
 
 
 @router.post("/api/v1/admin/unlock-account")
-async def admin_unlock_account(request: AdminUnlockRequest, db: Session = Depends(get_db)):
+async def admin_unlock_account(http_request: Request, request: AdminUnlockRequest, db: Session = Depends(get_db)):
     """
     Admin endpoint to unlock a locked user account.
     Uses the same ADMIN_RESET_KEY authentication as password reset.
     """
+    # Rate limit admin unlock — shares admin reset budget (5/hour per IP)
+    client_ip = _get_real_client_ip(http_request)
+    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_ADMIN_RESET_HOUR, _AUTH_RATE_WINDOW_HOUR, "admin_reset"):
+        logger.warning(f"Admin unlock-account rate limit exceeded for {client_ip}")
+        _raise_rate_limit(_AUTH_RATE_WINDOW_HOUR, "Too many requests. Please try again later.")
+
     models = get_models()
     User = models['User']
 
@@ -1128,11 +1213,15 @@ async def register_account(
     Public registration endpoint for new accounts.
     Creates a new organization and admin user.
     """
-    # Rate limit registration attempts
+    # Rate limit registration attempts — per-minute AND per-hour windows
     client_ip = _get_real_client_ip(http_request)
-    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_REGISTER):
+    allowed, retry_after = _check_auth_rate_limit_multi(client_ip, [
+        (_AUTH_RATE_MAX_REGISTER, _AUTH_RATE_WINDOW, "register"),
+        (_AUTH_RATE_MAX_REGISTER_HOUR, _AUTH_RATE_WINDOW_HOUR, "register_hour"),
+    ])
+    if not allowed:
         logger.warning(f"Registration rate limit exceeded for {client_ip}")
-        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+        _raise_rate_limit(retry_after, "Too many requests. Please try again later.")
 
     try:
         models = get_models()
@@ -1489,6 +1578,7 @@ def create_push_notification_routes(app, get_current_user, DeviceToken):
 
 @router.post("/api/v1/setup-admin")
 async def setup_admin_user(
+    http_request: Request,
     admin_key: str = Query(..., description="Admin API key for authorization"),
     db: Session = Depends(get_db),
 ):
@@ -1496,6 +1586,12 @@ async def setup_admin_user(
     One-time setup: Create or reset admin user password.
     Requires ADMIN_API_KEY and ADMIN_SETUP_PASSWORD env vars.
     """
+    # Rate limit admin setup — 3/hour per IP
+    client_ip = _get_real_client_ip(http_request)
+    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_SETUP_ADMIN, _AUTH_RATE_WINDOW_HOUR, "setup_admin"):
+        logger.warning(f"Setup-admin rate limit exceeded for {client_ip}")
+        _raise_rate_limit(_AUTH_RATE_WINDOW_HOUR, "Too many requests. Please try again later.")
+
     import os as _os
     _ADMIN_API_KEY = _os.getenv("ADMIN_API_KEY")
     if not _ADMIN_API_KEY or admin_key != _ADMIN_API_KEY:

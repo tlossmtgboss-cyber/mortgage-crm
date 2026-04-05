@@ -262,8 +262,19 @@ async def get_api_keys():
 
 
 @router.post("")
-async def create_api_key(key_data: APIKeyCreate):
+async def create_api_key(http_request: Request, key_data: APIKeyCreate):
     """Create a new API key"""
+    # Rate limit API key creation — 5/hour per IP
+    from routes.auth_routes import (
+        _get_real_client_ip, _check_auth_rate_limit, _raise_rate_limit,
+        _AUTH_RATE_MAX_API_KEY_CREATE_HOUR, _AUTH_RATE_WINDOW_HOUR,
+    )
+    client_ip = _get_real_client_ip(http_request)
+    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_API_KEY_CREATE_HOUR, _AUTH_RATE_WINDOW_HOUR, "apikey_create_settings"):
+        import logging as _logging
+        _logging.getLogger(__name__).warning(f"API key creation rate limit exceeded for {client_ip}")
+        _raise_rate_limit(_AUTH_RATE_WINDOW_HOUR, "Too many API key creation requests. Please try again later.")
+
     try:
         # Generate new key
         api_key, key_hash = generate_api_key()
@@ -379,8 +390,19 @@ async def delete_api_key(key_id: str):
 
 
 @router.post("/{key_id}/rotate")
-async def rotate_api_key(key_id: str):
+async def rotate_api_key(http_request: Request, key_id: str):
     """Rotate an API key (generate new key, invalidate old)"""
+    # Rate limit key rotation — shares the API key creation budget (5/hour per IP)
+    from routes.auth_routes import (
+        _get_real_client_ip, _check_auth_rate_limit, _raise_rate_limit,
+        _AUTH_RATE_MAX_API_KEY_CREATE_HOUR, _AUTH_RATE_WINDOW_HOUR,
+    )
+    client_ip = _get_real_client_ip(http_request)
+    if not _check_auth_rate_limit(client_ip, _AUTH_RATE_MAX_API_KEY_CREATE_HOUR, _AUTH_RATE_WINDOW_HOUR, "apikey_create_settings"):
+        import logging as _logging
+        _logging.getLogger(__name__).warning(f"API key rotation rate limit exceeded for {client_ip}")
+        _raise_rate_limit(_AUTH_RATE_WINDOW_HOUR, "Too many API key requests. Please try again later.")
+
     try:
         if key_id not in api_keys_store:
             raise HTTPException(status_code=404, detail="API key not found")

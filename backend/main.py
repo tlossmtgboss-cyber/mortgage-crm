@@ -622,6 +622,12 @@ reports_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/reports", StaticFiles(directory=str(reports_dir), html=True), name="reports")
 logger.info(f"✅ Reports mounted at /reports from {reports_dir.absolute()}")
 
+# Mount uploads directory for MMS media files (Telnyx fetches these on send)
+uploads_sms_dir = PathLib("uploads/sms")
+uploads_sms_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads/sms", StaticFiles(directory=str(uploads_sms_dir)), name="uploads_sms")
+logger.info(f"✅ SMS uploads mounted at /uploads/sms from {uploads_sms_dir.absolute()}")
+
 # Register standardized exception handlers for consistent error responses
 try:
     from utils.error_handling import register_exception_handlers
@@ -1850,6 +1856,34 @@ except Exception as e:
     logger.warning(f"⚠️ App Compatibility routes not loaded: {e}")
 
 # ============================================================================
+# AI AGENT FEEDBACK ROUTES
+# ============================================================================
+try:
+    from routes.agent_feedback_routes import register_agent_feedback_routes
+    register_agent_feedback_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Agent feedback routes loaded")
+except Exception as e:
+    logger.warning(f"Agent feedback routes skipped: {e}")
+
+# ============================================================================
+# AUTONOMOUS AI AGENT TASK ROUTES
+# ============================================================================
+try:
+    from routes.autonomous_task_routes import register_autonomous_task_routes
+    register_autonomous_task_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Autonomous task routes loaded")
+except Exception as e:
+    logger.warning(f"Autonomous task routes skipped: {e}")
+
+# ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py
 # ============================================================================
 try:
@@ -1985,6 +2019,46 @@ async def startup_event():
         logger.info("✅ Agent message processor job registered")
     except Exception as e:
         logger.warning(f"⚠️ Agent message processor skipped: {e}")
+
+    # Register autonomous AI agents (morning briefing, pipeline monitor, compliance watchdog, etc.)
+    try:
+        from migrations.add_autonomous_agent_runs import run_migration as _run_agent_runs_migration
+        _run_agent_runs_migration(engine)
+        from agents.autonomous.loop import register_all_autonomous_agents
+        from services.scheduler_service import scheduler_service
+        agent_count = register_all_autonomous_agents(scheduler_service.scheduler)
+        logger.info(f"✅ {agent_count} autonomous agents registered with scheduler")
+    except Exception as e:
+        logger.warning(f"⚠️ Autonomous agents registration skipped: {e}")
+
+    # Start autonomous AI task executor (proactive agents: nurturing, compliance, pipeline, etc.)
+    try:
+        from services.autonomous.task_executor import get_executor
+        _task_executor = get_executor()
+        import asyncio
+        asyncio.create_task(_task_executor.start())
+        logger.info("Autonomous AI task executor started")
+    except Exception as e:
+        logger.warning(f"Autonomous task executor skipped: {e}")
+
+    # Create new AI autonomy tables if needed
+    try:
+        from database.models.autonomous_task import create_tables_if_needed as _create_auto_task_tables
+        _create_auto_task_tables(engine)
+        from database.models.agent_feedback import create_tables_if_needed as _create_feedback_tables
+        _create_feedback_tables(engine)
+        from database.models.learning_example import create_tables_if_needed as _create_learning_tables
+        _create_learning_tables(engine)
+        logger.info("AI autonomy tables verified")
+    except Exception as e:
+        logger.warning(f"AI autonomy table creation skipped: {e}")
+
+    # Consolidate OAuth tokens into unified table
+    try:
+        from migrations.consolidate_oauth_tokens import run_migration as _run_oauth_migration
+        _run_oauth_migration(engine)
+    except Exception as e:
+        logger.warning(f"⚠️ OAuth token consolidation skipped: {e}")
 
     # Register SOC 2 compliance scheduled jobs
     try:

@@ -402,35 +402,40 @@ def register_debug_data_routes(
             # Auto-populate known_client_emails table before sync for better identity resolution
             try:
                 from sqlalchemy import text as sa_text
-                # Get emails from leads
+                # Batch-fetch leads and loans, then batch-insert (avoids N+1)
                 leads = db.execute(sa_text("""
                     SELECT id, email, name FROM leads
-                    WHERE email IS NOT NULL AND status NOT IN ('dead', 'closed_lost')
-                """)).fetchall()
-                for lead in leads:
-                    if lead[1]:
-                        db.execute(sa_text("""
-                            INSERT INTO known_client_emails (email_address, lead_id, client_name, source_type, user_id)
-                            VALUES (:email, :lead_id, :name, 'lead', :user_id)
-                            ON CONFLICT (email_address, user_id) DO UPDATE SET
-                                lead_id = COALESCE(known_client_emails.lead_id, :lead_id),
-                                updated_at = CURRENT_TIMESTAMP
-                        """), {"email": lead[1].lower(), "lead_id": lead[0], "name": lead[2], "user_id": current_user.id})
+                    WHERE email IS NOT NULL AND owner_id = :user_id
+                """), {"user_id": current_user.id}).fetchall()
+                lead_params = [
+                    {"email": l[1].lower(), "lead_id": l[0], "name": l[2], "user_id": current_user.id}
+                    for l in leads if l[1]
+                ]
+                if lead_params:
+                    db.execute(sa_text("""
+                        INSERT INTO known_client_emails (email_address, lead_id, client_name, source_type, user_id)
+                        VALUES (:email, :lead_id, :name, 'lead', :user_id)
+                        ON CONFLICT (email_address, user_id) DO UPDATE SET
+                            lead_id = COALESCE(known_client_emails.lead_id, EXCLUDED.lead_id),
+                            updated_at = CURRENT_TIMESTAMP
+                    """), lead_params)
 
-                # Get emails from loans
                 loans = db.execute(sa_text("""
                     SELECT id, borrower_email, borrower_name FROM loans
-                    WHERE borrower_email IS NOT NULL AND status NOT IN ('cancelled', 'withdrawn')
-                """)).fetchall()
-                for loan in loans:
-                    if loan[1]:
-                        db.execute(sa_text("""
-                            INSERT INTO known_client_emails (email_address, loan_id, client_name, source_type, user_id)
-                            VALUES (:email, :loan_id, :name, 'loan', :user_id)
-                            ON CONFLICT (email_address, user_id) DO UPDATE SET
-                                loan_id = COALESCE(known_client_emails.loan_id, :loan_id),
-                                updated_at = CURRENT_TIMESTAMP
-                        """), {"email": loan[1].lower(), "loan_id": loan[0], "name": loan[2], "user_id": current_user.id})
+                    WHERE borrower_email IS NOT NULL AND loan_officer_id = :user_id
+                """), {"user_id": current_user.id}).fetchall()
+                loan_params = [
+                    {"email": l[1].lower(), "loan_id": l[0], "name": l[2], "user_id": current_user.id}
+                    for l in loans if l[1]
+                ]
+                if loan_params:
+                    db.execute(sa_text("""
+                        INSERT INTO known_client_emails (email_address, loan_id, client_name, source_type, user_id)
+                        VALUES (:email, :loan_id, :name, 'loan', :user_id)
+                        ON CONFLICT (email_address, user_id) DO UPDATE SET
+                            loan_id = COALESCE(known_client_emails.loan_id, EXCLUDED.loan_id),
+                            updated_at = CURRENT_TIMESTAMP
+                    """), loan_params)
 
                 db.commit()
                 logger.info(f"Auto-synced {len(leads)} leads and {len(loans)} loans to known_client_emails")
@@ -1027,12 +1032,19 @@ def register_debug_data_routes(
             from ai_providers.claude_parser import get_claude_parser
             parser = get_claude_parser()
 
+            # Batch-fetch all related events in 1 query instead of N
+            event_ids = [e.event_id for e in pending if e.event_id]
+            events_map = {}
+            if event_ids:
+                events = db.query(IncomingDataEvent).filter(
+                    IncomingDataEvent.id.in_(event_ids)
+                ).all()
+                events_map = {e.id: e for e in events}
+
             for extracted in pending:
                 try:
-                    # Get the original email event
-                    event = db.query(IncomingDataEvent).filter(
-                        IncomingDataEvent.id == extracted.event_id
-                    ).first()
+                    # Look up pre-fetched event
+                    event = events_map.get(extracted.event_id)
 
                     if not event:
                         continue

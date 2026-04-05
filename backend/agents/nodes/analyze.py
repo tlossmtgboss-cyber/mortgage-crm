@@ -123,9 +123,38 @@ AVAILABLE_TOOLS = BASE_TOOLS
 # MEMORY RETRIEVAL (query AgentMemory for user preferences/context)
 # =============================================================================
 
-def _retrieve_user_memories(user_id: str, organization_id: Optional[int]) -> tuple:
+def _score_memory_relevance(memory_value: str, query: str) -> float:
+    """
+    Score how relevant a memory is to the current query using keyword overlap.
+
+    Returns a float between 0.0 and 1.0.  Directives and preferences get a
+    base relevance boost since they should almost always be injected.
+    """
+    if not query or not memory_value:
+        return 0.0
+
+    # Tokenize into lowercase words, stripping common noise
+    _stop_words = {"the", "a", "an", "is", "are", "was", "were", "to", "for",
+                   "and", "or", "of", "in", "on", "at", "my", "i", "me", "it"}
+    query_words = {w for w in query.lower().split() if w not in _stop_words and len(w) > 2}
+    memory_words = {w for w in memory_value.lower().split() if w not in _stop_words and len(w) > 2}
+
+    if not query_words or not memory_words:
+        return 0.0
+
+    overlap = query_words & memory_words
+    # Jaccard-like score: overlap / smaller set
+    score = len(overlap) / min(len(query_words), len(memory_words)) if memory_words else 0.0
+    return min(score, 1.0)
+
+
+def _retrieve_user_memories(user_id: str, organization_id: Optional[int], current_query: str = "") -> tuple:
     """
     Query AgentMemory table for the current user's stored memories.
+
+    Applies TTL filtering (expired memories excluded), then ranks by a
+    combined score of confidence and relevance to the current query.
+    Returns the top 10 most relevant memories.
 
     Returns:
         Tuple of (memories_list, formatted_memory_context_string).
@@ -140,8 +169,7 @@ def _retrieve_user_memories(user_id: str, organization_id: Optional[int]) -> tup
         try:
             now = datetime.now(timezone.utc)
 
-            # Query PREFERENCE, DIRECTIVE, and recent CONTEXT memories
-            # Not expired, ordered by confidence descending, limit 10
+            # Query PREFERENCE, DIRECTIVE, CONTEXT, and FACT memories
             query = (
                 db.query(AgentMemory)
                 .filter(
@@ -159,30 +187,53 @@ def _retrieve_user_memories(user_id: str, organization_id: Optional[int]) -> tup
             if organization_id is not None:
                 query = query.filter(AgentMemory.organization_id == organization_id)
 
-            # Exclude expired memories
+            # Exclude expired memories (TTL filtering)
             query = query.filter(
                 (AgentMemory.expires_at.is_(None)) | (AgentMemory.expires_at > now)
             )
 
+            # Fetch a broader pool so we can re-rank by relevance
             memories_rows = (
                 query
                 .order_by(AgentMemory.confidence.desc())
-                .limit(10)
+                .limit(50)
                 .all()
             )
 
             if not memories_rows:
                 return [], ""
 
-            memories_list = []
+            # Build candidate list with relevance scoring
+            candidates = []
             for mem in memories_rows:
-                memories_list.append({
+                mem_type = mem.memory_type.value if hasattr(mem.memory_type, 'value') else str(mem.memory_type)
+                confidence = mem.confidence or 0.5
+
+                # Relevance score from keyword overlap with current query
+                relevance = _score_memory_relevance(mem.value or "", current_query)
+
+                # Directives and preferences get a base relevance boost —
+                # they should almost always be injected regardless of query
+                type_boost = 0.0
+                if mem_type in ("directive", "preference"):
+                    type_boost = 0.4
+
+                # Combined score: 40% confidence + 40% relevance + 20% type boost
+                combined_score = (0.4 * confidence) + (0.4 * relevance) + (0.2 * min(type_boost + relevance, 1.0))
+
+                candidates.append({
                     "id": mem.id,
-                    "type": mem.memory_type.value if hasattr(mem.memory_type, 'value') else str(mem.memory_type),
+                    "type": mem_type,
                     "key": mem.key,
                     "value": mem.value,
-                    "confidence": mem.confidence,
+                    "confidence": confidence,
+                    "relevance": relevance,
+                    "combined_score": combined_score,
                 })
+
+            # Sort by combined score descending, take top 10
+            candidates.sort(key=lambda c: c["combined_score"], reverse=True)
+            memories_list = candidates[:10]
 
             # Format for prompt injection
             lines = []
@@ -190,7 +241,10 @@ def _retrieve_user_memories(user_id: str, organization_id: Optional[int]) -> tup
                 lines.append(f"[{m['type'].upper()}] {m['value']} (confidence: {m['confidence']:.1f})")
             formatted = "\n".join(lines)
 
-            logger.info(f"[ANALYZE] Retrieved {len(memories_list)} memories for user {user_id}")
+            logger.info(
+                f"[ANALYZE] Retrieved {len(memories_list)} memories (from {len(candidates)} candidates) "
+                f"for user {user_id}"
+            )
             return memories_list, formatted
 
         finally:
@@ -875,7 +929,8 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             # =============================================================
             mem_start = time.time()
             user_memories, memory_context = _retrieve_user_memories(
-                state.get("user_id", ""), state.get("organization_id")
+                state.get("user_id", ""), state.get("organization_id"),
+                current_query=state.get("user_message", "")
             )
             timing["memory_retrieve"] = (time.time() - mem_start) * 1000
             if user_memories or memory_context:

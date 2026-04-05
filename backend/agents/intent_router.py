@@ -28,6 +28,9 @@ Usage:
 import re
 import time
 import logging
+import threading
+from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
@@ -140,17 +143,18 @@ def is_haiku_intent(intent: str) -> bool:
 # =============================================================================
 
 INTENT_TO_AGENTS: Dict[str, List[str]] = {
+    # Core intents (original 21 agents)
     "greeting": [],                                       # No tools needed - direct Haiku response
     "simple": ["pipeline_analyst"],                       # Basic lookup with Haiku
-    "pipeline": ["pipeline_analyst"],
+    "pipeline": ["pipeline_analyst", "revenue_forecaster"],
     "historical": ["pipeline_analyst"],                   # Historical comparisons (Q3 vs Q4, etc.)
-    "compliance": ["compliance_checker"],
+    "compliance": ["compliance_checker", "quality_control"],
     "tasks": ["task_automation"],
     "priorities": ["pipeline_analyst", "task_automation"],
     "top_leads": ["lead_nurturer"],                       # Specific for "call my top leads" queries
-    "leads": ["lead_nurturer"],
-    "documents": ["document_tracker"],
-    "rates": ["rate_advisor"],
+    "leads": ["lead_nurturer", "pre_approval_specialist"],
+    "documents": ["document_tracker", "closing_coordinator"],
+    "rates": ["rate_advisor", "secondary_market"],
     "schedule": ["smart_scheduler"],
     "sla": ["sla_tracker"],
     "calls": ["voice_os", "ai_receptionist"],
@@ -158,14 +162,73 @@ INTENT_TO_AGENTS: Dict[str, List[str]] = {
     "video": ["uvip"],
     "reports": ["reporting_engine"],
     "billing": ["subscription_manager"],
-    "coaching": ["team_coach"],
-    "customer": ["customer_intelligence"],
-    "integrations": ["integrations"],
+    "coaching": ["team_coach", "training_specialist"],
+    "customer": ["customer_intelligence", "borrower_concierge"],
+    "integrations": ["integrations", "migration_assistant"],
     "operations": ["ops_manager"],
-    "profit": ["profitability_analyst"],
+    "profit": ["profitability_analyst", "pricing_strategist"],
     "notifications": ["notification_center"],
     "onboarding": ["onboarding_assistant"],
-    "compound": ["pipeline_analyst", "lead_nurturer", "smart_scheduler", "email_intelligence", "voice_os", "task_automation"],
+
+    # Revenue & Production intents
+    "revenue": ["revenue_forecaster", "profitability_analyst"],
+    "pricing": ["pricing_strategist", "rate_advisor"],
+    "closing": ["closing_coordinator", "document_tracker"],
+    "structuring": ["loan_structuring", "pricing_strategist"],
+
+    # Borrower Experience intents
+    "borrower": ["borrower_concierge", "pre_approval_specialist"],
+    "pre_approval": ["pre_approval_specialist"],
+    "credit_repair": ["credit_repair_advisor"],
+    "down_payment": ["down_payment_advisor"],
+    "post_closing": ["post_closing_care", "review_manager"],
+
+    # Risk & Fraud intents
+    "fraud": ["fraud_detector"],
+    "risk": ["risk_assessor", "quality_control"],
+    "qc": ["quality_control", "compliance_checker"],
+    "turn_down": ["turn_down_specialist"],
+
+    # Marketing & Content intents
+    "content": ["content_creator", "social_media_manager"],
+    "social_media": ["social_media_manager"],
+    "market": ["market_analyst"],
+    "campaign": ["campaign_manager"],
+    "reviews": ["review_manager"],
+
+    # HR & Workforce intents
+    "recruiting": ["recruiter"],
+    "training": ["training_specialist"],
+    "performance": ["performance_manager", "team_coach"],
+
+    # Partner & Referral intents
+    "referral": ["referral_partner_manager"],
+    "title": ["title_vendor_manager"],
+    "appraisal": ["appraiser_coordinator"],
+    "insurance": ["insurance_coordinator"],
+
+    # Operations intents
+    "warehouse": ["warehouse_manager"],
+    "shipping": ["shipping_coordinator"],
+    "secondary": ["secondary_market", "rate_advisor"],
+    "servicing": ["servicing_transfer"],
+    "investor": ["investor_relations"],
+
+    # Platform intents
+    "system_health": ["system_health_monitor"],
+    "data_quality": ["data_quality_manager"],
+    "migration": ["migration_assistant"],
+
+    # Specialty Lending intents
+    "va_loan": ["va_loan_specialist"],
+    "fha_loan": ["fha_loan_specialist"],
+    "jumbo": ["jumbo_specialist"],
+    "reverse_mortgage": ["reverse_mortgage_advisor"],
+    "construction": ["construction_loan_advisor"],
+    "commercial": ["commercial_bridge"],
+
+    # Compound & fallback
+    "compound": ["pipeline_analyst", "lead_nurturer", "smart_scheduler", "email_intelligence", "voice_os", "task_automation", "closing_coordinator"],
     "general": ["pipeline_analyst", "task_automation"],  # Default
 }
 
@@ -419,9 +482,407 @@ INTENT_PATTERNS: Dict[str, List[str]] = {
 }
 
 
+# =============================================================================
+# ROUTING STATS & PATTERN LEARNING
+# =============================================================================
+
+class _RoutingStats:
+    """Thread-safe in-memory routing statistics with periodic DB persistence."""
+
+    _PERSIST_INTERVAL = 300  # Persist every 5 minutes
+    _FALLBACK_WARN_THRESHOLD = 0.50  # Warn when fallback rate > 50%
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.total_requests: int = 0
+        self.regex_hits: int = 0
+        self.llm_fallbacks: int = 0
+        self.learned_hits: int = 0
+        self._last_persist_time: float = time.time()
+        self._warned_high_fallback: bool = False
+
+    def record_regex_hit(self) -> None:
+        with self._lock:
+            self.total_requests += 1
+            self.regex_hits += 1
+            self._maybe_persist()
+
+    def record_llm_fallback(self) -> None:
+        with self._lock:
+            self.total_requests += 1
+            self.llm_fallbacks += 1
+            self._check_fallback_rate()
+            self._maybe_persist()
+
+    def record_learned_hit(self) -> None:
+        with self._lock:
+            self.total_requests += 1
+            self.learned_hits += 1
+            self._maybe_persist()
+
+    def get_stats(self) -> dict:
+        with self._lock:
+            total = max(self.total_requests, 1)
+            return {
+                "total_requests": self.total_requests,
+                "regex_hits": self.regex_hits,
+                "llm_fallbacks": self.llm_fallbacks,
+                "learned_hits": self.learned_hits,
+                "regex_hit_rate": round(self.regex_hits / total, 4),
+                "llm_fallback_rate": round(self.llm_fallbacks / total, 4),
+                "learned_hit_rate": round(self.learned_hits / total, 4),
+            }
+
+    def _check_fallback_rate(self) -> None:
+        """Warn once when fallback rate exceeds threshold."""
+        if self.total_requests < 20:
+            return  # Not enough data
+        rate = self.llm_fallbacks / self.total_requests
+        if rate > self._FALLBACK_WARN_THRESHOLD and not self._warned_high_fallback:
+            self._warned_high_fallback = True
+            logger.warning(
+                f"[INTENT] High LLM fallback rate: {rate:.0%} "
+                f"({self.llm_fallbacks}/{self.total_requests}). "
+                f"Consider adding regex patterns for common queries."
+            )
+        elif rate <= self._FALLBACK_WARN_THRESHOLD:
+            self._warned_high_fallback = False
+
+    def _maybe_persist(self) -> None:
+        """Fire-and-forget DB persist if interval elapsed."""
+        now = time.time()
+        if now - self._last_persist_time < self._PERSIST_INTERVAL:
+            return
+        self._last_persist_time = now
+        stats = {
+            "total_requests": self.total_requests,
+            "regex_hits": self.regex_hits,
+            "llm_fallbacks": self.llm_fallbacks,
+            "learned_hits": self.learned_hits,
+        }
+        thread = threading.Thread(
+            target=_persist_routing_stats, args=(stats,), daemon=True
+        )
+        thread.start()
+
+
+# Singleton stats tracker
+_routing_stats = _RoutingStats()
+
+
+def _persist_routing_stats(stats: dict) -> None:
+    """Persist routing stats snapshot to DB (runs in background thread)."""
+    try:
+        from db import SessionLocal
+        from database.models.learning_example import LearningPattern
+
+        db = SessionLocal()
+        try:
+            pattern = db.query(LearningPattern).filter(
+                LearningPattern.pattern_type == "routing_stats",
+                LearningPattern.pattern_key == "cumulative",
+            ).first()
+
+            if pattern:
+                pattern.extra_metadata = stats
+                pattern.last_seen_at = datetime.now(timezone.utc)
+                pattern.occurrence_count = stats["total_requests"]
+            else:
+                pattern = LearningPattern(
+                    pattern_type="routing_stats",
+                    pattern_key="cumulative",
+                    pattern_value="intent_router_stats",
+                    confidence=1.0,
+                    occurrence_count=stats["total_requests"],
+                    extra_metadata=stats,
+                    last_seen_at=datetime.now(timezone.utc),
+                    is_active=True,
+                )
+                db.add(pattern)
+            db.commit()
+        except Exception as e:
+            logger.debug(f"[INTENT] Stats persist failed: {e}")
+            db.rollback()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug(f"[INTENT] Stats persist setup failed: {e}")
+
+
+# In-memory buffer of LLM fallback mappings: query_normalized -> {intent, count}
+_llm_mapping_buffer: Dict[str, Dict[str, Any]] = defaultdict(
+    lambda: {"intent": None, "count": 0, "queries": []}
+)
+_llm_buffer_lock = threading.Lock()
+
+# Minimum times an LLM classification must be seen before suggesting a pattern
+PATTERN_LEARNING_THRESHOLD = 5
+
+# Runtime learned patterns merged from DB (loaded at startup or via apply)
+_learned_patterns: Dict[str, List[str]] = {}
+_learned_patterns_lock = threading.Lock()
+
+
+def _normalize_for_learning(query: str) -> str:
+    """Normalize query for pattern learning — lowercase, strip, collapse whitespace."""
+    return re.sub(r"\s+", " ", query.lower().strip())
+
+
+def _record_llm_classification(query: str, intent: str) -> None:
+    """
+    Record an LLM fallback classification for pattern learning.
+    When the same intent is seen PATTERN_LEARNING_THRESHOLD times,
+    persist a LearningPattern record in a background thread.
+    """
+    normalized = _normalize_for_learning(query)
+
+    should_persist = False
+    with _llm_buffer_lock:
+        entry = _llm_mapping_buffer[normalized]
+        if entry["intent"] == intent:
+            entry["count"] += 1
+        else:
+            # New or changed intent — reset counter
+            entry["intent"] = intent
+            entry["count"] = 1
+            entry["queries"] = []
+        if len(entry["queries"]) < 10:
+            entry["queries"].append(query)
+
+        if entry["count"] >= PATTERN_LEARNING_THRESHOLD:
+            should_persist = True
+            # Reset so we don't persist repeatedly
+            persist_data = {
+                "intent": entry["intent"],
+                "count": entry["count"],
+                "queries": list(entry["queries"]),
+            }
+            entry["count"] = 0
+
+    if should_persist:
+        thread = threading.Thread(
+            target=_persist_learned_pattern,
+            args=(normalized, persist_data),
+            daemon=True,
+        )
+        thread.start()
+
+
+def _persist_learned_pattern(normalized_query: str, data: dict) -> None:
+    """Persist a learned intent mapping to the DB (background thread)."""
+    try:
+        from db import SessionLocal
+        from database.models.learning_example import LearningPattern
+
+        intent = data["intent"]
+        # Build a regex-safe escaped pattern from the normalized query
+        suggested_regex = re.escape(normalized_query)
+
+        db = SessionLocal()
+        try:
+            existing = db.query(LearningPattern).filter(
+                LearningPattern.pattern_type == "intent_mapping",
+                LearningPattern.pattern_key == f"{intent}:{normalized_query}",
+            ).first()
+
+            if existing:
+                existing.occurrence_count += data["count"]
+                existing.last_seen_at = datetime.now(timezone.utc)
+                existing.confidence = min(
+                    1.0, float(existing.occurrence_count) / (PATTERN_LEARNING_THRESHOLD * 4)
+                )
+                existing.extra_metadata = {
+                    **(existing.extra_metadata or {}),
+                    "sample_queries": data["queries"][:10],
+                }
+            else:
+                new_pattern = LearningPattern(
+                    pattern_type="intent_mapping",
+                    pattern_key=f"{intent}:{normalized_query}",
+                    pattern_value=suggested_regex,
+                    confidence=round(
+                        data["count"] / (PATTERN_LEARNING_THRESHOLD * 4), 4
+                    ),
+                    occurrence_count=data["count"],
+                    last_seen_at=datetime.now(timezone.utc),
+                    extra_metadata={
+                        "intent": intent,
+                        "sample_queries": data["queries"][:10],
+                        "auto_learned": True,
+                    },
+                    is_active=False,  # Inactive until explicitly applied
+                )
+                db.add(new_pattern)
+
+            db.commit()
+            logger.info(
+                f"[INTENT] Learned pattern: '{normalized_query}' -> {intent} "
+                f"(count={data['count']})"
+            )
+        except Exception as e:
+            logger.debug(f"[INTENT] Pattern persist failed: {e}")
+            db.rollback()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug(f"[INTENT] Pattern persist setup failed: {e}")
+
+
+def load_learned_patterns() -> int:
+    """
+    Load active learned patterns from the DB and merge into runtime patterns.
+    Call at startup to augment hardcoded INTENT_PATTERNS.
+
+    Returns number of patterns loaded.
+    """
+    loaded = 0
+    try:
+        from db import SessionLocal
+        from database.models.learning_example import LearningPattern
+
+        db = SessionLocal()
+        try:
+            active_patterns = db.query(LearningPattern).filter(
+                LearningPattern.pattern_type == "intent_mapping",
+                LearningPattern.is_active == True,
+            ).all()
+
+            new_patterns: Dict[str, List[str]] = defaultdict(list)
+            for p in active_patterns:
+                # pattern_key format: "intent:normalized_query"
+                intent = (p.extra_metadata or {}).get("intent")
+                if not intent:
+                    parts = p.pattern_key.split(":", 1)
+                    intent = parts[0] if parts else None
+                if intent and intent in INTENT_TO_AGENTS and p.pattern_value:
+                    new_patterns[intent].append(p.pattern_value)
+                    loaded += 1
+
+            with _learned_patterns_lock:
+                _learned_patterns.clear()
+                _learned_patterns.update(new_patterns)
+
+            if loaded > 0:
+                logger.info(f"[INTENT] Loaded {loaded} learned patterns from DB")
+        except Exception as e:
+            logger.debug(f"[INTENT] Failed to load learned patterns: {e}")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug(f"[INTENT] Learned patterns load setup failed: {e}")
+
+    return loaded
+
+
+def get_routing_stats() -> dict:
+    """Return current routing hit/fallback rates."""
+    return _routing_stats.get_stats()
+
+
+def get_learned_patterns() -> list:
+    """
+    Return all discovered patterns from LLM fallbacks.
+    Includes both active (applied) and inactive (pending review) patterns.
+    """
+    results = []
+    try:
+        from db import SessionLocal
+        from database.models.learning_example import LearningPattern
+
+        db = SessionLocal()
+        try:
+            patterns = db.query(LearningPattern).filter(
+                LearningPattern.pattern_type == "intent_mapping",
+            ).order_by(LearningPattern.occurrence_count.desc()).limit(100).all()
+
+            for p in patterns:
+                meta = p.extra_metadata or {}
+                intent = meta.get("intent", p.pattern_key.split(":")[0])
+                results.append({
+                    "id": p.id,
+                    "intent": intent,
+                    "pattern": p.pattern_value,
+                    "occurrence_count": p.occurrence_count,
+                    "confidence": float(p.confidence) if p.confidence else 0.0,
+                    "is_active": p.is_active,
+                    "sample_queries": meta.get("sample_queries", []),
+                    "last_seen_at": str(p.last_seen_at) if p.last_seen_at else None,
+                })
+        except Exception as e:
+            logger.error(f"[INTENT] Failed to fetch learned patterns: {e}")
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug(f"[INTENT] Learned patterns fetch setup failed: {e}")
+
+    return results
+
+
+def apply_learned_patterns(min_confidence: float = 0.25, min_occurrences: int = 10) -> int:
+    """
+    Activate high-confidence learned patterns and merge into runtime regex.
+
+    Args:
+        min_confidence: Minimum confidence to auto-activate (0-1)
+        min_occurrences: Minimum occurrence count to auto-activate
+
+    Returns number of patterns activated.
+    """
+    activated = 0
+    try:
+        from db import SessionLocal
+        from database.models.learning_example import LearningPattern
+
+        db = SessionLocal()
+        try:
+            candidates = db.query(LearningPattern).filter(
+                LearningPattern.pattern_type == "intent_mapping",
+                LearningPattern.is_active == False,
+                LearningPattern.confidence >= min_confidence,
+                LearningPattern.occurrence_count >= min_occurrences,
+            ).all()
+
+            new_patterns: Dict[str, List[str]] = defaultdict(list)
+            for p in candidates:
+                meta = p.extra_metadata or {}
+                intent = meta.get("intent", p.pattern_key.split(":")[0])
+                if intent in INTENT_TO_AGENTS and p.pattern_value:
+                    p.is_active = True
+                    p.updated_at = datetime.now(timezone.utc)
+                    new_patterns[intent].append(p.pattern_value)
+                    activated += 1
+
+            if activated > 0:
+                db.commit()
+                with _learned_patterns_lock:
+                    for intent, patterns in new_patterns.items():
+                        if intent not in _learned_patterns:
+                            _learned_patterns[intent] = []
+                        _learned_patterns[intent].extend(patterns)
+                logger.info(
+                    f"[INTENT] Activated {activated} learned patterns "
+                    f"(min_conf={min_confidence}, min_occ={min_occurrences})"
+                )
+        except Exception as e:
+            logger.error(f"[INTENT] Failed to apply learned patterns: {e}")
+            db.rollback()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.debug(f"[INTENT] Apply patterns setup failed: {e}")
+
+    return activated
+
+
+# =============================================================================
+# FAST PATTERN MATCHING
+# =============================================================================
+
 def classify_intent_fast(query: str) -> Tuple[Optional[str], float, Optional[str]]:
     """
     Ultra-fast intent classification using regex patterns.
+
+    Checks hardcoded INTENT_PATTERNS first, then runtime learned patterns.
 
     Returns:
         Tuple of (intent, confidence, matched_pattern)
@@ -429,11 +890,25 @@ def classify_intent_fast(query: str) -> Tuple[Optional[str], float, Optional[str
     """
     query_lower = query.lower().strip()
 
+    # 1. Try hardcoded patterns (highest confidence)
     for intent, patterns in INTENT_PATTERNS.items():
         for pattern in patterns:
             if re.search(pattern, query_lower, re.IGNORECASE):
                 logger.debug(f"[INTENT] Fast match: '{pattern}' -> {intent}")
-                return (intent, 0.95, pattern)
+                return (intent, 1.0, pattern)
+
+    # 2. Try learned patterns (slightly lower confidence)
+    with _learned_patterns_lock:
+        for intent, patterns in _learned_patterns.items():
+            for pattern in patterns:
+                try:
+                    if re.search(pattern, query_lower, re.IGNORECASE):
+                        logger.debug(f"[INTENT] Learned match: '{pattern}' -> {intent}")
+                        return (intent, 0.90, f"learned:{pattern}")
+                except re.error:
+                    # Bad regex from learned pattern — skip
+                    logger.debug(f"[INTENT] Invalid learned regex: {pattern}")
+                    continue
 
     return (None, 0.0, None)
 
@@ -536,9 +1011,14 @@ async def classify_intent_llm(
 
         logger.info(f"[INTENT] LLM classification: '{intent}' in {elapsed:.0f}ms")
 
-        # Validate intent
+        # Validate intent — assign confidence based on response quality
         if intent in INTENT_TO_AGENTS:
-            result = (intent, 0.85)
+            # Higher confidence if the response was clean (single word, exact match)
+            if intent in [v.value for v in Intent]:
+                llm_confidence = 0.85
+            else:
+                llm_confidence = 0.75  # Known agent mapping but not canonical intent
+            result = (intent, llm_confidence)
         else:
             logger.warning(f"[INTENT] Unknown intent from LLM: {intent}")
             result = ("general", 0.5)
@@ -606,27 +1086,48 @@ async def classify_intent(
     # Truncate long inputs to prevent regex DoS on adversarial strings
     query = query[:1000]
 
-    # Try fast pattern matching first
+    # Try fast pattern matching first (hardcoded + learned patterns)
     intent, confidence, pattern = classify_intent_fast(query)
 
     if intent:
         elapsed = (time.time() - start) * 1000
+
+        # Track whether this was a hardcoded or learned pattern hit
+        if pattern and pattern.startswith("learned:"):
+            _routing_stats.record_learned_hit()
+            method = "learned_pattern"
+        else:
+            _routing_stats.record_regex_hit()
+            method = "pattern_match"
+
         logger.info(
-            f"[INTENT] Pattern match: {intent} (conf={confidence:.2f}) in {elapsed:.1f}ms"
+            f"[INTENT] {method}: {intent} (conf={confidence:.2f}) in {elapsed:.1f}ms"
         )
         return {
             "intent": intent,
             "confidence": confidence,
             "agents": INTENT_TO_AGENTS.get(intent, INTENT_TO_AGENTS["general"]),
-            "method": "pattern_match",
+            "method": method,
             "matched_pattern": pattern,
             "elapsed_ms": elapsed
         }
 
     # Fall back to LLM if enabled
     if use_llm_fallback:
+        _routing_stats.record_llm_fallback()
         intent, confidence = await classify_intent_llm(query, anthropic_client)
         elapsed = (time.time() - start) * 1000
+
+        # Record this LLM classification for pattern learning (fire-and-forget)
+        if intent and intent != "general":
+            _record_llm_classification(query, intent)
+
+        # Log low-confidence routes for review
+        if confidence < 0.7:
+            logger.warning(
+                f"[INTENT] Low-confidence LLM route: '{query[:80]}' -> {intent} "
+                f"(conf={confidence:.2f})"
+            )
 
         return {
             "intent": intent,
@@ -748,4 +1249,10 @@ __all__ = [
     "get_tool_count_for_intent",
     "flush_intent_cache",
     "print_intent_summary",
+    # Pattern learning & stats
+    "get_routing_stats",
+    "get_learned_patterns",
+    "apply_learned_patterns",
+    "load_learned_patterns",
+    "PATTERN_LEARNING_THRESHOLD",
 ]

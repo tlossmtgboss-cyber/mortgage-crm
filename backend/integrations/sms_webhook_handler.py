@@ -192,9 +192,9 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
             from routes.sms_conversation_routes import notify_inbound_sms
             loop = asyncio.get_event_loop()
             if loop.is_running():
-                asyncio.ensure_future(notify_inbound_sms(from_phone, body, record.get("id", "")))
-            else:
-                loop.run_until_complete(notify_inbound_sms(from_phone, body, record.get("id", "")))
+                asyncio.ensure_future(
+                    notify_inbound_sms(from_phone, body, record.get("id", ""))
+                )
         except Exception as ws_err:
             logger.debug(f"WebSocket push skipped: {ws_err}")
 

@@ -116,11 +116,19 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
             ("purl_workspaces", "lead_id"),
         ]
 
+        # Batch-fetch all leads at once to avoid N+1 queries (1 query instead of N)
+        lead_query = db.query(Lead).filter(Lead.id.in_(lead_ids))
+        if not is_platform_admin:
+            org_id = getattr(current_user, 'organization_id', None)
+            if org_id:
+                lead_query = lead_query.filter(Lead.organization_id == org_id)
+        leads_map = {lead.id: lead for lead in lead_query.all()}
+
         for lead_id in lead_ids:
             # Use savepoint for each lead so failures don't cascade
             savepoint = db.begin_nested()
             try:
-                lead = _org_scoped_lead(db, lead_id, current_user)
+                lead = leads_map.get(lead_id)
                 if not lead:
                     errors.append(f"Lead {lead_id} not found")
                     savepoint.rollback()
@@ -234,9 +242,35 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         errors = []
         cascade_totals = {"loans_updated": 0, "mum_clients_updated": 0}
 
+        # Batch-fetch all leads at once to avoid N+1 queries
+        bulk_query = db.query(Lead).filter(Lead.id.in_(lead_ids))
+        if not is_platform_admin:
+            org_id = getattr(current_user, 'organization_id', None)
+            if org_id:
+                bulk_query = bulk_query.filter(Lead.organization_id == org_id)
+        bulk_leads_map = {lead.id: lead for lead in bulk_query.all()}
+
+        # Pre-fetch Encompass config once (same org for all leads in bulk update)
+        _enc_cfg_cache = {}
+        LOS_PUSH_STAGES = {"Application", "Converted", "Pre-Approved"}
+        if new_status in LOS_PUSH_STAGES:
+            try:
+                from sqlalchemy import text as sa_text
+                user_org_id = getattr(current_user, 'organization_id', None)
+                if user_org_id:
+                    enc_cfg = db.execute(sa_text("""
+                        SELECT auto_push_on_stage_change, is_connected
+                        FROM encompass_configs
+                        WHERE organization_id = :org_id
+                    """), {"org_id": user_org_id}).fetchone()
+                    if enc_cfg:
+                        _enc_cfg_cache[user_org_id] = enc_cfg
+            except Exception:
+                pass  # Encompass table may not exist
+
         for lead_id in lead_ids:
             try:
-                lead = _org_scoped_lead(db, lead_id, current_user)
+                lead = bulk_leads_map.get(lead_id)
 
                 if not lead:
                     errors.append(f"Lead {lead_id} not found or access denied")
@@ -309,16 +343,11 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
                 # LOS auto-push: when lead transitions to Application-stage,
                 # push to Encompass if org has auto_push_on_stage_change enabled
-                LOS_PUSH_STAGES = {"Application", "Converted", "Pre-Approved"}
                 if new_status in LOS_PUSH_STAGES and lead.loan_number:
                     try:
                         from sqlalchemy import text as sa_text
                         lead_org_id = getattr(lead, 'organization_id', None)
-                        enc_cfg = db.execute(sa_text("""
-                            SELECT auto_push_on_stage_change, is_connected
-                            FROM encompass_configs
-                            WHERE organization_id = :org_id
-                        """), {"org_id": lead_org_id}).fetchone()
+                        enc_cfg = _enc_cfg_cache.get(lead_org_id)
 
                         if enc_cfg and enc_cfg.auto_push_on_stage_change and enc_cfg.is_connected:
                             loan_row = db.execute(sa_text(

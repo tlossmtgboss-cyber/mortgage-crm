@@ -120,6 +120,11 @@ class AgentState(TypedDict, total=False):
     tokens_output: int                   # Output tokens from LLM API response
     model_used: str                      # Which model was used (e.g. claude-sonnet-4-20250514)
 
+    # === Verification & Quality ===
+    verification_report: Optional[dict]  # Hallucination verification report summary
+    quality_score: Optional[dict]        # Quality analysis score and breakdown
+    verification_passed: bool            # Whether verification found no high-confidence hallucinations
+
 
 def create_initial_state(
     user_message: str,
@@ -197,7 +202,12 @@ def create_initial_state(
 
         # Memory
         user_memories=[],
-        memory_context=""
+        memory_context="",
+
+        # Verification & Quality
+        verification_report=None,
+        quality_score=None,
+        verification_passed=True,
     )
 
 

@@ -1040,6 +1040,19 @@ async def update_appointment(
     db.commit()
     db.refresh(appointment)
 
+    # Calendar-Pipeline Bridge: auto-create loan when application appointment completes
+    new_status_val = audit_changes.get("status", {}).get("new")
+    if new_status_val == "completed":
+        try:
+            from services.calendar_pipeline_bridge import on_appointment_completed
+            bridge_result = on_appointment_completed(db, appointment)
+            if bridge_result.get("action") in ("created", "linked"):
+                db.commit()
+                db.refresh(appointment)
+                logger.info(f"Calendar-Pipeline Bridge: {bridge_result}")
+        except Exception as bridge_err:
+            logger.warning(f"Calendar-Pipeline Bridge error (non-blocking): {bridge_err}")
+
     # Enterprise audit: structured log for compliance
     if is_cancellation:
         scheduler_audit.log_appointment_cancelled(
