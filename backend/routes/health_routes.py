@@ -708,7 +708,7 @@ def register_health_routes(app, get_db, **kwargs):
         """Basic health check - database connectivity"""
         try:
             db.execute(text("SELECT 1"))
-            return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "2026.01.22.1"}
+            return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "2026.04.06.1"}
         except Exception as e:
             logger.error(f"Health check failed: {type(e).__name__}: {e}")
             return JSONResponse(
@@ -787,7 +787,7 @@ def register_health_routes(app, get_db, **kwargs):
         """API health check endpoint at /api/v1/health - database connectivity"""
         try:
             db.execute(text("SELECT 1"))
-            return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "2026.01.22.1"}
+            return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "2026.04.06.1"}
         except Exception as e:
             logger.error(f"API health check failed: {type(e).__name__}: {e}")
             return JSONResponse(
@@ -802,7 +802,7 @@ def register_health_routes(app, get_db, **kwargs):
     @app.get("/deploy-test")
     async def deploy_test():
         """Simple endpoint to verify deployment - added 2025-12-27T22:45"""
-        return {"deployed_at": "2026-01-22T09:10:00Z", "version": "2026.01.22.1", "test": "db-pool-fixes"}
+        return {"deployed_at": "2026-01-22T09:10:00Z", "version": "2026.04.06.1", "test": "db-pool-fixes"}
 
 
     # ========================================================================
@@ -1424,7 +1424,7 @@ def register_health_routes(app, get_db, **kwargs):
             "uptime_seconds": uptime_seconds,
             "started_at": _APP_START_TIMESTAMP.isoformat(),
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "version": "2026.01.22.1",
+            "version": "2026.04.06.1",
             "environment": os.getenv("ENVIRONMENT", "development"),
         }
 
