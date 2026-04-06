@@ -38,6 +38,9 @@ class PortalConnectionManager:
         # Token to loan mapping for quick lookup
         self.token_to_loan: Dict[str, int] = {}
 
+        # User-specific connections: user_id -> list of WebSockets
+        self.user_connections: Dict[int, List[WebSocket]] = {}
+
         # Connection metadata (for debugging/monitoring)
         self.connection_metadata: Dict[WebSocket, Dict] = {}
 
@@ -146,6 +149,59 @@ class PortalConnectionManager:
                 del self.token_to_loan[access_token]
 
         logger.info(f"WebSocket disconnected: {metadata.get('type', 'unknown')} from loan {loan_id}")
+
+    # =========================================================================
+    # USER-LEVEL CONNECTIONS (for CommunicationOrchestrator notifications)
+    # =========================================================================
+
+    async def connect_user(self, websocket: WebSocket, user_id: int) -> None:
+        """Register a WebSocket for a specific internal user (LO, processor, etc.)."""
+        async with self._lock:
+            if user_id not in self.user_connections:
+                self.user_connections[user_id] = []
+            self.user_connections[user_id].append(websocket)
+            meta = self.connection_metadata.get(websocket, {})
+            meta["user_id"] = user_id
+            self.connection_metadata[websocket] = meta
+
+    async def disconnect_user(self, websocket: WebSocket, user_id: int) -> None:
+        """Remove a user-level WebSocket."""
+        async with self._lock:
+            conns = self.user_connections.get(user_id, [])
+            if websocket in conns:
+                conns.remove(websocket)
+            if not conns and user_id in self.user_connections:
+                del self.user_connections[user_id]
+
+    async def send_personal_message(self, user_id: int, message: Dict) -> int:
+        """Send a message to all WebSocket connections for a specific user.
+
+        Returns the number of connections that received the message.
+        Used by CommunicationOrchestrator for per-collaborator notifications.
+        """
+        connections = self.user_connections.get(user_id, [])
+        if not connections:
+            logger.debug("No active WS connections for user %s", user_id)
+            return 0
+
+        sent = 0
+        dead: List[WebSocket] = []
+        for ws in connections:
+            try:
+                await ws.send_json(message)
+                sent += 1
+            except Exception:
+                dead.append(ws)
+
+        if dead:
+            async with self._lock:
+                for ws in dead:
+                    conns = self.user_connections.get(user_id, [])
+                    if ws in conns:
+                        conns.remove(ws)
+                    self.connection_metadata.pop(ws, None)
+
+        return sent
 
     # =========================================================================
     # MESSAGE BROADCASTING

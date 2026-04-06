@@ -95,7 +95,9 @@ class FileCollaborationResponse(BaseModel):
 
 
 # =============================================================================
-# SQLAlchemy Model (inline -- no separate model file needed yet)
+# SQLAlchemy Model — file_collaborators table for route-level CRUD
+# Maps to the same conceptual entity as LoanFileCollaborator but uses a
+# simpler schema optimized for the REST API (boolean permission flags).
 # =============================================================================
 
 from db import Base
@@ -109,13 +111,14 @@ class FileCollaborator(Base):
         Index("ix_file_collab_user_id", "user_id"),
         Index("ix_file_collab_org_id", "organization_id"),
         Index("ix_file_collab_file_user", "file_id", "user_id", unique=True),
+        {"extend_existing": True},
     )
 
     id = Column(Integer, primary_key=True, index=True)
     file_id = Column(Integer, ForeignKey("loans.id"), nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
-    role = Column(String, default="viewer")  # owner, editor, processor, underwriter, closer, viewer
+    role = Column(String, default="viewer")
     can_edit = Column(Boolean, default=True)
     can_comment = Column(Boolean, default=True)
     can_upload = Column(Boolean, default=True)
