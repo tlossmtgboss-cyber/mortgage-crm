@@ -22,38 +22,13 @@ import uuid
 import logging
 from sqlalchemy.exc import SQLAlchemyError
 
+from middleware.webhook_verification import require_telnyx_webhook
+
 logger = logging.getLogger(__name__)
 
-TELNYX_PUBLIC_KEY = os.getenv("TELNYX_PUBLIC_KEY")
-
-
-async def _verify_telnyx_webhook(request: Request):
-    """Validate Telnyx webhook signature. Fail-closed when key not configured."""
-    if not TELNYX_PUBLIC_KEY:
-        logger.error("TELNYX_PUBLIC_KEY not configured — rejecting recruiting dialer webhook")
-        raise HTTPException(status_code=403, detail="Webhook validation not configured")
-
-    signature = request.headers.get("telnyx-signature-ed25519", "")
-    timestamp = request.headers.get("telnyx-timestamp", "")
-    if not signature or not timestamp:
-        logger.warning("Missing Telnyx signature headers on recruiting dialer webhook")
-        raise HTTPException(status_code=403, detail="Missing webhook signature")
-
-    body = await request.body()
-
-    try:
-        from telephony.providers.telnyx.webhooks import validate_telnyx_webhook
-        if not validate_telnyx_webhook(body, signature, timestamp, TELNYX_PUBLIC_KEY):
-            logger.warning("Invalid Telnyx webhook signature on recruiting dialer")
-            raise HTTPException(status_code=403, detail="Invalid webhook signature")
-    except ImportError:
-        logger.error("Telnyx webhook validation module not available")
-        raise HTTPException(status_code=403, detail="Webhook validation unavailable")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Telnyx signature validation error: {e}")
-        raise HTTPException(status_code=403, detail="Webhook validation failed")
+# Backward compatibility alias — existing routes reference _verify_telnyx_webhook
+# in their Depends() declarations.  Map to the centralized implementation.
+_verify_telnyx_webhook = require_telnyx_webhook
 
 # ============================================================================
 # FEATURE TIER: PREMIUM

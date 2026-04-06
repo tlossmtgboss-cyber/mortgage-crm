@@ -17,6 +17,8 @@ Endpoints:
     GET  /api/v1/autonomous/confidence               Confidence graduation dashboard
     GET  /api/v1/autonomous/dashboard                Autonomous agents dashboard
     POST /api/v1/autonomous/tasks/seed               Seed default tasks (admin)
+    GET  /api/v1/autonomous/circuits                 Circuit breaker status (admin)
+    POST /api/v1/autonomous/circuits/{org_id}/{agent_type}/reset  Reset circuit (admin)
 """
 
 from datetime import datetime, timezone, timedelta
@@ -823,3 +825,67 @@ def register_autonomous_task_routes(app, get_db, get_current_user, **kwargs):
         except Exception as e:
             logger.exception(f"Failed to get confidence dashboard: {e}")
             raise HTTPException(status_code=500, detail="Failed to get confidence dashboard")
+
+    # -------------------------------------------------------------------
+    # GET /api/v1/autonomous/circuits — Circuit breaker status
+    # -------------------------------------------------------------------
+    @app.get("/api/v1/autonomous/circuits", tags=["Autonomous Tasks"])
+    async def get_circuit_breaker_status(
+        current_user=Depends(get_current_user),
+    ):
+        """Get circuit breaker status for all org+agent pairs. Admin only."""
+        _require_admin(current_user)
+        try:
+            from services.autonomous.circuit_breaker import get_circuit_breaker
+            breaker = get_circuit_breaker()
+            return {
+                "circuits": breaker.get_status(),
+                "open_circuits": breaker.get_open_circuits(),
+            }
+        except Exception as e:
+            logger.exception(f"Failed to get circuit breaker status: {e}")
+            raise HTTPException(status_code=500, detail="Failed to get circuit breaker status")
+
+    # -------------------------------------------------------------------
+    # POST /api/v1/autonomous/circuits/{org_id}/{agent_type}/reset
+    # -------------------------------------------------------------------
+    @app.post("/api/v1/autonomous/circuits/{org_id}/{agent_type}/reset", tags=["Autonomous Tasks"])
+    async def reset_circuit_breaker(
+        org_id: int,
+        agent_type: str,
+        current_user=Depends(get_current_user),
+    ):
+        """Manually reset a circuit breaker for a specific org+agent. Admin only."""
+        _require_admin(current_user)
+        try:
+            from services.autonomous.circuit_breaker import get_circuit_breaker
+            breaker = get_circuit_breaker()
+
+            if agent_type not in KNOWN_AGENT_TYPES:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Unknown agent_type '{agent_type}'. Must be one of: {sorted(KNOWN_AGENT_TYPES)}",
+                )
+
+            was_reset = breaker.reset(org_id, agent_type)
+            if not was_reset:
+                return {
+                    "status": "no_circuit",
+                    "message": f"No circuit found for org={org_id} agent={agent_type}",
+                }
+
+            logger.info(
+                "Circuit breaker reset by user %s for org=%d agent=%s",
+                current_user.id, org_id, agent_type,
+            )
+            return {
+                "status": "reset",
+                "org_id": org_id,
+                "agent_type": agent_type,
+                "message": f"Circuit for org={org_id} agent={agent_type} reset to CLOSED",
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.exception(f"Failed to reset circuit breaker: {e}")
+            raise HTTPException(status_code=500, detail="Failed to reset circuit breaker")

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 from database.models.autonomous_task import AutonomousTask, TaskExecution
 from database.models.core import Organization
 from db import SessionLocal
+from services.autonomous.circuit_breaker import get_circuit_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -167,9 +168,19 @@ class AutonomousTaskExecutor:
             db.close()
 
     async def _execute_task(self, task: AutonomousTask) -> None:
-        """Run a single autonomous task with timeout and error handling."""
+        """Run a single autonomous task with timeout, error handling, and circuit breaker."""
         task_id, org_id, agent_type = task.id, task.organization_id, task.agent_type
         timeout = task.timeout_seconds or 300
+
+        # --- Circuit breaker check ---
+        breaker = get_circuit_breaker()
+        if not breaker.can_execute(org_id, agent_type):
+            logger.warning(
+                "Circuit OPEN for org=%d agent=%s — skipping task %d",
+                org_id, agent_type, task_id,
+            )
+            return
+
         logger.info("Executing task %d [%s] org=%d timeout=%ds",
                      task_id, agent_type, org_id, timeout)
 
@@ -195,6 +206,13 @@ class AutonomousTaskExecutor:
             status = "failed"
             errors.append(f"{type(e).__name__}: {str(e)[:500]}")
             logger.exception("Task %d [%s] failed: %s", task_id, agent_type, e)
+
+        # --- Record success/failure in circuit breaker ---
+        if status == "completed":
+            breaker.record_success(org_id, agent_type)
+        else:
+            error_msg = errors[0] if errors else f"status={status}"
+            breaker.record_failure(org_id, agent_type, error_msg)
 
         duration = round(time.monotonic() - t0, 2)
         try:
@@ -342,6 +360,14 @@ class AutonomousTaskExecutor:
             logger.info("Task %d [%s] failure %d/%d: %s", task.id, task.agent_type,
                         task.consecutive_failures, max_retries,
                         errors[0] if errors else "unknown")
+
+    def get_circuit_status(self) -> Dict[str, Any]:
+        """Return circuit breaker status for monitoring dashboards."""
+        breaker = get_circuit_breaker()
+        return {
+            "circuits": breaker.get_status(),
+            "open_circuits": breaker.get_open_circuits(),
+        }
 
     async def seed_default_tasks(self, org_id: int) -> List[int]:
         """Create default autonomous task configs for a new org. Idempotent."""

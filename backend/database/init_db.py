@@ -1054,6 +1054,13 @@ def init_db():
                         ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS end_time TIMESTAMP;
                         ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS failure_reason VARCHAR;
                         ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+                        -- Recording fields for call_logs
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS recording_url VARCHAR;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS stereo_recording_url VARCHAR;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS recording_duration_seconds INTEGER;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS recording_status VARCHAR DEFAULT 'none';
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS transcript_text TEXT;
+                        ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS transcript_status VARCHAR DEFAULT 'none';
 
                         -- Migrate old column data if they exist
                         UPDATE call_logs SET start_time = started_at WHERE start_time IS NULL AND started_at IS NOT NULL;
@@ -1061,6 +1068,15 @@ def init_db():
                     """))
                     conn.commit()
                     logger.info("✅ Telephony tables created/verified")
+
+                    # Add recording/transcript status columns to vapi_calls
+                    conn.execute(text("""
+                        ALTER TABLE vapi_calls ADD COLUMN IF NOT EXISTS stereo_recording_url VARCHAR(512);
+                        ALTER TABLE vapi_calls ADD COLUMN IF NOT EXISTS recording_status VARCHAR(50) DEFAULT 'none';
+                        ALTER TABLE vapi_calls ADD COLUMN IF NOT EXISTS transcript_status VARCHAR(50) DEFAULT 'none';
+                    """))
+                    conn.commit()
+                    logger.info("✅ Vapi call recording columns verified")
 
                     # Add concierge_responsible column to workflow_day_configs
                     conn.execute(text("""

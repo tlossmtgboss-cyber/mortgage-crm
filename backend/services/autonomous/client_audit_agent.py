@@ -110,7 +110,8 @@ class ClientAuditAgent:
 
         # Task model for creating user-facing tasks
         try:
-            from database.models.core import Task, User
+            from database.models.task import Task
+            from database.models.core import User
             self.Task = Task
             self.User = User
         except ImportError:
@@ -504,19 +505,19 @@ class ClientAuditAgent:
         except Exception:
             pass  # Default to requiring approval
 
-        # Map severity to task priority
-        priority_map = {"critical": 1, "high": 2, "medium": 3, "low": 4}
-        task_priority = priority_map.get(issue.get("severity", "medium"), 3)
+        # Map severity to task priority (Task.priority is a String)
+        priority_map = {"critical": "high", "high": "high", "medium": "medium", "low": "low"}
+        task_priority = priority_map.get(issue.get("severity", "medium"), "medium")
 
         task = self.Task(
             organization_id=self.org_id,
             loan_id=loan.id,
-            assigned_to=loan.loan_officer_id,
+            owner_id=loan.loan_officer_id,
             title=issue["title"],
             description=issue["description"],
             priority=task_priority,
             status="pending_approval" if needs_approval else "pending",
-            source="ai_audit",
+            related_type="ai_audit",
             due_date=datetime.now(timezone.utc) + timedelta(days=issue.get("priority", 3)),
         )
 

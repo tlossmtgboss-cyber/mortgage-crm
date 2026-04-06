@@ -2,14 +2,16 @@
 Webhook Signature Verification Middleware
 =========================================
 Verifies webhook signatures from external services (Google Calendar,
-Microsoft Graph/Outlook, and generic HMAC) to prevent unauthorized
-POST requests to push notification endpoints.
+Microsoft Graph/Outlook, Telnyx, Vapi, and generic HMAC) to prevent
+unauthorized POST requests to push notification endpoints.
 
 Usage as FastAPI dependencies:
 
     from middleware.webhook_verification import (
         require_google_calendar_webhook,
         require_outlook_webhook,
+        require_telnyx_webhook,
+        require_vapi_webhook,
     )
 
     @router.post("/webhook/google")
@@ -26,22 +28,46 @@ Usage as FastAPI dependencies:
     ):
         ...
 
+    @router.post("/webhook/telnyx")
+    async def handle_telnyx_webhook(
+        request: Request,
+        body: bytes = Depends(require_telnyx_webhook),
+    ):
+        # body is the verified raw body bytes
+        ...
+
+    @router.post("/webhook/vapi")
+    async def handle_vapi_webhook(
+        request: Request,
+        body: bytes = Depends(require_vapi_webhook),
+    ):
+        # body is the verified raw body bytes
+        ...
+
 Environment variables:
     GOOGLE_CALENDAR_WEBHOOK_TOKEN  - Token set when creating a Google Calendar watch
     GRAPH_WEBHOOK_SECRET           - clientState set when creating an Outlook/Graph subscription
     WEBHOOK_SECRET                 - Fallback secret for Graph webhooks
+    TELNYX_PUBLIC_KEY              - Ed25519 public key for Telnyx webhook verification
+    VAPI_WEBHOOK_SECRET            - Shared secret for Vapi webhook verification
 """
 
 import hmac
 import hashlib
 import logging
 import os
+import time
 from typing import Optional
 
 from fastapi import HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Timestamp tolerance for replay protection (seconds)
+# ---------------------------------------------------------------------------
+WEBHOOK_TIMESTAMP_TOLERANCE = int(os.getenv("WEBHOOK_TIMESTAMP_TOLERANCE", "300"))  # 5 minutes
 
 
 class WebhookVerifier:
@@ -264,6 +290,194 @@ class WebhookVerifier:
 
         return True
 
+    # ------------------------------------------------------------------
+    # Telnyx webhook verification (Ed25519)
+    # ------------------------------------------------------------------
+    @staticmethod
+    async def verify_telnyx(request: Request) -> bytes:
+        """
+        Verify a Telnyx webhook using Ed25519 signature verification.
+
+        Telnyx signs webhooks with Ed25519.  The signed payload is
+        ``timestamp + "." + raw_body``.  Headers:
+
+        - ``telnyx-signature-ed25519``: base64-encoded Ed25519 signature
+        - ``telnyx-timestamp``: UNIX epoch seconds when Telnyx signed
+
+        Verification is **optional** when ``TELNYX_PUBLIC_KEY`` is not set
+        (to allow development without configuring the key).  When the key
+        IS set, verification is fail-closed.
+
+        Replay protection rejects payloads whose timestamp is older than
+        ``WEBHOOK_TIMESTAMP_TOLERANCE`` seconds (default 300 = 5 min).
+
+        Returns the raw request body bytes so the caller can parse JSON
+        without reading the body a second time.
+        """
+        public_key = os.getenv("TELNYX_PUBLIC_KEY")
+        body = await request.body()
+
+        if not public_key:
+            # Allow development without the key — log at DEBUG to avoid spam
+            env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
+            if env in ("production", "staging"):
+                logger.error(
+                    "TELNYX_PUBLIC_KEY not configured in %s — rejecting Telnyx webhook", env,
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="Telnyx webhook verification not configured",
+                )
+            logger.debug(
+                "TELNYX_PUBLIC_KEY not configured — skipping Telnyx webhook "
+                "verification (dev mode)"
+            )
+            return body
+
+        signature = request.headers.get("telnyx-signature-ed25519", "")
+        timestamp = request.headers.get("telnyx-timestamp", "")
+        source_ip = request.client.host if request.client else "unknown"
+
+        if not signature or not timestamp:
+            logger.warning(
+                "Telnyx webhook missing signature headers from %s", source_ip,
+            )
+            raise HTTPException(status_code=401, detail="Missing Telnyx signature headers")
+
+        # -- Replay protection ------------------------------------------------
+        try:
+            ts = int(timestamp)
+            now = int(time.time())
+            if abs(now - ts) > WEBHOOK_TIMESTAMP_TOLERANCE:
+                logger.warning(
+                    "Telnyx webhook timestamp too old/future: ts=%d now=%d diff=%ds from %s",
+                    ts, now, abs(now - ts), source_ip,
+                )
+                raise HTTPException(
+                    status_code=401,
+                    detail="Telnyx webhook timestamp out of tolerance",
+                )
+        except (ValueError, TypeError):
+            logger.warning(
+                "Telnyx webhook invalid timestamp value: %r from %s",
+                timestamp, source_ip,
+            )
+            raise HTTPException(status_code=401, detail="Invalid Telnyx timestamp")
+
+        # -- Ed25519 signature verification -----------------------------------
+        try:
+            from telephony.providers.telnyx.webhooks import validate_telnyx_webhook
+            if not validate_telnyx_webhook(body, signature, timestamp, public_key):
+                logger.warning(
+                    "Invalid Telnyx Ed25519 signature from %s", source_ip,
+                )
+                raise HTTPException(status_code=401, detail="Invalid Telnyx webhook signature")
+        except ImportError:
+            # PyNaCl or telephony module not installed
+            env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
+            if env in ("production", "staging"):
+                logger.error(
+                    "Telnyx webhook validation module not available in %s — "
+                    "rejecting webhook", env,
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="Telnyx webhook verification unavailable",
+                )
+            logger.warning(
+                "Telnyx webhook validation module not available — "
+                "skipping verification (dev mode)"
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("Telnyx webhook signature validation error: %s", e)
+            raise HTTPException(
+                status_code=401,
+                detail="Telnyx webhook signature validation failed",
+            )
+
+        return body
+
+    # ------------------------------------------------------------------
+    # Vapi webhook verification (shared secret / HMAC-SHA256)
+    # ------------------------------------------------------------------
+    @staticmethod
+    async def verify_vapi(request: Request) -> bytes:
+        """
+        Verify a Vapi webhook using the shared secret.
+
+        Vapi supports two authentication modes for server URLs:
+
+        1. **Shared secret** (``X-Vapi-Secret`` header) — the secret is set
+           when configuring the assistant's ``serverUrlSecret``.  The header
+           value is compared directly against ``VAPI_WEBHOOK_SECRET``.
+
+        2. **HMAC-SHA256** (``x-vapi-signature`` header) — the header
+           contains the hex-encoded HMAC-SHA256 of the raw request body
+           using ``VAPI_WEBHOOK_SECRET`` as the key.
+
+        This method checks both header formats for maximum compatibility.
+
+        Verification is **optional** when ``VAPI_WEBHOOK_SECRET`` is not
+        set (to allow development without configuring the secret).  When
+        the secret IS set, verification is fail-closed.
+
+        Returns the raw request body bytes so the caller can parse JSON
+        without reading the body a second time.
+        """
+        secret = os.getenv("VAPI_WEBHOOK_SECRET", "")
+        body = await request.body()
+        source_ip = request.client.host if request.client else "unknown"
+
+        if not secret:
+            env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
+            if env in ("production", "staging"):
+                logger.error(
+                    "VAPI_WEBHOOK_SECRET not configured in %s — rejecting Vapi webhook", env,
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="Vapi webhook verification not configured",
+                )
+            logger.debug(
+                "VAPI_WEBHOOK_SECRET not configured — skipping Vapi webhook "
+                "verification (dev mode)"
+            )
+            return body
+
+        # --- Mode 1: X-Vapi-Secret header (direct secret comparison) --------
+        vapi_secret_header = request.headers.get("X-Vapi-Secret", "")
+        if vapi_secret_header:
+            if hmac.compare_digest(vapi_secret_header, secret):
+                return body
+            logger.warning(
+                "Invalid Vapi X-Vapi-Secret from %s", source_ip,
+            )
+            raise HTTPException(status_code=401, detail="Invalid Vapi webhook authentication")
+
+        # --- Mode 2: x-vapi-signature header (HMAC-SHA256) -------------------
+        vapi_signature = request.headers.get("x-vapi-signature", "")
+        if vapi_signature:
+            expected = hmac.new(
+                secret.encode("utf-8"),
+                body,
+                hashlib.sha256,
+            ).hexdigest()
+            if hmac.compare_digest(vapi_signature, expected):
+                return body
+            logger.warning(
+                "Invalid Vapi HMAC signature from %s", source_ip,
+            )
+            raise HTTPException(status_code=401, detail="Invalid Vapi webhook signature")
+
+        # --- No recognized auth header present -------------------------------
+        logger.warning(
+            "Vapi webhook missing authentication header (X-Vapi-Secret or "
+            "x-vapi-signature) from %s", source_ip,
+        )
+        raise HTTPException(status_code=401, detail="Missing Vapi webhook authentication")
+
 
 # ======================================================================
 # FastAPI Dependencies
@@ -343,3 +557,55 @@ async def require_generic_hmac_webhook(request: Request) -> bool:
             status_code=503, detail="Webhook not configured"
         )
     return await WebhookVerifier.verify_generic_hmac(request, secret)
+
+
+async def require_telnyx_webhook(request: Request) -> bytes:
+    """
+    FastAPI dependency that verifies incoming Telnyx webhook signatures
+    using Ed25519.
+
+    Returns the raw request body bytes.  The caller should parse JSON
+    from these bytes instead of calling ``request.json()`` again (the
+    body stream is already consumed).
+
+    Verification is **skipped** (with a debug log) when the
+    ``TELNYX_PUBLIC_KEY`` env var is not set, so local development works
+    without the key.  In ``production`` / ``staging`` it is fail-closed.
+
+    Usage:
+        @router.post("/webhook/telnyx")
+        async def handler(
+            request: Request,
+            raw_body: bytes = Depends(require_telnyx_webhook),
+        ):
+            payload = json.loads(raw_body)
+            ...
+    """
+    return await WebhookVerifier.verify_telnyx(request)
+
+
+async def require_vapi_webhook(request: Request) -> bytes:
+    """
+    FastAPI dependency that verifies incoming Vapi webhook requests.
+
+    Supports two authentication modes:
+    - ``X-Vapi-Secret`` header (shared secret comparison)
+    - ``x-vapi-signature`` header (HMAC-SHA256 of the body)
+
+    Returns the raw request body bytes.  The caller should parse JSON
+    from these bytes instead of calling ``request.json()`` again.
+
+    Verification is **skipped** when ``VAPI_WEBHOOK_SECRET`` is not set,
+    allowing local development without the secret.  In ``production`` /
+    ``staging`` it is fail-closed.
+
+    Usage:
+        @router.post("/webhook/vapi")
+        async def handler(
+            request: Request,
+            raw_body: bytes = Depends(require_vapi_webhook),
+        ):
+            payload = json.loads(raw_body)
+            ...
+    """
+    return await WebhookVerifier.verify_vapi(request)

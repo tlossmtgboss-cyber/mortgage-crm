@@ -5,9 +5,11 @@ Transcription, text-to-speech, and voice chat endpoints using OpenAI
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from datetime import datetime, timedelta
+import json
 import logging
 import os
 from routes.auth_deps import current_user_flexible_dep
+from middleware.webhook_verification import require_vapi_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -280,16 +282,18 @@ async def voice_synthesize(
 @router.post("/phone-webhook")
 async def voice_phone_webhook(
     request: Request,
-    db: Session = Depends(lambda: get_db_dep())
+    raw_body: bytes = Depends(require_vapi_webhook),
+    db: Session = Depends(lambda: get_db_dep()),
 ):
     """
     Webhook for incoming phone calls (Telnyx/Vapi integration)
-    Processes voice input and returns TwiML or Vapi response
+    Processes voice input and returns TwiML or Vapi response.
+    Signature verification is handled by the require_vapi_webhook dependency.
     """
     try:
         from openai import OpenAI
 
-        data = await request.json()
+        data = json.loads(raw_body)
 
         # Handle different webhook formats (Telnyx, Vapi)
         caller = data.get("From") or data.get("caller") or "Unknown"

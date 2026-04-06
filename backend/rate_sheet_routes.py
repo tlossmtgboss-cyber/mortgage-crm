@@ -4,8 +4,8 @@ API endpoints for rate sheet upload, parsing, and refinance opportunity manageme
 """
 
 import os
+import json
 import logging
-import hmac
 from datetime import datetime
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, BackgroundTasks, Request
@@ -14,10 +14,9 @@ from sqlalchemy.orm import Session
 from decimal import Decimal
 
 from database import get_db
+from middleware.webhook_verification import require_vapi_webhook
 
 logger = logging.getLogger(__name__)
-
-VAPI_WEBHOOK_SECRET = os.getenv("VAPI_WEBHOOK_SECRET", "")
 
 router = APIRouter(prefix="/api/v1/rate-monitor", tags=["rate-monitor-sheets"])
 
@@ -510,26 +509,15 @@ async def mark_converted(
 @router.post("/webhooks/call-completed")
 async def webhook_call_completed(
     request: Request,
+    raw_body: bytes = Depends(require_vapi_webhook),
     db: Session = Depends(get_db),
 ):
     """
     Webhook endpoint for VAPI call completion.
     Updates opportunity status based on call outcome.
+    Signature verification is handled by the require_vapi_webhook dependency.
     """
-    # Validate Vapi webhook secret — fail-closed in production
-    if VAPI_WEBHOOK_SECRET:
-        vapi_secret = request.headers.get("X-Vapi-Secret", "")
-        if not hmac.compare_digest(vapi_secret, VAPI_WEBHOOK_SECRET):
-            logger.warning(f"Invalid Vapi secret on call-completed webhook from {request.client.host}")
-            raise HTTPException(status_code=401, detail="Invalid webhook authentication")
-    else:
-        is_production = os.getenv("ENVIRONMENT") == "production" or os.getenv("RAILWAY_ENVIRONMENT")
-        if is_production:
-            logger.error("VAPI_WEBHOOK_SECRET not configured in production — rejecting webhook")
-            raise HTTPException(status_code=503, detail="Webhook authentication not configured")
-        logger.warning("VAPI_WEBHOOK_SECRET not configured — skipping webhook verification (dev only)")
-
-    call_data = await request.json()
+    call_data = json.loads(raw_body)
     from services.refinance_outreach_service import RefinanceOutreachService
 
     vapi_call_id = call_data.get('call_id') or call_data.get('id')

@@ -7,8 +7,13 @@ used across route handlers and service layers.
 
 from validation.common import (
     sanitize_string,
+    sanitize_text,
     validate_email_format,
     validate_phone_format,
+    validate_ssn,
+    validate_loan_amount_decimal,
+    validate_credit_score,
+    validate_interest_rate,
     validate_loan_number,
     validate_uuid,
     safe_sql_identifier,
@@ -32,8 +37,13 @@ from validation.smart_docs_validators import (
 __all__ = [
     # common
     "sanitize_string",
+    "sanitize_text",
     "validate_email_format",
     "validate_phone_format",
+    "validate_ssn",
+    "validate_loan_amount_decimal",
+    "validate_credit_score",
+    "validate_interest_rate",
     "validate_loan_number",
     "validate_uuid",
     "safe_sql_identifier",

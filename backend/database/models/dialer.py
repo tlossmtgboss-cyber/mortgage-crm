@@ -134,6 +134,13 @@ class CallLog(Base):
     disposition = Column(String)
     notes = Column(Text)
     ai_note_summary = Column(Text)
+    # Recording fields
+    recording_url = Column(String, nullable=True)
+    stereo_recording_url = Column(String, nullable=True)
+    recording_duration_seconds = Column(Integer, nullable=True)
+    recording_status = Column(String, default='none')  # none, available, downloaded, transcribed
+    transcript_text = Column(Text, nullable=True)
+    transcript_status = Column(String, default='none')  # none, pending, completed, failed
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     agent = relationship("User", backref="call_logs")

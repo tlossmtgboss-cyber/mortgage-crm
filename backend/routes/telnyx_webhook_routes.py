@@ -13,7 +13,6 @@ import json
 import asyncio
 import logging
 import re
-import time
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -23,9 +22,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
 
 from database import get_db
+from middleware.webhook_verification import require_telnyx_webhook
 from telephony.providers.telnyx.webhooks import (
     parse_telnyx_webhook,
-    validate_telnyx_webhook,
     TelnyxCallEvent,
     TelnyxAMDEvent,
     TelnyxSMSEvent,
@@ -46,9 +45,6 @@ if API_BASE_URL and not API_BASE_URL.startswith("http"):
 if not API_BASE_URL:
     API_BASE_URL = "https://api.perenniaai.com"
 
-# Telnyx public key for webhook validation
-TELNYX_PUBLIC_KEY = os.getenv("TELNYX_PUBLIC_KEY")
-
 
 def _validate_texml_request(request: Request):
     """Validate TeXML callback requests using a shared secret or Telnyx signature."""
@@ -59,56 +55,23 @@ def _validate_texml_request(request: Request):
 
 
 # =============================================================================
-# Webhook Validation
-# =============================================================================
-
-async def validate_webhook(request: Request) -> bool:
-    """Validate incoming Telnyx webhook signature. Fail-closed when key not configured."""
-    if not TELNYX_PUBLIC_KEY:
-        logger.error("TELNYX_PUBLIC_KEY not configured — rejecting webhook")
-        return False
-
-    signature = request.headers.get("telnyx-signature-ed25519", "")
-    timestamp = request.headers.get("telnyx-timestamp", "")
-    if not signature or not timestamp:
-        logger.warning("Missing Telnyx signature headers")
-        return False
-
-    body = await request.body()
-
-    # Check timestamp freshness (reject webhooks older than 5 minutes)
-    try:
-        ts = int(timestamp)
-        now = int(time.time())
-        if abs(now - ts) > 300:  # 5 minutes
-            logger.warning(f"Webhook timestamp too old: {ts} (now: {now})")
-            return False
-    except (ValueError, TypeError):
-        pass
-
-    return validate_telnyx_webhook(body, signature, timestamp, TELNYX_PUBLIC_KEY)
-
-
-# =============================================================================
 # Main Webhook Handler
 # =============================================================================
 
 @router.post("/webhook")
 async def handle_telnyx_webhook(
     request: Request,
-    db: Session = Depends(get_db)
+    raw_body: bytes = Depends(require_telnyx_webhook),
+    db: Session = Depends(get_db),
 ):
     """
     Main Telnyx webhook handler.
     Routes events to appropriate handlers based on event type.
+    Signature verification is handled by the require_telnyx_webhook dependency.
     """
-    # Validate webhook signature
-    if not await validate_webhook(request):
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
-
-    # Parse webhook payload
+    # Parse webhook payload from the already-verified raw body
     try:
-        payload = await request.json()
+        payload = json.loads(raw_body)
     except Exception as e:
         logger.error(f"Failed to parse Telnyx webhook: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
@@ -167,7 +130,8 @@ async def handle_telnyx_webhook(
 async def handle_amd_callback(
     tracking_id: str,
     request: Request,
-    db: Session = Depends(get_db)
+    raw_body: bytes = Depends(require_telnyx_webhook),
+    db: Session = Depends(get_db),
 ):
     """
     Handle Telnyx AMD callback for a specific call.
@@ -178,11 +142,8 @@ async def handle_amd_callback(
     - "not_sure": Could not determine
     - "unknown": Detection failed
     """
-    if not await validate_webhook(request):
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
-
     try:
-        payload = await request.json()
+        payload = json.loads(raw_body)
     except Exception as e:
         logger.error(f"Failed to parse AMD callback: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")

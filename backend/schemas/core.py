@@ -19,12 +19,23 @@ from database.enums import (
 # PII masking utilities for API response sanitization (Enterprise Readiness 3.19)
 from schemas.pii_masking import sanitize_step_data, mask_ssn
 
+# Canonical validators from validation.common (centralized)
+from validation.common import (
+    validate_email_format as _canonical_validate_email,
+    validate_phone_format as _canonical_validate_phone,
+    validate_credit_score as _canonical_validate_credit_score,
+    validate_loan_amount_decimal as _canonical_validate_loan_amount,
+    validate_interest_rate as _canonical_validate_interest_rate,
+    sanitize_text as _canonical_sanitize_text,
+)
+
 
 # =============================================================================
 # CONTACT VALIDATION HELPERS (Enterprise Readiness 3.1 + 3.5)
+# Thin wrappers around validation.common that accept None for optional fields.
 # =============================================================================
 
-# E.164 phone format or common US formats: (xxx) xxx-xxxx, xxx-xxx-xxxx, +1xxxxxxxxxx
+# Keep regex patterns for backward compatibility (some external code may reference them)
 _PHONE_PATTERN = re.compile(
     r"^(\+?1?\s*[-.]?\s*)?"           # optional country code
     r"(\(?\d{3}\)?[\s\-.]?)"          # area code
@@ -32,35 +43,54 @@ _PHONE_PATTERN = re.compile(
     r"(\d{4})$"                        # subscriber
 )
 
-# Standard email regex (loose enough for real-world, strict enough to catch garbage)
 _EMAIL_PATTERN = re.compile(
     r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$"
 )
 
 
 def _validate_email_format(email: Optional[str]) -> Optional[str]:
-    """Validate email format. Returns the email if valid, raises ValueError if invalid."""
-    if email is None or email.strip() == "":
+    """Validate email format. Returns normalized email or None for empty input."""
+    if email is None or (isinstance(email, str) and email.strip() == ""):
         return None
-    email = email.strip()
-    if not _EMAIL_PATTERN.match(email):
-        raise ValueError(f"Invalid email format: '{email}'")
-    return email
+    return _canonical_validate_email(email)
 
 
 def _validate_phone_format(phone: Optional[str]) -> Optional[str]:
-    """Validate phone format. Returns the phone if valid, raises ValueError if invalid."""
-    if phone is None or phone.strip() == "":
+    """Validate phone format. Returns E.164 normalized phone or None for empty input."""
+    if phone is None or (isinstance(phone, str) and phone.strip() == ""):
         return None
-    phone = phone.strip()
-    # Strip common formatting to validate digits
-    digits_only = re.sub(r"[\s\-.()+]", "", phone)
-    if len(digits_only) < 10 or len(digits_only) > 15 or not digits_only.isdigit():
-        raise ValueError(
-            f"Invalid phone format: '{phone}'. Expected 10-15 digits "
-            f"(e.g., '(555) 123-4567' or '+15551234567')"
-        )
-    return phone
+    return _canonical_validate_phone(phone)
+
+
+def _validate_credit_score_optional(score: Optional[int]) -> Optional[int]:
+    """Validate FICO credit score (300-850) or return None."""
+    if score is None:
+        return None
+    return _canonical_validate_credit_score(score)
+
+
+def _validate_loan_amount_optional(amount: Optional[float]) -> Optional[float]:
+    """Validate loan amount ($1K-$50M) or return None."""
+    if amount is None:
+        return None
+    validated = _canonical_validate_loan_amount(amount)
+    return float(validated)
+
+
+def _validate_interest_rate_optional(rate: Optional[float]) -> Optional[float]:
+    """Validate interest rate (0.1%-30%) or return None."""
+    if rate is None:
+        return None
+    validated = _canonical_validate_interest_rate(rate)
+    return float(validated)
+
+
+def _sanitize_text_optional(text: Optional[str], max_length: int = 5000) -> Optional[str]:
+    """Sanitize free text or return None."""
+    if text is None:
+        return None
+    result = _canonical_sanitize_text(text, max_length=max_length)
+    return result if result else None
 
 
 
@@ -165,17 +195,41 @@ class LeadCreate(BaseModel):
     # Metadata (for assets, etc.)
     user_metadata: Optional[Dict[str, Any]] = None
 
-    # -- Enterprise Readiness 3.5: Email format validation --
+    # -- Enterprise Readiness 3.5: Email format validation + normalization --
     @field_validator('email', mode='before')
     @classmethod
     def validate_email(cls, v):
         return _validate_email_format(v)
 
-    # -- Enterprise Readiness 3.5: Phone format validation --
+    # -- Enterprise Readiness 3.5: Phone format validation + E.164 normalization --
     @field_validator('phone', mode='before')
     @classmethod
     def validate_phone(cls, v):
         return _validate_phone_format(v)
+
+    # -- Credit score: FICO range 300-850 --
+    @field_validator('credit_score', mode='before')
+    @classmethod
+    def validate_credit_score_field(cls, v):
+        return _validate_credit_score_optional(v)
+
+    # -- Loan amount: $1,000 - $50,000,000 --
+    @field_validator('loan_amount', 'preapproval_amount', mode='before')
+    @classmethod
+    def validate_loan_amount_field(cls, v):
+        return _validate_loan_amount_optional(v)
+
+    # -- Interest rate: 0.1% - 30%, auto-detect percentage vs decimal --
+    @field_validator('interest_rate', 'apr', mode='before')
+    @classmethod
+    def validate_interest_rate_field(cls, v):
+        return _validate_interest_rate_optional(v)
+
+    # -- Notes: sanitize free text (strip HTML, null bytes) --
+    @field_validator('notes', mode='before')
+    @classmethod
+    def sanitize_notes(cls, v):
+        return _sanitize_text_optional(v, max_length=10000)
 
     # -- Enterprise Readiness 3.1: At least one contact method required --
     @model_validator(mode='after')

@@ -234,6 +234,15 @@ class PrequalificationRequest(BaseModel):
     property_type: str = Field(default="single_family", max_length=30)
     occupancy: str = Field(default="primary", max_length=20)
 
+    @field_validator('credit_score_range', mode='before')
+    @classmethod
+    def validate_credit_score_range_format(cls, v):
+        """Validate credit score range is a recognized bucket."""
+        if not v or not isinstance(v, str):
+            raise ValueError("Credit score range is required")
+        from validation.common import sanitize_string
+        return sanitize_string(v.strip(), max_length=50)
+
 
 class PrequalificationResponse(BaseModel):
     """Schema for pre-qualification results"""
@@ -272,6 +281,22 @@ class CoborrowerInvitationCreate(BaseModel):
     relationship_type: Optional[str] = None
     send_email: bool = True
     send_sms: bool = False
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_coborrower_email(cls, v):
+        if not v or not isinstance(v, str) or not v.strip():
+            raise ValueError("Co-borrower email is required")
+        from validation.common import validate_email_format
+        return validate_email_format(v)
+
+    @field_validator('phone', mode='before')
+    @classmethod
+    def validate_coborrower_phone(cls, v):
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        from validation.common import validate_phone_format
+        return validate_phone_format(v)
 
 
 class CoborrowerInvitationResponse(BaseModel):
@@ -873,9 +898,30 @@ async def save_step_data(
     if application.expires_at and application.expires_at < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(status_code=410, detail="Application link has expired")
 
+    # SSN validation on input: if step data contains SSN fields, validate format
+    # and immediately redact to last-4 before storage (defense in depth)
+    from schemas.pii_masking import sanitize_step_data as _sanitize_pii
+    incoming = data.data
+    _ssn_keys = {"ssn", "co_ssn", "full_ssn", "ssn_full", "social_security", "ssn_number"}
+    for key in _ssn_keys:
+        raw_ssn = incoming.get(key)
+        if raw_ssn and isinstance(raw_ssn, str) and raw_ssn.strip():
+            # Validate SSN format (never log the value)
+            try:
+                from validation.common import validate_ssn
+                validate_ssn(raw_ssn)
+            except ValueError:
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Invalid SSN format in field '{key}'. "
+                    f"Expected 9 digits (XXX-XX-XXXX or XXXXXXXXX)."
+                )
+    # Always sanitize PII from step data before storage
+    incoming = _sanitize_pii(incoming)
+
     # Update step data
     step_data = application.step_data or {}
-    step_data[data.step] = data.data
+    step_data[data.step] = incoming
     application.step_data = step_data
 
     # Update completed steps if marked

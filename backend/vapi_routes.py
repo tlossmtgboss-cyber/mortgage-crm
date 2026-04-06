@@ -13,9 +13,9 @@ import logging
 from database import get_db
 from vapi_service import VapiService, VapiCRMIntegration
 from vapi_models import VapiCall, VapiCallNote, VapiAssistant
+from middleware.webhook_verification import require_vapi_webhook
 import os
-import hmac
-import hashlib
+import json
 
 try:
     from utils.pii_mask import mask_phone
@@ -26,37 +26,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/vapi", tags=["vapi"])
 
-# Vapi webhook secret for server-to-server authentication
-VAPI_WEBHOOK_SECRET = os.getenv("VAPI_WEBHOOK_SECRET")
-
-
-async def verify_vapi_request(request: Request):
-    """
-    Verify that the request comes from Vapi using a shared secret.
-    Checks the X-Vapi-Secret header against the configured VAPI_WEBHOOK_SECRET.
-    """
-    if not VAPI_WEBHOOK_SECRET:
-        logger.error("VAPI_WEBHOOK_SECRET not configured — rejecting webhook")
-        raise HTTPException(status_code=503, detail="Webhook not configured")
-
-    # Check for Vapi signature header
-    vapi_secret = request.headers.get("X-Vapi-Secret")
-    if not vapi_secret:
-        # Also check alternative header names
-        vapi_secret = request.headers.get("x-vapi-signature") or request.headers.get("Authorization")
-        if vapi_secret and vapi_secret.startswith("Bearer "):
-            vapi_secret = vapi_secret[7:]
-
-    if not vapi_secret:
-        logger.warning(f"Vapi request missing authentication header from {request.client.host}")
-        raise HTTPException(status_code=401, detail="Missing Vapi authentication")
-
-    # Constant-time comparison to prevent timing attacks
-    if not hmac.compare_digest(vapi_secret, VAPI_WEBHOOK_SECRET):
-        logger.warning(f"Invalid Vapi secret from {request.client.host}")
-        raise HTTPException(status_code=401, detail="Invalid Vapi authentication")
-
-    return True
+# Backward compatibility alias — existing routes may reference verify_vapi_request
+verify_vapi_request = require_vapi_webhook
 
 
 def get_current_user_flexible():

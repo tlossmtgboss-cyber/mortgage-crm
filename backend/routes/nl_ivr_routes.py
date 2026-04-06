@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from db import get_db
 from routes.auth_deps import current_user_flexible_dep
+from middleware.webhook_verification import require_vapi_webhook
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
@@ -460,15 +461,20 @@ async def get_assistant_status(
 # =============================================================================
 
 @router.post("/vapi-webhook")
-async def vapi_ivr_webhook(request: Request, db: Session = Depends(get_db)):
+async def vapi_ivr_webhook(
+    request: Request,
+    raw_body: bytes = Depends(require_vapi_webhook),
+    db: Session = Depends(get_db),
+):
     """
     Handle Vapi server-side function call events for the NL IVR assistant.
 
     Vapi sends a POST with the function call details. We execute the function
     and return the result so the assistant can continue the conversation.
+    Signature verification is handled by the require_vapi_webhook dependency.
     """
     try:
-        payload = await request.json()
+        payload = json.loads(raw_body)
     except Exception as e:
         logger.error(f"NL IVR webhook: invalid JSON: {e}")
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)

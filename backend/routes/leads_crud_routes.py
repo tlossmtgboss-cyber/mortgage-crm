@@ -94,12 +94,25 @@ async def create_lead(
 
     # Anyone can create leads - no permission check needed
 
+    # ---- Input validation (Pydantic schema includes phone/email/credit_score/
+    #      loan_amount/interest_rate validators from validation.common) ----
     try:
-        # Validate input with Pydantic schema
         lead_data = LeadCreate(**lead)
+    except Exception as validation_err:
+        logger.warning(f"Lead validation failed: {validation_err}")
+        raise HTTPException(status_code=422, detail=str(validation_err))
+
+    try:
+        # Sanitize free-text fields that bypass Pydantic (e.g., source, employer_name)
+        from validation.common import sanitize_string
+        model_data = lead_data.model_dump()
+        for text_field in ("source", "employer_name", "address", "city", "lender",
+                           "loan_officer", "processor", "underwriter"):
+            if model_data.get(text_field):
+                model_data[text_field] = sanitize_string(model_data[text_field], max_length=500)
 
         db_lead = Lead(
-            **lead_data.model_dump(),
+            **model_data,
             owner_id=current_user.id,
             organization_id=getattr(current_user, 'organization_id', None),
             lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking

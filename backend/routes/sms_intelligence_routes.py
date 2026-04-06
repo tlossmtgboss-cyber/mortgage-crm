@@ -644,41 +644,21 @@ def is_opt_out_message(message: str) -> bool:
 # TELNYX WEBHOOK SIGNATURE VALIDATION (Issue 3 FIX)
 # ================================================================
 
-TELNYX_PUBLIC_KEY = os.getenv("TELNYX_PUBLIC_KEY")
-
-
 async def _validate_telnyx_signature(request: Request) -> bool:
-    """Validate Telnyx webhook signature. Fail-closed in production/staging."""
-    if not TELNYX_PUBLIC_KEY:
-        env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
-        if env in ("production", "staging"):
-            logger.error("TELNYX_PUBLIC_KEY required in production/staging — rejecting webhook")
-            return False
-        logger.debug("TELNYX_PUBLIC_KEY not configured — skipping signature validation in dev")
-        return True
+    """Validate Telnyx webhook signature using centralized verifier.
 
-    signature = request.headers.get("telnyx-signature-ed25519", "")
-    timestamp = request.headers.get("telnyx-timestamp", "")
-
-    if not signature or not timestamp:
-        logger.warning("Missing Telnyx signature headers on SMS intelligence webhook")
-        return False
-
+    Delegates to ``middleware.webhook_verification.WebhookVerifier.verify_telnyx``.
+    Returns True on success, False on failure (for callers that use boolean checks
+    rather than letting the HTTPException propagate).
+    """
     try:
-        from telephony.providers.telnyx.webhooks import validate_telnyx_webhook
-
-        body = await request.body()
-        return validate_telnyx_webhook(
-            body=body,
-            signature=signature,
-            timestamp=timestamp,
-            public_key=TELNYX_PUBLIC_KEY,
-        )
-    except ImportError:
-        logger.warning("Telnyx webhook validation module not available -- rejecting request")
+        from middleware.webhook_verification import WebhookVerifier
+        await WebhookVerifier.verify_telnyx(request)
+        return True
+    except HTTPException:
         return False
     except Exception as e:
-        logger.error(f"Telnyx signature validation error: {e}")
+        logger.error("Telnyx signature validation error: %s", e)
         return False
 
 

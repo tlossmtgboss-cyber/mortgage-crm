@@ -30,6 +30,7 @@ import httpx
 
 from db import get_db
 from routes.auth_deps import current_user_flexible_dep
+from middleware.webhook_verification import require_vapi_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -1010,6 +1011,7 @@ async def _transfer_to_vapi(
 async def vapi_inbound_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
+    raw_body: bytes = Depends(require_vapi_webhook),
     db: Session = Depends(get_db),
 ):
     """
@@ -1020,16 +1022,11 @@ async def vapi_inbound_webhook(
       - end-of-call-report: log transcript, summary, create activity
       - status-update: ack
       - assistant-request: return configured assistant ID
-    """
-    # Validate webhook secret (fail-closed when configured)
-    if VAPI_WEBHOOK_SECRET:
-        vapi_secret = request.headers.get("X-Vapi-Secret", "")
-        if not hmac.compare_digest(vapi_secret, VAPI_WEBHOOK_SECRET):
-            logger.warning("Invalid Vapi secret on inbound webhook from %s", request.client.host)
-            raise HTTPException(status_code=401, detail="Invalid webhook authentication")
 
+    Signature verification is handled by the require_vapi_webhook dependency.
+    """
     try:
-        payload = await request.json()
+        payload = json.loads(raw_body)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
@@ -1146,7 +1143,8 @@ async def vapi_inbound_webhook(
 
         transcript = message.get("transcript", "")
         summary = message.get("summary", "")
-        recording_url = message.get("recordingUrl", "")
+        recording_url = message.get("recordingUrl", "") or call_data.get("recordingUrl", "")
+        stereo_recording_url = call_data.get("stereoRecordingUrl", "")
         ended_reason = message.get("endedReason", "")
         duration = call_data.get("duration")
         customer = call_data.get("customer", {})
@@ -1161,17 +1159,21 @@ async def vapi_inbound_webhook(
                 lo_user_id = lo_user_id or resolved.get("user_id")
 
         # Upsert into vapi_calls
+        _rec_status = "available" if recording_url else "none"
+        _tx_status = "completed" if transcript else "none"
         try:
             db.execute(text("""
                 INSERT INTO vapi_calls (
                     vapi_call_id, phone_number, direction, status,
-                    transcript, summary, recording_url, duration,
-                    organization_id, call_metadata,
+                    transcript, summary, recording_url, stereo_recording_url,
+                    recording_status, transcript_status,
+                    duration, organization_id, call_metadata,
                     started_at, ended_at, created_at
                 ) VALUES (
                     :call_id, :phone, 'inbound', 'completed',
-                    :transcript, :summary, :recording_url, :duration,
-                    :org_id, :metadata,
+                    :transcript, :summary, :recording_url, :stereo_recording_url,
+                    :recording_status, :transcript_status,
+                    :duration, :org_id, :metadata,
                     :started, :ended, NOW()
                 )
                 ON CONFLICT (vapi_call_id)
@@ -1180,6 +1182,9 @@ async def vapi_inbound_webhook(
                     transcript = EXCLUDED.transcript,
                     summary = EXCLUDED.summary,
                     recording_url = EXCLUDED.recording_url,
+                    stereo_recording_url = EXCLUDED.stereo_recording_url,
+                    recording_status = EXCLUDED.recording_status,
+                    transcript_status = EXCLUDED.transcript_status,
                     duration = EXCLUDED.duration,
                     ended_at = EXCLUDED.ended_at,
                     updated_at = NOW()
@@ -1188,7 +1193,10 @@ async def vapi_inbound_webhook(
                 "phone": customer_phone,
                 "transcript": transcript[:10000] if transcript else None,
                 "summary": summary[:2000] if summary else None,
-                "recording_url": recording_url,
+                "recording_url": recording_url or None,
+                "stereo_recording_url": stereo_recording_url or None,
+                "recording_status": _rec_status,
+                "transcript_status": _tx_status,
                 "duration": duration,
                 "org_id": org_id,
                 "metadata": json.dumps(call_metadata),

@@ -696,6 +696,10 @@ class VapiCRMIntegration:
         """
         Verify Vapi webhook signature using HMAC-SHA256.
         Returns False if no secret is configured (fail closed).
+
+        NOTE: Prefer using ``middleware.webhook_verification.require_vapi_webhook``
+        as a FastAPI dependency for new routes.  This static method is retained
+        for backward compatibility with code that calls it directly.
         """
         secret = os.getenv("VAPI_WEBHOOK_SECRET")
         if not secret:
@@ -755,6 +759,8 @@ class VapiCRMIntegration:
         vapi_call.ended_at = self._parse_datetime(call_data.get("endedAt"))
         vapi_call.duration = call_data.get("duration")
         vapi_call.recording_url = call_data.get("recordingUrl")
+        vapi_call.stereo_recording_url = call_data.get("stereoRecordingUrl")
+        vapi_call.recording_status = "available" if call_data.get("recordingUrl") else "none"
         vapi_call.vapi_raw_data = call_data
 
         # Extract transcript
@@ -766,6 +772,7 @@ class VapiCRMIntegration:
                 transcript_parts.append(f"{role.upper()}: {content}")
 
         vapi_call.transcript = "\n".join(transcript_parts)
+        vapi_call.transcript_status = "completed" if transcript_parts else "none"
 
         # Extract analysis from Vapi's analysis
         analysis = call_data.get("analysis", {})

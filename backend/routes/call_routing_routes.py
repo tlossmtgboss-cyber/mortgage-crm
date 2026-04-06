@@ -9,18 +9,16 @@ from sqlalchemy import or_, text
 from typing import Dict, Any, Optional, List
 from pydantic import BaseModel
 from datetime import datetime, timezone
+import json
 import logging
 import os
 import httpx
 
-import hmac
-
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from middleware.webhook_verification import require_vapi_webhook
 
 logger = logging.getLogger(__name__)
-
-VAPI_WEBHOOK_SECRET = os.getenv("VAPI_WEBHOOK_SECRET", "")
 
 router = APIRouter(prefix="/api/v1/call-routing", tags=["call-routing"])
 
@@ -242,7 +240,8 @@ def lookup_caller_in_crm(db: Session, phone: str, org_id: Optional[int] = None) 
 @router.post("/webhook/route-call")
 async def route_inbound_call(
     request: Request,
-    db: Session = Depends(get_db)
+    raw_body: bytes = Depends(require_vapi_webhook),
+    db: Session = Depends(get_db),
 ):
     """
     Vapi webhook endpoint for intelligent call routing.
@@ -250,18 +249,11 @@ async def route_inbound_call(
 
     Configure your Vapi phone number to use this URL:
     https://your-domain.com/api/v1/call-routing/webhook/route-call
-    """
-    # Validate Vapi webhook secret — fail closed if not configured
-    if not VAPI_WEBHOOK_SECRET:
-        logger.error("VAPI_WEBHOOK_SECRET not configured — rejecting webhook")
-        raise HTTPException(status_code=503, detail="Webhook not configured")
-    vapi_secret = request.headers.get("X-Vapi-Secret", "")
-    if not hmac.compare_digest(vapi_secret, VAPI_WEBHOOK_SECRET):
-        logger.warning(f"Invalid Vapi secret on route-call webhook from {request.client.host}")
-        raise HTTPException(status_code=401, detail="Invalid webhook authentication")
 
+    Signature verification is handled by the require_vapi_webhook dependency.
+    """
     try:
-        payload = await request.json()
+        payload = json.loads(raw_body)
         message = payload.get("message", {})
         message_type = message.get("type")
 

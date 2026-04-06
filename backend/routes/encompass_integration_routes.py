@@ -11,6 +11,10 @@ Endpoints (all under /api/v1/encompass):
     POST /test-connection    - Test credentials
     POST /sync/pull          - Pull loans from Encompass
     POST /sync/push/{loan_id} - Push loan to Encompass
+    GET  /sync/status        - Overall sync health dashboard
+    GET  /sync/status/{loan_id} - Per-loan sync status
+    POST /sync/retry/{loan_id} - Retry failed sync for a loan
+    GET  /sync/failures      - List recent sync failures
     GET  /search             - Search Encompass pipeline
     POST /import             - Import loans from Encompass
     GET  /field-mappings     - Get field mappings
@@ -453,6 +457,358 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
         return result.to_dict()
 
     # -----------------------------------------------------------------
+    # GET /api/v1/encompass/sync/status — Overall sync health dashboard
+    # -----------------------------------------------------------------
+
+    @app.get(
+        "/api/v1/encompass/sync/status",
+        tags=["Encompass Integration"],
+        summary="Overall sync health dashboard",
+    )
+    async def encompass_sync_status_dashboard(
+        db: Session = Depends(get_db),
+        user=Depends(get_current_user),
+    ):
+        """Get overall Encompass sync health for the organization.
+
+        Returns aggregate sync statistics, recent errors, and a health
+        determination based on failure rate and recency of successful syncs.
+
+        Health levels:
+            - healthy: <5% failure rate among synced loans
+            - degraded: 5-20% failure rate
+            - disconnected: no successful syncs in the last 24 hours
+        """
+        from database.models.lead_loan import Loan
+        from database.models.los_sync import LosSyncLog
+        from database.models.encompass_config import EncompassConfig
+        from sqlalchemy import func
+
+        org_id = _get_org_id(user)
+
+        # Check connection status
+        config = db.query(EncompassConfig).filter(
+            EncompassConfig.organization_id == org_id,
+            EncompassConfig.is_active == True,  # noqa: E712
+        ).first()
+        connected = config is not None
+
+        # Query loan sync statistics
+        total_loans = db.query(func.count(Loan.id)).filter(
+            Loan.organization_id == org_id,
+        ).scalar() or 0
+
+        synced = db.query(func.count(Loan.id)).filter(
+            Loan.organization_id == org_id,
+            Loan.encompass_sync_status == "synced",
+        ).scalar() or 0
+
+        pending = db.query(func.count(Loan.id)).filter(
+            Loan.organization_id == org_id,
+            Loan.encompass_sync_status == "pending",
+        ).scalar() or 0
+
+        failed = db.query(func.count(Loan.id)).filter(
+            Loan.organization_id == org_id,
+            Loan.encompass_sync_status == "error",
+        ).scalar() or 0
+
+        never_synced = db.query(func.count(Loan.id)).filter(
+            Loan.organization_id == org_id,
+            Loan.encompass_loan_id.isnot(None),
+            Loan.encompass_sync_status.is_(None),
+        ).scalar() or 0
+
+        # Last successful sync timestamp
+        last_sync_at = db.query(func.max(Loan.encompass_last_synced_at)).filter(
+            Loan.organization_id == org_id,
+            Loan.encompass_sync_status == "synced",
+        ).scalar()
+
+        # Recent errors from sync log
+        recent_errors_query = db.query(LosSyncLog).filter(
+            LosSyncLog.organization_id == org_id,
+            LosSyncLog.los_system == "encompass",
+            LosSyncLog.sync_status == "failed",
+        ).order_by(LosSyncLog.sync_timestamp.desc()).limit(10).all()
+
+        recent_errors = [
+            {
+                "loan_id": log.loan_id,
+                "timestamp": log.sync_timestamp.isoformat() if log.sync_timestamp else None,
+                "direction": log.sync_direction,
+                "error": log.error_message,
+            }
+            for log in recent_errors_query
+        ]
+
+        # Determine health
+        linked_total = synced + pending + failed + never_synced
+        if not connected:
+            health = "disconnected"
+        elif linked_total == 0:
+            health = "healthy"
+        else:
+            # Check for recent successful syncs
+            from datetime import timedelta
+            cutoff_24h = datetime.now(timezone.utc) - timedelta(hours=24)
+
+            has_recent_sync = last_sync_at and last_sync_at >= cutoff_24h
+            if not has_recent_sync and linked_total > 0:
+                health = "disconnected"
+            else:
+                failure_rate = failed / linked_total if linked_total > 0 else 0.0
+                if failure_rate >= 0.20:
+                    health = "degraded"
+                elif failure_rate >= 0.05:
+                    health = "degraded"
+                else:
+                    health = "healthy"
+
+        return {
+            "connected": connected,
+            "last_sync_at": last_sync_at.isoformat() if last_sync_at else None,
+            "sync_stats": {
+                "total_loans": total_loans,
+                "synced": synced,
+                "pending": pending,
+                "failed": failed,
+                "never_synced": never_synced,
+            },
+            "recent_errors": recent_errors,
+            "health": health,
+        }
+
+    # -----------------------------------------------------------------
+    # GET /api/v1/encompass/sync/status/{loan_id} — Per-loan sync status
+    # -----------------------------------------------------------------
+
+    @app.get(
+        "/api/v1/encompass/sync/status/{loan_id}",
+        tags=["Encompass Integration"],
+        summary="Per-loan sync status",
+    )
+    async def encompass_sync_status_loan(
+        loan_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(get_current_user),
+    ):
+        """Get sync status for a specific loan.
+
+        Returns the loan's Encompass sync state, last error, and full
+        sync history from the LosSyncLog.
+        """
+        from database.models.lead_loan import Loan
+        from database.models.los_sync import LosSyncLog
+
+        org_id = _get_org_id(user)
+
+        loan = db.query(Loan).filter(
+            Loan.id == loan_id,
+            Loan.organization_id == org_id,
+        ).first()
+        if not loan:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Loan {loan_id} not found in your organization",
+            )
+
+        # Determine sync status
+        if loan.encompass_loan_id is None:
+            sync_status = "never_synced"
+        elif loan.encompass_sync_status == "error":
+            sync_status = "failed"
+        elif loan.encompass_sync_status == "pending":
+            sync_status = "pending"
+        elif loan.encompass_sync_status == "synced":
+            sync_status = "synced"
+        else:
+            sync_status = "never_synced"
+
+        # Get last error from sync log
+        last_error_log = db.query(LosSyncLog).filter(
+            LosSyncLog.loan_id == loan_id,
+            LosSyncLog.organization_id == org_id,
+            LosSyncLog.los_system == "encompass",
+            LosSyncLog.sync_status == "failed",
+        ).order_by(LosSyncLog.sync_timestamp.desc()).first()
+
+        last_error = last_error_log.error_message if last_error_log else None
+
+        # Get sync history
+        sync_history_query = db.query(LosSyncLog).filter(
+            LosSyncLog.loan_id == loan_id,
+            LosSyncLog.organization_id == org_id,
+            LosSyncLog.los_system == "encompass",
+        ).order_by(LosSyncLog.sync_timestamp.desc()).limit(50).all()
+
+        sync_history = [
+            {
+                "timestamp": log.sync_timestamp.isoformat() if log.sync_timestamp else None,
+                "direction": log.sync_direction,
+                "status": log.sync_status,
+                "fields_synced": len(log.fields_synced) if log.fields_synced else 0,
+                "error": log.error_message,
+                "duration_ms": log.duration_ms,
+            }
+            for log in sync_history_query
+        ]
+
+        return {
+            "loan_id": loan.id,
+            "encompass_loan_id": loan.encompass_loan_id,
+            "sync_status": sync_status,
+            "last_synced_at": loan.encompass_last_synced_at.isoformat() if loan.encompass_last_synced_at else None,
+            "last_error": last_error,
+            "sync_history": sync_history,
+        }
+
+    # -----------------------------------------------------------------
+    # POST /api/v1/encompass/sync/retry/{loan_id} — Retry failed sync
+    # -----------------------------------------------------------------
+
+    @app.post(
+        "/api/v1/encompass/sync/retry/{loan_id}",
+        tags=["Encompass Integration"],
+        summary="Retry failed sync for a loan",
+    )
+    async def encompass_sync_retry(
+        loan_id: int,
+        db: Session = Depends(get_db),
+        user=Depends(get_current_user),
+    ):
+        """Retry a failed sync operation for a specific loan.
+
+        Admin only. Triggers a new push sync attempt to Encompass for
+        the specified loan. Updates the loan's sync status based on the result.
+        """
+        _require_admin(user)
+        org_id = _get_org_id(user)
+
+        from database.models.lead_loan import Loan
+
+        loan = db.query(Loan).filter(
+            Loan.id == loan_id,
+            Loan.organization_id == org_id,
+        ).first()
+        if not loan:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Loan {loan_id} not found in your organization",
+            )
+
+        if not loan.encompass_loan_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Loan {loan_id} has never been linked to Encompass. Use sync/push to create a new link.",
+            )
+
+        # Mark as pending during retry
+        loan.encompass_sync_status = "pending"
+        db.flush()
+
+        try:
+            client = await oauth_service.get_authenticated_client(db=db, org_id=org_id)
+        except (ValueError, RuntimeError) as e:
+            loan.encompass_sync_status = "error"
+            db.flush()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
+
+        sync_service = LOSSyncService(client=client)
+
+        try:
+            result = await sync_service.push_to_los(
+                db=db, loan_id=loan_id, organization_id=org_id,
+            )
+
+            # Update loan sync status
+            if result.status.value in ("success", "partial"):
+                loan.encompass_sync_status = "synced"
+                loan.encompass_last_synced_at = datetime.now(timezone.utc)
+            else:
+                loan.encompass_sync_status = "error"
+            db.flush()
+
+            _update_last_sync(db, org_id)
+
+            return {
+                "status": "success" if result.status.value in ("success", "partial") else "failed",
+                "loan_id": loan_id,
+                "encompass_loan_id": loan.encompass_loan_id,
+                "sync_result": result.to_dict(),
+            }
+        except Exception as e:
+            logger.error(
+                f"Encompass sync retry failed for loan {loan_id} org {org_id}: {e}",
+                exc_info=True,
+            )
+            loan.encompass_sync_status = "error"
+            db.flush()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Sync retry failed: {str(e)}",
+            )
+
+    # -----------------------------------------------------------------
+    # GET /api/v1/encompass/sync/failures — List recent sync failures
+    # -----------------------------------------------------------------
+
+    @app.get(
+        "/api/v1/encompass/sync/failures",
+        tags=["Encompass Integration"],
+        summary="List recent sync failures",
+    )
+    async def encompass_sync_failures(
+        limit: int = Query(20, ge=1, le=100, description="Max failures to return"),
+        days: int = Query(7, ge=1, le=90, description="Look back N days"),
+        db: Session = Depends(get_db),
+        user=Depends(get_current_user),
+    ):
+        """List recent Encompass sync failures for the organization.
+
+        Returns failed sync log entries with error details, filterable
+        by time window and limited to a configurable number of results.
+        """
+        from database.models.los_sync import LosSyncLog
+        from datetime import timedelta
+
+        org_id = _get_org_id(user)
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+
+        failures = db.query(LosSyncLog).filter(
+            LosSyncLog.organization_id == org_id,
+            LosSyncLog.los_system == "encompass",
+            LosSyncLog.sync_status == "failed",
+            LosSyncLog.sync_timestamp >= cutoff,
+        ).order_by(LosSyncLog.sync_timestamp.desc()).limit(limit).all()
+
+        results = [
+            {
+                "id": log.id,
+                "loan_id": log.loan_id,
+                "direction": log.sync_direction,
+                "trigger": log.sync_trigger,
+                "error": log.error_message,
+                "error_payload": log.error_payload,
+                "fields_failed": log.fields_failed,
+                "retry_count": log.retry_count,
+                "timestamp": log.sync_timestamp.isoformat() if log.sync_timestamp else None,
+                "duration_ms": log.duration_ms,
+            }
+            for log in failures
+        ]
+
+        return {
+            "count": len(results),
+            "days": days,
+            "failures": results,
+        }
+
+    # -----------------------------------------------------------------
     # GET /api/v1/encompass/search
     # -----------------------------------------------------------------
 
@@ -743,4 +1099,4 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
         except Exception as e:
             logger.warning(f"Failed to update last_sync_at for org {org_id}: {e}")
 
-    logger.info("Encompass integration routes registered (11 endpoints)")
+    logger.info("Encompass integration routes registered (15 endpoints)")

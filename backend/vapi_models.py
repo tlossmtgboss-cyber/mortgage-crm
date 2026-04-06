@@ -31,6 +31,9 @@ class VapiCall(Base):
     transcript = Column(Text)
     summary = Column(Text)
     recording_url = Column(String(512))
+    stereo_recording_url = Column(String(512), nullable=True)
+    recording_status = Column(String(50), default='none')  # none, available, downloaded, transcribed
+    transcript_status = Column(String(50), default='none')  # none, pending, completed, failed
 
     # Analysis
     sentiment = Column(String(50))  # positive, neutral, negative

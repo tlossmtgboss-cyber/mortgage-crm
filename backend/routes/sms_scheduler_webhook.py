@@ -21,6 +21,8 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
+from middleware.webhook_verification import require_telnyx_webhook
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Scheduler SMS Webhook"])
@@ -51,53 +53,13 @@ from db import get_db
 
 
 # ============================================================================
-# WEBHOOK SIGNATURE VALIDATION
-# ============================================================================
-
-TELNYX_PUBLIC_KEY = os.getenv("TELNYX_PUBLIC_KEY")
-
-
-async def _validate_telnyx_signature(request: Request) -> bool:
-    """Validate Telnyx webhook signature. Fail-closed in production/staging."""
-    if not TELNYX_PUBLIC_KEY:
-        env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
-        if env in ("production", "staging"):
-            logger.error("TELNYX_PUBLIC_KEY required in production/staging — rejecting webhook")
-            return False
-        logger.debug("TELNYX_PUBLIC_KEY not configured — skipping signature validation in dev")
-        return True
-
-    signature = request.headers.get("telnyx-signature-ed25519", "")
-    timestamp = request.headers.get("telnyx-timestamp", "")
-
-    if not signature or not timestamp:
-        logger.warning("Missing Telnyx signature headers on scheduler SMS webhook")
-        return False
-
-    try:
-        from telephony.providers.telnyx.webhooks import validate_telnyx_webhook
-
-        body = await request.body()
-        return validate_telnyx_webhook(body, signature, timestamp, TELNYX_PUBLIC_KEY)
-    except ImportError:
-        env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
-        if env in ("production", "staging"):
-            logger.error("Telnyx webhook validation module missing in production — rejecting")
-            return False
-        logger.debug("Telnyx webhook validation module not available — skipping in dev")
-        return True
-    except Exception as e:
-        logger.error(f"Telnyx signature validation error: {e}")
-        return False
-
-
-# ============================================================================
 # SMS REPLY HANDLER
 # ============================================================================
 
 @router.post("/api/v1/scheduler/sms/webhook")
 async def handle_sms_reply(
     request: Request,
+    raw_body: bytes = Depends(require_telnyx_webhook),
     db: Session = Depends(get_db),
 ):
     """Handle inbound SMS replies for appointment management.
@@ -121,14 +83,14 @@ async def handle_sms_reply(
     - RESCHEDULE: Reply with instructions to reschedule
     - HELP: Reply with available commands
     - STOP: Acknowledge opt-out (Telnyx handles actual DNC)
-    """
-    # Validate webhook signature
-    if not await _validate_telnyx_signature(request):
-        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
-    # Parse payload
+    Signature verification is handled by the require_telnyx_webhook dependency.
+    """
+    import json
+
+    # Parse payload from the already-verified raw body
     try:
-        body = await request.json()
+        body = json.loads(raw_body)
     except Exception as e:
         logger.error(f"Failed to parse SMS webhook JSON: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON")
