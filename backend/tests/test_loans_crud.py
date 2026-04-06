@@ -267,6 +267,7 @@ class TestStageTransitionStateMachine:
         assert error is not None
         assert "terminal" in error.lower()
 
+    @pytest.mark.integration
     def test_stage_history_recorded(self, client, create_loan, db_session):
         """18. StageHistory created on transition (integration)."""
         loan = create_loan(stage="APPLICATION")

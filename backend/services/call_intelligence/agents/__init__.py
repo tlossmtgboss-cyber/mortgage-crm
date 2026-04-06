@@ -59,7 +59,15 @@ from .shared_patterns import (
     match_marital_status,
 )
 
+# Live call agents (Domain 4: Mobile + Call Intelligence)
+from .live_transcription_agent import LiveTranscriptionAgent
+from .sentiment_analysis_agent import SentimentAnalysisAgent
+from .objection_detection_agent import ObjectionDetectionAgent
+from .compliance_monitor_agent import ComplianceMonitorCallAgent
+from .coaching_prompt_agent import CoachingPromptAgent
+
 __all__ = [
+    # Extraction agents
     "BaseExtractionAgent",
     "IdentityExtractionAgent",
     "PropertyExtractionAgent",
@@ -67,6 +75,12 @@ __all__ = [
     "FinancialExtractionAgent",
     "ComplianceExtractionAgent",
     "IntentExtractionAgent",
+    # Live call agents
+    "LiveTranscriptionAgent",
+    "SentimentAnalysisAgent",
+    "ObjectionDetectionAgent",
+    "ComplianceMonitorCallAgent",
+    "CoachingPromptAgent",
     # Shared patterns
     "US_CITIZEN_PATTERNS_COMPILED",
     "PERMANENT_RESIDENT_PATTERNS_COMPILED",

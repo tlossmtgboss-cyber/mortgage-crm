@@ -1943,6 +1943,42 @@ try:
 except ImportError:
     pass
 
+# ── Enterprise Challenge Routes ──────────────────────────────────────
+try:
+    from routes.file_collaborator_routes import register_file_collaborator_routes
+    register_file_collaborator_routes(app)
+    logger.info("✓ File collaborator routes registered")
+except Exception as e:
+    logger.warning(f"File collaborator routes skipped: {e}")
+
+try:
+    from routes.unified_timeline_routes import register_unified_timeline_routes
+    register_unified_timeline_routes(app)
+    logger.info("✓ Unified timeline routes registered")
+except Exception as e:
+    logger.warning(f"Unified timeline routes skipped: {e}")
+
+try:
+    from routes.vendor_management_routes import register_vendor_management_routes
+    register_vendor_management_routes(app)
+    logger.info("✓ Vendor management routes registered")
+except Exception as e:
+    logger.warning(f"Vendor management routes skipped: {e}")
+
+try:
+    from routes.marketing_campaign_routes import register_marketing_campaign_routes
+    register_marketing_campaign_routes(app)
+    logger.info("✓ Marketing campaign routes registered")
+except Exception as e:
+    logger.warning(f"Marketing campaign routes skipped: {e}")
+
+try:
+    from routes.learning_routes import register_learning_routes
+    register_learning_routes(app)
+    logger.info("✓ Learning routes registered")
+except Exception as e:
+    logger.warning(f"Learning routes skipped: {e}")
+
 # ============================================================================
 # STARTUP EVENT — Initialize scheduler for workflow task generation
 # ============================================================================
@@ -1971,6 +2007,14 @@ async def startup_event():
         _run_tcpa_migration()
     except Exception as e:
         logger.warning(f"TCPA consents table migration skipped: {e}")
+
+    # Create enterprise challenge tables (file collaborator, timeline, vendor, campaigns, learning)
+    try:
+        from migrations.enterprise_challenge_tables import run_migration
+        run_migration(engine)
+        logger.info("✓ Enterprise challenge tables created")
+    except Exception as e:
+        logger.warning(f"Enterprise migration skipped: {e}")
 
     # Run critical schema migrations (missing columns that break page loads)
     try:

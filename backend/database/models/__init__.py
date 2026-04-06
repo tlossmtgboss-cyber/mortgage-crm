@@ -677,6 +677,29 @@ from .agent_memory import AgentConversation, AgentMemory, AgentContext
 # Webhook Idempotency (duplicate callback prevention for Vapi/Telnyx/Stripe)
 from .webhook_idempotency import WebhookIdempotencyRecord
 
+# Unified Communication Threading (file-level comm timeline)
+from .file_communication import FileCommunication, CommunicationParticipant
+
+# Loan File Collaborator & User Onboarding State (Enterprise Team Onboarding)
+from .file_collaborator import LoanFileCollaborator, UserOnboardingState
+
+# Agent Context Store — Continual Learning (Domain 8)
+from .agent_context import (
+    AgentContextStore,
+    AgentContextEvent,
+    ContextChangeAudit,
+)
+
+# Vendor Management (Enterprise Challenge)
+from .vendor import Vendor, VendorOrder
+
+# Agent Registry — formal governance of all AI agents (Enterprise Challenge)
+from .agent_registry import (
+    AgentRegistryEntry,
+    AgentRunLog,
+    HarnessChangeProposal,
+)
+
 
 __all__ = [
     # =====================
@@ -1404,4 +1427,36 @@ __all__ = [
     # Webhook Idempotency
     # =====================
     "WebhookIdempotencyRecord",
+
+    # =====================
+    # Unified Communication Threading
+    # =====================
+    "FileCommunication",
+    "CommunicationParticipant",
+
+    # =====================
+    # Loan File Collaborator & Onboarding
+    # =====================
+    "LoanFileCollaborator",
+    "UserOnboardingState",
+
+    # =====================
+    # Agent Context Store (Continual Learning)
+    # =====================
+    "AgentContextStore",
+    "AgentContextEvent",
+    "ContextChangeAudit",
+
+    # =====================
+    # Vendor Management (Enterprise)
+    # =====================
+    "Vendor",
+    "VendorOrder",
+
+    # =====================
+    # Agent Registry & Harness (Enterprise)
+    # =====================
+    "AgentRegistryEntry",
+    "AgentRunLog",
+    "HarnessChangeProposal",
 ]

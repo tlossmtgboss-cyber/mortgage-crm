@@ -5,6 +5,7 @@ import './index.css';
 // Import from modular App.jsx (routes, layouts, and providers are now separate modules)
 import App from './App.jsx';
 import ErrorBoundary from './ErrorBoundary';
+import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
 // Global handler for chunk load errors (stale cache after deployment)
 window.addEventListener('error', (event) => {
@@ -29,6 +30,23 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+// Register service worker for offline support and push notifications
+serviceWorkerRegistration.register({
+  onUpdate: (registration) => {
+    // New version available — user will get it on next reload
+    console.log('[App] New version available');
+  },
+  onSuccess: () => {
+    console.log('[App] Offline support ready');
+  },
+  onMutationQueued: (data) => {
+    console.log('[App] Change saved offline:', data.method, data.url);
+  },
+  onSyncComplete: (data) => {
+    console.log('[App] Offline changes synced, remaining:', data.remaining);
+  },
+});
+
 /* Trigger rebuild - Sat Nov 15 07:18:33 EST 2025 */
 // Force rebuild $(date)
 // Trigger deployment 1767495280
