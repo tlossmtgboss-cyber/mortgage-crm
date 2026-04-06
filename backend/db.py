@@ -84,14 +84,14 @@ elif USE_PGBOUNCER:
     )
 else:
     # Direct PostgreSQL connection with SQLAlchemy pooling
-    # Railway has 97 connections max; pool_size + max_overflow = 15 (~15% of limit)
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=5, max_overflow=10, max=15)")
+    # Railway free tier has ~20 connections max; pool_size + max_overflow = 7 (safe headroom)
+    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=3, max_overflow=4, max=7)")
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,           # CRITICAL: Verify connections before use (catches stale/dead connections)
-        pool_size=5,                  # Permanent connections (5 warm connections ready)
-        max_overflow=10,              # Additional connections under load (total max: 15)
-        pool_recycle=900,             # Recycle connections every 15 min
+        pool_size=3,                  # Permanent connections (3 warm connections ready)
+        max_overflow=4,               # Additional connections under load (total max: 7)
+        pool_recycle=300,             # Recycle connections every 5 min (frees slots faster)
         pool_timeout=20,              # Wait max 20s for a connection (fail fast if pool exhaustion)
         pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)
         echo=False,                   # Set True for SQL debugging
@@ -204,8 +204,9 @@ def cleanup_idle_connections():
             total, idle, active = cur.fetchone()
             logger.info(f"DB connections at startup: total={total}, idle={idle}, active={active}")
 
-            if total > 20:
+            if total > 10:
                 # Terminate ALL idle connections except ours — aggressive cleanup
+                # Railway has ~20 max; reclaim aggressively to prevent "too many clients"
                 cur.execute("""
                     SELECT pg_terminate_backend(pid)
                     FROM pg_stat_activity
@@ -214,7 +215,7 @@ def cleanup_idle_connections():
                       AND pid != pg_backend_pid()
                 """)
                 count = cur.rowcount
-                logger.warning(f"Terminated {count} idle DB connections to prevent exhaustion")
+                logger.warning(f"Terminated {count} idle DB connections (total was {total}) to prevent exhaustion")
 
             cur.close()
             conn.close()
