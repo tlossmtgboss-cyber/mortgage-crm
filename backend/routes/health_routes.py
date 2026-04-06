@@ -708,12 +708,12 @@ def register_health_routes(app, get_db, **kwargs):
         """Basic health check - database connectivity"""
         try:
             db.execute(text("SELECT 1"))
-            return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2026.01.22.1"}
+            return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "2026.01.22.1"}
         except Exception as e:
-            logger.error(f"Health check failed: {e}")
+            logger.error(f"Health check failed: {type(e).__name__}: {e}")
             return JSONResponse(
                 status_code=503,
-                content={"status": "unhealthy", "error": "Internal server error"}
+                content={"status": "unhealthy", "error": f"{type(e).__name__}: {str(e)[:200]}"}
             )
 
 
@@ -787,12 +787,12 @@ def register_health_routes(app, get_db, **kwargs):
         """API health check endpoint at /api/v1/health - database connectivity"""
         try:
             db.execute(text("SELECT 1"))
-            return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc), "version": "2026.01.22.1"}
+            return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "2026.01.22.1"}
         except Exception as e:
-            logger.error(f"API health check failed: {e}")
+            logger.error(f"API health check failed: {type(e).__name__}: {e}")
             return JSONResponse(
                 status_code=503,
-                content={"status": "unhealthy", "error": "Internal server error"}
+                content={"status": "unhealthy", "error": f"{type(e).__name__}: {str(e)[:200]}"}
             )
 
     # ========================================================================
@@ -1146,6 +1146,53 @@ def register_health_routes(app, get_db, **kwargs):
             }
         except Exception as e:
             return {"error": str(e)}
+
+    @app.get("/health/diag-db", tags=["Health"])
+    async def diag_db_test(secret: str = ""):
+        """Temporary: test DB connectivity and show actual errors."""
+        import secrets as _secrets
+        if not _secrets.compare_digest(secret, "perennia-diag-2026-03"):
+            return JSONResponse(status_code=403, content={"detail": "Invalid secret"})
+        results = {}
+        # Test 1: Direct SessionLocal
+        try:
+            session = SessionLocal()
+            row = session.execute(text("SELECT 1 AS ok, current_database() AS db, version() AS ver"))
+            r = row.fetchone()
+            results["direct_session"] = {"ok": True, "db": r[1], "version": r[2][:50]}
+            session.close()
+        except Exception as e:
+            results["direct_session"] = {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}"}
+        # Test 2: get_db dependency simulation
+        try:
+            gen = get_db()
+            db = next(gen)
+            row = db.execute(text("SELECT 1 AS ok"))
+            results["get_db"] = {"ok": True, "result": row.fetchone()[0]}
+            try:
+                next(gen)
+            except StopIteration:
+                pass
+        except Exception as e:
+            results["get_db"] = {"ok": False, "error": f"{type(e).__name__}: {str(e)[:300]}"}
+        # Test 3: Check if enterprise tables exist
+        try:
+            session = SessionLocal()
+            row = session.execute(text("""
+                SELECT table_name FROM information_schema.tables
+                WHERE table_schema = 'public'
+                AND table_name IN ('file_collaborators', 'file_communications', 'vendors',
+                                   'marketing_campaigns', 'learning_examples', 'learning_patterns',
+                                   'autonomous_tasks', 'task_executions', 'agent_actions',
+                                   'agent_feedback', 'webhook_idempotency_records')
+                ORDER BY table_name
+            """))
+            tables = [r[0] for r in row.fetchall()]
+            results["enterprise_tables"] = tables
+            session.close()
+        except Exception as e:
+            results["enterprise_tables"] = {"error": f"{type(e).__name__}: {str(e)[:300]}"}
+        return results
 
     # ========================================================================
     # Admin-only: DB Pool Stats (detailed monitoring for operations)
