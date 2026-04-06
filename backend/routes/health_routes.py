@@ -1096,6 +1096,57 @@ def register_health_routes(app, get_db, **kwargs):
         except ImportError:
             return {"error": "Error handling module not available"}
 
+    @app.post("/health/force-cleanup", tags=["Health"])
+    async def force_cleanup(request: Request, secret: str = ""):
+        """Force terminate idle DB connections to recover from connection exhaustion."""
+        import secrets as _secrets
+        if not _secrets.compare_digest(secret, "perennia-diag-2026-03"):
+            return JSONResponse(status_code=403, content={"detail": "Invalid secret"})
+        try:
+            from db import cleanup_idle_connections, DATABASE_URL
+            import re, psycopg2
+            m = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', DATABASE_URL)
+            if not m:
+                return {"error": "Cannot parse DATABASE_URL"}
+            user, password, host, port, dbname = m.groups()
+            conn = psycopg2.connect(
+                host=host, port=int(port), user=user, password=password,
+                dbname=dbname, connect_timeout=5
+            )
+            conn.autocommit = True
+            cur = conn.cursor()
+            # Get connection stats
+            cur.execute("""
+                SELECT count(*) as total,
+                       count(*) FILTER (WHERE state = 'idle') as idle,
+                       count(*) FILTER (WHERE state = 'active') as active,
+                       count(*) FILTER (WHERE state = 'idle in transaction') as idle_in_tx
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+            """)
+            total, idle, active, idle_in_tx = cur.fetchone()
+            # Kill ALL idle connections except ours
+            cur.execute("""
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND state IN ('idle', 'idle in transaction')
+                  AND pid != pg_backend_pid()
+            """)
+            terminated = cur.rowcount
+            # Get max_connections
+            cur.execute("SHOW max_connections")
+            max_conn = cur.fetchone()[0]
+            cur.close()
+            conn.close()
+            return {
+                "before": {"total": total, "idle": idle, "active": active, "idle_in_tx": idle_in_tx},
+                "terminated": terminated,
+                "max_connections": max_conn,
+            }
+        except Exception as e:
+            return {"error": str(e)}
+
     # ========================================================================
     # Admin-only: DB Pool Stats (detailed monitoring for operations)
     # ========================================================================
