@@ -1979,6 +1979,13 @@ try:
 except Exception as e:
     logger.warning(f"Learning routes skipped: {e}")
 
+try:
+    from routes.ai_activity_routes import register_ai_activity_routes
+    register_ai_activity_routes(app)
+    logger.info("✓ AI activity routes registered")
+except Exception as e:
+    logger.warning(f"AI activity routes not loaded: {e}")
+
 # ============================================================================
 # STARTUP EVENT — Initialize scheduler for workflow task generation
 # ============================================================================
@@ -2085,17 +2092,21 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Autonomous task executor skipped: {e}")
 
-    # Create new AI autonomy tables if needed
+    # Create all AI autonomy tables (autonomous_tasks, agent_feedback, learning,
+    # agent_memory, agent_metrics, webhook_idempotency)
     try:
-        from database.models.autonomous_task import create_tables_if_needed as _create_auto_task_tables
-        _create_auto_task_tables(engine)
-        from database.models.agent_feedback import create_tables_if_needed as _create_feedback_tables
-        _create_feedback_tables(engine)
-        from database.models.learning_example import create_tables_if_needed as _create_learning_tables
-        _create_learning_tables(engine)
-        logger.info("AI autonomy tables verified")
+        from migrations.add_ai_autonomy_tables import run_migration as _run_ai_autonomy_migration
+        tables = _run_ai_autonomy_migration(engine)
+        logger.info(f"AI autonomy tables verified: {len(tables)} tables ({', '.join(tables)})")
     except Exception as e:
         logger.warning(f"AI autonomy table creation skipped: {e}")
+    # Webhook idempotency table (separate from AI autonomy)
+    try:
+        from database.models.webhook_idempotency import create_tables_if_needed as _create_webhook_tables
+        _create_webhook_tables(engine)
+        logger.info("Webhook idempotency table verified")
+    except Exception as e:
+        logger.warning(f"Webhook idempotency table creation skipped: {e}")
 
     # Consolidate OAuth tokens into unified table
     try:

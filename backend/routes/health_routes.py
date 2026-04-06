@@ -1184,7 +1184,9 @@ def register_health_routes(app, get_db, **kwargs):
                 AND table_name IN ('file_collaborators', 'file_communications', 'vendors',
                                    'marketing_campaigns', 'learning_examples', 'learning_patterns',
                                    'autonomous_tasks', 'task_executions', 'agent_actions',
-                                   'agent_feedback', 'webhook_idempotency_records')
+                                   'agent_feedback', 'agent_feedback_summaries', 'prompt_optimizations',
+                                   'agent_conversations', 'agent_memories', 'agent_contexts',
+                                   'agent_invocations', 'webhook_idempotency')
                 ORDER BY table_name
             """))
             tables = [r[0] for r in row.fetchall()]
