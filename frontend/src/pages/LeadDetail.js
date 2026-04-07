@@ -20,7 +20,6 @@ import IncomeTab from '../components/income/IncomeTab';
 import UnifiedIncomeCalculator from '../components/income/UnifiedIncomeCalculator';
 import IncomeCalculator from '../components/IncomeCalculator';
 import CreditTab from '../components/CreditTab';
-import CallIntelligenceTab from '../components/call-intelligence/CallIntelligenceTab';
 import VideoMeetings from '../components/VideoMeetings';
 import VideoCallScheduleModal from '../components/VideoCallScheduleModal';
 import EmailComposerModal from '../components/EmailComposerModal';
@@ -31,6 +30,7 @@ import SalesforceConnectionBadge from '../components/SalesforceConnectionBadge';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import CurrencyInput from '../components/common/CurrencyInput';
 import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
+import AIActivityTab from '../components/ai/AIActivityTab';
 import './LeadDetail.css';
 import { toast } from '../utils/toast';
 
@@ -2134,10 +2134,10 @@ function LeadDetail() {
           Team Members
         </button>
         <button
-          className={`tab-btn ${activeTab === 'call-intelligence' ? 'active' : ''}`}
-          onClick={() => setActiveTab('call-intelligence')}
+          className={`tab-btn ${activeTab === 'ai-activity' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ai-activity')}
         >
-          Call Intelligence
+          AI Activity
         </button>
       </div>
 
@@ -3591,13 +3591,15 @@ function LeadDetail() {
           </div>
           )}
 
-          {/* Call Intelligence Tab */}
-          {activeTab === 'call-intelligence' && (
-          <div className="info-section call-intelligence-section">
-            <CallIntelligenceTab
-              clientId={id}
-              loanId={lead?.loan_id}
-              leadId={id}
+          {/* AI Activity Tab (replaces Call Intelligence — call intel is inside AI Activity) */}
+          {activeTab === 'ai-activity' && (
+          <div className="info-section">
+            <AIActivityTab
+              loanId={lead?.id?.toString()}
+              borrowerName={lead?.name || lead?.first_name}
+              loanNumber={lead?.loan_number}
+              loanAmount={lead?.loan_amount}
+              loanStatus={lead?.stage}
             />
           </div>
           )}
@@ -4553,6 +4555,7 @@ function LeadDetail() {
             </div>
           </div>
           )}
+
 
         </div>
       </div>

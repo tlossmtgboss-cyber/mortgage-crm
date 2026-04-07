@@ -27,6 +27,7 @@ import SalesforceConnectionBadge from '../components/SalesforceConnectionBadge';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import CurrencyInput from '../components/common/CurrencyInput';
 import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
+import AIActivityTab from '../components/ai/AIActivityTab';
 import './LeadDetail.css';
 
 // Mock loans data (same as Loans.js)
@@ -1192,6 +1193,12 @@ function LoanDetail() {
           onClick={() => setActiveTab('team')}
         >
           Team Members
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'ai-activity' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ai-activity')}
+        >
+          AI Activity
         </button>
       </div>
 
@@ -3908,6 +3915,19 @@ function LoanDetail() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* AI Activity Tab */}
+        {activeTab === 'ai-activity' && (
+          <div className="info-section">
+            <AIActivityTab
+              loanId={loan?.id?.toString()}
+              borrowerName={loan?.borrower_name || loan?.borrower}
+              loanNumber={loan?.loan_number}
+              loanAmount={loan?.loan_amount}
+              loanStatus={loan?.stage}
+            />
           </div>
         )}
 

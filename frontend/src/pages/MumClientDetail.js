@@ -17,6 +17,7 @@ import EscalationModal from '../components/EscalationModal';
 import CalendarSidebar from '../components/CalendarSidebar';
 import RateMonitorWidget from '../components/RateMonitorWidget';
 import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
+import AIActivityTab from '../components/ai/AIActivityTab';
 import './LeadDetail.css';
 import { toast } from '../utils/toast';
 
@@ -913,6 +914,12 @@ function MumClientDetail() {
           onClick={() => setActiveTab('team')}
         >
           Team Members
+        </button>
+        <button
+          className={`tab-btn ${activeTab === 'ai-activity' ? 'active' : ''}`}
+          onClick={() => setActiveTab('ai-activity')}
+        >
+          AI Activity
         </button>
       </div>
 
@@ -2892,6 +2899,19 @@ function MumClientDetail() {
                 </div>
               </div>
             </div>
+          </div>
+          )}
+
+          {/* AI Activity Tab */}
+          {activeTab === 'ai-activity' && (
+          <div className="info-section">
+            <AIActivityTab
+              loanId={client?.id?.toString()}
+              borrowerName={client?.name || client?.first_name}
+              loanNumber={client?.loan_number}
+              loanAmount={client?.loan_amount}
+              loanStatus={client?.stage}
+            />
           </div>
           )}
 
