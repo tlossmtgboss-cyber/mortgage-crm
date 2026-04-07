@@ -1042,7 +1042,8 @@ const styles = {
   },
   body: {
     background: BG_BASE,
-    height: 220,
+    height: 'calc(100vh - 640px)',
+    minHeight: 200,
     display: 'flex',
     flexDirection: 'column' as const,
     borderLeft: `0.5px solid ${BORDER_LIGHT}`,
