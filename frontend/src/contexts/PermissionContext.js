@@ -186,8 +186,8 @@ export const PermissionProvider = ({ children }) => {
     try {
       setLoading(true);
 
-      // Skip permission fetching on public routes (application pages, etc.)
-      const publicRoutes = ['/apply/', '/purl/', '/borrower-portal/'];
+      // Skip permission fetching on public routes (application pages, booking, portals, etc.)
+      const publicRoutes = ['/apply/', '/purl/', '/borrower-portal/', '/book/', '/embed/book/', '/booking/', '/portal/', '/partner/', '/sign/', '/lo/', '/shared/', '/meeting/'];
       const currentPath = window.location.pathname;
       if (publicRoutes.some(route => currentPath.startsWith(route))) {
         setLoading(false);

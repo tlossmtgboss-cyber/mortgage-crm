@@ -40,6 +40,14 @@ export const ModuleProvider = ({ children }) => {
       setLoading(true);
       setError(null);
 
+      // Skip module fetching on public routes (booking, portals, applications, etc.)
+      const publicRoutes = ['/apply/', '/purl/', '/borrower-portal/', '/book/', '/embed/book/', '/booking/', '/portal/', '/partner/', '/sign/', '/lo/', '/shared/', '/meeting/'];
+      const currentPath = window.location.pathname;
+      if (publicRoutes.some(route => currentPath.startsWith(route))) {
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch(`${API_BASE}/api/v1/modules/my-modules`, {
         headers: getAuthHeaders()
       });
