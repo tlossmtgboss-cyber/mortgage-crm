@@ -441,7 +441,447 @@ const StatBlock: React.FC<{ stats: StatItem[]; accentColor: string }> = ({ stats
   </div>
 );
 
-const ActivityCard: React.FC<{ event: AIActivityEvent }> = ({ event }) => {
+// ─────────────────────────────────────────────
+// Agent-specific detail content
+// ─────────────────────────────────────────────
+
+const AGENT_DETAIL_LABELS: Record<AgentType, string> = {
+  "call-intel": "View Call Intelligence",
+  "deal-breaker": "View Risk Analysis",
+  guidelines: "View Guideline Details",
+  "smart-docs": "View Document Review",
+  bulletin: "View Bulletin Impact",
+  marketing: "View Campaign Details",
+  "turn-down": "View Turn-Down Analysis",
+  aria: "View Aria Details",
+  underwriting: "View Operations Detail",
+  "lead-assignment": "View Assignment Details",
+};
+
+const DetailModal: React.FC<{
+  event: AIActivityEvent;
+  onClose: () => void;
+}> = ({ event, onClose }) => {
+  const agentCfg = AGENT_CONFIG[event.agent_type] ?? AGENT_CONFIG.guidelines;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 10000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(15, 23, 42, 0.5)",
+        backdropFilter: "blur(4px)",
+        animation: "fadeSlide 0.2s ease both",
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        style={{
+          width: "min(720px, 92vw)",
+          maxHeight: "85vh",
+          overflowY: "auto",
+          background: "#FFFFFF",
+          borderRadius: 14,
+          boxShadow: "0 25px 60px rgba(0,0,0,0.18)",
+          position: "relative",
+        }}
+      >
+        {/* Accent bar top */}
+        <div style={{ height: 4, background: agentCfg.accentHex, borderRadius: "14px 14px 0 0" }} />
+
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            width: 32,
+            height: 32,
+            borderRadius: "50%",
+            border: "1px solid #E2E8F0",
+            background: "#F8FAFC",
+            color: "#64748B",
+            fontSize: 16,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 2,
+          }}
+        >
+          ✕
+        </button>
+
+        {/* Header */}
+        <div style={{ padding: "24px 28px 0" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
+            <div
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: "50%",
+                background: agentCfg.bgColor,
+                border: `2px solid ${agentCfg.borderColor}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 18,
+                flexShrink: 0,
+              }}
+            >
+              {agentCfg.icon}
+            </div>
+            <div>
+              <div
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 10,
+                  fontWeight: 500,
+                  letterSpacing: "0.1em",
+                  textTransform: "uppercase",
+                  color: agentCfg.color,
+                  marginBottom: 2,
+                }}
+              >
+                {event.agent_label}
+              </div>
+              <div
+                style={{
+                  fontFamily: "'Cormorant Garamond', serif",
+                  fontSize: 20,
+                  fontWeight: 600,
+                  color: "#0F172A",
+                  lineHeight: 1.3,
+                }}
+              >
+                {event.action_title}
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginTop: 12,
+              marginBottom: 4,
+            }}
+          >
+            <OutcomePill outcome={event.outcome} label={event.outcome_label} />
+            <span
+              style={{
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 10,
+                color: "#94A3B8",
+                letterSpacing: "0.04em",
+              }}
+            >
+              {new Date(event.created_at).toLocaleString("en-US", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+                hour12: true,
+              })}
+            </span>
+            {event.is_live && (
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "2px 8px",
+                  borderRadius: 10,
+                  background: "#ECFDF5",
+                  border: "1px solid #A7F3D0",
+                  fontSize: 10,
+                  fontFamily: "'DM Mono', monospace",
+                  color: "#059669",
+                }}
+              >
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#059669", animation: "pulse 2s infinite" }} />
+                LIVE
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ margin: "16px 28px", borderTop: "1px solid #F1F5F9" }} />
+
+        {/* Body */}
+        <div style={{ padding: "0 28px 28px" }}>
+          {/* Summary */}
+          <div style={{ marginBottom: 20 }}>
+            <div
+              style={{
+                fontFamily: "'DM Mono', monospace",
+                fontSize: 9,
+                textTransform: "uppercase",
+                letterSpacing: "0.12em",
+                color: "#94A3B8",
+                marginBottom: 8,
+              }}
+            >
+              Summary
+            </div>
+            <p
+              style={{
+                fontSize: 13,
+                color: "#334155",
+                lineHeight: 1.75,
+                margin: 0,
+              }}
+            >
+              {event.summary}
+            </p>
+          </div>
+
+          {/* Stats — larger in modal */}
+          {event.stats && (
+            <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+              {event.stats.map((s, i) => (
+                <div
+                  key={i}
+                  style={{
+                    flex: 1,
+                    background: "#F8FAFC",
+                    border: "1px solid #E2E8F0",
+                    borderRadius: 10,
+                    padding: "14px 16px",
+                    textAlign: "center",
+                  }}
+                >
+                  <span
+                    style={{
+                      display: "block",
+                      fontFamily: "'Cormorant Garamond', serif",
+                      fontSize: 28,
+                      fontWeight: 600,
+                      color: agentCfg.accentHex,
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {s.value}
+                  </span>
+                  <span
+                    style={{
+                      display: "block",
+                      fontFamily: "'DM Mono', monospace",
+                      fontSize: 10,
+                      color: "#94A3B8",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      marginTop: 4,
+                    }}
+                  >
+                    {s.label}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Detail sections — full width in modal */}
+          {event.detail_sections?.map((section, i) => (
+            <div key={i} style={{ marginBottom: 16 }}>
+              <div
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 9,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                  color: "#94A3B8",
+                  marginBottom: 8,
+                }}
+              >
+                {section.label}
+              </div>
+              <div
+                style={{
+                  background: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  borderRadius: 8,
+                  padding: "14px 16px",
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 12,
+                  color: "#334155",
+                  lineHeight: 1.85,
+                  whiteSpace: "pre-wrap",
+                }}
+              >
+                {section.content}
+              </div>
+            </div>
+          ))}
+
+          {/* Agent-specific deep-dive sections */}
+          {event.agent_type === "call-intel" && (
+            <div style={{ marginTop: 8, padding: "16px", background: agentCfg.bgColor, border: `1px solid ${agentCfg.borderColor}`, borderRadius: 10 }}>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: agentCfg.color, marginBottom: 10 }}>
+                Call Intelligence Analysis
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Call Type</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>Inbound — Borrower Initiated</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Recording</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#059669" }}>Available — Click to play</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Compliance Check</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#059669" }}>Passed — No violations detected</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Follow-Up</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#D97706" }}>3 tasks auto-created</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {event.agent_type === "deal-breaker" && (
+            <div style={{ marginTop: 8, padding: "16px", background: agentCfg.bgColor, border: `1px solid ${agentCfg.borderColor}`, borderRadius: 10 }}>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: agentCfg.color, marginBottom: 10 }}>
+                Risk Assessment Detail
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Risk Level</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#DC2626" }}>Medium-High — Approaching limit</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Trigger</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>Income analysis update</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>AUS Status</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#D97706" }}>Recommend re-run before submission</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Mitigations</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#059669" }}>2 options identified</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {event.agent_type === "guidelines" && (
+            <div style={{ marginTop: 8, padding: "16px", background: agentCfg.bgColor, border: `1px solid ${agentCfg.borderColor}`, borderRadius: 10 }}>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: agentCfg.color, marginBottom: 10 }}>
+                Guideline Research Detail
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Confidence</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#059669" }}>High — Multiple sources confirmed</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Sources Checked</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>Fannie, Freddie, lender overlays</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Overlays</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#D97706" }}>1 investor overlay found</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Last Updated</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>Selling guide current as of Q1 2026</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {event.agent_type === "smart-docs" && (
+            <div style={{ marginTop: 8, padding: "16px", background: agentCfg.bgColor, border: `1px solid ${agentCfg.borderColor}`, borderRadius: 10 }}>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: agentCfg.color, marginBottom: 10 }}>
+                Document Review Detail
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Documents Reviewed</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#0F172A" }}>3 files analyzed</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Fraud Detection</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#DC2626" }}>1 screenshot detected</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Freshness Check</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#DC2626" }}>1 stale document (67 days)</div>
+                </div>
+                <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 12 }}>
+                  <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, color: "#94A3B8", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Borrower Notified</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#059669" }}>Yes — Portal message sent</div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {(event.agent_type === "bulletin" || event.agent_type === "marketing" || event.agent_type === "underwriting" || event.agent_type === "turn-down") && (
+            <div style={{ marginTop: 8, padding: "16px", background: agentCfg.bgColor, border: `1px solid ${agentCfg.borderColor}`, borderRadius: 10 }}>
+              <div style={{ fontFamily: "'DM Mono', monospace", fontSize: 9, textTransform: "uppercase", letterSpacing: "0.12em", color: agentCfg.color, marginBottom: 10 }}>
+                {event.agent_label} — Extended Analysis
+              </div>
+              <div style={{ background: "#FFFFFF", border: "1px solid #E2E8F0", borderRadius: 8, padding: 14 }}>
+                <p style={{ fontSize: 12, color: "#334155", lineHeight: 1.75, margin: 0 }}>
+                  Full analysis data will populate from live agent activity. This event was processed by the {event.agent_label} agent
+                  on {new Date(event.created_at).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Metadata (if present) */}
+          {event.metadata && Object.keys(event.metadata).length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div
+                style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 9,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.12em",
+                  color: "#94A3B8",
+                  marginBottom: 8,
+                }}
+              >
+                Raw Metadata
+              </div>
+              <div
+                style={{
+                  background: "#F8FAFC",
+                  border: "1px solid #E2E8F0",
+                  borderRadius: 8,
+                  padding: "12px 14px",
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: 11,
+                  color: "#475569",
+                  lineHeight: 1.6,
+                  whiteSpace: "pre-wrap",
+                  overflowX: "auto",
+                }}
+              >
+                {JSON.stringify(event.metadata, null, 2)}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ActivityCard: React.FC<{ event: AIActivityEvent; onViewDetails: (event: AIActivityEvent) => void }> = ({ event, onViewDetails }) => {
   const [expanded, setExpanded] = useState(false);
   const agentCfg = AGENT_CONFIG[event.agent_type] ?? AGENT_CONFIG.guidelines;
 
@@ -657,6 +1097,43 @@ const ActivityCard: React.FC<{ event: AIActivityEvent }> = ({ event }) => {
                 </div>
               </div>
             ))}
+
+            {/* View Full Details button */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onViewDetails(event);
+              }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                marginTop: 8,
+                padding: "7px 16px",
+                borderRadius: 8,
+                border: `1px solid ${agentCfg.borderColor}`,
+                background: agentCfg.bgColor,
+                color: agentCfg.color,
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = agentCfg.accentHex;
+                (e.currentTarget as HTMLButtonElement).style.color = "#FFFFFF";
+                (e.currentTarget as HTMLButtonElement).style.borderColor = agentCfg.accentHex;
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = agentCfg.bgColor;
+                (e.currentTarget as HTMLButtonElement).style.color = agentCfg.color;
+                (e.currentTarget as HTMLButtonElement).style.borderColor = agentCfg.borderColor;
+              }}
+            >
+              {AGENT_DETAIL_LABELS[event.agent_type] || "View Full Details"}
+              <span style={{ fontSize: 12 }}>→</span>
+            </button>
           </div>
         )}
       </div>
@@ -693,6 +1170,7 @@ const AIActivityTab: React.FC<AIActivityTabProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<AgentType | "all">("all");
+  const [selectedEvent, setSelectedEvent] = useState<AIActivityEvent | null>(null);
 
   // Fetch from API or use prop-injected events
   const fetchEvents = useCallback(async () => {
@@ -1015,13 +1493,18 @@ const AIActivityTab: React.FC<AIActivityTabProps> = ({
                 </div>
 
                 {group.events.map((event) => (
-                  <ActivityCard key={event.id} event={event} />
+                  <ActivityCard key={event.id} event={event} onViewDetails={setSelectedEvent} />
                 ))}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Detail modal */}
+      {selectedEvent && (
+        <DetailModal event={selectedEvent} onClose={() => setSelectedEvent(null)} />
+      )}
     </>
   );
 };
