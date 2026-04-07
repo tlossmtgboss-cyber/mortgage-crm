@@ -1070,18 +1070,37 @@ def is_profile_active(profile: Optional[IntegrationProfile]) -> bool:
 async def connect_salesforce(
     request: Request,
     return_url: Optional[str] = Query(None, description="URL to redirect after auth"),
+    token: Optional[str] = Query(None, description="JWT token for browser redirect auth"),
     db: Session = Depends(get_db)
 ):
     """
     Initiate Salesforce OAuth flow.
     Redirects user to Salesforce login page.
 
-    Authentication via Authorization: Bearer header only.
-    Query parameter tokens are not accepted (tokens in URLs leak via
-    logs, browser history, and Salesforce redirect chains).
+    Authentication: Bearer header preferred, query param ?token= accepted
+    for browser redirect flows (OAuth initiation requires navigation, not fetch).
     """
     try:
         user_id = get_current_user_id(request, db)
+
+        # Fallback: accept token from query param for browser redirect flows
+        if not user_id and token:
+            try:
+                from auth.tokens import verify_token, TokenType
+                token_data = verify_token(token, expected_type=TokenType.ACCESS)
+                if token_data:
+                    uid = getattr(token_data, 'user_id', None)
+                    if uid:
+                        user_id = int(uid)
+                    elif token_data.sub:
+                        result = db.execute(
+                            text("SELECT id FROM users WHERE email = :email"),
+                            {"email": token_data.sub}
+                        ).fetchone()
+                        if result:
+                            user_id = result[0]
+            except Exception as e:
+                logger.debug(f"Query param token verification failed: {e}")
 
         if not user_id:
             raise HTTPException(status_code=401, detail="Authentication required")

@@ -201,6 +201,8 @@ _LOAN_STAGE_TO_LEAD_STAGE = {
 # Additional SF-specific lead statuses not in SALESFORCE_STAGE_MAPPING
 # (standard SF Lead Status values that have no loan-stage equivalent)
 _SF_LEAD_ONLY_STATUSES = {
+    "New": "New",
+    "Prospecting": "Prospect",
     "Open - Not Contacted": "New",
     "Working - Contacted": "Attempted Contact",
     "Qualified": "Pre-Qualified",

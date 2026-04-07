@@ -305,11 +305,12 @@ class TestFieldTransformations:
         config = {"mappings": {"Funded": "FUNDED"}, "default": "APPLICATION"}
         assert svc.transform_value("Unknown", "stage_map", config) == "APPLICATION"
 
-    def test_stage_map_unmapped_value_no_default_passes_through(self):
-        """Stage map with unmapped value and no default should pass through."""
+    def test_stage_map_unmapped_value_no_default_returns_none(self):
+        """Stage map with unmapped value not in VALID_STAGES returns None (safety guard)."""
         svc = self._get_service()
         config = {"mappings": {"Funded": "FUNDED"}}
-        assert svc.transform_value("Unknown", "stage_map", config) == "Unknown"
+        # "Unknown" is not a valid CRM stage, so transform_value returns None
+        assert svc.transform_value("Unknown", "stage_map", config) is None
 
     def test_picklist_map_transform(self):
         """Picklist map should work like stage map."""
@@ -1149,28 +1150,33 @@ class TestHTTPClientConfig:
         from services.salesforce.http_client import SF_REQUEST_TIMEOUT
         assert SF_REQUEST_TIMEOUT == 60.0
 
-    def test_get_sf_client_returns_async_client(self):
-        """get_sf_client should return an httpx.AsyncClient."""
-        import httpx
+    def test_get_sf_client_returns_context_manager(self):
+        """get_sf_client should return an async context manager."""
+        from contextlib import _AsyncGeneratorContextManager
         from services.salesforce.http_client import get_sf_client
         client = get_sf_client()
-        assert isinstance(client, httpx.AsyncClient)
+        assert isinstance(client, _AsyncGeneratorContextManager)
 
     def test_api_usage_tracking_parses_header(self):
-        """_track_api_usage should parse Sforce-Limit-Info header."""
-        from services.salesforce.http_client import _track_api_usage, get_api_usage
-        _track_api_usage("api-usage=500/15000")
+        """track_api_usage should parse Sforce-Limit-Info header."""
+        from unittest.mock import MagicMock
+        from services.salesforce.http_client import track_api_usage, get_api_usage
+        mock_response = MagicMock()
+        mock_response.headers = {"Sforce-Limit-Info": "api-usage=500/15000"}
+        track_api_usage(mock_response)
         usage = get_api_usage()
         assert usage["used"] == 500
         assert usage["limit"] == 15000
 
     def test_api_usage_tracking_malformed_input(self):
-        """_track_api_usage should silently handle malformed input."""
-        from services.salesforce.http_client import _track_api_usage
+        """track_api_usage should silently handle malformed input."""
+        from unittest.mock import MagicMock
+        from services.salesforce.http_client import track_api_usage
         # These should not raise
-        _track_api_usage("")
-        _track_api_usage("garbage")
-        _track_api_usage("api-usage=")
+        for header_val in ["", "garbage", "api-usage="]:
+            mock_response = MagicMock()
+            mock_response.headers = {"Sforce-Limit-Info": header_val}
+            track_api_usage(mock_response)
 
     def test_get_api_usage_returns_copy(self):
         """get_api_usage should return a copy, not the mutable original."""
