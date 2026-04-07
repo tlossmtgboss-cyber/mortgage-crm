@@ -203,10 +203,47 @@ async def generate_now(
         db.delete(existing)
         db.commit()
 
-    from tasks.morning_briefing_tasks import generate_user_briefing
-    generate_user_briefing.apply_async(args=[current_user.id, today.isoformat(), level])
+    # Try Celery first, fall back to synchronous generation
+    try:
+        from tasks.morning_briefing_tasks import generate_user_briefing
+        generate_user_briefing.apply_async(args=[current_user.id, today.isoformat(), level])
+        return JSONResponse(status_code=202, content={"status": "accepted", "message": "Briefing generation started"})
+    except Exception as celery_err:
+        logger.warning(f"Celery unavailable ({celery_err}), generating briefing synchronously")
 
-    return JSONResponse(status_code=202, content={"status": "accepted", "message": "Briefing generation started"})
+    # Synchronous fallback — generate inline when Celery/Redis isn't running
+    try:
+        from services.morning_briefing_service import MorningBriefingService
+
+        service = MorningBriefingService()
+        prefs = service.load_preferences(current_user)
+        ctx = service.build_context(db, current_user, today, prefs)
+
+        narrative = service.generate_narrative(ctx, prefs.ai_tone, prefs)
+
+        briefing = MorningBriefing(
+            organization_id=getattr(current_user, 'organization_id', None),
+            user_id=current_user.id,
+            briefing_date=today,
+            briefing_level=level,
+            status="delivered",
+            ai_narrative=narrative,
+            briefing_data={
+                "pipeline": ctx.pipeline,
+                "at_risk": ctx.at_risk,
+                "stale_leads": ctx.stale_leads,
+                "appointments": ctx.appointments,
+                "conditions": ctx.conditions,
+                "yesterday": ctx.yesterday,
+            },
+            team_data=ctx.team if ctx.team else None,
+        )
+        db.add(briefing)
+        db.commit()
+        return JSONResponse(status_code=201, content={"status": "generated", "message": "Briefing generated"})
+    except Exception as sync_err:
+        logger.exception(f"Synchronous briefing generation failed: {sync_err}")
+        raise HTTPException(status_code=500, detail="Briefing generation failed")
 
 
 @router.post("/{briefing_id}/viewed")

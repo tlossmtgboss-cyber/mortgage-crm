@@ -52,13 +52,9 @@ async def _async_get(*args, **kwargs):
 # =============================================================================
 
 def get_db():
-    """Get database session - imported from main app."""
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    """Get database session with RLS tenant context."""
+    from database import get_db as _get_db_rls
+    yield from _get_db_rls()
 
 
 # =============================================================================

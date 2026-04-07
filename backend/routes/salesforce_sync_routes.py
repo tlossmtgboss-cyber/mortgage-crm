@@ -113,8 +113,8 @@ async def salesforce_webhook(
             logger.warning("Invalid webhook signature")
             raise HTTPException(status_code=401, detail="Invalid webhook signature")
     else:
-        logger.warning("SALESFORCE_WEBHOOK_SECRET not configured - webhook verification disabled")
-        sync_service = get_salesforce_sync_service(db)
+        logger.error("SALESFORCE_WEBHOOK_SECRET not configured - rejecting webhook")
+        raise HTTPException(status_code=503, detail="Webhook verification not configured")
 
     # Parse payload - check content type first
     content_type = request.headers.get("Content-Type", "")

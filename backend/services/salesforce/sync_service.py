@@ -15,7 +15,7 @@ import hashlib
 import json
 import logging
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 from urllib.parse import quote
 import httpx
@@ -47,7 +47,7 @@ SF_API_VERSION = "v60.0"
 
 # Regex for validating SOQL identifiers (object names, field names).
 # Allows standard and custom fields like MyField__c, Account, etc.
-SAFE_SOQL_IDENTIFIER = re.compile(r'^[A-Za-z][A-Za-z0-9_]*(__[a-zA-Z])?$')
+SAFE_SOQL_IDENTIFIER = re.compile(r'^[A-Za-z][A-Za-z0-9_]*(__[a-zA-Z]+)?$')
 
 
 def _validate_soql_identifier(value: str, context: str = "identifier") -> str:

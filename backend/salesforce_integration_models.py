@@ -41,6 +41,7 @@ class IntegrationProfile(Base):
     last_sync_at = Column(DateTime)
     last_error = Column(Text)
     field_map_version = Column(Integer, default=1)
+    sync_metadata = Column(JSON)  # Circuit breaker state, token expiry
 
     # Settings
     sync_enabled = Column(Boolean, default=True)

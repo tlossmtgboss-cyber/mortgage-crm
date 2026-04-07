@@ -251,6 +251,9 @@ class TestSOQLSanitization:
         ("Opportunity", True),
         ("MtgPlanner_CRM__Transaction_Property__c", True),
         ("Custom_Field__c", True),
+        ("Account__r", True),
+        ("Custom_Metadata__mdt", True),
+        ("Platform_Event__e", True),
         ("Name", True),
         ("Id", True),
         ("Lead; DROP TABLE", False),
@@ -263,7 +266,7 @@ class TestSOQLSanitization:
     ])
     def test_soql_identifier_validation_regex(self, identifier, valid):
         """SOQL identifiers should be validated against a safe pattern."""
-        SAFE_SOQL_IDENTIFIER = re.compile(r'^[A-Za-z][A-Za-z0-9_]*(__[a-zA-Z])?$')
+        SAFE_SOQL_IDENTIFIER = re.compile(r'^[A-Za-z][A-Za-z0-9_]*(__[a-zA-Z]+)?$')
         result = bool(SAFE_SOQL_IDENTIFIER.match(identifier))
         assert result == valid, f"'{identifier}' expected valid={valid}, got {result}"
 

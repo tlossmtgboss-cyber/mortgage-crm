@@ -26,7 +26,7 @@ def _validate_salesforce_url(instance_url: str) -> str:
 
 # Salesforce API version - centralized for easy updates
 # See https://developer.salesforce.com/docs/atlas.en-us.api_rest.meta/api_rest/api_versions.htm
-SALESFORCE_API_VERSION = "v58.0"
+SALESFORCE_API_VERSION = "v60.0"
 
 # Database-backed PKCE store with TTL
 # Falls back to in-memory if database not available
