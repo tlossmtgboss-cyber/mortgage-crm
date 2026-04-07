@@ -98,6 +98,7 @@ function SmartDocs() {
           outstanding_count: loan.outstanding_docs_count || 0,
           overdue_count: loan.overdue_docs_count || 0,
           pending_count: loan.pending_docs_count || 0,
+          record_type: loan.record_type || 'loan',
           requests: [],
           documents: [],
         };
@@ -344,6 +345,7 @@ function SmartDocs() {
     return applicants.filter(applicant =>
       (applicant.borrower_name && applicant.borrower_name.toLowerCase().includes(query)) ||
       (applicant.loan_number && applicant.loan_number.toLowerCase().includes(query)) ||
+      (applicant.borrower_email && applicant.borrower_email.toLowerCase().includes(query)) ||
       (applicant.loan_id && String(applicant.loan_id).includes(query))
     );
   };
@@ -568,8 +570,8 @@ function SmartDocs() {
           <input
             type="text"
             className="search-input"
-            placeholder="Search by borrower or loan..."
-            aria-label="Search documents by borrower name or loan number"
+            placeholder="Search by name, email, or loan..."
+            aria-label="Search documents by name, email, or loan number"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
@@ -749,6 +751,9 @@ function SmartDocs() {
                         <td>
                           <div className="borrower-info">
                             <span className="borrower-name">{applicant.borrower_name}</span>
+                            {applicant.record_type === 'lead' && (
+                              <span className="lead-badge" title="This is a lead, not yet a loan">LEAD</span>
+                            )}
                             {hasDuplicate(applicant.loan_id) && (
                               <span
                                 className="duplicate-badge"

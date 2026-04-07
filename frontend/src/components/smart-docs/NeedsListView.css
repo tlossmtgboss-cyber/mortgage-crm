@@ -354,6 +354,81 @@
   cursor: not-allowed;
 }
 
+/* Multi-document entry cards */
+.document-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.document-entry-card {
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  position: relative;
+}
+
+.document-entry-card:not(:only-child) {
+  border-left: 3px solid #2563eb;
+}
+
+.document-entry-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.document-entry-number {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #2563eb;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.document-entry-remove {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  border-radius: 4px;
+  transition: color 0.2s, background 0.2s;
+}
+
+.document-entry-remove:hover {
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+.document-entry-card .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.add-another-doc-btn {
+  display: block;
+  width: 100%;
+  padding: 10px 16px;
+  margin: 16px 0;
+  background: #f0f9ff;
+  color: #2563eb;
+  border: 1px dashed #93c5fd;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.add-another-doc-btn:hover {
+  background: #dbeafe;
+  border-color: #2563eb;
+}
+
 /* Notification Section */
 .notification-section {
   margin-top: 16px;

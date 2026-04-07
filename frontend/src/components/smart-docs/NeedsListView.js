@@ -10,12 +10,15 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
   const [showAddModal, setShowAddModal] = useState(false);
   const [addingRequest, setAddingRequest] = useState(false);
 
-  const getDefaultRequest = () => ({
+  const getDefaultDocument = () => ({
     title: '',
     description: '',
     instructions: '',
     priority: 'NORMAL',
-    due_date: '',
+    due_date: ''
+  });
+
+  const getDefaultNotificationSettings = () => ({
     send_notification: false,
     send_sms: false,
     borrower_email: borrowerEmail || '',
@@ -23,17 +26,30 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
     borrower_phone: borrowerPhone || ''
   });
 
-  const [newRequest, setNewRequest] = useState(getDefaultRequest);
+  const [documents, setDocuments] = useState([getDefaultDocument()]);
+  const [notificationSettings, setNotificationSettings] = useState(getDefaultNotificationSettings);
 
   // Sync borrower fields when props change (lead data may load after mount)
   useEffect(() => {
-    setNewRequest(prev => ({
+    setNotificationSettings(prev => ({
       ...prev,
       borrower_email: prev.borrower_email || borrowerEmail || '',
       borrower_name: prev.borrower_name || borrowerName || '',
       borrower_phone: prev.borrower_phone || borrowerPhone || ''
     }));
   }, [borrowerEmail, borrowerName, borrowerPhone]);
+
+  const updateDocument = (index, field, value) => {
+    setDocuments(prev => prev.map((doc, i) => i === index ? { ...doc, [field]: value } : doc));
+  };
+
+  const addDocument = () => {
+    setDocuments(prev => [...prev, getDefaultDocument()]);
+  };
+
+  const removeDocument = (index) => {
+    setDocuments(prev => prev.filter((_, i) => i !== index));
+  };
 
   useEffect(() => {
     if (loanId) {
@@ -82,8 +98,11 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
 
   const handleAddCustomRequest = async (e) => {
     e.preventDefault();
-    if (!newRequest.title.trim()) {
-      setError('Document title is required');
+
+    // Validate all documents have titles
+    const emptyIndex = documents.findIndex(doc => !doc.title.trim());
+    if (emptyIndex !== -1) {
+      setError(`Document #${emptyIndex + 1} is missing a title`);
       return;
     }
 
@@ -91,31 +110,37 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
       setAddingRequest(true);
       setError(null);
 
-      const requestData = {
-        title: newRequest.title.trim(),
-        description: newRequest.description.trim() || null,
-        instructions: newRequest.instructions.trim() || null,
-        priority: newRequest.priority,
-        due_date: newRequest.due_date || null,
-        send_notification: newRequest.send_notification,
-        send_sms: newRequest.send_sms,
-        borrower_email: newRequest.borrower_email.trim() || null,
-        borrower_name: newRequest.borrower_name.trim() || null,
-        borrower_phone: newRequest.borrower_phone.trim() || null
-      };
+      const requests = documents.map(doc => ({
+        title: doc.title.trim(),
+        description: doc.description.trim() || null,
+        instructions: doc.instructions.trim() || null,
+        priority: doc.priority,
+        due_date: doc.due_date || null,
+        send_notification: notificationSettings.send_notification,
+        send_sms: notificationSettings.send_sms,
+        borrower_email: notificationSettings.borrower_email.trim() || null,
+        borrower_name: notificationSettings.borrower_name.trim() || null,
+        borrower_phone: notificationSettings.borrower_phone.trim() || null
+      }));
 
-      const result = await smartDocsAPI.addCustomRequest(loanId, borrowerId, requestData);
+      const results = await smartDocsAPI.addBulkCustomRequests(loanId, borrowerId, requests);
 
-      // Show notification status
-      if (result.notification_sent) {
-        console.log('Email notification sent to borrower');
-      }
-      if (result.sms_sent) {
-        console.log('SMS notification sent to borrower');
+      // Log notification status for each result
+      results.forEach(r => {
+        if (r.success && r.result) {
+          if (r.result.notification_sent) console.log(`Email notification sent for "${r.title}"`);
+          if (r.result.sms_sent) console.log(`SMS notification sent for "${r.title}"`);
+        }
+      });
+
+      const failures = results.filter(r => !r.success);
+      if (failures.length > 0) {
+        setError(`${failures.length} of ${results.length} requests failed: ${failures.map(f => f.title).join(', ')}`);
       }
 
       // Reset form and close modal
-      setNewRequest(getDefaultRequest());
+      setDocuments([getDefaultDocument()]);
+      setNotificationSettings(getDefaultNotificationSettings());
       setShowAddModal(false);
 
       // Refresh the list
@@ -123,7 +148,7 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
       if (onRequestUpdated) onRequestUpdated();
     } catch (err) {
       console.error('Error adding custom request:', err);
-      setError('Failed to add document request');
+      setError('Failed to add document requests');
     } finally {
       setAddingRequest(false);
     }
@@ -131,7 +156,8 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
 
   const handleCloseModal = () => {
     setShowAddModal(false);
-    setNewRequest(getDefaultRequest());
+    setDocuments([getDefaultDocument()]);
+    setNotificationSettings(getDefaultNotificationSettings());
     setError(null);
   };
 
@@ -187,74 +213,101 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
         <div className="modal-overlay" onClick={handleCloseModal}>
           <div className="modal-content add-request-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Request Document</h3>
+              <h3>Request Document{documents.length > 1 ? 's' : ''}</h3>
               <button className="modal-close" onClick={handleCloseModal}>×</button>
             </div>
             <form onSubmit={handleAddCustomRequest}>
-              <div className="form-group">
-                <label htmlFor="title">Document Title *</label>
-                <input
-                  type="text"
-                  id="title"
-                  value={newRequest.title}
-                  onChange={(e) => setNewRequest({ ...newRequest, title: e.target.value })}
-                  placeholder="e.g., Bank Statement - Chase"
-                  required
-                />
+              <div className="document-entries">
+                {documents.map((doc, index) => (
+                  <div key={index} className="document-entry-card">
+                    <div className="document-entry-header">
+                      <span className="document-entry-number">Document {index + 1}</span>
+                      {documents.length > 1 && (
+                        <button
+                          type="button"
+                          className="document-entry-remove"
+                          onClick={() => removeDocument(index)}
+                          title="Remove this document"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor={`title-${index}`}>Document Title *</label>
+                      <input
+                        type="text"
+                        id={`title-${index}`}
+                        value={doc.title}
+                        onChange={(e) => updateDocument(index, 'title', e.target.value)}
+                        placeholder="e.g., Bank Statement - Chase"
+                        required
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor={`description-${index}`}>Description</label>
+                      <textarea
+                        id={`description-${index}`}
+                        value={doc.description}
+                        onChange={(e) => updateDocument(index, 'description', e.target.value)}
+                        placeholder="What document is needed and why"
+                        rows={2}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor={`instructions-${index}`}>Instructions for Borrower</label>
+                      <textarea
+                        id={`instructions-${index}`}
+                        value={doc.instructions}
+                        onChange={(e) => updateDocument(index, 'instructions', e.target.value)}
+                        placeholder="Instructions on how to obtain or submit this document"
+                        rows={3}
+                      />
+                    </div>
+                    <div className="form-row">
+                      <div className="form-group">
+                        <label htmlFor={`priority-${index}`}>Priority</label>
+                        <select
+                          id={`priority-${index}`}
+                          value={doc.priority}
+                          onChange={(e) => updateDocument(index, 'priority', e.target.value)}
+                        >
+                          <option value="LOW">Low</option>
+                          <option value="NORMAL">Normal</option>
+                          <option value="HIGH">High</option>
+                          <option value="CRITICAL">Critical</option>
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor={`due_date-${index}`}>Due Date</label>
+                        <input
+                          type="date"
+                          id={`due_date-${index}`}
+                          value={doc.due_date}
+                          onChange={(e) => updateDocument(index, 'due_date', e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="form-group">
-                <label htmlFor="description">Description</label>
-                <textarea
-                  id="description"
-                  value={newRequest.description}
-                  onChange={(e) => setNewRequest({ ...newRequest, description: e.target.value })}
-                  placeholder="What document is needed and why"
-                  rows={2}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="instructions">Instructions for Borrower</label>
-                <textarea
-                  id="instructions"
-                  value={newRequest.instructions}
-                  onChange={(e) => setNewRequest({ ...newRequest, instructions: e.target.value })}
-                  placeholder="Instructions on how to obtain or submit this document"
-                  rows={3}
-                />
-              </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="priority">Priority</label>
-                  <select
-                    id="priority"
-                    value={newRequest.priority}
-                    onChange={(e) => setNewRequest({ ...newRequest, priority: e.target.value })}
-                  >
-                    <option value="LOW">Low</option>
-                    <option value="NORMAL">Normal</option>
-                    <option value="HIGH">High</option>
-                    <option value="CRITICAL">Critical</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="due_date">Due Date</label>
-                  <input
-                    type="date"
-                    id="due_date"
-                    value={newRequest.due_date}
-                    onChange={(e) => setNewRequest({ ...newRequest, due_date: e.target.value })}
-                    min={new Date().toISOString().split('T')[0]}
-                  />
-                </div>
-              </div>
+
+              <button
+                type="button"
+                className="add-another-doc-btn"
+                onClick={addDocument}
+              >
+                + Add Another Document
+              </button>
 
               {/* Notification Section */}
               <div className="notification-section">
                 <label className="checkbox-label">
                   <input
                     type="checkbox"
-                    checked={newRequest.send_notification}
-                    onChange={(e) => setNewRequest({ ...newRequest, send_notification: e.target.checked })}
+                    checked={notificationSettings.send_notification}
+                    onChange={(e) => setNotificationSettings({ ...notificationSettings, send_notification: e.target.checked })}
                   />
                   <span>Send email notification to borrower</span>
                 </label>
@@ -262,47 +315,47 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
                 <label className="checkbox-label" style={{ marginTop: '8px' }}>
                   <input
                     type="checkbox"
-                    checked={newRequest.send_sms}
-                    onChange={(e) => setNewRequest({ ...newRequest, send_sms: e.target.checked })}
+                    checked={notificationSettings.send_sms}
+                    onChange={(e) => setNotificationSettings({ ...notificationSettings, send_sms: e.target.checked })}
                   />
                   <span>Send SMS notification to borrower</span>
                 </label>
 
-                {(newRequest.send_notification || newRequest.send_sms) && (
+                {(notificationSettings.send_notification || notificationSettings.send_sms) && (
                   <div className="notification-fields">
                     <div className="form-group">
                       <label htmlFor="borrower_name">Borrower Name</label>
                       <input
                         type="text"
                         id="borrower_name"
-                        value={newRequest.borrower_name}
-                        onChange={(e) => setNewRequest({ ...newRequest, borrower_name: e.target.value })}
+                        value={notificationSettings.borrower_name}
+                        onChange={(e) => setNotificationSettings({ ...notificationSettings, borrower_name: e.target.value })}
                         placeholder="Borrower name"
                       />
                     </div>
-                    {newRequest.send_notification && (
+                    {notificationSettings.send_notification && (
                       <div className="form-group">
-                        <label htmlFor="borrower_email">Borrower Email {newRequest.send_notification ? '*' : ''}</label>
+                        <label htmlFor="borrower_email">Borrower Email *</label>
                         <input
                           type="email"
                           id="borrower_email"
-                          value={newRequest.borrower_email}
-                          onChange={(e) => setNewRequest({ ...newRequest, borrower_email: e.target.value })}
+                          value={notificationSettings.borrower_email}
+                          onChange={(e) => setNotificationSettings({ ...notificationSettings, borrower_email: e.target.value })}
                           placeholder="borrower@email.com"
-                          required={newRequest.send_notification}
+                          required={notificationSettings.send_notification}
                         />
                       </div>
                     )}
-                    {newRequest.send_sms && (
+                    {notificationSettings.send_sms && (
                       <div className="form-group">
-                        <label htmlFor="borrower_phone">Borrower Phone {newRequest.send_sms ? '*' : ''}</label>
+                        <label htmlFor="borrower_phone">Borrower Phone *</label>
                         <input
                           type="tel"
                           id="borrower_phone"
-                          value={newRequest.borrower_phone}
-                          onChange={(e) => setNewRequest({ ...newRequest, borrower_phone: e.target.value })}
+                          value={notificationSettings.borrower_phone}
+                          onChange={(e) => setNotificationSettings({ ...notificationSettings, borrower_phone: e.target.value })}
                           placeholder="(555) 123-4567"
-                          required={newRequest.send_sms}
+                          required={notificationSettings.send_sms}
                         />
                       </div>
                     )}
@@ -315,7 +368,11 @@ function NeedsListView({ loanId, borrowerId = 1, borrowerEmail = '', borrowerNam
                   Cancel
                 </button>
                 <button type="submit" className="btn-submit" disabled={addingRequest}>
-                  {addingRequest ? 'Adding...' : 'Add Request'}
+                  {addingRequest
+                    ? 'Adding...'
+                    : documents.length === 1
+                      ? 'Add Request'
+                      : `Add ${documents.length} Requests`}
                 </button>
               </div>
             </form>

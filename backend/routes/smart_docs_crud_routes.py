@@ -1478,16 +1478,19 @@ async def get_smart_docs_loans(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     stage: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
     """
-    Get all loans for Smart Docs dashboard.
+    Get all loans AND leads with document requests for Smart Docs dashboard.
 
-    This endpoint returns all loans in active stages for document tracking purposes.
-    Unlike the main /api/v1/loans/ endpoint, this does NOT filter by loan_officer_id
-    because Smart Docs is a document management tool that should show all active loans
-    within the user's organization.
+    This endpoint returns:
+    1. All loans in active stages for document tracking purposes.
+    2. Leads that have smart_document_requests (created via the lead profile's Smart Docs tab).
+
+    Each result includes a 'record_type' field ('loan' or 'lead') so the frontend
+    can distinguish them and navigate to the correct profile page.
     """
     from sqlalchemy import text
 
@@ -1497,36 +1500,103 @@ async def get_smart_docs_loans(
         is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
 
         # Build WHERE clause for active loans (exclude funded)
-        where_clauses = ["stage != 'Funded'"]
+        loan_where_clauses = ["l.stage != 'Funded'"]
         params = {"skip": skip, "limit": limit}
 
         # Add tenant isolation filter
         if not is_platform_admin and org_id:
-            where_clauses.append("organization_id = :org_id")
+            loan_where_clauses.append("l.organization_id = :org_id")
             params["org_id"] = org_id
 
         # Filter by specific stage if provided
         if stage:
-            where_clauses.append("stage = :stage")
+            loan_where_clauses.append("l.stage = :stage")
             params["stage"] = stage
 
-        where_sql = " AND ".join(where_clauses) if where_clauses else "1=1"
+        # Search filter
+        if search:
+            params["search"] = f"%{search}%"
 
-        sql = f"""
-            SELECT id, loan_number, borrower_name, borrower_email, borrower_phone,
-                   coborrower_name, co_borrower_email,
-                   stage, program, amount, rate,
-                   closing_date, days_in_stage, sla_status, created_at,
-                   loan_officer_name, loan_officer_email, processor, processor_email,
-                   underwriter, underwriter_email, closer, closer_email,
-                   property_address, loan_type, purchase_price, down_payment
-            FROM loans
-            WHERE {where_sql}
+        loan_where_sql = " AND ".join(loan_where_clauses) if loan_where_clauses else "1=1"
+
+        # Add search to loan query
+        loan_search_clause = ""
+        if search:
+            loan_search_clause = " AND (l.borrower_name ILIKE :search OR l.loan_number ILIKE :search OR l.borrower_email ILIKE :search)"
+
+        # Main loans query
+        loans_sql = f"""
+            SELECT l.id, l.loan_number, l.borrower_name, l.borrower_email, l.borrower_phone,
+                   l.coborrower_name, l.co_borrower_email,
+                   l.stage, l.program, l.amount, l.rate,
+                   l.closing_date, l.days_in_stage, l.sla_status, l.created_at,
+                   l.loan_officer_name, l.loan_officer_email, l.processor, l.processor_email,
+                   l.underwriter, l.underwriter_email, l.closer, l.closer_email,
+                   l.property_address, l.loan_type, l.purchase_price, l.down_payment,
+                   'loan' AS record_type
+            FROM loans l
+            WHERE {loan_where_sql}{loan_search_clause}
+        """
+
+        # Check if smart_document_requests table exists before trying to query leads
+        table_check = db.execute(text(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'smart_document_requests')"
+        )).scalar()
+
+        leads_sql = ""
+        if table_check:
+            # Build WHERE clause for leads with document requests
+            lead_where_clauses = []
+            if not is_platform_admin and org_id:
+                lead_where_clauses.append("ld.organization_id = :org_id")
+            if stage:
+                lead_where_clauses.append("ld.stage = :stage")
+
+            lead_where_sql = " AND ".join(lead_where_clauses) if lead_where_clauses else "1=1"
+
+            # Add search to lead query
+            lead_search_clause = ""
+            if search:
+                lead_search_clause = " AND (ld.name ILIKE :search OR ld.first_name ILIKE :search OR ld.last_name ILIKE :search OR ld.email ILIKE :search)"
+
+            # Leads with document requests — exclude any lead whose ID also matches
+            # a loan ID that already appears in the loans query (since doc requests
+            # use the same loan_id column for both)
+            leads_sql = f"""
+                UNION ALL
+                SELECT ld.id,
+                       ld.loan_number,
+                       COALESCE(ld.name, TRIM(COALESCE(ld.first_name, '') || ' ' || COALESCE(ld.last_name, ''))) AS borrower_name,
+                       ld.email AS borrower_email,
+                       ld.phone AS borrower_phone,
+                       ld.co_applicant_name AS coborrower_name,
+                       ld.co_applicant_email AS co_borrower_email,
+                       ld.stage, NULL AS program, ld.preapproval_amount AS amount, NULL AS rate,
+                       NULL AS closing_date, NULL AS days_in_stage, NULL AS sla_status, ld.created_at,
+                       NULL AS loan_officer_name, NULL AS loan_officer_email,
+                       NULL AS processor, NULL AS processor_email,
+                       NULL AS underwriter, NULL AS underwriter_email,
+                       NULL AS closer, NULL AS closer_email,
+                       NULL AS property_address, ld.loan_type, NULL AS purchase_price, NULL AS down_payment,
+                       'lead' AS record_type
+                FROM leads ld
+                INNER JOIN (
+                    SELECT DISTINCT loan_id FROM smart_document_requests
+                ) sdr ON sdr.loan_id = ld.id
+                WHERE {lead_where_sql}{lead_search_clause}
+                  AND ld.id NOT IN (SELECT id FROM loans)
+            """
+
+        combined_sql = f"""
+            SELECT * FROM (
+                {loans_sql}
+                {leads_sql}
+            ) combined
             ORDER BY created_at DESC
             LIMIT :limit OFFSET :skip
         """
 
-        results = db.execute(text(sql), params).fetchall()
+        results = db.execute(text(combined_sql), params).fetchall()
 
         # Convert to list of dicts
         loans = []
@@ -1540,8 +1610,17 @@ async def get_smart_docs_loans(
                 row_dict['stage'] = 'PROCESSING'
             loans.append(row_dict)
 
-        # Get total count for pagination
-        count_sql = f"SELECT COUNT(*) FROM loans WHERE {where_sql}"
+        # Get total count for pagination (same UNION structure without LIMIT/OFFSET)
+        count_leads_sql = ""
+        if table_check and leads_sql:
+            count_leads_sql = leads_sql
+
+        count_sql = f"""
+            SELECT COUNT(*) FROM (
+                {loans_sql}
+                {count_leads_sql}
+            ) combined
+        """
         total = db.execute(text(count_sql), params).scalar() or 0
 
         return {

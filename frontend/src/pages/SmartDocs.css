@@ -1097,6 +1097,18 @@
   letter-spacing: 0.3px;
 }
 
+.lead-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
 .has-duplicate {
   background-color: #fff5f5;
 }
