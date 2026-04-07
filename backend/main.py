@@ -1915,6 +1915,13 @@ except Exception as e:
     logger.warning(f"LO availability routes skipped: {e}")
 
 try:
+    from routes.speed_to_lead_call_routes import router as stl_call_router
+    app.include_router(stl_call_router, tags=["Speed to Lead Auto-Call"])
+    logger.info("✅ Speed-to-lead auto-call routes loaded")
+except Exception as e:
+    logger.warning(f"Speed-to-lead auto-call routes skipped: {e}")
+
+try:
     from routes.amd_voicemail_routes import router as amd_voicemail_router
     app.include_router(amd_voicemail_router, tags=["AMD Voicemail"])
     logger.info("✅ AMD voicemail routes loaded")

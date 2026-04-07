@@ -8,6 +8,7 @@ Endpoints:
     GET  /api/v1/email/templates     — List available email templates
 """
 
+import json
 import logging
 import os
 import re
@@ -672,10 +673,7 @@ async def ai_compose_email(
 
         raw_text = response.content[0].text.strip()
 
-        # Parse the JSON response
-        import json
-
-        # Handle potential markdown code fences
+        # Parse the JSON response — handle potential markdown code fences
         if raw_text.startswith("```"):
             raw_text = raw_text.split("\n", 1)[1] if "\n" in raw_text else raw_text[3:]
             if raw_text.endswith("```"):
@@ -847,7 +845,6 @@ async def list_email_templates(
     templates = []
     for key, tmpl in EMAIL_TEMPLATES.items():
         # Extract variable names from subject + body
-        import re
         all_text = tmpl["subject"] + tmpl["body"]
         variable_names = sorted(set(re.findall(r"\{(\w+)\}", all_text)))
 
