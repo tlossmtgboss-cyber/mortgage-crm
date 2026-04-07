@@ -793,7 +793,11 @@ def _generate_available_slots(
     if (end_date - start_date).days > 90:
         raise HTTPException(status_code=400, detail="Date range cannot exceed 90 days")
 
-    now = datetime.now(timezone.utc).replace(tzinfo=None)  # naive UTC -- consistent with datetime.combine() outputs
+    # IMPORTANT: `now` must be in the same timezone as slot_start (which is naive local
+    # time from working_hours). We convert UTC now to a naive local time per-user below.
+    # For batch queries (blocked times, appointments), we keep UTC boundaries.
+    _now_utc = datetime.now(timezone.utc)
+    now = _now_utc.replace(tzinfo=None)  # naive UTC for batch query boundaries
     start_dt = datetime.combine(start_date, time.min)
     end_dt = datetime.combine(end_date, time.max)
     all_slots = []
@@ -961,7 +965,16 @@ def _generate_available_slots(
         lunch_start_time = getattr(config, 'lunch_break_start', time(12, 0)) if config else time(12, 0)
         lunch_end_time = getattr(config, 'lunch_break_end', time(13, 0)) if config else time(13, 0)
 
-        min_booking_time = now + timedelta(hours=min_notice)
+        # Convert UTC now to the user's local timezone for min-notice comparison.
+        # slot_start is a naive datetime in the user's local time (from working_hours),
+        # so min_booking_time must also be in that same local time.
+        user_tz_str = config.timezone if config and config.timezone else DEFAULT_TIMEZONE
+        try:
+            user_tz = pytz.timezone(user_tz_str)
+            now_local = _now_utc.astimezone(user_tz).replace(tzinfo=None)
+        except Exception:
+            now_local = now  # fallback to UTC if timezone is invalid
+        min_booking_time = now_local + timedelta(hours=min_notice)
 
         # Use pre-loaded data
         blocked_times = blocked_by_user.get(user_id, [])
