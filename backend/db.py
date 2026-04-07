@@ -84,23 +84,27 @@ elif USE_PGBOUNCER:
     )
 else:
     # Direct PostgreSQL connection with SQLAlchemy pooling
-    # Railway free tier has ~20 connections max; pool_size + max_overflow = 7 (safe headroom)
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=3, max_overflow=4, max=7)")
+    # Railway has ~20 connections max.  Keep pool_size=0 so no connections are
+    # pre-allocated on startup (all connections are overflow, created on demand
+    # and released when idle).  This prevents crash-loop connection pileup.
+    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=0, max_overflow=5, max=5)")
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,           # CRITICAL: Verify connections before use (catches stale/dead connections)
-        pool_size=3,                  # Permanent connections (3 warm connections ready)
-        max_overflow=4,               # Additional connections under load (total max: 7)
-        pool_recycle=300,             # Recycle connections every 5 min (frees slots faster)
-        pool_timeout=20,              # Wait max 20s for a connection (fail fast if pool exhaustion)
+        pool_size=0,                  # NO pre-allocated connections — all on-demand via overflow
+        max_overflow=5,               # Max 5 concurrent connections (all created on demand)
+        pool_recycle=120,             # Recycle connections every 2 min (frees slots faster)
+        pool_timeout=10,              # Wait max 10s for a connection (fail fast)
         pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)
+        pool_reset_on_return='rollback',  # Clean connections before reuse
         echo=False,                   # Set True for SQL debugging
         connect_args={
             "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}",
+            "connect_timeout": "5",   # 5s TCP connect timeout
             "keepalives": 1,          # Enable TCP keepalives
-            "keepalives_idle": 30,    # Start keepalives after 30s idle
-            "keepalives_interval": 10, # Send keepalive every 10s
-            "keepalives_count": 5     # Close connection after 5 failed keepalives
+            "keepalives_idle": 15,    # Start keepalives after 15s idle (detect dead faster)
+            "keepalives_interval": 5,  # Send keepalive every 5s
+            "keepalives_count": 3     # Close connection after 3 failed keepalives (15s total)
         }
     )
 
@@ -169,12 +173,15 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def cleanup_idle_connections():
-    """Terminate idle database connections at startup to prevent connection exhaustion.
+    """Terminate stale database connections at startup to prevent connection exhaustion.
 
-    Railway PostgreSQL has a ~97 connection limit. After crashes or restarts,
-    stale connections from previous instances can linger, preventing new
-    connections. Uses raw psycopg2 (bypassing SQLAlchemy pool) with retries
-    since the pool itself may be unable to connect during exhaustion.
+    Railway PostgreSQL has limited connections (~20). After crashes or restarts,
+    stale connections from previous instances linger, preventing new connections.
+    This ALWAYS terminates idle and idle-in-transaction connections at startup
+    (no threshold — every deploy gets a clean slate).
+
+    Uses raw psycopg2 (bypassing SQLAlchemy pool) since the pool itself may be
+    unable to connect during exhaustion.
     """
     import re
     m = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', DATABASE_URL)
@@ -189,7 +196,7 @@ def cleanup_idle_connections():
             import psycopg2
             conn = psycopg2.connect(
                 host=host, port=int(port), user=user, password=password,
-                dbname=dbname, connect_timeout=5
+                dbname=dbname, connect_timeout=3
             )
             conn.autocommit = True
             cur = conn.cursor()
@@ -197,25 +204,28 @@ def cleanup_idle_connections():
             cur.execute("""
                 SELECT count(*) as total,
                        count(*) FILTER (WHERE state = 'idle') as idle,
-                       count(*) FILTER (WHERE state = 'active') as active
+                       count(*) FILTER (WHERE state = 'active') as active,
+                       count(*) FILTER (WHERE state = 'idle in transaction') as idle_in_tx
                 FROM pg_stat_activity
                 WHERE datname = current_database()
             """)
-            total, idle, active = cur.fetchone()
-            logger.info(f"DB connections at startup: total={total}, idle={idle}, active={active}")
+            total, idle, active, idle_in_tx = cur.fetchone()
+            logger.info(f"DB connections at startup: total={total}, idle={idle}, active={active}, idle_in_tx={idle_in_tx}")
 
-            if total > 10:
-                # Terminate ALL idle connections except ours — aggressive cleanup
-                # Railway has ~20 max; reclaim aggressively to prevent "too many clients"
-                cur.execute("""
-                    SELECT pg_terminate_backend(pid)
-                    FROM pg_stat_activity
-                    WHERE datname = current_database()
-                      AND state = 'idle'
-                      AND pid != pg_backend_pid()
-                """)
-                count = cur.rowcount
-                logger.warning(f"Terminated {count} idle DB connections (total was {total}) to prevent exhaustion")
+            # ALWAYS terminate idle + idle-in-transaction connections at startup.
+            # Every deploy gets a clean slate — previous instance's connections are stale.
+            cur.execute("""
+                SELECT pg_terminate_backend(pid)
+                FROM pg_stat_activity
+                WHERE datname = current_database()
+                  AND state IN ('idle', 'idle in transaction', 'idle in transaction (aborted)')
+                  AND pid != pg_backend_pid()
+            """)
+            terminated = cur.rowcount
+            if terminated > 0:
+                logger.warning(f"Startup cleanup: terminated {terminated} stale connections (was {total} total)")
+            else:
+                logger.info(f"Startup cleanup: no stale connections to terminate ({total} total, {active} active)")
 
             cur.close()
             conn.close()
@@ -224,7 +234,7 @@ def cleanup_idle_connections():
             logger.warning(f"Connection cleanup attempt {attempt + 1}/5 failed: {e}")
             if attempt < 4:
                 import time as _time
-                _time.sleep(2 * (attempt + 1))  # Back off: 2, 4, 6, 8 seconds
+                _time.sleep(1)  # Short retry — don't block startup
     logger.error("Connection cleanup failed after 5 attempts — DB may be fully exhausted")
 
 
