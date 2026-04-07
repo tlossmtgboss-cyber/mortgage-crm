@@ -73,7 +73,10 @@ async def android_asset_links():
             "target": {
                 "namespace": "android_app",
                 "package_name": "com.perenniaai.crm",
-                "sha256_cert_fingerprints": [],
+                "sha256_cert_fingerprints": [
+                    # TODO: Replace with actual SHA256 fingerprint from Android signing key
+                    # Generate with: keytool -list -v -keystore release.keystore | grep SHA256
+                ],
             },
         }],
         media_type="application/json",

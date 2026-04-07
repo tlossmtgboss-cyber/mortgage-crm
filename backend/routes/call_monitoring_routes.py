@@ -1515,7 +1515,7 @@ async def process_ci_recording(
         if not recording.transcription_id:
             raise HTTPException(
                 status_code=400,
-                detail="Recording has no transcription. Please transcribe first using /api/v1/ci-voice/recordings/{id}/transcribe"
+                detail="Recording has no transcription. Please transcribe first using /api/v1/conversation-intelligence/recordings/{id}/transcribe"
             )
 
         if recording.transcription_status != 'completed':
@@ -2657,7 +2657,7 @@ async def run_agents_background(
     user_id: Optional[int] = None,
     force_rerun: bool = False,
 ):
-    """Background task to run agents."""
+    """Background task to run agents, then trigger post-call automation and CI extraction."""
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
 
@@ -2673,8 +2673,206 @@ async def run_agents_background(
                 agent_types=agent_types,
                 trigger="api_request",
             )
+
+            # -----------------------------------------------------------
+            # Post-agent pipeline: CI extraction → orchestration → post-call automation
+            # Failures here MUST NOT break the existing agent pipeline.
+            # -----------------------------------------------------------
+            await _run_post_agent_pipeline(db, session_id, user_id)
+
         finally:
             db.close()
 
     except SQLAlchemyError as e:
         logger.error(f"Background agent processing failed: {e}")
+
+
+# Minimum transcript length (in characters) to justify running CI extraction.
+# Short transcripts (greetings-only, missed calls) produce low-value extractions.
+_MIN_TRANSCRIPT_LEN_FOR_CI = 200
+
+
+async def _run_post_agent_pipeline(
+    db: Session,
+    session_id: str,
+    user_id: Optional[int] = None,
+) -> None:
+    """
+    Run post-call automation and CI extraction after the call monitoring agents finish.
+
+    Sequence:
+      1. Fetch session context (transcript, loan_id, org_id, metadata).
+      2. CI extraction (6 domain agents) — produces extracted_data for the orchestrator.
+      3. CI orchestration (lead creation, pre-qual, doc checklist, outreach, scheduling).
+      4. Post-call automation (summary, action items, compliance score, follow-up SMS).
+
+    Every step is wrapped in its own try/except so a failure in one does not block the others.
+    """
+    # -- Fetch session context ------------------------------------------------
+    try:
+        session_row = db.execute(text("""
+            SELECT id, full_transcript, loan_id, lead_id, user_id,
+                   organization_id, metadata, duration_seconds, status,
+                   capture_mode
+            FROM call_sessions
+            WHERE id = :sid
+        """), {"sid": session_id}).fetchone()
+    except Exception as e:
+        logger.error(f"[PostAgentPipeline] Failed to fetch session {session_id}: {e}")
+        return
+
+    if not session_row:
+        logger.warning(f"[PostAgentPipeline] Session {session_id} not found — skipping post-agent pipeline")
+        return
+
+    transcript = session_row[1] or ""
+    loan_id_raw = session_row[2]          # UUID or None
+    lead_id_raw = session_row[3]          # UUID or None
+    session_user_id = session_row[4]      # UUID or None
+    org_id = session_row[5]               # int or None
+    session_metadata = session_row[6] or {}
+    duration_seconds = session_row[7]
+    capture_mode = session_row[9]
+
+    if not transcript or len(transcript.strip()) < _MIN_TRANSCRIPT_LEN_FOR_CI:
+        logger.info(
+            f"[PostAgentPipeline] Transcript too short ({len(transcript)} chars) for session "
+            f"{session_id} — skipping CI extraction and post-call automation"
+        )
+        return
+
+    # Convert UUID loan_id to int if it looks like an integer (CRM loans use integer PKs).
+    # If the UUID is a true UUID string we pass it as-is where accepted.
+    loan_id_str = str(loan_id_raw) if loan_id_raw else None
+    loan_id_int: Optional[int] = None
+    if loan_id_str:
+        try:
+            loan_id_int = int(loan_id_str)
+        except (ValueError, TypeError):
+            # True UUID — some downstream services accept str, others need int.
+            pass
+
+    org_id_int: Optional[int] = None
+    if org_id is not None:
+        try:
+            org_id_int = int(org_id)
+        except (ValueError, TypeError):
+            pass
+
+    call_id = str(session_id)
+    lo_user_id = user_id or (int(str(session_user_id)) if session_user_id else None)
+
+    # -- Step 1: CI Extraction ------------------------------------------------
+    ci_result: Optional[Dict[str, Any]] = None
+    try:
+        from services.call_intelligence.integration import CallIntelligenceIntegration
+
+        ci_integration = CallIntelligenceIntegration(db_session=db)
+        ci_result = await ci_integration.process_completed_call(
+            call_id=call_id,
+            loan_id=loan_id_int,
+            organization_id=org_id_int or 0,
+            transcript=transcript,
+            call_type="call_monitoring",
+            call_metadata={
+                "source": "call_monitoring_agents",
+                "session_id": session_id,
+                "capture_mode": capture_mode,
+                "duration_seconds": duration_seconds,
+                "user_id": lo_user_id,
+            },
+        )
+        if ci_result and ci_result.get("success"):
+            logger.info(
+                f"[PostAgentPipeline] CI extraction succeeded for session {session_id}: "
+                f"extractions={ci_result.get('extractions_count', 0)}, "
+                f"high_confidence={ci_result.get('high_confidence_count', 0)}"
+            )
+        else:
+            logger.warning(
+                f"[PostAgentPipeline] CI extraction returned non-success for session {session_id}: "
+                f"{ci_result}"
+            )
+    except Exception as e:
+        logger.error(f"[PostAgentPipeline] CI extraction failed for session {session_id}: {e}", exc_info=True)
+
+    # -- Step 2: CI Orchestration (lead creation, pre-qual, docs, outreach, scheduling) --
+    try:
+        from services.call_intelligence.orchestration.orchestrator import (
+            CallIntelligenceOrchestrator,
+            OrchestrationConfig,
+        )
+
+        # Build extracted_data dict from CI result or fall back to empty structure.
+        extracted_data: Dict[str, Any] = {}
+        if ci_result and ci_result.get("success"):
+            # The CI processor saves full extraction results in the DB; the
+            # orchestrator only needs the high-level dict.  Re-use what we can
+            # from the ci_result; the orchestrator's _normalize_extracted_data
+            # will handle missing keys gracefully.
+            extracted_data = ci_result
+
+        orch_config = OrchestrationConfig(
+            continue_on_step_failure=True,
+        )
+        ci_orchestrator = CallIntelligenceOrchestrator(config=orch_config)
+        orch_result = await ci_orchestrator.orchestrate(
+            call_id=call_id,
+            extracted_data=extracted_data,
+            loan_id=loan_id_int,
+            organization_id=org_id_int,
+            assigned_to=str(lo_user_id) if lo_user_id else None,
+        )
+        logger.info(
+            f"[PostAgentPipeline] CI orchestration completed for session {session_id}: "
+            f"status={orch_result.status.value}, "
+            f"successful_steps={orch_result.successful_steps}/{orch_result.successful_steps + orch_result.failed_steps}"
+        )
+    except Exception as e:
+        logger.error(f"[PostAgentPipeline] CI orchestration failed for session {session_id}: {e}", exc_info=True)
+
+    # -- Step 3: Post-Call Automation (summary, action items, compliance, SMS) --
+    try:
+        from services.call_intelligence.post_call_automation import PostCallAutomationService
+
+        if org_id_int is None:
+            logger.warning(
+                f"[PostAgentPipeline] Skipping post-call automation for session {session_id}: "
+                f"no organization_id on session"
+            )
+        elif loan_id_int is None:
+            logger.info(
+                f"[PostAgentPipeline] Skipping post-call automation for session {session_id}: "
+                f"no integer loan_id (loan_id_raw={loan_id_raw})"
+            )
+        else:
+            # Build call_metadata expected by PostCallAutomationService
+            call_metadata: Dict[str, Any] = {
+                "lo_user_id": lo_user_id,
+                "borrower_name": (session_metadata or {}).get("borrower_name", ""),
+                "borrower_phone": (session_metadata or {}).get("borrower_phone", ""),
+                "call_duration_seconds": duration_seconds or 0,
+                "call_direction": (session_metadata or {}).get("call_direction", "unknown"),
+                "call_outcome": (session_metadata or {}).get("call_outcome", ""),
+                "lead_id": int(str(lead_id_raw)) if lead_id_raw else None,
+            }
+
+            post_call_svc = PostCallAutomationService(db)
+            post_call_results = await post_call_svc.process_call_end(
+                call_id=call_id,
+                loan_id=loan_id_int,
+                org_id=org_id_int,
+                transcript=transcript,
+                call_metadata=call_metadata,
+            )
+            logger.info(
+                f"[PostAgentPipeline] Post-call automation completed for session {session_id}: "
+                f"summary_len={len(post_call_results.get('summary') or '')}, "
+                f"action_items={len(post_call_results.get('action_items') or [])}, "
+                f"compliance_score={post_call_results.get('compliance_score', 0)}"
+            )
+    except Exception as e:
+        logger.error(
+            f"[PostAgentPipeline] Post-call automation failed for session {session_id}: {e}",
+            exc_info=True,
+        )

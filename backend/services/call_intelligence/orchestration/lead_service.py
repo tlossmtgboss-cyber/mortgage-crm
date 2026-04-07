@@ -12,6 +12,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 import uuid
 
+from sqlalchemy import text
+
 logger = logging.getLogger(__name__)
 
 
@@ -343,17 +345,41 @@ class LeadManagementService:
         return LeadPriority.WARM
 
     async def _find_existing_lead(self, lead_data: LeadData) -> Optional[str]:
-        """Find existing lead by phone or email."""
+        """Find existing lead by phone or email within the same organization."""
         if self.db_session:
-            # Database lookup
-            query = """
-                SELECT id FROM leads
-                WHERE (email = :email AND email IS NOT NULL)
-                   OR (phone = :phone AND phone IS NOT NULL)
-                LIMIT 1
-            """
-            # Would execute query here
-            pass
+            # Need at least one identifier to search
+            if not lead_data.email and not lead_data.phone:
+                return None
+
+            try:
+                # Build conditions based on available identifiers
+                conditions = []
+                params: Dict[str, Any] = {"org_id": lead_data.organization_id}
+
+                if lead_data.email:
+                    conditions.append("email = :email")
+                    params["email"] = lead_data.email
+                if lead_data.phone:
+                    conditions.append("phone = :phone")
+                    params["phone"] = lead_data.phone
+
+                where_clause = " OR ".join(conditions)
+
+                result = self.db_session.execute(
+                    text(f"""
+                        SELECT id FROM leads
+                        WHERE organization_id = :org_id
+                          AND ({where_clause})
+                        LIMIT 1
+                    """),
+                    params,
+                )
+                row = result.fetchone()
+                if row:
+                    return str(row[0])
+            except Exception as e:
+                logger.exception("Failed to query existing lead: %s", e)
+                return None
         else:
             # In-memory lookup for testing
             for lead_id, existing in self._leads.items():
@@ -368,19 +394,72 @@ class LeadManagementService:
         """Create a new lead."""
         result = LeadResult(success=True, action="created")
 
-        # Generate lead ID
-        lead_id = str(uuid.uuid4())[:8].upper()
-        result.lead_id = lead_id
-
-        # Set source
+        # Set source and status
         lead_data.source = LeadSource.INBOUND_CALL
         lead_data.status = LeadStatus.NEW
 
         if self.db_session:
-            # Database insert
-            pass
+            try:
+                now = datetime.now(timezone.utc)
+                # Build the full name (Lead.name is NOT NULL)
+                full_name = " ".join(
+                    part for part in [lead_data.first_name, lead_data.last_name] if part
+                ) or "Unknown"
+
+                db_result = self.db_session.execute(
+                    text("""
+                        INSERT INTO leads
+                            (organization_id, name, first_name, last_name,
+                             email, phone, source, stage, ai_score,
+                             loan_purpose, property_type, credit_score,
+                             owner_id, notes, lead_received_date,
+                             last_modified_by_ai, created_at, updated_at)
+                        VALUES
+                            (:organization_id, :name, :first_name, :last_name,
+                             :email, :phone, :source, :stage, :ai_score,
+                             :loan_purpose, :property_type, :credit_score,
+                             :owner_id, :notes, :lead_received_date,
+                             true, :created_at, :updated_at)
+                        RETURNING id
+                    """),
+                    {
+                        "organization_id": lead_data.organization_id,
+                        "name": full_name,
+                        "first_name": lead_data.first_name,
+                        "last_name": lead_data.last_name,
+                        "email": lead_data.email,
+                        "phone": lead_data.phone,
+                        "source": "call_intelligence",
+                        "stage": "New",
+                        "ai_score": lead_data.lead_score,
+                        "loan_purpose": lead_data.loan_purpose,
+                        "property_type": lead_data.property_type,
+                        "credit_score": lead_data.estimated_credit_score,
+                        "owner_id": int(lead_data.assigned_to) if lead_data.assigned_to else None,
+                        "notes": f"Created from call {call_id}. Priority: {lead_data.priority.value}.",
+                        "lead_received_date": now,
+                        "created_at": now,
+                        "updated_at": now,
+                    },
+                )
+                lead_id = str(db_result.scalar())
+                self.db_session.commit()
+                result.lead_id = lead_id
+
+                logger.info(
+                    "Created lead %s in DB for org %s from call %s",
+                    lead_id, lead_data.organization_id, call_id,
+                )
+            except Exception as e:
+                logger.exception("Failed to insert lead from call %s: %s", call_id, e)
+                self.db_session.rollback()
+                result.success = False
+                result.errors.append(f"DB insert failed: {e}")
+                return result
         else:
             # In-memory storage for testing
+            lead_id = str(uuid.uuid4())[:8].upper()
+            result.lead_id = lead_id
             self._leads[lead_id] = lead_data
 
         result.changes_made = [
@@ -400,12 +479,92 @@ class LeadManagementService:
         new_data: LeadData,
         call_id: str,
     ) -> LeadResult:
-        """Update existing lead with new data."""
+        """Update existing lead with new data from a call."""
         result = LeadResult(success=True, action="updated", lead_id=lead_id)
 
         if self.db_session:
-            # Database update
-            pass
+            try:
+                now = datetime.now(timezone.utc)
+
+                # Build dynamic SET clause from non-null extracted fields.
+                # Maps: LeadData field -> (leads column name, value)
+                field_mapping = {
+                    "first_name": ("first_name", new_data.first_name),
+                    "last_name": ("last_name", new_data.last_name),
+                    "email": ("email", new_data.email),
+                    "phone": ("phone", new_data.phone),
+                    "loan_purpose": ("loan_purpose", new_data.loan_purpose),
+                    "property_type": ("property_type", new_data.property_type),
+                    "credit_score": ("credit_score", new_data.estimated_credit_score),
+                }
+
+                set_clauses = []
+                params: Dict[str, Any] = {
+                    "lead_id": int(lead_id),
+                    "org_id": new_data.organization_id,
+                    "now": now,
+                }
+                changes = []
+
+                for field_name, (col_name, value) in field_mapping.items():
+                    if value is not None:
+                        set_clauses.append(f"{col_name} = :{col_name}")
+                        params[col_name] = value
+                        changes.append(f"Updated {col_name}")
+
+                # Update ai_score only if the new score is higher (use GREATEST)
+                if new_data.lead_score:
+                    set_clauses.append("ai_score = GREATEST(COALESCE(ai_score, 0), :ai_score)")
+                    params["ai_score"] = new_data.lead_score
+
+                # Update name if we have name parts
+                if new_data.first_name or new_data.last_name:
+                    # Rebuild full name: prefer new parts, keep existing via COALESCE
+                    if new_data.first_name and new_data.last_name:
+                        set_clauses.append("name = :full_name")
+                        params["full_name"] = f"{new_data.first_name} {new_data.last_name}"
+                    elif new_data.first_name:
+                        set_clauses.append("name = :full_name")
+                        params["full_name"] = new_data.first_name
+                    elif new_data.last_name:
+                        set_clauses.append("name = :full_name")
+                        params["full_name"] = new_data.last_name
+
+                # Append call reference to notes
+                set_clauses.append(
+                    "notes = COALESCE(notes, '') || :note_append"
+                )
+                params["note_append"] = f"\n[{now.isoformat()}] Updated from call {call_id}."
+
+                # Always mark as AI-modified and update timestamp
+                set_clauses.append("last_modified_by_ai = true")
+                set_clauses.append("updated_at = :now")
+
+                if not set_clauses:
+                    result.changes_made = ["No changes needed"]
+                    return result
+
+                set_sql = ", ".join(set_clauses)
+                self.db_session.execute(
+                    text(f"""
+                        UPDATE leads
+                        SET {set_sql}
+                        WHERE id = :lead_id AND organization_id = :org_id
+                    """),
+                    params,
+                )
+                self.db_session.commit()
+
+                result.changes_made = changes if changes else ["Metadata updated"]
+                logger.info(
+                    "Updated lead %s from call %s: %s",
+                    lead_id, call_id, ", ".join(changes) if changes else "metadata only",
+                )
+            except Exception as e:
+                logger.exception("Failed to update lead %s from call %s: %s", lead_id, call_id, e)
+                self.db_session.rollback()
+                result.success = False
+                result.errors.append(f"DB update failed: {e}")
         else:
             # In-memory update for testing
             existing = self._leads.get(lead_id)
@@ -455,12 +614,40 @@ class LeadManagementService:
     async def get_lead(self, lead_id: str) -> Optional[LeadData]:
         """Get lead by ID."""
         if self.db_session:
-            # Database lookup
-            pass
+            try:
+                result = self.db_session.execute(
+                    text("""
+                        SELECT first_name, last_name, email, phone, source,
+                               stage, ai_score, loan_purpose, property_type,
+                               credit_score, owner_id, notes, organization_id
+                        FROM leads
+                        WHERE id = :lead_id
+                    """),
+                    {"lead_id": int(lead_id)},
+                )
+                row = result.fetchone()
+                if row:
+                    lead = LeadData(
+                        first_name=row[0],
+                        last_name=row[1],
+                        email=row[2],
+                        phone=row[3],
+                        source=LeadSource.INBOUND_CALL,
+                        status=LeadStatus.NEW if row[5] == "New" else LeadStatus.CONTACTED,
+                        lead_score=row[6] or 50,
+                        loan_purpose=row[7],
+                        property_type=row[8],
+                        estimated_credit_score=row[9],
+                        assigned_to=str(row[10]) if row[10] else None,
+                        organization_id=row[12],
+                        notes=row[11] or "",
+                    )
+                    return lead
+            except Exception as e:
+                logger.exception("Failed to fetch lead %s: %s", lead_id, e)
+            return None
         else:
             return self._leads.get(lead_id)
-
-        return None
 
     async def update_lead_status(
         self,
@@ -472,8 +659,52 @@ class LeadManagementService:
         result = LeadResult(success=False, lead_id=lead_id)
 
         if self.db_session:
-            # Database update
-            pass
+            try:
+                now = datetime.now(timezone.utc)
+
+                # Map LeadStatus to CRM stage values
+                status_to_stage = {
+                    LeadStatus.NEW: "New",
+                    LeadStatus.CONTACTED: "Contacted",
+                    LeadStatus.QUALIFIED: "Pre-Qualified",
+                    LeadStatus.NURTURING: "Nurture",
+                    LeadStatus.APPLICATION_STARTED: "Application",
+                    LeadStatus.CONVERTED: "Converted",
+                    LeadStatus.LOST: "Dead",
+                }
+                new_stage = status_to_stage.get(new_status, "New")
+
+                note_append = ""
+                if notes:
+                    note_append = f"\n[{now.isoformat()}] {notes}"
+
+                self.db_session.execute(
+                    text("""
+                        UPDATE leads
+                        SET stage = :stage,
+                            stage_changed_at = :now,
+                            notes = COALESCE(notes, '') || :note_append,
+                            last_modified_by_ai = true,
+                            updated_at = :now
+                        WHERE id = :lead_id
+                    """),
+                    {
+                        "stage": new_stage,
+                        "now": now,
+                        "note_append": note_append,
+                        "lead_id": int(lead_id),
+                    },
+                )
+                self.db_session.commit()
+
+                result.success = True
+                result.action = "status_updated"
+                result.changes_made = [f"Stage -> {new_stage}"]
+                logger.info("Lead %s stage updated to %s", lead_id, new_stage)
+            except Exception as e:
+                logger.exception("Failed to update lead %s status: %s", lead_id, e)
+                self.db_session.rollback()
+                result.errors.append(f"DB update failed: {e}")
         else:
             lead = self._leads.get(lead_id)
             if lead:

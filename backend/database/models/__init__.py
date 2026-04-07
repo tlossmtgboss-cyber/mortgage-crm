@@ -693,6 +693,49 @@ from .agent_context import (
 # Vendor Management (Enterprise Challenge)
 from .vendor import Vendor, VendorOrder
 
+# Agent escalation tracking
+from .agent_escalation import (
+    AgentEscalation,
+    EscalationReason,
+    EscalationPriority,
+    EscalationStatus,
+)
+
+# Content governance (approval workflows, templates, usage tracking)
+from .content_governance import (
+    ContentTemplate,
+    ContentApproval,
+    ContentUsageLog,
+)
+
+# Document notifications
+from .doc_notification import DocNotification
+
+# Income calculation & verification
+from .income_calculation import (
+    IncomeCalculation,
+    IncomeSource,
+    IncomeVerificationTask,
+)
+
+# LO availability schedules
+from .lo_availability import (
+    LOAvailability,
+    LOAvailabilitySchedule,
+)
+
+# Live call transfers
+from .live_transfer import LiveTransfer
+
+# Push notification preferences (extends DeviceToken)
+from .device_token import PushNotificationPreference
+
+# GDPR recovery opt-outs
+from .recovery_opt_out import RecoveryOptOut
+
+# GDPR data subject requests
+from .security import DataSubjectRequest
+
 # Agent Registry — formal governance of all AI agents (Enterprise Challenge)
 from .agent_registry import (
     AgentRegistryEntry,
@@ -1459,4 +1502,53 @@ __all__ = [
     "AgentRegistryEntry",
     "AgentRunLog",
     "HarnessChangeProposal",
+
+    # =====================
+    # Agent Escalation
+    # =====================
+    "AgentEscalation",
+    "EscalationReason",
+    "EscalationPriority",
+    "EscalationStatus",
+
+    # =====================
+    # Content Governance
+    # =====================
+    "ContentTemplate",
+    "ContentApproval",
+    "ContentUsageLog",
+
+    # =====================
+    # Document Notifications
+    # =====================
+    "DocNotification",
+
+    # =====================
+    # Income Calculation
+    # =====================
+    "IncomeCalculation",
+    "IncomeSource",
+    "IncomeVerificationTask",
+
+    # =====================
+    # LO Availability
+    # =====================
+    "LOAvailability",
+    "LOAvailabilitySchedule",
+
+    # =====================
+    # Live Transfers
+    # =====================
+    "LiveTransfer",
+
+    # =====================
+    # Push Notification Preferences
+    # =====================
+    "PushNotificationPreference",
+
+    # =====================
+    # GDPR
+    # =====================
+    "RecoveryOptOut",
+    "DataSubjectRequest",
 ]

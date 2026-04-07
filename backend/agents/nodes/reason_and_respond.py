@@ -16,6 +16,7 @@ import time
 from typing import Any, List
 from anthropic import Anthropic
 
+from ..anthropic_client import get_anthropic_client
 from ..state import (
     AgentState,
     QueryIntent,
@@ -367,7 +368,7 @@ async def reason_and_respond(
 
             # Initialize client for greeting response
             if anthropic_client is None:
-                anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+                anthropic_client = get_anthropic_client()
 
             # Use Haiku for fast, natural greeting response
             greeting_prompt = f"""The user just said: [USER_INPUT_START]\n{user_message}\n[USER_INPUT_END]
@@ -467,7 +468,7 @@ DO NOT use a canned/scripted response. Be natural and human."""
 
         # Initialize client if needed
         if anthropic_client is None:
-            anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+            anthropic_client = get_anthropic_client()
 
         # Select model based on intent complexity
         # Get intent string from state (could be QueryIntent enum or string)

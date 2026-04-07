@@ -29,6 +29,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from ..recording_consent import requires_two_party_consent
+
 logger = logging.getLogger(__name__)
 
 
@@ -128,20 +130,29 @@ class ComplianceMonitorCallAgent:
         result = await agent.process(transcript_chunk, call_context)
     """
 
-    def __init__(self, db: Session = None):
+    def __init__(self, db: Session = None, lead_state: Optional[str] = None):
         self.db = db
         self._call_id: Optional[str] = None
         self._violations: List[ComplianceViolation] = []
         self._rate_quoted: bool = False
         self._apr_disclosed: bool = False
 
+        # State-aware recording consent detection
+        self._lead_state = lead_state.upper().strip() if lead_state else None
+        self._two_party_required = requires_two_party_consent(self._lead_state)
+
         # Initialise the disclosure checklist
         self._checklist: Dict[str, DisclosureItem] = {
             "recording_consent": DisclosureItem(
                 name="Recording Consent",
-                description="Borrower informed that call is being recorded",
-                required=True,
-                weight=25,
+                description=(
+                    f"Borrower informed that call is being recorded"
+                    f" (two-party state: {self._lead_state})"
+                    if self._two_party_required and self._lead_state
+                    else "Borrower informed that call is being recorded"
+                ),
+                required=self._two_party_required,
+                weight=30 if self._two_party_required else 10,
             ),
             "nmls_disclosure": DisclosureItem(
                 name="NMLS Disclosure",
@@ -258,6 +269,39 @@ class ComplianceMonitorCallAgent:
                     new_violations.append(violation)
                     self._violations.append(violation)
 
+            # Check for missing recording consent in two-party state
+            # Flag after 2 minutes (120s) — enough time for LO to announce
+            if (
+                self._two_party_required
+                and not self._checklist["recording_consent"].detected
+                and elapsed > 120
+            ):
+                if not any(
+                    v.violation_type == "missing_recording_consent"
+                    for v in self._violations
+                ):
+                    state_label = self._lead_state or "unknown"
+                    violation = ComplianceViolation(
+                        violation_type="missing_recording_consent",
+                        description=(
+                            f"Recording consent not announced within first 2 minutes "
+                            f"in two-party consent state ({state_label}). "
+                            f"This recording may not be legally usable."
+                        ),
+                        severity="critical",
+                        transcript_excerpt=(
+                            "(No recording disclosure detected in first 120 seconds)"
+                        ),
+                        timestamp=elapsed,
+                    )
+                    new_violations.append(violation)
+                    self._violations.append(violation)
+                    logger.warning(
+                        "Missing recording consent in two-party state %s "
+                        "at %.1fs in call %s",
+                        state_label, elapsed, self._call_id,
+                    )
+
             return self._build_response(new_violations=new_violations)
 
         except Exception as e:
@@ -370,6 +414,8 @@ class ComplianceMonitorCallAgent:
             "agent": "compliance_monitor",
             "call_id": self._call_id,
             "compliance_score": self._calculate_score(),
+            "lead_state": self._lead_state,
+            "two_party_consent_required": self._two_party_required,
             "checklist": {
                 key: {
                     "name": item.name,

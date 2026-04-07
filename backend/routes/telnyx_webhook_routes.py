@@ -21,8 +21,16 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import text as sa_text
 
-from database import get_db
+from database import get_db, SessionLocal
 from middleware.webhook_verification import require_telnyx_webhook
+
+# Call Intelligence Integration (optional — degrades gracefully if unavailable)
+try:
+    from services.call_intelligence.integration import CallIntelligenceIntegration
+    CALL_INTELLIGENCE_ENABLED = True
+except ImportError:
+    CALL_INTELLIGENCE_ENABLED = False
+    CallIntelligenceIntegration = None
 from telephony.providers.telnyx.webhooks import (
     parse_telnyx_webhook,
     TelnyxCallEvent,
@@ -76,16 +84,40 @@ async def handle_telnyx_webhook(
         logger.error(f"Failed to parse Telnyx webhook: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
-    # Webhook idempotency - skip if already processed
+    # Webhook idempotency — use WebhookIdempotencyRecord (database-backed)
+    # instead of Activity.content.contains() which was unreliable and slow
     webhook_event_id = payload.get("data", {}).get("id", "")
+    event_type_raw = payload.get("data", {}).get("event_type", "")
     if webhook_event_id:
-        from database.models.communication import Activity
-        existing = db.query(Activity).filter(
-            Activity.content.contains(webhook_event_id)
+        from database.models.webhook_idempotency import WebhookIdempotencyRecord
+        from middleware.webhook_idempotency import _build_idempotency_key, mark_processed, mark_failed
+
+        idem_key = _build_idempotency_key("telnyx", event_type_raw, webhook_event_id, raw_body)
+        existing = db.query(WebhookIdempotencyRecord).filter(
+            WebhookIdempotencyRecord.idempotency_key == idem_key,
+            WebhookIdempotencyRecord.status == "processed",
         ).first()
         if existing:
             logger.info(f"Duplicate webhook {webhook_event_id}, skipping")
             return {"status": "duplicate", "event_id": webhook_event_id}
+
+        # Insert a 'processing' record (race-condition safe via unique constraint)
+        try:
+            db.add(WebhookIdempotencyRecord(
+                idempotency_key=idem_key,
+                provider="telnyx",
+                event_type=event_type_raw,
+                event_id=webhook_event_id,
+                status="processing",
+            ))
+            db.flush()
+        except Exception:
+            # IntegrityError = another worker already inserted — treat as duplicate
+            db.rollback()
+            logger.info(f"Duplicate webhook (race) {webhook_event_id}, skipping")
+            return {"status": "duplicate", "event_id": webhook_event_id}
+    else:
+        idem_key = None
 
     # Parse into typed event
     event = parse_telnyx_webhook(payload)
@@ -99,27 +131,52 @@ async def handle_telnyx_webhook(
     # is available early in the pipeline without extra DB queries.
 
     # Route to appropriate handler
-    if event_type == TelnyxEventType.CALL_MACHINE_DETECTION_ENDED:
-        return await handle_amd_event(event, db)
+    try:
+        if event_type == TelnyxEventType.CALL_MACHINE_DETECTION_ENDED:
+            result = await handle_amd_event(event, db)
 
-    elif event_type == TelnyxEventType.CALL_ANSWERED:
-        return await handle_call_answered(event, db)
+        elif event_type == TelnyxEventType.CALL_ANSWERED:
+            result = await handle_call_answered(event, db)
 
-    elif event_type == TelnyxEventType.CALL_HANGUP:
-        return await handle_call_hangup(event, db)
+        elif event_type == TelnyxEventType.CALL_HANGUP:
+            result = await handle_call_hangup(event, db)
 
-    elif event_type in [TelnyxEventType.MESSAGE_SENT, TelnyxEventType.MESSAGE_FINALIZED]:
-        return await handle_sms_status(event, db)
+        elif event_type in [TelnyxEventType.MESSAGE_SENT, TelnyxEventType.MESSAGE_FINALIZED]:
+            result = await handle_sms_status(event, db)
 
-    elif event_type == TelnyxEventType.MESSAGE_RECEIVED:
-        return await handle_inbound_sms(event, db)
+        elif event_type == TelnyxEventType.MESSAGE_RECEIVED:
+            result = await handle_inbound_sms(event, db)
 
-    elif event_type == TelnyxEventType.CALL_RECORDING_SAVED:
-        return await handle_recording_saved(event, db)
+        elif event_type == TelnyxEventType.CALL_RECORDING_SAVED:
+            result = await handle_recording_saved(event, db)
 
-    else:
-        logger.info(f"Unhandled Telnyx event type: {event_type}")
-        return {"status": "acknowledged", "event_type": event_type}
+        else:
+            logger.info(f"Unhandled Telnyx event type: {event_type}")
+            result = {"status": "acknowledged", "event_type": event_type}
+
+        # Mark as successfully processed
+        if idem_key:
+            try:
+                mark_processed(db, idem_key, response_code=200)
+            except Exception as e:
+                logger.warning(f"Failed to mark webhook as processed: {e}")
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Telnyx webhook processing error: {e}", exc_info=True)
+        # Mark idempotency record as failed so retries can reprocess
+        if idem_key:
+            try:
+                mark_failed(db, idem_key, response_code=200)
+            except Exception:
+                pass
+        # Return 200 to prevent provider retries — log error for investigation
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=200,
+            content={"status": "error", "message": "Processing failed, queued for retry"},
+        )
 
 
 # =============================================================================
@@ -749,7 +806,11 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
 # =============================================================================
 
 async def handle_recording_saved(event: TelnyxCallEvent, db: Session):
-    """Handle call recording saved event"""
+    """Handle call recording saved event.
+
+    Stores the recording URL, then kicks off a background task to transcribe
+    the audio and feed the transcript into the Call Intelligence pipeline.
+    """
     call_control_id = event.call_control_id
     recording_url = event.payload.get("recording_urls", {}).get("mp3")
 
@@ -764,7 +825,210 @@ async def handle_recording_saved(event: TelnyxCallEvent, db: Session):
         """), {"url": recording_url, "call_id": call_control_id})
         db.commit()
 
+        # Kick off background transcription + CI processing
+        if CALL_INTELLIGENCE_ENABLED:
+            asyncio.create_task(
+                _transcribe_and_process_recording(call_control_id, recording_url)
+            )
+        else:
+            logger.debug("Call Intelligence not enabled, skipping recording processing")
+
     return {"status": "acknowledged", "recording_url": recording_url}
+
+
+async def _transcribe_and_process_recording(
+    call_control_id: str,
+    recording_url: str,
+) -> None:
+    """Background task: transcribe a Telnyx call recording and run CI.
+
+    Creates its own DB session so the webhook handler can return 200
+    immediately. All errors are caught and logged — never propagated.
+    """
+    db: Optional[Session] = None
+    try:
+        # -----------------------------------------------------------------
+        # 1. Transcribe the recording
+        # -----------------------------------------------------------------
+        from services.media.transcription_service import (
+            get_transcription_service,
+            TranscriptionService,
+        )
+
+        svc = get_transcription_service()
+        if svc is None:
+            logger.warning(
+                "No transcription service available (set DEEPGRAM_API_KEY or "
+                "OPENAI_API_KEY) — skipping CI for recording %s",
+                call_control_id,
+            )
+            return
+
+        # Deepgram's TranscriptionService can transcribe directly from URL.
+        # WhisperTranscriptionService requires a local file, so we download first.
+        if isinstance(svc, TranscriptionService):
+            transcript_result = svc.transcribe_url(recording_url)
+        else:
+            # Whisper fallback — download MP3 to a temp file
+            import tempfile
+            import httpx
+
+            async with httpx.AsyncClient(timeout=120) as client:
+                resp = await client.get(recording_url)
+                resp.raise_for_status()
+                audio_bytes = resp.content
+
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+                tmp.write(audio_bytes)
+                tmp_path = tmp.name
+
+            try:
+                transcript_result = svc.transcribe_file(tmp_path)
+            finally:
+                import os as _os
+                try:
+                    _os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+        full_text = transcript_result.get("full_text", "").strip()
+        if not full_text:
+            logger.info(
+                "Transcription returned empty text for %s — skipping CI",
+                call_control_id,
+            )
+            return
+
+        logger.info(
+            "Transcribed recording %s: %d chars, %d words",
+            call_control_id,
+            len(full_text),
+            transcript_result.get("word_count", 0),
+        )
+
+        # -----------------------------------------------------------------
+        # 2. Resolve organization_id (and optional loan_id) from call record
+        # -----------------------------------------------------------------
+        db = SessionLocal()
+
+        org_id: Optional[int] = None
+        loan_id: Optional[int] = None
+
+        # Try amd_outbound_calls first (AMD / voicemail-drop calls)
+        row = db.execute(sa_text("""
+            SELECT organization_id, user_id, to_number
+            FROM amd_outbound_calls
+            WHERE call_sid = :call_id
+            LIMIT 1
+        """), {"call_id": call_control_id}).fetchone()
+
+        user_id = None
+        to_number = None
+        if row:
+            org_id = row[0]
+            user_id = row[1]
+            to_number = row[2]
+
+        # Fallback: try call_attempts -> call_targets for dialer calls
+        if not org_id:
+            target_row = db.execute(sa_text("""
+                SELECT ct.lead_id, ct.phone_number
+                FROM call_attempts ca
+                JOIN call_targets ct ON ct.id = ca.call_target_id
+                WHERE ca.provider_call_id = :call_id
+                LIMIT 1
+            """), {"call_id": call_control_id}).fetchone()
+
+            if target_row:
+                lead_id_val = target_row[0]
+                to_number = target_row[1]
+                if lead_id_val:
+                    # Resolve org from lead
+                    org_row = db.execute(sa_text("""
+                        SELECT organization_id FROM leads
+                        WHERE id = :lead_id
+                    """), {"lead_id": lead_id_val}).fetchone()
+                    if org_row:
+                        org_id = org_row[0]
+
+        # Fallback: resolve org from user_id
+        if not org_id and user_id:
+            user_row = db.execute(sa_text("""
+                SELECT organization_id FROM users WHERE id = :uid
+            """), {"uid": user_id}).fetchone()
+            if user_row:
+                org_id = user_row[0]
+
+        # Fallback: resolve org from to_number via leads
+        if not org_id and to_number:
+            lead_row = db.execute(sa_text("""
+                SELECT id, organization_id FROM leads
+                WHERE phone = :phone AND organization_id IS NOT NULL
+                ORDER BY updated_at DESC NULLS LAST
+                LIMIT 1
+            """), {"phone": to_number}).fetchone()
+            if lead_row:
+                loan_id_lookup = db.execute(sa_text("""
+                    SELECT id FROM loans
+                    WHERE lead_id = :lead_id
+                    ORDER BY updated_at DESC NULLS LAST
+                    LIMIT 1
+                """), {"lead_id": lead_row[0]}).fetchone()
+                org_id = lead_row[1]
+                if loan_id_lookup:
+                    loan_id = loan_id_lookup[0]
+
+        if not org_id:
+            logger.warning(
+                "Could not resolve organization_id for recording %s — skipping CI",
+                call_control_id,
+            )
+            return
+
+        # -----------------------------------------------------------------
+        # 3. Feed transcript into Call Intelligence
+        # -----------------------------------------------------------------
+        integration = CallIntelligenceIntegration(db)
+        ci_result = await integration.process_completed_call(
+            call_id=f"telnyx-{call_control_id}",
+            loan_id=loan_id,
+            organization_id=org_id,
+            transcript=full_text,
+            call_type="follow_up",
+            call_metadata={
+                "source": "telnyx_recording",
+                "recording_url": recording_url,
+                "word_count": transcript_result.get("word_count", 0),
+                "confidence": transcript_result.get("confidence", 0.0),
+            },
+        )
+
+        if ci_result.get("success"):
+            logger.info(
+                "CI processed Telnyx recording %s: %d extractions, %d tasks",
+                call_control_id,
+                ci_result.get("extractions_count", 0),
+                ci_result.get("tasks_created", 0),
+            )
+        else:
+            logger.warning(
+                "CI processing failed for Telnyx recording %s: %s",
+                call_control_id,
+                ci_result.get("error", ci_result.get("errors", "unknown")),
+            )
+
+    except Exception as e:
+        logger.exception(
+            "Background transcription/CI failed for recording %s: %s",
+            call_control_id,
+            e,
+        )
+    finally:
+        if db is not None:
+            try:
+                db.close()
+            except Exception:
+                pass
 
 
 # =============================================================================

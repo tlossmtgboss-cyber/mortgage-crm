@@ -9,7 +9,10 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime, timezone
+from utils.response import success_response, error_response, ErrorCodes
+import asyncio
 import logging
+import os
 import time
 
 logger = logging.getLogger(__name__)
@@ -708,12 +711,18 @@ def register_health_routes(app, get_db, **kwargs):
         """Basic health check - database connectivity"""
         try:
             db.execute(text("SELECT 1"))
-            return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "2026.04.06.1"}
+            return success_response(data={
+                "status": "healthy",
+                "database": "connected",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "version": "2026.04.06.1",
+            })
         except Exception as e:
             logger.error(f"Health check failed: {type(e).__name__}: {e}")
-            return JSONResponse(
+            return error_response(
+                code=ErrorCodes.SERVICE_UNAVAILABLE,
+                message=f"Health check failed: {type(e).__name__}: {str(e)[:200]}",
                 status_code=503,
-                content={"status": "unhealthy", "error": f"{type(e).__name__}: {str(e)[:200]}"}
             )
 
 
@@ -787,12 +796,122 @@ def register_health_routes(app, get_db, **kwargs):
         """API health check endpoint at /api/v1/health - database connectivity"""
         try:
             db.execute(text("SELECT 1"))
-            return {"status": "healthy", "database": "connected", "timestamp": datetime.now(timezone.utc).isoformat(), "version": "2026.04.06.1"}
+            return success_response(data={
+                "status": "healthy",
+                "database": "connected",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "version": "2026.04.06.1",
+            })
         except Exception as e:
             logger.error(f"API health check failed: {type(e).__name__}: {e}")
-            return JSONResponse(
+            return error_response(
+                code=ErrorCodes.SERVICE_UNAVAILABLE,
+                message=f"Health check failed: {type(e).__name__}: {str(e)[:200]}",
                 status_code=503,
-                content={"status": "unhealthy", "error": f"{type(e).__name__}: {str(e)[:200]}"}
+            )
+
+    # ========================================================================
+    # Detailed health check at /api/v1/health/detailed (unauthenticated)
+    # For load balancers, monitoring dashboards, and uptime checks.
+    # ========================================================================
+
+    @app.get("/api/v1/health/detailed")
+    async def api_health_detailed(db: Session = Depends(get_db)):
+        """
+        Comprehensive health check for load balancers and monitoring.
+
+        No authentication required. Checks:
+        - Database connectivity (SELECT 1 with 3s timeout)
+        - Redis connectivity (PING)
+        - Connection pool stats
+        - External service API key configuration (no live calls)
+
+        Returns 200 if all critical services (database) are healthy,
+        503 if any critical service is down.
+        """
+        checks = {}
+        overall = True
+
+        # --- Database connectivity (with 3-second timeout) ---
+        try:
+            loop = asyncio.get_event_loop()
+
+            def _db_ping():
+                start = time.monotonic()
+                try:
+                    db.execute(text("SELECT 1"))
+                    latency_ms = round((time.monotonic() - start) * 1000, 1)
+                    return {"status": "healthy", "latency_ms": latency_ms}
+                except Exception as e:
+                    latency_ms = round((time.monotonic() - start) * 1000, 1)
+                    return {"status": "unhealthy", "latency_ms": latency_ms, "error": str(e)}
+
+            db_result = await asyncio.wait_for(
+                loop.run_in_executor(None, _db_ping),
+                timeout=3.0,
+            )
+            checks["database"] = db_result
+            if db_result["status"] != "healthy":
+                overall = False
+        except asyncio.TimeoutError:
+            checks["database"] = {"status": "unhealthy", "error": "timeout (>3s)"}
+            overall = False
+        except Exception as e:
+            checks["database"] = {"status": "unhealthy", "error": str(e)}
+            overall = False
+
+        # --- Connection pool stats ---
+        try:
+            from db import get_pool_status
+            checks["connection_pool"] = get_pool_status()
+        except Exception as e:
+            checks["connection_pool"] = {"status": "unknown", "error": str(e)}
+
+        # --- Redis (via centralized redis_service) ---
+        try:
+            from services.redis_service import check_redis_health
+            redis_health = check_redis_health()
+            redis_status = redis_health.get("status", "unknown")
+            checks["redis"] = redis_health
+            if redis_status == "unhealthy":
+                overall = False
+        except Exception as e:
+            checks["redis"] = {"status": "unknown", "error": str(e)}
+
+        # --- External services (config check only -- no live API calls) ---
+        for name, env_var in [
+            ("anthropic", "ANTHROPIC_API_KEY"),
+            ("telnyx", "TELNYX_API_KEY"),
+            ("vapi", "VAPI_API_KEY"),
+            ("apns", "APNS_KEY_ID"),
+            ("stripe", "STRIPE_SECRET_KEY"),
+        ]:
+            checks[name] = {
+                "status": "configured" if os.getenv(env_var) else "not_configured"
+            }
+
+        # --- Build response ---
+        uptime_seconds = round(time.monotonic() - _APP_START_TIME, 1)
+        if overall:
+            return success_response(data={
+                "status": "healthy",
+                "checks": checks,
+                "uptime_seconds": uptime_seconds,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "version": "2026.04.06.1",
+            })
+        else:
+            return error_response(
+                code=ErrorCodes.SERVICE_UNAVAILABLE,
+                message="One or more services are degraded",
+                status_code=503,
+                details={
+                    "status": "degraded",
+                    "checks": checks,
+                    "uptime_seconds": uptime_seconds,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "version": "2026.04.06.1",
+                },
             )
 
     # ========================================================================

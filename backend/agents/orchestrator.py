@@ -19,6 +19,8 @@ from datetime import datetime, timezone
 from langgraph.graph import StateGraph, END
 from anthropic import Anthropic
 
+from .anthropic_client import get_anthropic_client
+
 from .state import (
     AgentState,
     QueryIntent,
@@ -262,7 +264,7 @@ def create_orchestrator(
     """
 
     if anthropic_client is None:
-        anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        anthropic_client = get_anthropic_client()
 
     if tool_functions is None:
         tool_functions = {}

@@ -91,12 +91,8 @@ def register_los_webhook_routes(app, get_db, **kwargs):
             True if signature is valid
         """
         if not WEBHOOK_SECRET:
-            if ENVIRONMENT in ("production", "prod"):
-                logger.error("ENCOMPASS_WEBHOOK_SECRET not configured in production")
-                return False
-            # Allow unsigned webhooks in development
-            logger.warning("No webhook secret configured; skipping signature verification")
-            return True
+            logger.error("ENCOMPASS_WEBHOOK_SECRET not configured - rejecting webhook (fail-closed)")
+            return False
 
         expected = hmac.new(
             WEBHOOK_SECRET.encode("utf-8"),

@@ -12,6 +12,7 @@ Endpoints:
 from fastapi import Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import Optional
+from utils.response import success_response, error_response, ErrorCodes
 import logging
 
 logger = logging.getLogger(__name__)
@@ -66,10 +67,14 @@ def register_agent_metrics_routes(app, get_db, get_current_user, **kwargs):
                 org_id=organization_id,
                 days=days,
             )
-            return {"status": "success", "data": summary}
+            return success_response(data=summary)
         except Exception as e:
             logger.exception(f"Failed to retrieve agent metrics summary: {e}")
-            raise HTTPException(status_code=500, detail="Failed to retrieve agent metrics")
+            return error_response(
+                code=ErrorCodes.INTERNAL_ERROR,
+                message="Failed to retrieve agent metrics",
+                status_code=500,
+            )
 
     # -----------------------------------------------------------------------
     # GET /api/admin/agent-metrics/tools — Per-tool breakdown
@@ -97,10 +102,14 @@ def register_agent_metrics_routes(app, get_db, get_current_user, **kwargs):
                 org_id=organization_id,
                 days=days,
             )
-            return {"status": "success", "data": {"threshold_ms": threshold_ms, "slow_tools": slow_tools}}
+            return success_response(data={"threshold_ms": threshold_ms, "slow_tools": slow_tools})
         except Exception as e:
             logger.exception(f"Failed to retrieve slow tools: {e}")
-            raise HTTPException(status_code=500, detail="Failed to retrieve tool metrics")
+            return error_response(
+                code=ErrorCodes.INTERNAL_ERROR,
+                message="Failed to retrieve tool metrics",
+                status_code=500,
+            )
 
     # -----------------------------------------------------------------------
     # GET /api/admin/agent-metrics/errors — Error analysis
@@ -128,7 +137,11 @@ def register_agent_metrics_routes(app, get_db, get_current_user, **kwargs):
                 org_id=organization_id,
                 limit=limit,
             )
-            return {"status": "success", "data": {"period_days": days, "error_patterns": patterns}}
+            return success_response(data={"period_days": days, "error_patterns": patterns})
         except Exception as e:
             logger.exception(f"Failed to retrieve error patterns: {e}")
-            raise HTTPException(status_code=500, detail="Failed to retrieve error patterns")
+            return error_response(
+                code=ErrorCodes.INTERNAL_ERROR,
+                message="Failed to retrieve error patterns",
+                status_code=500,
+            )

@@ -9,7 +9,7 @@ Handles webhook receivers for:
 - WebSocket broadcast triggers
 """
 
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header, Request
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any, List
 from datetime import datetime, date, timezone
@@ -113,16 +113,20 @@ def verify_webhook_signature(
 
 
 async def get_verified_payload(
+    request: Request,
     x_webhook_signature: Optional[str] = Header(None, alias="X-Webhook-Signature"),
 ) -> bool:
     """Dependency to verify webhook signatures in production."""
-    # Skip verification in development
+    # Skip verification in development only
     if os.getenv("ENVIRONMENT", "development") == "development":
         return True
 
     if not x_webhook_signature:
         raise HTTPException(status_code=401, detail="Missing webhook signature")
 
+    body = await request.body()
+    if not verify_webhook_signature(body, x_webhook_signature):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
     return True
 
 

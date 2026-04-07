@@ -99,6 +99,14 @@ from .webhooks import (
     create_webhook_handler,
 )
 from .review_service import HumanReviewService
+from .recording_consent import (
+    requires_two_party_consent,
+    get_recording_disclosure,
+    check_call_compliance,
+    detect_disclosure_in_transcript,
+    assess_recording_compliance,
+    TWO_PARTY_STATES,
+)
 
 __all__ = [
     # Processor
@@ -165,4 +173,11 @@ __all__ = [
     "create_webhook_handler",
     # Review service
     "HumanReviewService",
+    # Recording consent
+    "requires_two_party_consent",
+    "get_recording_disclosure",
+    "check_call_compliance",
+    "detect_disclosure_in_transcript",
+    "assess_recording_compliance",
+    "TWO_PARTY_STATES",
 ]

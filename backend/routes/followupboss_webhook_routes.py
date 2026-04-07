@@ -68,17 +68,14 @@ async def handle_fub_webhook(
     # Get raw body for signature validation
     body = await request.body()
 
-    # Validate webhook signature
+    # Validate webhook signature — secret is required
     signature = request.headers.get("X-FUB-Signature", "")
-    if connection.webhook_secret:
-        if not validate_webhook_signature(body, signature, connection.webhook_secret):
-            logger.warning(f"FUB webhook signature validation failed for user {user_id}")
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
-    else:
-        # No webhook secret configured - allow but log warning
-        # FUB does not support custom signing secrets via their webhook UI,
-        # so we accept unsigned webhooks but verify the connection exists and is active
-        logger.info(f"FUB webhook received without signature verification for user {user_id} (no secret configured)")
+    if not connection.webhook_secret:
+        logger.error(f"FUB webhook secret not configured for user {user_id}")
+        raise HTTPException(status_code=503, detail="Webhook secret not configured")
+    if not validate_webhook_signature(body, signature, connection.webhook_secret):
+        logger.warning(f"FUB webhook signature validation failed for user {user_id}")
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     # Parse payload
     try:

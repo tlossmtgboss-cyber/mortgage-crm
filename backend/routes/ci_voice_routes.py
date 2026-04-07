@@ -36,7 +36,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/ci-voice", tags=["Conversation Intelligence - Voice"])
+router = APIRouter(prefix="/api/v1/conversation-intelligence", tags=["Conversation Intelligence - Voice"])
 
 
 # =============================================================================
@@ -678,7 +678,7 @@ async def upload_audio(
 
         # In production, upload to S3/GCS and get URL
         # For now, store locally or use placeholder
-        audio_url = f"/api/v1/ci-voice/recordings/{recording_id}/audio"
+        audio_url = f"/api/v1/conversation-intelligence/recordings/{recording_id}/audio"
 
         # Update recording
         db.execute(text("""
@@ -1451,7 +1451,7 @@ async def create_realtime_session(
         db.commit()
 
         # Generate WebSocket URL
-        ws_url = f"/api/v1/ci-voice/realtime/sessions/{session_id}/ws"
+        ws_url = f"/api/v1/conversation-intelligence/realtime/sessions/{session_id}/ws"
 
         return RealTimeSessionResponse(
             session_id=session_id,

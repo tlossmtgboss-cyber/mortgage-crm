@@ -21,6 +21,7 @@ from sqlalchemy.orm import relationship
 
 # Import Base from the db module (renamed from database.py)
 from db import Base
+from encryption_utils import EncryptedString
 
 
 # ============================================================================
@@ -101,10 +102,10 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    email = Column(String, unique=True, index=True, nullable=False)
+    email = Column(String, unique=True, index=True, nullable=False)  # NOTE: Not encrypted — unique+indexed for auth lookups. Consider adding email_hash column.
     hashed_password = Column(String, nullable=False)
-    first_name = Column(String)
-    last_name = Column(String)
+    first_name = Column(EncryptedString)  # PII: name
+    last_name = Column(EncryptedString)  # PII: name
     role = Column(String, default="loan_officer")  # Legacy role field
 
     @property
@@ -133,9 +134,9 @@ class User(Base):
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Onboarding fields
-    phone = Column(String)
-    nmls_number = Column(String, index=True)
-    business_address = Column(String)
+    phone = Column(EncryptedString)  # PII: phone number
+    nmls_number = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups. Public registry number.
+    business_address = Column(EncryptedString)  # PII: physical address
     current_role = Column(String)
     business_hours = Column(JSON)
     email_verified_at = Column(DateTime)
@@ -164,7 +165,7 @@ class User(Base):
     last_failed_login_at = Column(DateTime, nullable=True)
 
     # MFA (enterprise security - Check 4.6)
-    mfa_secret = Column(String, nullable=True)  # TOTP secret (encrypted in production)
+    mfa_secret = Column(EncryptedString, nullable=True)  # PII/security: TOTP secret (encrypted at-rest)
     mfa_enabled = Column(Boolean, default=False)
     mfa_backup_codes = Column(JSON, nullable=True)  # Hashed backup codes
     mfa_enabled_at = Column(DateTime, nullable=True)
@@ -265,11 +266,11 @@ class EmailSignature(Base):
     company_logo_url = Column(Text, nullable=True)
 
     # Contact info
-    email = Column(String, nullable=True)
-    office_phone = Column(String, nullable=True)
-    cell_phone = Column(String, nullable=True)
-    fax = Column(String, nullable=True)
-    address = Column(Text, nullable=True)
+    email = Column(EncryptedString, nullable=True)  # PII: email address
+    office_phone = Column(EncryptedString, nullable=True)  # PII: phone number
+    cell_phone = Column(EncryptedString, nullable=True)  # PII: phone number
+    fax = Column(EncryptedString, nullable=True)  # PII: phone/fax number
+    address = Column(EncryptedString, nullable=True)  # PII: physical address
 
     # Links
     website_url = Column(String, nullable=True)

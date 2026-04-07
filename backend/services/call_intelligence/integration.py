@@ -375,6 +375,13 @@ class CallIntelligenceIntegration:
                 metadata=metadata,
             )
 
+            # Step 5: Log to CRM activity feeds (profile page AI Activity + Conversation Log)
+            try:
+                self._log_to_ai_activity_feed(call_id, loan_id, organization_id, ci_response, audit_response, metadata)
+                self._log_to_conversation_log(call_id, loan_id, None, organization_id, ci_response, metadata)
+            except Exception as e:
+                logger.warning(f"Failed to log CI results to activity feeds for call {call_id}: {e}")
+
             return {
                 "success": True,
                 "call_id": call_id,
@@ -579,6 +586,152 @@ class CallIntelligenceIntegration:
             # Already logged by db_transaction context manager
             logger.warning(f"Failed to save call results for {call_id} - results not persisted")
             return False
+
+    # =========================================================================
+    # CRM Activity Feed Integration
+    # =========================================================================
+
+    def _log_to_ai_activity_feed(
+        self,
+        call_id: str,
+        loan_id: Optional[int],
+        organization_id: int,
+        ci_response: "CallIntelligenceResponse",
+        audit_response: Optional[Any] = None,
+        metadata: Optional[Dict] = None,
+    ) -> None:
+        """Write a summary entry to ai_activity_log so it appears on the loan profile AI Activity tab."""
+        if not self.db or not loan_id:
+            return
+        try:
+            extractions = ci_response.total_extractions
+            high_conf = ci_response.high_confidence_count
+            app_status = audit_response.overall_status.value if audit_response else "pending"
+            app_completion = round(audit_response.overall_completion * 100, 1) if audit_response else 0
+            tasks_created = len(audit_response.all_tasks) if audit_response and audit_response.all_tasks else 0
+
+            outcome = "success" if extractions > 0 else "info"
+            if audit_response and app_status in ("incomplete", "needs_review"):
+                outcome = "warning"
+
+            summary_parts = [f"Extracted {extractions} data points ({high_conf} high-confidence) from call transcript."]
+            if audit_response:
+                summary_parts.append(f"Application {app_completion}% complete.")
+            if tasks_created:
+                summary_parts.append(f"{tasks_created} follow-up tasks created.")
+
+            detail_sections = []
+            # Add extraction breakdown
+            for domain in ["identity", "property", "employment", "financial", "compliance", "intent"]:
+                domain_data = getattr(ci_response, f"{domain}_extractions", None)
+                if domain_data:
+                    items = [f"**{k}**: {v}" for k, v in domain_data.items() if v] if isinstance(domain_data, dict) else []
+                    if items:
+                        detail_sections.append({"label": domain.title(), "content": "\n".join(items)})
+
+            stats = [
+                {"value": str(extractions), "label": "Extractions"},
+                {"value": str(high_conf), "label": "High Confidence"},
+                {"value": f"{app_completion}%", "label": "App Complete"},
+            ]
+            if tasks_created:
+                stats.append({"value": str(tasks_created), "label": "Tasks Created"})
+
+            self.db.execute(
+                text("""
+                    INSERT INTO ai_activity_log
+                    (organization_id, loan_id, agent_type, agent_label, action_title,
+                     summary, outcome, outcome_label, metadata, detail_sections, stats, created_at)
+                    VALUES
+                    (:org_id, :loan_id, 'call-intel', 'Call Intelligence',
+                     :action_title, :summary, :outcome, :outcome_label,
+                     :metadata, :detail_sections, :stats, :created_at)
+                """),
+                {
+                    "org_id": organization_id,
+                    "loan_id": loan_id,
+                    "action_title": f"Processed call transcript — {extractions} extractions",
+                    "summary": " ".join(summary_parts),
+                    "outcome": outcome,
+                    "outcome_label": "Extraction Complete" if outcome == "success" else "Review Needed",
+                    "metadata": json.dumps({"call_id": call_id, "processing_time_ms": ci_response.processing_time_ms}),
+                    "detail_sections": json.dumps(detail_sections) if detail_sections else None,
+                    "stats": json.dumps(stats),
+                    "created_at": datetime.now(timezone.utc),
+                },
+            )
+            self.db.commit()
+            logger.info(f"AI activity logged for loan {loan_id}, call {call_id}")
+        except Exception as e:
+            logger.warning(f"Failed to log AI activity for call {call_id}: {e}")
+
+    def _log_to_conversation_log(
+        self,
+        call_id: str,
+        loan_id: Optional[int],
+        lead_id: Optional[int],
+        organization_id: int,
+        ci_response: "CallIntelligenceResponse",
+        metadata: Optional[Dict] = None,
+    ) -> None:
+        """Write a CALL activity to the activities table so it appears in the Conversation Log on the profile page."""
+        if not self.db:
+            return
+        if not lead_id and not loan_id:
+            return
+        try:
+            extractions = ci_response.total_extractions
+            high_conf = ci_response.high_confidence_count
+            call_duration = metadata.get("duration") if metadata else None
+
+            content_parts = [f"AI Call Intelligence processed {extractions} data points ({high_conf} high-confidence)."]
+            # Add key extractions to the activity content
+            identity = ci_response.identity_extractions if hasattr(ci_response, "identity_extractions") else {}
+            if isinstance(identity, dict):
+                name_parts = [identity.get("first_name", ""), identity.get("last_name", "")]
+                name = " ".join(p for p in name_parts if p)
+                if name:
+                    content_parts.append(f"Caller: {name}")
+            intent = ci_response.intent_extractions if hasattr(ci_response, "intent_extractions") else {}
+            if isinstance(intent, dict) and intent.get("loan_purpose"):
+                content_parts.append(f"Intent: {intent['loan_purpose']}")
+
+            # Resolve lead_id from loan if needed
+            if not lead_id and loan_id:
+                try:
+                    result = self.db.execute(
+                        text("SELECT lead_id FROM loans WHERE id = :loan_id"),
+                        {"loan_id": loan_id},
+                    ).fetchone()
+                    if result:
+                        lead_id = result[0]
+                except Exception:
+                    pass
+
+            self.db.execute(
+                text("""
+                    INSERT INTO activities
+                    (organization_id, type, content, lead_id, loan_id, duration, sentiment,
+                     user_metadata, created_at)
+                    VALUES
+                    (:org_id, 'Call', :content, :lead_id, :loan_id, :duration, :sentiment,
+                     :user_metadata, :created_at)
+                """),
+                {
+                    "org_id": organization_id,
+                    "content": " ".join(content_parts),
+                    "lead_id": lead_id,
+                    "loan_id": loan_id,
+                    "duration": str(call_duration) if call_duration else None,
+                    "sentiment": None,
+                    "user_metadata": json.dumps({"source": "call_intelligence", "call_id": call_id, "extractions": extractions}),
+                    "created_at": datetime.now(timezone.utc),
+                },
+            )
+            self.db.commit()
+            logger.info(f"Conversation log activity created for call {call_id}")
+        except Exception as e:
+            logger.warning(f"Failed to create activity for call {call_id}: {e}")
 
     # =========================================================================
     # Batch Processing Methods

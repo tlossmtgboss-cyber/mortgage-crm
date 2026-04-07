@@ -11,6 +11,7 @@ import time
 from typing import Any
 from anthropic import Anthropic
 
+from ..anthropic_client import get_anthropic_client
 from ..state import (
     AgentState,
     QueryIntent,
@@ -173,8 +174,7 @@ async def generate_response(
 
         # Generate response with Claude
         if anthropic_client is None:
-            import os
-            anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+            anthropic_client = get_anthropic_client()
 
         llm_start = time.time()
         response = anthropic_client.messages.create(

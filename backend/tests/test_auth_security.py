@@ -7,7 +7,7 @@ accidental exposure of internal tooling in production.
 
 Covers:
 - Salesforce debug endpoints (9 endpoints under /api/v1/salesforce/debug/*)
-- CI Voice diagnostic endpoint (/api/v1/ci-voice/diagnostic/rubrics)
+- CI Voice diagnostic endpoint (/api/v1/conversation-intelligence/diagnostic/rubrics)
 - Power dialer debug endpoint (/api/v1/dialer/call-tasks-debug)
 """
 
@@ -97,7 +97,7 @@ class TestSalesforceDebugAuth:
 
 
 # =============================================================================
-# CI Voice Diagnostic Endpoints (mounted at /api/v1/ci-voice)
+# CI Voice Diagnostic Endpoints (mounted at /api/v1/conversation-intelligence)
 # =============================================================================
 
 @pytest.mark.unit
@@ -105,8 +105,8 @@ class TestCIVoiceDiagnosticAuth:
     """Verify CI Voice diagnostic endpoints reject unauthenticated requests."""
 
     def test_diagnostic_rubrics_requires_auth(self, client: TestClient):
-        """GET /api/v1/ci-voice/diagnostic/rubrics must require auth."""
-        response = client.get("/api/v1/ci-voice/diagnostic/rubrics")
+        """GET /api/v1/conversation-intelligence/diagnostic/rubrics must require auth."""
+        response = client.get("/api/v1/conversation-intelligence/diagnostic/rubrics")
         # 404 is acceptable if the route isn't loaded in test env
         if response.status_code == 404:
             pytest.skip("CI Voice routes not loaded in test environment")

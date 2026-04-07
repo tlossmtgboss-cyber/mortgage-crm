@@ -24,6 +24,7 @@ from sqlalchemy.orm import relationship, validates
 
 # Import Base from the db module
 from db import Base
+from encryption_utils import EncryptedString
 
 # Import enums from the database package
 from database.enums import (
@@ -70,16 +71,16 @@ class Lead(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)  # Multi-tenant isolation
-    name = Column(String, nullable=False, index=True)
-    first_name = Column(String)
-    last_name = Column(String)
-    email = Column(String, index=True)
-    phone = Column(String, index=True)
+    name = Column(String, nullable=False, index=True)  # NOTE: Not encrypted — indexed for lookups.
+    first_name = Column(String)  # NOTE: Not encrypted — used with name index for search.
+    last_name = Column(String)  # NOTE: Not encrypted — used with name index for search.
+    email = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding email_hash column.
+    phone = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding phone_hash column.
 
     # Co-applicant
-    co_applicant_name = Column(String)
-    co_applicant_email = Column(String)
-    co_applicant_phone = Column(String)
+    co_applicant_name = Column(EncryptedString)  # PII: name
+    co_applicant_email = Column(EncryptedString)  # PII: email address
+    co_applicant_phone = Column(EncryptedString)  # PII: phone number
 
     # Communication
     preferred_communication = Column(String)  # email, phone, text, voicemail
@@ -108,10 +109,10 @@ class Lead(Base):
     notes = Column(Text)
 
     # Property Information
-    address = Column(String)
-    city = Column(String)
-    state = Column(String)
-    zip_code = Column(String)
+    address = Column(EncryptedString)  # PII: physical address
+    city = Column(EncryptedString)  # PII: physical address
+    state = Column(EncryptedString)  # PII: physical address
+    zip_code = Column(EncryptedString)  # PII: physical address
     property_type = Column(String)
     property_value = Column(Numeric(18, 2))
     down_payment = Column(Numeric(18, 2))
@@ -160,7 +161,7 @@ class Lead(Base):
     realtor_referral_date = Column(DateTime)
     rate_watch_enrollment_date = Column(DateTime)
     initial_consultation_date = Column(DateTime)         # Initial Consultation
-    property_address = Column(String)
+    property_address = Column(EncryptedString)  # PII: physical address
 
     # PRD Section 4.1 - Rate Lock Intelligence
     buying_timeline_category = Column(SQLEnum(BuyingTimelineCategory))
@@ -321,13 +322,13 @@ class Loan(Base):
     loan_number = Column(String, unique=True, index=True, nullable=False)
 
     # Borrower info
-    borrower_name = Column(String, nullable=False)
-    borrower_email = Column(String)
-    borrower_phone = Column(String)
+    borrower_name = Column(String, nullable=False)  # NOTE: Not encrypted — indexed for lookups (ix_loans_borrower_name).
+    borrower_email = Column(EncryptedString)  # PII: email address
+    borrower_phone = Column(EncryptedString)  # PII: phone number
     preferred_communication = Column(String)
-    coborrower_name = Column(String)
-    co_borrower_email = Column(String)
-    co_borrower_phone = Column(String)
+    coborrower_name = Column(EncryptedString)  # PII: name
+    co_borrower_email = Column(EncryptedString)  # PII: email address
+    co_borrower_phone = Column(EncryptedString)  # PII: phone number
 
     # Pipeline status
     stage = Column(String, default="DISCLOSED")
@@ -342,10 +343,10 @@ class Loan(Base):
     term = Column(Integer, default=360)
 
     # Property
-    property_address = Column(String)
-    property_city = Column(String)
-    property_state = Column(String)
-    property_zip = Column(String)
+    property_address = Column(EncryptedString)  # PII: physical address
+    property_city = Column(EncryptedString)  # PII: physical address
+    property_state = Column(EncryptedString)  # PII: physical address
+    property_zip = Column(EncryptedString)  # PII: physical address
 
     # Key dates
     lock_date = Column(DateTime)

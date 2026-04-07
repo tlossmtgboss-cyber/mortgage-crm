@@ -38,9 +38,9 @@ class BorrowerProfile(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
 
     # Identity from social provider
-    email = Column(String, nullable=False, index=True)
-    first_name = Column(String)
-    last_name = Column(String)
+    email = Column(String, nullable=False, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding email_hash column.
+    first_name = Column(EncryptedString)
+    last_name = Column(EncryptedString)
     profile_photo = Column(String)
 
     # Social provider info
@@ -52,7 +52,7 @@ class BorrowerProfile(Base):
     communication_consent = Column(Boolean, default=True)
     marketing_consent = Column(Boolean, default=False)
     consent_captured_at = Column(DateTime)
-    consent_ip_address = Column(String)
+    consent_ip_address = Column(EncryptedString)  # PII: IP address
 
     # Granular consent tracking (FCC Jan 2025 one-to-one consent rule)
     consent_given_to = Column(String(255))       # Company or user name consent was given to
@@ -79,7 +79,7 @@ class BorrowerAuthEvent(Base):
 
     event_type = Column(String(20), nullable=False)  # login, logout, token_refresh
     provider = Column(String(20))
-    ip_address = Column(String)
+    ip_address = Column(EncryptedString)  # PII: IP address
     user_agent = Column(String)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -137,14 +137,14 @@ class BorrowerApplication(Base):
     step_data = Column(JSON, default=dict)
 
     # Borrower information
-    borrower_first_name = Column(String)
-    borrower_last_name = Column(String)
-    borrower_email = Column(String, index=True)
-    borrower_phone = Column(String)
+    borrower_first_name = Column(EncryptedString)  # PII: name
+    borrower_last_name = Column(EncryptedString)  # PII: name
+    borrower_email = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding email_hash column.
+    borrower_phone = Column(EncryptedString)  # PII: phone number
 
     # Co-borrower tracking
     has_coborrower = Column(Boolean, default=False)
-    coborrower_email = Column(String)
+    coborrower_email = Column(EncryptedString)  # PII: email address
     coborrower_completed = Column(Boolean, default=False)
 
     # Pre-qualification data
@@ -156,9 +156,9 @@ class BorrowerApplication(Base):
     # Credit authorization
     credit_auth_captured = Column(Boolean, default=False)
     credit_auth_timestamp = Column(DateTime)
-    credit_auth_ip_address = Column(String)
+    credit_auth_ip_address = Column(EncryptedString)  # PII: IP address
     credit_auth_user_agent = Column(String)
-    credit_auth_ssn_last4 = Column(String(4))
+    credit_auth_ssn_last4 = Column(EncryptedString)  # PII: partial SSN
 
     # Encrypted SSN storage (P0-3: SSN must not be stored plaintext)
     ssn_encrypted = Column(EncryptedString, nullable=True)
@@ -284,10 +284,10 @@ class CoborrowerInvitation(Base):
 
     # Invitation details
     invitation_token = Column(String(64), unique=True, nullable=False, index=True)
-    email = Column(String, nullable=False)
-    first_name = Column(String)
-    last_name = Column(String)
-    phone = Column(String)
+    email = Column(EncryptedString, nullable=False)  # PII: email address
+    first_name = Column(EncryptedString)  # PII: name
+    last_name = Column(EncryptedString)  # PII: name
+    phone = Column(EncryptedString)  # PII: phone number
     relationship_type = Column(String)
 
     # Status tracking
@@ -306,7 +306,7 @@ class CoborrowerInvitation(Base):
     # Credit authorization
     credit_auth_captured = Column(Boolean, default=False)
     credit_auth_timestamp = Column(DateTime)
-    credit_auth_ip_address = Column(String)
+    credit_auth_ip_address = Column(EncryptedString)  # PII: IP address
 
     # Reminder tracking
     reminder_count = Column(Integer, default=0)
@@ -337,11 +337,11 @@ class ApplicationEvent(Base):
 
     # Actor info
     actor_type = Column(String)
-    actor_email = Column(String)
+    actor_email = Column(EncryptedString)  # PII: email address
 
     # Context
     step = Column(String)
-    ip_address = Column(String)
+    ip_address = Column(EncryptedString)  # PII: IP address
     user_agent = Column(String)
     device_type = Column(String)
 
@@ -366,8 +366,8 @@ class ApplicationNotification(Base):
     # Notification details
     notification_type = Column(String, nullable=False)
     channel = Column(String, nullable=False)
-    recipient_email = Column(String)
-    recipient_phone = Column(String)
+    recipient_email = Column(EncryptedString)  # PII: email address
+    recipient_phone = Column(EncryptedString)  # PII: phone number
 
     # Content
     subject = Column(String)
@@ -416,8 +416,8 @@ class ApplicationSession(Base):
     scroll_position = Column(JSON)
 
     # Device info
-    device_fingerprint = Column(String)
-    ip_address = Column(String)
+    device_fingerprint = Column(EncryptedString)  # PII: device fingerprint
+    ip_address = Column(EncryptedString)  # PII: IP address
     user_agent = Column(String)
 
     # Status
@@ -442,7 +442,7 @@ class VoiceApplicationSession(Base):
 
     # Call details
     call_sid = Column(String, unique=True, index=True)
-    phone_number = Column(String)
+    phone_number = Column(EncryptedString)  # PII: phone number
 
     # Session state
     current_step = Column(String)

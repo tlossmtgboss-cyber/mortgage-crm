@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from anthropic import Anthropic
 
+from ..anthropic_client import get_anthropic_client
 from ..state import (
     AgentState,
     QueryIntent,

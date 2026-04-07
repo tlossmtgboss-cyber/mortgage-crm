@@ -146,20 +146,36 @@ try:
     from auth.config import get_auth_settings
     _USE_SECURE_TOKENS = True
 
-    # Initialize token blacklist with Redis if configured
+    # Initialize centralized Redis service and token blacklist
+    from services.redis_service import redis_service as _redis_service
     _redis_url = os.getenv("REDIS_URL")
+    _redis_ok = _redis_service.initialize(_redis_url)
     if _redis_url:
         token_blacklist.initialize(_redis_url)
-        logger.info("Token blacklist initialized with Redis")
+        if _redis_ok:
+            logger.info("Token blacklist initialized with Redis (validated)")
+        else:
+            logger.warning("Token blacklist initialized with Redis URL but connectivity unverified")
     else:
         _env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
         if _env in ("production", "staging"):
             logger.error("REDIS_URL not set — token revocation disabled in production")
         else:
             logger.warning("REDIS_URL not set — using in-memory token blacklist (dev only)")
+
 except ImportError as e:
     logger.warning(f"⚠️ Secure auth module not available, using legacy JWT: {e}")
     _USE_SECURE_TOKENS = False
+
+# Install encryption key rotation support (RotatingFernet) if both keys present.
+# This is independent of the auth module — EncryptedString columns in lead_loan,
+# borrower, core, and communication models use encryption_utils.EncryptionManager.
+try:
+    from services.encryption_key_rotation import install_rotating_fernet
+    if install_rotating_fernet():
+        logger.info("Encryption key rotation active (DATA_ENCRYPTION_KEY_PREVIOUS is set)")
+except Exception as _rot_err:
+    logger.warning(f"Encryption key rotation setup skipped: {_rot_err}")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
@@ -172,6 +188,7 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 # Simple TTL cache for expensive endpoints
 _cache: Dict[str, Dict[str, Any]] = {}
 CACHE_TTL_SECONDS = 30  # 30-second cache for dashboard data
+MAX_CACHE_SIZE = 1000
 
 def get_cached(key: str) -> Optional[Any]:
     """Get cached value if not expired"""
@@ -184,6 +201,17 @@ def get_cached(key: str) -> Optional[Any]:
 
 def set_cached(key: str, data: Any) -> None:
     """Set cache entry with timestamp"""
+    # Evict oldest entries if cache is full
+    if len(_cache) >= MAX_CACHE_SIZE:
+        # Remove expired entries first
+        now = time.time()
+        expired = [k for k, v in _cache.items() if now - v['timestamp'] > CACHE_TTL_SECONDS]
+        for k in expired:
+            del _cache[k]
+        # If still full, remove oldest
+        if len(_cache) >= MAX_CACHE_SIZE:
+            oldest_key = min(_cache, key=lambda k: _cache[k]['timestamp'])
+            del _cache[oldest_key]
     _cache[key] = {'data': data, 'timestamp': time.time()}
 
 def clear_cache(prefix: str = None) -> None:
@@ -1389,6 +1417,22 @@ except Exception as e:
     traceback.print_exc()
 
 # ============================================================================
+# GDPR / CCPA DATA PRIVACY ROUTES (Export, Deletion, DSAR)
+# ============================================================================
+try:
+    from routes.gdpr_routes import register_gdpr_routes
+    register_gdpr_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("GDPR/CCPA data privacy routes loaded (export, deletion, DSAR)")
+except Exception as e:
+    logger.error(f"GDPR routes failed to load: {e}")
+    import traceback
+    traceback.print_exc()
+
+# ============================================================================
 # SMART DOCS V2 ROUTES (Intelligence, Income, Review, Follow-up, Security,
 #                        Bank Analysis, Analytics, Portal, E-Signature)
 # ============================================================================
@@ -1667,6 +1711,14 @@ try:
 except Exception as e:
     logger.warning(f"AI outbound calling routes skipped: {e}")
 
+# AI Email — compose, send, template send via Microsoft Graph
+try:
+    from routes.ai_email_routes import router as ai_email_router
+    app.include_router(ai_email_router, tags=["AI Email"])
+    logger.info("AI Email routes loaded")
+except Exception as e:
+    logger.warning(f"AI Email routes skipped: {e}")
+
 # SMS scheduler webhook routes
 try:
     from routes.sms_scheduler_webhook import router as sms_sched_router, set_dependencies as sms_set_deps
@@ -1846,6 +1898,66 @@ except Exception as e:
     logger.warning(f"SMS conversation routes skipped: {e}")
 
 # ============================================================================
+# ENGAGEMENT ENGINE ROUTES — Live Transfer, LO Availability, AMD, Drip, etc.
+# ============================================================================
+try:
+    from routes.live_transfer_routes import router as live_transfer_router
+    app.include_router(live_transfer_router, tags=["Live Transfer"])
+    logger.info("✅ Live transfer routes loaded")
+except Exception as e:
+    logger.warning(f"Live transfer routes skipped: {e}")
+
+try:
+    from routes.lo_availability_routes import router as lo_availability_router
+    app.include_router(lo_availability_router, tags=["LO Availability"])
+    logger.info("✅ LO availability routes loaded")
+except Exception as e:
+    logger.warning(f"LO availability routes skipped: {e}")
+
+try:
+    from routes.amd_voicemail_routes import router as amd_voicemail_router
+    app.include_router(amd_voicemail_router, tags=["AMD Voicemail"])
+    logger.info("✅ AMD voicemail routes loaded")
+except Exception as e:
+    logger.warning(f"AMD voicemail routes skipped: {e}")
+
+try:
+    from routes.drip_sequence_routes import router as drip_sequence_router
+    app.include_router(drip_sequence_router, tags=["Drip Sequences"])
+    logger.info("✅ Drip sequence routes loaded")
+except Exception as e:
+    logger.warning(f"Drip sequence routes skipped: {e}")
+
+try:
+    from routes.engagement_dashboard_routes import router as engagement_dashboard_router
+    app.include_router(engagement_dashboard_router, tags=["Engagement Dashboard"])
+    logger.info("✅ Engagement dashboard routes loaded")
+except Exception as e:
+    logger.warning(f"Engagement dashboard routes skipped: {e}")
+
+try:
+    from routes.script_customization_routes import router as script_customization_router
+    app.include_router(script_customization_router, tags=["Script Customization"])
+    logger.info("✅ Script customization routes loaded")
+except Exception as e:
+    logger.warning(f"Script customization routes skipped: {e}")
+
+try:
+    from routes.lead_routing_routes import router as lead_routing_router
+    app.include_router(lead_routing_router, tags=["Lead Routing"])
+    logger.info("✅ Lead routing routes loaded")
+except Exception as e:
+    logger.warning(f"Lead routing routes skipped: {e}")
+
+try:
+    from routes.call_monitoring_routes import router as call_monitoring_router, set_dependencies as set_call_monitor_deps
+    set_call_monitor_deps(user_dependency=get_current_user)
+    app.include_router(call_monitoring_router, tags=["Call Monitoring"])
+    logger.info("✅ Call monitoring routes loaded")
+except Exception as e:
+    logger.warning(f"Call monitoring routes skipped: {e}")
+
+# ============================================================================
 # APP VERSION COMPATIBILITY ROUTES (unauthenticated — mobile pre-login)
 # ============================================================================
 try:
@@ -1882,6 +1994,449 @@ try:
     logger.info("Autonomous task routes loaded")
 except Exception as e:
     logger.warning(f"Autonomous task routes skipped: {e}")
+
+# ============================================================================
+# AGGREGATE ROUTE REGISTRATIONS — Auth, Security, Settings, Telephony, etc.
+# These _register_*.py files are aggregators that load many sub-route modules.
+# ============================================================================
+
+# --- Auth & Security (CSRF, SSO, MFA, org routes, public routes) ---
+try:
+    from routes._register_auth_security import register_auth_security_routes
+    register_auth_security_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+        oauth2_scheme=oauth2_scheme,
+    )
+    logger.info("Auth & security routes loaded")
+except Exception as e:
+    logger.warning(f"Auth & security routes failed to load: {e}")
+
+# --- Settings & Configuration (user settings, profile, lead capture, branding) ---
+try:
+    from routes._register_settings import register_settings_routes
+    register_settings_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+        pwd_context=pwd_context,
+    )
+    logger.info("Settings routes loaded")
+except Exception as e:
+    logger.warning(f"Settings routes failed to load: {e}")
+
+# --- Telephony & Voice (Telnyx, Vapi, AMD, IVR, dialer, voice workflows) ---
+try:
+    from routes._register_telephony import register_telephony_routes
+    register_telephony_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+    )
+    logger.info("Telephony routes loaded")
+except Exception as e:
+    logger.warning(f"Telephony routes failed to load: {e}")
+
+# --- Video & Media (meetings, clips, carousel, content marketing) ---
+try:
+    from routes._register_video_media import register_video_media_routes
+    register_video_media_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+        pwd_context=pwd_context,
+    )
+    logger.info("Video & media routes loaded")
+except Exception as e:
+    logger.warning(f"Video & media routes failed to load: {e}")
+
+# --- Documents & Income (smart docs, income extraction, bank statements) ---
+try:
+    from routes._register_documents_income import register_documents_income_routes
+    register_documents_income_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+    )
+    logger.info("Documents & income routes loaded")
+except Exception as e:
+    logger.warning(f"Documents & income routes failed to load: {e}")
+
+# --- AI & ML (orchestrator chat, underwriter, streaming, knowledge base) ---
+try:
+    from routes._register_ai_routes import register_ai_routes
+    register_ai_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+        log_ai_action_to_mission_control=log_ai_action_to_mission_control,
+        update_ai_action_outcome=update_ai_action_outcome,
+    )
+    logger.info("AI & ML routes loaded")
+except Exception as e:
+    logger.warning(f"AI & ML routes failed to load: {e}")
+
+# --- Third-Party Integrations (Salesforce, Microsoft, Google, Zoom, Slack) ---
+try:
+    from routes._register_integrations import register_integration_routes
+    register_integration_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+        scheduler=scheduler,
+    )
+    logger.info("Integration routes loaded")
+except Exception as e:
+    logger.warning(f"Integration routes failed to load: {e}")
+
+# --- Recruiting (engine, grading, DISC, workflow, dialer, portal) ---
+try:
+    from routes._register_recruiting import register_recruiting_routes
+    register_recruiting_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+    )
+    logger.info("Recruiting routes loaded")
+except Exception as e:
+    logger.warning(f"Recruiting routes failed to load: {e}")
+
+# ============================================================================
+# CORE CRM ROUTES — Leads, Search, MUM, Email, Compliance
+# ============================================================================
+
+# --- Health & system status ---
+try:
+    from routes.health_routes import register_health_routes
+    register_health_routes(app=app, get_db=get_db)
+    logger.info("Health routes loaded")
+except Exception as e:
+    logger.warning(f"Health routes failed to load: {e}")
+
+# --- Leads detail (bulk ops, individual CRUD by ID, claim-orphans) ---
+try:
+    from routes.leads_detail_routes import register_leads_detail_routes
+    register_leads_detail_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+    )
+    logger.info("Leads detail routes loaded")
+except Exception as e:
+    logger.warning(f"Leads detail routes failed to load: {e}")
+
+# --- Global search (cross-entity: leads, loans, contacts, partners) ---
+try:
+    from routes.search_routes import register_search_routes
+    from routes.permission_core_routes import filter_leads_by_permissions
+    register_search_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user_flexible=get_current_user_flexible,
+        Lead=Lead,
+        Loan=Loan,
+        LoanTeamMember=LoanTeamMember,
+        ReferralPartner=ReferralPartner,
+        MUMClient=MUMClient,
+        filter_leads_by_permissions=filter_leads_by_permissions,
+    )
+    logger.info("Search routes loaded")
+except Exception as e:
+    logger.warning(f"Search routes failed to load: {e}")
+
+# --- MUM client & activity (referral scores, funded conversion, CRUD) ---
+try:
+    from routes.mum_activity_routes import register_mum_activity_routes
+    register_mum_activity_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+    )
+    logger.info("MUM activity routes loaded")
+except Exception as e:
+    logger.warning(f"MUM activity routes failed to load: {e}")
+
+# --- Email management (signatures, drafts, send via Microsoft 365) ---
+try:
+    from routes.email_management_routes import register_email_management_routes
+    register_email_management_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Email management routes loaded")
+except Exception as e:
+    logger.warning(f"Email management routes failed to load: {e}")
+
+# --- Escalation (SLA escalation, team alerts) ---
+try:
+    from routes.escalation_routes import register_escalation_routes
+    register_escalation_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Escalation routes loaded")
+except Exception as e:
+    logger.warning(f"Escalation routes failed to load: {e}")
+
+# --- Compliance (fair lending, license enforcement, TCPA) ---
+try:
+    from routes.compliance_routes import register_compliance_routes
+    register_compliance_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Compliance routes loaded")
+except Exception as e:
+    logger.warning(f"Compliance routes failed to load: {e}")
+
+# --- Compliance Validation (TRID, ECOA, HMDA, stage-transition) ---
+try:
+    from routes.compliance_validation_routes import register_compliance_validation_routes
+    register_compliance_validation_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Compliance validation routes loaded")
+except Exception as e:
+    logger.warning(f"Compliance validation routes failed to load: {e}")
+
+# --- Data import (CSV/Excel lead import, field mapping, rollback) ---
+try:
+    from routes.data_import_routes import register_data_import_routes
+    register_data_import_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Data import routes loaded")
+except Exception as e:
+    logger.warning(f"Data import routes failed to load: {e}")
+
+# ============================================================================
+# ENTERPRISE & ADMIN ROUTES — LOS, SCIM, Scorecard, DR, Quality
+# ============================================================================
+
+# --- LOS integration API (push/pull, config, field mappings, health) ---
+try:
+    from routes.los_routes import register_los_routes
+    register_los_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("LOS integration routes loaded")
+except Exception as e:
+    logger.warning(f"LOS integration routes failed to load: {e}")
+
+# --- LOS webhook routes (inbound webhooks from Encompass/LOS) ---
+try:
+    from routes.los_webhook_routes import register_los_webhook_routes
+    register_los_webhook_routes(app=app, get_db=get_db)
+    logger.info("LOS webhook routes loaded")
+except Exception as e:
+    logger.warning(f"LOS webhook routes failed to load: {e}")
+
+# --- SCIM provisioning (enterprise user provisioning via SCIM 2.0) ---
+try:
+    from routes.scim_provisioning_routes import register_scim_provisioning_routes
+    register_scim_provisioning_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("SCIM provisioning routes loaded")
+except Exception as e:
+    logger.warning(f"SCIM provisioning routes failed to load: {e}")
+
+# --- Scorecard (loan scorecard metrics, conversion, funding, referral breakdown) ---
+try:
+    from routes.scorecard_routes import register_scorecard_routes
+    register_scorecard_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        Lead=Lead,
+        Loan=Loan,
+        LoanStage=LoanStage,
+    )
+    logger.info("Scorecard routes loaded")
+except Exception as e:
+    logger.warning(f"Scorecard routes failed to load: {e}")
+
+# --- State disclosure (admin: state-specific disclosure requirements) ---
+try:
+    from routes.state_disclosure_routes import register_state_disclosure_routes
+    register_state_disclosure_routes(app=app, get_db=get_db)
+    logger.info("State disclosure routes loaded")
+except Exception as e:
+    logger.warning(f"State disclosure routes failed to load: {e}")
+
+# --- Data quality (validation, dedup, integrity checks) ---
+try:
+    from routes.data_quality_routes import register_data_quality_routes
+    register_data_quality_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Data quality routes loaded")
+except Exception as e:
+    logger.warning(f"Data quality routes failed to load: {e}")
+
+# --- Disaster recovery (failover, RTO benchmarking, retention policy) ---
+try:
+    from routes.dr_routes import register_dr_routes
+    register_dr_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("DR routes loaded")
+except Exception as e:
+    logger.warning(f"DR routes failed to load: {e}")
+
+# --- Team calendar (shared calendar views, team scheduling) ---
+try:
+    from routes.team_calendar_routes import register_team_calendar_routes
+    register_team_calendar_routes(app=app, get_current_user=get_current_user)
+    logger.info("Team calendar routes loaded")
+except Exception as e:
+    logger.warning(f"Team calendar routes failed to load: {e}")
+
+# ============================================================================
+# MOBILE, NOTIFICATIONS & CONFIGURATION ROUTES
+# ============================================================================
+
+# --- SSE notifications (server-sent events for real-time updates) ---
+try:
+    from routes.sse_notification_routes import register_sse_notification_routes
+    register_sse_notification_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("SSE notification routes loaded")
+except Exception as e:
+    logger.warning(f"SSE notification routes failed to load: {e}")
+
+# --- Remote config (mobile feature flags, A/B config) ---
+try:
+    from routes.remote_config_routes import register_remote_config_routes
+    register_remote_config_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Remote config routes loaded")
+except Exception as e:
+    logger.warning(f"Remote config routes failed to load: {e}")
+
+# --- Calculator settings (mortgage calculator configuration) ---
+try:
+    from routes.calculator_settings_routes import register_calculator_settings_routes
+    register_calculator_settings_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Calculator settings routes loaded")
+except Exception as e:
+    logger.warning(f"Calculator settings routes failed to load: {e}")
+
+# ============================================================================
+# INFRASTRUCTURE ROUTES — Backup, Cache, API Keys, Agents, Debug
+# ============================================================================
+
+# --- Backup (data backup, restore, export) ---
+try:
+    from routes.backup_routes import register_backup_routes
+    register_backup_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Backup routes loaded")
+except Exception as e:
+    logger.warning(f"Backup routes failed to load: {e}")
+
+# --- Cache management (cache stats, clear, warm) ---
+try:
+    from routes.cache_routes import register_cache_routes
+    register_cache_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Cache routes loaded")
+except Exception as e:
+    logger.warning(f"Cache routes failed to load: {e}")
+
+# --- API key management (CRUD for API keys) ---
+try:
+    from routes.api_key_routes import register_api_key_routes
+    register_api_key_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("API key routes loaded")
+except Exception as e:
+    logger.warning(f"API key routes failed to load: {e}")
+
+# --- Agent metrics (AI agent performance metrics, dashboards) ---
+try:
+    from routes.agent_metrics_routes import register_agent_metrics_routes
+    register_agent_metrics_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Agent metrics routes loaded")
+except Exception as e:
+    logger.warning(f"Agent metrics routes failed to load: {e}")
+
+# --- Application completion orchestrator (completeness scoring, gap detection) ---
+try:
+    from routes.app_completion_registration import register_app_completion_routes
+    register_app_completion_routes(app=app)
+    logger.info("App completion routes loaded")
+except Exception as e:
+    logger.warning(f"App completion routes failed to load: {e}")
+
+# --- Smart Docs enterprise (Wave 3 enterprise document routes) ---
+try:
+    from routes.smart_docs_enterprise_registration import register_smart_docs_enterprise_routes
+    register_smart_docs_enterprise_routes(app=app)
+    logger.info("Smart Docs enterprise routes loaded")
+except Exception as e:
+    logger.warning(f"Smart Docs enterprise routes failed to load: {e}")
+
+# --- Debug status & diagnostics (PURL testing, cache stats, admin tools) ---
+try:
+    from routes.debug_status_routes import register_debug_status_routes
+    register_debug_status_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Debug status routes loaded")
+except Exception as e:
+    logger.warning(f"Debug status routes failed to load: {e}")
 
 # ============================================================================
 # INLINE ROUTES - extracted to routes/inline_legacy_routes.py
@@ -1987,6 +2542,50 @@ except Exception as e:
     logger.warning(f"AI activity routes not loaded: {e}")
 
 # ============================================================================
+# POST-LEGACY ROUTES — Depend on functions exported from inline_legacy_routes
+# ============================================================================
+
+# --- Admin ops (pool status, migrations, user mgmt, data endpoints) ---
+try:
+    from routes.admin_ops_routes import register_admin_ops_routes
+    register_admin_ops_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+        pwd_context=pwd_context,
+        get_password_hash=get_password_hash,
+        create_access_token=create_access_token,
+        DATABASE_URL=DATABASE_URL,
+    )
+    logger.info("Admin ops routes loaded")
+except Exception as e:
+    logger.warning(f"Admin ops routes failed to load: {e}")
+
+# --- Debug data & email (email sync, reconciliation, Microsoft integration) ---
+try:
+    from routes.debug_data_routes import register_debug_data_routes
+    from services.dre_helpers import (
+        process_microsoft_email_to_dre as _dre_process,
+        fetch_microsoft_emails as _dre_fetch,
+        match_entity as _dre_match,
+        refresh_microsoft_token as _dre_refresh,
+    )
+    register_debug_data_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+        get_current_user_flexible=get_current_user_flexible,
+        process_microsoft_email_to_dre=_dre_process,
+        fetch_microsoft_emails=_dre_fetch,
+        match_entity=_dre_match,
+        refresh_microsoft_token=_dre_refresh,
+    )
+    logger.info("Debug data routes loaded")
+except Exception as e:
+    logger.warning(f"Debug data routes failed to load: {e}")
+
+# ============================================================================
 # STARTUP EVENT — Initialize scheduler for workflow task generation
 # ============================================================================
 @app.on_event("startup")
@@ -2000,28 +2599,41 @@ async def startup_event():
         logger.info("⏭️ Skipping startup DB operations (TESTING=1)")
         return
 
+    # Initialize migration tracker (records which migrations have run, prevents duplicates)
+    try:
+        from migrations.migration_tracker import ensure_tracker_table, run_tracked
+        ensure_tracker_table(engine)
+        logger.info("Migration tracker initialized")
+    except Exception as e:
+        logger.warning(f"Migration tracker init failed, migrations will run untracked: {e}")
+        run_tracked = None
+
     # Run API key hash migration (adds key_hash/key_prefix columns, migrates plaintext keys)
     try:
         from migrations.hash_api_keys import run_migration as _run_api_key_hash_migration
-        _run_api_key_hash_migration(engine)
-        logger.info("API key hash migration completed successfully.")
+        if run_tracked:
+            run_tracked(engine, "hash_api_keys", _run_api_key_hash_migration)
+        else:
+            _run_api_key_hash_migration(engine)
     except Exception as e:
-        logger.warning(f"API key hash migration skipped or failed: {e}")
+        logger.error(f"API key hash migration FAILED: {e}", exc_info=True)
 
     # Ensure tcpa_consents table exists (needed for SMS opt-in form)
     try:
         from migrations.add_tcpa_consents_table import run_migration as _run_tcpa_migration
         _run_tcpa_migration()
     except Exception as e:
-        logger.warning(f"TCPA consents table migration skipped: {e}")
+        logger.error(f"TCPA consents table migration FAILED: {e}", exc_info=True)
 
     # Create enterprise challenge tables (file collaborator, timeline, vendor, campaigns, learning)
     try:
-        from migrations.enterprise_challenge_tables import run_migration
-        run_migration(engine)
-        logger.info("✓ Enterprise challenge tables created")
+        from migrations.enterprise_challenge_tables import run_migration as _run_enterprise_migration
+        if run_tracked:
+            run_tracked(engine, "enterprise_challenge_tables", _run_enterprise_migration)
+        else:
+            _run_enterprise_migration(engine)
     except Exception as e:
-        logger.warning(f"Enterprise migration skipped: {e}")
+        logger.error(f"Enterprise migration FAILED: {e}", exc_info=True)
 
     # Run critical schema migrations (missing columns that break page loads)
     try:
@@ -2074,7 +2686,10 @@ async def startup_event():
     # Register autonomous AI agents (morning briefing, pipeline monitor, compliance watchdog, etc.)
     try:
         from migrations.add_autonomous_agent_runs import run_migration as _run_agent_runs_migration
-        _run_agent_runs_migration(engine)
+        if run_tracked:
+            run_tracked(engine, "add_autonomous_agent_runs", _run_agent_runs_migration)
+        else:
+            _run_agent_runs_migration(engine)
         from agents.autonomous.loop import register_all_autonomous_agents
         from services.scheduler_service import scheduler_service
         agent_count = register_all_autonomous_agents(scheduler_service.scheduler)
@@ -2096,24 +2711,299 @@ async def startup_event():
     # agent_memory, agent_metrics, webhook_idempotency)
     try:
         from migrations.add_ai_autonomy_tables import run_migration as _run_ai_autonomy_migration
-        tables = _run_ai_autonomy_migration(engine)
-        logger.info(f"AI autonomy tables verified: {len(tables)} tables ({', '.join(tables)})")
+        if run_tracked:
+            run_tracked(engine, "add_ai_autonomy_tables", _run_ai_autonomy_migration)
+        else:
+            _run_ai_autonomy_migration(engine)
     except Exception as e:
-        logger.warning(f"AI autonomy table creation skipped: {e}")
+        logger.error(f"AI autonomy table creation FAILED: {e}", exc_info=True)
     # Webhook idempotency table (separate from AI autonomy)
     try:
         from database.models.webhook_idempotency import create_tables_if_needed as _create_webhook_tables
         _create_webhook_tables(engine)
         logger.info("Webhook idempotency table verified")
     except Exception as e:
-        logger.warning(f"Webhook idempotency table creation skipped: {e}")
+        logger.error(f"Webhook idempotency table creation FAILED: {e}", exc_info=True)
 
     # Consolidate OAuth tokens into unified table
     try:
         from migrations.consolidate_oauth_tokens import run_migration as _run_oauth_migration
-        _run_oauth_migration(engine)
+        if run_tracked:
+            run_tracked(engine, "consolidate_oauth_tokens", _run_oauth_migration)
+        else:
+            _run_oauth_migration(engine)
     except Exception as e:
-        logger.warning(f"⚠️ OAuth token consolidation skipped: {e}")
+        logger.error(f"OAuth token consolidation FAILED: {e}", exc_info=True)
+
+    # Ensure call intelligence columns and tables exist
+    try:
+        from migrations.add_call_intelligence_columns import run_migration as _run_ci_migration
+        if run_tracked:
+            run_tracked(engine, "add_call_intelligence_columns", _run_ci_migration)
+        else:
+            _run_ci_migration(engine)
+    except Exception as e:
+        logger.error(f"Call intelligence migration FAILED: {e}", exc_info=True)
+
+    # ========================================================================
+    # CRITICAL TABLE MIGRATIONS — Tables required by active SQLAlchemy models
+    # Without these, any query touching these models raises ProgrammingError.
+    # All use CREATE TABLE IF NOT EXISTS / ADD COLUMN IF NOT EXISTS (idempotent).
+    # ========================================================================
+
+    # --- Voice & Telephony ---
+    try:
+        from migrations.add_voice_workflows_table import run_migration as _run_voice_wf
+        if run_tracked:
+            run_tracked(engine, "add_voice_workflows_table", _run_voice_wf)
+        else:
+            _run_voice_wf(engine)
+    except Exception as e:
+        logger.warning(f"Voice workflows migration: {e}")
+
+    try:
+        from migrations.add_vapi_tables import run_migration as _run_vapi
+        _run_vapi()
+    except Exception as e:
+        logger.warning(f"Vapi tables migration: {e}")
+
+    try:
+        from migrations.add_engagement_tables import run_migration as _run_engagement
+        _run_engagement()
+    except Exception as e:
+        logger.warning(f"Engagement tables migration: {e}")
+
+    try:
+        from migrations.add_call_monitoring_system import run_migration as _run_call_monitor
+        _run_call_monitor()
+    except Exception as e:
+        logger.warning(f"Call monitoring system migration: {e}")
+
+    try:
+        from migrations.add_call_intelligence_expansion import run_migration as _run_ci_expand
+        _run_ci_expand()
+    except Exception as e:
+        logger.warning(f"Call intelligence expansion migration: {e}")
+
+    try:
+        from migrations.add_ci_enhancement_columns import run_migration as _run_ci_enhance
+        if run_tracked:
+            run_tracked(engine, "add_ci_enhancement_columns", _run_ci_enhance)
+        else:
+            _run_ci_enhance(engine)
+    except Exception as e:
+        logger.warning(f"CI enhancement columns migration: {e}")
+
+    # --- SMS & Notifications ---
+    try:
+        from migrations.add_sms_persistence_tables import run_migration as _run_sms_persist
+        _run_sms_persist()
+    except Exception as e:
+        logger.warning(f"SMS persistence tables migration: {e}")
+
+    try:
+        from migrations.add_device_tokens_table import run_migration as _run_device_tokens
+        _run_device_tokens()
+    except Exception as e:
+        logger.warning(f"Device tokens migration: {e}")
+
+    try:
+        from migrations.add_push_notification_preferences import run_migration as _run_push_prefs
+        _run_push_prefs()
+    except Exception as e:
+        logger.warning(f"Push notification preferences migration: {e}")
+
+    # --- AI Agents & Orchestration ---
+    try:
+        from migrations.add_agent_memory_tables import run_migration as _run_agent_mem
+        _run_agent_mem()
+    except Exception as e:
+        logger.warning(f"Agent memory tables migration: {e}")
+
+    try:
+        from migrations.add_morning_briefings import run_migration as _run_briefings
+        _run_briefings()
+    except Exception as e:
+        logger.warning(f"Morning briefings migration: {e}")
+
+    try:
+        from migrations.add_ai_benchmark_tables import run_migration as _run_ai_bench
+        if run_tracked:
+            run_tracked(engine, "add_ai_benchmark_tables", _run_ai_bench)
+        else:
+            _run_ai_bench(engine)
+    except Exception as e:
+        logger.warning(f"AI benchmark tables migration: {e}")
+
+    # --- Lead & Loan Pipeline ---
+    try:
+        from migrations.add_stage_history_table import run_migration as _run_stage_hist
+        _run_stage_hist()
+    except Exception as e:
+        logger.warning(f"Stage history table migration: {e}")
+
+    try:
+        from migrations.add_lead_assignment_tables import run_migration as _run_lead_assign
+        _run_lead_assign()
+    except Exception as e:
+        logger.warning(f"Lead assignment tables migration: {e}")
+
+    try:
+        from migrations.add_app_completion_tables import run_migration as _run_app_complete
+        if run_tracked:
+            run_tracked(engine, "add_app_completion_tables", _run_app_complete)
+        else:
+            _run_app_complete(engine)
+    except Exception as e:
+        logger.warning(f"App completion tables migration: {e}")
+
+    try:
+        from migrations.add_post_closing_workflow import run_migration as _run_post_close
+        _run_post_close()
+    except Exception as e:
+        logger.warning(f"Post-closing workflow migration: {e}")
+
+    try:
+        from migrations.add_business_rules_table import run_migration as _run_biz_rules
+        _run_biz_rules()
+    except Exception as e:
+        logger.warning(f"Business rules table migration: {e}")
+
+    # --- Compliance & Audit ---
+    try:
+        from migrations.add_compliance_decision_log import run_migration as _run_compliance_log
+        _run_compliance_log()
+    except Exception as e:
+        logger.warning(f"Compliance decision log migration: {e}")
+
+    try:
+        from migrations.add_decision_audit_tables import run_migration as _run_decision_audit
+        _run_decision_audit()
+    except Exception as e:
+        logger.warning(f"Decision audit tables migration: {e}")
+
+    try:
+        from migrations.add_pii_audit_log_table import run_migration as _run_pii_audit
+        _run_pii_audit()
+    except Exception as e:
+        logger.warning(f"PII audit log migration: {e}")
+
+    try:
+        from migrations.add_security_training_table import run_migration as _run_sec_training
+        _run_sec_training()
+    except Exception as e:
+        logger.warning(f"Security training table migration: {e}")
+
+    # --- Smart Docs ---
+    try:
+        from migrations.add_document_cache_table import run_migration as _run_doc_cache
+        _run_doc_cache()
+    except Exception as e:
+        logger.warning(f"Document cache table migration: {e}")
+
+    try:
+        from migrations.add_document_extraction_tables import run_migration as _run_doc_extract
+        if run_tracked:
+            run_tracked(engine, "add_document_extraction_tables", _run_doc_extract)
+        else:
+            _run_doc_extract(engine)
+    except Exception as e:
+        logger.warning(f"Document extraction tables migration: {e}")
+
+    try:
+        from migrations.add_smart_docs_sla import run_migration as _run_smart_sla
+        _run_smart_sla()
+    except Exception as e:
+        logger.warning(f"Smart docs SLA migration: {e}")
+
+    try:
+        from migrations.add_smart_docs_missing_columns import run_migration as _run_smart_cols
+        _run_smart_cols()
+    except Exception as e:
+        logger.warning(f"Smart docs missing columns migration: {e}")
+
+    # --- E-Signature & E-Closing ---
+    try:
+        from migrations.add_esign_tables import run_migration as _run_esign
+        _run_esign()
+    except Exception as e:
+        logger.warning(f"E-signature tables migration: {e}")
+
+    try:
+        from migrations.add_eclosing_table import run_migration as _run_eclose
+        if run_tracked:
+            run_tracked(engine, "add_eclosing_table", _run_eclose)
+        else:
+            _run_eclose(engine)
+    except Exception as e:
+        logger.warning(f"E-closing table migration: {e}")
+
+    # --- Underwriting & Income ---
+    try:
+        from migrations.add_aus_submission_table import run_migration as _run_aus
+        if run_tracked:
+            run_tracked(engine, "add_aus_submission_table", _run_aus)
+        else:
+            _run_aus(engine)
+    except Exception as e:
+        logger.warning(f"AUS submission table migration: {e}")
+
+    try:
+        from migrations.add_guideline_updates_tables import run_migration as _run_guidelines
+        _run_guidelines()
+    except Exception as e:
+        logger.warning(f"Guideline updates tables migration: {e}")
+
+    # --- Billing & Subscriptions ---
+    try:
+        from migrations.add_accounting_tables import run_migration as _run_accounting
+        _run_accounting()
+    except Exception as e:
+        logger.warning(f"Accounting tables migration: {e}")
+
+    try:
+        from migrations.add_subscription_modules import run_migration as _run_sub_modules
+        if run_tracked:
+            run_tracked(engine, "add_subscription_modules", _run_sub_modules)
+        else:
+            _run_sub_modules(engine)
+    except Exception as e:
+        logger.warning(f"Subscription modules migration: {e}")
+
+    # --- Encompass LOS Integration ---
+    try:
+        from migrations.add_encompass_columns import run_migration as _run_encompass
+        _run_encompass()
+    except Exception as e:
+        logger.warning(f"Encompass columns migration: {e}")
+
+    # --- Content Marketing ---
+    try:
+        from migrations.add_content_marketing_tables import run_migration as _run_content_mktg
+        _run_content_mktg()
+    except Exception as e:
+        logger.warning(f"Content marketing tables migration: {e}")
+
+    # --- Performance Indexes (HIGH priority) ---
+    try:
+        from migrations.add_performance_indexes import run_migration as _run_perf_idx
+        if run_tracked:
+            run_tracked(engine, "add_performance_indexes", _run_perf_idx)
+        else:
+            _run_perf_idx(engine)
+    except Exception as e:
+        logger.warning(f"Performance indexes migration: {e}")
+
+    try:
+        from migrations.add_scheduler_indexes import run_migration as _run_sched_idx
+        if run_tracked:
+            run_tracked(engine, "add_scheduler_indexes", _run_sched_idx)
+        else:
+            _run_sched_idx(engine)
+    except Exception as e:
+        logger.warning(f"Scheduler indexes migration: {e}")
+
+    logger.info("✅ Critical table migrations complete")
 
     # Register SOC 2 compliance scheduled jobs
     try:
@@ -2167,6 +3057,10 @@ def _run_critical_schema_migrations():
     """
     from sqlalchemy import text as sa_text
     from db import SessionLocal
+
+    success_count = 0
+    skip_count = 0
+    fail_count = 0
 
     db = SessionLocal()
     try:
@@ -2239,11 +3133,13 @@ def _run_critical_schema_migrations():
                 db.execute(sa_text(alter_sql))
                 db.commit()
                 added += 1
+                success_count += 1
             except Exception as e:
                 db.rollback()
-                logger.debug(f"loans.{col_name} migration: {e}")
+                fail_count += 1
+                logger.error(f"loans.{col_name} migration FAILED: {e}", exc_info=True)
         if added:
-            logger.info(f"✅ Ensured {added} loan columns exist")
+            logger.info(f"Ensured {added} loan columns exist")
 
         # Create index on encompass_loan_id if it doesn't exist
         try:
@@ -2252,9 +3148,11 @@ def _run_critical_schema_migrations():
                 ON loans (encompass_loan_id)
             """))
             db.commit()
+            success_count += 1
         except Exception as e:
             db.rollback()
-            logger.debug(f"encompass_loan_id index: {e}")
+            fail_count += 1
+            logger.error(f"encompass_loan_id index creation FAILED: {e}", exc_info=True)
 
         # Fix 2: Add missing columns to leads table
         lead_columns = [
@@ -2373,11 +3271,13 @@ def _run_critical_schema_migrations():
                 db.execute(sa_text(alter_sql))
                 db.commit()
                 leads_added += 1
+                success_count += 1
             except Exception as e:
                 db.rollback()
-                logger.debug(f"leads.{col_name} migration: {e}")
+                fail_count += 1
+                logger.error(f"leads.{col_name} migration FAILED: {e}", exc_info=True)
         if leads_added:
-            logger.info(f"✅ Ensured {leads_added} lead columns exist")
+            logger.info(f"Ensured {leads_added} lead columns exist")
 
         # Fix 3a: Convert leads.stage from PostgreSQL ENUM to VARCHAR if needed
         # The model defines Column(String) but the DB may have a leadstage enum type
@@ -2390,10 +3290,14 @@ def _run_critical_schema_migrations():
                 logger.info("Converting leads.stage from enum to varchar...")
                 db.execute(sa_text("ALTER TABLE leads ALTER COLUMN stage TYPE VARCHAR USING stage::text"))
                 db.commit()
-                logger.info("✅ leads.stage converted from enum to varchar")
+                logger.info("leads.stage converted from enum to varchar")
+                success_count += 1
+            else:
+                skip_count += 1
         except Exception as e:
             db.rollback()
-            logger.warning(f"leads.stage type migration: {e}")
+            fail_count += 1
+            logger.error(f"leads.stage type migration FAILED: {e}", exc_info=True)
 
         # Fix 3b: Convert loans.stage from PostgreSQL ENUM to VARCHAR if needed
         try:
@@ -2405,10 +3309,14 @@ def _run_critical_schema_migrations():
                 logger.info("Converting loans.stage from enum to varchar...")
                 db.execute(sa_text("ALTER TABLE loans ALTER COLUMN stage TYPE VARCHAR USING stage::text"))
                 db.commit()
-                logger.info("✅ loans.stage converted from enum to varchar")
+                logger.info("loans.stage converted from enum to varchar")
+                success_count += 1
+            else:
+                skip_count += 1
         except Exception as e:
             db.rollback()
-            logger.warning(f"loans.stage type migration: {e}")
+            fail_count += 1
+            logger.error(f"loans.stage type migration FAILED: {e}", exc_info=True)
 
         # Fix 4: Backfill MUM client names from leads (replace "Client - XXX" with real names)
         try:
@@ -2426,10 +3334,12 @@ def _run_critical_schema_migrations():
             """))
             db.commit()
             if result.rowcount > 0:
-                logger.info(f"✅ Backfilled {result.rowcount} MUM client names from leads")
+                logger.info(f"Backfilled {result.rowcount} MUM client names from leads")
+            success_count += 1
         except Exception as e:
             db.rollback()
-            logger.debug(f"MUM name backfill: {e}")
+            fail_count += 1
+            logger.error(f"MUM name backfill FAILED: {e}", exc_info=True)
 
         # Chime SDK migration: add columns for video meeting Chime integration
         chime_columns = {
@@ -2448,29 +3358,37 @@ def _run_critical_schema_migrations():
                     alter_sql = "ALTER TABLE " + table + " ADD COLUMN IF NOT EXISTS " + col_name + " " + col_type
                     db.execute(sa_text(alter_sql))
                     db.commit()
+                    success_count += 1
                 except Exception as e:
                     db.rollback()
-                    logger.debug(f"{table}.{col_name} migration: {e}")
+                    fail_count += 1
+                    logger.error(f"{table}.{col_name} migration FAILED: {e}", exc_info=True)
         try:
             db.execute(sa_text("CREATE INDEX IF NOT EXISTS ix_video_meeting_rooms_chime_meeting_id ON video_meeting_rooms (chime_meeting_id)"))
             db.commit()
+            success_count += 1
         except Exception as e:
             db.rollback()
-            logger.debug(f"chime_meeting_id index: {e}")
+            fail_count += 1
+            logger.error(f"chime_meeting_id index creation FAILED: {e}", exc_info=True)
         try:
             db.execute(sa_text("ALTER TABLE meeting_recordings ALTER COLUMN retention_days SET DEFAULT 1825"))
             db.commit()
+            success_count += 1
         except Exception as e:
             db.rollback()
-            logger.debug(f"retention_days default: {e}")
+            fail_count += 1
+            logger.error(f"retention_days default migration FAILED: {e}", exc_info=True)
         try:
             result = db.execute(sa_text("UPDATE meeting_recordings SET retention_days = 1825 WHERE retention_days = 90"))
             db.commit()
             if result.rowcount > 0:
-                logger.info(f"✅ Updated {result.rowcount} recording retention periods to 5 years")
+                logger.info(f"Updated {result.rowcount} recording retention periods to 5 years")
+            success_count += 1
         except Exception as e:
             db.rollback()
-            logger.debug(f"retention_days update: {e}")
+            fail_count += 1
+            logger.error(f"retention_days update FAILED: {e}", exc_info=True)
 
         # Fix N: Add missing columns to users table
         # The User model defines columns that may not exist in the production table,
@@ -2515,11 +3433,13 @@ def _run_critical_schema_migrations():
                 db.execute(sa_text(alter_sql))
                 db.commit()
                 u_added += 1
+                success_count += 1
             except Exception as e:
                 db.rollback()
-                logger.debug(f"users.{col_name} migration: {e}")
+                fail_count += 1
+                logger.error(f"users.{col_name} migration FAILED: {e}", exc_info=True)
         if u_added:
-            logger.info(f"✅ Ensured {u_added} users columns exist")
+            logger.info(f"Ensured {u_added} users columns exist")
 
         # Fix N+1: Add missing columns to scheduler tables
         # The BookingLink model defines columns (organization_id, etc.) that may not
@@ -2664,11 +3584,13 @@ def _run_critical_schema_migrations():
                     db.execute(sa_text(alter_sql))
                     db.commit()
                     tbl_added += 1
+                    success_count += 1
                 except Exception as e:
                     db.rollback()
-                    logger.debug(f"{table_name}.{col_name} migration: {e}")
+                    fail_count += 1
+                    logger.error(f"{table_name}.{col_name} migration FAILED: {e}", exc_info=True)
             if tbl_added:
-                logger.info(f"✅ Ensured {tbl_added} {table_name} columns exist")
+                logger.info(f"Ensured {tbl_added} {table_name} columns exist")
 
         # Fix N+2: Convert scheduler ENUM columns to VARCHAR
         # Same pattern as Lead.stage and Loan.stage — the production DB has a
@@ -2690,17 +3612,22 @@ def _run_critical_schema_migrations():
                     alter_col_sql = "ALTER TABLE " + table + " ALTER COLUMN " + col + " TYPE VARCHAR(50) USING " + col + "::text"
                     db.execute(sa_text(alter_col_sql))
                     db.commit()
-                    logger.info(f"✅ Converted {table}.{col} from enum to VARCHAR")
+                    logger.info(f"Converted {table}.{col} from enum to VARCHAR")
+                    success_count += 1
                     # Drop the old enum type if it's no longer used
                     try:
                         drop_type_sql = "DROP TYPE IF EXISTS " + enum_type
                         db.execute(sa_text(drop_type_sql))
                         db.commit()
-                    except Exception:
+                    except Exception as e:
                         db.rollback()
+                        logger.error(f"Failed to drop enum type {enum_type}: {e}", exc_info=True)
+                else:
+                    skip_count += 1
             except Exception as e:
                 db.rollback()
-                logger.debug(f"Enum conversion {table}.{col}: {e}")
+                fail_count += 1
+                logger.error(f"Enum conversion {table}.{col} FAILED: {e}", exc_info=True)
 
         # Fix N+3: Create missing scheduler tables if they don't exist
         missing_tables_sql = [
@@ -2746,11 +3673,15 @@ def _run_critical_schema_migrations():
             try:
                 db.execute(sa_text(create_sql))
                 db.commit()
+                success_count += 1
             except Exception as e:
                 db.rollback()
-                logger.debug(f"Table creation: {e}")
+                fail_count += 1
+                logger.error(f"Table creation FAILED: {e}", exc_info=True)
 
-        logger.info("✅ Critical schema migrations complete")
+        logger.info(f"Schema migrations: {success_count} applied, {skip_count} skipped, {fail_count} FAILED")
+        if fail_count > 0:
+            logger.error(f"Schema migrations completed with {fail_count} FAILURES — check logs above for details")
     finally:
         db.close()
 

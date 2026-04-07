@@ -28,8 +28,8 @@ RETR_WEBHOOK_SECRET = os.getenv("RETR_WEBHOOK_SECRET", "")
 def verify_webhook_signature(payload: bytes, signature: str) -> bool:
     """Verify HMAC signature for webhook security"""
     if not RETR_WEBHOOK_SECRET:
-        logger.warning("RETR_WEBHOOK_SECRET not configured - skipping signature verification")
-        return True
+        logger.error("RETR_WEBHOOK_SECRET not configured - rejecting webhook (fail-closed)")
+        return False
 
     expected_signature = hmac.new(
         RETR_WEBHOOK_SECRET.encode(),
@@ -458,7 +458,7 @@ async def inbound_webhook(
         return {"success": True, "event_type": event_type, "result": result}
 
     except Exception as e:
-        logger.error(f"Inbound webhook handler error for {event_type}: {e}")
+        logger.error(f"Inbound webhook handler error for {event_type}: {e}", exc_info=True)
         if log_id:
             try:
                 db.execute(text("""
@@ -470,7 +470,12 @@ async def inbound_webhook(
             except Exception as e:
                 logger.error(f"Error updating webhook log to failed: {e}")
                 db.rollback()
-        raise HTTPException(status_code=500, detail="Webhook processing failed")
+        # Return 200 to prevent provider retries — log error for investigation
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=200,
+            content={"status": "error", "event_type": event_type, "message": "Processing failed, queued for retry"},
+        )
 
 
 async def _handle_lead_status_changed(payload: Dict, db: Session) -> Dict:

@@ -42,7 +42,7 @@ from services.portal_home_value_service import PortalHomeValueService
 from services.portal_document_service import PortalDocumentService
 from services.portal_notification_service import PortalNotificationService
 
-router = APIRouter(prefix="/api/portal", tags=["Portal"])
+router = APIRouter(prefix="/api/v1/portal", tags=["Portal"])
 
 
 # =============================================================================

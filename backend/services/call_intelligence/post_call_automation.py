@@ -32,6 +32,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from .pii_utils import redact_transcript_for_llm
+from .recording_consent import assess_recording_compliance
 
 logger = logging.getLogger(__name__)
 
@@ -128,18 +129,27 @@ class PostCallAutomationService:
         results["compliance_score"] = await self._compute_compliance_score(
             call_metadata, call_id, loan_id, org_id
         )
+        results["recording_consent"] = await self._check_recording_consent(
+            transcript, call_metadata, call_id, loan_id, org_id
+        )
         results["sentiment_summary"] = await self._summarize_sentiment(
             call_metadata, call_id, loan_id, org_id
         )
 
+        recording_compliant = (
+            results.get("recording_consent", {})
+            .get("compliance", {})
+            .get("compliant", True)
+        )
         logger.info(
             "post_call_automation: completed for call_id=%s — transcript=%s summary_len=%d "
-            "action_items=%d compliance=%.2f",
+            "action_items=%d compliance=%.2f recording_consent_compliant=%s",
             call_id,
             results["transcript_attached"],
             len(results.get("summary") or ""),
             len(results.get("action_items") or []),
             results.get("compliance_score") or 0.0,
+            recording_compliant,
         )
         return results
 
@@ -609,7 +619,123 @@ class PostCallAutomationService:
             return 0.0
 
     # ------------------------------------------------------------------
-    # 6. Sentiment summary
+    # 6. Recording consent compliance
+    # ------------------------------------------------------------------
+
+    async def _check_recording_consent(
+        self,
+        transcript: str,
+        metadata: dict,
+        call_id: str,
+        loan_id: int,
+        org_id: int,
+    ) -> dict:
+        """
+        Check whether recording consent was properly announced.
+
+        Cross-references the borrower's state with two-party consent laws,
+        then scans the first ~2 minutes of transcript for disclosure phrases.
+
+        If the lead's state is available (from metadata or by DB lookup),
+        it's used for state-specific rules. Otherwise defaults to requiring
+        two-party consent (safest).
+
+        Returns the full assessment dict from recording_consent module.
+        """
+        try:
+            # Resolve lead state from metadata or DB
+            lead_state = metadata.get("lead_state") or metadata.get("borrower_state")
+
+            if not lead_state:
+                lead_state = await self._resolve_lead_state(
+                    metadata.get("lead_id"), org_id
+                )
+
+            result = assess_recording_compliance(
+                transcript=transcript,
+                lead_state=lead_state,
+            )
+
+            compliance = result.get("compliance", {})
+
+            # Persist non-compliant findings to call_logs
+            if not compliance.get("compliant", True):
+                risk = compliance.get("risk_level", "unknown")
+                recommendation = compliance.get("recommendation", "")
+                try:
+                    self.db.execute(
+                        text("""
+                            UPDATE call_logs
+                            SET ai_note_summary = COALESCE(ai_note_summary, '') ||
+                                :consent_note
+                            WHERE call_sid = :call_id
+                              AND organization_id = :org_id
+                        """),
+                        {
+                            "consent_note": (
+                                f"\n[Recording Consent: NON-COMPLIANT | "
+                                f"Risk: {risk} | {recommendation}]"
+                            ),
+                            "call_id": call_id,
+                            "org_id": org_id,
+                        },
+                    )
+                    self.db.commit()
+                except Exception as e:
+                    logger.exception(
+                        "post_call: failed to persist recording consent finding "
+                        "for call %s: %s", call_id, e,
+                    )
+                    self.db.rollback()
+
+                logger.warning(
+                    "post_call: recording consent NON-COMPLIANT for call %s "
+                    "(state=%s risk=%s)",
+                    call_id, lead_state, risk,
+                )
+            else:
+                logger.info(
+                    "post_call: recording consent compliant for call %s (state=%s)",
+                    call_id, lead_state,
+                )
+
+            return result
+
+        except Exception as e:
+            logger.exception(
+                "post_call: recording consent check failed for call %s: %s",
+                call_id, e,
+            )
+            return {
+                "disclosure_detection": {"detected": False, "error": str(e)},
+                "compliance": {"compliant": False, "risk_level": "unknown", "error": str(e)},
+            }
+
+    async def _resolve_lead_state(
+        self, lead_id: Optional[int], org_id: int
+    ) -> Optional[str]:
+        """Look up the lead's state from the database."""
+        if not lead_id:
+            return None
+        try:
+            result = self.db.execute(
+                text("""
+                    SELECT state FROM leads
+                    WHERE id = :lead_id AND organization_id = :org_id
+                """),
+                {"lead_id": lead_id, "org_id": org_id},
+            )
+            row = result.fetchone()
+            return row[0] if row and row[0] else None
+        except Exception as e:
+            logger.warning(
+                "post_call: failed to look up lead state for lead_id=%s: %s",
+                lead_id, e,
+            )
+            return None
+
+    # ------------------------------------------------------------------
+    # 7. Sentiment summary
     # ------------------------------------------------------------------
 
     async def _summarize_sentiment(

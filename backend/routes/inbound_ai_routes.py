@@ -1226,8 +1226,13 @@ async def vapi_inbound_webhook(
         try:
             from services.call_intelligence.integration import handle_vapi_call_ended as _handle_ci
             if _handle_ci:
+                ci_call_data = {
+                    "messages": [{"role": "assistant", "message": transcript}] if transcript else [],
+                    "assistant": {"metadata": {"organization_id": org_id}},
+                    "duration": duration,
+                }
                 background_tasks.add_task(
-                    _handle_ci, db, vapi_call_id, transcript, summary,
+                    _handle_ci, db, vapi_call_id, ci_call_data,
                 )
         except ImportError:
             pass

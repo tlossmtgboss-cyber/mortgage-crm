@@ -982,9 +982,8 @@ async def classify_intent_llm(
             return (cached.get("intent", "general"), cached.get("confidence", 0.85))
 
     if anthropic_client is None:
-        import os
-        from anthropic import Anthropic
-        anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        from .anthropic_client import get_anthropic_client
+        anthropic_client = get_anthropic_client()
 
     try:
         # Use prompt caching: static classification instructions as cached system prompt,

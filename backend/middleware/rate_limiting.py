@@ -7,10 +7,13 @@ This middleware provides:
 - Suspicious activity detection
 - Automatic stricter limits for bad actors
 - Client identification via visitor_id, IP, or fingerprint
+- In-memory token bucket fallback when Redis is unavailable
 """
 
 import logging
 import hashlib
+import time
+import threading
 from datetime import datetime, timezone
 from typing import Optional, Tuple, Dict, Any
 from fastapi import Request, HTTPException
@@ -19,6 +22,105 @@ from starlette.middleware.base import BaseHTTPMiddleware
 import redis
 
 logger = logging.getLogger(__name__)
+
+
+class InMemoryRateLimiter:
+    """Thread-safe in-memory token bucket rate limiter.
+
+    Used as a fallback when Redis is unavailable. Applies conservative limits
+    (50% of Redis-backed limits) since state is per-instance, not shared across
+    workers.
+
+    Memory-bounded: evicts oldest entries when exceeding MAX_ENTRIES.
+    Stale entries (older than STALE_SECONDS) are cleaned up periodically.
+    """
+
+    MAX_ENTRIES = 10_000
+    STALE_SECONDS = 300  # 5 minutes
+    CLEANUP_INTERVAL = 60  # Run cleanup at most once per minute
+    CONSERVATIVE_FACTOR = 0.5  # 50% of normal limits
+
+    # Log fallback activation at most once per minute
+    _LOG_INTERVAL = 60
+
+    def __init__(self):
+        self._buckets: Dict[str, Tuple[float, float, float]] = {}
+        # Each value: (tokens_remaining, last_refill_time, max_tokens)
+        self._lock = threading.Lock()
+        self._last_cleanup = 0.0
+        self._last_fallback_log = 0.0
+
+    def log_fallback(self) -> None:
+        """Log that we are falling back to in-memory limiter, throttled to once/min."""
+        now = time.monotonic()
+        if now - self._last_fallback_log >= self._LOG_INTERVAL:
+            self._last_fallback_log = now
+            logger.warning(
+                "Redis unavailable — rate limiter falling back to in-memory token bucket"
+            )
+
+    def check(self, key: str, max_requests: int, window_seconds: int) -> Tuple[bool, int]:
+        """Check if a request is allowed under the token bucket.
+
+        Args:
+            key: Unique identifier for the rate limit bucket.
+            max_requests: The normal (Redis-backed) limit. Will be halved internally.
+            window_seconds: Time window in seconds for the limit.
+
+        Returns:
+            (allowed, remaining) matching the Redis path return signature.
+            ``remaining`` is the estimated tokens left; when denied it is 0.
+        """
+        now = time.monotonic()
+        conservative_max = max(1, int(max_requests * self.CONSERVATIVE_FACTOR))
+        refill_rate = conservative_max / max(window_seconds, 1)  # tokens per second
+
+        with self._lock:
+            self._maybe_cleanup(now)
+
+            if key in self._buckets:
+                tokens, last_refill, _ = self._buckets[key]
+                elapsed = now - last_refill
+                tokens = min(conservative_max, tokens + elapsed * refill_rate)
+            else:
+                tokens = float(conservative_max)
+
+            if tokens >= 1.0:
+                tokens -= 1.0
+                self._buckets[key] = (tokens, now, float(conservative_max))
+                return True, int(tokens)
+            else:
+                # Denied — record the attempt time but don't deduct
+                self._buckets[key] = (tokens, now, float(conservative_max))
+                return False, 0
+
+    def _maybe_cleanup(self, now: float) -> None:
+        """Remove stale entries and evict oldest if over capacity.
+
+        Must be called while holding self._lock.
+        """
+        if now - self._last_cleanup < self.CLEANUP_INTERVAL:
+            return
+        self._last_cleanup = now
+
+        # Remove entries older than STALE_SECONDS
+        stale_cutoff = now - self.STALE_SECONDS
+        stale_keys = [
+            k for k, (_, last_refill, _) in self._buckets.items()
+            if last_refill < stale_cutoff
+        ]
+        for k in stale_keys:
+            del self._buckets[k]
+
+        # If still over capacity, evict oldest entries
+        if len(self._buckets) > self.MAX_ENTRIES:
+            sorted_keys = sorted(
+                self._buckets.keys(),
+                key=lambda k: self._buckets[k][1]  # sort by last_refill time
+            )
+            evict_count = len(self._buckets) - self.MAX_ENTRIES
+            for k in sorted_keys[:evict_count]:
+                del self._buckets[k]
 
 # Per-tenant rate limit quotas by subscription tier (PERF-004)
 # These define the TOTAL requests/min allowed for an entire organization
@@ -43,6 +145,7 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
     def __init__(self, app, redis_client: redis.Redis):
         super().__init__(app)
         self.redis = redis_client
+        self._memory_limiter = InMemoryRateLimiter()
 
         # Per-client rate limit tiers by route category
         self.LIMITS = {
@@ -242,7 +345,12 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
 
         except redis.RedisError as e:
             logger.error(f"Redis error in tenant rate limiter: {e}")
-            return True, 0  # Fail open
+            # Fall back to in-memory limiter instead of failing open
+            self._memory_limiter.log_fallback()
+            allowed, remaining = self._memory_limiter.check(
+                key, limit, window
+            )
+            return allowed, 0 if allowed else window
 
     async def _get_tenant_tier(self, org_id: int) -> str:
         """Look up an org's subscription tier from cache or DB.
@@ -305,8 +413,15 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
 
         except redis.RedisError as e:
             logger.error(f"Redis error in rate limiter: {e}")
-            # Fail open on Redis errors (allow request)
-            return True, 0
+            # Fall back to in-memory limiter instead of failing open
+            self._memory_limiter.log_fallback()
+            fallback_key = f"ratelimit:{category}:{client_id}"
+            allowed, remaining = self._memory_limiter.check(
+                fallback_key,
+                limit_config['requests'],
+                limit_config['window'],
+            )
+            return allowed, 0 if allowed else limit_config['window']
 
     async def _track_activity(self, client_id: str, request: Request):
         """Track activity for suspicious pattern detection"""

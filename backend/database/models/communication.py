@@ -20,6 +20,7 @@ from sqlalchemy.orm import relationship
 
 # Import Base from the db module
 from db import Base
+from encryption_utils import EncryptedString
 
 # Import enums from the database package
 from database.enums import ActivityType
@@ -162,8 +163,8 @@ class SMSMessage(Base):
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))
     conversation_id = Column(Integer, ForeignKey("sms_conversations.id"))
-    to_number = Column(String, nullable=False)
-    from_number = Column(String, nullable=False)
+    to_number = Column(EncryptedString, nullable=False)  # PII: phone number
+    from_number = Column(EncryptedString, nullable=False)  # PII: phone number
     message = Column(Text, nullable=False)
     direction = Column(String)  # inbound, outbound
     status = Column(String)  # queued, sent, delivered, failed, received
@@ -191,12 +192,12 @@ class SMSConversation(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
-    phone_number = Column(String, nullable=False, index=True)  # The external party's phone
+    phone_number = Column(String, nullable=False, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding phone_hash column.
     user_id = Column(Integer, ForeignKey("users.id"))  # The LO managing this conversation
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))
     contact_id = Column(Integer)  # No FK - contacts table may not exist in all deployments
-    contact_name = Column(String)  # Cached name for quick display
+    contact_name = Column(EncryptedString)  # PII: name (cached for display)
     is_active = Column(Boolean, default=True)
     ai_enabled = Column(Boolean, default=True)  # Whether AI auto-responds
     last_message_at = Column(DateTime)
@@ -228,8 +229,8 @@ class EmailMessage(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))
-    to_email = Column(String, nullable=False)
-    from_email = Column(String, nullable=False)
+    to_email = Column(EncryptedString, nullable=False)  # PII: email address
+    from_email = Column(EncryptedString, nullable=False)  # PII: email address
     subject = Column(String)
     body = Column(Text)
     html_body = Column(Text)
@@ -262,8 +263,8 @@ class Email(Base):
     message_id = Column(String, unique=True, index=True)  # Microsoft Graph message ID
     user_id = Column(Integer, ForeignKey("users.id"))
     lead_id = Column(Integer, ForeignKey("leads.id"))  # Linked lead if identified
-    sender_email = Column(String, index=True)
-    sender_name = Column(String)
+    sender_email = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding email_hash column.
+    sender_name = Column(EncryptedString)  # PII: name
     recipient_emails = Column(JSON)  # Array of recipient emails
     subject = Column(String)
     body_text = Column(Text)  # Plain text body
@@ -294,8 +295,8 @@ class EmailDraft(Base):
     loan_id = Column(Integer, ForeignKey("loans.id"), index=True)
 
     # Email content
-    recipient_email = Column(String, index=True)
-    recipient_name = Column(String)
+    recipient_email = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding email_hash column.
+    recipient_name = Column(EncryptedString)  # PII: name
     cc_emails = Column(JSON)  # Array of CC recipients
     subject = Column(String)
     body_html = Column(Text)
@@ -325,7 +326,7 @@ class EmailVerificationToken(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
-    email = Column(String, nullable=False)
+    email = Column(EncryptedString, nullable=False)  # PII: email address
     token = Column(String, unique=True, nullable=False)
     expires_at = Column(DateTime, nullable=False)
     verified_at = Column(DateTime)
@@ -345,8 +346,8 @@ class TeamsMessage(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))
-    to_user = Column(String)  # Email or Teams user ID
-    from_user = Column(String)
+    to_user = Column(EncryptedString)  # PII: email or Teams user ID
+    from_user = Column(EncryptedString)  # PII: email or Teams user ID
     message = Column(Text, nullable=False)
     channel_id = Column(String)
     message_type = Column(String, default="direct")  # direct, channel
@@ -374,9 +375,9 @@ class VoicemailDrop(Base):
     template_id = Column(Integer, ForeignKey("voicemail_templates.id"), index=True)
 
     # Contact info
-    contact_name = Column(String(255))
-    phone_number = Column(String(20), nullable=False)
-    contact_email = Column(String(255))
+    contact_name = Column(EncryptedString)  # PII: name
+    phone_number = Column(EncryptedString, nullable=False)  # PII: phone number
+    contact_email = Column(EncryptedString)  # PII: email address
 
     # Message
     message_text = Column(Text, nullable=False)
@@ -576,9 +577,9 @@ class IntegrationCredential(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     integration_type = Column(String, nullable=False)  # calendly, zoom, docusign, etc.
-    api_key = Column(String, nullable=False)  # Encrypted API key
-    refresh_token = Column(String)  # For OAuth integrations
-    access_token = Column(String)  # For OAuth integrations
+    api_key = Column(EncryptedString, nullable=False)  # Encrypted at-rest: API key
+    refresh_token = Column(EncryptedString)  # Encrypted at-rest: OAuth refresh token
+    access_token = Column(EncryptedString)  # Encrypted at-rest: OAuth access token
     token_expiry = Column(DateTime)  # When access token expires
     integration_metadata = Column(JSON)  # Additional integration-specific data
     is_active = Column(Boolean, default=True)

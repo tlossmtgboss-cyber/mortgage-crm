@@ -2,10 +2,13 @@
 Vapi AI Receptionist - Database Models
 Handles call records, transcriptions, and lead capture
 """
-from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Float, Boolean, ForeignKey
+import logging
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Float, Boolean, ForeignKey, text
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 from database import Base
+
+logger = logging.getLogger(__name__)
 
 
 class VapiCall(Base):
@@ -46,6 +49,11 @@ class VapiCall(Base):
 
     # CRM Integration
     lead_id = Column(Integer, ForeignKey('leads.id'), nullable=True)
+
+    # Call Intelligence
+    ci_processed = Column(Boolean, default=False)
+    ci_extractions_count = Column(Integer, default=0)
+    ci_tasks_created = Column(Integer, default=0)
 
     # Relationships
     notes = relationship("VapiCallNote", back_populates="call", cascade="all, delete-orphan")
@@ -200,6 +208,29 @@ class StaffAvailability(Base):
     # Timestamps
     last_call_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+def ensure_vapi_ci_columns(db) -> None:
+    """Add Call Intelligence columns to vapi_calls if they don't exist.
+
+    Safe to call on every startup — uses IF NOT EXISTS.
+    """
+    _cols = [
+        ("ci_processed", "BOOLEAN DEFAULT FALSE"),
+        ("ci_extractions_count", "INTEGER DEFAULT 0"),
+        ("ci_tasks_created", "INTEGER DEFAULT 0"),
+    ]
+    for col_name, col_def in _cols:
+        try:
+            db.execute(text(
+                f"ALTER TABLE vapi_calls ADD COLUMN IF NOT EXISTS {col_name} {col_def}"
+            ))
+        except Exception as e:
+            logger.warning("Could not add vapi_calls.%s: %s", col_name, e)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
 
 
 class CallTransferConfig(Base):

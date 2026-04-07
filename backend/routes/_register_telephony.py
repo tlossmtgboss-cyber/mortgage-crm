@@ -218,6 +218,14 @@ def register_telephony_routes(app, get_db, get_current_user, get_current_user_fl
     except Exception as e:
         logger.warning(f"Retell AI routes not loaded: {e}")
 
+    # Retell AI Webhook routes (dedicated webhook receiver)
+    try:
+        from routes.retell_webhook_routes import router as retell_webhook_router
+        app.include_router(retell_webhook_router, tags=["Retell Webhooks"])
+        logger.info("Retell Webhook routes loaded")
+    except Exception as e:
+        logger.warning(f"Retell Webhook routes not loaded: {e}")
+
     # Telnyx-Retell Bridge routes
     try:
         from routes.telnyx_retell_routes import router as telnyx_retell_router, set_dependencies as set_telnyx_retell_deps

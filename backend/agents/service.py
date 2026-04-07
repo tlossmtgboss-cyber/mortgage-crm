@@ -19,6 +19,8 @@ from datetime import datetime
 from anthropic import Anthropic, AsyncAnthropic
 from sqlalchemy.orm import Session
 
+from .anthropic_client import get_anthropic_client, get_async_anthropic_client
+
 from .orchestrator import run_orchestrator, OrchestratorSession
 from .state import create_initial_state, QueryIntent
 
@@ -67,13 +69,9 @@ class AIAgentService:
         self.current_user = current_user
         self.autonomous_mode = autonomous_mode
 
-        # Initialize Anthropic clients (sync and async)
-        self.anthropic_client = Anthropic(
-            api_key=os.getenv("ANTHROPIC_API_KEY")
-        )
-        self.async_anthropic_client = AsyncAnthropic(
-            api_key=os.getenv("ANTHROPIC_API_KEY")
-        )
+        # Initialize Anthropic clients (sync and async) with timeout/retry
+        self.anthropic_client = get_anthropic_client()
+        self.async_anthropic_client = get_async_anthropic_client()
 
         # Model configuration
         self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
@@ -2379,7 +2377,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 client_secret = os.getenv("MICROSOFT_CLIENT_SECRET")
 
                 if refresh_token and client_id and client_secret:
-                    async with httpx.AsyncClient() as client:
+                    async with httpx.AsyncClient(timeout=30.0) as client:
                         refresh_response = await client.post(
                             "https://login.microsoftonline.com/common/oauth2/v2.0/token",
                             data={
@@ -2439,7 +2437,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 logger.info(f"[send_email] Detected scheduling email - checking calendar availability")
                 try:
                     # Get busy slots from Microsoft Graph calendar
-                    async with httpx.AsyncClient() as cal_client:
+                    async with httpx.AsyncClient(timeout=15.0) as cal_client:
                         # First get the user's email
                         me_response = await cal_client.get(
                             "https://graph.microsoft.com/v1.0/me",
@@ -2499,7 +2497,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                     # Continue without availability - don't block the email
 
             # Send email via Microsoft Graph
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 email_data = {
                     "message": {
                         "subject": subject,

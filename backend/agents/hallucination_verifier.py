@@ -21,6 +21,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import httpx
 from anthropic import Anthropic
 
+from .anthropic_client import get_anthropic_client
+
 from .metrics.models import (
     ClaimType,
     VerificationStatus,
@@ -117,9 +119,10 @@ class HallucinationVerifier:
     """
 
     def __init__(self):
-        self.client = Anthropic(
-            api_key=os.getenv("ANTHROPIC_API_KEY"),
-            timeout=httpx.Timeout(15.0),
+        # Short timeout: verification is non-blocking and should not delay responses
+        self.client = get_anthropic_client(
+            timeout=httpx.Timeout(30.0, connect=5.0),
+            max_retries=2,
         )
         self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
