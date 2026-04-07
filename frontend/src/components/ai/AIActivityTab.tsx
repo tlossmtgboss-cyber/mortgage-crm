@@ -676,6 +676,8 @@ interface AIActivityTabProps {
   loanStatus?: string;
   /** Optional: pass events directly (bypasses API fetch) */
   events?: AIActivityEvent[];
+  /** Click-to-dial handler — when provided, shows a "Start Call Intelligence" button */
+  onClickToDial?: () => void;
 }
 
 const AIActivityTab: React.FC<AIActivityTabProps> = ({
@@ -685,6 +687,7 @@ const AIActivityTab: React.FC<AIActivityTabProps> = ({
   loanAmount,
   loanStatus = "In Processing",
   events: propEvents,
+  onClickToDial,
 }) => {
   const [events, setEvents] = useState<AIActivityEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -843,6 +846,43 @@ const AIActivityTab: React.FC<AIActivityTabProps> = ({
           })}
 
           <div style={{ flex: 1 }} />
+
+          {/* Start Call Intelligence button */}
+          {onClickToDial && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onClickToDial();
+              }}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "6px 14px",
+                borderRadius: 20,
+                border: "1px solid #A7F3D0",
+                background: "#059669",
+                color: "#FFFFFF",
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: "'DM Sans', sans-serif",
+                cursor: "pointer",
+                transition: "all 0.15s",
+                boxShadow: "0 1px 3px rgba(5,150,105,0.3)",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "#047857";
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 6px rgba(5,150,105,0.4)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.background = "#059669";
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 1px 3px rgba(5,150,105,0.3)";
+              }}
+            >
+              <span style={{ fontSize: 13 }}>📞</span>
+              Start Call Intelligence
+            </button>
+          )}
 
           {/* Refresh button */}
           <button

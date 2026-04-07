@@ -3927,6 +3927,7 @@ function LoanDetail() {
               loanNumber={loan?.loan_number}
               loanAmount={loan?.loan_amount}
               loanStatus={loan?.stage}
+              onClickToDial={() => handleAction('call')}
             />
           </div>
         )}

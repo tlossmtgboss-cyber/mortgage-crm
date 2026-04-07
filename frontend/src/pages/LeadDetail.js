@@ -3600,6 +3600,7 @@ function LeadDetail() {
               loanNumber={lead?.loan_number}
               loanAmount={lead?.loan_amount}
               loanStatus={lead?.stage}
+              onClickToDial={() => handleAction('call')}
             />
           </div>
           )}

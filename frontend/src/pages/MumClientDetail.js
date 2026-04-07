@@ -2911,6 +2911,7 @@ function MumClientDetail() {
               loanNumber={client?.loan_number}
               loanAmount={client?.loan_amount}
               loanStatus={client?.stage}
+              onClickToDial={() => handleAction('call')}
             />
           </div>
           )}
