@@ -633,7 +633,28 @@ function App() {
           <Route path="/verify-account" element={<AccountVerification />} />
           <Route path="/verify-email-sent" element={<EmailVerificationSent />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/briefing" element={<PrivateRoute><LazyPage><BriefingPage /></LazyPage></PrivateRoute>} />
+          <Route
+            path="/briefing"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''} ${taskSidebarOpen ? 'with-task-sidebar' : ''}`}>
+                    <LazyPage><BriefingPage /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
           <Route path="/aria" element={<PrivateRoute><LazyPage><AriaVoiceApp /></LazyPage></PrivateRoute>} />
           <Route path="/aria/calendar" element={<PrivateRoute><LazyPage><AriaCalendarPage /></LazyPage></PrivateRoute>} />
           <Route path="/aria/calculator" element={<PrivateRoute><LazyPage><AriaMortgageCalculator /></LazyPage></PrivateRoute>} />
