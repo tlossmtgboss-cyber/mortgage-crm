@@ -298,7 +298,7 @@ export default function EmbeddableBookingWidget({ slug, onBooked, theme = {} }) 
       if (!res.ok) throw new Error('Booking link not found');
       const data = await res.json();
       setBookingLink(data);
-      await loadSlots();
+      await loadSlots(data);
       setStep('dates');
     } catch (err) {
       setError(err.message);
@@ -306,14 +306,24 @@ export default function EmbeddableBookingWidget({ slug, onBooked, theme = {} }) 
     }
   };
 
-  const loadSlots = async () => {
+  const loadSlots = async (linkData) => {
     try {
       const today = new Date();
       const end = new Date(today);
       end.setDate(end.getDate() + 14);
-      const res = await fetch(
-        `${apiBase}/${slug}/slots?start_date=${today.toISOString().split('T')[0]}&end_date=${end.toISOString().split('T')[0]}`
-      );
+
+      // Resolve appointment_type_id from the booking link data
+      const bk = linkData || bookingLink;
+      const types = bk?.booking_page?.appointment_types || bk?.appointment_types || [];
+      const typeId = types[0]?.id;
+      const duration = types[0]?.default_duration_minutes || 30;
+
+      let url = `${apiBase}/${slug}/slots?start_date=${today.toISOString().split('T')[0]}&end_date=${end.toISOString().split('T')[0]}`;
+      if (typeId) {
+        url += `&appointment_type_id=${typeId}&duration_minutes=${duration}`;
+      }
+
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         const slotList = data.slots || data.available_slots || [];
