@@ -1,0 +1,37 @@
+# SwiftLint Configuration for Perennia AI iOS
+disabled_rules:
+  - trailing_whitespace
+  - line_length
+  - type_body_length
+  - file_length
+  - function_body_length
+  - cyclomatic_complexity
+  - force_cast
+
+opt_in_rules:
+  - empty_count
+  - closure_spacing
+  - contains_over_filter_count
+  - discouraged_optional_boolean
+  - empty_string
+  - explicit_init
+  - fatal_error_message
+  - first_where
+  - implicitly_unwrapped_optional
+  - modifier_order
+  - overridden_super_call
+  - private_action
+  - private_outlet
+  - redundant_nil_coalescing
+  - unowned_variable_capture
+
+included:
+  - App
+
+excluded:
+  - Pods
+  - build
+  - DerivedData
+  - .build
+
+reporter: "github-actions-logging"

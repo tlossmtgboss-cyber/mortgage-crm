@@ -4,6 +4,7 @@
  * Manages:
  * - Loading recent CI sessions list
  * - Selecting a history session and loading its artifacts
+ * - Fetching session transcript for playback/review
  * - Back navigation from history detail view
  *
  * Extracted from MobileCallIntelligence.jsx
@@ -20,6 +21,8 @@ const useCallHistory = ({ activeTab }) => {
   const [selectedHistorySession, setSelectedHistorySession] = useState(null);
   const [historyArtifacts, setHistoryArtifacts] = useState([]);
   const [historyArtifactsLoading, setHistoryArtifactsLoading] = useState(false);
+  const [historyTranscript, setHistoryTranscript] = useState(null);
+  const [historyTranscriptLoading, setHistoryTranscriptLoading] = useState(false);
 
   // Load history
   const loadHistory = useCallback(async () => {
@@ -41,24 +44,38 @@ const useCallHistory = ({ activeTab }) => {
     }
   }, [activeTab, loadHistory]);
 
-  // Select a history session and load its artifacts
+  // Select a history session and load its artifacts + transcript
   const handleSelectHistorySession = useCallback(async (session) => {
     setSelectedHistorySession(session);
     setHistoryArtifactsLoading(true);
-    try {
-      const result = await callMonitoringAPI.getArtifacts(session.id);
-      setHistoryArtifacts(result?.artifacts || result || []);
-    } catch {
-      toast.error('Failed to load session artifacts');
-    } finally {
-      setHistoryArtifactsLoading(false);
-    }
+    setHistoryTranscript(null);
+    setHistoryTranscriptLoading(true);
+
+    // Fetch artifacts and transcript in parallel
+    const artifactsPromise = callMonitoringAPI.getArtifacts(session.id)
+      .then((result) => result?.artifacts || result || [])
+      .catch(() => {
+        toast.error('Failed to load session artifacts');
+        return [];
+      });
+
+    const transcriptPromise = callMonitoringAPI.getTranscript(session.id)
+      .then((result) => result?.full_transcript || result?.transcript || null)
+      .catch(() => null); // Transcript fetch is best-effort
+
+    const [artifacts, transcript] = await Promise.all([artifactsPromise, transcriptPromise]);
+
+    setHistoryArtifacts(artifacts);
+    setHistoryArtifactsLoading(false);
+    setHistoryTranscript(transcript);
+    setHistoryTranscriptLoading(false);
   }, []);
 
   // Back from history detail
   const handleBackFromHistoryDetail = useCallback(() => {
     setSelectedHistorySession(null);
     setHistoryArtifacts([]);
+    setHistoryTranscript(null);
   }, []);
 
   return {
@@ -68,6 +85,8 @@ const useCallHistory = ({ activeTab }) => {
     selectedHistorySession,
     historyArtifacts,
     historyArtifactsLoading,
+    historyTranscript,
+    historyTranscriptLoading,
 
     // Actions
     loadHistory,

@@ -394,6 +394,8 @@ function SessionCard({ session, onTap }) {
     session.metadata?.client_name ||
     null;
 
+  const hasRecording = !!(session.recording_url || session.audio_url);
+
   return (
     <button className="mci-session-card" onClick={() => onTap(session)}>
       <div className="mci-session-info">
@@ -406,6 +408,14 @@ function SessionCard({ session, onTap }) {
           </span>
           {duration && (
             <span className="mci-session-duration">{duration}</span>
+          )}
+          {hasRecording && (
+            <span className="mci-session-has-recording" title="Recording available">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+            </span>
           )}
           {artifactCount > 0 && (
             <span className="mci-session-artifacts">
@@ -474,6 +484,7 @@ export default function MobileCallIntelligence() {
       stopSpeechRecognition: transcription.stopSpeechRecognition,
       transcript: transcription.transcript,
       onStopComplete: (sid) => {
+        transcription.clearSessionOfflineChunks();
         setActiveTab('artifacts');
         artifactsMgr.beginArtifactFetch(sid);
       },
@@ -517,7 +528,7 @@ export default function MobileCallIntelligence() {
     setClientSearchValue, handleClientSearch, clearClient,
   } = monitor;
 
-  const { transcript, interimText, transcriptRef } = transcription;
+  const { transcript, interimText, transcriptRef, pendingChunksCount } = transcription;
 
   const {
     artifacts, artifactsLoading, actionLoading,
@@ -528,8 +539,12 @@ export default function MobileCallIntelligence() {
   const {
     sessions, sessionsLoading,
     selectedHistorySession, historyArtifacts, historyArtifactsLoading,
+    historyTranscript, historyTranscriptLoading,
     loadHistory, handleSelectHistorySession, handleBackFromHistoryDetail,
   } = history;
+
+  // Collapsible transcript toggle in history detail
+  const [historyTranscriptExpanded, setHistoryTranscriptExpanded] = useState(false);
 
   // ---------------------------------------------------------------------------
   // Render
@@ -678,6 +693,11 @@ export default function MobileCallIntelligence() {
             <div className="mci-transcript-container">
               <div className="mci-transcript-header">
                 <span className="mci-transcript-title">Live Transcript</span>
+                {pendingChunksCount > 0 && (
+                  <span className="mci-pending-chunks">
+                    {pendingChunksCount} chunk{pendingChunksCount !== 1 ? 's' : ''} pending
+                  </span>
+                )}
                 {isRecording && (
                   <span className="mci-transcript-cursor-label">
                     <span className="mci-blink-cursor" />
@@ -802,7 +822,10 @@ export default function MobileCallIntelligence() {
                 <div className="mci-history-detail-header">
                   <button
                     className="mci-history-back-btn"
-                    onClick={handleBackFromHistoryDetail}
+                    onClick={() => {
+                      setHistoryTranscriptExpanded(false);
+                      handleBackFromHistoryDetail();
+                    }}
                     aria-label="Back to history"
                   >
                     <IconBack size={20} color="#374151" />
@@ -811,6 +834,7 @@ export default function MobileCallIntelligence() {
                   <div className="mci-history-detail-title">
                     {selectedHistorySession.client_name ||
                       selectedHistorySession.client?.name ||
+                      selectedHistorySession.metadata?.client_name ||
                       'Session'}
                   </div>
                   <div className="mci-history-detail-date">
@@ -819,8 +843,112 @@ export default function MobileCallIntelligence() {
                         selectedHistorySession.created_at
                     )}
                   </div>
+
+                  {/* Duration display */}
+                  {(selectedHistorySession.duration_seconds ||
+                    (selectedHistorySession.ended_at && selectedHistorySession.started_at)) && (
+                    <div className="mci-history-detail-duration">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      <span>
+                        {selectedHistorySession.duration_seconds
+                          ? formatDuration(selectedHistorySession.duration_seconds)
+                          : formatDuration(
+                              Math.round(
+                                (new Date(selectedHistorySession.ended_at) -
+                                  new Date(selectedHistorySession.started_at)) /
+                                  1000
+                              )
+                            )}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
+                {/* Audio player */}
+                <div className="mci-audio-section">
+                  {(selectedHistorySession.recording_url || selectedHistorySession.audio_url) ? (
+                    <div className="mci-audio-player">
+                      <div className="mci-audio-player-label">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                          <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+                        </svg>
+                        Call Recording
+                      </div>
+                      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+                      <audio
+                        controls
+                        preload="metadata"
+                        src={selectedHistorySession.recording_url || selectedHistorySession.audio_url}
+                        className="mci-audio-element"
+                      />
+                    </div>
+                  ) : (
+                    <div className="mci-audio-unavailable">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                        <line x1="23" y1="9" x2="17" y2="15" />
+                        <line x1="17" y1="9" x2="23" y2="15" />
+                      </svg>
+                      No recording available
+                    </div>
+                  )}
+                </div>
+
+                {/* Transcript section */}
+                <div className="mci-history-transcript-section">
+                  <button
+                    className="mci-history-transcript-toggle"
+                    onClick={() => setHistoryTranscriptExpanded((prev) => !prev)}
+                    disabled={historyTranscriptLoading}
+                  >
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`mci-history-transcript-chevron${historyTranscriptExpanded ? ' mci-history-transcript-chevron--open' : ''}`}
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                    <span>Transcript</span>
+                    {historyTranscriptLoading && (
+                      <span className="mci-spinner-small" />
+                    )}
+                  </button>
+                  {historyTranscriptExpanded && (
+                    <div className="mci-history-transcript-body">
+                      {historyTranscriptLoading ? (
+                        <div className="mci-history-transcript-loading">
+                          <span className="mci-spinner-small" />
+                          Loading transcript...
+                        </div>
+                      ) : historyTranscript ? (
+                        <p className="mci-history-transcript-text">{historyTranscript}</p>
+                      ) : (
+                        <p className="mci-history-transcript-empty">No transcript available for this session.</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Open Full Review button */}
+                <button
+                  className="mci-open-review-btn"
+                  onClick={() => navigate(`/call-intelligence/review/${selectedHistorySession.id}`)}
+                >
+                  Open Full Review
+                  <IconChevronRight size={16} color="#fff" />
+                </button>
+
+                {/* Artifacts */}
                 {historyArtifactsLoading && (
                   <div className="mci-artifact-list">
                     {[1, 2].map((i) => <SkeletonCard key={i} />)}

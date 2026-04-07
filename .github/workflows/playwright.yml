@@ -34,18 +34,11 @@ jobs:
         run: npx playwright test tests/api.spec.js --project=chromium
         env:
           API_BASE_URL: https://app.perenniaai.com
-        continue-on-error: true
 
       - name: Run E2E Tests
         run: npx playwright test --project=chromium --ignore-pattern="**/api.spec.js"
         env:
           TEST_BASE_URL: https://frontend-tim-loss-projects.vercel.app
-        continue-on-error: true
-
-      - name: Check test results
-        run: |
-          echo "Tests completed. Check artifacts for detailed results."
-          echo "Note: External API/E2E tests may fail due to network restrictions."
 
       - uses: actions/upload-artifact@v4
         if: always()

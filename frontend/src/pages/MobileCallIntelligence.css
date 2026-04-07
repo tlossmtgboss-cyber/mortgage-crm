@@ -456,6 +456,16 @@
   letter-spacing: 0.07em;
 }
 
+.mci-pending-chunks {
+  font-size: 11px;
+  font-weight: 500;
+  color: #d97706;
+  background: #fef3c7;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
 .mci-transcript-cursor-label {
   display: flex;
   align-items: center;
@@ -782,6 +792,14 @@
   font-variant-numeric: tabular-nums;
 }
 
+.mci-session-has-recording {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mci-green);
+  flex-shrink: 0;
+}
+
 .mci-session-artifacts {
   font-size: 11px;
   font-weight: 600;
@@ -871,6 +889,171 @@
 .mci-history-detail-date {
   font-size: 13px;
   color: var(--mci-text-muted);
+}
+
+.mci-history-detail-duration {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--mci-text-secondary);
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =============================================================================
+   HISTORY DETAIL — AUDIO PLAYER
+   ============================================================================= */
+
+.mci-audio-section {
+  background: var(--mci-surface);
+  border-radius: var(--mci-radius);
+  box-shadow: var(--mci-shadow-sm);
+  overflow: hidden;
+}
+
+.mci-audio-player {
+  padding: 14px;
+}
+
+.mci-audio-player-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mci-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 10px;
+}
+
+.mci-audio-element {
+  width: 100%;
+  height: 40px;
+  border-radius: var(--mci-radius-sm);
+  outline: none;
+}
+
+/* Dark-themed audio player for WebKit browsers */
+.mci-audio-element::-webkit-media-controls-panel {
+  background: var(--mci-surface);
+}
+
+.mci-audio-unavailable {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px;
+  font-size: 14px;
+  color: var(--mci-text-muted);
+  font-style: italic;
+}
+
+/* =============================================================================
+   HISTORY DETAIL — TRANSCRIPT SECTION
+   ============================================================================= */
+
+.mci-history-transcript-section {
+  background: var(--mci-surface);
+  border-radius: var(--mci-radius);
+  box-shadow: var(--mci-shadow-sm);
+  overflow: hidden;
+}
+
+.mci-history-transcript-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--mci-text-primary);
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mci-history-transcript-toggle:active {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.mci-history-transcript-toggle:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mci-history-transcript-chevron {
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.mci-history-transcript-chevron--open {
+  transform: rotate(180deg);
+}
+
+.mci-history-transcript-body {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--mci-border);
+  margin-top: -1px;
+}
+
+.mci-history-transcript-text {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--mci-text-secondary);
+  margin: 12px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.mci-history-transcript-empty {
+  font-size: 13px;
+  color: var(--mci-text-muted);
+  font-style: italic;
+  margin: 12px 0 0;
+}
+
+.mci-history-transcript-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--mci-text-muted);
+  padding: 12px 0 0;
+}
+
+/* =============================================================================
+   HISTORY DETAIL — OPEN FULL REVIEW BUTTON
+   ============================================================================= */
+
+.mci-open-review-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 48px;
+  background: var(--mci-accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--mci-radius-sm);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s;
+}
+
+.mci-open-review-btn:active {
+  opacity: 0.85;
 }
 
 /* =============================================================================
@@ -1079,6 +1262,23 @@
 
   .mci-history-toolbar .mci-refresh-btn:active {
     background: #0f172a;
+  }
+
+  /* Audio player dark mode */
+  .mci-audio-element::-webkit-media-controls-panel {
+    background: #1e293b;
+  }
+
+  .mci-history-transcript-toggle:active {
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  .mci-history-transcript-text {
+    color: #cbd5e1;
+  }
+
+  .mci-open-review-btn {
+    background: #2563eb;
   }
 }
 

@@ -55,7 +55,8 @@ jobs:
           SECRET_KEY: ci-test-secret-key
           DATA_ENCRYPTION_KEY: ${{ secrets.DATA_ENCRYPTION_KEY }}
         run: |
-          pytest tests/ -v -m "unit" --timeout=30 --tb=short --continue-on-collection-errors
+          pytest tests/ -v -m "unit" --timeout=30 --tb=short --continue-on-collection-errors \
+            --cov=. --cov-report=xml --cov-fail-under=70
   contract-tests:
     name: API Contract Tests (Critical)
     runs-on: ubuntu-latest
@@ -295,11 +296,9 @@ jobs:
         run: |
           flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
-        continue-on-error: true
       - name: Run ESLint
         working-directory: ./frontend
         run: npm run lint --if-present
-        continue-on-error: true
   security-scan:
     name: Security Scan
     runs-on: ubuntu-latest
@@ -314,7 +313,8 @@ jobs:
         run: pip install bandit safety
       - name: Run Bandit security scan
         working-directory: ./backend
-        run: bandit -r . -x ./tests -f json -o bandit-report.json || true
+        run: |
+          bandit -r . -x ./tests -ll -f json -o bandit-report.json
       - name: Check for known vulnerabilities
         working-directory: ./backend
         run: safety check -r requirements.txt --full-report || true
@@ -324,6 +324,28 @@ jobs:
           name: security-reports
           path: ./backend/bandit-report.json
           retention-days: 30
+  type-check:
+    name: Type Check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install mypy types-redis types-requests
+      - name: Run mypy
+        working-directory: ./backend
+        run: |
+          mypy --ignore-missing-imports --no-strict-optional --warn-return-any auth/ db.py middleware/rate_limiting.py middleware/csrf_protection.py
+        continue-on-error: true  # Start as warning-only, tighten later
   build-check:
     name: Build Check
     runs-on: ubuntu-latest

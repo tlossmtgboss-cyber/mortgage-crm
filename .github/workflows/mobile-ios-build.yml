@@ -77,6 +77,25 @@ jobs:
         run: npm ci
 
       # -----------------------------------------------------------------
+      # SwiftLint Static Analysis
+      # -----------------------------------------------------------------
+      - name: Run SwiftLint
+        run: |
+          brew install swiftlint
+          cd frontend/ios/App
+          swiftlint lint --reporter github-actions-logging --config .swiftlint.yml 2>/dev/null || swiftlint lint --reporter github-actions-logging || true
+        continue-on-error: true
+
+      # -----------------------------------------------------------------
+      # Audit npm dependencies
+      # -----------------------------------------------------------------
+      - name: Audit npm dependencies
+        run: |
+          cd frontend
+          npm audit --audit-level=high --omit=dev || true
+        continue-on-error: true
+
+      # -----------------------------------------------------------------
       # Lint (non-blocking — report but don't fail the build)
       # -----------------------------------------------------------------
       - name: Run linting
@@ -112,6 +131,17 @@ jobs:
           # Clear stale SPM resolution so Xcode re-resolves
           rm -f ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
           npx cap sync ios
+
+      # -----------------------------------------------------------------
+      # Verify Privacy Manifest (required for iOS 17+)
+      # -----------------------------------------------------------------
+      - name: Verify Privacy Manifest
+        run: |
+          if [ ! -f "frontend/ios/App/App/PrivacyInfo.xcprivacy" ]; then
+            echo "WARNING: Missing PrivacyInfo.xcprivacy — required for iOS 17+"
+          else
+            echo "PrivacyInfo.xcprivacy found."
+          fi
 
       # -----------------------------------------------------------------
       # Pre-flight validation script

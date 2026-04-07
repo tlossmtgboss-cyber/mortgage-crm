@@ -14,18 +14,25 @@
  * 4. Fork-based sandbox escape detection
  * 5. Dynamic library injection detection (DYLD_INSERT_LIBRARIES)
  * 6. Symbolic link checks on system paths
+ * 7. Anti-hooking framework detection (frida, cycript, substrate)
  */
 
 import Foundation
 import Capacitor
 import MachO
+import DeviceCheck
+import CryptoKit
 
 @objc(DeviceIntegrityPlugin)
 public class DeviceIntegrityPlugin: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "DeviceIntegrityPlugin"
     public let jsName = "DeviceIntegrity"
     public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "checkIntegrity", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "checkIntegrity", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "enforceIntegrity", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "attestDevice", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "startPeriodicChecks", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "stopPeriodicChecks", returnType: CAPPluginReturnPromise)
     ]
 
     // MARK: - Known jailbreak indicators
@@ -93,9 +100,18 @@ public class DeviceIntegrityPlugin: CAPPlugin, CAPBridgedPlugin {
         "/tmp/jailbreak_integrity_check",
     ]
 
+    // MARK: - Runtime State
+
+    /// Timer for periodic integrity re-checks
+    private var periodicTimer: Timer?
+
+    /// Last known risk level for detecting degradation
+    private var lastKnownRiskLevel: String = "safe"
+
     // MARK: - Plugin Method
 
-    @objc func checkIntegrity(_ call: CAPPluginCall) {
+    /// Run all integrity checks and return reasons + risk level
+    private func performIntegrityChecks() -> (reasons: [String], riskLevel: String) {
         var reasons: [String] = []
 
         // Check 1: Known jailbreak file paths
@@ -122,7 +138,9 @@ public class DeviceIntegrityPlugin: CAPPlugin, CAPBridgedPlugin {
         let symlinkResults = checkSymlinks()
         reasons.append(contentsOf: symlinkResults)
 
-        let isCompromised = !reasons.isEmpty
+        // Check 7: Anti-hooking framework detection
+        let hookingResults = checkHookingFrameworks()
+        reasons.append(contentsOf: hookingResults)
 
         // Determine risk level based on severity
         let riskLevel: String
@@ -134,13 +152,259 @@ public class DeviceIntegrityPlugin: CAPPlugin, CAPBridgedPlugin {
             riskLevel = "safe"
         }
 
+        return (reasons, riskLevel)
+    }
+
+    @objc func checkIntegrity(_ call: CAPPluginCall) {
+        let (reasons, riskLevel) = performIntegrityChecks()
+        let isCompromised = !reasons.isEmpty
+
+        // Audit log every integrity check
+        AuditLogger.shared.log(
+            event: .deviceIntegrityCheck,
+            details: [
+                "riskLevel": riskLevel,
+                "reasons": reasons.joined(separator: ", ")
+            ]
+        )
+
+        // Audit log compromised devices
+        if riskLevel == "warning" || riskLevel == "critical" {
+            AuditLogger.shared.log(
+                event: .deviceCompromised,
+                details: [
+                    "riskLevel": riskLevel,
+                    "reasons": reasons.joined(separator: ", "),
+                    "reasonCount": "\(reasons.count)"
+                ]
+            )
+        }
+
         call.resolve([
             "isCompromised": isCompromised,
             "reasons": reasons,
             "riskLevel": riskLevel,
             "platform": "ios",
-            "checkCount": 6,
+            "checkCount": 7,
         ])
+    }
+
+    @objc func enforceIntegrity(_ call: CAPPluginCall) {
+        let (reasons, riskLevel) = performIntegrityChecks()
+
+        // Audit log every integrity check
+        AuditLogger.shared.log(
+            event: .deviceIntegrityCheck,
+            details: [
+                "riskLevel": riskLevel,
+                "reasons": reasons.joined(separator: ", ")
+            ]
+        )
+
+        // Audit log compromised devices
+        if riskLevel == "warning" || riskLevel == "critical" {
+            AuditLogger.shared.log(
+                event: .deviceCompromised,
+                details: [
+                    "riskLevel": riskLevel,
+                    "reasons": reasons.joined(separator: ", "),
+                    "reasonCount": "\(reasons.count)",
+                    "action": "enforceIntegrity"
+                ]
+            )
+        }
+
+        // Build feature restrictions based on risk level
+        let restrictions: [String: Any]
+        switch riskLevel {
+        case "critical":
+            restrictions = [
+                "biometricAuth": false,
+                "documentUpload": false,
+                "forceReauthEverySession": true,
+                "sessionFlagged": true,
+                "riskLevel": riskLevel,
+                "reasons": reasons,
+            ]
+        case "warning":
+            restrictions = [
+                "biometricAuth": true,
+                "documentUpload": true,
+                "forceReauthEverySession": false,
+                "sessionFlagged": true,
+                "riskLevel": riskLevel,
+                "reasons": reasons,
+            ]
+        default:
+            // "safe" — no restrictions
+            restrictions = [
+                "biometricAuth": true,
+                "documentUpload": true,
+                "forceReauthEverySession": false,
+                "sessionFlagged": false,
+                "riskLevel": riskLevel,
+                "reasons": reasons,
+            ]
+        }
+
+        call.resolve(restrictions)
+    }
+
+    // MARK: - App Attest (iOS 14.0+)
+
+    /// Generate an App Attest key and attest it with a challenge hash.
+    /// Returns attestation status to JavaScript. Falls back gracefully
+    /// on simulator or unsupported devices.
+    @objc func attestDevice(_ call: CAPPluginCall) {
+        guard #available(iOS 14.0, *) else {
+            call.resolve(["supported": false, "reason": "iOS 14+ required"])
+            return
+        }
+
+        let service = DCAppAttestService.shared
+        guard service.isSupported else {
+            call.resolve(["supported": false, "reason": "App Attest not supported on this device"])
+            return
+        }
+
+        Task {
+            do {
+                let keyId = try await service.generateKey()
+                // Store keyId for future assertion calls
+                UserDefaults.standard.set(keyId, forKey: "com.perenniaai.appAttest.keyId")
+
+                // Get challenge from server (or use a local nonce for now)
+                let challenge = UUID().uuidString
+                let challengeHash = Data(SHA256.hash(data: Data(challenge.utf8)))
+
+                let attestation = try await service.attestKey(keyId, clientDataHash: challengeHash)
+
+                AuditLogger.shared.log(
+                    event: .deviceIntegrityCheck,
+                    details: [
+                        "appAttest": "success",
+                        "keyId": keyId
+                    ]
+                )
+
+                call.resolve([
+                    "supported": true,
+                    "attested": true,
+                    "keyId": keyId,
+                    "attestationSize": attestation.count
+                ])
+            } catch {
+                AuditLogger.shared.log(
+                    event: .deviceIntegrityCheck,
+                    details: [
+                        "appAttest": "failed",
+                        "error": error.localizedDescription
+                    ]
+                )
+
+                call.resolve([
+                    "supported": true,
+                    "attested": false,
+                    "error": error.localizedDescription
+                ])
+            }
+        }
+    }
+
+    // MARK: - Periodic Runtime Re-checks
+
+    /// Start a repeating timer that re-runs integrity checks at the given interval.
+    /// If device integrity degrades from safe to warning/critical during runtime,
+    /// notifies JavaScript listeners and logs to audit trail.
+    @objc func startPeriodicChecks(_ call: CAPPluginCall) {
+        let interval = call.getDouble("intervalSeconds") ?? 300 // 5 minutes default
+
+        // Snapshot current state as baseline
+        let (_, currentRisk) = performIntegrityChecks()
+        lastKnownRiskLevel = currentRisk
+
+        DispatchQueue.main.async { [weak self] in
+            self?.periodicTimer?.invalidate()
+            self?.periodicTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+                self?.runPeriodicCheck()
+            }
+        }
+
+        AuditLogger.shared.log(
+            event: .deviceIntegrityCheck,
+            details: [
+                "periodicChecks": "started",
+                "intervalSeconds": "\(interval)",
+                "baselineRiskLevel": currentRisk
+            ]
+        )
+
+        call.resolve(["started": true, "intervalSeconds": interval])
+    }
+
+    /// Stop the periodic integrity check timer.
+    @objc func stopPeriodicChecks(_ call: CAPPluginCall) {
+        DispatchQueue.main.async { [weak self] in
+            self?.periodicTimer?.invalidate()
+            self?.periodicTimer = nil
+        }
+
+        AuditLogger.shared.log(
+            event: .deviceIntegrityCheck,
+            details: ["periodicChecks": "stopped"]
+        )
+
+        call.resolve(["stopped": true])
+    }
+
+    /// Run a single periodic integrity check. Compares current risk level to the
+    /// last known state and fires notifications if integrity has degraded.
+    private func runPeriodicCheck() {
+        let (reasons, currentRisk) = performIntegrityChecks()
+        let previousRisk = lastKnownRiskLevel
+
+        // Determine if integrity has degraded
+        let riskOrder = ["safe": 0, "warning": 1, "critical": 2]
+        let currentSeverity = riskOrder[currentRisk] ?? 0
+        let previousSeverity = riskOrder[previousRisk] ?? 0
+        let degraded = currentSeverity > previousSeverity
+
+        if degraded {
+            // Log degradation to audit trail
+            AuditLogger.shared.log(
+                event: .deviceCompromised,
+                details: [
+                    "periodicCheck": "degraded",
+                    "previousRiskLevel": previousRisk,
+                    "currentRiskLevel": currentRisk,
+                    "reasons": reasons.joined(separator: ", "),
+                    "reasonCount": "\(reasons.count)"
+                ]
+            )
+
+            // Notify JavaScript listeners of integrity change
+            notifyListeners("integrityChanged", data: [
+                "previousRiskLevel": previousRisk,
+                "currentRiskLevel": currentRisk,
+                "reasons": reasons,
+                "degraded": true,
+                "timestamp": ISO8601DateFormatter().string(from: Date())
+            ])
+
+            // Post a system-level notification for other native components
+            NotificationCenter.default.post(
+                name: NSNotification.Name("DeviceIntegrityDegraded"),
+                object: nil,
+                userInfo: [
+                    "previousRiskLevel": previousRisk,
+                    "currentRiskLevel": currentRisk,
+                    "reasons": reasons
+                ]
+            )
+        }
+
+        // Always update the last known risk level
+        lastKnownRiskLevel = currentRisk
     }
 
     // MARK: - Individual Checks
@@ -277,6 +541,29 @@ public class DeviceIntegrityPlugin: CAPPlugin, CAPBridgedPlugin {
                 for lib in suspiciousLibs {
                     if name.lowercased().contains(lib.lowercased()) {
                         results.append("injected_library:\(name)")
+                        break
+                    }
+                }
+            }
+        }
+
+        return results
+    }
+
+    /// Detect common hooking frameworks by scanning loaded dyld images
+    /// Looks for frida, cycript, and substrate (case-insensitive) which indicate
+    /// runtime instrumentation or method hooking tools.
+    private func checkHookingFrameworks() -> [String] {
+        var results: [String] = []
+
+        let hookingIndicators = ["frida", "cycript", "substrate"]
+
+        for i in 0..<_dyld_image_count() {
+            if let imageName = _dyld_get_image_name(i) {
+                let name = String(cString: imageName).lowercased()
+                for indicator in hookingIndicators {
+                    if name.contains(indicator) {
+                        results.append("hooking_framework:\(indicator):\(String(cString: _dyld_get_image_name(i)!))")
                         break
                     }
                 }

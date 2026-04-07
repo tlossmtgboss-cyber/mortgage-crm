@@ -66,7 +66,7 @@ jobs:
     name: Build & Deploy to TestFlight
     runs-on: macos-14
     timeout-minutes: 90
-    environment: Production
+    environment: production
 
     steps:
       # ---------------------------------------------------------------
@@ -340,20 +340,117 @@ jobs:
           echo "ipa_file=$IPA_FILE" >> "$GITHUB_ENV"
 
       # ---------------------------------------------------------------
+      # Generate Software Bill of Materials
+      # ---------------------------------------------------------------
+      - name: Generate Software Bill of Materials
+        run: |
+          # Generate SBOM from SPM dependencies
+          echo '{"bomFormat":"CycloneDX","specVersion":"1.4","components":[' > sbom.json
+
+          # Extract SPM dependencies
+          cd frontend/ios/App/CapApp-SPM
+          swift package show-dependencies --format json 2>/dev/null | python3 -c "
+          import json, sys
+          try:
+              deps = json.load(sys.stdin)
+              components = []
+              def walk(node):
+                  if 'name' in node:
+                      components.append({
+                          'type': 'library',
+                          'name': node.get('name', ''),
+                          'version': node.get('version', 'unknown'),
+                          'purl': f\"pkg:swift/{node.get('name', '')}@{node.get('version', 'unknown')}\"
+                      })
+                  for dep in node.get('dependencies', []):
+                      walk(dep)
+              walk(deps)
+              print(json.dumps(components))
+          except:
+              print('[]')
+          " >> ../../../sbom-components.json 2>/dev/null || echo '[]' > ../../../sbom-components.json
+          cd ../../../
+
+          # Also include npm dependencies
+          cd frontend
+          npm ls --json --all 2>/dev/null | python3 -c "
+          import json, sys
+          try:
+              data = json.load(sys.stdin)
+              deps = data.get('dependencies', {})
+              components = []
+              for name, info in deps.items():
+                  components.append({
+                      'type': 'library',
+                      'name': name,
+                      'version': info.get('version', 'unknown'),
+                      'purl': f'pkg:npm/{name}@{info.get(\"version\", \"unknown\")}'
+                  })
+              print(json.dumps(components[:200]))  # Limit to top 200
+          except:
+              print('[]')
+          " > ../sbom-npm.json 2>/dev/null || echo '[]' > ../sbom-npm.json
+          cd ..
+
+          echo "SBOM generated with $(cat sbom-components.json 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' 2>/dev/null || echo 0) Swift + $(cat sbom-npm.json 2>/dev/null | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' 2>/dev/null || echo 0) npm components"
+        continue-on-error: true
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: |
+            sbom-components.json
+            sbom-npm.json
+          retention-days: 90
+        if: always()
+        continue-on-error: true
+
+      # ---------------------------------------------------------------
+      # Build attestation
+      # ---------------------------------------------------------------
+      - name: Generate build attestation
+        run: |
+          # Create attestation record
+          IPA_PATH=$(find . -name "*.ipa" -print -quit)
+          if [ -n "$IPA_PATH" ]; then
+            shasum -a 256 "$IPA_PATH" > build-attestation.sha256
+            echo "Build SHA-256: $(cat build-attestation.sha256)"
+            echo "Build Time: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> build-attestation.sha256
+            echo "Runner: $RUNNER_NAME" >> build-attestation.sha256
+            echo "Commit: $GITHUB_SHA" >> build-attestation.sha256
+          fi
+        continue-on-error: true
+
+      # ---------------------------------------------------------------
       # Upload to TestFlight
       # ---------------------------------------------------------------
       - name: Upload to TestFlight
+        env:
+          APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
         run: |
           set -euo pipefail
 
           echo "Uploading ${{ env.ipa_file }} to TestFlight..."
 
-          xcrun altool --upload-app \
-            --type ios \
-            --file "${{ env.ipa_file }}" \
-            --apiKey "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}" \
-            --apiIssuer "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}"
+          # Create Fastlane API key JSON (replaces deprecated xcrun altool)
+          API_KEY_JSON="${{ runner.temp }}/fastlane_api_key.json"
+          cat > "$API_KEY_JSON" <<KEYEOF
+          {
+            "key_id": "$APP_STORE_CONNECT_API_KEY_ID",
+            "issuer_id": "$APP_STORE_CONNECT_ISSUER_ID",
+            "key_filepath": "$HOME/.appstoreconnect/private_keys/AuthKey_${APP_STORE_CONNECT_API_KEY_ID}.p8",
+            "in_house": false
+          }
+          KEYEOF
 
+          fastlane pilot upload \
+            --ipa "${{ env.ipa_file }}" \
+            --api_key_path "$API_KEY_JSON" \
+            --skip_waiting_for_build_processing
+
+          rm -f "$API_KEY_JSON"
           echo "Upload complete. Check App Store Connect for processing status."
 
       # ---------------------------------------------------------------

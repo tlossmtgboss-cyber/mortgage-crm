@@ -1,9 +1,11 @@
 name: iOS Build and Deploy
 
 on:
-  push:
-    tags:
-      - 'v*'  # Trigger on version tags (v1.0.0, v1.0.1, etc.)
+  # Tag trigger disabled — this workflow targets macos-26/Xcode 26 (not yet available).
+  # Use mobile-testflight.yml for current builds. Re-enable when macos-26 runners ship.
+  # push:
+  #   tags:
+  #     - 'v*'
   workflow_dispatch:
     inputs:
       build_type:
@@ -190,15 +192,28 @@ jobs:
           fi
           if [ -n "$IPA_FILE" ]; then
             echo "Uploading $IPA_FILE to App Store Connect..."
-            xcrun altool --upload-app \
-              --type ios \
-              --file "$IPA_FILE" \
-              --apiKey ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
-              --apiIssuer ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+
+            # Create Fastlane API key JSON (replaces deprecated xcrun altool)
+            API_KEY_JSON="${{ runner.temp }}/fastlane_api_key.json"
+            cat > "$API_KEY_JSON" <<KEYEOF
+            {
+              "key_id": "${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}",
+              "issuer_id": "${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}",
+              "key_filepath": "$HOME/.appstoreconnect/private_keys/AuthKey_${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}.p8",
+              "in_house": false
+            }
+          KEYEOF
+
+            gem install fastlane 2>/dev/null || true
+            fastlane pilot upload \
+              --ipa "$IPA_FILE" \
+              --api_key_path "$API_KEY_JSON" \
+              --skip_waiting_for_build_processing
+
+            rm -f "$API_KEY_JSON"
           else
-            echo "No IPA file found — checking if export step already uploaded directly..."
-            echo "If ExportOptions-appstore.plist has destination=upload, the IPA was"
-            echo "streamed to App Store Connect during the Export step. Skipping."
+            echo "No IPA file found. Check if export step succeeded."
+            exit 1
           fi
 
       - name: Create GitHub Release

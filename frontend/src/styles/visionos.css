@@ -1,0 +1,182 @@
+/* ============================================================
+   Vision Pro / visionOS Optimizations
+   When the app runs as a web view on Apple Vision Pro,
+   CSS hover effects translate to eye-gaze interactions.
+   This file optimizes interactive elements for spatial computing.
+   ============================================================ */
+
+/*
+   Detection: Vision Pro reports (hover: hover) + (pointer: coarse).
+   Standard touch devices report (hover: none) + (pointer: coarse).
+   Desktop mice report (hover: hover) + (pointer: fine).
+   This combo targets Vision Pro without affecting either group.
+*/
+@media (hover: hover) and (pointer: coarse) {
+
+  /* ----------------------------------------------------------
+     1. Larger tap/gaze targets for eye tracking accuracy
+     ---------------------------------------------------------- */
+  button,
+  a,
+  [role="button"],
+  .clickable {
+    min-height: 48px;
+    min-width: 48px;
+  }
+
+  /* ----------------------------------------------------------
+     2. Base hover transition for all interactive elements
+     ---------------------------------------------------------- */
+  button,
+  a,
+  [role="button"],
+  .clickable,
+  .card,
+  .dashboard-card,
+  .lead-card,
+  .task-card,
+  .loan-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  /* ----------------------------------------------------------
+     3. Subtle lift on gaze hover — general interactive elements
+     ---------------------------------------------------------- */
+  button:hover,
+  a:hover,
+  [role="button"]:hover {
+    transform: scale(1.02) translateZ(4px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  }
+
+  .card:hover {
+    transform: scale(1.02) translateZ(4px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  }
+
+  /* ----------------------------------------------------------
+     4. Glow effect for primary action buttons
+     ---------------------------------------------------------- */
+  .btn-primary:hover,
+  .action-button:hover {
+    box-shadow:
+      0 0 20px rgba(33, 127, 141, 0.35),
+      0 8px 32px rgba(0, 0, 0, 0.15);
+  }
+
+  /* ----------------------------------------------------------
+     5. Cards lift and highlight on gaze
+     ---------------------------------------------------------- */
+  .dashboard-card:hover,
+  .lead-card:hover,
+  .task-card:hover,
+  .loan-card:hover {
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+    border-color: rgba(33, 127, 141, 0.3);
+  }
+
+  /* Mobile dashboard cards on Vision Pro */
+  .mhd-stat-card:hover {
+    transform: translateY(-2px) scale(1.01);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  }
+
+  .mhd-schedule-item:hover,
+  .mhd-alert-item:hover,
+  .mhd-workflow-task-item:hover {
+    transform: translateY(-1px) scale(1.005);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  /* ----------------------------------------------------------
+     6. Larger body text for distance viewing
+     ---------------------------------------------------------- */
+  body {
+    font-size: 18px;
+    line-height: 1.6;
+  }
+
+  /* ----------------------------------------------------------
+     7. Input fields — larger targets for eye+hand tracking
+     ---------------------------------------------------------- */
+  input,
+  select,
+  textarea {
+    min-height: 52px;
+    font-size: 18px;
+    padding: 12px 16px;
+  }
+
+  /* ----------------------------------------------------------
+     8. Navigation feedback on gaze
+     ---------------------------------------------------------- */
+  nav a:hover,
+  .sidebar-item:hover,
+  .nav-link:hover {
+    background: rgba(33, 127, 141, 0.1);
+    border-radius: 12px;
+  }
+
+  /* ----------------------------------------------------------
+     9. Table row highlight on gaze
+     ---------------------------------------------------------- */
+  tr:hover {
+    background: rgba(33, 127, 141, 0.05) !important;
+  }
+
+  /* ----------------------------------------------------------
+     10. Hide mobile bottom nav on Vision Pro
+         (Vision Pro uses the full desktop layout)
+     ---------------------------------------------------------- */
+  .mbn,
+  .mobile-bottom-nav {
+    display: none !important;
+  }
+
+  .mhd-bottom-spacer {
+    display: none;
+  }
+
+  /* ----------------------------------------------------------
+     11. Glassmorphism for floating window chrome
+     ---------------------------------------------------------- */
+  .app-header,
+  .main-sidebar {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  /* ----------------------------------------------------------
+     12. Dark mode glassmorphism
+     ---------------------------------------------------------- */
+  [data-theme="dark"] .app-header,
+  [data-theme="dark"] .main-sidebar {
+    background: rgba(30, 30, 30, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  [data-theme="dark"] .dashboard-card,
+  [data-theme="dark"] .card {
+    background: rgba(40, 40, 40, 0.6);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+/* ============================================================
+   Reduced motion — critical for spatial computing comfort.
+   Excessive animation in a head-mounted display causes nausea.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

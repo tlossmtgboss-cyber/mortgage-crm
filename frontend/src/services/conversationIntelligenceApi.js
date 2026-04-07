@@ -14,7 +14,7 @@
 // Import the base API instance
 import api from './api';
 
-const BASE_PATH = '/api/v1/ci-voice';
+const BASE_PATH = '/api/v1/conversation-intelligence';
 
 // =============================================================================
 // RECORDINGS API

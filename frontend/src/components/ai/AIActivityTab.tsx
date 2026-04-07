@@ -1181,9 +1181,11 @@ const AIActivityTab: React.FC<AIActivityTabProps> = ({
     }
     try {
       setLoading(true);
-      const res = await fetch(`/api/loans/${loanId}/ai-activity`);
+      const res = await fetch(`/api/v1/loans/${loanId}/ai-activity`);
       if (!res.ok) throw new Error("Failed to load AI activity");
-      const data: AIActivityEvent[] = await res.json();
+      const raw = await res.json();
+      // Backend returns paginated {items, total, limit, offset} — extract items array
+      const data: AIActivityEvent[] = Array.isArray(raw) ? raw : (raw.items ?? []);
       setEvents(data);
     } catch {
       // Fallback to mock data in development

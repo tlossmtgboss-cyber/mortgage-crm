@@ -2,16 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>BGTaskSchedulerPermittedIdentifiers</key>
-	<array>
-		<string>com.perenniaai.crm.background-refresh</string>
-	</array>
 	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>PerenniaAI CRM Platform</string>
+	<string>Perennia AI</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -28,6 +24,17 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>perenniaai</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>com.perenniaai.crm</string>
+		</dict>
+	</array>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
 		<string>tel</string>
@@ -67,6 +74,8 @@
 	<string>Perennia AI needs to save photos to your library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Perennia AI needs photo library access to upload documents for your loan applications.</string>
+	<key>NSSiriUsageDescription</key>
+	<string>Perennia AI uses Siri to help you quickly access your loan pipeline, schedule appointments, and manage tasks hands-free.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Perennia AI uses speech recognition for voice commands and hands-free note dictation while managing your loan pipeline.</string>
 	<key>NSUserActivityTypes</key>
@@ -75,10 +84,37 @@
 		<string>com.perenniaai.crm.contactClient</string>
 		<string>com.perenniaai.crm.manageTask</string>
 	</array>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<true/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>CPTemplateApplicationSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>CarPlay Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).CarPlaySceneDelegate</string>
+				</dict>
+			</array>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).AppDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
-		<string>processing</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
@@ -104,5 +140,26 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- MDM Managed App Configuration (AppConfig.org standard) -->
+	<key>com.apple.configuration.managed</key>
+	<dict>
+		<key>RequireBiometric</key>
+		<true/>
+		<key>SessionTimeoutMinutes</key>
+		<integer>15</integer>
+		<key>AllowScreenshots</key>
+		<true/>
+		<key>AllowClipboardSharing</key>
+		<true/>
+		<key>SSOProviderURL</key>
+		<string></string>
+		<key>MinimumOSVersion</key>
+		<string>15.0</string>
+		<key>AllowedDomains</key>
+		<array>
+			<string>api.perenniaai.com</string>
+			<string>app.perenniaai.com</string>
+		</array>
+	</dict>
 </dict>
 </plist>

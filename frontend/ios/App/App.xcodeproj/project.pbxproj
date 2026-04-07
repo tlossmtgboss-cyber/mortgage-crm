@@ -20,7 +20,62 @@
 		C3D4E5F6A7B8C9D0E1F2A3B5 /* DeviceIntegrityPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3D4E5F6A7B8C9D0E1F2A3B4 /* DeviceIntegrityPlugin.swift */; };
 		D4E5F6A7B8C9D0E1F2A3B4C6 /* MDMConfigPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4E5F6A7B8C9D0E1F2A3B4C5 /* MDMConfigPlugin.swift */; };
 		E5F6A7B8C9D0E1F2A3B4C5D7 /* PerenniaViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5F6A7B8C9D0E1F2A3B4C5D6 /* PerenniaViewController.swift */; };
+		F1A2B3C4D5E6F7A8B9C0D1E2 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1E1 /* ShareViewController.swift */; };
+		F1A2B3C4D5E6F7A8B9C0D1E4 /* ShareNetworkService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1E3 /* ShareNetworkService.swift */; };
+		F1A2B3C4D5E6F7A8B9C0D1E6 /* MainInterface.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1E5 /* MainInterface.storyboard */; };
+		F1A2B3C4D5E6F7A8B9C0D1E8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1E7 /* Assets.xcassets */; };
+		F1A2B3C4D5E6F7A8B9C0D2E1 /* PerenniaShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1F0 /* PerenniaShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		F2B3C4D5E6F7A8B9C0D1E2F4 /* ShareExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B3C4D5E6F7A8B9C0D1E2F3 /* ShareExtensionBridge.swift */; };
+		AA01B2C3D4E5F6A7B8C9D002 /* CarPlayAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01B2C3D4E5F6A7B8C9D001 /* CarPlayAPIService.swift */; };
+		AA02B2C3D4E5F6A7B8C9D002 /* CarPlayModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA02B2C3D4E5F6A7B8C9D001 /* CarPlayModels.swift */; };
+		AA03B2C3D4E5F6A7B8C9D002 /* CarPlayVoiceHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA03B2C3D4E5F6A7B8C9D001 /* CarPlayVoiceHandler.swift */; };
+		AA04B2C3D4E5F6A7B8C9D002 /* VisionProSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA04B2C3D4E5F6A7B8C9D001 /* VisionProSupport.swift */; };
+		AA05B2C3D4E5F6A7B8C9D002 /* VisionProDashboardOrnament.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA05B2C3D4E5F6A7B8C9D001 /* VisionProDashboardOrnament.swift */; };
+		AA06B2C3D4E5F6A7B8C9D002 /* VisionProPipelineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA06B2C3D4E5F6A7B8C9D001 /* VisionProPipelineView.swift */; };
+		AA07B2C3D4E5F6A7B8C9D002 /* VisionProStyles.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA07B2C3D4E5F6A7B8C9D001 /* VisionProStyles.swift */; };
+		AA08B2C3D4E5F6A7B8C9D002 /* VisionProDashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA08B2C3D4E5F6A7B8C9D001 /* VisionProDashboardView.swift */; };
+		AA09B2C3D4E5F6A7B8C9D002 /* VisionProDocumentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA09B2C3D4E5F6A7B8C9D001 /* VisionProDocumentView.swift */; };
+		AA10B2C3D4E5F6A7B8C9D002 /* BackgroundSyncManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA10B2C3D4E5F6A7B8C9D001 /* BackgroundSyncManager.swift */; };
+		AA11B2C3D4E5F6A7B8C9D002 /* PushNotificationRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA11B2C3D4E5F6A7B8C9D001 /* PushNotificationRouter.swift */; };
+		AA12B2C3D4E5F6A7B8C9D002 /* AppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA12B2C3D4E5F6A7B8C9D001 /* AppIntents.swift */; };
+		AA13B2C3D4E5F6A7B8C9D002 /* AppShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA13B2C3D4E5F6A7B8C9D001 /* AppShortcuts.swift */; };
+		AA14B2C3D4E5F6A7B8C9D002 /* SiriShortcutsPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA14B2C3D4E5F6A7B8C9D001 /* SiriShortcutsPlugin.swift */; };
+		AA15B2C3D4E5F6A7B8C9D002 /* SpotlightIndexer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA15B2C3D4E5F6A7B8C9D001 /* SpotlightIndexer.swift */; };
+		AA16B2C3D4E5F6A7B8C9D002 /* SpotlightHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA16B2C3D4E5F6A7B8C9D001 /* SpotlightHandler.swift */; };
+		AA17B2C3D4E5F6A7B8C9D002 /* LiveActivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA17B2C3D4E5F6A7B8C9D001 /* LiveActivityManager.swift */; };
+		AA18B2C3D4E5F6A7B8C9D002 /* LiveActivityPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA18B2C3D4E5F6A7B8C9D001 /* LiveActivityPlugin.swift */; };
+		AA19B2C3D4E5F6A7B8C9D002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = AA19B2C3D4E5F6A7B8C9D001 /* PrivacyInfo.xcprivacy */; };
+		BB01A2C3D4E5F6A7B8C9D002 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB01A2C3D4E5F6A7B8C9D001 /* KeychainService.swift */; };
+		BB02A2C3D4E5F6A7B8C9D002 /* EncryptedCacheService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB02A2C3D4E5F6A7B8C9D001 /* EncryptedCacheService.swift */; };
+		BB03A2C3D4E5F6A7B8C9D002 /* AuditLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB03A2C3D4E5F6A7B8C9D001 /* AuditLogger.swift */; };
+		BB04A2C3D4E5F6A7B8C9D002 /* AppSwitcherGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB04A2C3D4E5F6A7B8C9D001 /* AppSwitcherGuard.swift */; };
+		BB05A2C3D4E5F6A7B8C9D002 /* RateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB05A2C3D4E5F6A7B8C9D001 /* RateLimiter.swift */; };
+		BB06A2C3D4E5F6A7B8C9D002 /* PerformanceMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB06A2C3D4E5F6A7B8C9D001 /* PerformanceMonitor.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		F1A2B3C4D5E6F7A8B9C0D2E2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = F1A2B3C4D5E6F7A8B9C0D1EF;
+			remoteInfo = PerenniaShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		F1A2B3C4D5E6F7A8B9C0D2E3 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				F1A2B3C4D5E6F7A8B9C0D2E1 /* PerenniaShare.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
@@ -39,6 +94,39 @@
 		C3D4E5F6A7B8C9D0E1F2A3B4 /* DeviceIntegrityPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceIntegrityPlugin.swift; sourceTree = "<group>"; };
 		D4E5F6A7B8C9D0E1F2A3B4C5 /* MDMConfigPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDMConfigPlugin.swift; sourceTree = "<group>"; };
 		E5F6A7B8C9D0E1F2A3B4C5D6 /* PerenniaViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerenniaViewController.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F7A8B9C0D1E1 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F7A8B9C0D1E3 /* ShareNetworkService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareNetworkService.swift; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F7A8B9C0D1E5 /* MainInterface.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = MainInterface.storyboard; path = Base.lproj/MainInterface.storyboard; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F7A8B9C0D1E7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F7A8B9C0D1E9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F7A8B9C0D1EA /* PerenniaShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PerenniaShare.entitlements; sourceTree = "<group>"; };
+		F1A2B3C4D5E6F7A8B9C0D1F0 /* PerenniaShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PerenniaShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		F2B3C4D5E6F7A8B9C0D1E2F3 /* ShareExtensionBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionBridge.swift; sourceTree = "<group>"; };
+		AA01B2C3D4E5F6A7B8C9D001 /* CarPlayAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayAPIService.swift; sourceTree = "<group>"; };
+		AA02B2C3D4E5F6A7B8C9D001 /* CarPlayModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayModels.swift; sourceTree = "<group>"; };
+		AA03B2C3D4E5F6A7B8C9D001 /* CarPlayVoiceHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayVoiceHandler.swift; sourceTree = "<group>"; };
+		AA04B2C3D4E5F6A7B8C9D001 /* VisionProSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionProSupport.swift; sourceTree = "<group>"; };
+		AA05B2C3D4E5F6A7B8C9D001 /* VisionProDashboardOrnament.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionProDashboardOrnament.swift; sourceTree = "<group>"; };
+		AA06B2C3D4E5F6A7B8C9D001 /* VisionProPipelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionProPipelineView.swift; sourceTree = "<group>"; };
+		AA07B2C3D4E5F6A7B8C9D001 /* VisionProStyles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionProStyles.swift; sourceTree = "<group>"; };
+		AA08B2C3D4E5F6A7B8C9D001 /* VisionProDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionProDashboardView.swift; sourceTree = "<group>"; };
+		AA09B2C3D4E5F6A7B8C9D001 /* VisionProDocumentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionProDocumentView.swift; sourceTree = "<group>"; };
+		AA10B2C3D4E5F6A7B8C9D001 /* BackgroundSyncManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundSyncManager.swift; sourceTree = "<group>"; };
+		AA11B2C3D4E5F6A7B8C9D001 /* PushNotificationRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PushNotificationRouter.swift; sourceTree = "<group>"; };
+		AA12B2C3D4E5F6A7B8C9D001 /* AppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppIntents.swift; sourceTree = "<group>"; };
+		AA13B2C3D4E5F6A7B8C9D001 /* AppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShortcuts.swift; sourceTree = "<group>"; };
+		AA14B2C3D4E5F6A7B8C9D001 /* SiriShortcutsPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiriShortcutsPlugin.swift; sourceTree = "<group>"; };
+		AA15B2C3D4E5F6A7B8C9D001 /* SpotlightIndexer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightIndexer.swift; sourceTree = "<group>"; };
+		AA16B2C3D4E5F6A7B8C9D001 /* SpotlightHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpotlightHandler.swift; sourceTree = "<group>"; };
+		AA17B2C3D4E5F6A7B8C9D001 /* LiveActivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityManager.swift; sourceTree = "<group>"; };
+		AA18B2C3D4E5F6A7B8C9D001 /* LiveActivityPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityPlugin.swift; sourceTree = "<group>"; };
+		AA19B2C3D4E5F6A7B8C9D001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		BB01A2C3D4E5F6A7B8C9D001 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainService.swift; sourceTree = "<group>"; };
+		BB02A2C3D4E5F6A7B8C9D001 /* EncryptedCacheService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EncryptedCacheService.swift; sourceTree = "<group>"; };
+		BB03A2C3D4E5F6A7B8C9D001 /* AuditLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuditLogger.swift; sourceTree = "<group>"; };
+		BB04A2C3D4E5F6A7B8C9D001 /* AppSwitcherGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSwitcherGuard.swift; sourceTree = "<group>"; };
+		BB05A2C3D4E5F6A7B8C9D001 /* RateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimiter.swift; sourceTree = "<group>"; };
+		BB06A2C3D4E5F6A7B8C9D001 /* PerformanceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceMonitor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -50,6 +138,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F1A2B3C4D5E6F7A8B9C0D2F1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -58,6 +153,7 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+				F1A2B3C4D5E6F7A8B9C0D1F1 /* PerenniaShare */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -66,6 +162,7 @@
 			isa = PBXGroup;
 			children = (
 				504EC3041FED79650016851F /* Perennia AI.app */,
+				F1A2B3C4D5E6F7A8B9C0D1F0 /* PerenniaShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -76,11 +173,37 @@
 				405886BE2F167D5600618442 /* App.entitlements */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
+				AA12B2C3D4E5F6A7B8C9D001 /* AppIntents.swift */,
+				BB04A2C3D4E5F6A7B8C9D001 /* AppSwitcherGuard.swift */,
+				BB03A2C3D4E5F6A7B8C9D001 /* AuditLogger.swift */,
+				AA13B2C3D4E5F6A7B8C9D001 /* AppShortcuts.swift */,
+				AA10B2C3D4E5F6A7B8C9D001 /* BackgroundSyncManager.swift */,
+				AA01B2C3D4E5F6A7B8C9D001 /* CarPlayAPIService.swift */,
+				AA02B2C3D4E5F6A7B8C9D001 /* CarPlayModels.swift */,
 				A1B2C3D4E5F6A7B8C9D0E1F2 /* CarPlaySceneDelegate.swift */,
+				AA03B2C3D4E5F6A7B8C9D001 /* CarPlayVoiceHandler.swift */,
 				B2C3D4E5F6A7B8C9D0E1F2A3 /* CertificatePinning.swift */,
 				C3D4E5F6A7B8C9D0E1F2A3B4 /* DeviceIntegrityPlugin.swift */,
+				BB02A2C3D4E5F6A7B8C9D001 /* EncryptedCacheService.swift */,
+				BB01A2C3D4E5F6A7B8C9D001 /* KeychainService.swift */,
+				AA17B2C3D4E5F6A7B8C9D001 /* LiveActivityManager.swift */,
+				AA18B2C3D4E5F6A7B8C9D001 /* LiveActivityPlugin.swift */,
 				D4E5F6A7B8C9D0E1F2A3B4C5 /* MDMConfigPlugin.swift */,
 				E5F6A7B8C9D0E1F2A3B4C5D6 /* PerenniaViewController.swift */,
+				AA19B2C3D4E5F6A7B8C9D001 /* PrivacyInfo.xcprivacy */,
+				AA11B2C3D4E5F6A7B8C9D001 /* PushNotificationRouter.swift */,
+				BB05A2C3D4E5F6A7B8C9D001 /* RateLimiter.swift */,
+				BB06A2C3D4E5F6A7B8C9D001 /* PerformanceMonitor.swift */,
+				F2B3C4D5E6F7A8B9C0D1E2F3 /* ShareExtensionBridge.swift */,
+				AA14B2C3D4E5F6A7B8C9D001 /* SiriShortcutsPlugin.swift */,
+				AA16B2C3D4E5F6A7B8C9D001 /* SpotlightHandler.swift */,
+				AA15B2C3D4E5F6A7B8C9D001 /* SpotlightIndexer.swift */,
+				AA08B2C3D4E5F6A7B8C9D001 /* VisionProDashboardView.swift */,
+				AA05B2C3D4E5F6A7B8C9D001 /* VisionProDashboardOrnament.swift */,
+				AA09B2C3D4E5F6A7B8C9D001 /* VisionProDocumentView.swift */,
+				AA06B2C3D4E5F6A7B8C9D001 /* VisionProPipelineView.swift */,
+				AA07B2C3D4E5F6A7B8C9D001 /* VisionProStyles.swift */,
+				AA04B2C3D4E5F6A7B8C9D001 /* VisionProSupport.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -89,6 +212,19 @@
 				50B271D01FEDC1A000F3C39B /* public */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		F1A2B3C4D5E6F7A8B9C0D1F1 /* PerenniaShare */ = {
+			isa = PBXGroup;
+			children = (
+				F1A2B3C4D5E6F7A8B9C0D1EA /* PerenniaShare.entitlements */,
+				F1A2B3C4D5E6F7A8B9C0D1E1 /* ShareViewController.swift */,
+				F1A2B3C4D5E6F7A8B9C0D1E3 /* ShareNetworkService.swift */,
+				F1A2B3C4D5E6F7A8B9C0D1E5 /* MainInterface.storyboard */,
+				F1A2B3C4D5E6F7A8B9C0D1E7 /* Assets.xcassets */,
+				F1A2B3C4D5E6F7A8B9C0D1E9 /* Info.plist */,
+			);
+			path = PerenniaShare;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -101,10 +237,12 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				F1A2B3C4D5E6F7A8B9C0D2E3 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				F1A2B3C4D5E6F7A8B9C0D2E4 /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
@@ -114,6 +252,23 @@
 			productReference = 504EC3041FED79650016851F /* Perennia AI.app */;
 			productType = "com.apple.product-type.application";
 		};
+		F1A2B3C4D5E6F7A8B9C0D1EF /* PerenniaShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F1A2B3C4D5E6F7A8B9C0D3F0 /* Build configuration list for PBXNativeTarget "PerenniaShare" */;
+			buildPhases = (
+				F1A2B3C4D5E6F7A8B9C0D2F0 /* Sources */,
+				F1A2B3C4D5E6F7A8B9C0D2F1 /* Frameworks */,
+				F1A2B3C4D5E6F7A8B9C0D2F2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PerenniaShare;
+			productName = PerenniaShare;
+			productReference = F1A2B3C4D5E6F7A8B9C0D1F0 /* PerenniaShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -121,12 +276,16 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = YES;
-				LastSwiftUpdateCheck = 0920;
+				LastSwiftUpdateCheck = 1600;
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					504EC3031FED79650016851F = {
 						CreatedOnToolsVersion = 9.2;
 						LastSwiftMigration = 1100;
+						ProvisioningStyle = Automatic;
+					};
+					F1A2B3C4D5E6F7A8B9C0D1EF = {
+						CreatedOnToolsVersion = 16.0;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -148,6 +307,7 @@
 			projectRoot = "";
 			targets = (
 				504EC3031FED79650016851F /* App */,
+				F1A2B3C4D5E6F7A8B9C0D1EF /* PerenniaShare */,
 			);
 		};
 /* End PBXProject section */
@@ -163,6 +323,16 @@
 				50379B232058CBB4000EE86E /* capacitor.config.json in Resources */,
 				504EC30D1FED79650016851F /* Main.storyboard in Resources */,
 				2FAD9763203C412B000D30F8 /* config.xml in Resources */,
+				AA19B2C3D4E5F6A7B8C9D002 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1A2B3C4D5E6F7A8B9C0D2F2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F1A2B3C4D5E6F7A8B9C0D1E6 /* MainInterface.storyboard in Resources */,
+				F1A2B3C4D5E6F7A8B9C0D1E8 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -174,15 +344,57 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				AA12B2C3D4E5F6A7B8C9D002 /* AppIntents.swift in Sources */,
+				AA13B2C3D4E5F6A7B8C9D002 /* AppShortcuts.swift in Sources */,
+				BB04A2C3D4E5F6A7B8C9D002 /* AppSwitcherGuard.swift in Sources */,
+				BB03A2C3D4E5F6A7B8C9D002 /* AuditLogger.swift in Sources */,
+				AA10B2C3D4E5F6A7B8C9D002 /* BackgroundSyncManager.swift in Sources */,
+				AA01B2C3D4E5F6A7B8C9D002 /* CarPlayAPIService.swift in Sources */,
+				AA02B2C3D4E5F6A7B8C9D002 /* CarPlayModels.swift in Sources */,
 				A1B2C3D4E5F6A7B8C9D0E1F3 /* CarPlaySceneDelegate.swift in Sources */,
+				AA03B2C3D4E5F6A7B8C9D002 /* CarPlayVoiceHandler.swift in Sources */,
 				B2C3D4E5F6A7B8C9D0E1F2A4 /* CertificatePinning.swift in Sources */,
 				C3D4E5F6A7B8C9D0E1F2A3B5 /* DeviceIntegrityPlugin.swift in Sources */,
+				BB02A2C3D4E5F6A7B8C9D002 /* EncryptedCacheService.swift in Sources */,
+				BB01A2C3D4E5F6A7B8C9D002 /* KeychainService.swift in Sources */,
+				AA17B2C3D4E5F6A7B8C9D002 /* LiveActivityManager.swift in Sources */,
+				AA18B2C3D4E5F6A7B8C9D002 /* LiveActivityPlugin.swift in Sources */,
 				D4E5F6A7B8C9D0E1F2A3B4C6 /* MDMConfigPlugin.swift in Sources */,
 				E5F6A7B8C9D0E1F2A3B4C5D7 /* PerenniaViewController.swift in Sources */,
+				AA11B2C3D4E5F6A7B8C9D002 /* PushNotificationRouter.swift in Sources */,
+				BB05A2C3D4E5F6A7B8C9D002 /* RateLimiter.swift in Sources */,
+				BB06A2C3D4E5F6A7B8C9D002 /* PerformanceMonitor.swift in Sources */,
+				F2B3C4D5E6F7A8B9C0D1E2F4 /* ShareExtensionBridge.swift in Sources */,
+				AA14B2C3D4E5F6A7B8C9D002 /* SiriShortcutsPlugin.swift in Sources */,
+				AA16B2C3D4E5F6A7B8C9D002 /* SpotlightHandler.swift in Sources */,
+				AA15B2C3D4E5F6A7B8C9D002 /* SpotlightIndexer.swift in Sources */,
+				AA08B2C3D4E5F6A7B8C9D002 /* VisionProDashboardView.swift in Sources */,
+				AA05B2C3D4E5F6A7B8C9D002 /* VisionProDashboardOrnament.swift in Sources */,
+				AA09B2C3D4E5F6A7B8C9D002 /* VisionProDocumentView.swift in Sources */,
+				AA06B2C3D4E5F6A7B8C9D002 /* VisionProPipelineView.swift in Sources */,
+				AA07B2C3D4E5F6A7B8C9D002 /* VisionProStyles.swift in Sources */,
+				AA04B2C3D4E5F6A7B8C9D002 /* VisionProSupport.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F1A2B3C4D5E6F7A8B9C0D2F0 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F1A2B3C4D5E6F7A8B9C0D1E2 /* ShareViewController.swift in Sources */,
+				F1A2B3C4D5E6F7A8B9C0D1E4 /* ShareNetworkService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		F1A2B3C4D5E6F7A8B9C0D2E4 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = F1A2B3C4D5E6F7A8B9C0D1EF /* PerenniaShare */;
+			targetProxy = F1A2B3C4D5E6F7A8B9C0D2E2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
 		504EC30B1FED79650016851F /* Main.storyboard */ = {
@@ -334,20 +546,21 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.2;
 				OTHER_SWIFT_FLAGS = "$(inherited) \"-D\" \"COCOAPODS\" \"-DDEBUG\"";
 				PRODUCT_BUNDLE_IDENTIFIER = com.perenniaai.crm;
 				PRODUCT_NAME = "Perennia AI";
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = "1,2,7";
 			};
 			name = Debug;
 		};
@@ -357,17 +570,71 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 27;
+				CURRENT_PROJECT_VERSION = 28;
 				INFOPLIST_FILE = App/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.perenniaai.crm;
 				PRODUCT_NAME = "Perennia AI";
+				SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2,7";
+			};
+			name = Release;
+		};
+		F1A2B3C4D5E6F7A8B9C0D3E1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = ExtensionIcon;
+				CODE_SIGN_ENTITLEMENTS = PerenniaShare/PerenniaShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 28;
+				DEVELOPMENT_TEAM = V5ZA5FZ2J8;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PerenniaShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perenniaai.crm.PerenniaShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		F1A2B3C4D5E6F7A8B9C0D3E2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = ExtensionIcon;
+				CODE_SIGN_ENTITLEMENTS = PerenniaShare/PerenniaShare.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 28;
+				DEVELOPMENT_TEAM = V5ZA5FZ2J8;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PerenniaShare/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.perenniaai.crm.PerenniaShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -390,6 +657,15 @@
 			buildConfigurations = (
 				504EC3171FED79650016851F /* Debug */,
 				504EC3181FED79650016851F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F1A2B3C4D5E6F7A8B9C0D3F0 /* Build configuration list for PBXNativeTarget "PerenniaShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F1A2B3C4D5E6F7A8B9C0D3E1 /* Debug */,
+				F1A2B3C4D5E6F7A8B9C0D3E2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

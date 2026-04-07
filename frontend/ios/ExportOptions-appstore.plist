@@ -15,7 +15,7 @@
     <key>signingStyle</key>
     <string>automatic</string>
     <key>manageAppVersionAndBuildNumber</key>
-    <true/>
+    <false/>
     <key>compileBitcode</key>
     <false/>
     <key>stripSwiftSymbols</key>

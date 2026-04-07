@@ -15,7 +15,7 @@ const RecordingPlayer = ({ transcript, participants, session }) => {
   const audioRef = useRef(null);
 
   const audioUrl = session?.recording_id
-    ? `/api/v1/ci-voice/recordings/${session.recording_id}/audio`
+    ? `/api/v1/conversation-intelligence/recordings/${session.recording_id}/audio`
     : null;
 
   // Audio event handlers

@@ -2,52 +2,64 @@
   "short_name": "Perennia AI",
   "name": "Perennia AI - Mortgage CRM",
   "description": "Agentic AI-powered mortgage CRM with intelligent scheduling, pipeline management, and lead nurturing.",
+  "id": "/",
   "icons": [
     {
       "src": "favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
       "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "logo512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "logo192-maskable.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "start_url": ".",
   "display": "standalone",
+  "orientation": "any",
   "theme_color": "#1a73e8",
   "background_color": "#ffffff",
   "categories": ["business", "finance", "productivity"],
   "shortcuts": [
     {
-      "name": "Book Appointment",
-      "short_name": "Book",
-      "description": "Schedule a mortgage consultation",
-      "url": "/book/demo",
+      "name": "Pipeline",
+      "url": "/pipeline",
       "icons": [
         {
-          "src": "favicon.ico",
-          "sizes": "64x64"
+          "src": "icon-pipeline.png",
+          "sizes": "96x96"
         }
       ]
     },
     {
-      "name": "Calendar",
-      "short_name": "Calendar",
-      "description": "View your appointment calendar",
-      "url": "/calendar",
+      "name": "Add Lead",
+      "url": "/leads/add",
       "icons": [
         {
-          "src": "favicon.ico",
-          "sizes": "64x64"
+          "src": "icon-lead.png",
+          "sizes": "96x96"
         }
       ]
     },
     {
-      "name": "Schedule Settings",
-      "short_name": "Schedule",
-      "description": "Manage availability and booking links",
-      "url": "/scheduler-settings",
+      "name": "Tasks",
+      "url": "/tasks",
       "icons": [
         {
-          "src": "favicon.ico",
-          "sizes": "64x64"
+          "src": "icon-tasks.png",
+          "sizes": "96x96"
         }
       ]
     }
