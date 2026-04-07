@@ -1194,6 +1194,43 @@ def register_health_routes(app, get_db, **kwargs):
             session.close()
         except Exception as e:
             results["enterprise_tables"] = {"error": f"{type(e).__name__}: {str(e)[:300]}"}
+        # Test 4: Check demo booking link + scheduler config
+        try:
+            session = SessionLocal()
+            row = session.execute(text("""
+                SELECT bl.id, bl.slug, bl.user_id, bl.organization_id,
+                       bl.assigned_users, bl.is_active, bl.is_public,
+                       sc.working_hours, sc.is_active as config_active,
+                       sc.timezone
+                FROM scheduler_booking_links bl
+                LEFT JOIN scheduler_configs sc ON sc.user_id = bl.user_id
+                    AND sc.organization_id = bl.organization_id
+                WHERE bl.slug = 'demo' AND bl.is_active = true
+                LIMIT 1
+            """))
+            r = row.fetchone()
+            if r:
+                results["demo_booking"] = {
+                    "link_id": r[0], "slug": r[1], "user_id": r[2],
+                    "org_id": r[3], "assigned_users": r[4],
+                    "is_active": r[5], "is_public": r[6],
+                    "has_working_hours": r[7] is not None,
+                    "working_hours_sample": str(r[7])[:200] if r[7] else None,
+                    "config_active": r[8], "timezone": r[9],
+                }
+            else:
+                results["demo_booking"] = "No active demo booking link found"
+            # Also check recurring availability for the user
+            if r and r[2]:
+                ra_row = session.execute(text("""
+                    SELECT count(*) FROM recurring_availability
+                    WHERE user_id = :uid AND is_active = true
+                """), {"uid": r[2]})
+                ra_count = ra_row.scalar()
+                results["recurring_availability_count"] = ra_count
+            session.close()
+        except Exception as e:
+            results["demo_booking"] = {"error": f"{type(e).__name__}: {str(e)[:300]}"}
         return results
 
     # ========================================================================
