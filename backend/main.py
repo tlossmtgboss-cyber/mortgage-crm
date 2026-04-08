@@ -2,6 +2,12 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+# Increase recursion limit for FastAPI's merged_lifespan chain.
+# Each app.include_router() adds a nesting level; with 400+ routers the default
+# limit of 1000 is exceeded, causing RecursionError on startup.
+import sys
+sys.setrecursionlimit(4000)
+
 # Suppress warnings in production to avoid Railway rate limiting (500 logs/sec limit)
 import warnings
 import os as _os
