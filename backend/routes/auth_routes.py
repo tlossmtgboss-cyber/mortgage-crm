@@ -30,6 +30,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
+from sqlalchemy.exc import OperationalError, InterfaceError
 from jose import jwt, JWTError, ExpiredSignatureError
 
 from db import get_db
@@ -415,7 +416,13 @@ async def _login_impl(http_request: Request, form_data, db: Session):
         auth_funcs = get_auth_functions()
         config = get_auth_config()
 
-        user = db.query(User).filter(User.email == form_data.username).first()
+        # Use no_autoflush to prevent unexpected UPDATEs during read queries.
+        # EncryptedString TypeDecorator on User columns (first_name, last_name, phone,
+        # business_address, mfa_secret) can trigger dirty detection during gradual
+        # plaintext→encrypted migration, causing autoflush to generate UPDATEs that
+        # poison the Postgres transaction.
+        with db.no_autoflush:
+            user = db.query(User).filter(User.email == form_data.username).first()
 
         # Check user exists and has a valid hashed_password before verification
         if not user:
@@ -430,16 +437,30 @@ async def _login_impl(http_request: Request, form_data, db: Session):
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+        # Cache user attributes into local variables immediately.
+        # If a later DB operation fails and poisons the session, we can still
+        # build the response / log events without touching the ORM object.
+        user_id = user.id
+        user_email = user.email
+        user_org_id = getattr(user, 'organization_id', None)
+        user_role = getattr(user, 'role', '') or ''
+        user_perm_role = getattr(user, 'permission_role', '') or ''
+        user_full_name = user.full_name
+        user_onboarding = getattr(user, 'onboarding_completed', False)
+        user_mfa_enabled = getattr(user, 'mfa_enabled', False) or False
+        user_hashed_password = user.hashed_password
+
         # SSO-only enforcement (Enterprise Check 5.12)
         # If the user's organization has sso_enforced=True, reject password login
         org = None  # Will be loaded if user has org_id, reused by MFA check
         try:
-            if user.organization_id:
-                org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+            if user_org_id:
+                with db.no_autoflush:
+                    org = db.query(Organization).filter(Organization.id == user_org_id).first()
                 if org and getattr(org, 'sso_enforced', False):
-                    logger.warning(f"Password login rejected for SSO-enforced org: user={user.email}, org={org.name}")
+                    logger.warning(f"Password login rejected for SSO-enforced org: user={user_email}, org={org.name}")
                     _log_access_event_bg(
-                        user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
+                        user_id=user_id, tenant_id=user_org_id,
                         attempted_email=form_data.username,
                         success=False, failure_reason="sso_enforced",
                         ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
@@ -452,15 +473,16 @@ async def _login_impl(http_request: Request, form_data, db: Session):
         except HTTPException:
             raise
         except Exception as e:
+            db.rollback()  # Recover session — failed SQL poisons the transaction
             logger.debug(f"SSO enforcement check skipped: {e}")
 
         # Account lockout check (Enterprise Security Check 4.4)
         try:
             from auth.account_lockout import check_account_locked, record_failed_login, reset_failed_login
             if check_account_locked(user):
-                logger.warning(f"Login attempt on locked account: {user.email}")
+                logger.warning(f"Login attempt on locked account: {user_email}")
                 _log_access_event_bg(
-                    user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
+                    user_id=user_id, tenant_id=user_org_id,
                     attempted_email=form_data.username,
                     success=False, event_type="account_locked",
                     failure_reason="account_locked",
@@ -473,12 +495,13 @@ async def _login_impl(http_request: Request, form_data, db: Session):
         except HTTPException:
             raise
         except Exception as e:
+            db.rollback()
             logger.debug(f"Account lockout check skipped in login: {e}")
 
-        if not user.hashed_password:
+        if not user_hashed_password:
             logger.warning("Login attempt for user with no password set")
             _log_access_event_bg(
-                user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
+                user_id=user_id, tenant_id=user_org_id,
                 attempted_email=form_data.username,
                 success=False, failure_reason="no_password_set",
                 ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
@@ -489,15 +512,15 @@ async def _login_impl(http_request: Request, form_data, db: Session):
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
-        if not auth_funcs['verify_password'](form_data.password, user.hashed_password):
+        if not auth_funcs['verify_password'](form_data.password, user_hashed_password):
             # Record failed login attempt (Enterprise Security Check 4.4)
             try:
                 from auth.account_lockout import record_failed_login
                 lockout_result = record_failed_login(db, user)
                 if lockout_result.get("locked"):
-                    logger.warning(f"Account locked after failed attempts: {user.email}")
+                    logger.warning(f"Account locked after failed attempts: {user_email}")
                     _log_access_event_bg(
-                        user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
+                        user_id=user_id, tenant_id=user_org_id,
                         attempted_email=form_data.username,
                         success=False, event_type="account_locked",
                         failure_reason="locked_after_failed_attempts",
@@ -510,10 +533,11 @@ async def _login_impl(http_request: Request, form_data, db: Session):
             except HTTPException:
                 raise  # Re-raise the 423 HTTPException
             except Exception as e:
-                logger.debug(f"Failed to record failed login attempt in login: {e}")
+                db.rollback()  # Recover session so subsequent operations work
+                logger.warning(f"Failed to record failed login attempt: {type(e).__name__}: {e}")
 
             _log_access_event_bg(
-                user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
+                user_id=user_id, tenant_id=user_org_id,
                 attempted_email=form_data.username,
                 success=False, failure_reason="incorrect_password",
                 ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
@@ -529,39 +553,42 @@ async def _login_impl(http_request: Request, form_data, db: Session):
             from auth.account_lockout import reset_failed_login
             if hasattr(user, 'failed_login_attempts') and user.failed_login_attempts:
                 reset_failed_login(db, user)
-        except (ImportError, Exception):
-            pass  # Account lockout module not available or column missing, skip
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         # Update last_activity_at on successful login
         try:
             user.last_activity_at = datetime.now(timezone.utc)
+            db.flush()
             db.commit()
         except Exception as e:
-            db.rollback()
+            try:
+                db.rollback()
+            except Exception:
+                pass
             logger.debug(f"Failed to update last_activity_at in login: {e}")
-
-        # Check if MFA is enabled (Enterprise Security Check 4.6)
-        user_mfa_enabled = getattr(user, 'mfa_enabled', False) or False
 
         # Check org-level MFA enforcement (Enterprise Check 4.6)
         org_mfa_required = False
         mfa_setup_required = False
         try:
-            if user.organization_id:
+            if user_org_id:
                 if not org:  # org may already be loaded from SSO check above
-                    org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+                    with db.no_autoflush:
+                        org = db.query(Organization).filter(Organization.id == user_org_id).first()
                 if org and getattr(org, 'mfa_required', False):
                     org_mfa_required = True
                     if not user_mfa_enabled:
-                        # User must set up MFA before they can proceed
                         mfa_setup_required = True
         except Exception as e:
+            db.rollback()
             logger.debug(f"Org MFA check skipped: {e}")
 
         # Enterprise Security - Domain 4: Admin/site_admin roles MUST have MFA
         admin_mfa_required = False
-        user_role = getattr(user, 'role', '') or ''
-        user_perm_role = getattr(user, 'permission_role', '') or ''
         admin_roles_requiring_mfa = ['admin', 'site_admin']
         if (user_role.lower() in admin_roles_requiring_mfa
                 or user_perm_role.lower() in admin_roles_requiring_mfa):
@@ -569,7 +596,7 @@ async def _login_impl(http_request: Request, form_data, db: Session):
             if not user_mfa_enabled:
                 mfa_setup_required = True
                 logger.info(
-                    f"Admin MFA enforcement: user {user.email} must set up MFA "
+                    f"Admin MFA enforcement: user {user_email} must set up MFA "
                     f"(role={user_role}, permission_role={user_perm_role})"
                 )
 
@@ -578,22 +605,22 @@ async def _login_impl(http_request: Request, form_data, db: Session):
 
         # SOC 2: Log successful authentication
         _log_access_event_bg(
-            user_id=user.id, tenant_id=getattr(user, 'organization_id', None),
-            attempted_email=user.email,
+            user_id=user_id, tenant_id=user_org_id,
+            attempted_email=user_email,
             success=True, event_type="login",
             ip=client_ip, user_agent=http_request.headers.get("user-agent", ""),
         )
 
         # Create tokens with user context for proper security
-        tenant_id = str(user.organization_id) if hasattr(user, 'organization_id') and user.organization_id else None
+        tenant_id = str(user_org_id) if user_org_id else None
 
         if mfa_required and user_mfa_enabled:
             # User has MFA set up and must verify — issue only a short-lived
             # MFA-scoped token (5 min). Do NOT return full access_token or refresh_token.
             mfa_token_data = {
-                "sub": user.email,
+                "sub": user_email,
                 "scope": "mfa_verify",
-                "user_id": user.id,
+                "user_id": user_id,
             }
             mfa_token_expires = timedelta(minutes=5)
             expire = datetime.now(timezone.utc) + mfa_token_expires
@@ -610,24 +637,24 @@ async def _login_impl(http_request: Request, form_data, db: Session):
                 "mfa_setup_required": False,
                 "mfa_token": True,  # Signal to frontend this is NOT a full token
                 "user": {
-                    "id": user.id,
-                    "email": user.email,
-                    "full_name": user.full_name,
-                    "role": user.role,
-                    "permission_role": user.permission_role,
-                    "onboarding_completed": user.onboarding_completed
+                    "id": user_id,
+                    "email": user_email,
+                    "full_name": user_full_name,
+                    "role": user_role,
+                    "permission_role": user_perm_role,
+                    "onboarding_completed": user_onboarding
                 }
             }
 
         # Full token issuance (no MFA required, or MFA setup needed)
         access_token = auth_funcs['create_access_token'](
-            data={"sub": user.email, "mfa_setup_pending": mfa_setup_required},
-            user_id=user.id,
+            data={"sub": user_email, "mfa_setup_pending": mfa_setup_required},
+            user_id=user_id,
             tenant_id=tenant_id
         )
         refresh_token = auth_funcs['create_refresh_token'](
-            data={"sub": user.email},
-            user_id=user.id
+            data={"sub": user_email},
+            user_id=user_id
         )
 
         return {
@@ -636,18 +663,53 @@ async def _login_impl(http_request: Request, form_data, db: Session):
             "token_type": "bearer",
             "expires_in": config['ACCESS_TOKEN_EXPIRE_MINUTES'] * 60,  # seconds
             "mfa_required": mfa_required,
-            "mfa_setup_required": mfa_setup_required,  # True if org requires MFA but user hasn't set it up
+            "mfa_setup_required": mfa_setup_required,
             "user": {
-                "id": user.id,
-                "email": user.email,
-                "full_name": user.full_name,
-                "role": user.role,
-                "permission_role": user.permission_role,
-                "onboarding_completed": user.onboarding_completed
+                "id": user_id,
+                "email": user_email,
+                "full_name": user_full_name,
+                "role": user_role,
+                "permission_role": user_perm_role,
+                "onboarding_completed": user_onboarding
             }
         }
     except HTTPException:
         raise
+    except (OperationalError, InterfaceError) as e:
+        import traceback
+        tb_str = traceback.format_exc()
+        logger.error(f"Login DB error for {form_data.username}: {type(e).__name__}: {str(e)}\n{tb_str}")
+        try:
+            from utils.error_handling import _record_error
+            _record_error("POST", "/token", f"{type(e).__name__}", str(e), tb_str)
+        except Exception:
+            pass
+        # Return diagnostic info in body (production error handler strips HTTPException detail for 500s)
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=503,
+            content={
+                "detail": "Database connection error. Please try again in a moment.",
+                "error_type": type(e).__name__,
+            },
+        )
+    except (JWTError, ExpiredSignatureError) as e:
+        import traceback
+        tb_str = traceback.format_exc()
+        logger.error(f"Login token error for {form_data.username}: {type(e).__name__}: {str(e)}\n{tb_str}")
+        try:
+            from utils.error_handling import _record_error
+            _record_error("POST", "/token", f"{type(e).__name__}", str(e), tb_str)
+        except Exception:
+            pass
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "Token generation failed. Please try again.",
+                "error_type": type(e).__name__,
+            },
+        )
     except Exception as e:
         import traceback
         tb_str = traceback.format_exc()
@@ -657,9 +719,14 @@ async def _login_impl(http_request: Request, form_data, db: Session):
             _record_error("POST", "/token", f"{type(e).__name__}", str(e), tb_str)
         except Exception:
             pass
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Login service temporarily unavailable. Please try again.",
+        # Return as JSONResponse so production error handler doesn't strip the detail
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "Login service temporarily unavailable. Please try again.",
+                "error_type": type(e).__name__,
+            },
         )
 
 

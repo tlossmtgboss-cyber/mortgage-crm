@@ -34,33 +34,50 @@ def check_account_locked(user) -> bool:
 
 def record_failed_login(db: Session, user) -> dict:
     """Record a failed login attempt and lock if threshold exceeded."""
-    user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
-    user.last_failed_login_at = _utcnow_naive()
+    try:
+        user.failed_login_attempts = (user.failed_login_attempts or 0) + 1
+        user.last_failed_login_at = _utcnow_naive()
 
-    if user.failed_login_attempts >= MAX_FAILED_ATTEMPTS:
-        user.locked_until = _utcnow_naive() + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
-        logger.warning(f"Account locked for user {user.email} after {user.failed_login_attempts} failed attempts")
+        locked = user.failed_login_attempts >= MAX_FAILED_ATTEMPTS
+        if locked:
+            user.locked_until = _utcnow_naive() + timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+            logger.warning(f"Account locked for user {user.email} after {user.failed_login_attempts} failed attempts")
+
         db.commit()
-        return {
-            "locked": True,
-            "locked_until": user.locked_until.isoformat(),
-            "attempts": user.failed_login_attempts,
-        }
 
-    db.commit()
-    return {
-        "locked": False,
-        "attempts": user.failed_login_attempts,
-        "remaining": MAX_FAILED_ATTEMPTS - user.failed_login_attempts,
-    }
+        if locked:
+            return {
+                "locked": True,
+                "locked_until": user.locked_until.isoformat(),
+                "attempts": user.failed_login_attempts,
+            }
+        return {
+            "locked": False,
+            "attempts": user.failed_login_attempts,
+            "remaining": MAX_FAILED_ATTEMPTS - user.failed_login_attempts,
+        }
+    except Exception as e:
+        logger.warning(f"Failed to record login attempt: {type(e).__name__}: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return {"locked": False, "attempts": 0, "error": str(e)}
 
 
 def reset_failed_login(db: Session, user):
     """Reset failed login counter after successful login."""
-    user.failed_login_attempts = 0
-    user.locked_until = None
-    user.last_failed_login_at = None
-    db.commit()
+    try:
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user.last_failed_login_at = None
+        db.commit()
+    except Exception as e:
+        logger.warning(f"Failed to reset login counter: {type(e).__name__}: {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
 
 def unlock_account(db: Session, user):
