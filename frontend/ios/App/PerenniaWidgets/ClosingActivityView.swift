@@ -134,6 +134,8 @@ struct LockScreenView: View {
                         .foregroundColor(.white.opacity(0.7))
                         .lineLimit(1)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Loan closing status for your borrower")
 
                 Spacer()
 
@@ -146,6 +148,7 @@ struct LockScreenView: View {
                     .background(stageColor.opacity(0.8))
                     .foregroundColor(.white)
                     .clipShape(Capsule())
+                    .accessibilityLabel("Stage: \(currentStage?.displayName ?? state.currentStage)")
             }
 
             // Progress bar through stages
@@ -153,6 +156,9 @@ struct LockScreenView: View {
                 currentStage: state.currentStage,
                 progress: state.stageProgress
             )
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Loan progress: \(Int(state.stageProgress * 100)) percent, currently in \(currentStage?.displayName ?? state.currentStage)")
+            .accessibilityValue("\(Int(state.stageProgress * 100)) percent complete")
 
             // Bottom row: next action + estimated close
             HStack {
@@ -161,11 +167,14 @@ struct LockScreenView: View {
                     Image(systemName: "arrow.forward.circle.fill")
                         .font(.caption2)
                         .foregroundColor(stageColor)
+                        .accessibilityHidden(true)
                     Text(state.nextAction)
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.9))
                         .lineLimit(1)
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Next step: \(state.nextAction)")
 
                 Spacer()
 
@@ -175,10 +184,13 @@ struct LockScreenView: View {
                         Image(systemName: "calendar")
                             .font(.caption2)
                             .foregroundColor(.white.opacity(0.6))
+                            .accessibilityHidden(true)
                         Text(estimatedClose, style: .date)
                             .font(.caption)
                             .foregroundColor(.white.opacity(0.8))
                     }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("Estimated closing date: \(estimatedClose, style: .date)")
                 }
             }
         }
@@ -286,6 +298,7 @@ struct CompactLeadingView: View {
             Image(systemName: "house.fill")
                 .font(.system(size: 10))
                 .foregroundColor(.white.opacity(0.8))
+                .accessibilityHidden(true)
             Text(attributes.loanAmount)
                 .font(.caption2)
                 .fontWeight(.semibold)
@@ -293,6 +306,8 @@ struct CompactLeadingView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Loan amount: \(attributes.loanAmount)")
     }
 }
 
@@ -310,12 +325,17 @@ struct CompactTrailingView: View {
         ClosingStage(fromRawStage: state.currentStage)?.abbreviation ?? "---"
     }
 
+    private var fullStageName: String {
+        ClosingStage(fromRawStage: state.currentStage)?.displayName ?? state.currentStage
+    }
+
     var body: some View {
         Text(abbreviation)
             .font(.caption2)
             .fontWeight(.bold)
             .foregroundColor(stageColor)
             .padding(.horizontal, 4)
+            .accessibilityLabel("Stage: \(fullStageName)")
     }
 }
 
@@ -333,10 +353,15 @@ struct MinimalView: View {
         ClosingColors.forStage(state.currentStage)
     }
 
+    private var fullStageName: String {
+        ClosingStage(fromRawStage: state.currentStage)?.displayName ?? state.currentStage
+    }
+
     var body: some View {
         Image(systemName: iconName)
             .font(.system(size: 12))
             .foregroundColor(stageColor)
+            .accessibilityLabel("Loan closing: \(fullStageName)")
     }
 }
 
@@ -356,12 +381,15 @@ struct ExpandedLeadingView: View {
             Image(systemName: "house.fill")
                 .font(.title3)
                 .foregroundColor(stageColor)
+                .accessibilityHidden(true)
 
             Text(attributes.loanAmount)
                 .font(.caption2)
                 .fontWeight(.semibold)
                 .foregroundColor(.white)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Loan amount: \(attributes.loanAmount)")
     }
 }
 
@@ -375,9 +403,13 @@ struct ExpandedTrailingView: View {
         ClosingColors.forStage(state.currentStage)
     }
 
+    private var fullStageName: String {
+        ClosingStage(fromRawStage: state.currentStage)?.displayName ?? state.currentStage
+    }
+
     var body: some View {
         VStack(alignment: .trailing, spacing: 2) {
-            Text(ClosingStage(fromRawStage: state.currentStage)?.displayName ?? state.currentStage)
+            Text(fullStageName)
                 .font(.caption2)
                 .fontWeight(.bold)
                 .foregroundColor(stageColor)
@@ -388,6 +420,8 @@ struct ExpandedTrailingView: View {
                 .fontWeight(.heavy)
                 .foregroundColor(.white)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(fullStageName), \(Int(state.stageProgress * 100)) percent complete")
     }
 }
 
@@ -405,11 +439,14 @@ struct ExpandedCenterView: View {
                 .fontWeight(.semibold)
                 .foregroundColor(.white)
                 .lineLimit(1)
+                .accessibilityLabel("Borrower loan progress")
 
             // Compact progress bar for Dynamic Island
             ProgressView(value: state.stageProgress)
                 .tint(ClosingColors.forStage(state.currentStage))
                 .scaleEffect(y: 1.5)
+                .accessibilityLabel("Closing progress")
+                .accessibilityValue("\(Int(state.stageProgress * 100)) percent")
         }
     }
 }
@@ -426,11 +463,14 @@ struct ExpandedBottomView: View {
                 Image(systemName: "arrow.forward.circle.fill")
                     .font(.caption2)
                     .foregroundColor(ClosingColors.forStage(state.currentStage))
+                    .accessibilityHidden(true)
                 Text(state.nextAction)
                     .font(.caption2)
                     .foregroundColor(.white.opacity(0.9))
                     .lineLimit(1)
             }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Next step: \(state.nextAction)")
 
             Spacer()
 
@@ -439,10 +479,13 @@ struct ExpandedBottomView: View {
                     Image(systemName: "calendar")
                         .font(.system(size: 8))
                         .foregroundColor(.white.opacity(0.6))
+                        .accessibilityHidden(true)
                     Text(estimatedClose, style: .date)
                         .font(.system(size: 9))
                         .foregroundColor(.white.opacity(0.7))
                 }
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Estimated close: \(estimatedClose, style: .date)")
             }
         }
     }

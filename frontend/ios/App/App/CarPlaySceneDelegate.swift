@@ -124,6 +124,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     private func buildLoadingTemplate(title: String, tabTitle: String, tabImage: String) -> CPListTemplate {
         let loadingItem = CPListItem(text: "Loading...", detailText: "Fetching latest data")
         loadingItem.isEnabled = false
+        loadingItem.accessibilityLabel = "\(tabTitle): Loading, fetching latest data"
         let template = CPListTemplate(title: title, sections: [CPListSection(items: [loadingItem])])
         template.tabTitle = tabTitle
         template.tabImage = UIImage(systemName: tabImage)
@@ -136,6 +137,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             detailText: message,
             image: UIImage(systemName: "exclamationmark.triangle.fill")
         )
+        errorItem.accessibilityLabel = "Error: Unable to load. \(message)"
+        errorItem.accessibilityHint = "Tap to retry loading"
         errorItem.handler = { _, completion in
             retryAction()
             completion()
@@ -145,6 +148,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             detailText: nil,
             image: UIImage(systemName: "arrow.clockwise")
         )
+        retryItem.accessibilityLabel = "Retry"
+        retryItem.accessibilityHint = "Double tap to reload data"
         retryItem.handler = { _, completion in
             retryAction()
             completion()
@@ -307,6 +312,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             detail: urgentTaskCount > 0 ? "\(urgentTaskCount) need attention" : "All clear",
             image: "exclamationmark.triangle.fill"
         )
+        urgentItem.accessibilityHint = "Double tap to view tasks"
         urgentItem.handler = { [weak self] _, completion in
             self?.drillIntoTasks()
             completion()
@@ -318,6 +324,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             detail: todayEventCount > 0 ? "\(todayEventCount) events today" : "No events today",
             image: "calendar"
         )
+        scheduleItem.accessibilityHint = "Double tap to view schedule"
         scheduleItem.handler = { [weak self] _, completion in
             self?.drillIntoSchedule()
             completion()
@@ -329,11 +336,13 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         var rateItems: [CPListItem] = []
         for alert in rateAlerts.prefix(4) {
             let direction = alert.changeDirection == "up" ? "^" : (alert.changeDirection == "down" ? "v" : "-")
+            let spokenDirection = alert.changeDirection == "up" ? "up" : (alert.changeDirection == "down" ? "down" : "unchanged")
             let item = makeItem(
                 text: alert.productName,
                 detail: "\(alert.currentRate)% \(direction) \(alert.changeAmount)%",
                 image: alert.changeDirection == "down" ? "arrow.down.right" : "arrow.up.right"
             )
+            item.accessibilityLabel = "\(alert.productName): \(alert.currentRate) percent, \(spokenDirection) \(alert.changeAmount) percent"
             rateItems.append(item)
         }
         if rateItems.isEmpty {
@@ -396,6 +405,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 detail: "\(lead.stage) - \(lead.lastActivity)",
                 image: "person.fill"
             )
+            item.accessibilityHint = "Double tap to view details"
             item.handler = { [weak self] _, completion in
                 self?.showContactDetail(leadId: lead.id, name: lead.name, stage: lead.stage, lastActivity: lead.lastActivity)
                 completion()
@@ -417,6 +427,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 detail: "\(loan.stage) - \(formatCurrency(loan.loanAmount))",
                 image: "person.text.rectangle.fill"
             )
+            item.accessibilityHint = "Double tap to view loan details"
             item.handler = { [weak self] _, completion in
                 self?.showBorrowerDetail(loan: loan)
                 completion()
@@ -443,6 +454,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         activityItem.isEnabled = false
 
         let callItem = makeItem(text: "Call \(name)", detail: "Initiate call via Perennia", image: "phone.fill")
+        callItem.accessibilityHint = "Double tap to start a phone call"
         callItem.handler = { [weak self] _, completion in
             self?.initiateCall(leadId: leadId, name: name)
             completion()
@@ -469,6 +481,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         typeItem.isEnabled = false
 
         let callItem = makeItem(text: "Call \(loan.borrowerName)", detail: "Initiate call via Perennia", image: "phone.fill")
+        callItem.accessibilityHint = "Double tap to start a phone call"
         callItem.handler = { [weak self] _, completion in
             self?.initiateCall(leadId: loan.leadId, name: loan.borrowerName)
             completion()
@@ -591,15 +604,20 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
     private func buildTaskListItem(task: TaskItem) -> CPListItem {
         let priorityIcon: String
+        let spokenPriority: String
         switch task.priority.lowercased() {
         case "urgent":
             priorityIcon = "exclamationmark.3"
+            spokenPriority = "urgent priority"
         case "high":
             priorityIcon = "exclamationmark.2"
+            spokenPriority = "high priority"
         case "medium":
             priorityIcon = "minus"
+            spokenPriority = "medium priority"
         default:
             priorityIcon = "arrow.down"
+            spokenPriority = "low priority"
         }
 
         let dateFormatter = DateFormatter()
@@ -612,6 +630,13 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
 
         let item = makeItem(text: task.title, detail: detail, image: priorityIcon)
+        // Override the combined label to include spoken priority
+        var accessLabel = "\(spokenPriority): \(task.title), due \(dateFormatter.string(from: task.dueDate))"
+        if let contact = task.contactName, !contact.isEmpty {
+            accessLabel += ", for \(contact)"
+        }
+        item.accessibilityLabel = accessLabel
+        item.accessibilityHint = "Double tap to view task details"
         item.handler = { [weak self] _, completion in
             self?.showTaskDetail(task: task)
             completion()
@@ -645,6 +670,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
         // Mark Complete action
         let completeItem = makeItem(text: "Mark Complete", detail: "Tap to complete this task", image: "checkmark.circle.fill")
+        completeItem.accessibilityHint = "Double tap to mark this task as done"
         completeItem.handler = { [weak self] _, completion in
             self?.completeTask(task: task)
             completion()
@@ -737,6 +763,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             }
 
             let item = makeItem(text: event.title, detail: detail, image: "calendar")
+            item.accessibilityHint = "Double tap to view event details"
             item.handler = { [weak self] _, completion in
                 self?.showEventDetail(event: event)
                 completion()
@@ -786,6 +813,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
             // Navigate action
             let navigateItem = makeItem(text: "Navigate to Location", detail: location, image: "location.fill")
+            navigateItem.accessibilityHint = "Double tap to open directions in Maps"
             navigateItem.handler = { _, completion in
                 // Open Apple Maps with the location
                 let encodedAddress = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
@@ -849,11 +877,17 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     // MARK: - Utility Helpers
 
     private func makeItem(text: String, detail: String?, image: String) -> CPListItem {
-        return CPListItem(
+        let item = CPListItem(
             text: text,
             detailText: detail,
             image: UIImage(systemName: image)
         )
+        // CPListItem uses text/detailText for VoiceOver by default.
+        // Provide a combined accessibilityLabel for a smoother spoken experience.
+        if let detail = detail, !detail.isEmpty {
+            item.accessibilityLabel = "\(text): \(detail)"
+        }
+        return item
     }
 
     private func formatCurrency(_ value: Double) -> String {

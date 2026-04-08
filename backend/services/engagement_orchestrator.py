@@ -38,6 +38,7 @@ Usage::
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -149,7 +150,7 @@ def _ensure_engagement_tables(db: Session) -> None:
         _tables_initialized = True
     except Exception as e:
         db.rollback()
-        logger.warning("Engagement tables init note: %s", e)
+        logger.error("Engagement tables init failed — events will be lost until restart: %s", e, exc_info=True)
         _tables_initialized = True  # Don't retry every request
 
 
@@ -330,6 +331,12 @@ def _check_compliance(
         return False, f"no phone number for {channel}"
     if channel == "email" and not email:
         return False, "no email address"
+
+    # TCPA consent checks — automated calls/SMS require prior express consent
+    if channel == "call" and not ctx.get("call_consent"):
+        return False, "no call_consent on file (TCPA)"
+    if channel == "sms" and not ctx.get("sms_consent"):
+        return False, "no sms_consent on file (TCPA)"
 
     # Email opt-in check
     if channel == "email" and not ctx.get("email_opt_in", True):
@@ -793,6 +800,79 @@ def _load_org_email_config(db: Session, organization_id: int) -> Dict[str, Any]:
 # Event logging
 # ---------------------------------------------------------------------------
 
+def _check_channel_fatigue(
+    db: Session,
+    lead_id: int,
+    organization_id: int,
+    channel: str,
+    window_minutes: int = 30,
+) -> Tuple[bool, Optional[str]]:
+    """
+    DATA-003: Check if a message was already sent on the same channel within the
+    dedup window (default 30 min).  Prevents drip-sequence and orchestrator
+    from double-tapping the same lead on the same channel.
+
+    Returns (is_fatigued: bool, last_event_trigger: Optional[str]).
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=window_minutes)
+    try:
+        row = db.execute(text("""
+            SELECT trigger_event, created_at
+            FROM engagement_events
+            WHERE lead_id = :lid
+              AND organization_id = :org_id
+              AND channel_chosen = :channel
+              AND action_result NOT IN ('blocked', 'failed', 'skipped')
+              AND created_at >= :cutoff
+            ORDER BY created_at DESC
+            LIMIT 1
+        """), {
+            "lid": lead_id,
+            "org_id": organization_id,
+            "channel": channel,
+            "cutoff": cutoff,
+        }).fetchone()
+
+        if row:
+            return True, row.trigger_event
+    except Exception as e:
+        logger.warning("Channel fatigue check failed: %s", e)
+
+    return False, None
+
+
+def _check_idempotency(
+    db: Session,
+    lead_id: int,
+    organization_id: int,
+    trigger_event: str,
+    window_seconds: int = 60,
+) -> bool:
+    """
+    DATA-004: Return True if the exact same (lead_id, organization_id,
+    trigger_event) already fired within the dedup window.
+    """
+    cutoff = datetime.now(timezone.utc) - timedelta(seconds=window_seconds)
+    try:
+        row = db.execute(text("""
+            SELECT id FROM engagement_events
+            WHERE lead_id = :lid
+              AND organization_id = :org_id
+              AND trigger_event = :trigger
+              AND created_at >= :cutoff
+            LIMIT 1
+        """), {
+            "lid": lead_id,
+            "org_id": organization_id,
+            "trigger": trigger_event,
+            "cutoff": cutoff,
+        }).fetchone()
+        return row is not None
+    except Exception as e:
+        logger.warning("Idempotency check failed: %s", e)
+        return False
+
+
 def _log_engagement_event(
     db: Session,
     organization_id: int,
@@ -824,7 +904,7 @@ def _log_engagement_event(
             "reason": channel_reason[:500] if channel_reason else None,
             "action": action_taken,
             "result": action_result,
-            "meta": str(metadata or {}).replace("'", '"')[:2000],
+            "meta": json.dumps(metadata or {}, default=str)[:2000],
             "next_at": scheduled_next_at,
             "next_trigger": scheduled_next_trigger,
             "now": datetime.now(timezone.utc),
@@ -1026,6 +1106,18 @@ async def orchestrate_lead_engagement(
         logger.warning("Unknown trigger event: %s", trigger_event)
         return {"error": f"unknown trigger: {trigger_event}", "trigger": trigger_event}
 
+    # 0a. DATA-004: Idempotency — reject duplicate trigger within 60s
+    if _check_idempotency(db, lead_id, organization_id, trigger_event, window_seconds=60):
+        logger.info(
+            "Duplicate trigger deduplicated",
+            extra={
+                "lead_id": lead_id,
+                "organization_id": organization_id,
+                "trigger_event": trigger_event,
+            },
+        )
+        return {"status": "deduplicated", "trigger": trigger_event}
+
     # 1. Load context
     ctx = _load_lead_context(db, lead_id, organization_id)
     if not ctx:
@@ -1087,6 +1179,18 @@ async def orchestrate_lead_engagement(
     # 4. Select channel
     channel, channel_reason = _select_channel(db, ctx, trigger_event, recent)
 
+    # OBS-008: Log every channel selection decision with structured fields
+    logger.info(
+        "Engagement channel selected",
+        extra={
+            "lead_id": lead_id,
+            "organization_id": organization_id,
+            "trigger_event": trigger_event,
+            "channel_chosen": channel,
+            "reason": channel_reason,
+        },
+    )
+
     if not channel:
         _log_engagement_event(
             db, organization_id, lead_id, trigger_event,
@@ -1096,6 +1200,33 @@ async def orchestrate_lead_engagement(
             "trigger": trigger_event,
             "action": "skipped",
             "reason": channel_reason,
+        }
+
+    # 4b. DATA-003: Channel fatigue — skip if same channel used in last 30 min
+    is_fatigued, last_trigger = _check_channel_fatigue(
+        db, lead_id, organization_id, channel, window_minutes=30,
+    )
+    if is_fatigued and trigger_event not in ("new_lead", "document_needed"):
+        logger.info(
+            "Channel fatigue — skipping duplicate channel",
+            extra={
+                "lead_id": lead_id,
+                "organization_id": organization_id,
+                "trigger_event": trigger_event,
+                "channel_chosen": channel,
+                "reason": f"channel {channel} used by trigger '{last_trigger}' within 30 min",
+            },
+        )
+        _log_engagement_event(
+            db, organization_id, lead_id, trigger_event,
+            channel, f"channel_fatigue: {channel} used by '{last_trigger}' within 30 min",
+            "skipped", "channel_fatigue",
+        )
+        return {
+            "trigger": trigger_event,
+            "channel": channel,
+            "action": "skipped",
+            "reason": f"channel fatigue: {channel} already used within 30 min (last: {last_trigger})",
         }
 
     # 5. Determine timing
@@ -1127,6 +1258,12 @@ async def orchestrate_lead_engagement(
     elif channel == "sms":
         dispatch_result = await _dispatch_sms(db, ctx, trigger_event)
     elif channel == "email":
+        # PERF-006: TODO — The Microsoft Graph OAuth token used for email
+        # dispatch may be expired (tokens last ~60 min and are non-refreshable
+        # in the current implementation).  The actual refresh/re-auth logic
+        # lives in services.email_delivery_service.EmailDeliveryService and
+        # services.los_integration.encompass_oauth_service.  If email dispatch
+        # starts returning 401s, the Graph token needs to be re-acquired there.
         dispatch_result = await _dispatch_email(db, ctx, trigger_event)
     elif channel == "voicemail":
         dispatch_result = await _dispatch_voicemail(db, ctx, trigger_event)
@@ -1134,6 +1271,20 @@ async def orchestrate_lead_engagement(
         dispatch_result = {"success": False, "error": f"unknown channel: {channel}"}
 
     action_result = "success" if dispatch_result.get("success") else f"failed: {dispatch_result.get('error', 'unknown')}"
+
+    # OBS-008: Log every dispatch decision with structured fields
+    logger.info(
+        "Engagement action dispatched",
+        extra={
+            "lead_id": lead_id,
+            "organization_id": organization_id,
+            "trigger_event": trigger_event,
+            "channel_chosen": channel,
+            "action_taken": action_taken,
+            "action_result": action_result,
+            "reason": channel_reason,
+        },
+    )
 
     # 7. Handle trigger-specific side effects
     if trigger_event == "call_completed" and channel == "email":
@@ -1159,7 +1310,10 @@ async def orchestrate_lead_engagement(
                 UPDATE leads SET last_contact = :now WHERE id = :lid AND organization_id = :org_id
             """), {"now": datetime.now(timezone.utc), "lid": lead_id, "org_id": organization_id})
             db.commit()
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "Failed to update last_contact for lead %s: %s", lead_id, e,
+            )
             try:
                 db.rollback()
             except Exception:
@@ -1171,13 +1325,29 @@ async def orchestrate_lead_engagement(
     if next_trigger and next_delay:
         scheduled_next_at = datetime.now(timezone.utc) + timedelta(minutes=next_delay)
 
-    # 10. Log the event
+    # 10. Log the event with full decision explanation for fair lending audit
     _log_engagement_event(
         db, organization_id, lead_id, trigger_event,
         channel, channel_reason, action_taken, action_result,
         scheduled_next_at=scheduled_next_at,
         scheduled_next_trigger=next_trigger,
-        metadata={**(metadata or {}), **dispatch_result},
+        metadata={
+            **(metadata or {}),
+            **dispatch_result,
+            "decision_factors": {
+                "ai_score": ctx.get("ai_score"),
+                "stage": ctx.get("stage"),
+                "preferred_channels": ctx.get("preferred_channels"),
+                "contacts_today": contacts_today,
+                "contacts_week": contacts_week,
+                "time_bucket": _get_time_bucket(ctx.get("timezone", "America/New_York")),
+                "consent": {
+                    "sms": ctx.get("sms_consent"),
+                    "call": ctx.get("call_consent"),
+                    "email": ctx.get("email_opt_in"),
+                },
+            },
+        },
     )
 
     # 11. Log CRM activity
@@ -1345,11 +1515,15 @@ async def get_next_best_action(
 async def process_engagement_queue(
     db: Session,
     organization_id: int,
-    batch_size: int = 50,
+    batch_size: int = 100,
 ) -> Dict[str, Any]:
     """
     Batch processor: find all leads with pending engagement actions
     (scheduled_next_at <= now) and process each one through the orchestrator.
+
+    PERF-005: Uses LIMIT-based pagination to avoid loading unbounded rows.
+    Each chunk fetches at most ``batch_size`` (default 100) rows, processes
+    them, then fetches the next chunk until none remain.
 
     Respects rate limits: max 1 call/sec, max 1 SMS/sec.
 
@@ -1365,79 +1539,90 @@ async def process_engagement_queue(
     _ensure_engagement_tables(db)
 
     now = datetime.now(timezone.utc)
-    stats = {"processed": 0, "succeeded": 0, "failed": 0, "deferred": 0, "details": []}
+    stats: Dict[str, Any] = {"processed": 0, "succeeded": 0, "failed": 0, "deferred": 0, "details": []}
 
-    # Find pending engagement actions
-    rows = db.execute(text("""
-        SELECT DISTINCT ON (lead_id) id, lead_id, scheduled_next_trigger, scheduled_next_at
-        FROM engagement_events
-        WHERE organization_id = :org_id
-          AND scheduled_next_at IS NOT NULL
-          AND scheduled_next_at <= :now
-          AND scheduled_next_trigger IS NOT NULL
-        ORDER BY lead_id, scheduled_next_at ASC
-        LIMIT :batch
-    """), {"org_id": organization_id, "now": now, "batch": batch_size}).fetchall()
-
-    if not rows:
-        return stats
-
-    logger.info("Engagement queue: %d pending actions for org %s", len(rows), organization_id)
-
-    for row in rows:
-        lead_id = row.lead_id
-        trigger = row.scheduled_next_trigger
-        event_id = row.id
-
-        try:
-            result = await orchestrate_lead_engagement(
-                db=db,
-                lead_id=lead_id,
-                organization_id=organization_id,
-                trigger_event=trigger,
-                metadata={"source": "queue_processor", "parent_event_id": event_id},
+    # PERF-005: Paginate in chunks — each iteration fetches at most batch_size rows
+    while True:
+        # Fetch one chunk with row-level locking to prevent duplicate processing
+        rows = db.execute(text("""
+            SELECT id, lead_id, scheduled_next_trigger, scheduled_next_at
+            FROM engagement_events
+            WHERE id IN (
+                SELECT DISTINCT ON (lead_id) id
+                FROM engagement_events
+                WHERE organization_id = :org_id
+                  AND scheduled_next_at IS NOT NULL
+                  AND scheduled_next_at <= :now
+                  AND scheduled_next_trigger IS NOT NULL
+                ORDER BY lead_id, scheduled_next_at ASC
+                LIMIT :batch
             )
+            FOR UPDATE SKIP LOCKED
+        """), {"org_id": organization_id, "now": now, "batch": batch_size}).fetchall()
 
-            stats["processed"] += 1
-            action = result.get("action", "unknown")
+        if not rows:
+            break
 
-            if result.get("result") and "success" in result["result"]:
-                stats["succeeded"] += 1
-            elif action == "deferred":
-                stats["deferred"] += 1
-            elif result.get("error") or (result.get("result") and "fail" in result.get("result", "")):
-                stats["failed"] += 1
-            else:
-                stats["succeeded"] += 1
+        logger.info("Engagement queue chunk: %d pending actions for org %s", len(rows), organization_id)
 
-            stats["details"].append({
-                "lead_id": lead_id,
-                "trigger": trigger,
-                "result": result.get("result") or result.get("action"),
-            })
+        for row in rows:
+            lead_id = row.lead_id
+            trigger = row.scheduled_next_trigger
+            event_id = row.id
 
-            # Clear the scheduled_next fields on the source event to prevent re-processing
             try:
-                db.execute(text("""
-                    UPDATE engagement_events
-                    SET scheduled_next_at = NULL, scheduled_next_trigger = NULL
-                    WHERE id = :eid
-                """), {"eid": event_id})
-                db.commit()
-            except Exception:
+                result = await orchestrate_lead_engagement(
+                    db=db,
+                    lead_id=lead_id,
+                    organization_id=organization_id,
+                    trigger_event=trigger,
+                    metadata={"source": "queue_processor", "parent_event_id": event_id},
+                )
+
+                stats["processed"] += 1
+                action = result.get("action", "unknown")
+
+                if result.get("result") and "success" in result["result"]:
+                    stats["succeeded"] += 1
+                elif action == "deferred":
+                    stats["deferred"] += 1
+                elif result.get("error") or (result.get("result") and "fail" in result.get("result", "")):
+                    stats["failed"] += 1
+                else:
+                    stats["succeeded"] += 1
+
+                stats["details"].append({
+                    "lead_id": lead_id,
+                    "trigger": trigger,
+                    "result": result.get("result") or result.get("action"),
+                })
+
+                # Clear the scheduled_next fields on the source event to prevent re-processing
                 try:
-                    db.rollback()
+                    db.execute(text("""
+                        UPDATE engagement_events
+                        SET scheduled_next_at = NULL, scheduled_next_trigger = NULL
+                        WHERE id = :eid
+                    """), {"eid": event_id})
+                    db.commit()
                 except Exception:
-                    pass
+                    try:
+                        db.rollback()
+                    except Exception:
+                        pass
 
-        except Exception as e:
-            logger.exception("Queue processing failed for lead %s trigger %s", lead_id, trigger)
-            stats["processed"] += 1
-            stats["failed"] += 1
-            stats["details"].append({"lead_id": lead_id, "trigger": trigger, "error": str(e)})
+            except Exception as e:
+                logger.exception("Queue processing failed for lead %s trigger %s", lead_id, trigger)
+                stats["processed"] += 1
+                stats["failed"] += 1
+                stats["details"].append({"lead_id": lead_id, "trigger": trigger, "error": str(e)})
 
-        # Rate limiting: 1 second between dispatches
-        await asyncio.sleep(1.0)
+            # Rate limiting: 1 second between dispatches
+            await asyncio.sleep(1.0)
+
+        # If we got fewer rows than batch_size, there are no more to process
+        if len(rows) < batch_size:
+            break
 
     logger.info(
         "Engagement queue complete: processed=%d succeeded=%d failed=%d deferred=%d",

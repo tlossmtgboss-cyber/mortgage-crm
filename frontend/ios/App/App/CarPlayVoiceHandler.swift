@@ -213,7 +213,7 @@ final class CarPlayVoiceHandler {
 
         var parts: [String] = []
         parts.append("Here's your pipeline summary.")
-        parts.append("You have \(data.activeLoans) active loans worth \(data.formattedPipeline).")
+        parts.append("You have \(data.activeLoans) active loans worth \(data.spokenPipeline).")
 
         if data.pendingTasks > 0 {
             parts.append("\(data.pendingTasks) pending tasks.")
@@ -419,13 +419,20 @@ final class CarPlayVoiceHandler {
         var parts: [String] = ["You have \(loans.count) loan\(loans.count == 1 ? "" : "s") in your pipeline."]
 
         if totalAmount > 0 {
-            let formatted: String
+            let spoken: String
             if totalAmount >= 1_000_000 {
-                formatted = String(format: "$%.1f million", totalAmount / 1_000_000)
+                let millions = totalAmount / 1_000_000
+                if millions == Double(Int(millions)) {
+                    spoken = String(format: "%.0f million dollars", millions)
+                } else {
+                    spoken = String(format: "%.1f million dollars", millions)
+                }
+            } else if totalAmount >= 1_000 {
+                spoken = String(format: "%.0f thousand dollars", totalAmount / 1_000)
             } else {
-                formatted = String(format: "$%.0f thousand", totalAmount / 1_000)
+                spoken = String(format: "%.0f dollars", totalAmount)
             }
-            parts.append("Total volume: \(formatted).")
+            parts.append("Total volume: \(spoken).")
         }
 
         // Report top stages

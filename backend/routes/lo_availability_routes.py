@@ -8,8 +8,9 @@ Prefix: /api/v1/availability
 """
 
 import logging
+import threading
 from datetime import datetime, time, timedelta, timezone
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -20,6 +21,41 @@ from db import get_db
 from routes.auth_deps import current_user_dep
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# PERF-011: In-memory TTL cache for LO availability lookups (30s TTL)
+# ---------------------------------------------------------------------------
+
+_avail_cache: Dict[int, Tuple[bool, float]] = {}  # user_id -> (is_available, expires_ts)
+_avail_cache_lock = threading.Lock()
+_CACHE_TTL_SECONDS = 30
+
+
+def _cache_get(user_id: int) -> Optional[bool]:
+    """Return cached availability or None if miss/expired."""
+    with _avail_cache_lock:
+        entry = _avail_cache.get(user_id)
+        if entry is None:
+            return None
+        is_available, expires_at = entry
+        if datetime.now(timezone.utc).timestamp() > expires_at:
+            del _avail_cache[user_id]
+            return None
+        return is_available
+
+
+def _cache_set(user_id: int, is_available: bool) -> None:
+    """Store availability in cache with TTL."""
+    with _avail_cache_lock:
+        expires_at = datetime.now(timezone.utc).timestamp() + _CACHE_TTL_SECONDS
+        _avail_cache[user_id] = (is_available, expires_at)
+
+
+def _cache_invalidate(user_id: int) -> None:
+    """Invalidate cached entry for a user (call on status change)."""
+    with _avail_cache_lock:
+        _avail_cache.pop(user_id, None)
 
 router = APIRouter(prefix="/api/v1/availability", tags=["LO Availability"])
 
@@ -110,7 +146,7 @@ def _ensure_table(db: Session):
         LOAvailability.__table__.create(engine, checkfirst=True)
         LOAvailabilitySchedule.__table__.create(engine, checkfirst=True)
     except Exception as e:
-        logger.warning(f"Table creation check failed (non-fatal): {e}")
+        logger.warning("Table creation check failed (non-fatal): %s", e)
 
 
 def _parse_time(t: str) -> time:
@@ -119,6 +155,32 @@ def _parse_time(t: str) -> time:
     if len(parts) != 2:
         raise ValueError(f"Invalid time format: {t}")
     return time(int(parts[0]), int(parts[1]))
+
+
+def _verify_lo_belongs_to_org(db: Session, user_id: int, organization_id: int) -> None:
+    """
+    TENANT-011: Verify that the target LO belongs to the authenticated user's org.
+
+    Raises HTTPException 403 if the user does not belong to the org.
+    """
+    _ensure_models()
+    user = db.query(_User).filter(_User.id == user_id).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.organization_id != organization_id:
+        logger.warning(
+            "Tenant isolation violation: user %s (org %s) tried to modify LO %s (org %s)",
+            organization_id, organization_id, user_id, user.organization_id,
+            extra={
+                "user_id": user_id,
+                "target_org": user.organization_id,
+                "requesting_org": organization_id,
+            },
+        )
+        raise HTTPException(
+            status_code=403,
+            detail="LO does not belong to your organization",
+        )
 
 
 def _get_or_create_availability(db: Session, user_id: int, organization_id: int):
@@ -174,45 +236,56 @@ def _is_lo_available(db: Session, user_id: int) -> bool:
     """Full availability check: status + schedule + transfer capacity.
 
     Public helper for use by other modules (e.g., telephony transfer logic).
+    Uses PERF-011 in-memory cache with 30-second TTL.
     """
+    # PERF-011: Check cache first
+    cached = _cache_get(user_id)
+    if cached is not None:
+        return cached
+
     _ensure_models()
     avail = db.query(_LOAvailability).filter(
         _LOAvailability.user_id == user_id,
     ).first()
     if avail is None:
+        _cache_set(user_id, False)
         return False
+
+    result = True
 
     # Status check
     if avail.status != "available":
-        return False
+        result = False
 
     # Heartbeat freshness
-    if avail.last_heartbeat_at:
+    elif avail.last_heartbeat_at:
         stale_cutoff = datetime.now(timezone.utc) - timedelta(minutes=HEARTBEAT_STALE_MINUTES)
         hb_utc = avail.last_heartbeat_at
         if hb_utc.tzinfo is None:
             hb_utc = hb_utc.replace(tzinfo=timezone.utc)
         if hb_utc < stale_cutoff:
-            return False
+            result = False
 
     # Transfer capacity
-    if avail.active_transfer_count >= avail.max_concurrent_transfers:
-        return False
+    if result and avail.active_transfer_count >= avail.max_concurrent_transfers:
+        result = False
 
     # Schedule window
-    try:
-        import pytz
-        tz = pytz.timezone(avail.timezone or "America/Chicago")
-        now_in_tz = datetime.now(tz)
-    except Exception:
-        now_in_tz = datetime.now(timezone.utc)
-    now_time_val = now_in_tz.time()
-    now_weekday = now_in_tz.weekday()  # 0=Monday
+    if result:
+        try:
+            import pytz
+            tz = pytz.timezone(avail.timezone or "America/Chicago")
+            now_in_tz = datetime.now(tz)
+        except Exception:
+            now_in_tz = datetime.now(timezone.utc)
+        now_time_val = now_in_tz.time()
+        now_weekday = now_in_tz.weekday()  # 0=Monday
 
-    if not _is_within_schedule(db, user_id, now_time_val, now_weekday):
-        return False
+        if not _is_within_schedule(db, user_id, now_time_val, now_weekday):
+            result = False
 
-    return True
+    _cache_set(user_id, result)
+    return result
 
 
 def get_available_los(db: Session, organization_id: int) -> list:
@@ -286,6 +359,7 @@ def update_status_from_call(db: Session, user_id: int, event_type: str):
 
     avail.updated_at = datetime.now(timezone.utc)
     db.flush()
+    _cache_invalidate(user_id)
 
 
 # =============================================================================
@@ -322,8 +396,17 @@ async def update_own_status(
         avail.max_concurrent_transfers = body.max_concurrent_transfers
 
     db.commit()
+    _cache_invalidate(current_user.id)
 
-    logger.info(f"LO {current_user.id} status -> {body.status} (reason={body.status_reason})")
+    logger.info(
+        "LO %s status -> %s (reason=%s)",
+        current_user.id, body.status, body.status_reason,
+        extra={
+            "user_id": current_user.id,
+            "organization_id": current_user.organization_id,
+            "new_status": body.status,
+        },
+    )
 
     return {
         "status": "ok",
@@ -382,8 +465,18 @@ async def set_schedule(
     avail.timezone = user_tz
 
     db.commit()
+    _cache_invalidate(current_user.id)
 
-    logger.info(f"LO {current_user.id} schedule updated: {len(body.slots)} slots")
+    logger.info(
+        "LO %s schedule updated: %d slots",
+        current_user.id, len(body.slots),
+        extra={
+            "user_id": current_user.id,
+            "organization_id": current_user.organization_id,
+            "slots_count": len(body.slots),
+            "timezone": user_tz,
+        },
+    )
 
     return {
         "status": "ok",
@@ -510,7 +603,7 @@ async def find_available_los(
             user_id=user.id,
             first_name=user.first_name,
             last_name=user.last_name,
-            email=user.email,
+            email=None,  # PII: do not expose LO email in availability listing
             status=avail.status,
             active_transfer_count=avail.active_transfer_count,
             max_concurrent_transfers=avail.max_concurrent_transfers,
@@ -586,15 +679,20 @@ async def get_lo_availability(
 @router.post("/call-event")
 async def call_event_webhook(
     body: CallEvent,
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """
     Auto-update LO status from telephony call events.
 
     Called by the telephony layer when a call starts or ends.
-    No user auth required — intended to be called by internal services
-    or webhooks.  In production, protect via API key or network policy.
+    Requires internal API key via X-API-Key header.
     """
+    import os
+    expected_key = os.getenv("INTERNAL_API_KEY", "")
+    provided_key = request.headers.get("X-API-Key", "")
+    if not expected_key or provided_key != expected_key:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
     _ensure_models()
     _ensure_table(db)
 
@@ -604,19 +702,29 @@ async def call_event_webhook(
             detail="event_type must be 'call_start' or 'call_end'",
         )
 
+    call_log_extra = {
+        "user_id": body.user_id,
+        "event_type": body.event_type,
+        "call_id": body.call_id,
+    }
+
     avail = db.query(_LOAvailability).filter(
         _LOAvailability.user_id == body.user_id,
     ).first()
 
     if avail is None:
         logger.warning(
-            f"Call event for user {body.user_id} but no availability record exists"
+            "Call event for user %s but no availability record exists",
+            body.user_id,
+            extra=call_log_extra,
         )
         return {"status": "ignored", "reason": "no_availability_record"}
 
     if not avail.auto_status:
         logger.debug(
-            f"Call event for user {body.user_id} ignored — auto_status is disabled"
+            "Call event for user %s ignored — auto_status is disabled",
+            body.user_id,
+            extra=call_log_extra,
         )
         return {"status": "ignored", "reason": "auto_status_disabled"}
 
@@ -625,7 +733,9 @@ async def call_event_webhook(
         avail.status = "on_call"
         avail.status_reason = f"On call ({body.call_id})" if body.call_id else "On call"
         logger.info(
-            f"LO {body.user_id} -> on_call (transfers={avail.active_transfer_count})"
+            "LO %s -> on_call (transfers=%d)",
+            body.user_id, avail.active_transfer_count,
+            extra={**call_log_extra, "organization_id": avail.organization_id},
         )
 
     elif body.event_type == "call_end":
@@ -633,14 +743,21 @@ async def call_event_webhook(
         if avail.active_transfer_count == 0:
             avail.status = "available"
             avail.status_reason = None
-            logger.info(f"LO {body.user_id} -> available (all calls ended)")
+            logger.info(
+                "LO %s -> available (all calls ended)",
+                body.user_id,
+                extra={**call_log_extra, "organization_id": avail.organization_id},
+            )
         else:
             logger.info(
-                f"LO {body.user_id} still on_call (transfers={avail.active_transfer_count})"
+                "LO %s still on_call (transfers=%d)",
+                body.user_id, avail.active_transfer_count,
+                extra={**call_log_extra, "organization_id": avail.organization_id},
             )
 
     avail.updated_at = datetime.now(timezone.utc)
     db.commit()
+    _cache_invalidate(body.user_id)
 
     return {
         "status": "ok",
@@ -672,10 +789,18 @@ async def heartbeat(
     if avail.status == "offline" and avail.auto_status:
         avail.status = "available"
         avail.status_reason = None
-        logger.info(f"LO {current_user.id} heartbeat received — status -> available")
+        logger.info(
+            "LO %s heartbeat received — status -> available",
+            current_user.id,
+            extra={
+                "user_id": current_user.id,
+                "organization_id": current_user.organization_id,
+            },
+        )
 
     avail.updated_at = datetime.now(timezone.utc)
     db.commit()
+    _cache_invalidate(current_user.id)
 
     return {
         "status": "ok",

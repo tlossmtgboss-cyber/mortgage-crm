@@ -12,6 +12,7 @@ Endpoints:
   PUT  /api/v1/speed-to-lead/config          — Update per-org STL config
 """
 
+import hmac
 import os
 import logging
 import re
@@ -331,9 +332,16 @@ def _is_tcpa_quiet_hours(
         return start <= local_now < end
 
 
-def _is_weekend() -> bool:
-    """Check if today is Saturday (5) or Sunday (6) in UTC."""
-    return datetime.now(timezone.utc).weekday() in (5, 6)
+def _is_weekend(phone: Optional[str] = None) -> bool:
+    """Check if today is Saturday (5) or Sunday (6) in the borrower's local timezone."""
+    tz_name = _get_borrower_timezone(phone)
+    try:
+        import pytz
+        tz = pytz.timezone(tz_name)
+        local_now = datetime.now(tz)
+    except Exception:
+        local_now = datetime.now(timezone.utc)
+    return local_now.weekday() in (5, 6)
 
 
 def _check_dnc_opt_out(db: Session, phone: str, organization_id: Optional[int]) -> Optional[str]:
@@ -385,8 +393,8 @@ def _check_dnc_opt_out(db: Session, phone: str, organization_id: Optional[int]) 
         """), {"phone": phone, "org_id": organization_id}).fetchone()
         if row and row.call_consent is False:
             return "no_call_consent"
-    except Exception:
-        pass  # Table may not exist yet
+    except Exception as e:
+        logger.warning("Call consent check unavailable (table may not exist): %s", e)
 
     return None
 
@@ -544,7 +552,11 @@ async def _initiate_vapi_call(
         f"5) If they want to schedule, confirm a time that works. "
         f"Be professional, warm, and concise. Do not pressure or rush them. "
         f"If they ask to be called back later, note the preferred time. "
-        f"If they are not interested, thank them and end the call gracefully."
+        f"If they are not interested, thank them and end the call gracefully. "
+        f"COMPLIANCE (ECOA): NEVER ask about or discuss race, color, religion, national origin, "
+        f"sex, marital status, age, familial status, disability, or receipt of public assistance. "
+        f"If the borrower volunteers such information, do NOT record it or ask follow-up questions about it. "
+        f"COMPLIANCE (RATES): NEVER quote specific interest rates, APRs, or monthly payment amounts."
     )
 
     voicemail_message = ctx.get("voicemail_message") or (
@@ -762,7 +774,7 @@ async def _execute_stl_call(
         )
 
         # ---- Weekend check ----
-        is_wknd = _is_weekend()
+        is_wknd = _is_weekend(phone)
         weekend_blocked = is_wknd and not config.get("weekend_calls_enabled", False)
 
         call_blocked = (in_quiet_hours or weekend_blocked) and not force
@@ -833,7 +845,8 @@ async def _execute_stl_call(
                         "now": datetime.now(timezone.utc),
                     })
                     db.commit()
-                except Exception:
+                except Exception as e:
+                    logger.warning("Failed to log STL call to call_logs for lead %s: %s", lead_id, e)
                     db.rollback()
 
                 logger.info(
@@ -874,8 +887,8 @@ async def _execute_stl_call(
         try:
             _log_stl_event(db, lead_id, organization_id, "call_flow_error",
                            meta={"error": str(e)[:500]})
-        except Exception:
-            pass
+        except Exception as log_err:
+            logger.error("Failed to log STL call flow error for lead %s: %s", lead_id, log_err)
     finally:
         db.close()
         engine.dispose()
@@ -974,19 +987,31 @@ async def new_lead_webhook(
     Returns immediately while processing happens asynchronously.
 
     Authentication: X-API-Key header or api_key in payload.
+
+    Rate limiting: This endpoint should be behind X-RateLimit enforcement
+    (e.g., 30 requests/minute per source IP). The idempotency check below
+    provides application-level protection against duplicate webhook retries.
     """
     _ensure_tables(db)
 
-    # Authenticate via API key
-    api_key_header = request.headers.get("X-API-Key", "")
+    # --- SEC-002 Fix: Timing-safe API key validation with empty-key rejection ---
     expected_key = os.getenv("SPEED_TO_LEAD_WEBHOOK_KEY", "")
+    if not expected_key:
+        logger.error("SPEED_TO_LEAD_WEBHOOK_KEY is not configured; rejecting all webhook requests")
+        raise HTTPException(status_code=503, detail="Webhook not configured")
 
+    api_key_header = request.headers.get("X-API-Key", "")
     payload = await request.json()
 
     # Allow api_key in body as fallback
     api_key = api_key_header or payload.get("api_key", "")
 
-    if not expected_key or api_key != expected_key:
+    # Reject empty/None API keys before comparison
+    if not api_key:
+        raise HTTPException(status_code=401, detail="API key required")
+
+    # Timing-safe comparison to prevent timing attacks
+    if not hmac.compare_digest(api_key, expected_key):
         raise HTTPException(status_code=401, detail="Invalid API key")
 
     try:
@@ -994,10 +1019,13 @@ async def new_lead_webhook(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid payload: {e}")
 
-    # Verify lead exists
+    # --- IDOR Fix: Verify lead exists AND belongs to a valid organization ---
+    # Query requires organization_id IS NOT NULL to ensure the lead is org-scoped
     lead = db.execute(text("""
-        SELECT id, phone, organization_id, owner_id, first_name
-        FROM leads WHERE id = :lid
+        SELECT l.id, l.phone, l.organization_id, l.owner_id, l.first_name
+        FROM leads l
+        INNER JOIN organizations o ON o.id = l.organization_id
+        WHERE l.id = :lid AND l.organization_id IS NOT NULL
     """), {"lid": body.lead_id}).fetchone()
 
     if not lead:
@@ -1011,6 +1039,32 @@ async def new_lead_webhook(
             "reason": "no_phone_number",
         }
 
+    # --- Idempotency: reject if a speed-to-lead call was already triggered
+    #     for this lead in the last 60 seconds (prevents duplicate webhook retries) ---
+    try:
+        recent_event = db.execute(text("""
+            SELECT id FROM speed_to_lead_events
+            WHERE lead_id = :lid
+              AND event = 'call_flow_started'
+              AND created_at > NOW() - INTERVAL '60 seconds'
+            LIMIT 1
+        """), {"lid": body.lead_id}).fetchone()
+        if recent_event:
+            logger.info(
+                "STL webhook: duplicate suppressed for lead %s (event %s within 60s)",
+                body.lead_id, recent_event.id,
+            )
+            return {
+                "status": "accepted",
+                "lead_id": body.lead_id,
+                "call_triggered": False,
+                "reason": "duplicate_suppressed",
+                "message": "A speed-to-lead call was already triggered for this lead recently",
+            }
+    except Exception as e:
+        # Non-fatal: if the idempotency check fails, allow the call to proceed
+        logger.warning("STL idempotency check failed (non-fatal): %s", e)
+
     # Dispatch background call
     db_url = os.getenv("DATABASE_URL", "postgresql://localhost:5432/perennia")
 
@@ -1022,7 +1076,7 @@ async def new_lead_webhook(
         owner_id=lead.owner_id,
     )
 
-    logger.info(f"STL webhook: auto-call triggered for lead {body.lead_id} (source={body.source})")
+    logger.info("STL webhook: auto-call triggered for lead %s (source=%s, org=%s)", body.lead_id, body.source, lead.organization_id)
 
     return {
         "status": "accepted",

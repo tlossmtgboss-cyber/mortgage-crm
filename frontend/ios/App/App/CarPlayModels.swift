@@ -76,6 +76,24 @@ struct DashboardData: Codable {
             return String(format: "$%.0f", totalPipeline)
         }
     }
+
+    /// TTS-friendly pipeline value (e.g. "2.5 million dollars").
+    /// Avoids "$" symbols and abbreviations that screen readers mispronounce.
+    var spokenPipeline: String {
+        if totalPipeline >= 1_000_000 {
+            let millions = totalPipeline / 1_000_000
+            if millions == Double(Int(millions)) {
+                return String(format: "%.0f million dollars", millions)
+            }
+            return String(format: "%.1f million dollars", millions)
+        } else if totalPipeline >= 1_000 {
+            return String(format: "%.0f thousand dollars", totalPipeline / 1_000)
+        } else if totalPipeline > 0 {
+            return String(format: "%.0f dollars", totalPipeline)
+        } else {
+            return "zero dollars"
+        }
+    }
 }
 
 // MARK: - Tasks
@@ -150,10 +168,40 @@ struct LeadItem: Codable, Identifiable {
         return joined.isEmpty ? "Unknown Lead" : joined
     }
 
-    /// Stage formatted for spoken output (lowercased, underscores replaced).
+    /// Stage formatted for spoken output — expands abbreviations that
+    /// TTS engines and screen readers would mispronounce.
     var spokenStage: String {
-        stage.replacingOccurrences(of: "_", with: " ").lowercased()
+        Self.spokenStageMap[stage.uppercased()]
+            ?? stage.replacingOccurrences(of: "_", with: " ").lowercased()
     }
+
+    /// Maps stage codes to natural language for text-to-speech.
+    private static let spokenStageMap: [String: String] = [
+        "APPLICATION":          "application",
+        "DISCLOSED":            "disclosed",
+        "PROCESSING":           "processing",
+        "SUBMITTED":            "submitted",
+        "UNDERWRITING":         "underwriting",
+        "UW_RECEIVED":          "underwriting received",
+        "CONDITIONAL_APPROVAL": "conditional approval",
+        "APPROVED":             "approved",
+        "SUSPENDED":            "suspended",
+        "CTC":                  "clear to close",
+        "CLEAR_TO_CLOSE":       "clear to close",
+        "CLOSING":              "closing",
+        "DOCS":                 "docs out",
+        "DOCS_OUT":             "docs out",
+        "FUNDED":               "funded",
+        "CANCELLED":            "cancelled",
+        "DENIED":               "denied",
+        "DEAD":                 "dead",
+        "WITHDRAWN":            "withdrawn",
+        "DOES_NOT_QUALIFY":     "does not qualify",
+        "NURTURE":              "nurture",
+        "NEW":                  "new",
+        "CONTACTED":            "contacted",
+        "QUALIFIED":            "qualified",
+    ]
 }
 
 // MARK: - Loans
@@ -182,10 +230,56 @@ struct LoanItem: Codable, Identifiable {
         }
     }
 
-    /// Stage formatted for spoken output.
-    var spokenStage: String {
-        stage.replacingOccurrences(of: "_", with: " ").lowercased()
+    /// TTS-friendly loan amount (e.g. "425 thousand dollars").
+    /// Avoids "$" symbols and abbreviations that screen readers mispronounce.
+    var spokenAmount: String {
+        guard let amount = loanAmount else { return "unknown amount" }
+        if amount >= 1_000_000 {
+            let millions = amount / 1_000_000
+            if millions == Double(Int(millions)) {
+                return String(format: "%.0f million dollars", millions)
+            }
+            return String(format: "%.1f million dollars", millions)
+        } else if amount >= 1_000 {
+            return String(format: "%.0f thousand dollars", amount / 1_000)
+        } else if amount > 0 {
+            return String(format: "%.0f dollars", amount)
+        } else {
+            return "zero dollars"
+        }
     }
+
+    /// Stage formatted for spoken output — expands abbreviations that
+    /// TTS engines and screen readers would mispronounce.
+    var spokenStage: String {
+        Self.spokenStageMap[stage.uppercased()]
+            ?? stage.replacingOccurrences(of: "_", with: " ").lowercased()
+    }
+
+    /// Maps stage codes to natural language for text-to-speech.
+    private static let spokenStageMap: [String: String] = [
+        "APPLICATION":          "application",
+        "DISCLOSED":            "disclosed",
+        "PROCESSING":           "processing",
+        "SUBMITTED":            "submitted",
+        "UNDERWRITING":         "underwriting",
+        "UW_RECEIVED":          "underwriting received",
+        "CONDITIONAL_APPROVAL": "conditional approval",
+        "APPROVED":             "approved",
+        "SUSPENDED":            "suspended",
+        "CTC":                  "clear to close",
+        "CLEAR_TO_CLOSE":       "clear to close",
+        "CLOSING":              "closing",
+        "DOCS":                 "docs out",
+        "DOCS_OUT":             "docs out",
+        "FUNDED":               "funded",
+        "CANCELLED":            "cancelled",
+        "DENIED":               "denied",
+        "DEAD":                 "dead",
+        "WITHDRAWN":            "withdrawn",
+        "DOES_NOT_QUALIFY":     "does not qualify",
+        "NURTURE":              "nurture",
+    ]
 }
 
 // MARK: - Rate Alerts

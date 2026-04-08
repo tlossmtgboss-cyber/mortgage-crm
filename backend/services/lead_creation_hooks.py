@@ -55,17 +55,36 @@ async def on_lead_created(
         _await_dispatch: If True, await the dispatch coroutine instead of
                          using ensure_future.  Used by the sync wrapper.
     """
+    log_extra = {
+        "lead_id": lead_id,
+        "organization_id": organization_id,
+        "source": source,
+        "owner_id": owner_id,
+    }
+
     try:
         logger.info(
-            f"on_lead_created hook fired: lead_id={lead_id}, "
-            f"org_id={organization_id}, source={source}"
+            "on_lead_created hook fired: lead_id=%s, org_id=%s, source=%s",
+            lead_id, organization_id, source,
+            extra=log_extra,
         )
 
         # ---- Check if speed-to-lead is enabled for this org ----
         if not _is_stl_enabled(db, organization_id):
             logger.info(
-                f"Speed-to-lead not enabled for org {organization_id}, "
-                f"skipping auto-call for lead {lead_id}"
+                "Speed-to-lead not enabled for org %s, skipping auto-call for lead %s",
+                organization_id, lead_id,
+                extra=log_extra,
+            )
+            return
+
+        # ---- FUNC-003: Deduplication — skip if STL was already triggered
+        #      for this lead within the last 60 seconds (race condition guard).
+        if _has_recent_stl_dispatch(db, lead_id):
+            logger.info(
+                "Duplicate STL dispatch suppressed for lead %s (already triggered within 60s)",
+                lead_id,
+                extra=log_extra,
             )
             return
 
@@ -90,13 +109,17 @@ async def on_lead_created(
             asyncio.ensure_future(coro)
 
         logger.info(
-            f"Speed-to-lead call dispatched for lead {lead_id} (source={source})"
+            "Speed-to-lead call dispatched for lead %s (source=%s)",
+            lead_id, source,
+            extra={**log_extra, "action": "stl_dispatched"},
         )
 
     except Exception as e:
         # Never let hook failure bubble up — lead creation must succeed.
         logger.error(
-            f"on_lead_created hook error for lead {lead_id}: {e}",
+            "on_lead_created hook error for lead %s: %s",
+            lead_id, e,
+            extra=log_extra,
             exc_info=True,
         )
 
@@ -140,8 +163,44 @@ def _is_stl_enabled(db: Session, organization_id: Optional[int]) -> bool:
     except Exception as e:
         # Table may not exist yet — treat as "enabled" (first request
         # to the STL endpoint will create it via _ensure_tables).
-        logger.debug(f"STL config lookup note (non-fatal): {e}")
+        logger.debug("STL config lookup note (non-fatal): %s", e, extra={
+            "organization_id": organization_id,
+        })
         return True
+
+
+def _has_recent_stl_dispatch(db: Session, lead_id: int, window_seconds: int = 60) -> bool:
+    """
+    FUNC-003: Check if a speed-to-lead event was already logged for this lead
+    within the last ``window_seconds``.  Prevents duplicate dispatches when
+    two webhooks fire simultaneously for the same lead.
+
+    Returns True if a recent dispatch exists (caller should skip).
+    """
+    try:
+        from sqlalchemy import text
+
+        row = db.execute(
+            text("""
+                SELECT id FROM speed_to_lead_events
+                WHERE lead_id = :lid
+                  AND event IN ('call_flow_started', 'call_initiated', 'sms_sent')
+                  AND created_at > NOW() - CAST(:window_sec AS INTERVAL)
+                LIMIT 1
+            """),
+            {"lid": lead_id, "window_sec": f"{window_seconds} seconds"},
+        ).fetchone()
+
+        return row is not None
+
+    except Exception as e:
+        # Table may not exist yet — treat as "no recent dispatch" so the
+        # call flow proceeds normally.
+        logger.debug(
+            "STL dedup check note (non-fatal): %s", e,
+            extra={"lead_id": lead_id},
+        )
+        return False
 
 
 def on_lead_created_sync(
@@ -170,7 +229,9 @@ def on_lead_created_sync(
             loop.close()
     except Exception as e:
         logger.error(
-            f"on_lead_created_sync error for lead {lead_id}: {e}",
+            "on_lead_created_sync error for lead %s: %s",
+            lead_id, e,
+            extra={"lead_id": lead_id, "organization_id": organization_id},
             exc_info=True,
         )
 
@@ -200,10 +261,14 @@ async def _dispatch_stl_call(
 
     except ImportError as e:
         logger.warning(
-            f"Cannot import speed-to-lead call module (lead {lead_id}): {e}"
+            "Cannot import speed-to-lead call module (lead %s): %s",
+            lead_id, e,
+            extra={"lead_id": lead_id, "organization_id": organization_id},
         )
     except Exception as e:
         logger.error(
-            f"Speed-to-lead dispatch failed for lead {lead_id}: {e}",
+            "Speed-to-lead dispatch failed for lead %s: %s",
+            lead_id, e,
+            extra={"lead_id": lead_id, "organization_id": organization_id},
             exc_info=True,
         )

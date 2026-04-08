@@ -10,7 +10,7 @@ Models:
 
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, Integer, String, DateTime, Text, ForeignKey, Index,
+    Column, Integer, String, DateTime, Text, ForeignKey, Index, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
@@ -30,6 +30,13 @@ class DripEnrollment(Base):
         Index("ix_drip_enroll_seq_status", "sequence_id", "status"),
         Index("ix_drip_enroll_next_step", "next_step_at"),
         Index("ix_drip_enroll_status", "status"),
+        # Partial unique index: prevent duplicate active enrollments per lead+sequence+org
+        Index(
+            "uq_drip_enroll_active",
+            "organization_id", "lead_id", "sequence_name",
+            unique=True,
+            postgresql_where=Column("status").in_(["active", "paused"]),
+        ),
         {"extend_existing": True},
     )
 

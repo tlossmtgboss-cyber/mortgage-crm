@@ -7,7 +7,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import {
   initMDMConfig,
@@ -19,6 +19,20 @@ import {
   getMDMOrganizationId,
   getMDMSSOConfig,
 } from '../services/mdmConfig';
+
+// Native plugin bridge for DLP / VPN status queries
+const MDMConfigNative = registerPlugin('MDMConfig', {
+  web: () =>
+    Promise.resolve({
+      getDLPStatus: async () => ({
+        clipboardAllowed: true,
+        vpnRequired: false,
+        vpnConnected: false,
+        isCompliant: true,
+      }),
+      checkClipboardPolicy: async () => ({ allowed: true }),
+    }),
+});
 
 const MDMConfigContext = createContext(null);
 
@@ -35,7 +49,11 @@ const MDMConfigContext = createContext(null);
  *   serverUrl: string | null,
  *   organizationId: string | null,
  *   ssoConfig: { provider: string, domain: string | null } | null,
+ *   clipboardAllowed: boolean,
+ *   vpnRequired: boolean,
+ *   vpnConnected: boolean,
  *   isFeatureDisabled: (featureName: string) => boolean,
+ *   checkClipboardPolicy: () => Promise<boolean>,
  *   refresh: () => Promise<void>,
  * }}
  */
@@ -53,7 +71,11 @@ export function useMDMConfig() {
       serverUrl: null,
       organizationId: null,
       ssoConfig: null,
+      clipboardAllowed: true,
+      vpnRequired: false,
+      vpnConnected: false,
       isFeatureDisabled: () => false,
+      checkClipboardPolicy: async () => true,
       refresh: async () => {},
     };
   }
@@ -74,6 +96,9 @@ export function MDMConfigProvider({ children }) {
   const [serverUrl, setServerUrl] = useState(null);
   const [organizationId, setOrganizationId] = useState(null);
   const [ssoConfig, setSsoConfig] = useState(null);
+  const [clipboardAllowed, setClipboardAllowed] = useState(true);
+  const [vpnRequired, setVpnRequired] = useState(false);
+  const [vpnConnected, setVpnConnected] = useState(false);
 
   const loadConfig = useCallback(async () => {
     try {
@@ -96,6 +121,18 @@ export function MDMConfigProvider({ children }) {
         setFeaturesDisabled(raw ? JSON.parse(raw) : []);
       } catch {
         setFeaturesDisabled([]);
+      }
+
+      // Read DLP / VPN policy status from native layer
+      if (Capacitor.isNativePlatform()) {
+        try {
+          const dlp = await MDMConfigNative.getDLPStatus();
+          setClipboardAllowed(dlp.clipboardAllowed ?? true);
+          setVpnRequired(dlp.vpnRequired ?? false);
+          setVpnConnected(dlp.vpnConnected ?? false);
+        } catch (dlpErr) {
+          console.warn('[MDMConfigContext] DLP status check failed:', dlpErr);
+        }
       }
     } catch (err) {
       console.error('[MDMConfigContext] Initialization failed:', err);
@@ -132,6 +169,16 @@ export function MDMConfigProvider({ children }) {
     [featuresDisabled]
   );
 
+  const checkClipboardPolicy = useCallback(async () => {
+    if (!Capacitor.isNativePlatform()) return true;
+    try {
+      const result = await MDMConfigNative.checkClipboardPolicy();
+      return result?.allowed !== false;
+    } catch {
+      return true;
+    }
+  }, []);
+
   const refresh = useCallback(async () => {
     invalidateMDMCache();
     await loadConfig();
@@ -147,7 +194,11 @@ export function MDMConfigProvider({ children }) {
     serverUrl,
     organizationId,
     ssoConfig,
+    clipboardAllowed,
+    vpnRequired,
+    vpnConnected,
     isFeatureDisabled,
+    checkClipboardPolicy,
     refresh,
   };
 

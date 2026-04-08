@@ -6,13 +6,20 @@ a lead.  Every public function enforces organization_id tenant isolation.
 """
 
 import logging
+import time
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# In-memory context cache (PERF-012)
+# ---------------------------------------------------------------------------
+_context_cache: Dict[Tuple[int, int], Tuple[float, Dict[str, Any]]] = {}
+_cache_ttl: float = 120.0  # seconds
 
 # ---------------------------------------------------------------------------
 # Scoring weights for engagement events
@@ -41,18 +48,46 @@ async def get_lead_engagement_context(
     """Return a structured dict summarizing the lead's cross-channel engagement.
 
     All queries are scoped to *organization_id* for tenant isolation.
+    Results are cached for 2 minutes (PERF-012).
     """
-    return {
+    # --- Check cache (PERF-012) -----------------------------------------------
+    cache_key = (lead_id, organization_id)
+    cached = _context_cache.get(cache_key)
+    if cached is not None:
+        cached_at, cached_result = cached
+        if time.monotonic() - cached_at < _cache_ttl:
+            return cached_result
+
+    t0 = time.monotonic()
+
+    # --- Load lead ONCE, pass to helpers (PERF-014) ---------------------------
+    lead = _load_lead(db, lead_id, organization_id)
+
+    result = {
         "last_call": _get_last_call(db, lead_id, organization_id),
         "sms_conversation": _get_sms_context(db, lead_id, organization_id),
         "email_history": _get_email_history(db, lead_id, organization_id),
-        "qualification_data": await merge_qualification_data(db, lead_id, organization_id),
-        "deal_breaker_result": _get_deal_breaker_result(db, lead_id, organization_id),
-        "drip_status": _get_drip_status(lead_id),
+        "qualification_data": await merge_qualification_data(db, lead_id, organization_id, lead=lead),
+        "deal_breaker_result": _get_deal_breaker_result(db, lead_id, organization_id, lead=lead),
+        "drip_status": _get_drip_status(db, lead_id, organization_id),
         "appointments": _get_appointments(db, lead_id, organization_id),
-        "overall_engagement_score": _compute_engagement_score(db, lead_id, organization_id),
-        "channel_preference": _derive_channel_preference(db, lead_id, organization_id),
+        "overall_engagement_score": _compute_engagement_score(db, lead_id, organization_id, lead=lead),
+        "channel_preference": _derive_channel_preference(db, lead_id, organization_id, lead=lead),
     }
+
+    # --- Cache result (PERF-012) ----------------------------------------------
+    _context_cache[cache_key] = (time.monotonic(), result)
+
+    # --- Performance timing (OBS-015) -----------------------------------------
+    elapsed_ms = (time.monotonic() - t0) * 1000
+    if elapsed_ms > 500:
+        logger.warning(
+            "get_lead_engagement_context for lead %d took %.0fms (threshold 500ms)",
+            lead_id,
+            elapsed_ms,
+        )
+
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -170,13 +205,17 @@ async def merge_qualification_data(
     db: Session,
     lead_id: int,
     organization_id: int,
+    *,
+    lead=None,
 ) -> Dict[str, Any]:
     """Combine qualification data from all channels with source attribution.
 
     Priority order (later overwrites earlier unless None):
-      1. SMS conversation context_data
-      2. Call transcript extracted entities
+      1. SMS conversation context_data (last 90 days only — DATA-008)
+      2. Call transcript extracted entities (last 90 days only — DATA-008)
       3. Lead model fields (authoritative)
+
+    Pass *lead* to avoid a redundant DB load (PERF-014).
     """
     merged: Dict[str, Any] = {
         "credit_score": None,
@@ -195,6 +234,8 @@ async def merge_qualification_data(
         "sources": {},
     }
 
+    freshness_cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+
     # --- Source 1: SMS AI conversation context_data ---------------------------
     try:
         from database.models.sms_conversation import SMSAIConversation
@@ -207,7 +248,13 @@ async def merge_qualification_data(
             .order_by(desc(SMSAIConversation.last_message_at))
             .first()
         )
-        if sms_conv and sms_conv.context_data:
+        # DATA-008: Only use SMS data from the last 90 days
+        if (
+            sms_conv
+            and sms_conv.context_data
+            and sms_conv.last_message_at
+            and sms_conv.last_message_at >= freshness_cutoff
+        ):
             _sms_data = sms_conv.context_data or {}
             _MAP = {
                 "credit_score": "credit_score",
@@ -230,6 +277,12 @@ async def merge_qualification_data(
                 if val is not None:
                     merged[merged_key] = val
                     merged["sources"][merged_key] = "sms"
+        elif sms_conv and sms_conv.context_data and sms_conv.last_message_at:
+            logger.debug(
+                "Skipping stale SMS qualification data for lead %d (last message: %s)",
+                lead_id,
+                sms_conv.last_message_at.isoformat(),
+            )
     except Exception as e:
         logger.exception(f"Error reading SMS context for lead {lead_id}: {e}")
 
@@ -238,12 +291,14 @@ async def merge_qualification_data(
         from database.models.communication import Activity
         from database.enums import ActivityType
 
+        # DATA-008: Only use call data from the last 90 days
         call_activities = (
             db.query(Activity)
             .filter(
                 Activity.lead_id == lead_id,
                 Activity.organization_id == organization_id,
                 Activity.type == ActivityType.CALL,
+                Activity.created_at >= freshness_cutoff,
             )
             .order_by(desc(Activity.created_at))
             .limit(5)
@@ -263,7 +318,8 @@ async def merge_qualification_data(
         logger.exception(f"Error reading call entities for lead {lead_id}: {e}")
 
     # --- Source 3: Lead model fields (authoritative) --------------------------
-    lead = _load_lead(db, lead_id, organization_id)
+    if lead is None:
+        lead = _load_lead(db, lead_id, organization_id)
     if lead:
         _lead_map = {
             "credit_score": lead.credit_score,
@@ -323,11 +379,16 @@ async def update_engagement_score(
     lead_id: int,
     event_type: str,
     channel: str,
+    organization_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Increment lead.ai_score based on engagement event.
 
     Returns the updated score and delta applied.
     """
+    # Invalidate context cache on score update (PERF-012)
+    if organization_id is not None:
+        _context_cache.pop((lead_id, organization_id), None)
+
     delta = ENGAGEMENT_WEIGHTS.get(event_type, 0)
     if delta == 0:
         logger.warning(f"Unknown engagement event_type '{event_type}' for lead {lead_id}")
@@ -336,7 +397,10 @@ async def update_engagement_score(
     try:
         from database.models.lead_loan import Lead
 
-        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        filters = [Lead.id == lead_id]
+        if organization_id is not None:
+            filters.append(Lead.organization_id == organization_id)
+        lead = db.query(Lead).filter(*filters).first()
         if not lead:
             logger.warning(f"Lead {lead_id} not found for engagement score update")
             return {"lead_id": lead_id, "delta": delta, "new_score": None, "event_type": event_type}
@@ -526,6 +590,7 @@ def _get_email_history(db: Session, lead_id: int, organization_id: int) -> Optio
     try:
         from database.models.communication import EmailMessage
 
+        # PERF-013: Limit to most recent 50 emails to avoid unbounded query
         emails = (
             db.query(EmailMessage)
             .filter(
@@ -533,6 +598,7 @@ def _get_email_history(db: Session, lead_id: int, organization_id: int) -> Optio
                 EmailMessage.organization_id == organization_id,
             )
             .order_by(desc(EmailMessage.created_at))
+            .limit(50)
             .all()
         )
         if not emails:
@@ -589,9 +655,10 @@ def _get_email_history(db: Session, lead_id: int, organization_id: int) -> Optio
 
 # --- Deal breaker -----------------------------------------------------------
 
-def _get_deal_breaker_result(db: Session, lead_id: int, organization_id: int) -> Optional[Dict]:
+def _get_deal_breaker_result(db: Session, lead_id: int, organization_id: int, *, lead=None) -> Optional[Dict]:
     """Return the last deal-breaker evaluation stored in lead.user_metadata."""
-    lead = _load_lead(db, lead_id, organization_id)
+    if lead is None:
+        lead = _load_lead(db, lead_id, organization_id)
     if not lead:
         return None
     meta = lead.user_metadata or {}
@@ -600,19 +667,17 @@ def _get_deal_breaker_result(db: Session, lead_id: int, organization_id: int) ->
 
 # --- Drip status ------------------------------------------------------------
 
-def _get_drip_status(lead_id: int) -> Dict[str, Any]:
-    """Return current drip enrollment status for this lead.
-
-    The DripEnrollmentService uses an in-memory store, so we import
-    the singleton if available.
-    """
+def _get_drip_status(db: Session, lead_id: int, organization_id: int) -> Dict[str, Any]:
+    """Return current drip enrollment status for this lead within their org."""
     try:
-        from services.drip_enrollment_service import DripEnrollmentService
-        svc = DripEnrollmentService()
-        enrollments = svc.get_active_enrollments(str(lead_id))
+        from services.drip_enrollment_service import get_drip_enrollment_service
+        svc = get_drip_enrollment_service()
+        enrollments = svc.get_active_enrollments(
+            db=db, lead_id=str(lead_id), org_id=str(organization_id)
+        )
         return {
             "enrolled": bool(enrollments),
-            "enrollments": [e.to_dict() for e in enrollments],
+            "enrollments": enrollments,  # already dicts from _enrollment_to_dict
         }
     except Exception as e:
         logger.debug(f"Could not fetch drip status for lead {lead_id}: {e}")
@@ -728,22 +793,24 @@ def _get_calendar_events_fallback(db: Session, lead_id: int, organization_id: in
 
 # --- Engagement scoring -----------------------------------------------------
 
-def _compute_engagement_score(db: Session, lead_id: int, organization_id: int) -> int:
+def _compute_engagement_score(db: Session, lead_id: int, organization_id: int, *, lead=None) -> int:
     """Return the lead's current ai_score (engagement proxy)."""
-    lead = _load_lead(db, lead_id, organization_id)
+    if lead is None:
+        lead = _load_lead(db, lead_id, organization_id)
     return lead.ai_score if lead and lead.ai_score is not None else 0
 
 
 # --- Channel preference -----------------------------------------------------
 
-def _derive_channel_preference(db: Session, lead_id: int, organization_id: int) -> str:
+def _derive_channel_preference(db: Session, lead_id: int, organization_id: int, *, lead=None) -> str:
     """Determine which channel the lead engages with most.
 
     Checks explicit ChannelPreference first, then falls back to activity
     frequency analysis.
     """
     # 1. Explicit preference on the lead record
-    lead = _load_lead(db, lead_id, organization_id)
+    if lead is None:
+        lead = _load_lead(db, lead_id, organization_id)
     if lead and lead.preferred_communication:
         return lead.preferred_communication
 

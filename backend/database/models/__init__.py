@@ -387,6 +387,9 @@ from .esignature import (
     AuditEventType,
 )
 
+# Engagement event tracking
+from .engagement_event import EngagementEvent
+
 # Document security & audit models
 from .document_security import (
     DocumentAccessLog,

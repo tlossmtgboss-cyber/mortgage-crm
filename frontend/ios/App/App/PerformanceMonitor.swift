@@ -9,6 +9,8 @@
 import Foundation
 import UIKit
 import os.log
+import MetricKit
+import os.signpost
 
 @available(iOS 14.0, *)
 final class PerformanceMonitor {
@@ -29,6 +31,7 @@ final class PerformanceMonitor {
     /// Call from applicationDidFinishLaunching
     func recordAppLaunch() {
         appLaunchDuration = CFAbsoluteTimeGetCurrent() - Self.processStartTime
+        endSignpost("AppLaunch") // Pair with beginSignpost at process start
         logger.info("App launch (didFinishLaunching): \(String(format: "%.3f", self.appLaunchDuration))s")
 
         // Measure time to first frame
@@ -152,6 +155,7 @@ final class PerformanceMonitor {
 
     /// Record an API request duration for performance tracking
     func recordRequestTiming(endpoint: String, durationMs: Int) {
+        emitSignpost("APIRequest")
         monitorQueue.async { [weak self] in
             guard let self = self else { return }
             self.requestTimings.append((endpoint: endpoint, durationMs: durationMs, timestamp: Date()))
@@ -214,8 +218,141 @@ final class PerformanceMonitor {
         ]
     }
 
+    // MARK: - MetricKit Payload Storage
+
+    private let payloadStorageKey = "com.perenniaai.metrickit.payloads"
+    private let payloadIndexKey = "com.perenniaai.metrickit.payloadIndex"
+
+    private func storeMetricPayload(_ jsonData: Data, type: String) {
+        monitorQueue.async { [weak self] in
+            guard let self = self else { return }
+            let key = "\(self.payloadStorageKey).\(type).\(Int(Date().timeIntervalSince1970))"
+
+            if #available(iOS 14.0, *) {
+                EncryptedCacheService.shared.store(key: key, value: jsonData)
+            }
+
+            // Track in index
+            var index = UserDefaults.standard.stringArray(forKey: self.payloadIndexKey) ?? []
+            index.append(key)
+            UserDefaults.standard.set(index, forKey: self.payloadIndexKey)
+        }
+    }
+
+    /// Retrieve stored MetricKit payloads for backend sync
+    func getPendingMetricPayloads() -> [(type: String, data: Data)] {
+        var results: [(type: String, data: Data)] = []
+        let index = UserDefaults.standard.stringArray(forKey: payloadIndexKey) ?? []
+
+        for key in index {
+            if #available(iOS 14.0, *) {
+                if let data: Data = EncryptedCacheService.shared.retrieve(key: key, type: Data.self) {
+                    let type = key.contains(".diagnostic.") ? "diagnostic" : "performance"
+                    results.append((type: type, data: data))
+                }
+            }
+        }
+        return results
+    }
+
+    /// Clear all synced payloads from encrypted cache and index
+    func clearSyncedPayloads() {
+        let index = UserDefaults.standard.stringArray(forKey: payloadIndexKey) ?? []
+        for key in index {
+            if #available(iOS 14.0, *) {
+                EncryptedCacheService.shared.delete(key: key)
+            }
+        }
+        UserDefaults.standard.removeObject(forKey: payloadIndexKey)
+    }
+
+    // MARK: - Signpost Instrumentation (Instruments.app integration)
+
+    private static let signpostLog = OSLog(subsystem: "com.perenniaai.crm", category: .pointsOfInterest)
+
+    /// Begin a signpost interval for a named operation (shows in Instruments)
+    func beginSignpost(_ name: StaticString, id: OSSignpostID = .exclusive) {
+        os_signpost(.begin, log: Self.signpostLog, name: name, signpostID: id)
+    }
+
+    /// End a signpost interval
+    func endSignpost(_ name: StaticString, id: OSSignpostID = .exclusive) {
+        os_signpost(.end, log: Self.signpostLog, name: name, signpostID: id)
+    }
+
+    /// Emit a single signpost event
+    func emitSignpost(_ name: StaticString) {
+        os_signpost(.event, log: Self.signpostLog, name: name)
+    }
+
     private init() {
         // Enable battery monitoring
         UIDevice.current.isBatteryMonitoringEnabled = true
+
+        // Register for MetricKit payloads (crash reports + performance)
+        if #available(iOS 14.0, *) {
+            MXMetricManager.shared.add(self)
+        }
+    }
+
+    deinit {
+        if #available(iOS 14.0, *) {
+            MXMetricManager.shared.remove(self)
+        }
+    }
+}
+
+// MARK: - MXMetricManagerSubscriber
+
+@available(iOS 14.0, *)
+extension PerformanceMonitor: MXMetricManagerSubscriber {
+
+    /// Receives daily performance metric payloads from Apple
+    func didReceive(_ payloads: [MXMetricPayload]) {
+        for payload in payloads {
+            let metrics: [String: Any] = [
+                "type": "metric_payload",
+                "timeStamp": ISO8601DateFormatter().string(from: payload.timeStampEnd),
+                "includes_cpu": payload.cpuMetrics != nil,
+                "includes_memory": payload.memoryMetrics != nil,
+                "includes_display": payload.displayMetrics != nil,
+                "includes_network": payload.networkTransferMetrics != nil,
+                "includes_launch": payload.applicationLaunchMetrics != nil
+            ]
+            logger.info("MetricKit payload received: \(metrics.description)")
+
+            // Store payload JSON for backend sync
+            if let jsonData = payload.jsonRepresentation() {
+                storeMetricPayload(jsonData, type: "performance")
+            }
+        }
+    }
+
+    /// Receives crash diagnostics, hang reports, and disk write exceptions (iOS 14+)
+    func didReceive(_ payloads: [MXDiagnosticPayload]) {
+        for payload in payloads {
+            logger.warning("MetricKit diagnostic received — crashes: \(payload.crashDiagnostics?.count ?? 0), hangs: \(payload.hangDiagnostics?.count ?? 0)")
+
+            // Log crash count to audit trail
+            let crashCount = payload.crashDiagnostics?.count ?? 0
+            let hangCount = payload.hangDiagnostics?.count ?? 0
+
+            if crashCount > 0 || hangCount > 0 {
+                AuditLogger.shared.log(
+                    event: .featureAccess,
+                    details: [
+                        "performance_event": "diagnostic_payload",
+                        "crash_count": "\(crashCount)",
+                        "hang_count": "\(hangCount)",
+                        "disk_write_exceptions": "\(payload.diskWriteExceptionDiagnostics?.count ?? 0)"
+                    ]
+                )
+            }
+
+            // Store diagnostic JSON for backend sync
+            if let jsonData = payload.jsonRepresentation() {
+                storeMetricPayload(jsonData, type: "diagnostic")
+            }
+        }
     }
 }

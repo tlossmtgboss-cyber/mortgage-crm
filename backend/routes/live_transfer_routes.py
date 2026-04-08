@@ -10,6 +10,7 @@ Flow:
 
 import os
 import logging
+import threading
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -30,6 +31,59 @@ router = APIRouter(prefix="/api/v1/telephony", tags=["Live Transfer"])
 
 TELNYX_API_KEY = os.getenv("TELNYX_API_KEY", "")
 TELNYX_API_BASE = "https://api.telnyx.com/v2"
+
+
+# ---------------------------------------------------------------------------
+# PERF-008: Circuit breaker for Telnyx API
+# Opens after 5 consecutive failures, auto-resets after 30 seconds.
+# ---------------------------------------------------------------------------
+
+_telnyx_cb_lock = threading.Lock()
+_telnyx_cb = {
+    "consecutive_failures": 0,
+    "open_since": None,          # datetime when circuit opened, or None if closed
+    "threshold": 5,              # failures before opening
+    "recovery_seconds": 30,      # seconds before half-open retry
+}
+
+
+def _telnyx_circuit_open() -> bool:
+    """Check if the Telnyx circuit breaker is open (should reject calls)."""
+    with _telnyx_cb_lock:
+        if _telnyx_cb["open_since"] is None:
+            return False
+        elapsed = (datetime.now(timezone.utc) - _telnyx_cb["open_since"]).total_seconds()
+        if elapsed >= _telnyx_cb["recovery_seconds"]:
+            # Half-open: allow one request through to probe recovery
+            logger.info("Telnyx circuit breaker half-open after %.1fs — allowing probe request", elapsed)
+            return False
+        return True
+
+
+def _telnyx_circuit_record_success():
+    """Record a successful Telnyx call — reset circuit breaker."""
+    with _telnyx_cb_lock:
+        if _telnyx_cb["consecutive_failures"] > 0 or _telnyx_cb["open_since"] is not None:
+            logger.info(
+                "Telnyx circuit breaker reset (was %d consecutive failures)",
+                _telnyx_cb["consecutive_failures"],
+            )
+        _telnyx_cb["consecutive_failures"] = 0
+        _telnyx_cb["open_since"] = None
+
+
+def _telnyx_circuit_record_failure():
+    """Record a Telnyx failure — may trip the circuit breaker."""
+    with _telnyx_cb_lock:
+        _telnyx_cb["consecutive_failures"] += 1
+        count = _telnyx_cb["consecutive_failures"]
+        if count >= _telnyx_cb["threshold"] and _telnyx_cb["open_since"] is None:
+            _telnyx_cb["open_since"] = datetime.now(timezone.utc)
+            logger.error(
+                "Telnyx circuit breaker OPEN after %d consecutive failures — "
+                "rejecting requests for %ds",
+                count, _telnyx_cb["recovery_seconds"],
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -55,18 +109,57 @@ class TransferStatusResponse(BaseModel):
 # Telnyx helpers
 # ---------------------------------------------------------------------------
 
-async def _telnyx_post(path: str, payload: dict) -> dict:
-    """POST to Telnyx Call Control API."""
-    async with httpx.AsyncClient(timeout=15) as client:
-        resp = await client.post(
-            f"{TELNYX_API_BASE}{path}",
-            json=payload,
-            headers={"Authorization": f"Bearer {TELNYX_API_KEY}", "Content-Type": "application/json"},
+async def _telnyx_post(path: str, payload: dict, _retries: int = 2) -> dict:
+    """POST to Telnyx Call Control API with retry on transient errors.
+
+    Protected by a circuit breaker (PERF-008): after 5 consecutive failures
+    the circuit opens and requests are rejected for 30 seconds.
+    """
+    import asyncio as _asyncio
+
+    # PERF-008: Circuit breaker fast-reject
+    if _telnyx_circuit_open():
+        logger.warning("Telnyx circuit breaker OPEN — rejecting request to %s", path)
+        raise HTTPException(
+            status_code=503,
+            detail="Telephony provider temporarily unavailable (circuit open)",
         )
-        if resp.status_code >= 400:
-            logger.error("Telnyx API error %s: %s", resp.status_code, resp.text)
+
+    last_exc = None
+    for attempt in range(_retries + 1):
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                resp = await client.post(
+                    f"{TELNYX_API_BASE}{path}",
+                    json=payload,
+                    headers={"Authorization": f"Bearer {TELNYX_API_KEY}", "Content-Type": "application/json"},
+                )
+                if resp.status_code >= 500 and attempt < _retries:
+                    logger.warning(
+                        "Telnyx API transient error %s on %s (attempt %d/%d)",
+                        resp.status_code, path, attempt + 1, _retries + 1,
+                    )
+                    await _asyncio.sleep(0.5 * (attempt + 1))
+                    continue
+                if resp.status_code >= 400:
+                    logger.error("Telnyx API error %s on %s: %s", resp.status_code, path, resp.text[:300])
+                    _telnyx_circuit_record_failure()
+                    raise HTTPException(status_code=502, detail="Telephony provider error")
+                _telnyx_circuit_record_success()
+                return resp.json() if resp.content else {}
+        except HTTPException:
+            raise
+        except Exception as e:
+            last_exc = e
+            if attempt < _retries:
+                logger.warning("Telnyx API request error on %s (attempt %d): %s", path, attempt + 1, e)
+                await _asyncio.sleep(0.5 * (attempt + 1))
+                continue
+            logger.error("Telnyx API request failed after %d attempts on %s: %s", _retries + 1, path, e)
+            _telnyx_circuit_record_failure()
             raise HTTPException(status_code=502, detail="Telephony provider error")
-        return resp.json() if resp.content else {}
+    _telnyx_circuit_record_failure()
+    raise HTTPException(status_code=502, detail="Telephony provider error")
 
 
 async def _hold_call(call_control_id: str, audio_url: Optional[str] = None):
@@ -193,15 +286,55 @@ async def initiate_live_transfer(
     from database.models.live_transfer import LiveTransfer
 
     org_id = getattr(current_user, "organization_id", None)
+    user_id = getattr(current_user, "id", None)
 
-    # Look up target LO
+    # ── SEC-006: Tenant isolation — verify target LO belongs to same org ──
     lo = db.execute(text("""
-        SELECT id, phone, first_name, last_name FROM users
-        WHERE id = :lo_id AND organization_id = :org_id
-    """), {"lo_id": body.target_lo_id, "org_id": org_id}).fetchone()
+        SELECT id, phone, first_name, last_name, organization_id FROM users
+        WHERE id = :lo_id
+    """), {"lo_id": body.target_lo_id}).fetchone()
 
     if not lo or not lo.phone:
         raise HTTPException(status_code=404, detail="Target LO not found or has no phone number")
+
+    if lo.organization_id != org_id:
+        logger.warning(
+            "SEC-006 tenant isolation violation: user_id=%s org=%s tried to transfer to lo_id=%s org=%s",
+            user_id, org_id, body.target_lo_id, lo.organization_id,
+        )
+        raise HTTPException(status_code=403, detail="Target LO does not belong to your organization")
+
+    # ── DATA-007: Idempotency — check for existing active transfer on same call ──
+    active_statuses = ("initiated", "lo_ringing", "lo_answered", "whisper_playing", "bridged")
+    existing = db.query(LiveTransfer).filter(
+        LiveTransfer.call_control_id == body.call_control_id,
+        LiveTransfer.status.in_(active_statuses),
+    ).first()
+
+    if existing:
+        logger.info(
+            "DATA-007 idempotency: returning existing transfer %s (status=%s) for call_control_id=%s, "
+            "org_id=%s, user_id=%s",
+            existing.id, existing.status, body.call_control_id[:12], org_id, user_id,
+        )
+        lo_row = db.execute(text(
+            "SELECT first_name, last_name FROM users WHERE id = :uid"
+        ), {"uid": existing.lo_id}).fetchone()
+        return {
+            "transfer_id": existing.id,
+            "status": existing.status,
+            "lo_name": f"{lo_row.first_name} {lo_row.last_name}" if lo_row else None,
+            "whisper_text": existing.whisper_text,
+            "idempotent": True,
+        }
+
+    # ── OBS-010: Log transfer lifecycle — stage: initiated ──
+    logger.info(
+        "transfer_lifecycle stage=initiated call_control_id=%s lead_id=%s lo_id=%s "
+        "transfer_type=%s org_id=%s user_id=%s",
+        body.call_control_id[:12], body.lead_id, body.target_lo_id,
+        body.transfer_type, org_id, user_id,
+    )
 
     # Build whisper with cross-channel context
     whisper = _build_whisper(db, body.lead_id, body.whisper_text, organization_id=org_id)
@@ -224,6 +357,10 @@ async def initiate_live_transfer(
     try:
         # Step 1 — hold the caller
         await _hold_call(body.call_control_id)
+        logger.info(
+            "transfer_lifecycle stage=caller_on_hold transfer_id=%s org_id=%s",
+            transfer.id, org_id,
+        )
 
         # Step 2 — dial the LO
         import base64
@@ -243,6 +380,12 @@ async def initiate_live_transfer(
         transfer.status = "lo_ringing"
         db.commit()
 
+        # OBS-010: Log transfer lifecycle — stage: lo_dialed
+        logger.info(
+            "transfer_lifecycle stage=lo_dialed transfer_id=%s lo_id=%s lo_call_control_id=%s org_id=%s",
+            transfer.id, body.target_lo_id, transfer.lo_call_control_id, org_id,
+        )
+
         return {
             "transfer_id": transfer.id,
             "status": "lo_ringing",
@@ -251,7 +394,10 @@ async def initiate_live_transfer(
         }
 
     except Exception as e:
-        logger.exception("Failed to initiate live transfer %s", transfer.id)
+        logger.exception(
+            "transfer_lifecycle stage=failed transfer_id=%s error=%s org_id=%s",
+            transfer.id, e, org_id,
+        )
         transfer.status = "failed"
         transfer.failure_reason = str(e)
         db.commit()
@@ -280,8 +426,11 @@ async def transfer_status_webhook(request: Request, db: Session = Depends(get_db
     if client_state_b64:
         try:
             transfer_id = base64.b64decode(client_state_b64).decode()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "Failed to decode transfer client_state: %s (call_control_id=%s)",
+                e, call_control_id[:12],
+            )
 
     if not transfer_id:
         # Try lookup by LO call control id
@@ -306,12 +455,25 @@ async def transfer_status_webhook(request: Request, db: Session = Depends(get_db
         transfer.lo_answered_at = now
         db.commit()
 
+        # OBS-010: Log transfer lifecycle — stage: lo_answered
+        logger.info(
+            "transfer_lifecycle stage=lo_answered transfer_id=%s lo_id=%s org_id=%s",
+            transfer_id, transfer.lo_id, transfer.organization_id,
+        )
+
         try:
             transfer.status = "whisper_playing"
             db.commit()
+            logger.info(
+                "transfer_lifecycle stage=whisper_playing transfer_id=%s org_id=%s",
+                transfer_id, transfer.organization_id,
+            )
             await _speak(call_control_id, transfer.whisper_text)
         except Exception as e:
-            logger.error("Whisper TTS failed for transfer %s: %s", transfer_id, e)
+            logger.error(
+                "transfer_lifecycle stage=whisper_failed transfer_id=%s error=%s org_id=%s",
+                transfer_id, e, transfer.organization_id,
+            )
             # Still try to bridge even if whisper fails
             transfer.status = "lo_answered"
             db.commit()
@@ -339,10 +501,19 @@ async def transfer_status_webhook(request: Request, db: Session = Depends(get_db
             db.commit()
 
             # Cold transfer: AI leg drops immediately (nothing extra to do — we just don't join a third leg)
-            logger.info("Transfer %s bridged successfully", transfer_id)
+            # OBS-010: Log transfer lifecycle — stage: bridged
+            logger.info(
+                "transfer_lifecycle stage=bridged transfer_id=%s conference_id=%s "
+                "lo_id=%s lead_id=%s org_id=%s",
+                transfer_id, conference_id, transfer.lo_id,
+                transfer.lead_id, transfer.organization_id,
+            )
 
         except Exception as e:
-            logger.exception("Bridge failed for transfer %s", transfer_id)
+            logger.exception(
+                "transfer_lifecycle stage=bridge_failed transfer_id=%s error=%s org_id=%s",
+                transfer_id, e, transfer.organization_id,
+            )
             transfer.status = "failed"
             transfer.failure_reason = str(e)
             db.commit()
@@ -352,9 +523,20 @@ async def transfer_status_webhook(request: Request, db: Session = Depends(get_db
         if transfer.status in ("bridged", "lo_answered", "whisper_playing"):
             transfer.status = "completed"
             transfer.completed_at = now
+            # OBS-010: Log transfer lifecycle — stage: completed
+            logger.info(
+                "transfer_lifecycle stage=completed transfer_id=%s lo_id=%s "
+                "lead_id=%s org_id=%s",
+                transfer_id, transfer.lo_id, transfer.lead_id, transfer.organization_id,
+            )
         elif transfer.status == "lo_ringing":
             transfer.status = "failed"
             transfer.failure_reason = "LO did not answer"
+            # OBS-010: Log transfer lifecycle — stage: failed (no answer)
+            logger.warning(
+                "transfer_lifecycle stage=failed_no_answer transfer_id=%s lo_id=%s org_id=%s",
+                transfer_id, transfer.lo_id, transfer.organization_id,
+            )
         db.commit()
 
     return JSONResponse({"status": "ok"})

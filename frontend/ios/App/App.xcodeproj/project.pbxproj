@@ -51,6 +51,7 @@
 		BB04A2C3D4E5F6A7B8C9D002 /* AppSwitcherGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB04A2C3D4E5F6A7B8C9D001 /* AppSwitcherGuard.swift */; };
 		BB05A2C3D4E5F6A7B8C9D002 /* RateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB05A2C3D4E5F6A7B8C9D001 /* RateLimiter.swift */; };
 		BB06A2C3D4E5F6A7B8C9D002 /* PerformanceMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB06A2C3D4E5F6A7B8C9D001 /* PerformanceMonitor.swift */; };
+		BB07A2C3D4E5F6A7B8C9D002 /* ManagedPasteboardGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB07A2C3D4E5F6A7B8C9D001 /* ManagedPasteboardGuard.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -127,6 +128,7 @@
 		BB04A2C3D4E5F6A7B8C9D001 /* AppSwitcherGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSwitcherGuard.swift; sourceTree = "<group>"; };
 		BB05A2C3D4E5F6A7B8C9D001 /* RateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimiter.swift; sourceTree = "<group>"; };
 		BB06A2C3D4E5F6A7B8C9D001 /* PerformanceMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceMonitor.swift; sourceTree = "<group>"; };
+		BB07A2C3D4E5F6A7B8C9D001 /* ManagedPasteboardGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManagedPasteboardGuard.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -194,6 +196,7 @@
 				AA11B2C3D4E5F6A7B8C9D001 /* PushNotificationRouter.swift */,
 				BB05A2C3D4E5F6A7B8C9D001 /* RateLimiter.swift */,
 				BB06A2C3D4E5F6A7B8C9D001 /* PerformanceMonitor.swift */,
+				BB07A2C3D4E5F6A7B8C9D001 /* ManagedPasteboardGuard.swift */,
 				F2B3C4D5E6F7A8B9C0D1E2F3 /* ShareExtensionBridge.swift */,
 				AA14B2C3D4E5F6A7B8C9D001 /* SiriShortcutsPlugin.swift */,
 				AA16B2C3D4E5F6A7B8C9D001 /* SpotlightHandler.swift */,
@@ -364,6 +367,7 @@
 				AA11B2C3D4E5F6A7B8C9D002 /* PushNotificationRouter.swift in Sources */,
 				BB05A2C3D4E5F6A7B8C9D002 /* RateLimiter.swift in Sources */,
 				BB06A2C3D4E5F6A7B8C9D002 /* PerformanceMonitor.swift in Sources */,
+				BB07A2C3D4E5F6A7B8C9D002 /* ManagedPasteboardGuard.swift in Sources */,
 				F2B3C4D5E6F7A8B9C0D1E2F4 /* ShareExtensionBridge.swift in Sources */,
 				AA14B2C3D4E5F6A7B8C9D002 /* SiriShortcutsPlugin.swift in Sources */,
 				AA16B2C3D4E5F6A7B8C9D002 /* SpotlightHandler.swift in Sources */,

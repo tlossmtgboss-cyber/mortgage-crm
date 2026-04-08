@@ -203,6 +203,27 @@ jobs:
           fi
 
       # -----------------------------------------------------------------
+      # Accessibility audit (non-blocking)
+      # -----------------------------------------------------------------
+      - name: Run accessibility audit
+        run: |
+          cd frontend/ios/App
+          # Run accessibility tests if test target exists
+          if xcodebuild -list -json 2>/dev/null | python3 -c "import json,sys; schemes=json.load(sys.stdin).get('project',{}).get('schemes',[]); sys.exit(0 if 'AppUITests' in str(schemes) else 1)" 2>/dev/null; then
+            xcodebuild test \
+              -project App.xcodeproj \
+              -scheme App \
+              -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+              -only-testing:AppUITests/AccessibilityTests \
+              CODE_SIGNING_ALLOWED=NO \
+              2>&1 | tail -20 || true
+          else
+            echo "AppUITests target not found — skipping accessibility audit"
+          fi
+        continue-on-error: true
+        timeout-minutes: 10
+
+      # -----------------------------------------------------------------
       # Report status
       # -----------------------------------------------------------------
       - name: Report build status

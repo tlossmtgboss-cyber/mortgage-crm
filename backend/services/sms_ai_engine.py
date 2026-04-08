@@ -16,15 +16,45 @@ Usage:
     # result = {"response": "...", "compliance_ok": True, "tone": "friendly", ...}
 """
 
+import asyncio
 import logging
 import os
 import re
+import time
 from datetime import datetime, timezone
 from typing import Optional, Dict, List, Tuple, Any
 
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+# ── In-memory TTL cache for persona config (PERF-003) ───────────────
+_persona_cache: Dict[int, Tuple[float, Dict]] = {}
+_PERSONA_CACHE_TTL = 300  # 5 minutes
+
+# ── Prompt injection patterns (AGENT-004) ────────────────────────────
+_INJECTION_PATTERNS = [
+    re.compile(r"ignore\s+(all\s+)?previous\s+instructions", re.IGNORECASE),
+    re.compile(r"ignore\s+(all\s+)?above", re.IGNORECASE),
+    re.compile(r"you\s+are\s+now\b", re.IGNORECASE),
+    re.compile(r"^system\s*:", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^assistant\s*:", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"^human\s*:", re.IGNORECASE | re.MULTILINE),
+    re.compile(r"disregard\s+(all\s+)?prior", re.IGNORECASE),
+    re.compile(r"new\s+instructions?\s*:", re.IGNORECASE),
+    re.compile(r"override\s+(system|prompt)", re.IGNORECASE),
+    re.compile(r"pretend\s+(you('re|\s+are)\s+)", re.IGNORECASE),
+]
+
+# Max chars per borrower-sourced field injected into prompts
+_MAX_FIELD_LEN = 500
+
+# Max total chars for conversation history in Claude messages
+_MAX_HISTORY_CHARS = 3000
+_MAX_HISTORY_MESSAGES = 10
+
+# Fallback response when Claude API times out (PERF-002)
+_TIMEOUT_FALLBACK = "Thanks for your message! Let me look into that and get back to you shortly."
 
 # Claude model for SMS generation — Sonnet for speed + cost efficiency on short messages
 SMS_MODEL = "claude-sonnet-4-20250514"
@@ -37,7 +67,7 @@ ECOA_PROHIBITED_PATTERNS = [
     r"\b(religion|religious|church|mosque|synagogue|temple)\b",
     r"\b(sex|gender|sexual orientation|transgender)\b",
     r"\b(national origin|nationality|country of origin|immigrant|immigration)\b",
-    r"\b(marital status|married|divorced|single|spouse|husband|wife)\b",
+    r"\b(marital status|married|divorced|spouse|husband|wife)\b",
     r"\bage\b(?!\s*of\s*(loan|property|home|house))",  # "age" unless "age of loan/property"
     r"\b(handicap|disability|disabled)\b",
     r"\b(familial status|pregnant|children|kids|family planning)\b",
@@ -54,6 +84,24 @@ _ECOA_RE = [re.compile(p, re.IGNORECASE) for p in ECOA_PROHIBITED_PATTERNS]
 _RATE_RE = [re.compile(p, re.IGNORECASE) for p in RATE_QUOTE_PATTERNS]
 
 
+# ── Prompt injection sanitizer (AGENT-004) ───────────────────────────
+def _sanitize_for_prompt(text: Optional[str], max_len: int = _MAX_FIELD_LEN) -> str:
+    """Sanitize borrower-sourced text before injecting into system prompts.
+
+    Strips prompt-injection patterns, limits length, and removes control chars.
+    """
+    if not text:
+        return ""
+    # Truncate to max length
+    sanitized = str(text)[:max_len]
+    # Strip known injection patterns
+    for pattern in _INJECTION_PATTERNS:
+        sanitized = pattern.sub("[REDACTED]", sanitized)
+    # Remove control characters (except newline/tab)
+    sanitized = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", sanitized)
+    return sanitized.strip()
+
+
 # ── Anthropic client accessor ─────────────────────────────────────────
 def _get_async_client():
     """Lazily import the shared async Anthropic client."""
@@ -61,7 +109,7 @@ def _get_async_client():
         from agents.anthropic_client import get_async_anthropic_client
         return get_async_anthropic_client()
     except Exception as e:
-        logger.error("Failed to get async Anthropic client: %s", e)
+        logger.error("Failed to get async Anthropic client: %s", e, extra={"error": str(e)})
         return None
 
 
@@ -93,6 +141,36 @@ async def generate_sms_response(
         }
     """
     try:
+        # ── TCPA: Verify SMS consent before generating AI response ──
+        if lead_id and organization_id:
+            try:
+                from sqlalchemy import text as _text
+                consent_row = db.execute(_text("""
+                    SELECT sms_consent FROM channel_preferences
+                    WHERE lead_id = :lid AND organization_id = :oid
+                    LIMIT 1
+                """), {"lid": lead_id, "oid": organization_id}).fetchone()
+                if consent_row and consent_row.sms_consent is False:
+                    logger.warning(
+                        "SMS AI response blocked: no sms_consent for lead %s",
+                        lead_id,
+                        extra={"organization_id": organization_id, "conversation_id": conversation_id, "lead_id": lead_id},
+                    )
+                    return {
+                        "response": "",
+                        "compliance_ok": False,
+                        "compliance_flags": ["NO_SMS_CONSENT"],
+                        "tone": "professional",
+                        "escalate": False,
+                        "escalate_reason": None,
+                    }
+            except Exception as e:
+                logger.debug(
+                    "Consent check skipped: %s",
+                    e,
+                    extra={"organization_id": organization_id, "conversation_id": conversation_id, "lead_id": lead_id},
+                )
+
         # ── a. Load conversation history (last 15 messages) ───────
         history = _load_conversation_history(db, conversation_id, limit=15)
 
@@ -147,7 +225,9 @@ async def generate_sms_response(
             logger.warning(
                 "SMS compliance violation detected, falling back to template",
                 extra={
+                    "organization_id": organization_id,
                     "conversation_id": conversation_id,
+                    "lead_id": lead_id,
                     "flags": flags,
                     "original_response": response_text[:100],
                 },
@@ -169,7 +249,7 @@ async def generate_sms_response(
     except Exception as e:
         logger.exception(
             "SMS AI engine error, falling back to template",
-            extra={"conversation_id": conversation_id, "error": str(e)},
+            extra={"conversation_id": conversation_id, "organization_id": organization_id, "lead_id": lead_id, "error": str(e)},
         )
         fallback = _get_fallback_response(
             _load_lead_context(db, lead_id) if lead_id else {},
@@ -370,7 +450,7 @@ async def generate_proactive_message(
 
     prompt_instruction = trigger_prompts.get(trigger_type)
     if not prompt_instruction:
-        logger.warning("Unknown proactive trigger type: %s", trigger_type)
+        logger.warning("Unknown proactive trigger type: %s", trigger_type, extra={"lead_id": lead_id, "trigger_type": trigger_type})
         return {
             "response": f"Hi {name}, just checking in! Reach out anytime if you have questions.",
             "trigger_type": trigger_type,
@@ -389,11 +469,14 @@ async def generate_proactive_message(
         if not client:
             raise RuntimeError("Anthropic client unavailable")
 
-        resp = await client.messages.create(
-            model=SMS_MODEL,
-            max_tokens=SMS_MAX_TOKENS,
-            system=system,
-            messages=[{"role": "user", "content": prompt_instruction}],
+        resp = await asyncio.wait_for(
+            client.messages.create(
+                model=SMS_MODEL,
+                max_tokens=SMS_MAX_TOKENS,
+                system=system,
+                messages=[{"role": "user", "content": prompt_instruction}],
+            ),
+            timeout=15.0,
         )
 
         text = resp.content[0].text.strip()
@@ -404,7 +487,7 @@ async def generate_proactive_message(
         if not compliance_ok:
             logger.warning(
                 "Proactive message failed compliance, using fallback",
-                extra={"trigger_type": trigger_type, "flags": flags},
+                extra={"lead_id": lead_id, "trigger_type": trigger_type, "flags": flags},
             )
             text = _proactive_fallback(trigger_type, name, lo_name, trigger_data)
 
@@ -415,7 +498,7 @@ async def generate_proactive_message(
         }
 
     except Exception as e:
-        logger.exception("Proactive message generation failed: %s", e)
+        logger.exception("Proactive message generation failed: %s", e, extra={"lead_id": lead_id, "trigger_type": trigger_type})
         text = _proactive_fallback(trigger_type, name, lo_name, trigger_data)
         return {
             "response": text,
@@ -452,7 +535,11 @@ def _load_conversation_history(
             for m in messages
         ]
     except Exception as e:
-        logger.warning("Failed to load conversation history: %s", e)
+        logger.error(
+            "Failed to load conversation history",
+            extra={"conversation_id": conversation_id, "error": str(e)},
+            exc_info=True,
+        )
         return []
 
 
@@ -519,14 +606,31 @@ def _load_lead_context(db: Session, lead_id: Optional[int]) -> Dict:
         return ctx
 
     except Exception as e:
-        logger.warning("Failed to load lead context for lead %s: %s", lead_id, e)
+        logger.error(
+            "Failed to load lead context: %s",
+            e,
+            extra={"lead_id": lead_id, "error": str(e)},
+            exc_info=True,
+        )
         return {}
 
 
 def _load_org_persona(db: Session, organization_id: Optional[int]) -> Dict:
-    """Load AI persona and org branding from script_customization config."""
+    """Load AI persona and org branding from script_customization config.
+
+    Results are cached in-memory for 5 minutes per org to avoid hitting
+    the DB on every inbound SMS (PERF-003).
+    """
     if not organization_id:
         return _default_persona()
+
+    # Check TTL cache first
+    now = time.monotonic()
+    cached = _persona_cache.get(organization_id)
+    if cached:
+        cached_at, cached_result = cached
+        if now - cached_at < _PERSONA_CACHE_TTL:
+            return cached_result
 
     try:
         from services.script_customization_service import get_script_customization_service
@@ -548,10 +652,16 @@ def _load_org_persona(db: Session, organization_id: Optional[int]) -> Dict:
         else:
             result["company_name"] = ""
 
+        # Store in cache
+        _persona_cache[organization_id] = (now, result)
         return result
 
     except Exception as e:
-        logger.warning("Failed to load org persona for org %s: %s", organization_id, e)
+        logger.error(
+            "Failed to load org persona",
+            extra={"organization_id": organization_id},
+            exc_info=True,
+        )
         return _default_persona()
 
 
@@ -646,16 +756,24 @@ def _build_system_prompt(
     tone: str,
     history: List[Dict],
 ) -> str:
-    """Construct the Claude system prompt with full context."""
-    ai_name = persona.get("ai_name", "Aria")
-    company_name = persona.get("company_name", "")
-    personality = persona.get("personality", "professional, warm, knowledgeable")
-    borrower_name = lead_ctx.get("first_name") or lead_ctx.get("name", "the borrower")
-    loan_purpose = lead_ctx.get("loan_purpose") or lead_ctx.get("loan_type") or "mortgage"
-    lo_name = lead_ctx.get("lo_name", "your loan officer")
-    lo_nmls = lead_ctx.get("lo_nmls", "")
-    qualification_summary = lead_ctx.get("qualification_summary", "No qualification data yet")
-    stage = lead_ctx.get("stage", "New")
+    """Construct the Claude system prompt with full context.
+
+    All borrower-sourced fields are sanitized to prevent prompt injection (AGENT-004).
+    """
+    ai_name = _sanitize_for_prompt(persona.get("ai_name", "Aria"), max_len=50)
+    company_name = _sanitize_for_prompt(persona.get("company_name", ""), max_len=100)
+    personality = _sanitize_for_prompt(persona.get("personality", "professional, warm, knowledgeable"), max_len=200)
+    borrower_name = _sanitize_for_prompt(
+        lead_ctx.get("first_name") or lead_ctx.get("name", "the borrower"), max_len=100
+    )
+    loan_purpose = _sanitize_for_prompt(
+        lead_ctx.get("loan_purpose") or lead_ctx.get("loan_type") or "mortgage", max_len=100
+    )
+    lo_name = _sanitize_for_prompt(lead_ctx.get("lo_name", "your loan officer"), max_len=100)
+    lo_nmls = _sanitize_for_prompt(lead_ctx.get("lo_nmls", ""), max_len=20)
+    qualification_summary = _sanitize_for_prompt(lead_ctx.get("qualification_summary", "No qualification data yet"))
+    stage = _sanitize_for_prompt(lead_ctx.get("stage", "New"), max_len=50)
+    channel_ctx = _sanitize_for_prompt(channel_ctx)
 
     # Determine next question to ask based on missing qualification data
     next_question = _determine_next_question(lead_ctx)
@@ -726,10 +844,37 @@ Respond with ONLY the SMS text. No quotes, no explanation, no prefix."""
 def _build_claude_messages(
     history: List[Dict], inbound_message: str,
 ) -> List[Dict]:
-    """Convert conversation history + new inbound into Claude messages format."""
-    messages = []
+    """Convert conversation history + new inbound into Claude messages format.
 
-    for msg in history:
+    Enforces a token budget to prevent unbounded context growth (AGENT-002).
+    Keeps the most recent messages, truncating oldest first. The inbound
+    message is always included in full.
+    """
+    # Cap history to most recent N messages before processing
+    capped_history = history[-_MAX_HISTORY_MESSAGES:] if len(history) > _MAX_HISTORY_MESSAGES else history
+
+    # Enforce character budget on history (rough token estimate: 1 token ~ 4 chars)
+    total_chars = 0
+    budget_history: List[Dict] = []
+    for msg in reversed(capped_history):
+        content = msg.get("content", "")
+        if not content:
+            continue
+        msg_chars = len(content)
+        if total_chars + msg_chars > _MAX_HISTORY_CHARS:
+            # Truncate this message to fit remaining budget
+            remaining = _MAX_HISTORY_CHARS - total_chars
+            if remaining > 50:  # Only include if meaningful content remains
+                budget_history.append({"role": msg.get("role", "user"), "content": content[-remaining:]})
+                total_chars += remaining
+            break
+        budget_history.append(msg)
+        total_chars += msg_chars
+    # Restore chronological order
+    budget_history.reverse()
+
+    messages = []
+    for msg in budget_history:
         role = msg.get("role", "user")
         content = msg.get("content", "")
         if not content:
@@ -754,17 +899,38 @@ def _build_claude_messages(
 
 
 async def _call_claude(system_prompt: str, messages: List[Dict]) -> str:
-    """Call the Claude API and return the response text."""
+    """Call the Claude API and return the response text.
+
+    Includes a 15-second timeout (PERF-002) to avoid blocking SMS responses
+    when the upstream LLM is slow or unavailable. Returns a safe fallback
+    on timeout instead of raising.
+    """
     client = _get_async_client()
     if not client:
         raise RuntimeError("Anthropic async client not available")
 
-    resp = await client.messages.create(
-        model=SMS_MODEL,
-        max_tokens=SMS_MAX_TOKENS,
-        system=system_prompt,
-        messages=messages,
-    )
+    start = time.monotonic()
+    try:
+        resp = await asyncio.wait_for(
+            client.messages.create(
+                model=SMS_MODEL,
+                max_tokens=SMS_MAX_TOKENS,
+                system=system_prompt,
+                messages=messages,
+            ),
+            timeout=15.0,
+        )
+    except asyncio.TimeoutError:
+        elapsed = time.monotonic() - start
+        logger.error(
+            "Claude API timeout after %.1fs for SMS generation — returning fallback",
+            elapsed,
+        )
+        return _TIMEOUT_FALLBACK
+    finally:
+        elapsed = time.monotonic() - start
+        if elapsed > 5.0:
+            logger.warning("Claude API slow response: %.1fs", elapsed)
 
     text = resp.content[0].text.strip()
     # Strip wrapping quotes the model sometimes adds

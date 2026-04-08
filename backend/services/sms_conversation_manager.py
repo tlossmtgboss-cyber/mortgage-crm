@@ -4,6 +4,7 @@ Uses Claude (Anthropic API) for intelligent, contextual response generation with
 canned templates as fallback. Integrates with the Deal Breaker bridge for
 qualification routing.
 """
+import asyncio
 import logging
 import os
 from datetime import datetime, timezone
@@ -30,11 +31,11 @@ class SMSConversationManager:
         self._anthropic_client = None
 
     def _get_anthropic_client(self):
-        """Lazy-init Anthropic client. Returns None if API key not configured."""
+        """Lazy-init async Anthropic client. Returns None if API key not configured."""
         if self._anthropic_client is None:
             try:
                 import anthropic
-                self._anthropic_client = anthropic.Anthropic(
+                self._anthropic_client = anthropic.AsyncAnthropic(
                     timeout=_CLAUDE_TIMEOUT,
                 )
             except Exception as e:
@@ -365,11 +366,14 @@ class SMSConversationManager:
             if not conversation_messages:
                 conversation_messages = [{"role": "user", "content": message}]
 
-            response = client.messages.create(
-                model=_CLAUDE_MODEL,
-                max_tokens=_CLAUDE_MAX_TOKENS,
-                system=system_prompt,
-                messages=conversation_messages,
+            response = await asyncio.wait_for(
+                client.messages.create(
+                    model=_CLAUDE_MODEL,
+                    max_tokens=_CLAUDE_MAX_TOKENS,
+                    system=system_prompt,
+                    messages=conversation_messages,
+                ),
+                timeout=15.0,
             )
 
             if response.content and len(response.content) > 0:
@@ -381,6 +385,9 @@ class SMSConversationManager:
             logger.warning("Claude returned empty response for conversation %s", conversation.id)
             return None
 
+        except asyncio.TimeoutError:
+            logger.warning("Claude SMS generation timed out after 15s for conversation %s", conversation.id)
+            return None
         except Exception as e:
             logger.warning("Claude SMS generation failed (falling back to templates): %s", e)
             return None

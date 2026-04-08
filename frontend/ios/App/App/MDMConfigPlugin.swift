@@ -26,7 +26,9 @@ public class MDMConfigPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "getCurrentNetworkSSID", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "checkBiometricAvailability", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getDeviceInfo", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setScreenshotPrevention", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setScreenshotPrevention", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getDLPStatus", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "checkClipboardPolicy", returnType: CAPPluginReturnPromise)
     ]
 
     // MARK: - MDM configuration keys
@@ -204,6 +206,50 @@ public class MDMConfigPlugin: CAPPlugin, CAPBridgedPlugin {
             }
 
             call.resolve(["enabled": enabled])
+        }
+    }
+
+    // MARK: - DLP / VPN Policy
+
+    /// Return the current data loss prevention (DLP) policy status including
+    /// clipboard sharing and VPN enforcement state from ManagedPasteboardGuard.
+    ///
+    /// Returns: `{ clipboardAllowed: bool, vpnRequired: bool, vpnConnected: bool, isCompliant: bool }`
+    @objc func getDLPStatus(_ call: CAPPluginCall) {
+        if #available(iOS 14.0, *) {
+            let guard_ = ManagedPasteboardGuard.shared
+            guard_.checkVPNStatus()
+
+            // Small delay to allow async VPN status load to settle
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                let summary = guard_.policySummary
+                call.resolve([
+                    "clipboardAllowed": summary["clipboardSharingAllowed"] as? Bool ?? true,
+                    "vpnRequired": summary["vpnRequired"] as? Bool ?? false,
+                    "vpnConnected": summary["vpnConnected"] as? Bool ?? false,
+                    "isCompliant": summary["isCompliant"] as? Bool ?? true
+                ])
+            }
+        } else {
+            call.resolve([
+                "clipboardAllowed": true,
+                "vpnRequired": false,
+                "vpnConnected": false,
+                "isCompliant": true
+            ])
+        }
+    }
+
+    /// Check whether clipboard paste is currently allowed by MDM policy.
+    /// Logs a security violation audit event if paste is blocked.
+    ///
+    /// Returns: `{ allowed: bool }`
+    @objc func checkClipboardPolicy(_ call: CAPPluginCall) {
+        if #available(iOS 14.0, *) {
+            let allowed = ManagedPasteboardGuard.shared.canPaste()
+            call.resolve(["allowed": allowed])
+        } else {
+            call.resolve(["allowed": true])
         }
     }
 

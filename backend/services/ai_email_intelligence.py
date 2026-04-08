@@ -10,9 +10,12 @@ The most intelligent outbound email system in mortgage:
 All AI generation uses Claude claude-sonnet-4-20250514 via the Anthropic SDK.
 """
 
+import asyncio
 import json
 import logging
 import os
+import re
+import time
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
@@ -21,6 +24,101 @@ from sqlalchemy import func, and_, desc, case
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Circuit breaker for Claude API (AGENT-005)
+# ---------------------------------------------------------------------------
+_circuit_consecutive_failures: int = 0
+_circuit_open_until: float = 0.0  # monotonic timestamp
+_CIRCUIT_FAILURE_THRESHOLD = 3
+_CIRCUIT_COOLDOWN_SECONDS = 60.0
+
+
+def _circuit_record_failure() -> None:
+    """Record a Claude API failure and potentially open the circuit."""
+    global _circuit_consecutive_failures, _circuit_open_until
+    _circuit_consecutive_failures += 1
+    if _circuit_consecutive_failures >= _CIRCUIT_FAILURE_THRESHOLD:
+        _circuit_open_until = time.monotonic() + _CIRCUIT_COOLDOWN_SECONDS
+        logger.warning(
+            "Circuit breaker OPEN — %d consecutive Claude failures, skipping calls for %ds",
+            _circuit_consecutive_failures,
+            int(_CIRCUIT_COOLDOWN_SECONDS),
+        )
+
+
+def _circuit_record_success() -> None:
+    """Reset the circuit breaker on a successful call."""
+    global _circuit_consecutive_failures, _circuit_open_until
+    _circuit_consecutive_failures = 0
+    _circuit_open_until = 0.0
+
+
+def _circuit_is_open() -> bool:
+    """Return True if the circuit breaker is tripped and still in cooldown."""
+    if _circuit_consecutive_failures < _CIRCUIT_FAILURE_THRESHOLD:
+        return False
+    if time.monotonic() >= _circuit_open_until:
+        # Cooldown elapsed — allow a probe request
+        return False
+    return True
+
+
+# ---------------------------------------------------------------------------
+# ECOA compliance validation for AI-generated email content (COMP-004)
+# ---------------------------------------------------------------------------
+_ECOA_PROHIBITED_PATTERNS = [
+    r"\b(race|racial|ethnicity|ethnic)\b",
+    r"\b(religion|religious|church|mosque|synagogue|temple)\b",
+    r"\b(sex|gender|sexual orientation|transgender)\b",
+    r"\b(national origin|nationality|country of origin|immigrant|immigration)\b",
+    r"\b(marital status|married|divorced|spouse|husband|wife)\b",
+    r"\bage\b(?!\s*of\s*(loan|property|home|house))",
+    r"\b(handicap|disability|disabled)\b",
+    r"\b(familial status|pregnant|children|kids|family planning)\b",
+]
+_ECOA_RE = [re.compile(p, re.IGNORECASE) for p in _ECOA_PROHIBITED_PATTERNS]
+
+
+def _validate_ecoa_compliance(text: str) -> Tuple[bool, List[str]]:
+    """Check AI-generated email content for ECOA-prohibited demographic references.
+
+    Returns (is_compliant, list_of_violations).
+    """
+    violations: List[str] = []
+    for pattern in _ECOA_RE:
+        match = pattern.search(text)
+        if match:
+            violations.append(f"ECOA_VIOLATION: '{match.group()}' found")
+    return (len(violations) == 0), violations
+
+
+# ---------------------------------------------------------------------------
+# Token budget enforcement (AGENT-006)
+# ---------------------------------------------------------------------------
+_MAX_PROMPT_CHARS = 6000
+
+
+def _enforce_token_budget(system_prompt: str, user_prompt: str) -> Tuple[str, str]:
+    """Truncate prompts if combined length exceeds the character budget.
+
+    System prompt gets priority (kept intact up to 60% of budget).
+    User prompt fills the remainder. Truncation is at line boundaries where
+    possible.
+    """
+    total = len(system_prompt) + len(user_prompt)
+    if total <= _MAX_PROMPT_CHARS:
+        return system_prompt, user_prompt
+
+    sys_budget = int(_MAX_PROMPT_CHARS * 0.6)
+    if len(system_prompt) > sys_budget:
+        system_prompt = system_prompt[:sys_budget].rsplit("\n", 1)[0] + "\n[...truncated]"
+
+    remaining = _MAX_PROMPT_CHARS - len(system_prompt)
+    if len(user_prompt) > remaining:
+        user_prompt = user_prompt[:remaining].rsplit("\n", 1)[0] + "\n[...truncated]"
+
+    return system_prompt, user_prompt
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -124,13 +222,16 @@ def _get_lead_full_context(db: Session, lead_id: int, organization_id: int) -> O
     return ctx
 
 
-def _get_recent_activities(db: Session, lead_id: int, limit: int = 10) -> List[Dict[str, str]]:
+def _get_recent_activities(db: Session, lead_id: int, organization_id: Optional[int] = None, limit: int = 10) -> List[Dict[str, str]]:
     """Fetch the N most recent activities for a lead."""
     try:
         from database.models.communication import Activity
+        filters = [Activity.lead_id == lead_id]
+        if organization_id is not None:
+            filters.append(Activity.organization_id == organization_id)
         activities = (
             db.query(Activity)
-            .filter(Activity.lead_id == lead_id)
+            .filter(*filters)
             .order_by(desc(Activity.created_at))
             .limit(limit)
             .all()
@@ -144,7 +245,10 @@ def _get_recent_activities(db: Session, lead_id: int, limit: int = 10) -> List[D
             for a in activities
         ]
     except Exception as e:
-        logger.debug("Could not fetch activities for lead %s: %s", lead_id, e)
+        logger.debug(
+            "Could not fetch activities for lead %s: %s", lead_id, e,
+            extra={"lead_id": lead_id, "organization_id": organization_id},
+        )
         return []
 
 
@@ -175,7 +279,10 @@ def _get_outstanding_documents(db: Session, lead_id: int, organization_id: int) 
         missing = standard_docs - existing_types
         return [dt.value for dt in missing]
     except Exception as e:
-        logger.debug("Could not check documents for lead %s: %s", lead_id, e)
+        logger.debug(
+            "Could not check documents for lead %s: %s", lead_id, e,
+            extra={"lead_id": lead_id, "organization_id": organization_id},
+        )
         return ["Pay stubs (most recent 30 days)", "W-2s (last 2 years)", "Bank statements (last 2 months)", "Government-issued photo ID"]
 
 
@@ -190,7 +297,10 @@ def _get_rate_environment(db: Session, organization_id: int) -> Optional[Dict[st
             if rates:
                 return rates
     except Exception as e:
-        logger.debug("Could not fetch rate environment: %s", e)
+        logger.debug(
+            "Could not fetch rate environment: %s", e,
+            extra={"organization_id": organization_id},
+        )
     return None
 
 
@@ -220,12 +330,15 @@ def _get_lo_context(db: Session, organization_id: int, user_id: Optional[int] = 
                     if branch and branch.company:
                         lo["company_name"] = branch.company
     except Exception as e:
-        logger.debug("Could not load LO context: %s", e)
+        logger.debug(
+            "Could not load LO context: %s", e,
+            extra={"organization_id": organization_id},
+        )
 
     return lo
 
 
-def _get_email_tracking_history(db: Session, lead_id: int) -> Dict[str, Any]:
+def _get_email_tracking_history(db: Session, lead_id: int, organization_id: Optional[int] = None) -> Dict[str, Any]:
     """Aggregate email tracking events (opens, clicks) for a lead."""
     history: Dict[str, Any] = {
         "total_sent": 0,
@@ -242,12 +355,15 @@ def _get_email_tracking_history(db: Session, lead_id: int) -> Dict[str, Any]:
         from database.models.email_tracking import EmailTrackingEvent
 
         # Get all outbound emails for this lead
+        email_filters = [
+            EmailMessageModel.lead_id == lead_id,
+            EmailMessageModel.direction == "outbound",
+        ]
+        if organization_id is not None:
+            email_filters.append(EmailMessageModel.organization_id == organization_id)
         emails = (
             db.query(EmailMessageModel)
-            .filter(
-                EmailMessageModel.lead_id == lead_id,
-                EmailMessageModel.direction == "outbound",
-            )
+            .filter(*email_filters)
             .order_by(desc(EmailMessageModel.created_at))
             .all()
         )
@@ -287,27 +403,36 @@ def _get_email_tracking_history(db: Session, lead_id: int) -> Dict[str, Any]:
                         history["click_timestamps"].append(ev.created_at.isoformat())
 
     except Exception as e:
-        logger.debug("Could not aggregate email tracking for lead %s: %s", lead_id, e)
+        logger.debug(
+            "Could not aggregate email tracking for lead %s: %s", lead_id, e,
+            extra={"lead_id": lead_id, "organization_id": organization_id},
+        )
 
     return history
 
 
-def _get_sms_response_times(db: Session, lead_id: int) -> List[datetime]:
+def _get_sms_response_times(db: Session, lead_id: int, organization_id: Optional[int] = None) -> List[datetime]:
     """Return timestamps of inbound SMS responses from the lead."""
     try:
         from database.models.communication import SMSMessage
+        filters = [
+            SMSMessage.lead_id == lead_id,
+            SMSMessage.direction == "inbound",
+        ]
+        if organization_id is not None:
+            filters.append(SMSMessage.organization_id == organization_id)
         msgs = (
             db.query(SMSMessage.created_at)
-            .filter(
-                SMSMessage.lead_id == lead_id,
-                SMSMessage.direction == "inbound",
-            )
+            .filter(*filters)
             .order_by(SMSMessage.created_at)
             .all()
         )
         return [m[0] for m in msgs if m[0]]
     except Exception as e:
-        logger.debug("Could not fetch SMS response times for lead %s: %s", lead_id, e)
+        logger.debug(
+            "Could not fetch SMS response times for lead %s: %s", lead_id, e,
+            extra={"lead_id": lead_id, "organization_id": organization_id},
+        )
         return []
 
 
@@ -319,8 +444,15 @@ def _get_sms_response_times(db: Session, lead_id: int) -> List[datetime]:
 async def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = MAX_TOKENS_COMPOSE) -> str:
     """Send a prompt to Claude and return the raw text response.
 
+    Includes circuit-breaker gating (AGENT-005), token-budget enforcement
+    (AGENT-006), and a 30-second asyncio timeout (PERF-004).
+
     Raises RuntimeError on failure so callers can fall back to templates.
     """
+    # AGENT-005: circuit breaker check
+    if _circuit_is_open():
+        raise RuntimeError("Circuit breaker OPEN — Claude API calls suspended after consecutive failures")
+
     try:
         import anthropic
     except ImportError:
@@ -330,14 +462,30 @@ async def _call_claude(system_prompt: str, user_prompt: str, max_tokens: int = M
     if not api_key:
         raise RuntimeError("ANTHROPIC_API_KEY not configured")
 
-    client = anthropic.Anthropic(api_key=api_key)
-    response = client.messages.create(
-        model=ANTHROPIC_MODEL,
-        max_tokens=max_tokens,
-        system=system_prompt,
-        messages=[{"role": "user", "content": user_prompt}],
-    )
-    return response.content[0].text.strip()
+    # AGENT-006: enforce token budget before sending
+    system_prompt, user_prompt = _enforce_token_budget(system_prompt, user_prompt)
+
+    async def _do_call() -> str:
+        client = anthropic.AsyncAnthropic(api_key=api_key)
+        response = await client.messages.create(
+            model=ANTHROPIC_MODEL,
+            max_tokens=max_tokens,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        return response.content[0].text.strip()
+
+    try:
+        # PERF-004: 30-second timeout for email composition
+        result = await asyncio.wait_for(_do_call(), timeout=30.0)
+        _circuit_record_success()
+        return result
+    except asyncio.TimeoutError:
+        _circuit_record_failure()
+        raise RuntimeError("Claude API timeout after 30s for email composition")
+    except Exception:
+        _circuit_record_failure()
+        raise
 
 
 def _parse_json_response(raw: str) -> Dict[str, Any]:
@@ -509,8 +657,8 @@ async def compose_contextual_email(
         raise ValueError(f"Lead {lead_id} not found in organization {organization_id}")
 
     lo = _get_lo_context(db, organization_id, user_id)
-    activities = _get_recent_activities(db, lead_id, limit=8)
-    email_history = _get_email_tracking_history(db, lead_id)
+    activities = _get_recent_activities(db, lead_id, organization_id=organization_id, limit=8)
+    email_history = _get_email_tracking_history(db, lead_id, organization_id=organization_id)
     rate_env = _get_rate_environment(db, organization_id)
 
     # Trigger-specific context
@@ -661,6 +809,7 @@ async def compose_contextual_email(
     user_prompt = "\n".join(context_parts)
 
     # ---- Call Claude ----
+    _log_extra = {"lead_id": lead_id, "organization_id": organization_id}
     try:
         raw = await _call_claude(system_prompt, user_prompt, MAX_TOKENS_COMPOSE)
         parsed = _parse_json_response(raw)
@@ -670,12 +819,23 @@ async def compose_contextual_email(
         if not subject or not body_html:
             raise ValueError("Empty subject or body from AI")
 
+        # COMP-004: ECOA compliance check on AI-generated content
+        ecoa_ok, ecoa_violations = _validate_ecoa_compliance(subject + " " + body_html)
+        if not ecoa_ok:
+            logger.warning(
+                "ECOA violation in AI-composed email — falling back to template: %s",
+                ecoa_violations,
+                extra=_log_extra,
+            )
+            raise ValueError(f"ECOA compliance failure: {ecoa_violations}")
+
         # Wrap in HTML envelope
         full_html = _wrap_html_email(body_html, lo["primary_color"])
 
         logger.info(
             "AI contextual email composed: lead=%s trigger=%s subject='%s'",
             lead_id, trigger_event, subject[:60],
+            extra=_log_extra,
         )
 
         return {"subject": subject, "body_html": full_html}
@@ -684,6 +844,7 @@ async def compose_contextual_email(
         logger.warning(
             "AI email composition failed for lead=%s trigger=%s: %s — using fallback",
             lead_id, trigger_event, e,
+            extra=_log_extra,
         )
         # Fallback to template
         variables = {
@@ -729,13 +890,16 @@ async def determine_optimal_send_time(
             org = db.query(Organization).filter(Organization.id == organization_id).first()
             if org and org.timezone:
                 lead_tz_name = org.timezone
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                "Could not determine timezone for org %s: %s", organization_id, e,
+                extra={"lead_id": lead_id, "organization_id": organization_id},
+            )
 
     # ---- Signal 1: Past email open times ----
     open_hours: List[int] = []
     open_weekdays: List[int] = []
-    email_history = _get_email_tracking_history(db, lead_id)
+    email_history = _get_email_tracking_history(db, lead_id, organization_id=organization_id)
 
     for ts_str in email_history.get("open_timestamps", []):
         try:
@@ -748,7 +912,7 @@ async def determine_optimal_send_time(
     # ---- Signal 2: SMS response times ----
     sms_hours: List[int] = []
     sms_weekdays: List[int] = []
-    sms_times = _get_sms_response_times(db, lead_id)
+    sms_times = _get_sms_response_times(db, lead_id, organization_id=organization_id)
     for ts in sms_times:
         sms_hours.append(ts.hour)
         sms_weekdays.append(ts.weekday())
@@ -871,8 +1035,8 @@ async def generate_follow_up_sequence(
         raise ValueError(f"Lead {lead_id} not found in organization {organization_id}")
 
     lo = _get_lo_context(db, organization_id, user_id)
-    activities = _get_recent_activities(db, lead_id, limit=5)
-    email_history = _get_email_tracking_history(db, lead_id)
+    activities = _get_recent_activities(db, lead_id, organization_id=organization_id, limit=5)
+    email_history = _get_email_tracking_history(db, lead_id, organization_id=organization_id)
 
     # Determine send times
     optimal = await determine_optimal_send_time(db, lead_id, organization_id)
@@ -942,6 +1106,7 @@ async def generate_follow_up_sequence(
     user_prompt = "\n".join([p for p in context_parts if p])
 
     # ---- Call Claude for the full sequence ----
+    _log_extra = {"lead_id": lead_id, "organization_id": organization_id}
     try:
         raw = await _call_claude(system_prompt, user_prompt, MAX_TOKENS_SEQUENCE)
         parsed = _parse_json_response(raw)
@@ -956,6 +1121,16 @@ async def generate_follow_up_sequence(
 
             if not body_html:
                 raise ValueError(f"Empty body_html in email {i + 1}")
+
+            # COMP-004: ECOA compliance check on each sequence email
+            ecoa_ok, ecoa_violations = _validate_ecoa_compliance(subject + " " + body_html)
+            if not ecoa_ok:
+                logger.warning(
+                    "ECOA violation in AI sequence email %d — falling back to templates: %s",
+                    i + 1, ecoa_violations,
+                    extra=_log_extra,
+                )
+                raise ValueError(f"ECOA compliance failure in email {i + 1}: {ecoa_violations}")
 
             full_html = _wrap_html_email(body_html, lo["primary_color"])
 
@@ -975,6 +1150,7 @@ async def generate_follow_up_sequence(
         logger.info(
             "AI follow-up sequence generated: lead=%s trigger=%s emails=%d",
             lead_id, trigger, len(sequence),
+            extra=_log_extra,
         )
         return sequence
 
@@ -982,6 +1158,7 @@ async def generate_follow_up_sequence(
         logger.warning(
             "AI sequence generation failed for lead=%s trigger=%s: %s — building fallback sequence",
             lead_id, trigger, e,
+            extra=_log_extra,
         )
 
         # Fallback: generate 3 emails from templates with variation
@@ -1052,7 +1229,7 @@ async def score_email_engagement(
             "recommendations": list of actionable strings,
         }
     """
-    email_history = _get_email_tracking_history(db, lead_id)
+    email_history = _get_email_tracking_history(db, lead_id, organization_id=organization_id)
 
     total_sent = email_history["total_sent"]
     total_opens = email_history["total_opens"]
@@ -1064,16 +1241,22 @@ async def score_email_engagement(
     total_responses = 0
     try:
         from database.models.communication import EmailMessage as EmailMessageModel
+        response_filters = [
+            EmailMessageModel.lead_id == lead_id,
+            EmailMessageModel.direction == "inbound",
+        ]
+        if organization_id is not None:
+            response_filters.append(EmailMessageModel.organization_id == organization_id)
         total_responses = (
             db.query(func.count(EmailMessageModel.id))
-            .filter(
-                EmailMessageModel.lead_id == lead_id,
-                EmailMessageModel.direction == "inbound",
-            )
+            .filter(*response_filters)
             .scalar() or 0
         )
     except Exception as e:
-        logger.debug("Could not count inbound emails for lead %s: %s", lead_id, e)
+        logger.debug(
+            "Could not count inbound emails for lead %s: %s", lead_id, e,
+            extra={"lead_id": lead_id, "organization_id": organization_id},
+        )
 
     # Compute rates
     open_rate = (total_opens / total_sent * 100) if total_sent > 0 else 0.0
@@ -1188,6 +1371,7 @@ async def score_email_engagement(
     logger.info(
         "Email engagement scored: lead=%s sent=%d opens=%d score=%d trend=%s",
         lead_id, total_sent, total_opens, engagement_score, engagement_trend,
+        extra={"lead_id": lead_id, "organization_id": organization_id},
     )
 
     return result
@@ -1202,6 +1386,7 @@ __all__ = [
     "determine_optimal_send_time",
     "generate_follow_up_sequence",
     "score_email_engagement",
+    "_validate_ecoa_compliance",
     "VALID_TRIGGERS",
     "TRIGGER_RATE_DROP",
     "TRIGGER_STALE_LEAD",

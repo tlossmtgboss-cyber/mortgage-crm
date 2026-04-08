@@ -1943,6 +1943,13 @@ except Exception as e:
     logger.warning(f"Engagement dashboard routes skipped: {e}")
 
 try:
+    from routes.engagement_health_routes import router as engagement_health_router
+    app.include_router(engagement_health_router)
+    logger.info("Engagement health routes registered")
+except Exception as e:
+    logger.warning(f"Engagement health routes not loaded: {e}")
+
+try:
     from routes.script_customization_routes import router as script_customization_router
     app.include_router(script_customization_router, tags=["Script Customization"])
     logger.info("✅ Script customization routes loaded")

@@ -1,6 +1,8 @@
 """Email open/click tracking service — pixel injection, link rewriting, score updates."""
 import hashlib
+import hmac
 import logging
+import os
 import re
 import uuid
 from datetime import datetime
@@ -22,6 +24,32 @@ PIXEL_GIF = (
     b"\x00\x00\x00\x00\x01\x00\x01\x00\x00\x02\x02D\x01\x00;"
 )
 
+# ---------------------------------------------------------------------------
+# HMAC-signed tracking tokens (SEC-005)
+# ---------------------------------------------------------------------------
+
+def _get_tracking_secret() -> bytes:
+    """Return the secret key used for HMAC-signing tracking tokens."""
+    secret = os.getenv("EMAIL_TRACKING_SECRET") or os.getenv("SECRET_KEY") or "perennia-email-tracking-default"
+    return secret.encode("utf-8")
+
+
+def sign_tracking_id(tracking_id: str) -> str:
+    """Generate an HMAC-SHA256 signature for a tracking ID (SEC-005).
+
+    Returns a 16-char hex digest (truncated for URL brevity).
+    """
+    return hmac.new(_get_tracking_secret(), tracking_id.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
+
+
+def verify_tracking_signature(tracking_id: str, signature: str) -> bool:
+    """Verify that a tracking ID signature is valid (SEC-005).
+
+    Uses constant-time comparison to prevent timing attacks.
+    """
+    expected = sign_tracking_id(tracking_id)
+    return hmac.compare_digest(expected, signature)
+
 
 def generate_tracking_id() -> str:
     return str(uuid.uuid4())
@@ -32,7 +60,12 @@ def _hash_link(url: str) -> str:
 
 
 def inject_tracking(html_body: str, tracking_id: str, base_url: str = BASE_URL) -> tuple:
-    """Inject tracking pixel and rewrite links. Returns (modified_html, link_mappings)."""
+    """Inject tracking pixel and rewrite links. Returns (modified_html, link_mappings).
+
+    All tracking URLs include an HMAC signature query param (SEC-005) to prevent
+    spoofed open/click events from guessed or enumerated tracking IDs.
+    """
+    sig = sign_tracking_id(tracking_id)
     link_mappings = []
 
     # Rewrite <a href="..."> links
@@ -42,13 +75,13 @@ def inject_tracking(html_body: str, tracking_id: str, base_url: str = BASE_URL) 
             return match.group(0)
         link_hash = _hash_link(original_url)
         link_mappings.append({"link_hash": link_hash, "original_url": original_url})
-        tracking_url = f"{base_url}/api/v1/email-tracking/click/{tracking_id}/{link_hash}"
+        tracking_url = f"{base_url}/api/v1/email-tracking/click/{tracking_id}/{link_hash}?sig={sig}"
         return match.group(0).replace(original_url, tracking_url)
 
     html_body = re.sub(r'<a\s+[^>]*href=["\']([^"\']+)["\']', rewrite_link, html_body, flags=re.IGNORECASE)
 
     # Insert tracking pixel before </body>
-    pixel = f'<img src="{base_url}/api/v1/email-tracking/open/{tracking_id}.png" width="1" height="1" style="display:none" alt="" />'
+    pixel = f'<img src="{base_url}/api/v1/email-tracking/open/{tracking_id}.png?sig={sig}" width="1" height="1" style="display:none" alt="" />'
     if "</body>" in html_body.lower():
         html_body = re.sub(r"</body>", f"{pixel}</body>", html_body, flags=re.IGNORECASE)
     else:

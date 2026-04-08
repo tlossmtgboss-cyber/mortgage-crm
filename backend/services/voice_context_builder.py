@@ -11,6 +11,7 @@ Provides rich context for:
 """
 
 import logging
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -18,6 +19,44 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# TTS text sanitization (AGENT-007: prevent prompt/SSML injection)
+# ---------------------------------------------------------------------------
+
+# Pattern to strip SSML-like tags and common prompt-injection markers
+_SSML_TAG_RE = re.compile(r"</?(?:speak|break|phoneme|prosody|say-as|sub|emphasis|audio|voice|p|s)\b[^>]*>", re.IGNORECASE)
+_PROMPT_INJECTION_RE = re.compile(
+    r"(?:system\s*:|ignore\s+previous|you\s+are\s+now|forget\s+(?:all|your)|"
+    r"new\s+instructions|override|<\|im_start\|>|<\|im_end\|>|\[INST\]|\[/INST\])",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_tts_text(text_val: str, max_length: int = 200) -> str:
+    """
+    Sanitize text before injecting into TTS/whisper/prompt strings.
+
+    - Strips SSML tags that could manipulate speech synthesis.
+    - Removes prompt-injection patterns.
+    - Strips non-printable / special control characters.
+    - Limits length to ``max_length`` characters.
+    """
+    if not text_val:
+        return ""
+    # Remove SSML tags
+    cleaned = _SSML_TAG_RE.sub("", text_val)
+    # Remove prompt-injection patterns
+    cleaned = _PROMPT_INJECTION_RE.sub("", cleaned)
+    # Strip non-printable chars except basic whitespace
+    cleaned = re.sub(r"[^\x20-\x7E\n\t]", "", cleaned)
+    # Collapse excessive whitespace
+    cleaned = re.sub(r"\s{3,}", "  ", cleaned).strip()
+    # Truncate
+    if len(cleaned) > max_length:
+        cleaned = cleaned[:max_length].rsplit(" ", 1)[0] + "..."
+    return cleaned
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +137,10 @@ def _find_lead_by_phone(
             "first_time_buyer": row.first_time_buyer,
         }
     except Exception as e:
-        logger.warning("Lead lookup by phone failed: %s", e)
+        logger.warning("Lead lookup by phone failed", extra={
+            "organization_id": organization_id,
+            "error": str(e),
+        })
         return None
 
 
@@ -159,24 +201,35 @@ def _get_lead_by_id(
             "first_time_buyer": row.first_time_buyer,
         }
     except Exception as e:
-        logger.warning("Lead lookup by ID failed: %s", e)
+        logger.warning("Lead lookup by ID failed", extra={
+            "lead_id": lead_id,
+            "organization_id": organization_id,
+            "error": str(e),
+        })
         return None
 
 
 def _get_recent_activities(
     db: Session,
     lead_id: int,
+    organization_id: Optional[int] = None,
     limit: int = 10,
 ) -> List[Dict[str, Any]]:
     """Fetch recent activity log entries for a lead."""
     try:
-        rows = db.execute(text("""
+        params: Dict[str, Any] = {"lid": lead_id, "lim": limit}
+        org_clause = ""
+        if organization_id:
+            org_clause = "AND organization_id = :org_id"
+            params["org_id"] = organization_id
+
+        rows = db.execute(text(f"""
             SELECT type, content, created_at
             FROM activities
-            WHERE lead_id = :lid
+            WHERE lead_id = :lid {org_clause}
             ORDER BY created_at DESC
             LIMIT :lim
-        """), {"lid": lead_id, "lim": limit}).fetchall()
+        """), params).fetchall()
 
         return [
             {
@@ -187,7 +240,11 @@ def _get_recent_activities(
             for row in rows
         ]
     except Exception as e:
-        logger.debug("Activity lookup failed (non-fatal): %s", e)
+        logger.debug("Activity lookup failed (non-fatal)", extra={
+            "lead_id": lead_id,
+            "organization_id": organization_id,
+            "error": str(e),
+        })
         return []
 
 
@@ -228,26 +285,36 @@ def _get_recent_sms(
             for row in reversed(rows)  # Chronological order
         ]
     except Exception as e:
-        logger.debug("SMS lookup failed (non-fatal): %s", e)
+        logger.debug("SMS lookup failed (non-fatal)", extra={
+            "organization_id": organization_id,
+            "error": str(e),
+        })
         return []
 
 
 def _get_recent_voicemail_drops(
     db: Session,
     lead_id: int,
+    organization_id: Optional[int] = None,
     limit: int = 3,
 ) -> List[Dict[str, Any]]:
     """Fetch recent voicemail drops sent to a lead."""
     try:
-        rows = db.execute(text("""
+        params: Dict[str, Any] = {"lid": lead_id, "lim": limit}
+        org_clause = ""
+        if organization_id:
+            org_clause = "AND vd.organization_id = :org_id"
+            params["org_id"] = organization_id
+
+        rows = db.execute(text(f"""
             SELECT vd.status, vd.created_at,
                    vt.message_text, vt.category
             FROM voicemail_drops vd
             LEFT JOIN voicemail_templates vt ON vt.id = vd.template_id
-            WHERE vd.lead_id = :lid
+            WHERE vd.lead_id = :lid {org_clause}
             ORDER BY vd.created_at DESC
             LIMIT :lim
-        """), {"lid": lead_id, "lim": limit}).fetchall()
+        """), params).fetchall()
 
         return [
             {
@@ -259,7 +326,11 @@ def _get_recent_voicemail_drops(
             for row in rows
         ]
     except Exception as e:
-        logger.debug("Voicemail drop lookup failed (non-fatal): %s", e)
+        logger.debug("Voicemail drop lookup failed (non-fatal)", extra={
+            "lead_id": lead_id,
+            "organization_id": organization_id,
+            "error": str(e),
+        })
         return []
 
 
@@ -301,7 +372,10 @@ def _get_recent_calls(
             for row in rows
         ]
     except Exception as e:
-        logger.debug("Call history lookup failed (non-fatal): %s", e)
+        logger.debug("Call history lookup failed (non-fatal)", extra={
+            "organization_id": organization_id,
+            "error": str(e),
+        })
         return []
 
 
@@ -524,9 +598,10 @@ def build_inbound_context(
         lead_name = lead["full_name"] or "the borrower"
 
         # Fetch cross-channel engagement data
-        activities = _get_recent_activities(db, lead_id, limit=10)
+        lead_org_id = lead.get("organization_id") or organization_id
+        activities = _get_recent_activities(db, lead_id, organization_id=lead_org_id, limit=10)
         sms_messages = _get_recent_sms(db, caller_phone, organization_id, limit=5)
-        voicemail_drops = _get_recent_voicemail_drops(db, lead_id, limit=3)
+        voicemail_drops = _get_recent_voicemail_drops(db, lead_id, organization_id=lead_org_id, limit=3)
         calls = _get_recent_calls(db, caller_phone, organization_id, limit=5)
 
         # Build context components
@@ -596,6 +671,13 @@ def build_inbound_context(
         logger.info(
             "Built inbound context for lead %s (%s) — %d activities, %d SMS, %d VM drops",
             lead_id, lead_name, len(activities), len(sms_messages), len(voicemail_drops),
+            extra={
+                "lead_id": lead_id,
+                "organization_id": lead_org_id,
+                "activities_count": len(activities),
+                "sms_count": len(sms_messages),
+                "vm_drops_count": len(voicemail_drops),
+            },
         )
 
         return {
@@ -605,7 +687,10 @@ def build_inbound_context(
         }
 
     except Exception as e:
-        logger.error("build_inbound_context failed (returning generic): %s", e)
+        logger.error("build_inbound_context failed (returning generic)", extra={
+            "organization_id": organization_id,
+            "error": str(e),
+        }, exc_info=True)
         return {
             "system_prompt_addition": "",
             "lead": None,
@@ -639,21 +724,22 @@ def build_outbound_context(
                 "lead": None,
             }
 
-        lead_name = lead.get("full_name") or "there"
-        first_name = lead.get("first_name") or lead_name
+        lead_name = _sanitize_tts_text(lead.get("full_name") or "there", max_length=80)
+        first_name = _sanitize_tts_text(lead.get("first_name") or lead_name, max_length=60)
         source = lead.get("source")
         loan_type = lead.get("loan_type")
         phone = lead.get("phone") or ""
 
         # Fetch engagement history
-        activities = _get_recent_activities(db, lead_id, limit=5)
+        activities = _get_recent_activities(db, lead_id, organization_id=organization_id, limit=5)
         sms_messages = _get_recent_sms(db, phone, organization_id, limit=5)
         calls = _get_recent_calls(db, phone, organization_id, limit=3)
 
         # LO name
         lo_name = None
         if lead.get("owner_id"):
-            lo_name = _get_lo_name(db, lead["owner_id"])
+            raw_lo_name = _get_lo_name(db, lead["owner_id"])
+            lo_name = _sanitize_tts_text(raw_lo_name, max_length=80) if raw_lo_name else None
         lo_display = lo_name or "your loan officer"
 
         # Build personalized first message
@@ -765,6 +851,13 @@ def build_outbound_context(
         logger.info(
             "Built outbound context for lead %s (%s) — source=%s, %d SMS, %d prior calls",
             lead_id, lead_name, source, len(sms_messages), len(outbound_calls),
+            extra={
+                "lead_id": lead_id,
+                "organization_id": organization_id,
+                "source": source,
+                "sms_count": len(sms_messages),
+                "prior_calls": len(outbound_calls),
+            },
         )
 
         return {
@@ -775,13 +868,44 @@ def build_outbound_context(
         }
 
     except Exception as e:
-        logger.error("build_outbound_context failed (returning None): %s", e)
+        logger.error("build_outbound_context failed (returning None)", extra={
+            "lead_id": lead_id,
+            "organization_id": organization_id,
+            "error": str(e),
+        }, exc_info=True)
         return {
             "system_prompt": None,
             "first_message": None,
             "voicemail_message": None,
             "lead": None,
         }
+
+
+def _load_lead_with_engagement(
+    db: Session,
+    lead_id: int,
+    organization_id: Optional[int],
+) -> Optional[Dict[str, Any]]:
+    """
+    Load lead data and all cross-channel engagement history in a single pass.
+
+    PERF-010: Consolidates what was previously multiple separate DB round-trips
+    into a single function that can be called once and the result passed around.
+    """
+    lead = _get_lead_by_id(db, lead_id, organization_id)
+    if not lead:
+        return None
+
+    phone = lead.get("phone") or ""
+    lead_org_id = lead.get("organization_id") or organization_id
+
+    lead["_engagement"] = {
+        "sms_messages": _get_recent_sms(db, phone, organization_id, limit=5),
+        "calls": _get_recent_calls(db, phone, organization_id, limit=5),
+        "voicemail_drops": _get_recent_voicemail_drops(db, lead_id, organization_id=lead_org_id, limit=3),
+        "activities": _get_recent_activities(db, lead_id, organization_id=lead_org_id, limit=10),
+    }
+    return lead
 
 
 def build_transfer_whisper(
@@ -799,20 +923,21 @@ def build_transfer_whisper(
     Returns a TTS-friendly spoken text string.
     """
     try:
-        lead = _get_lead_by_id(db, lead_id, organization_id)
+        # PERF-010: Single consolidated load of lead + engagement data
+        lead = _load_lead_with_engagement(db, lead_id, organization_id)
         if not lead:
             if current_call_summary:
-                return f"Incoming transfer. {current_call_summary[:200]}"
+                safe_summary = _sanitize_tts_text(current_call_summary)
+                return f"Incoming transfer. {safe_summary}"
             return "Incoming transfer. No lead data available."
 
-        lead_name = lead.get("full_name") or "Unknown caller"
-        phone = lead.get("phone") or ""
+        # AGENT-007: Sanitize all lead-sourced text before TTS injection
+        lead_name = _sanitize_tts_text(lead.get("full_name") or "Unknown caller", max_length=80)
 
-        # Fetch cross-channel data
-        sms_messages = _get_recent_sms(db, phone, organization_id, limit=3)
-        calls = _get_recent_calls(db, phone, organization_id, limit=3)
-        voicemail_drops = _get_recent_voicemail_drops(db, lead_id, limit=2)
-        activities = _get_recent_activities(db, lead_id, limit=5)
+        # Use pre-loaded engagement data (no additional DB queries)
+        engagement = lead.get("_engagement", {})
+        sms_messages = engagement.get("sms_messages", [])
+        voicemail_drops = engagement.get("voicemail_drops", [])
 
         # Build concise spoken briefing
         parts = [f"Incoming transfer from {lead_name}."]
@@ -836,16 +961,14 @@ def build_transfer_whisper(
 
         # Current call context (what the AI just discussed)
         if current_call_summary:
-            # Trim to fit the ~15 second constraint
-            summary_short = current_call_summary[:150]
+            summary_short = _sanitize_tts_text(current_call_summary, max_length=150)
             parts.append(f"In this call they discussed: {summary_short}.")
 
         # Cross-channel highlights (brief)
         if sms_messages:
-            # Find the last inbound SMS for key context
             inbound_sms = [m for m in sms_messages if m.get("direction") == "inbound"]
             if inbound_sms:
-                last_sms = inbound_sms[-1]["content"][:80]
+                last_sms = _sanitize_tts_text(inbound_sms[-1]["content"], max_length=80)
                 parts.append(f"Last text from them: {last_sms}.")
 
         if voicemail_drops:
@@ -863,8 +986,9 @@ def build_transfer_whisper(
         # Key concerns from notes
         notes = lead.get("notes")
         if notes:
-            # Extract first meaningful sentence
-            first_sentence = notes.split(".")[0].strip()[:80]
+            first_sentence = _sanitize_tts_text(
+                notes.split(".")[0].strip(), max_length=80,
+            )
             if first_sentence:
                 parts.append(f"Note: {first_sentence}.")
 
@@ -878,12 +1002,22 @@ def build_transfer_whisper(
         logger.info(
             "Built transfer whisper for lead %s (%d words)",
             lead_id, len(whisper_text.split()),
+            extra={
+                "lead_id": lead_id,
+                "organization_id": organization_id,
+                "word_count": len(whisper_text.split()),
+            },
         )
 
         return whisper_text
 
     except Exception as e:
-        logger.error("build_transfer_whisper failed: %s", e)
+        logger.error("build_transfer_whisper failed", extra={
+            "lead_id": lead_id,
+            "organization_id": organization_id,
+            "error": str(e),
+        }, exc_info=True)
         if current_call_summary:
-            return f"Incoming transfer. {current_call_summary[:200]}"
+            safe_summary = _sanitize_tts_text(current_call_summary)
+            return f"Incoming transfer. {safe_summary}"
         return "Incoming transfer. No lead data available."
