@@ -199,6 +199,27 @@ def process_webhook_event(
         sync_event.completed_at = datetime.now(timezone.utc)
         db.commit()
 
+        # Speed-to-lead hook — fire for newly created leads
+        if (
+            result
+            and result.get("entity_type") == "lead"
+            and result.get("created")
+            and result.get("entity_id")
+        ):
+            try:
+                from services.lead_creation_hooks import on_lead_created_sync
+                on_lead_created_sync(
+                    db=db,
+                    lead_id=result["entity_id"],
+                    organization_id=getattr(connection, "organization_id", None),
+                    source="followupboss",
+                    owner_id=connection.user_id,
+                )
+            except Exception as stl_err:
+                logger.warning(
+                    f"Speed-to-lead hook failed for FUB lead {result.get('entity_id')}: {stl_err}"
+                )
+
         # Update connection last sync
         connection.last_sync_at = datetime.now(timezone.utc)
         connection.last_sync_status = sync_event.status

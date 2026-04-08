@@ -48,18 +48,18 @@ async def enroll_lead(request: EnrollRequest, db=Depends(get_db)):
 
 
 @router.post("/pause/{lead_id}")
-async def pause_drip(lead_id: str, reason: str = ""):
+async def pause_drip(lead_id: str, reason: str = "", db=Depends(get_db)):
     """Pause all active drip sequences for a lead."""
     service = get_drip_enrollment_service()
-    result = service.pause_enrollment(lead_id, reason)
+    result = service.pause_enrollment(db=db, lead_id=lead_id, reason=reason)
     return result
 
 
 @router.post("/resume/{lead_id}")
-async def resume_drip(lead_id: str):
+async def resume_drip(lead_id: str, db=Depends(get_db)):
     """Resume paused drip sequences for a lead."""
     service = get_drip_enrollment_service()
-    result = service.resume_enrollment(lead_id)
+    result = service.resume_enrollment(db=db, lead_id=lead_id)
     return result
 
 
@@ -116,14 +116,26 @@ async def get_template_detail(template_name: str):
 
 
 @router.get("/enrollments/{lead_id}")
-async def get_enrollments(lead_id: str):
+async def get_enrollments(lead_id: str, db=Depends(get_db)):
     """Get all drip enrollments for a lead."""
     service = get_drip_enrollment_service()
-    enrollments = service.get_all_enrollments(lead_id)
-    active = service.get_active_enrollments(lead_id)
+    enrollments = service.get_all_enrollments(db=db, lead_id=lead_id)
+    active = service.get_active_enrollments(db=db, lead_id=lead_id)
     return {
         "lead_id": lead_id,
         "active_count": len(active),
         "total_count": len(enrollments),
         "enrollments": enrollments,
+    }
+
+
+@router.post("/process-due-steps")
+async def process_due_steps(db=Depends(get_db)):
+    """Process all enrollments with due steps. Called by scheduler/cron."""
+    service = get_drip_enrollment_service()
+    results = service.process_due_steps(db=db)
+    return {
+        "status": "processed",
+        "steps_processed": len(results),
+        "results": results,
     }

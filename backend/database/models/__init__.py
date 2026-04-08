@@ -287,6 +287,12 @@ from .marketing import (
     DripSequence,
 )
 
+# Drip enrollment persistence (replaces in-memory enrollment tracking)
+from .drip_enrollment import (
+    DripEnrollment,
+    DripEnrollmentEvent,
+)
+
 # LOS integration & sync models
 from .los_sync import (
     LosFieldMapping,

@@ -22,6 +22,7 @@ import httpx
 
 from db import get_db
 from routes.auth_deps import current_user_flexible_dep
+from services.voice_context_builder import build_transfer_whisper
 
 logger = logging.getLogger(__name__)
 
@@ -116,37 +117,64 @@ async def _join_conference(conference_id: str, call_control_id: str):
 # Build whisper text from lead data
 # ---------------------------------------------------------------------------
 
-def _build_whisper(db: Session, lead_id: Optional[int], custom_text: Optional[str]) -> str:
-    """Build a TTS whisper script from lead/loan data."""
+def _build_whisper(
+    db: Session,
+    lead_id: Optional[int],
+    custom_text: Optional[str],
+    organization_id: Optional[int] = None,
+    current_call_summary: Optional[str] = None,
+) -> str:
+    """
+    Build a TTS whisper script with cross-channel context.
+
+    Uses the enhanced voice_context_builder for rich context including SMS
+    history, voicemail drops, and current call summary. Falls back to basic
+    lead data if the enhanced builder fails.
+    """
     if custom_text:
         return custom_text
 
     if not lead_id:
         return "Incoming transfer. No lead data available."
 
-    row = db.execute(text("""
-        SELECT l.first_name, l.last_name, l.loan_purpose, l.loan_amount,
-               l.credit_score, l.property_type
-        FROM leads l WHERE l.id = :lid
-    """), {"lid": lead_id}).fetchone()
+    # Try enhanced whisper with cross-channel context
+    try:
+        enhanced = build_transfer_whisper(
+            db, lead_id, organization_id, current_call_summary,
+        )
+        if enhanced and enhanced != "Incoming transfer. No lead data available.":
+            return enhanced
+    except Exception as e:
+        logger.warning("Enhanced whisper build failed, using basic fallback: %s", e)
 
-    if not row:
+    # Fallback: basic lead data only
+    try:
+        row = db.execute(text("""
+            SELECT l.first_name, l.last_name, l.loan_type, l.loan_amount,
+                   l.credit_score, l.property_type
+            FROM leads l WHERE l.id = :lid
+        """), {"lid": lead_id}).fetchone()
+
+        if not row:
+            return "Incoming transfer. Lead details unavailable."
+
+        parts = ["Incoming transfer."]
+        name = f"{row.first_name or ''} {row.last_name or ''}".strip()
+        if name:
+            parts.append(f"Borrower: {name}.")
+        if row.loan_type:
+            parts.append(f"{row.loan_type.replace('_', ' ').title()} loan.")
+        if row.loan_amount:
+            parts.append(f"Amount: ${int(row.loan_amount):,}.")
+        if row.credit_score:
+            parts.append(f"Credit: {row.credit_score}.")
+        if row.property_type:
+            parts.append(f"Property: {row.property_type.replace('_', ' ')}.")
+
+        return " ".join(parts)
+    except Exception as e:
+        logger.warning("Basic whisper build failed: %s", e)
         return "Incoming transfer. Lead details unavailable."
-
-    parts = ["Incoming transfer."]
-    name = f"{row.first_name or ''} {row.last_name or ''}".strip()
-    if name:
-        parts.append(f"Borrower: {name}.")
-    if row.loan_purpose:
-        parts.append(f"{row.loan_purpose.replace('_', ' ').title()} loan.")
-    if row.loan_amount:
-        parts.append(f"Amount: ${int(row.loan_amount):,}.")
-    if row.credit_score:
-        parts.append(f"Credit: {row.credit_score}.")
-    if row.property_type:
-        parts.append(f"Property: {row.property_type.replace('_', ' ')}.")
-
-    return " ".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -175,8 +203,8 @@ async def initiate_live_transfer(
     if not lo or not lo.phone:
         raise HTTPException(status_code=404, detail="Target LO not found or has no phone number")
 
-    # Build whisper
-    whisper = _build_whisper(db, body.lead_id, body.whisper_text)
+    # Build whisper with cross-channel context
+    whisper = _build_whisper(db, body.lead_id, body.whisper_text, organization_id=org_id)
 
     # Create transfer record
     transfer = LiveTransfer(

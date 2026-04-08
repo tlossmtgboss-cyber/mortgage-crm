@@ -137,32 +137,43 @@ class DripTriggerEngine:
     def _stop_all_sequences(self, db: Session, lead_id: str, org_id: str) -> Dict:
         """Stop all active drip enrollments for a lead."""
         try:
-            from database.models.marketing import DripEnrollment
+            from database.models.drip_enrollment import DripEnrollment
+            from datetime import datetime, timezone
+            lead_id_int = int(lead_id)
+            now = datetime.now(timezone.utc)
             enrollments = db.query(DripEnrollment).filter(
-                DripEnrollment.lead_id == lead_id,
-                DripEnrollment.status == "active",
+                DripEnrollment.lead_id == lead_id_int,
+                DripEnrollment.status.in_(["active", "paused"]),
             ).all()
             for e in enrollments:
-                e.status = "stopped"
+                e.status = "cancelled"
+                e.exit_reason = "Stopped by trigger engine"
+                e.completed_at = now
+                e.next_step_at = None
             db.commit()
             return {"action": "stop_all", "status": "completed", "stopped": len(enrollments)}
-        except Exception:
-            logger.debug("DripEnrollment model not available, logging action only")
+        except Exception as e:
+            logger.debug(f"Could not stop enrollments via DB: {e}")
             return {"action": "stop_all", "status": "logged"}
 
     def _pause_sequences(self, db: Session, lead_id: str, org_id: str, reason: str) -> Dict:
         """Pause active drip sequences."""
         try:
-            from database.models.marketing import DripEnrollment
+            from database.models.drip_enrollment import DripEnrollment
+            from datetime import datetime, timezone
+            lead_id_int = int(lead_id)
+            now = datetime.now(timezone.utc)
             enrollments = db.query(DripEnrollment).filter(
-                DripEnrollment.lead_id == lead_id,
+                DripEnrollment.lead_id == lead_id_int,
                 DripEnrollment.status == "active",
             ).all()
             for e in enrollments:
                 e.status = "paused"
+                e.paused_at = now
             db.commit()
             return {"action": "pause_drip", "status": "completed", "paused": len(enrollments), "reason": reason}
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Could not pause enrollments via DB: {e}")
             return {"action": "pause_drip", "status": "logged", "reason": reason}
 
     def _switch_sequence(self, db: Session, lead_id: str, org_id: str,

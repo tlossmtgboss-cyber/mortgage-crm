@@ -142,6 +142,19 @@ async def create_lead(
         except Exception as e:
             logger.warning(f"Failed to start SLA tracking for lead {lead_id}: {e}")
 
+        # Speed-to-lead hook — triggers AI call / SMS in background
+        try:
+            from services.lead_creation_hooks import on_lead_created
+            await on_lead_created(
+                db=db,
+                lead_id=lead_id,
+                organization_id=getattr(current_user, 'organization_id', None),
+                source=lead_data.source if hasattr(lead_data, 'source') else "api",
+                owner_id=current_user.id,
+            )
+        except Exception as e:
+            logger.warning(f"Speed-to-lead hook failed for lead {lead_id}: {e}")
+
         # Automated outreach triggers - don't pass db to async tasks
         try:
             from routes.automated_outreach_routes import execute_trigger, TriggerType

@@ -24,6 +24,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from db import get_db
+from services.voice_context_builder import build_outbound_context
 
 logger = logging.getLogger(__name__)
 
@@ -499,9 +500,14 @@ async def _initiate_vapi_call(
     organization_id: Optional[int],
     owner_id: Optional[int],
     greeting_override: Optional[str] = None,
+    outbound_context: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Initiate an AI outbound call via Vapi.
+
+    If outbound_context is provided (from build_outbound_context), uses
+    personalized system prompt, greeting, and voicemail message with
+    cross-channel engagement data. Otherwise falls back to generic prompts.
 
     Returns dict with:
       - success: bool
@@ -518,13 +524,16 @@ async def _initiate_vapi_call(
     if not vapi_phone_number_id:
         return {"success": False, "error": "VAPI_PHONE_NUMBER_ID not configured"}
 
-    first_message = greeting_override or (
+    # Use enriched context if available, otherwise fall back to generic prompts
+    ctx = outbound_context or {}
+
+    first_message = greeting_override or ctx.get("first_message") or (
         f"Hi {lead_name}! This is Aria from Perennia AI calling on behalf of your "
         f"loan officer. Thank you for your interest in mortgage options. "
         f"I'd love to help you get started. Do you have a moment to chat?"
     )
 
-    system_prompt = (
+    system_prompt = ctx.get("system_prompt") or (
         f"You are Aria, an AI assistant for a mortgage loan officer at Perennia AI. "
         f"You are making a speed-to-lead callback to {lead_name} who just expressed "
         f"interest in mortgage services. Your goals: "
@@ -536,6 +545,12 @@ async def _initiate_vapi_call(
         f"Be professional, warm, and concise. Do not pressure or rush them. "
         f"If they ask to be called back later, note the preferred time. "
         f"If they are not interested, thank them and end the call gracefully."
+    )
+
+    voicemail_message = ctx.get("voicemail_message") or (
+        f"Hi {lead_name}, this is a message from your loan officer's team at Perennia AI. "
+        f"We received your mortgage inquiry and wanted to connect. "
+        f"Your loan officer will be reaching out shortly. Thank you!"
     )
 
     payload = {
@@ -563,16 +578,13 @@ async def _initiate_vapi_call(
                 "provider": "vapi",
                 "beepMaxAwaitSeconds": 25,
             },
-            "voicemailMessage": (
-                f"Hi {lead_name}, this is a message from your loan officer's team at Perennia AI. "
-                f"We received your mortgage inquiry and wanted to connect. "
-                f"Your loan officer will be reaching out shortly. Thank you!"
-            ),
+            "voicemailMessage": voicemail_message,
             "metadata": {
                 "lead_id": lead_id,
                 "organization_id": organization_id,
                 "owner_id": owner_id,
                 "trigger": "speed_to_lead",
+                "context_enriched": bool(ctx.get("system_prompt")),
             },
         },
     }
@@ -777,6 +789,13 @@ async def _execute_stl_call(
             logger.info(f"STL call blocked for lead {lead_id}: {reason}")
             return
 
+        # ---- Build cross-channel context for AI call ----
+        outbound_ctx = None
+        try:
+            outbound_ctx = build_outbound_context(db, lead_id, org_id)
+        except Exception as e:
+            logger.warning(f"Outbound context build failed (non-fatal): {e}")
+
         # ---- Initiate AI call via Vapi ----
         if "call" in channels:
             call_result = await _initiate_vapi_call(
@@ -786,6 +805,7 @@ async def _execute_stl_call(
                 organization_id=org_id,
                 owner_id=lo_id,
                 greeting_override=config.get("ai_greeting_override"),
+                outbound_context=outbound_ctx,
             )
 
             elapsed_ms = int((datetime.now(timezone.utc) - started_at).total_seconds() * 1000)

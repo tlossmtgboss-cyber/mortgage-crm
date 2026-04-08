@@ -31,6 +31,7 @@ import httpx
 from db import get_db
 from routes.auth_deps import current_user_flexible_dep
 from middleware.webhook_verification import require_vapi_webhook
+from services.voice_context_builder import build_inbound_context, build_transfer_whisper
 
 logger = logging.getLogger(__name__)
 
@@ -956,24 +957,64 @@ async def _transfer_to_vapi(
         })
         return
 
+    # Build caller context from CRM data (never blocks the call on failure)
+    caller_context = None
+    try:
+        caller_context = build_inbound_context(db, from_number, org_id)
+    except Exception as e:
+        logger.warning("Inbound context build failed (non-fatal): %s", e)
+
+    # Build the Vapi call payload with per-call context overrides
+    call_payload: Dict[str, Any] = {
+        "assistantId": assistant_id,
+        "customer": {"number": from_number},
+        "metadata": {
+            "source": "inbound_transfer",
+            "original_call_control_id": call_control_id,
+            "lo_user_id": lo_user_id,
+            "organization_id": org_id,
+        },
+    }
+
+    # Inject caller-specific context via assistantOverrides
+    if caller_context and caller_context.get("has_context"):
+        prompt_addition = caller_context.get("system_prompt_addition", "")
+        if prompt_addition:
+            call_payload["assistantOverrides"] = {
+                "model": {
+                    "messages": [
+                        {"role": "system", "content": prompt_addition},
+                    ],
+                },
+            }
+            lead_data = caller_context.get("lead")
+            lead_id = lead_data.get("id") if lead_data else None
+            if lead_id:
+                call_payload["metadata"]["lead_id"] = lead_id
+
+            # Personalize the first message if we know who's calling
+            lead_name = lead_data.get("full_name") if lead_data else None
+            if lead_name:
+                call_payload["assistantOverrides"]["firstMessage"] = (
+                    f"Hi {lead_name}! Thanks for calling back. "
+                    f"This is Aria from {company}. How can I help you today?"
+                )
+
+            logger.info(
+                "Injected inbound context for caller: lead_id=%s",
+                lead_id,
+            )
+
     # Create Vapi outbound call to the caller
     try:
-        vapi_result = await _vapi_post("/call/phone", {
-            "assistantId": assistant_id,
-            "customer": {"number": from_number},
-            "metadata": {
-                "source": "inbound_transfer",
-                "original_call_control_id": call_control_id,
-                "lo_user_id": lo_user_id,
-                "organization_id": org_id,
-            },
-        })
+        vapi_result = await _vapi_post("/call/phone", call_payload)
 
         vapi_call_id = vapi_result.get("id")
         if vapi_call_id:
             logger.info(
-                "Transferred inbound call to Vapi: assistant=%s call=%s",
+                "Transferred inbound call to Vapi: assistant=%s call=%s context=%s",
                 assistant_id, vapi_call_id,
+                "enriched" if (caller_context and caller_context.get("has_context")) else "generic",
             )
             # Hang up the Telnyx leg
             await _telnyx_post(

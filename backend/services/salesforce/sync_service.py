@@ -1028,6 +1028,19 @@ class SalesforceSyncService:
                     track_lead_created(db, lead_id, organization_id=org_id)
                 except Exception as e:
                     logger.warning(f"SLA tracking hook failed for new lead {lead_id}: {e}")
+
+                # Speed-to-lead hook — triggers AI call / SMS in background
+                try:
+                    from services.lead_creation_hooks import on_lead_created
+                    await on_lead_created(
+                        db=db,
+                        lead_id=lead_id,
+                        organization_id=org_id,
+                        source="salesforce_field_sync",
+                        owner_id=user_id,
+                    )
+                except Exception as e:
+                    logger.warning(f"Speed-to-lead hook failed for SF lead {lead_id}: {e}")
             else:
                 logger.info(
                     f"Lead {lead_id} already existed (race condition resolved via ON CONFLICT) "
@@ -2840,6 +2853,19 @@ class SalesforceSyncService:
             track_lead_created(db, lead_id, organization_id=org_id)
         except Exception as e:
             logger.warning(f"SLA tracking hook failed for new SF lead {lead_id}: {e}")
+
+        # Speed-to-lead hook — triggers AI call / SMS in background
+        try:
+            from services.lead_creation_hooks import on_lead_created
+            await on_lead_created(
+                db=db,
+                lead_id=lead_id,
+                organization_id=org_id,
+                source="salesforce_auto_import",
+                owner_id=user_id,
+            )
+        except Exception as e:
+            logger.warning(f"Speed-to-lead hook failed for new SF lead {lead_id}: {e}")
 
         return True
 
