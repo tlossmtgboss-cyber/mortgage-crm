@@ -233,6 +233,56 @@ function BiometricGate({
   }, [error, onFailed]);
 
   // ----------------------------------------------------------
+  // Focus trap for accessibility
+  // ----------------------------------------------------------
+  useEffect(() => {
+    if (!isAuthenticated && !isChecking) {
+      const gate = document.querySelector('.biometric-gate');
+      if (!gate) return;
+
+      const focusableElements = gate.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      const firstEl = focusableElements[0];
+      const lastEl = focusableElements[focusableElements.length - 1];
+
+      // Focus the first element
+      firstEl?.focus();
+
+      const trapFocus = (e) => {
+        if (e.key !== 'Tab') return;
+        if (e.shiftKey) {
+          if (document.activeElement === firstEl) {
+            e.preventDefault();
+            lastEl?.focus();
+          }
+        } else {
+          if (document.activeElement === lastEl) {
+            e.preventDefault();
+            firstEl?.focus();
+          }
+        }
+      };
+
+      // Prevent interaction outside the gate
+      const blockOutsideClick = (e) => {
+        if (!gate.contains(e.target)) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      };
+
+      document.addEventListener('keydown', trapFocus);
+      document.addEventListener('click', blockOutsideClick, true);
+
+      return () => {
+        document.removeEventListener('keydown', trapFocus);
+        document.removeEventListener('click', blockOutsideClick, true);
+      };
+    }
+  }, [isAuthenticated, isChecking]);
+
+  // ----------------------------------------------------------
   // Render: checking / loading state
   // ----------------------------------------------------------
   if (isChecking || loading) {

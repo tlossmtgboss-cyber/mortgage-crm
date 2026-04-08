@@ -233,8 +233,6 @@ struct SmallWidgetView: View {
                     .foregroundColor(.secondary)
                 Spacer()
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Pipeline overview")
 
             if !entry.data.isAuthenticated {
                 Spacer()
@@ -249,8 +247,6 @@ struct SmallWidgetView: View {
                         .multilineTextAlignment(.center)
                 }
                 .frame(maxWidth: .infinity)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("Sign in to Perennia AI to view your pipeline")
                 Spacer()
             } else {
                 // Active loans count
@@ -262,8 +258,6 @@ struct SmallWidgetView: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(.secondary)
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(entry.data.pipeline.activeLoans) active loans")
 
                 Spacer()
 
@@ -271,7 +265,6 @@ struct SmallWidgetView: View {
                 Text(maskAmount(entry.data.pipeline.totalVolume))
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundColor(PerenniaBrand.accent)
-                    .accessibilityLabel("Pipeline volume: \(maskAmount(entry.data.pipeline.totalVolume))")
 
                 // Tasks badge
                 HStack(spacing: 4) {
@@ -282,12 +275,17 @@ struct SmallWidgetView: View {
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundColor(entry.data.pipeline.tasksDueToday > 0 ? .orange : .secondary)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(entry.data.pipeline.tasksDueToday) tasks due today")
             }
         }
         .padding(14)
         .widgetURL(URL(string: "\(WidgetConstants.deepLinkScheme)://pipeline"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(
+            entry.data.isAuthenticated
+                ? "\(entry.data.pipeline.activeLoans) active loans, \(maskAmount(entry.data.pipeline.totalVolume)) volume, \(entry.data.pipeline.tasksDueToday) tasks due today"
+                : "Sign in to Perennia AI to view your pipeline"
+        )
+        .accessibilityHint("Open Perennia AI for details")
     }
 }
 
@@ -339,6 +337,14 @@ struct MediumWidgetView: View {
         .widgetURL(URL(string: "\(WidgetConstants.deepLinkScheme)://login"))
     }
 
+    /// Build a VoiceOver summary of pipeline stages (e.g. "3 in Processing, 2 in Underwriting")
+    private var mediumStagesSummary: String {
+        let parts = entry.data.pipeline.stages.prefix(5)
+            .filter { $0.count > 0 }
+            .map { "\($0.count) in \($0.displayName)" }
+        return parts.isEmpty ? "No active loans" : parts.joined(separator: ", ")
+    }
+
     private var pipelineColumn: some View {
         VStack(alignment: .leading, spacing: 6) {
             // Header
@@ -355,8 +361,6 @@ struct MediumWidgetView: View {
                     .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(PerenniaBrand.accent)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Pipeline: \(entry.data.pipeline.activeLoans) active loans")
 
             if entry.data.pipeline.stages.isEmpty {
                 Spacer()
@@ -398,8 +402,6 @@ struct MediumWidgetView: View {
                             .foregroundColor(.primary)
                             .frame(width: 18, alignment: .trailing)
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(stage.displayName): \(stage.count) loans")
                 }
             }
 
@@ -409,9 +411,20 @@ struct MediumWidgetView: View {
             Text(maskAmount(entry.data.pipeline.totalVolume))
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundColor(PerenniaBrand.accent)
-                .accessibilityLabel("Pipeline volume: \(maskAmount(entry.data.pipeline.totalVolume))")
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Pipeline: \(entry.data.pipeline.activeLoans) active loans worth \(maskAmount(entry.data.pipeline.totalVolume)). \(mediumStagesSummary)")
         .widgetURL(URL(string: "\(WidgetConstants.deepLinkScheme)://pipeline"))
+    }
+
+    /// Build a VoiceOver summary of top tasks
+    private var mediumTasksSummary: String {
+        if entry.data.tasks.isEmpty {
+            return "All tasks complete"
+        }
+        let topTasks = entry.data.tasks.prefix(3).map { $0.title }.joined(separator: "; ")
+        let extra = entry.data.tasks.count > 3 ? ", and \(entry.data.tasks.count - 3) more" : ""
+        return topTasks + extra
     }
 
     private var tasksColumn: some View {
@@ -435,8 +448,6 @@ struct MediumWidgetView: View {
                         .background(Capsule().fill(Color.orange))
                 }
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Today's tasks: \(entry.data.pipeline.tasksDueToday) due")
 
             if entry.data.tasks.isEmpty {
                 Spacer()
@@ -450,8 +461,6 @@ struct MediumWidgetView: View {
                         .foregroundColor(.secondary)
                 }
                 .frame(maxWidth: .infinity)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("All tasks complete")
                 Spacer()
             } else {
                 ForEach(entry.data.tasks.prefix(3)) { task in
@@ -474,8 +483,6 @@ struct MediumWidgetView: View {
                             }
                         }
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Task: \(task.title)\(task.dueTimeString.isEmpty ? "" : ", due \(task.dueTimeString)")")
                 }
 
                 Spacer(minLength: 0)
@@ -484,10 +491,11 @@ struct MediumWidgetView: View {
                     Text("+\(entry.data.tasks.count - 3) more")
                         .font(.system(size: 10))
                         .foregroundColor(.secondary)
-                        .accessibilityLabel("\(entry.data.tasks.count - 3) more tasks")
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Tasks: \(entry.data.pipeline.tasksDueToday) due today. \(mediumTasksSummary)")
     }
 }
 
@@ -566,8 +574,6 @@ struct LargeWidgetView: View {
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Perennia AI Pipeline Overview")
 
             Spacer()
 
@@ -579,9 +585,22 @@ struct LargeWidgetView: View {
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundColor(.secondary)
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("\(entry.data.pipeline.activeLoans) active loans, volume \(maskAmount(entry.data.pipeline.totalVolume))")
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Pipeline overview: \(entry.data.pipeline.activeLoans) loans, \(maskAmount(entry.data.pipeline.totalVolume))")
+    }
+
+    /// Build a VoiceOver summary of all pipeline stages (e.g. "3 in Processing, 2 in Underwriting, 1 Clear to Close")
+    private var largeStagesSummary: String {
+        let parts = entry.data.pipeline.stages.prefix(7)
+            .filter { $0.count > 0 }
+            .map { "\($0.count) in \($0.displayName)" }
+        if parts.isEmpty { return "No active pipeline data" }
+        let summary = parts.joined(separator: ", ")
+        if entry.data.pipeline.closingSoon > 0 {
+            return summary + ", \(entry.data.pipeline.closingSoon) closing soon"
+        }
+        return summary
     }
 
     private var pipelineSection: some View {
@@ -606,8 +625,6 @@ struct LargeWidgetView: View {
                     .foregroundColor(.green)
                 }
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Pipeline stages\(entry.data.pipeline.closingSoon > 0 ? ", \(entry.data.pipeline.closingSoon) closing soon" : "")")
 
             if entry.data.pipeline.stages.isEmpty {
                 Text("No active pipeline data")
@@ -651,11 +668,20 @@ struct LargeWidgetView: View {
                             .foregroundColor(.primary)
                             .frame(width: 24, alignment: .trailing)
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(stage.displayName): \(stage.count) loans")
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(largeStagesSummary)
+    }
+
+    /// Build a VoiceOver summary of tasks for the large widget
+    private var largeTasksSummary: String {
+        if entry.data.tasks.isEmpty {
+            return "All tasks complete"
+        }
+        let topTasks = entry.data.tasks.prefix(5).map { $0.title }.joined(separator: "; ")
+        return "\(entry.data.pipeline.tasksDueToday) due today: \(topTasks)"
     }
 
     private var tasksSection: some View {
@@ -678,8 +704,6 @@ struct LargeWidgetView: View {
                         .background(Capsule().fill(Color.orange))
                 }
             }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Today's tasks: \(entry.data.pipeline.tasksDueToday) due")
 
             if entry.data.tasks.isEmpty {
                 HStack(spacing: 6) {
@@ -692,8 +716,6 @@ struct LargeWidgetView: View {
                         .foregroundColor(.secondary)
                 }
                 .padding(.vertical, 2)
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("All tasks complete")
             } else {
                 ForEach(entry.data.tasks.prefix(5)) { task in
                     HStack(spacing: 8) {
@@ -724,20 +746,11 @@ struct LargeWidgetView: View {
 
                         Spacer(minLength: 0)
                     }
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel({
-                        var label = "Task: \(task.title)"
-                        if let contact = task.contactName, !contact.isEmpty {
-                            label += ", for lead \(maskName(contact))"
-                        }
-                        if !task.dueTimeString.isEmpty {
-                            label += ", due \(task.dueTimeString)"
-                        }
-                        return label
-                    }())
                 }
             }
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Tasks: \(largeTasksSummary)")
     }
 
     private func recentLeadRow(_ lead: RecentLead) -> some View {
@@ -767,9 +780,8 @@ struct LargeWidgetView: View {
                     .foregroundColor(.secondary)
             }
         }
-        .accessibilityElement(children: .combine)
+        .accessibilityElement(children: .ignore)
         .accessibilityLabel({
-            // Announce masked initials as "Recent lead" instead of spelling out letters
             var label = "Recent lead"
             if let stage = lead.stage {
                 label += ", \(stage)"
@@ -788,15 +800,14 @@ struct LargeWidgetView: View {
                 Text("Just updated")
                     .font(.system(size: 9))
                     .foregroundColor(.secondary.opacity(0.6))
-                    .accessibilityLabel("Data just updated")
             } else {
                 let formatter = RelativeDateTimeFormatter()
                 Text("Updated \(formatter.localizedString(for: entry.data.lastUpdated, relativeTo: Date()))")
                     .font(.system(size: 9))
                     .foregroundColor(.secondary.opacity(0.6))
-                    .accessibilityLabel("Data updated \(formatter.localizedString(for: entry.data.lastUpdated, relativeTo: Date()))")
             }
         }
+        .accessibilityHidden(true)
     }
 }
 

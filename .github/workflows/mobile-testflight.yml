@@ -386,7 +386,7 @@ jobs:
                       'version': info.get('version', 'unknown'),
                       'purl': f'pkg:npm/{name}@{info.get(\"version\", \"unknown\")}'
                   })
-              print(json.dumps(components[:200]))  # Limit to top 200
+              print(json.dumps(components))
           except:
               print('[]')
           " > ../sbom-npm.json 2>/dev/null || echo '[]' > ../sbom-npm.json

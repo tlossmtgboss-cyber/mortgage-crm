@@ -361,6 +361,26 @@ final class BackgroundSyncManager {
     /// Check if token needs refresh (within 5 min of expiry) and refresh if needed.
     /// Returns `true` if a valid token is available, `false` if the user must re-login.
     private func refreshTokenIfNeeded() async -> Bool {
+        // Check session timeout (mirrors AppDelegate.enforceSessionTimeoutIfNeeded)
+        let lastActiveKey = "com.perenniaai.session.lastActiveTime"
+        var sessionTimeoutSeconds: TimeInterval = 900 // 15 minutes default
+
+        // Check for MDM-managed session timeout override
+        if let managedConfig = UserDefaults.standard.dictionary(forKey: "com.apple.configuration.managed"),
+           let mdmTimeout = managedConfig["SessionTimeoutMinutes"] as? Int {
+            sessionTimeoutSeconds = TimeInterval(mdmTimeout * 60)
+        }
+
+        if let lastActive = UserDefaults.standard.object(forKey: lastActiveKey) as? TimeInterval {
+            let elapsed = Date().timeIntervalSince1970 - lastActive
+            if elapsed > sessionTimeoutSeconds {
+                // Session has timed out — clear token and abort sync
+                KeychainService.shared.authToken = nil
+                NSLog("[BackgroundSync] Session timed out (%.0fs elapsed, %.0fs limit) — clearing token", elapsed, sessionTimeoutSeconds)
+                return false
+            }
+        }
+
         guard let token = KeychainService.shared.authToken else { return false }
 
         // Token is still fresh — no refresh needed

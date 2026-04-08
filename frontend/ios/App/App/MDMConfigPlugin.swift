@@ -218,10 +218,7 @@ public class MDMConfigPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func getDLPStatus(_ call: CAPPluginCall) {
         if #available(iOS 14.0, *) {
             let guard_ = ManagedPasteboardGuard.shared
-            guard_.checkVPNStatus()
-
-            // Small delay to allow async VPN status load to settle
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+            guard_.checkVPNStatus {
                 let summary = guard_.policySummary
                 call.resolve([
                     "clipboardAllowed": summary["clipboardSharingAllowed"] as? Bool ?? true,

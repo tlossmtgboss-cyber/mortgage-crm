@@ -102,11 +102,12 @@ final class ManagedPasteboardGuard {
     // MARK: - VPN Status Monitoring
 
     /// Check current VPN connection status
-    func checkVPNStatus() {
+    func checkVPNStatus(completion: (() -> Void)? = nil) {
         NEVPNManager.shared().loadFromPreferences { [weak self] error in
-            guard let self = self else { return }
+            guard let self = self else { completion?(); return }
             if let error = error {
                 self.logger.error("Failed to load VPN preferences: \(error.localizedDescription)")
+                completion?()
                 return
             }
 
@@ -130,6 +131,8 @@ final class ManagedPasteboardGuard {
                     object: nil
                 )
             }
+
+            completion?()
         }
     }
 

@@ -5,8 +5,14 @@ disabled_rules:
   - type_body_length
   - file_length
   - function_body_length
-  - cyclomatic_complexity
-  - force_cast
+
+# Re-enabled with thresholds — warn on complexity/force_cast, don't disable entirely
+cyclomatic_complexity:
+  warning: 15
+  error: 25
+
+force_cast:
+  severity: warning
 
 opt_in_rules:
   - empty_count

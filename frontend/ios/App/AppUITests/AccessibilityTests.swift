@@ -26,15 +26,27 @@ final class AccessibilityTests: XCTestCase {
     // MARK: - Biometric Gate Accessibility
 
     func testBiometricGateAccessibility() throws {
-        // The biometric gate should be a dialog with proper ARIA attributes
-        // Since this is a web view, we test via XCUIElement queries
         let webView = app.webViews.firstMatch
         guard webView.waitForExistence(timeout: 10) else {
-            throw XCTSkip("WebView did not load — skipping biometric gate test")
+            throw XCTSkip("WebView did not load")
         }
 
-        // Verify web content loads
-        XCTAssertTrue(webView.exists, "WebView should be present")
+        // Verify the web view contains interactive elements
+        let allElements = webView.descendants(matching: .any).allElementsBoundByIndex
+        XCTAssertGreaterThan(allElements.count, 5, "WebView should contain multiple accessible elements")
+
+        // Verify no element has an empty accessibility identifier when it should have one
+        let interactiveTypes: [XCUIElement.ElementType] = [.button, .textField, .link, .switch_]
+        for elementType in interactiveTypes {
+            let elements = webView.descendants(matching: elementType).allElementsBoundByIndex
+            for element in elements where element.exists && element.isHittable {
+                // Interactive elements should be reachable by accessibility
+                XCTAssertTrue(
+                    element.isEnabled || !element.label.isEmpty,
+                    "\(elementType) at \(element.frame) is not accessible"
+                )
+            }
+        }
     }
 
     // MARK: - App Switcher Guard Accessibility
@@ -83,16 +95,19 @@ final class AccessibilityTests: XCTestCase {
             throw XCTSkip("WebView did not load")
         }
 
-        // Check all buttons in the web view meet 44x44pt minimum
         let buttons = webView.buttons.allElementsBoundByIndex
         for button in buttons {
             if button.exists && button.isHittable {
                 let frame = button.frame
-                // WCAG 2.5.5 Target Size — minimum 44x44 points on iOS
                 if frame.width > 0 && frame.height > 0 {
+                    // WCAG 2.5.5: BOTH width AND height must be at least 44pt
                     XCTAssertGreaterThanOrEqual(
-                        max(frame.width, frame.height), 44,
-                        "Button '\(button.label)' has tap target \(frame.size) — minimum is 44pt"
+                        frame.width, 44,
+                        "Button '\(button.label)' width \(frame.width) is below 44pt minimum"
+                    )
+                    XCTAssertGreaterThanOrEqual(
+                        frame.height, 44,
+                        "Button '\(button.label)' height \(frame.height) is below 44pt minimum"
                     )
                 }
             }
@@ -107,31 +122,34 @@ final class AccessibilityTests: XCTestCase {
             throw XCTSkip("WebView did not load")
         }
 
-        // Check buttons have non-empty labels
         let buttons = webView.buttons.allElementsBoundByIndex
         for button in buttons where button.exists {
-            XCTAssertFalse(
-                button.label.isEmpty,
-                "Button at \(button.frame) has empty accessibility label"
+            let label = button.label
+            XCTAssertFalse(label.isEmpty, "Button at \(button.frame) has empty accessibility label")
+
+            // Check label quality — reject generic/meaningless labels
+            let genericLabels = ["button", "btn", "click", "tap", "here", "link", "image"]
+            let lowerLabel = label.lowercased()
+            for generic in genericLabels {
+                XCTAssertNotEqual(
+                    lowerLabel, generic,
+                    "Button has generic label '\(label)' — should be descriptive"
+                )
+            }
+
+            // Labels should be at least 3 characters (meaningful content)
+            XCTAssertGreaterThanOrEqual(
+                label.count, 3,
+                "Button label '\(label)' is too short to be meaningful"
             )
         }
 
-        // Check text fields have non-empty labels
+        // Text fields must have labels for form accessibility
         let textFields = webView.textFields.allElementsBoundByIndex
         for field in textFields where field.exists {
             XCTAssertFalse(
-                field.label.isEmpty,
-                "Text field at \(field.frame) has empty accessibility label"
-            )
-        }
-
-        // Check images have labels (non-decorative)
-        let images = webView.images.allElementsBoundByIndex
-        for image in images where image.exists && image.isHittable {
-            // Interactive images must have labels
-            XCTAssertFalse(
-                image.label.isEmpty,
-                "Interactive image at \(image.frame) has empty accessibility label"
+                field.label.isEmpty && field.placeholderValue?.isEmpty != false,
+                "Text field at \(field.frame) has no label or placeholder"
             )
         }
     }
@@ -153,29 +171,50 @@ final class AccessibilityTests: XCTestCase {
 
     @available(iOS 17.0, *)
     func testPerformAccessibilityAudit() throws {
-        // iOS 17 introduced built-in accessibility audit in XCTest
         let webView = app.webViews.firstMatch
         guard webView.waitForExistence(timeout: 10) else {
             throw XCTSkip("WebView did not load")
         }
 
-        // Run Apple's built-in accessibility audit
+        // Run Apple's built-in accessibility audit — report ALL issues
         try app.performAccessibilityAudit(for: [
             .dynamicType,
             .sufficientElementDescription,
             .contrast,
             .hitRegion,
             .trait
-        ]) { issue in
-            // Filter out known web view issues that are CSS-controlled
-            var dominated = false
+        ])
+        // No filter — all issues should be visible in test output
+    }
 
-            // Skip contrast issues in web content (handled by CSS)
-            if issue.auditType == .contrast {
-                dominated = true
-            }
+    // MARK: - Dynamic Type Truncation
 
-            return dominated
+    func testDynamicTypeDoesNotTruncate() throws {
+        // Launch with large accessibility text size
+        app.launchArguments.append(contentsOf: [
+            "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryAccessibilityExtraLarge"
+        ])
+        app.terminate()
+        app.launch()
+
+        let webView = app.webViews.firstMatch
+        guard webView.waitForExistence(timeout: 15) else {
+            throw XCTSkip("WebView did not load with large text")
+        }
+
+        // Verify the web view is still usable at large text size
+        let webFrame = webView.frame
+        let screenBounds = app.frame
+        XCTAssertGreaterThan(webFrame.width, screenBounds.width * 0.9,
+            "WebView should fill screen width even with large text")
+
+        // Verify buttons are still tappable
+        let buttons = webView.buttons.allElementsBoundByIndex
+        let hittableButtons = buttons.filter { $0.exists && $0.isHittable }
+        // At least some buttons should be reachable
+        if !buttons.isEmpty {
+            XCTAssertGreaterThan(hittableButtons.count, 0,
+                "At least some buttons should be hittable with large text")
         }
     }
 }

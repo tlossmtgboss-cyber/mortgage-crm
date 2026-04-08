@@ -206,22 +206,55 @@ jobs:
       # Accessibility audit (non-blocking)
       # -----------------------------------------------------------------
       - name: Run accessibility audit
+        working-directory: frontend/ios/App
         run: |
-          cd frontend/ios/App
-          # Run accessibility tests if test target exists
-          if xcodebuild -list -json 2>/dev/null | python3 -c "import json,sys; schemes=json.load(sys.stdin).get('project',{}).get('schemes',[]); sys.exit(0 if 'AppUITests' in str(schemes) else 1)" 2>/dev/null; then
-            xcodebuild test \
-              -project App.xcodeproj \
-              -scheme App \
-              -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
-              -only-testing:AppUITests/AccessibilityTests \
-              CODE_SIGNING_ALLOWED=NO \
-              2>&1 | tail -20 || true
+          set -euo pipefail
+
+          # Boot a simulator for UI tests
+          SIMULATOR_ID=$(xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, devices in data.get('devices', {}).items():
+              if 'iOS' in runtime:
+                  for d in devices:
+                      if 'iPhone 15' in d.get('name', '') or 'iPhone 16' in d.get('name', ''):
+                          print(d['udid']); sys.exit(0)
+          # Fallback: any available iPhone
+          for runtime, devices in data.get('devices', {}).items():
+              if 'iOS' in runtime:
+                  for d in devices:
+                      if 'iPhone' in d.get('name', ''):
+                          print(d['udid']); sys.exit(0)
+          sys.exit(1)
+          " 2>/dev/null) || { echo "::warning::No iPhone simulator found — skipping accessibility audit"; exit 0; }
+
+          echo "Using simulator: $SIMULATOR_ID"
+          xcrun simctl boot "$SIMULATOR_ID" 2>/dev/null || true
+
+          # Run accessibility tests — capture output and report failures
+          TEST_OUTPUT=$(xcodebuild test \
+            -project App.xcodeproj \
+            -scheme App \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+            -only-testing:AppUITests/AccessibilityTests \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1) || TEST_FAILED=true
+
+          # Always show test results
+          echo "$TEST_OUTPUT" | grep -E "(Test Case|Tests? (Passed|Failed)|Executed)" || true
+
+          if [ "${TEST_FAILED:-}" = "true" ]; then
+            echo "::warning::Accessibility tests failed — review output above"
+            # Show failures in step summary
+            echo "### Accessibility Test Failures" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            echo "$TEST_OUTPUT" | grep -A2 "failed" | head -30 >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "AppUITests target not found — skipping accessibility audit"
+            echo "Accessibility tests passed."
           fi
         continue-on-error: true
-        timeout-minutes: 10
+        timeout-minutes: 15
 
       # -----------------------------------------------------------------
       # Report status

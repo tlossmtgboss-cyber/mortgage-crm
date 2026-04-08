@@ -28,6 +28,7 @@ class PerenniaViewController: CAPBridgeViewController, WKNavigationDelegate {
         bridge?.registerPluginInstance(SpotlightSearchPlugin())
         bridge?.registerPluginInstance(LiveActivityPlugin())
         bridge?.registerPluginInstance(ShareExtensionBridge())
+        bridge?.registerPluginInstance(PinnedFetchPlugin())
     }
 
     override func viewDidLoad() {

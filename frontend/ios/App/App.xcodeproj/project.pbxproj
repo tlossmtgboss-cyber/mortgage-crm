@@ -26,6 +26,7 @@
 		F1A2B3C4D5E6F7A8B9C0D1E8 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1E7 /* Assets.xcassets */; };
 		F1A2B3C4D5E6F7A8B9C0D2E1 /* PerenniaShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = F1A2B3C4D5E6F7A8B9C0D1F0 /* PerenniaShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		F2B3C4D5E6F7A8B9C0D1E2F4 /* ShareExtensionBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2B3C4D5E6F7A8B9C0D1E2F3 /* ShareExtensionBridge.swift */; };
+		CC01B2C3D4E5F6A7B8C9D002 /* PinnedFetchPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC01B2C3D4E5F6A7B8C9D001 /* PinnedFetchPlugin.swift */; };
 		AA01B2C3D4E5F6A7B8C9D002 /* CarPlayAPIService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA01B2C3D4E5F6A7B8C9D001 /* CarPlayAPIService.swift */; };
 		AA02B2C3D4E5F6A7B8C9D002 /* CarPlayModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA02B2C3D4E5F6A7B8C9D001 /* CarPlayModels.swift */; };
 		AA03B2C3D4E5F6A7B8C9D002 /* CarPlayVoiceHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA03B2C3D4E5F6A7B8C9D001 /* CarPlayVoiceHandler.swift */; };
@@ -103,6 +104,7 @@
 		F1A2B3C4D5E6F7A8B9C0D1EA /* PerenniaShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = PerenniaShare.entitlements; sourceTree = "<group>"; };
 		F1A2B3C4D5E6F7A8B9C0D1F0 /* PerenniaShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PerenniaShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		F2B3C4D5E6F7A8B9C0D1E2F3 /* ShareExtensionBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtensionBridge.swift; sourceTree = "<group>"; };
+		CC01B2C3D4E5F6A7B8C9D001 /* PinnedFetchPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PinnedFetchPlugin.swift; sourceTree = "<group>"; };
 		AA01B2C3D4E5F6A7B8C9D001 /* CarPlayAPIService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayAPIService.swift; sourceTree = "<group>"; };
 		AA02B2C3D4E5F6A7B8C9D001 /* CarPlayModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayModels.swift; sourceTree = "<group>"; };
 		AA03B2C3D4E5F6A7B8C9D001 /* CarPlayVoiceHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayVoiceHandler.swift; sourceTree = "<group>"; };
@@ -196,6 +198,7 @@
 				AA11B2C3D4E5F6A7B8C9D001 /* PushNotificationRouter.swift */,
 				BB05A2C3D4E5F6A7B8C9D001 /* RateLimiter.swift */,
 				BB06A2C3D4E5F6A7B8C9D001 /* PerformanceMonitor.swift */,
+				CC01B2C3D4E5F6A7B8C9D001 /* PinnedFetchPlugin.swift */,
 				BB07A2C3D4E5F6A7B8C9D001 /* ManagedPasteboardGuard.swift */,
 				F2B3C4D5E6F7A8B9C0D1E2F3 /* ShareExtensionBridge.swift */,
 				AA14B2C3D4E5F6A7B8C9D001 /* SiriShortcutsPlugin.swift */,
@@ -368,6 +371,7 @@
 				BB05A2C3D4E5F6A7B8C9D002 /* RateLimiter.swift in Sources */,
 				BB06A2C3D4E5F6A7B8C9D002 /* PerformanceMonitor.swift in Sources */,
 				BB07A2C3D4E5F6A7B8C9D002 /* ManagedPasteboardGuard.swift in Sources */,
+				CC01B2C3D4E5F6A7B8C9D002 /* PinnedFetchPlugin.swift in Sources */,
 				F2B3C4D5E6F7A8B9C0D1E2F4 /* ShareExtensionBridge.swift in Sources */,
 				AA14B2C3D4E5F6A7B8C9D002 /* SiriShortcutsPlugin.swift in Sources */,
 				AA16B2C3D4E5F6A7B8C9D002 /* SpotlightHandler.swift in Sources */,

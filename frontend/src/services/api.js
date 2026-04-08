@@ -2,6 +2,7 @@ import axios from 'axios';
 import { Capacitor } from '@capacitor/core';
 import { ensureArray } from '../utils/arrayHelpers';
 import { getCSRFTokenFromCookie } from '../utils/security';
+import { pinnedAdapter } from '../utils/pinnedFetch';
 
 // Detect native mobile app FIRST — Capacitor serves from localhost,
 // so we must check isNativePlatform() before the hostname check.
@@ -15,6 +16,7 @@ export const API_BASE_URL = isNativeApp
     : 'https://api.perenniaai.com'; // Production web
 
 // Create axios instance with mobile app identification
+// On native iOS, route through certificate-pinned URLSession
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000, // 30 second timeout
@@ -23,6 +25,7 @@ const api = axios.create({
     // Identify mobile app requests to bypass IP blocking middleware
     ...(isNativeApp && { 'X-Mobile-App': 'capacitor-ios' }),
   },
+  ...(isNativeApp && { adapter: pinnedAdapter }),
 });
 
 // CSRF token cache — fetched once, reused for all requests

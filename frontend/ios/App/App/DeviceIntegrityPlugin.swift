@@ -22,6 +22,7 @@ import Capacitor
 import MachO
 import DeviceCheck
 import CryptoKit
+import Security
 
 @objc(DeviceIntegrityPlugin)
 public class DeviceIntegrityPlugin: CAPPlugin, CAPBridgedPlugin {
@@ -270,8 +271,16 @@ public class DeviceIntegrityPlugin: CAPPlugin, CAPBridgedPlugin {
         Task {
             do {
                 let keyId = try await service.generateKey()
-                // Store keyId for future assertion calls
-                UserDefaults.standard.set(keyId, forKey: "com.perenniaai.appAttest.keyId")
+                // Store keyId in Keychain (not UserDefaults)
+                let query: [String: Any] = [
+                    kSecClass as String: kSecClassGenericPassword,
+                    kSecAttrService as String: "com.perenniaai.crm.appAttest",
+                    kSecAttrAccount as String: "keyId",
+                    kSecValueData as String: keyId.data(using: .utf8)!,
+                    kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+                ]
+                SecItemDelete(query as CFDictionary) // Remove old if exists
+                SecItemAdd(query as CFDictionary, nil)
 
                 // Get challenge from server (or use a local nonce for now)
                 let challenge = UUID().uuidString
