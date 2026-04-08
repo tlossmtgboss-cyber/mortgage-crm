@@ -25,7 +25,6 @@ import {
   getBrowserTimezone,
   getTimezoneAbbreviation,
 } from '../../utils/timezone';
-import { API_BASE_URL } from '../../services/api';
 
 // =============================================================================
 // Skeleton Loader
@@ -269,7 +268,7 @@ export default function EmbeddableBookingWidget({ slug, onBooked, theme = {} }) 
   const statusRef = useRef(null);
   const mainContentRef = useRef(null);
 
-  const apiBase = `${API_BASE_URL}/api/v1/scheduler/public/book`;
+  const apiBase = '/api/v1/scheduler/public/book';
 
   useEffect(() => { loadBookingLink(); }, [slug]);
 
