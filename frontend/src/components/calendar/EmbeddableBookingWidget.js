@@ -25,6 +25,7 @@ import {
   getBrowserTimezone,
   getTimezoneAbbreviation,
 } from '../../utils/timezone';
+import { API_BASE_URL } from '../../services/api';
 
 // =============================================================================
 // Skeleton Loader
@@ -268,7 +269,7 @@ export default function EmbeddableBookingWidget({ slug, onBooked, theme = {} }) 
   const statusRef = useRef(null);
   const mainContentRef = useRef(null);
 
-  const apiBase = '/api/v1/scheduler/public/book';
+  const apiBase = `${API_BASE_URL}/api/v1/scheduler/public/book`;
 
   useEffect(() => { loadBookingLink(); }, [slug]);
 
@@ -294,14 +295,17 @@ export default function EmbeddableBookingWidget({ slug, onBooked, theme = {} }) 
 
   const loadBookingLink = async () => {
     try {
-      const res = await fetch(`${apiBase}/${slug}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(`${apiBase}/${slug}`, { signal: controller.signal });
+      clearTimeout(timeout);
       if (!res.ok) throw new Error('Booking link not found');
       const data = await res.json();
       setBookingLink(data);
       await loadSlots(data);
       setStep('dates');
     } catch (err) {
-      setError(err.message);
+      setError(err.name === 'AbortError' ? 'Request timed out. Please refresh and try again.' : err.message);
       setStep('error');
     }
   };
