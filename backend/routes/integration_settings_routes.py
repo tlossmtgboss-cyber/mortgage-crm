@@ -330,6 +330,15 @@ INTEGRATIONS = {
         "icon": "microsoft",
         "features": ["send_email", "receive_email", "attachments", "folders"]
     },
+    "gmail": {
+        "id": "gmail",
+        "name": "Gmail",
+        "category": "communication",
+        "auth_type": "oauth2",
+        "description": "Sync Gmail emails and contacts with your CRM",
+        "icon": "google",
+        "features": ["send_email", "receive_email", "contacts", "email_sync"]
+    },
     "calendly": {
         "id": "calendly",
         "name": "Calendly",
@@ -490,6 +499,17 @@ async def get_all_integrations(
                         connected_providers.add("retell")
                 except Exception as e:
                     logger.warning(f"Error checking Retell config: {e}")
+
+                # Check for Gmail connection (tokens stored in user_metadata)
+                try:
+                    gmail_result = db.execute(text("""
+                        SELECT user_metadata->>'gmail_connected' FROM users
+                        WHERE id = :user_id
+                    """), {"user_id": int(user_id)}).fetchone()
+                    if gmail_result and gmail_result[0] == 'true':
+                        connected_providers.add("gmail")
+                except Exception as e:
+                    logger.warning(f"Error checking Gmail config: {e}")
 
                 # Check for Salesforce connection in integration_profiles table
                 try:
@@ -903,6 +923,35 @@ async def connect_integration(
                     "redirect_uri": microsoft_outlook_client.redirect_uri
                 }, "OAuth flow initiated - redirect to Microsoft")
 
+            # Handle Gmail OAuth
+            if integration_id == "gmail":
+                google_client_id = os.getenv("GOOGLE_CLIENT_ID")
+                if not google_client_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=error_response("Gmail integration not configured. Contact your administrator.", code="NOT_CONFIGURED")
+                    )
+                user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", 1)
+                frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
+                redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", f"{frontend_url}/api/v1/gmail/callback")
+                scopes = "openid email profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/gmail.compose https://www.googleapis.com/auth/contacts.readonly"
+                oauth_url = (
+                    f"https://accounts.google.com/o/oauth2/v2/auth"
+                    f"?client_id={google_client_id}"
+                    f"&redirect_uri={redirect_uri}"
+                    f"&response_type=code"
+                    f"&scope={scopes}"
+                    f"&access_type=offline"
+                    f"&prompt=consent"
+                    f"&state={user_id}"
+                )
+                return success_response({
+                    "integration_id": integration_id,
+                    "auth_type": "oauth2",
+                    "oauth_url": oauth_url,
+                    "redirect_uri": redirect_uri
+                }, "OAuth flow initiated - redirect to Google")
+
             # Generic OAuth URL for other integrations
             oauth_url = int_info.get("oauth_url", f"https://{integration_id}.com/oauth/authorize")
             return success_response({
@@ -969,6 +1018,19 @@ async def disconnect_integration(
                     except Exception as sf_error:
                         logger.error(f"Error disconnecting Salesforce OAuth: {sf_error}")
                         # Continue to try the generic disconnect too
+
+                # Special handling for Gmail - clear tokens from user_metadata
+                if integration_id == 'gmail':
+                    try:
+                        db.execute(text("""
+                            UPDATE users SET user_metadata = user_metadata - 'gmail_tokens' - 'gmail_email' - 'gmail_connected'
+                            WHERE id = :user_id
+                        """), {"user_id": int(user_id)})
+                        db.commit()
+                        logger.info(f"Disconnected Gmail for user {user_id}")
+                    except Exception as gmail_error:
+                        logger.error(f"Error disconnecting Gmail: {gmail_error}")
+                        db.rollback()
 
                 # Delete the integration record from database (generic)
                 db.execute(text("""
