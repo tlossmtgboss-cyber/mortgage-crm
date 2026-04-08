@@ -59,15 +59,17 @@ class EncryptionManager:
             raise
 
     def decrypt(self, encrypted_value: str) -> str:
-        """Decrypt an encrypted string"""
+        """Decrypt an encrypted string. Returns plaintext as-is if not Fernet-encrypted
+        (gradual migration: existing DB rows may predate encryption)."""
         if not encrypted_value:
             return encrypted_value
         try:
             decrypted = self.fernet.decrypt(encrypted_value.encode())
             return decrypted.decode()
-        except Exception as e:
-            logger.error(f"Decryption failed: {e}")
-            raise
+        except Exception:
+            # Value is not Fernet-encrypted (pre-existing plaintext row).
+            # Return as-is; it will be encrypted on next write.
+            return encrypted_value
 
 
 # Global encryption manager instance
@@ -110,7 +112,10 @@ class EncryptedInteger(TypeDecorator):
         if value is None:
             return value
         decrypted = encryption_manager.decrypt(value)
-        return int(decrypted) if decrypted else None
+        try:
+            return int(decrypted) if decrypted else None
+        except (ValueError, TypeError):
+            return None
 
 
 class EncryptedFloat(TypeDecorator):
@@ -130,7 +135,10 @@ class EncryptedFloat(TypeDecorator):
         if value is None:
             return value
         decrypted = encryption_manager.decrypt(value)
-        return float(decrypted) if decrypted else None
+        try:
+            return float(decrypted) if decrypted else None
+        except (ValueError, TypeError):
+            return None
 
 
 # Utility functions for manual encryption/decryption
