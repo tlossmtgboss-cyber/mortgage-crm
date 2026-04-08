@@ -109,12 +109,19 @@ def main():
     print("START.PY: Cleaning up idle database connections...", flush=True)
     cleanup_idle_connections()
 
-    # Run migrations first
+    # Run migrations first (with timeout to prevent startup hang)
     print("=" * 50, flush=True)
     print("START.PY: Running migrations...", flush=True)
-    result = subprocess.run([sys.executable, "run_migrations.py"], check=False)
-    if result.returncode != 0:
-        print("START.PY: Warning: Migration had issues, continuing anyway...", flush=True)
+    try:
+        result = subprocess.run(
+            [sys.executable, "run_migrations.py"],
+            check=False,
+            timeout=120  # 2 minute timeout — don't let migrations block startup
+        )
+        if result.returncode != 0:
+            print("START.PY: Warning: Migration had issues, continuing anyway...", flush=True)
+    except subprocess.TimeoutExpired:
+        print("START.PY: WARNING: Migrations timed out after 120s, continuing with server start...", flush=True)
 
     # Run multi-tenant organization_id migration
     print("=" * 50, flush=True)
