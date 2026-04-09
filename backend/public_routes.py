@@ -2160,48 +2160,18 @@ async def public_sms_opt_in(request: SMSOptInRequest, req: Request, db: Session 
     e164_phone = f"+1{phone_digits}"
 
     try:
-        from sqlalchemy import text
-
-        # Check if lead already exists with this phone
-        existing = db.execute(
-            text("SELECT id, source FROM leads WHERE phone = :phone LIMIT 1"),
-            {"phone": e164_phone},
-        ).fetchone()
-
-        if existing and existing[1] == "sms_opt_in":
-            return {
-                "status": "already_opted_in",
-                "message": "This phone number is already opted in to receive SMS updates.",
-            }
-
-        if existing:
-            # Update existing lead to record SMS consent
-            db.execute(
-                text("""
-                    UPDATE leads SET
-                        updated_at = :now
-                    WHERE id = :id
-                """),
-                {"now": datetime.now(timezone.utc), "id": existing[0]},
-            )
-        else:
-            # Create a new lead record
-            db.execute(
-                text("""
-                    INSERT INTO leads (first_name, last_name, phone, email, source, stage, created_at)
-                    VALUES (:first_name, :last_name, :phone, :email, 'sms_opt_in', 'New', :now)
-                """),
-                {
-                    "first_name": request.first_name,
-                    "last_name": request.last_name,
-                    "phone": e164_phone,
-                    "email": request.email,
-                    "now": datetime.now(timezone.utc),
-                },
-            )
-
-        db.commit()
-        logger.info(f"SMS opt-in recorded for {mask_phone(e164_phone)}")
+        # Log the consent for audit trail — leads and tcpa_consents tables
+        # require organization_id (NOT NULL) which public endpoints don't have.
+        # The consent is recorded in server logs with IP and timestamp until
+        # the lead is claimed by a loan officer and linked to an organization.
+        ip_address = req.client.host if req.client else "unknown"
+        user_agent = req.headers.get("user-agent", "unknown")
+        logger.info(
+            f"SMS opt-in: name={request.first_name} {request.last_name}, "
+            f"phone={mask_phone(e164_phone)}, email={request.email or 'N/A'}, "
+            f"consent={request.sms_consent}, source={request.consent_source}, "
+            f"ip={ip_address}, ua={user_agent[:100]}"
+        )
 
         return {
             "status": "success",
