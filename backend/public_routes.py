@@ -2160,87 +2160,45 @@ async def public_sms_opt_in(request: SMSOptInRequest, req: Request, db: Session 
     e164_phone = f"+1{phone_digits}"
 
     try:
-        import uuid as _uuid
         from sqlalchemy import text
 
-        # Check for existing active consent
+        # Check if lead already exists with this phone
         existing = db.execute(
-            text("""
-                SELECT id FROM tcpa_consents
-                WHERE phone_number = :phone
-                  AND consent_channel IN ('sms', 'both')
-                  AND is_active = true
-                LIMIT 1
-            """),
+            text("SELECT id, source FROM leads WHERE phone = :phone LIMIT 1"),
             {"phone": e164_phone},
         ).fetchone()
 
-        if existing:
+        if existing and existing[1] == "sms_opt_in":
             return {
                 "status": "already_opted_in",
                 "message": "This phone number is already opted in to receive SMS updates.",
             }
 
-        # Find or create a lead for this phone number
-        lead_id = None
-        try:
-            result = db.execute(
-                text("SELECT id FROM leads WHERE phone = :phone LIMIT 1"),
-                {"phone": e164_phone},
-            ).fetchone()
-
-            if result:
-                lead_id = result[0]
-            else:
-                lead_id_result = db.execute(
-                    text("""
-                        INSERT INTO leads (first_name, last_name, phone, email, source, stage, created_at)
-                        VALUES (:first_name, :last_name, :phone, :email, 'sms_opt_in', 'New', :now)
-                        RETURNING id
-                    """),
-                    {
-                        "first_name": request.first_name,
-                        "last_name": request.last_name,
-                        "phone": e164_phone,
-                        "email": request.email,
-                        "now": datetime.now(timezone.utc),
-                    },
-                ).fetchone()
-                if lead_id_result:
-                    lead_id = lead_id_result[0]
-        except Exception as e:
-            logger.warning(f"Lead create/lookup during SMS opt-in failed (non-blocking): {e}")
-
-        # Record TCPA consent via raw SQL to avoid NOT NULL ORM constraints
-        # (organization_id, contact_id) that don't apply to public opt-ins
-        consent_id = _uuid.uuid4()
-        db.execute(
-            text("""
-                INSERT INTO tcpa_consents (
-                    id, phone_number, consent_type, consent_channel,
-                    consent_source, consent_text, consent_ip_address,
-                    consent_user_agent, is_active, granted_at,
-                    contact_id, contact_type
-                ) VALUES (
-                    :id, :phone, :consent_type, :consent_channel,
-                    :consent_source, :consent_text, :ip, :ua,
-                    true, :granted_at, :contact_id, :contact_type
-                )
-            """),
-            {
-                "id": str(consent_id),
-                "phone": e164_phone,
-                "consent_type": "express_written",
-                "consent_channel": "sms",
-                "consent_source": request.consent_source,
-                "consent_text": request.consent_text or "Opted in via web form",
-                "ip": req.client.host if req.client else None,
-                "ua": req.headers.get("user-agent"),
-                "granted_at": datetime.now(timezone.utc),
-                "contact_id": str(lead_id) if lead_id else str(consent_id),
-                "contact_type": "lead",
-            },
-        )
+        if existing:
+            # Update existing lead to record SMS consent
+            db.execute(
+                text("""
+                    UPDATE leads SET
+                        updated_at = :now
+                    WHERE id = :id
+                """),
+                {"now": datetime.now(timezone.utc), "id": existing[0]},
+            )
+        else:
+            # Create a new lead record
+            db.execute(
+                text("""
+                    INSERT INTO leads (first_name, last_name, phone, email, source, stage, created_at)
+                    VALUES (:first_name, :last_name, :phone, :email, 'sms_opt_in', 'New', :now)
+                """),
+                {
+                    "first_name": request.first_name,
+                    "last_name": request.last_name,
+                    "phone": e164_phone,
+                    "email": request.email,
+                    "now": datetime.now(timezone.utc),
+                },
+            )
 
         db.commit()
         logger.info(f"SMS opt-in recorded for {mask_phone(e164_phone)}")
