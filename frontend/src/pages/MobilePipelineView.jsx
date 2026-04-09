@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import { useVirtualList } from '../hooks/useVirtualList';
 import { toast } from '../utils/toast';
+import MobileBottomNav from '../components/mobile/MobileBottomNav';
 import './MobilePipelineView.css';
 
 // ---------------------------------------------------------------------------
@@ -601,6 +602,8 @@ const MobilePipelineView = () => {
           )
         )}
       </div>
+
+      <MobileBottomNav />
     </div>
   );
 };

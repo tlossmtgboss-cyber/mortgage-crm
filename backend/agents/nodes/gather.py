@@ -113,6 +113,13 @@ NON_CACHEABLE_TOOLS = {
     "send_sms", "send_text", "text_contact"
 }
 
+# Tools that need LLM-composed content before execution.
+# These are deferred from gather to the execute phase so the LLM can
+# compose proper content (e.g., email subject/body) in reason_and_respond.
+DEFERRED_TO_EXECUTE_TOOLS = {
+    "send_email",  # LLM must compose subject + body before sending
+}
+
 
 async def execute_tool(
     tool_name: str,
@@ -219,7 +226,7 @@ async def execute_tool(
         # For sync tools, we use copy_context().run() to propagate the tenant
         # context into the executor thread. Without this, get_tenant_context()
         # returns None in the thread and tenant isolation is bypassed.
-        TOOL_TIMEOUT = 15  # seconds
+        TOOL_TIMEOUT = 10  # seconds (reduced from 15s for faster failure)
         try:
             try:
                 if asyncio.iscoroutinefunction(func):
@@ -282,6 +289,10 @@ def determine_tool_arguments(
     """
     Determine arguments for a tool based on query entities and context.
 
+    When the user is viewing a specific lead/loan in the CRM UI,
+    active_lead_id/active_loan_id are set and used to resolve
+    ambiguous references like "send them an email" or "create a task".
+
     Args:
         tool_name: Name of the tool
         state: Current agent state with extracted entities
@@ -294,6 +305,11 @@ def determine_tool_arguments(
 
     # Get extracted entities from pattern matching (e.g., borrower names)
     extracted_entities = state.get("extracted_entities", {})
+
+    # Active entity context from CRM UI (the lead/loan the user is viewing)
+    active_lead_id = state.get("active_lead_id")
+    active_loan_id = state.get("active_loan_id")
+    active_entity_data = state.get("active_entity_data") or {}
 
     # Map entities to tool arguments based on tool type
     if tool_name == "search_loans":
@@ -353,6 +369,11 @@ def determine_tool_arguments(
     elif tool_name == "create_task":
         args["title"] = entities.get("task_title", "Follow up")
         args["priority"] = "medium"
+        # Link task to the active lead/loan when the user is viewing one
+        if active_lead_id:
+            args["lead_id"] = str(active_lead_id)
+        if active_loan_id:
+            args["loan_id"] = str(active_loan_id)
 
     # Communication tools
     elif tool_name in ["click_to_dial", "make_call", "call_contact"]:
@@ -396,6 +417,12 @@ def determine_tool_arguments(
             if email_match:
                 email = email_match.group()
 
+        # Fall back to active entity email when user says "send them an email"
+        if not email and active_entity_data:
+            email = active_entity_data.get("lead_email") or active_entity_data.get("loan_borrower_email")
+            if email:
+                logger.info(f"[GATHER] send_email resolved email from active entity context")
+
         if email:
             args["to_email"] = email
             # Default subject and body - will be enhanced by AI
@@ -403,6 +430,10 @@ def determine_tool_arguments(
             args["body"] = state.get("email_body", state.get("user_message", "Hello!"))
             # Pass user_id for OAuth token lookup
             args["user_id"] = state.get("user_id")
+            # Link to active entity for tracking
+            if active_lead_id:
+                args["contact_id"] = str(active_lead_id)
+                args["contact_type"] = "lead"
 
         logger.info(f"[GATHER] send_email args: {args}")
 
@@ -443,6 +474,86 @@ def determine_tool_arguments(
     return args
 
 
+def _fetch_active_entity_data(
+    active_lead_id: Optional[int],
+    active_loan_id: Optional[int],
+) -> dict:
+    """
+    Fetch details for the lead/loan the user is currently viewing in the CRM.
+
+    This gives the AI real context so it can answer questions like
+    "send them an email" or "what stage is this loan at?" accurately.
+
+    Returns a dict with keyed data (lead_* and/or loan_*), or empty dict.
+    """
+    from ..tools.base import execute_query, execute_single
+    result = {}
+
+    if active_lead_id:
+        try:
+            lead = execute_single(
+                """SELECT l.id, l.first_name, l.last_name, l.email, l.phone,
+                          l.status, l.source, l.created_at,
+                          l.estimated_loan_amount, l.credit_score_range,
+                          l.property_type_interest, l.timeline, l.notes,
+                          l.last_contact_date, l.next_followup_date, l.lead_score,
+                          lo.name as assigned_lo_name
+                   FROM leads l
+                   LEFT JOIN loan_officers lo ON l.assigned_to = lo.id
+                   WHERE l.id = :lead_id""",
+                {"lead_id": active_lead_id}
+            )
+            if lead:
+                result["lead_id"] = active_lead_id
+                result["lead_name"] = f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip()
+                result["lead_email"] = lead.get("email")
+                result["lead_phone"] = lead.get("phone")
+                result["lead_status"] = lead.get("status")
+                result["lead_source"] = lead.get("source")
+                result["lead_score"] = lead.get("lead_score")
+                result["lead_loan_amount"] = lead.get("estimated_loan_amount")
+                result["lead_credit_range"] = lead.get("credit_score_range")
+                result["lead_last_contact"] = str(lead.get("last_contact_date")) if lead.get("last_contact_date") else None
+                result["lead_next_followup"] = str(lead.get("next_followup_date")) if lead.get("next_followup_date") else None
+                result["lead_assigned_to"] = lead.get("assigned_lo_name")
+                result["lead_notes"] = lead.get("notes")
+                logger.info(f"[GATHER] Fetched active lead context: {result['lead_name']} (id={active_lead_id})")
+        except Exception as e:
+            logger.warning(f"[GATHER] Failed to fetch active lead {active_lead_id}: {e}")
+
+    if active_loan_id:
+        try:
+            loan = execute_single(
+                """SELECT ln.id, ln.loan_number, ln.borrower_name, ln.borrower_email,
+                          ln.loan_amount, ln.loan_type, ln.interest_rate, ln.stage,
+                          ln.property_address, ln.closing_date, ln.lock_expiration_date,
+                          ln.created_at, ln.updated_at,
+                          lo.name as assigned_lo_name
+                   FROM loans ln
+                   LEFT JOIN loan_officers lo ON ln.loan_officer_id = lo.id
+                   WHERE ln.id = :loan_id""",
+                {"loan_id": active_loan_id}
+            )
+            if loan:
+                result["loan_id"] = active_loan_id
+                result["loan_number"] = loan.get("loan_number")
+                result["loan_borrower_name"] = loan.get("borrower_name")
+                result["loan_borrower_email"] = loan.get("borrower_email")
+                result["loan_amount"] = loan.get("loan_amount")
+                result["loan_type"] = loan.get("loan_type")
+                result["loan_rate"] = loan.get("interest_rate")
+                result["loan_stage"] = loan.get("stage")
+                result["loan_property"] = loan.get("property_address")
+                result["loan_closing_date"] = str(loan.get("closing_date")) if loan.get("closing_date") else None
+                result["loan_lock_expiration"] = str(loan.get("lock_expiration_date")) if loan.get("lock_expiration_date") else None
+                result["loan_assigned_to"] = loan.get("assigned_lo_name")
+                logger.info(f"[GATHER] Fetched active loan context: {result.get('loan_borrower_name', '')} (id={active_loan_id})")
+        except Exception as e:
+            logger.warning(f"[GATHER] Failed to fetch active loan {active_loan_id}: {e}")
+
+    return result
+
+
 async def gather_data(
     state: AgentState,
     tool_functions: Dict[str, Callable] = None
@@ -452,6 +563,10 @@ async def gather_data(
 
     This node executes ALL tools concurrently using asyncio.gather(),
     reducing sequential execution time (e.g., 15s -> 3-5s).
+
+    When the user is viewing a specific lead/loan in the CRM, the active
+    entity's details are auto-fetched and injected into gathered_data so
+    the LLM has real context for answers and action execution.
 
     Args:
         state: Current agent state with required_tools populated
@@ -465,6 +580,30 @@ async def gather_data(
 
     if tool_functions is None:
         tool_functions = {}
+
+    # ================================================================
+    # AUTO-FETCH ACTIVE ENTITY DATA (lead/loan user is viewing in CRM)
+    # ================================================================
+    active_lead_id = state.get("active_lead_id")
+    active_loan_id = state.get("active_loan_id")
+    organization_id = state.get("organization_id")
+
+    if active_lead_id or active_loan_id:
+        try:
+            # Set tenant context so execute_query applies org isolation
+            if organization_id is not None:
+                set_tenant_context(organization_id)
+            try:
+                entity_data = _fetch_active_entity_data(active_lead_id, active_loan_id)
+            finally:
+                if organization_id is not None:
+                    clear_tenant_context()
+
+            if entity_data:
+                state = update_state(state, {"active_entity_data": entity_data})
+                logger.info(f"[GATHER] Active entity context loaded: lead_id={active_lead_id}, loan_id={active_loan_id}")
+        except Exception as e:
+            logger.warning(f"[GATHER] Active entity fetch failed (non-blocking): {e}")
 
     # Debug: Log available tools
     available_tool_names = list(tool_functions.keys())
@@ -491,6 +630,7 @@ async def gather_data(
     tool_calls = []
     gathered_data = {}
     missing_data = []
+    deferred_actions = []  # Tools deferred to execute phase (need LLM content)
 
     try:
         # Build list of tool execution tasks - filter out unavailable tools first
@@ -508,6 +648,27 @@ async def gather_data(
                 continue
 
             args = determine_tool_arguments(tool_name, state)
+
+            # Defer tools that need LLM-composed content (e.g., send_email).
+            # These will be executed in the execute phase after reason_and_respond
+            # composes the content.
+            if tool_name in DEFERRED_TO_EXECUTE_TOOLS:
+                logger.info(f"[GATHER] Deferring {tool_name} to execute phase (needs LLM content). Args: {args}")
+                deferred_actions.append({
+                    "type": tool_name,
+                    "params": args,
+                    "auto_execute": True,
+                    "deferred_from_gather": True,
+                })
+                # Store the recipient info so the LLM knows who the email is for
+                gathered_data[tool_name] = {
+                    "status": "deferred",
+                    "message": f"Email to {args.get('to_email', 'recipient')} will be sent after composing content.",
+                    "to_email": args.get("to_email"),
+                    "user_request": state.get("user_message", ""),
+                }
+                continue
+
             logger.info(f"[GATHER] Queuing tool {tool_name} with args: {args}")
             tasks.append(execute_tool(tool_name, args, tool_functions, user_id, organization_id))
             task_tool_names.append(tool_name)
@@ -548,13 +709,30 @@ async def gather_data(
         else:
             data_quality = "complete"
 
+        # Inject active entity data into gathered_data so the LLM sees it
+        active_entity_data = state.get("active_entity_data")
+        if active_entity_data:
+            gathered_data["active_crm_context"] = active_entity_data
+            # If no other tools succeeded but we have entity context, upgrade quality
+            if data_quality == "insufficient" and active_entity_data:
+                data_quality = "partial"
+
         # Update state with results
-        state = update_state(state, {
+        state_updates = {
             "tool_calls": tool_calls,
             "gathered_data": gathered_data,
             "data_quality": data_quality,
-            "missing_data": missing_data
-        })
+            "missing_data": missing_data,
+        }
+
+        # Pass deferred actions to execute phase
+        if deferred_actions:
+            state_updates["deferred_actions"] = deferred_actions
+            # Ensure execute node runs even if requires_action wasn't set
+            state_updates["requires_action"] = True
+            logger.info(f"[GATHER] {len(deferred_actions)} actions deferred to execute phase")
+
+        state = update_state(state, state_updates)
 
         logger.info(
             f"[GATHER] Complete: {successful_tools}/{total_tools} tools succeeded "

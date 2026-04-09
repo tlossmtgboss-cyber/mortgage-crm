@@ -107,6 +107,121 @@ def _persist_invocation_sync(
             pass
 
 
+class ResponseTimeTracker:
+    """
+    Lightweight in-memory response time tracker with percentile calculations.
+
+    Maintains a fixed-size circular buffer of recent response times for
+    real-time percentile reporting without DB overhead. Thread-safe.
+
+    Usage:
+        tracker = get_response_time_tracker()
+        tracker.record(1250, intent="pipeline", model="haiku")
+        stats = tracker.get_stats()
+        # {'p50': 850, 'p90': 2100, 'p99': 5200, 'count': 42, ...}
+    """
+
+    _MAX_SAMPLES = 1000  # Keep last 1000 response times
+
+    def __init__(self):
+        import threading
+        self._lock = threading.Lock()
+        self._times: List[float] = []
+        self._by_intent: Dict[str, List[float]] = defaultdict(list)
+        self._by_model: Dict[str, List[float]] = defaultdict(list)
+        self._total_count = 0
+
+    def record(self, response_time_ms: float, intent: str = "", model: str = "") -> None:
+        """Record a response time measurement."""
+        with self._lock:
+            self._times.append(response_time_ms)
+            if len(self._times) > self._MAX_SAMPLES:
+                self._times = self._times[-self._MAX_SAMPLES:]
+            self._total_count += 1
+
+            if intent:
+                bucket = self._by_intent[intent]
+                bucket.append(response_time_ms)
+                if len(bucket) > 200:
+                    self._by_intent[intent] = bucket[-200:]
+
+            if model:
+                bucket = self._by_model[model]
+                bucket.append(response_time_ms)
+                if len(bucket) > 200:
+                    self._by_model[model] = bucket[-200:]
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get percentile stats for recent response times."""
+        with self._lock:
+            if not self._times:
+                return {"count": 0, "total_count": 0}
+
+            sorted_times = sorted(self._times)
+            n = len(sorted_times)
+
+            def _percentile(pct: float) -> float:
+                idx = int(pct / 100.0 * (n - 1))
+                return round(sorted_times[idx], 1)
+
+            stats = {
+                "count": n,
+                "total_count": self._total_count,
+                "p50_ms": _percentile(50),
+                "p75_ms": _percentile(75),
+                "p90_ms": _percentile(90),
+                "p95_ms": _percentile(95),
+                "p99_ms": _percentile(99),
+                "min_ms": round(sorted_times[0], 1),
+                "max_ms": round(sorted_times[-1], 1),
+                "avg_ms": round(sum(sorted_times) / n, 1),
+            }
+
+            # Per-intent breakdown (top 5 by volume)
+            intent_stats = {}
+            for intent, times in sorted(
+                self._by_intent.items(),
+                key=lambda x: len(x[1]),
+                reverse=True
+            )[:5]:
+                st = sorted(times)
+                cnt = len(st)
+                intent_stats[intent] = {
+                    "count": cnt,
+                    "p50_ms": round(st[cnt // 2], 1),
+                    "p90_ms": round(st[int(0.9 * (cnt - 1))], 1) if cnt > 1 else round(st[0], 1),
+                    "avg_ms": round(sum(st) / cnt, 1),
+                }
+            stats["by_intent"] = intent_stats
+
+            # Per-model breakdown
+            model_stats = {}
+            for model_name, times in self._by_model.items():
+                st = sorted(times)
+                cnt = len(st)
+                model_stats[model_name] = {
+                    "count": cnt,
+                    "p50_ms": round(st[cnt // 2], 1),
+                    "p90_ms": round(st[int(0.9 * (cnt - 1))], 1) if cnt > 1 else round(st[0], 1),
+                    "avg_ms": round(sum(st) / cnt, 1),
+                }
+            stats["by_model"] = model_stats
+
+            return stats
+
+
+# Singleton response time tracker
+_response_time_tracker: Optional[ResponseTimeTracker] = None
+
+
+def get_response_time_tracker() -> ResponseTimeTracker:
+    """Get the singleton response time tracker."""
+    global _response_time_tracker
+    if _response_time_tracker is None:
+        _response_time_tracker = ResponseTimeTracker()
+    return _response_time_tracker
+
+
 class PerformanceTracker:
     """
     Track and analyze agent performance.
@@ -126,6 +241,7 @@ class PerformanceTracker:
     # Token costs (approximate, update as needed)
     TOKEN_COSTS = {
         "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},  # per 1K tokens
+        "claude-haiku-4-5-20251001": {"input": 0.0008, "output": 0.004},  # Haiku costs
         "claude-opus-4-20250514": {"input": 0.015, "output": 0.075},
         "gpt-4-turbo": {"input": 0.01, "output": 0.03},
         "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},

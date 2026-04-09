@@ -709,6 +709,14 @@ def pattern_match_intent(query: str) -> Optional[Dict[str, Any]]:
                         result["extracted_entities"] = {"phone_number": phone}
                         logger.info(f"[ANALYZE] Extracted phone: {mask_phone(phone)}")
 
+                # For email requests, extract email address
+                if intent_key == "email_request":
+                    email = extract_email_address(query)
+                    if email:
+                        result["extracted_entities"] = result.get("extracted_entities", {})
+                        result["extracted_entities"]["email_address"] = email
+                        logger.info(f"[ANALYZE] Extracted email: {email}")
+
                 # For borrower-specific queries, extract the borrower name
                 if config.get("extract_borrower_name"):
                     borrower_name = extract_borrower_name(query)
@@ -735,13 +743,19 @@ def extract_entities(query: str) -> Dict[str, List]:
         "dates": [],
         "stages": [],
         "team_members": [],
-        "phone_numbers": []
+        "phone_numbers": [],
+        "email_addresses": []
     }
 
     # Extract phone numbers
     phone = extract_phone_number(query)
     if phone:
         entities["phone_numbers"] = [phone]
+
+    # Extract email addresses
+    email = extract_email_address(query)
+    if email:
+        entities["email_addresses"] = [email]
 
     # Extract loan/lead IDs (numeric)
     id_matches = re.findall(r'\b(?:loan|lead|id|#)\s*(\d+)\b', query, re.IGNORECASE)
@@ -795,60 +809,22 @@ def extract_entities(query: str) -> Dict[str, List]:
 # LLM-BASED ANALYSIS (fallback for complex queries)
 # =============================================================================
 
-ANALYZE_SYSTEM_PROMPT = """You are a query analyzer for a mortgage CRM AI assistant. Analyze user queries and select appropriate tools.
-
-CRITICAL: Return ONLY a single-line JSON object. No line breaks inside the JSON. No text before or after.
+ANALYZE_SYSTEM_PROMPT = """Query analyzer for mortgage CRM. Return ONLY single-line JSON.
 
 Format: {"intent":"...","entities":{"loan_ids":[],"borrower_names":[],"amounts":[],"dates":[],"stages":[],"team_members":[]},"urgency":"...","complexity":"...","required_tools":[...],"requires_action":false}
 
-Intent must be ONE of: pipeline_status, lead_management, team_performance, task_management, communication, document_analysis, market_intelligence, financial_analysis, predictive_analytics, action_request, general_query
+Intents: pipeline_status, lead_management, team_performance, task_management, communication, document_analysis, market_intelligence, financial_analysis, predictive_analytics, action_request, general_query
 
-ALWAYS select at least one tool in required_tools.
+Available tools: {tools}
 
-Available tools:
-{tools}
+Rules:
+- leads/prospects -> lead_management, use ["lead_status_insights"]
+- loans/pipeline/deals -> pipeline_status, use ["get_pipeline","get_pipeline_metrics"]
+- tasks/priorities -> task_management, use ["get_daily_priorities","get_tasks"]
+- rates/lock/float -> market_intelligence, use ["get_rate_lock_advisory","get_pipeline"]
+- Default: task_management with ["get_daily_priorities","get_pipeline"]
 
-### CRITICAL TOOL ROUTING RULES ###
-
-**FOR LEAD QUESTIONS (highest priority):**
-If the user mentions: "lead", "leads", "prospect", "prospects", "new lead", "lead pipeline", "lead conversion", "lead bottleneck", "nurture", "who to call", "speed to lead", or asks about converting/qualifying leads:
-- ALWAYS use: lead_status_insights (for analytics, coaching, bottlenecks, conversion rates)
-- ADD: get_leads_by_status (when user wants specific lead names/lists)
-- Intent: lead_management
-
-**FOR LOAN PIPELINE QUESTIONS:**
-If user mentions: "loan", "loans", "deal", "deals", "closing", "processing", "underwriting", "funded":
-- Use: get_pipeline, get_pipeline_metrics
-- Intent: pipeline_status
-
-Examples with EXACT required_tools:
-- "How is my lead pipeline?" -> ["lead_status_insights"]
-- "Where are leads getting stuck?" -> ["lead_status_insights"]
-- "Give me lead coaching" -> ["lead_status_insights", "get_leads_by_status"]
-- "Show my New leads" -> ["get_leads_by_status"]
-- "Who should I call today?" -> ["lead_status_insights", "get_leads_by_status"]
-- "What are my lead bottlenecks?" -> ["lead_status_insights"]
-- "Daily briefing on leads" -> ["lead_status_insights", "get_leads_by_status"]
-- "Show my pipeline" -> ["get_pipeline", "get_pipeline_metrics"]
-- "What loans are closing soon?" -> ["get_pipeline"]
-- "Top priorities today?" -> ["get_daily_priorities", "get_tasks"]
-- "Should I lock rates?" -> ["get_rate_lock_advisory", "get_pipeline"]
-
-Intent mapping:
-- lead_management: Lead-related questions (ALWAYS use lead_status_insights)
-- pipeline_status: Loan pipeline, deals, stages
-- task_management: Tasks, priorities, schedule
-- market_intelligence: Rates, lock/float decisions
-
-DEFAULT: If unsure, use task_management with ["get_daily_priorities", "get_pipeline"].
-
-Urgency:
-- critical: Closing today, urgent issues
-- high: Important items this week
-- medium: Standard requests
-- low: Informational queries
-
-Return ONLY valid JSON."""
+Urgency: critical|high|medium|low. Return ONLY JSON."""
 
 
 async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -> AgentState:
@@ -926,24 +902,31 @@ async def analyze_query(state: AgentState, anthropic_client: Anthropic = None) -
             state = update_state(state, state_updates)
 
             # =============================================================
-            # MEMORY RETRIEVAL (after intent classification, before return)
+            # MEMORY RETRIEVAL (skip for greetings/simple — saves ~20-50ms DB round-trip)
             # =============================================================
-            mem_start = time.time()
-            user_memories, memory_context = _retrieve_user_memories(
-                state.get("user_id", ""), state.get("organization_id"),
-                current_query=state.get("user_message", "")
-            )
-            timing["memory_retrieve"] = (time.time() - mem_start) * 1000
-            if user_memories or memory_context:
-                state = update_state(state, {
-                    "user_memories": user_memories,
-                    "memory_context": memory_context,
-                })
+            _intent_str_val = pattern_result.get("intent_str", intent_str)
+            _skip_memory = _intent_str_val in ("greeting", "simple")
+
+            if not _skip_memory:
+                mem_start = time.time()
+                user_memories, memory_context = _retrieve_user_memories(
+                    state.get("user_id", ""), state.get("organization_id"),
+                    current_query=state.get("user_message", "")
+                )
+                timing["memory_retrieve"] = (time.time() - mem_start) * 1000
+                if user_memories or memory_context:
+                    state = update_state(state, {
+                        "user_memories": user_memories,
+                        "memory_context": memory_context,
+                    })
+            else:
+                timing["memory_retrieve"] = 0.0
+                logger.debug(f"[ANALYZE] Skipping memory retrieval for '{_intent_str_val}' intent")
 
             node_time = (time.time() - node_start) * 1000
             use_haiku = pattern_result.get("use_haiku", False)
             logger.info(
-                f"[ANALYZE] ⚡ FAST PATH complete in {node_time:.1f}ms | "
+                f"[ANALYZE] FAST PATH complete in {node_time:.1f}ms | "
                 f"pattern_match={timing['pattern_match']:.1f}ms | "
                 f"memory={timing.get('memory_retrieve', 0):.1f}ms | "
                 f"intent={pattern_result['intent'].value}, use_haiku={use_haiku}, tools={final_tools}"

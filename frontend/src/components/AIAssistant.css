@@ -232,14 +232,62 @@
   color: white;
 }
 
-.message-timestamp {
-  font-size: 11px;
-  color: #64748b;
+.message-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 0 4px;
 }
 
-.message-user .message-timestamp {
-  text-align: right;
+.message-timestamp {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.message-user .message-meta {
+  justify-content: flex-end;
+}
+
+.message-feedback {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.feedback-btn {
+  background: none;
+  border: none;
+  padding: 2px 4px;
+  cursor: pointer;
+  color: #475569;
+  opacity: 0;
+  transition: opacity 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.message-assistant:hover .feedback-btn {
+  opacity: 0.6;
+}
+
+.feedback-btn:hover:not(:disabled) {
+  opacity: 1 !important;
+  color: #94a3b8;
+}
+
+.feedback-btn.active {
+  opacity: 1 !important;
+  color: #22c55e;
+}
+
+.feedback-btn.active.negative {
+  color: #ef4444;
+}
+
+.feedback-btn:disabled {
+  cursor: default;
 }
 
 /* Input Area */

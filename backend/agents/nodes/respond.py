@@ -7,6 +7,7 @@ analysis, insights, recommendations, and action results.
 
 import json
 import logging
+import os
 import time
 from typing import Any
 from anthropic import Anthropic
@@ -24,72 +25,85 @@ from .execute import format_action_confirmation_request
 logger = logging.getLogger(__name__)
 
 
-RESPONSE_SYSTEM_PROMPT = """You are an expert mortgage industry AI assistant. Your job is to generate helpful, actionable responses for loan officers and mortgage professionals.
+RESPONSE_SYSTEM_PROMPT = """You are Aria, the AI assistant for Perennia AI. You help loan officers manage their pipeline, communicate with borrowers, and get things done fast.
 
-Given the analysis, insights, and recommendations, create a natural, conversational response.
+You are ACTION-ORIENTED. When the user asks you to do something, DO IT using the available tools - do not just describe what they could do. You have full access to the CRM and can execute actions on their behalf.
 
-Guidelines:
-- Be concise but thorough
-- Lead with the most important information
-- Use specific numbers, names, and dates when available
-- Format lists and key points clearly
-- If actions were taken, confirm what was done
-- If actions are pending, explain what needs confirmation
-- Suggest relevant follow-up questions
-- Use a professional but friendly tone
+CORE BEHAVIOR:
+- When the user says "send an email to [person]", USE the send_email tool. Do not just draft it.
+- When the user says "create a task", USE the create_task tool. Do not just suggest it.
+- When the user says "call [person]", USE the click_to_dial tool. Do not just provide the number.
+- When the user says "text [person]", USE the send_sms tool. Do not just suggest it.
+- When the user asks for data (pipeline, leads, tasks), PULL it from the CRM and present REAL numbers.
 
-Response structure:
-1. Direct answer to the user's question
-2. Key supporting details/data
-3. Actionable recommendations (if any)
-4. Brief follow-up suggestions
+AFTER TAKING ACTION, confirm clearly:
+- "Done! I sent the email to john@example.com with subject 'Rate Lock Update'."
+- "Done! I created 3 follow-up tasks for your processing loans."
+- "Done! Initiating call to (843) 555-1234."
+- Do NOT say "I would recommend sending..." or "You could create a task..." - just DO it.
+
+WHEN YOU CANNOT ACT:
+- If a borrower has no email address on file, say so: "I don't have an email address for Sarah Thompson. Want me to search by a different field?"
+- If required details are missing, ask for them specifically: "What should the email subject be?" or "When should this task be due?"
+- Never fabricate contact info, loan amounts, or borrower details. Only use data from the CRM context provided.
+
+RESPONSE STYLE:
+- Be concise. Lead with the result, not the process.
+- Use specific names, numbers, dates, and dollar amounts from CRM data.
+- Skip pleasantries and filler. Get to the point.
+- When listing items, keep it tight - no walls of text.
+- Professional but direct tone.
 
 DO NOT use markdown headers (no # symbols). Use plain text with clear organization.
-DO NOT include JSON in your response - write natural language only."""
+DO NOT include JSON in your response - write natural language only.
+DO NOT fabricate data. If a tool returned no results, say so honestly."""
 
 
 INTENT_RESPONSE_TEMPLATES = {
     QueryIntent.PIPELINE_STATUS: """Focus the response on:
-- Overall pipeline health and value
-- Key deals and their status
-- Items needing attention
-- Upcoming deadlines""",
+- Overall pipeline health and value (use real dollar amounts)
+- Key deals and their status (use borrower names and loan stages)
+- Items needing attention with specific next steps
+- Upcoming deadlines with dates""",
 
     QueryIntent.TEAM_PERFORMANCE: """Focus the response on:
-- Performance highlights and concerns
-- Workload balance
+- Performance highlights and concerns with specific numbers
+- Workload balance across team members
 - Specific team member insights
 - Capacity recommendations""",
 
     QueryIntent.TASK_MANAGEMENT: """Focus the response on:
-- Prioritized task list
-- Urgent items first
-- Context for each task (borrower, loan)
-- Suggested task groupings""",
+- Prioritized task list with borrower names and context
+- Urgent/overdue items first
+- If user asked to CREATE tasks, confirm each one created with details
+- If listing tasks, include due dates and associated borrowers""",
 
     QueryIntent.MARKET_INTELLIGENCE: """Focus the response on:
-- Clear lock/float recommendation
+- Clear lock/float recommendation with specific rates
 - Supporting market data
 - Key factors driving the recommendation
-- Timeline considerations""",
+- Timeline considerations for specific loans in pipeline""",
 
     QueryIntent.PREDICTIVE_ANALYTICS: """Focus the response on:
 - Risk assessments with probabilities
-- Key warning signs
-- Recommended interventions
+- Key warning signs with specific borrower names
+- Recommended interventions (offer to take action: "Want me to create follow-up tasks for these?")
 - Priority order for attention""",
 
     QueryIntent.COMMUNICATION: """Focus the response on:
-- Confirmation of what was sent/done
-- Summary of content
-- Next steps if any
-- Follow-up timing""",
+- Confirm EXACTLY what was sent: recipient, subject, channel (email/SMS/call)
+- If the action succeeded, say "Done!" with specifics
+- If it failed, explain why and offer alternatives
+- Suggest logical next steps ("Want me to also create a follow-up task?")
+IMPORTANT: Do NOT describe what you would send. Confirm what you DID send.""",
 
     QueryIntent.ACTION_REQUEST: """Focus the response on:
-- What was done or will be done
-- Confirmation of details
-- Any items needing confirmation
-- Result of the action"""
+- Confirm the action was completed: "Done! I [action] for [details]."
+- Include specific details: names, emails, phone numbers, dates used
+- If multiple actions taken, list each with its result
+- If any action failed or needs more info, say so clearly
+- Offer related follow-up actions ("Want me to also...?")
+IMPORTANT: Be direct. "Done! Created task 'Follow up with Sarah Thompson' due Friday." NOT "I would suggest creating a task..." """
 }
 
 
@@ -179,7 +193,7 @@ async def generate_response(
         llm_start = time.time()
         response = anthropic_client.messages.create(
             model=os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514"),
-            max_tokens=1500,
+            max_tokens=1000,  # Concise responses = fewer output tokens = faster
             system=f"{RESPONSE_SYSTEM_PROMPT}\n\n{intent_guidance}",
             messages=[
                 {
@@ -187,10 +201,10 @@ async def generate_response(
                     "content": context
                 }
             ],
-            timeout=30.0,
+            timeout=15.0,  # Reduced from 30s — response should complete in <10s
         )
         llm_time = (time.time() - llm_start) * 1000
-        logger.info(f"[RESPOND] ⏱️ LLM call took {llm_time:.0f}ms (context: {len(context)} chars)")
+        logger.info(f"[RESPOND] LLM call took {llm_time:.0f}ms (context: {len(context)} chars)")
 
         response_text = response.content[0].text.strip()
 
@@ -250,39 +264,45 @@ def generate_follow_up_suggestions(state: AgentState, intent: QueryIntent) -> li
 
     if intent == QueryIntent.PIPELINE_STATUS:
         suggestions = [
-            "What are my upcoming closings this week?",
-            "Which deals are at risk?",
-            "Show me bottlenecks in the pipeline"
+            "Email me a pipeline summary",
+            "Create follow-up tasks for my at-risk deals",
+            "Which deals are closing this week?"
         ]
     elif intent == QueryIntent.TEAM_PERFORMANCE:
         suggestions = [
             "Who has capacity for new loans?",
-            "What are the SLA violations?",
+            "Create tasks to coach underperformers",
             "Compare this month to last month"
         ]
     elif intent == QueryIntent.TASK_MANAGEMENT:
         suggestions = [
-            "What's overdue?",
+            "Create tasks for all my overdue follow-ups",
             "Email me my task summary",
-            "What should I prioritize?"
+            "What should I prioritize today?"
         ]
     elif intent == QueryIntent.MARKET_INTELLIGENCE:
         suggestions = [
+            "Text my borrowers about the rate drop",
             "Should I lock or float on my 30-day closes?",
-            "What's the rate trend this week?",
-            "How do rates compare to last month?"
+            "Email rate alerts to my processing loans"
         ]
     elif intent == QueryIntent.PREDICTIVE_ANALYTICS:
         suggestions = [
-            "Which deals are most likely to close?",
-            "Who should I follow up with today?",
-            "Forecast my revenue for next month"
+            "Create follow-up tasks for at-risk deals",
+            "Call my hottest lead",
+            "Email borrowers who need attention"
+        ]
+    elif intent in (QueryIntent.COMMUNICATION, QueryIntent.ACTION_REQUEST):
+        suggestions = [
+            "Send a follow-up email to the same borrower",
+            "Create a task to check back in 3 days",
+            "Text my top 5 leads"
         ]
     else:
         suggestions = [
             "Show me my pipeline",
             "What are my priorities today?",
-            "Any deals at risk?"
+            "Call my top lead"
         ]
 
     return suggestions[:3]  # Return top 3

@@ -36,6 +36,7 @@ logger = logging.getLogger(__name__)
 ACTION_RISK_LEVELS = {
     # LOW RISK - Auto-execute without confirmation
     "create_task": "low",
+    "bulk_create_tasks": "low",
     "schedule_followup": "low",
     "get_tasks": "low",
     "get_pipeline": "low",
@@ -197,13 +198,33 @@ def extract_actions_from_analysis(state: AgentState) -> List[dict]:
             "auto_execute": True
         })
 
-    # Detect task creation requests
+    # Detect bulk task creation requests (check BEFORE single task patterns)
+    _bulk_task_patterns = [
+        r"create\s+(?:a\s+)?(?:follow[- ]?up\s+)?tasks?\s+for\s+each",
+        r"create\s+(?:a\s+)?task\s+for\s+(?:all|every)\s+(?:of\s+)?(?:these|those|the)\s+(?:borrower|lead|client)",
+        r"create\s+(?:individual\s+)?tasks?\s+for\s+(?:all|every|each|multiple|these|those)",
+        r"(?:add|make)\s+(?:follow[- ]?up\s+)?tasks?\s+for\s+each",
+        r"bulk\s+(?:create|add)\s+tasks?",
+    ]
+    if any(re.search(pat, user_message) for pat in _bulk_task_patterns):
+        actions.append({
+            "type": "bulk_create_tasks",
+            "params": {
+                "tasks_data": "[]"
+            },
+            "auto_execute": False,
+            "needs_details": True
+        })
+
+    # Detect single task creation requests
     _task_patterns = [
         r"create\s+a?\s*task", r"add\s+a?\s*task", r"remind me\b",
         r"\bschedule\b", r"new task", r"make\s+a?\s*task",
         r"set\s+a?\s*reminder",
     ]
-    if any(re.search(pat, user_message) for pat in _task_patterns):
+    if any(re.search(pat, user_message) for pat in _task_patterns) and not any(
+        re.search(pat, user_message) for pat in _bulk_task_patterns
+    ):
         # Extract task details from context
         actions.append({
             "type": "create_task",
@@ -249,6 +270,32 @@ def extract_actions_from_analysis(state: AgentState) -> List[dict]:
     return actions
 
 
+def _extract_composed_email(response_text: str) -> dict:
+    """
+    Extract LLM-composed email subject and body from the response.
+
+    The LLM is instructed to output email content in structured tags:
+    [EMAIL_SUBJECT]...[/EMAIL_SUBJECT]
+    [EMAIL_BODY]...[/EMAIL_BODY]
+
+    Returns dict with 'subject' and 'body' keys, or empty dict if not found.
+    """
+    result = {}
+    subject_match = re.search(
+        r'\[EMAIL_SUBJECT\]\s*\n?(.*?)\n?\s*\[/EMAIL_SUBJECT\]',
+        response_text, re.DOTALL
+    )
+    body_match = re.search(
+        r'\[EMAIL_BODY\]\s*\n?(.*?)\n?\s*\[/EMAIL_BODY\]',
+        response_text, re.DOTALL
+    )
+    if subject_match:
+        result["subject"] = subject_match.group(1).strip()
+    if body_match:
+        result["body"] = body_match.group(1).strip()
+    return result
+
+
 async def execute_actions(
     state: AgentState,
     tool_functions: Dict[str, Callable] = None,
@@ -256,6 +303,10 @@ async def execute_actions(
 ) -> AgentState:
     """
     Execute requested actions based on user intent.
+
+    Handles two sources of actions:
+    1. Deferred actions from gather phase (e.g., send_email with LLM-composed content)
+    2. Actions extracted from the user's message via pattern matching
 
     Args:
         state: Current agent state
@@ -281,18 +332,74 @@ async def execute_actions(
         })
 
     try:
-        # Extract actions from the user's request
-        actions = extract_actions_from_analysis(state)
-
-        if not actions:
-            return update_state(state, {
-                "actions_requested": actions,
-                "actions_executed": [],
-                "actions_pending": []
-            })
-
         executed = []
         pending = []
+        all_actions = []
+
+        # ====================================================================
+        # PHASE 1: Handle deferred actions from gather (LLM-composed content)
+        # ====================================================================
+        deferred_actions = state.get("deferred_actions", [])
+        if deferred_actions:
+            response_text = state.get("response", "")
+
+            for deferred in deferred_actions:
+                action_type = deferred.get("type")
+                params = deferred.get("params", {})
+
+                if action_type == "send_email":
+                    # Extract LLM-composed email from response
+                    composed = _extract_composed_email(response_text)
+                    if composed.get("subject"):
+                        params["subject"] = composed["subject"]
+                    if composed.get("body"):
+                        params["body"] = composed["body"]
+                    else:
+                        # LLM didn't compose in structured tags — skip sending,
+                        # the response itself is the user-facing message
+                        logger.warning(
+                            "[EXECUTE] LLM did not compose email in structured tags — "
+                            "skipping auto-send, user will see the response"
+                        )
+                        pending.append(deferred)
+                        all_actions.append(deferred)
+                        continue
+
+                    logger.info(
+                        f"[EXECUTE] Sending deferred email to {params.get('to_email')} "
+                        f"with composed subject: {params.get('subject', '')[:60]}"
+                    )
+
+                # Execute the deferred action
+                result = await execute_single_action(deferred, tool_functions)
+                executed.append(result)
+                all_actions.append(deferred)
+
+                # Update the response to strip the structured email tags
+                # and append send confirmation
+                if action_type == "send_email" and result.success:
+                    # Clean structured tags from the user-facing response
+                    clean_response = response_text
+                    clean_response = re.sub(
+                        r'\[EMAIL_SUBJECT\].*?\[/EMAIL_SUBJECT\]\s*',
+                        '', clean_response, flags=re.DOTALL
+                    )
+                    clean_response = re.sub(
+                        r'\[EMAIL_BODY\].*?\[/EMAIL_BODY\]\s*',
+                        '', clean_response, flags=re.DOTALL
+                    )
+                    clean_response = clean_response.strip()
+                    if not clean_response:
+                        clean_response = f"Email sent to {params.get('to_email')} with subject \"{params.get('subject', '')}\"."
+                    state = update_state(state, {"response": clean_response})
+
+        # ====================================================================
+        # PHASE 2: Handle regex-extracted actions (legacy path)
+        # ====================================================================
+        actions = extract_actions_from_analysis(state)
+        # Skip actions that were already handled as deferred
+        deferred_types = {d.get("type") for d in deferred_actions}
+        actions = [a for a in actions if a.get("type") not in deferred_types]
 
         for action in actions:
             action_type = action.get("type")
@@ -301,6 +408,7 @@ async def execute_actions(
             # If action needs more details, mark as pending
             if needs_details:
                 pending.append(action)
+                all_actions.append(action)
                 continue
 
             # Check if we should auto-execute
@@ -311,9 +419,11 @@ async def execute_actions(
                 # Requires confirmation
                 pending.append(action)
 
+            all_actions.append(action)
+
         # Update state with results
         state = update_state(state, {
-            "actions_requested": actions,
+            "actions_requested": all_actions,
             "actions_executed": executed,
             "actions_pending": pending
         })
@@ -594,6 +704,8 @@ def format_action_confirmation_request(pending_actions: List[dict]) -> str:
             lines.append(f"{i}. Send email to {params.get('recipient', 'contact')}")
         elif action_type == "send_sms":
             lines.append(f"{i}. Send SMS to {params.get('phone', 'contact')}")
+        elif action_type == "bulk_create_tasks":
+            lines.append(f"{i}. Create tasks for multiple borrowers")
         elif action_type == "create_task":
             lines.append(f"{i}. Create task: {params.get('title', 'New task')}")
         elif action_type == "update_lead":

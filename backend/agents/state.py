@@ -93,6 +93,7 @@ class AgentState(TypedDict, total=False):
     reasoning_chain: list[str]           # Step-by-step reasoning trace
 
     # === Action Execution (from execute node) ===
+    deferred_actions: list[dict]         # Actions deferred from gather to execute (need LLM content)
     actions_requested: list[dict]        # Actions user requested
     actions_executed: list[ActionResult] # Results of executed actions
     actions_pending: list[dict]          # Actions requiring confirmation
@@ -106,6 +107,11 @@ class AgentState(TypedDict, total=False):
     node_trace: list[str]                # Which nodes have processed this state
     start_time: datetime                 # When processing started
     errors: list[str]                    # Any errors encountered
+
+    # === Active Entity Context (from CRM UI) ===
+    active_lead_id: Optional[int]        # Lead the user is currently viewing in the CRM
+    active_loan_id: Optional[int]        # Loan the user is currently viewing in the CRM
+    active_entity_data: Optional[dict]   # Auto-fetched details for the active lead/loan
 
     # === Context & Memory ===
     conversation_history: list[dict]     # Previous turns in conversation
@@ -133,7 +139,9 @@ def create_initial_state(
     user_role: str = "loan_officer",
     organization_id: Optional[int] = None,
     conversation_id: Optional[str] = None,
-    conversation_history: Optional[list] = None
+    conversation_history: Optional[list] = None,
+    active_lead_id: Optional[int] = None,
+    active_loan_id: Optional[int] = None,
 ) -> AgentState:
     """
     Create initial state for a new agent run.
@@ -146,6 +154,8 @@ def create_initial_state(
         organization_id: Tenant org ID for data isolation
         conversation_id: Optional ID for multi-turn conversations
         conversation_history: Previous messages in the conversation
+        active_lead_id: Lead ID the user is currently viewing in the CRM UI
+        active_loan_id: Loan ID the user is currently viewing in the CRM UI
 
     Returns:
         AgentState: Initialized state ready for processing
@@ -181,6 +191,7 @@ def create_initial_state(
         reasoning_chain=[],
 
         # Action Execution (to be filled by execute node)
+        deferred_actions=[],
         actions_requested=[],
         actions_executed=[],
         actions_pending=[],
@@ -194,6 +205,11 @@ def create_initial_state(
         node_trace=[],
         start_time=datetime.now(timezone.utc),
         errors=[],
+
+        # Active Entity Context (from CRM UI)
+        active_lead_id=active_lead_id,
+        active_loan_id=active_loan_id,
+        active_entity_data=None,
 
         # Context
         conversation_history=conversation_history or [],

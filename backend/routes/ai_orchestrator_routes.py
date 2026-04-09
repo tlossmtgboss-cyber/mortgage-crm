@@ -281,6 +281,21 @@ async def orchestrator_chat(
         session_id = data.get("session_id")
         document_context = _sanitize_document_context(data.get("document_context"))
 
+        # Extract active entity context from CRM UI (lead/loan the user is viewing)
+        active_lead_id = data.get("lead_id")
+        active_loan_id = data.get("loan_id")
+        # Validate and coerce to int (frontend may send string or null)
+        if active_lead_id is not None:
+            try:
+                active_lead_id = int(active_lead_id)
+            except (ValueError, TypeError):
+                active_lead_id = None
+        if active_loan_id is not None:
+            try:
+                active_loan_id = int(active_loan_id)
+            except (ValueError, TypeError):
+                active_loan_id = None
+
         if not message:
             raise HTTPException(status_code=400, detail="Message is required")
 
@@ -297,8 +312,15 @@ async def orchestrator_chat(
         # Create the full agent service with all 215 tools
         service = await create_ai_agent_service(db, current_user, autonomous_mode=True)
 
-        # Process through LangGraph orchestrator (document_context injected for this turn only)
-        result = await service.process_message(message, conversation_history, document_context=document_context)
+        # Process through LangGraph orchestrator
+        # Active entity IDs allow the AI to fetch real data for the lead/loan the user is viewing
+        result = await service.process_message(
+            message,
+            conversation_history,
+            document_context=document_context,
+            active_lead_id=active_lead_id,
+            active_loan_id=active_loan_id,
+        )
 
         # Save to conversation memory (non-fatal on failure)
         try:

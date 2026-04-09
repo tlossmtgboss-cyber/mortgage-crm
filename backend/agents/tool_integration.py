@@ -295,6 +295,7 @@ AGENT_CONFIGS = {
         description="Automates task creation, assignment, and workflow management",
         tool_names=[
             "create_task",
+            "bulk_create_tasks",
             "get_task_queue",
             "update_task_status",
             "assign_task",

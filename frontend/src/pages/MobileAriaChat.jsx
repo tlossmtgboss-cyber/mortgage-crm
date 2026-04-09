@@ -27,6 +27,7 @@ import api from '../services/api';
 import { useAriaVoice } from '../hooks/useAriaVoice';
 import { auditLog, AUDIT_EVENTS } from '../services/mobileAuditLogger';
 import { toast } from '../utils/toast';
+import MobileBottomNav from '../components/mobile/MobileBottomNav';
 import './MobileAriaChat.css';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -798,6 +799,7 @@ export default function MobileAriaChat() {
   const showQuickCommands = isEmpty && !isLoading;
 
   return (
+    <>
     <div className="mac">
       {/* ── Header ── */}
       <header className="mac__header">
@@ -984,5 +986,7 @@ export default function MobileAriaChat() {
         </div>
       </div>
     </div>
+    <MobileBottomNav />
+    </>
   );
 }

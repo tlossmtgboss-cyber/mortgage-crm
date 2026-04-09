@@ -10,8 +10,10 @@ function Assistant() {
   const [context, setContext] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [isListening, setIsListening] = useState(false);
+  const [feedbackGiven, setFeedbackGiven] = useState({});
   const messagesEndRef = useRef(null);
   const recognitionRef = useRef(null);
+  const sessionIdRef = useRef(`assistant-${Date.now()}`);
 
   const quickActions = [
     { icon: '📊', text: 'Show my pipeline overview', action: 'pipeline_overview' },
@@ -48,9 +50,9 @@ function Assistant() {
     try {
       const data = await conversationsAPI.getAll();
       // Convert to chat format
-      const chatMessages = data.flatMap(conv => [
-        { role: 'user', content: conv.message, timestamp: conv.created_at },
-        { role: 'assistant', content: conv.response, timestamp: conv.created_at }
+      const chatMessages = data.flatMap((conv, i) => [
+        { id: `hist-u-${i}`, role: 'user', content: conv.message, timestamp: conv.created_at },
+        { id: `hist-a-${i}`, role: 'assistant', content: conv.response, timestamp: conv.created_at }
       ]);
       setMessages(chatMessages);
     } catch (error) {
@@ -71,6 +73,7 @@ function Assistant() {
     if (!message.trim()) return;
 
     const userMessage = {
+      id: `msg-${Date.now()}`,
       role: 'user',
       content: message,
       timestamp: new Date().toISOString()
@@ -81,32 +84,37 @@ function Assistant() {
     setLoading(true);
 
     try {
-      const response = await aiAPI.chat({ message, context });
-      
+      // Use the full LangGraph orchestrator with 215 tools (email, tasks, pipeline, etc.)
+      const response = await aiAPI.processCommand(message, context || {});
+
       const assistantMessage = {
+        id: `msg-${Date.now() + 1}`,
         role: 'assistant',
-        content: response.response || response.message,
+        content: response.response || response.explanation || '',
         timestamp: new Date().toISOString(),
-        suggestions: response.suggestions
+        suggestions: response.follow_up_suggestions || [],
+        intent: response.intent,
+        agentUsed: response.agent_used,
+        actionsExecuted: response.actions_executed,
       };
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Update context if provided
-      if (response.context) {
-        setContext(response.context);
+      // Save conversation (orchestrator saves server-side, but also save to legacy store)
+      try {
+        await conversationsAPI.create({
+          message: message,
+          response: response.response || response.explanation || '',
+          context: context
+        });
+      } catch (saveErr) {
+        console.warn('Failed to save conversation to legacy store:', saveErr);
       }
-
-      // Save conversation
-      await conversationsAPI.create({
-        message: message,
-        response: response.response || response.message,
-        context: context
-      });
 
     } catch (error) {
       console.error('Failed to send message:', error);
       const errorMessage = {
+        id: `msg-err-${Date.now()}`,
         role: 'assistant',
         content: 'Sorry, I encountered an error. Please try again.',
         timestamp: new Date().toISOString(),
@@ -195,6 +203,33 @@ function Assistant() {
     recognition.start();
   };
 
+  const handleFeedback = async (msg, rating) => {
+    if (feedbackGiven[msg.id]) return;
+
+    setFeedbackGiven(prev => ({ ...prev, [msg.id]: rating }));
+
+    // Find the preceding user message for context
+    const msgIndex = messages.findIndex(m => m.id === msg.id);
+    const precedingUserMsg = messages.slice(0, msgIndex).reverse().find(m => m.role === 'user');
+
+    try {
+      await aiAPI.submitInlineFeedback({
+        sessionId: sessionIdRef.current,
+        messageId: String(msg.id),
+        rating,
+        userQuestion: precedingUserMsg?.content,
+        aiResponse: msg.content,
+      });
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+      setFeedbackGiven(prev => {
+        const updated = { ...prev };
+        delete updated[msg.id];
+        return updated;
+      });
+    }
+  };
+
   return (
     <div className="assistant-page">
       <div className="assistant-header">
@@ -246,7 +281,7 @@ function Assistant() {
             ) : (
               <>
                 {messages.map((msg, index) => (
-                  <div key={index} className={`message message-${msg.role}`}>
+                  <div key={msg.id || index} className={`message message-${msg.role}`}>
                     <div className="message-avatar">
                       {msg.role === 'user' ? '👤' : '🤖'}
                     </div>
@@ -266,8 +301,32 @@ function Assistant() {
                           ))}
                         </div>
                       )}
-                      <div className="message-time">
-                        {new Date(msg.timestamp).toLocaleTimeString()}
+                      <div className="message-meta-row">
+                        <span className="message-time">
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </span>
+                        {msg.role === 'assistant' && msg.id && (
+                          <span className="message-feedback-row">
+                            <button
+                              className={`feedback-btn${feedbackGiven[msg.id] === 'positive' ? ' active' : ''}`}
+                              onClick={() => handleFeedback(msg, 'positive')}
+                              disabled={!!feedbackGiven[msg.id]}
+                              title="Helpful response"
+                              aria-label="Thumbs up"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                            </button>
+                            <button
+                              className={`feedback-btn${feedbackGiven[msg.id] === 'negative' ? ' active negative' : ''}`}
+                              onClick={() => handleFeedback(msg, 'negative')}
+                              disabled={!!feedbackGiven[msg.id]}
+                              title="Unhelpful response"
+                              aria-label="Thumbs down"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+                            </button>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

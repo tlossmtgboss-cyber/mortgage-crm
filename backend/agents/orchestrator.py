@@ -203,7 +203,7 @@ INTENT_TO_SCOPED_TOOLS = {
     "simple": ["get_daily_priorities"],  # Minimal tools for simple queries
     # Standard intents (use Sonnet, appropriate tools)
     "priorities": ["get_daily_priorities", "get_tasks", "get_pipeline"],
-    "tasks": ["get_tasks", "create_task", "get_daily_priorities", "get_task_queue", "update_task_status", "assign_task", "get_task_templates", "bulk_update_tasks", "execute_workflow", "get_workflow_status", "get_daily_call_list"],
+    "tasks": ["get_tasks", "create_task", "bulk_create_tasks", "get_daily_priorities", "get_task_queue", "update_task_status", "assign_task", "get_task_templates", "bulk_update_tasks", "execute_workflow", "get_workflow_status", "get_daily_call_list"],
     "leads": ["lead_status_insights", "get_leads_by_status", "get_top_leads", "get_stale_leads", "search_leads"],
     "top_leads": ["get_top_leads", "score_lead", "suggest_followup", "get_lead_details"],
     "pipeline": ["get_pipeline", "get_pipeline_metrics", "search_loans"],
@@ -225,7 +225,7 @@ INTENT_TO_SCOPED_TOOLS = {
     "notifications": ["send_notification", "get_pending_notifications", "get_notification_templates", "schedule_notification", "get_delivery_status", "update_preferences", "get_preferences", "batch_send"],
     "profit": ["calculate_loan_profitability", "analyze_margins_by_segment", "forecast_revenue", "compare_lo_profitability", "optimize_pricing", "get_cost_breakdown", "calculate_pull_through_impact", "get_profitability_trends"],
     "operations": ["get_pipeline_metrics", "get_loan_aging_report", "get_bottleneck_analysis", "check_sla_status", "get_sla_dashboard", "escalate_sla_breach", "get_lo_pipeline_breakdown", "get_compliance_history"],
-    "compound": ["get_pipeline_metrics", "search_loans", "search_leads", "get_tasks", "create_task", "send_email", "schedule_followup"],
+    "compound": ["get_pipeline_metrics", "search_loans", "search_leads", "get_tasks", "create_task", "bulk_create_tasks", "send_email", "schedule_followup"],
     "content_marketing": ["get_pipeline_metrics", "search_leads", "draft_message"],
     "general": ["get_daily_priorities", "get_pipeline", "get_tasks"],
 }
@@ -386,9 +386,10 @@ def create_orchestrator(
     workflow = StateGraph(AgentState)
 
     if use_unified_mode:
-        # OPTIMIZED: Unified mode - 2 LLM calls instead of 3
-        # Flow: analyze → gather → reason_and_respond → verify_and_score → execute|END
-        logger.info("[ORCHESTRATOR] Using UNIFIED mode (reason+respond combined)")
+        # OPTIMIZED v5: Fast-path routing + deferred verification
+        # Flow: analyze → gather → reason_and_respond → route → verify_and_score|execute|END
+        # Greetings/simple skip verify_and_score entirely for ~100-200ms savings
+        logger.info("[ORCHESTRATOR] Using UNIFIED mode (reason+respond combined, fast-path routing)")
 
         # Add nodes
         workflow.add_node("analyze", analyze_node)
@@ -397,7 +398,34 @@ def create_orchestrator(
         workflow.add_node("verify_and_score", verify_and_score_node)
         workflow.add_node("execute", execute_node)
 
-        # Define routing logic for unified mode
+        # Route after reason_and_respond: skip verification for fast intents
+        def route_after_respond(state: AgentState) -> Literal["verify_and_score", "execute", "end"]:
+            """Route after response generation.
+
+            Fast intents (greeting, simple, Haiku-eligible) skip verification
+            for faster response times. Complex/compliance intents go through
+            full verification pipeline.
+            """
+            requires_action = state.get("requires_action", False)
+            query_intent = state.get("query_intent", QueryIntent.GENERAL_QUERY)
+            intent_str = state.get("intent_str", "")
+            use_haiku = state.get("use_haiku", False)
+
+            # Actions always need execution
+            if requires_action or query_intent == QueryIntent.ACTION_REQUEST:
+                return "execute"
+
+            # Fast intents skip verification entirely
+            SKIP_VERIFY_INTENTS = {"greeting", "simple", "schedule", "tasks",
+                                   "video", "notifications", "onboarding",
+                                   "billing", "calls"}
+            if intent_str in SKIP_VERIFY_INTENTS or use_haiku:
+                return "end"
+
+            # Complex/compliance intents get full verification
+            return "verify_and_score"
+
+        # Define routing logic for post-verification
         def should_execute_after_verify(state: AgentState) -> Literal["execute", "end"]:
             """Determine if we should execute actions after verification."""
             requires_action = state.get("requires_action", False)
@@ -407,11 +435,21 @@ def create_orchestrator(
                 return "execute"
             return "end"
 
-        # Define edges: analyze → gather → reason_and_respond → verify_and_score → execute|END
+        # Define edges: analyze → gather → reason_and_respond → route
         workflow.set_entry_point("analyze")
         workflow.add_edge("analyze", "gather")
         workflow.add_edge("gather", "reason_and_respond")
-        workflow.add_edge("reason_and_respond", "verify_and_score")
+
+        # After response, route based on intent complexity
+        workflow.add_conditional_edges(
+            "reason_and_respond",
+            route_after_respond,
+            {
+                "verify_and_score": "verify_and_score",
+                "execute": "execute",
+                "end": END
+            }
+        )
 
         # After verification, check if we need to execute actions
         workflow.add_conditional_edges(
@@ -497,6 +535,8 @@ async def run_orchestrator(
     db_session = None,
     current_user = None,
     document_context: Optional[str] = None,
+    active_lead_id: Optional[int] = None,
+    active_loan_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Run the full orchestrator pipeline on a user message.
@@ -660,7 +700,9 @@ async def run_orchestrator(
             user_role=user_role,
             organization_id=resolved_org_id,
             conversation_id=conversation_id,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
+            active_lead_id=active_lead_id,
+            active_loan_id=active_loan_id,
         )
         # Pre-populate intent info so analyze node can skip re-classification
         # when confidence is high enough (>0.90)
@@ -866,18 +908,31 @@ async def run_orchestrator(
                 logger.warning(f"[ORCHESTRATOR] Failed to start hallucination verification: {e}")
 
         # ================================================================
-        # TIMING SUMMARY
+        # TIMING SUMMARY + RESPONSE TIME TRACKING
         # ================================================================
         total_perf = (time.perf_counter() - start_perf) * 1000
         node_trace = final_state.get("node_trace", [])
+
+        # Record response time for percentile tracking
+        try:
+            from .orchestration.performance_tracker import get_response_time_tracker
+            model_used = final_state.get("model_used", "unknown")
+            get_response_time_tracker().record(
+                response_time_ms=total_perf,
+                intent=intent,
+                model=model_used
+            )
+        except Exception:
+            pass  # Never fail the response for metrics
 
         # Add intent routing info to performance metrics
         response["performance"]["intent_method"] = intent_method
         response["performance"]["intent_classify_ms"] = timing["intent_classify"]
         response["performance"]["scoped_tool_names"] = scoped_tool_names
+        response["performance"]["total_ms"] = round(total_perf, 1)
 
         logger.info(f"[ORCHESTRATOR] ========================================")
-        logger.info(f"[ORCHESTRATOR] ⏱️ TIMING BREAKDOWN (v4 - Two-Phase):")
+        logger.info(f"[ORCHESTRATOR] TIMING BREAKDOWN (v5 - Fast Path):")
         logger.info(f"  PHASE 1 - Intent Classification:")
         logger.info(f"    - intent_classify:  {timing['intent_classify']:>8.1f}ms ({intent_method})")
         logger.info(f"  PHASE 2 - Scoped Tool Loading:")
@@ -887,10 +942,9 @@ async def run_orchestrator(
         logger.info(f"    - create_graph:     {timing['create_graph']:>8.1f}ms")
         logger.info(f"    - workflow_execute: {timing['workflow_execute']:>8.1f}ms")
         logger.info(f"    - build_response:   {timing['build_response']:>8.1f}ms")
-        logger.info(f"  ────────────────────────────────")
+        logger.info(f"  ----------------------------------------")
         logger.info(f"  TOTAL:                {total_perf:>8.1f}ms ({processing_time:.2f}s)")
-        logger.info(f"[ORCHESTRATOR] ----------------------------------------")
-        logger.info(f"[ORCHESTRATOR] Intent: {intent} → Agents: {intent_agents}")
+        logger.info(f"[ORCHESTRATOR] Intent: {intent} -> Agents: {intent_agents}")
         logger.info(f"[ORCHESTRATOR] Scoped tools: {list(scoped_tools.keys())}")
         logger.info(f"[ORCHESTRATOR] Tools used: {len(final_state.get('tool_calls', []))} of {tool_count} available")
         logger.info(f"[ORCHESTRATOR] ========================================")

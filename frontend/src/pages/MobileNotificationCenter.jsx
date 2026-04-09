@@ -12,6 +12,7 @@ import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { haptics } from '../services/nativeServices';
 import useNotifications from '../hooks/useNotifications';
+import MobileBottomNav from '../components/mobile/MobileBottomNav';
 import './MobileNotificationCenter.css';
 
 // ============================================================================
@@ -511,6 +512,8 @@ export default function MobileNotificationCenter() {
             </React.Fragment>
           ))}
       </div>
+
+      <MobileBottomNav />
     </div>
   );
 }

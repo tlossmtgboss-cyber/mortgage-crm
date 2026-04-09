@@ -154,6 +154,23 @@ Never give generic advice like "follow up with your leads." Always name the spec
 - Result of the action"""
 }
 
+# Additional guidance injected when the LLM must compose an email for a deferred send_email action
+_EMAIL_COMPOSE_GUIDANCE = """
+EMAIL COMPOSITION REQUIRED:
+The user has asked you to send an email. You MUST compose the email content and include it in your response using this EXACT format:
+
+[EMAIL_SUBJECT]
+Your composed subject line here
+[/EMAIL_SUBJECT]
+[EMAIL_BODY]
+Your composed email body here. Write it as the loan officer would send it.
+Use a professional but warm tone. Sign off appropriately.
+[/EMAIL_BODY]
+
+After the email block, briefly confirm what you're sending and to whom (1 sentence).
+Do NOT send the user's raw instruction as the email body — compose a proper professional email based on their request.
+"""
+
 
 # =============================================================================
 # TIER 2: ROLE CONTEXT (~100 tokens, injected when user role is known)
@@ -381,7 +398,7 @@ DO NOT use a canned/scripted response. Be natural and human."""
 
             greeting_response_obj = anthropic_client.messages.create(
                 model=_model_haiku(),
-                max_tokens=150,
+                max_tokens=100,  # Greetings are 1-2 sentences, 100 tokens is generous
                 system=[
                     {
                         "type": "text",
@@ -390,7 +407,7 @@ DO NOT use a canned/scripted response. Be natural and human."""
                     }
                 ],
                 messages=[{"role": "user", "content": greeting_prompt}],
-                timeout=30.0,
+                timeout=8.0,  # Haiku greeting should complete in <2s
             )
             greeting_response = greeting_response_obj.content[0].text.strip()
 
@@ -417,6 +434,12 @@ DO NOT use a canned/scripted response. Be natural and human."""
             if role_context:
                 intent_guidance = f"{role_context}\n\n{intent_guidance}" if intent_guidance else role_context
 
+        # Inject email composition guidance when deferred send_email actions exist
+        deferred_actions = state.get("deferred_actions", [])
+        has_deferred_email = any(a.get("type") == "send_email" for a in deferred_actions)
+        if has_deferred_email:
+            intent_guidance = f"{intent_guidance}\n\n{_EMAIL_COMPOSE_GUIDANCE}" if intent_guidance else _EMAIL_COMPOSE_GUIDANCE
+
         # Build the system prompt
         system_prompt = UNIFIED_SYSTEM_PROMPT.format(intent_guidance=intent_guidance)
 
@@ -431,6 +454,18 @@ DO NOT use a canned/scripted response. Be natural and human."""
             f"QUERY INTENT: {query_intent.value}",
             f"DATA QUALITY: {data_quality}",
         ]
+
+        # Inject active entity context (the lead/loan the user is viewing in the CRM)
+        # This allows the AI to answer "send them an email" or "what stage is this at?"
+        active_entity_data = state.get("active_entity_data")
+        if active_entity_data:
+            context_parts.append("")
+            context_parts.append("=== ACTIVE CRM CONTEXT (the lead/loan the user is currently viewing) ===")
+            for key, value in active_entity_data.items():
+                if value is not None:
+                    context_parts.append(f"  {key}: {value}")
+            context_parts.append("=== END ACTIVE CRM CONTEXT ===")
+            context_parts.append("When the user says 'this lead', 'this loan', 'them', 'they', or similar pronouns, they are referring to the entity above.")
 
         # Inject uploaded document text if present (one-shot, not in memory)
         doc_context = state.get("document_context")
@@ -502,6 +537,11 @@ DO NOT use a canned/scripted response. Be natural and human."""
         if doc_context:
             max_tokens = max(max_tokens, 2000)
 
+        # Email composition needs Sonnet (quality) and more tokens for the email body
+        if has_deferred_email:
+            model = _model_sonnet()
+            max_tokens = max(max_tokens, 800)
+
         # Rough token budget check (4 chars ~ 1 token)
         estimated_input_tokens = (len(str(system_prompt)) + len(str(context))) // 4
         model_context_window = 200000 if "claude-3" in model or "claude-sonnet" in model or "claude-haiku" in model else 100000
@@ -512,7 +552,8 @@ DO NOT use a canned/scripted response. Be natural and human."""
             logger.warning(f"[REASON_AND_RESPOND] Context truncated from ~{estimated_input_tokens} est. tokens to fit {model}")
 
         # Use lean prompt for simple tool-formatting intents (saves ~600 tokens per call)
-        if use_haiku and intent_str not in ("greeting", "simple") and intent_str_override not in ("greeting", "simple"):
+        # Never use lean prompt when composing email content (need full guidance)
+        if use_haiku and not has_deferred_email and intent_str not in ("greeting", "simple") and intent_str_override not in ("greeting", "simple"):
             system_prompt = LEAN_SYSTEM_PROMPT
 
         logger.info(
@@ -546,7 +587,7 @@ DO NOT use a canned/scripted response. Be natural and human."""
                             "content": f"Analyze this data and provide a helpful response:\n\n{context}"
                         }
                     ],
-                    timeout=30.0,
+                    timeout=15.0,  # Sonnet ~7-8s, Haiku ~1-2s; 15s is generous
                 )
                 break
             except Exception as llm_err:

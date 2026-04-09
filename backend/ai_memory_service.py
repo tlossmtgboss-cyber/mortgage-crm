@@ -4,10 +4,13 @@ Provides context-aware AI responses using conversation history
 
 Caching:
 - Metadata extraction is cached with 6h TTL (same message = same metadata)
+- Pinecone query results cached for 5 min per (user_id, query_hash)
 - Reduces redundant LLM calls for repeated messages
 """
 import logging
-from typing import Optional, Dict, List
+import threading
+import time as _time
+from typing import Optional, Dict, List, Tuple
 from datetime import datetime, timezone, date, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
@@ -30,6 +33,80 @@ except ImportError:
     llm_cache = None
     LLMCacheService = None
     LLM_CACHE_AVAILABLE = False
+
+
+# ---------------------------------------------------------------------------
+# Pinecone query result cache
+# Saves 300-400ms per hit by reusing recent Pinecone results when the same
+# user asks a similar query within 5 minutes.
+# ---------------------------------------------------------------------------
+
+class _PineconeQueryCache:
+    """In-memory cache for Pinecone query results, keyed by (user_id, query_hash).
+
+    TTL: 5 minutes. Max entries: 500 (auto-evicts expired + LRU).
+    Thread-safe.
+    """
+
+    TTL_SECONDS = 300  # 5 minutes
+    MAX_ENTRIES = 500
+
+    def __init__(self):
+        self._store: Dict[Tuple[int, str], Tuple[float, List[Dict]]] = {}
+        self._lock = threading.Lock()
+        self._hits = 0
+        self._misses = 0
+
+    @staticmethod
+    def _query_hash(query: str) -> str:
+        """Hash query text for cache key. Normalises whitespace first."""
+        normalised = " ".join(query.lower().split())
+        return hashlib.sha256(normalised.encode("utf-8")).hexdigest()[:16]
+
+    def get(self, user_id: int, query: str) -> Optional[List[Dict]]:
+        key = (user_id, self._query_hash(query))
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                self._misses += 1
+                return None
+            ts, results = entry
+            if _time.time() - ts > self.TTL_SECONDS:
+                del self._store[key]
+                self._misses += 1
+                return None
+            self._hits += 1
+            return results
+
+    def put(self, user_id: int, query: str, results: List[Dict]) -> None:
+        key = (user_id, self._query_hash(query))
+        now = _time.time()
+        with self._lock:
+            # Evict expired entries periodically (when at capacity)
+            if len(self._store) >= self.MAX_ENTRIES:
+                expired_keys = [
+                    k for k, (ts, _) in self._store.items()
+                    if now - ts > self.TTL_SECONDS
+                ]
+                for k in expired_keys:
+                    del self._store[k]
+                # If still at capacity after eviction, drop oldest entry
+                if len(self._store) >= self.MAX_ENTRIES:
+                    oldest_key = min(self._store, key=lambda k: self._store[k][0])
+                    del self._store[oldest_key]
+            self._store[key] = (now, results)
+
+    def stats(self) -> Dict:
+        total = self._hits + self._misses
+        return {
+            "hits": self._hits,
+            "misses": self._misses,
+            "hit_rate": round(self._hits / total * 100, 1) if total > 0 else 0,
+            "size": len(self._store),
+        }
+
+
+_pinecone_query_cache = _PineconeQueryCache()
 
 # Import A/B testing service
 try:
@@ -96,18 +173,29 @@ class ContextAwareAI:
 
         try:
             # 1. Retrieve relevant past context if enabled
+            #    Uses in-memory cache (5 min TTL) to avoid redundant Pinecone queries.
+            #    Saves 300-400ms per cache hit.
             relevant_history = []
             if include_context and self.vector_memory.enabled:
-                filter_metadata = {}
-                if lead_id:
-                    filter_metadata["lead_id"] = lead_id
+                # Check the Pinecone query cache first
+                cached_results = _pinecone_query_cache.get(user_id, current_message)
+                if cached_results is not None:
+                    relevant_history = cached_results
+                    logger.debug(f"Pinecone query cache HIT for user {user_id} (saved ~300ms)")
+                else:
+                    filter_metadata = {}
+                    if lead_id:
+                        filter_metadata["lead_id"] = lead_id
 
-                relevant_history = await self.vector_memory.retrieve_relevant_context(
-                    user_id=user_id,
-                    current_query=current_message,
-                    top_k=5,
-                    filter_metadata=filter_metadata if filter_metadata else None
-                )
+                    relevant_history = await self.vector_memory.retrieve_relevant_context(
+                        user_id=user_id,
+                        current_query=current_message,
+                        top_k=5,
+                        filter_metadata=filter_metadata if filter_metadata else None
+                    )
+
+                    # Cache the results for 5 minutes
+                    _pinecone_query_cache.put(user_id, current_message, relevant_history)
 
                 # Update access tracking in database
                 for context in relevant_history:

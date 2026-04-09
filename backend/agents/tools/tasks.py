@@ -2,7 +2,7 @@
 Perennia AI - Task Automation Tools
 ===================================
 Tools for the Task Automation Agent handling workflow tasks and automation.
-9 tools for task management, workflow automation, and productivity.
+10 tools for task management, workflow automation, and productivity.
 """
 
 from datetime import datetime, timedelta
@@ -19,7 +19,7 @@ from .base import (
 
 
 # =============================================================================
-# Task Automation Tools (8 tools)
+# Task Automation Tools (9 tools)
 # =============================================================================
 
 @mortgage_tool(
@@ -103,6 +103,160 @@ def create_task(
     return ToolResult.success(
         data=task,
         message=f"Task created: {title} (due {due_date})",
+    )
+
+
+@mortgage_tool(
+    name="bulk_create_tasks",
+    description="Create multiple tasks at once, one for each borrower/lead. Use when the user asks to create follow-up tasks for several borrowers from a conversation.",
+    agent_roles=["task_automation", "pipeline_analyst"],
+    risk_level="LOW",
+    parameters={
+        "tasks_data": "JSON array of task objects, each with: title (required), lead_id (optional), loan_id (optional), description (optional), due_date (optional, YYYY-MM-DD), priority (low/normal/high/urgent), category (follow_up/document/call/review/compliance/other)",
+    },
+)
+def bulk_create_tasks(
+    tasks_data: str,
+) -> ToolResult:
+    """Create individual tasks for multiple borrowers in a single call.
+
+    Args:
+        tasks_data: JSON string containing an array of task objects.
+            Each object can have:
+                - title (required): Task title
+                - lead_id (optional): Lead ID to link
+                - loan_id (optional): Loan ID to link
+                - description (optional): Task description
+                - due_date (optional): YYYY-MM-DD format
+                - priority (optional): low, normal, high, urgent (default: normal)
+                - category (optional): follow_up, document, call, review, compliance, other (default: follow_up)
+                - assigned_to (optional): User ID to assign to
+    """
+    import json as _json
+    import uuid
+
+    # Parse the JSON input
+    try:
+        if isinstance(tasks_data, list):
+            task_list = tasks_data
+        else:
+            task_list = _json.loads(tasks_data)
+    except (TypeError, _json.JSONDecodeError) as e:
+        return ToolResult.error(f"Invalid tasks_data JSON: {e}")
+
+    if not isinstance(task_list, list):
+        return ToolResult.error("tasks_data must be a JSON array of task objects")
+
+    if len(task_list) == 0:
+        return ToolResult.error("tasks_data array is empty — provide at least one task")
+
+    if len(task_list) > 50:
+        return ToolResult.error("Maximum 50 tasks per bulk creation (received {})".format(len(task_list)))
+
+    created_tasks = []
+    errors = []
+
+    for i, task_def in enumerate(task_list):
+        if not isinstance(task_def, dict):
+            errors.append({"index": i, "error": "Task must be a JSON object"})
+            continue
+
+        title = task_def.get("title")
+        if not title:
+            errors.append({"index": i, "error": "Missing required field 'title'"})
+            continue
+
+        # Resolve due date
+        due_date = task_def.get("due_date")
+        if not due_date:
+            due = datetime.now() + timedelta(days=3)
+            while due.weekday() >= 5:
+                due += timedelta(days=1)
+            due_date = due.strftime("%Y-%m-%d")
+
+        lead_id = task_def.get("lead_id")
+        loan_id = task_def.get("loan_id")
+        priority = task_def.get("priority", "normal")
+        category = task_def.get("category", "follow_up")
+        description = task_def.get("description")
+        assigned_to = task_def.get("assigned_to")
+
+        task_id = f"TSK-{str(uuid.uuid4())[:8].upper()}"
+
+        # Resolve related entity names for confirmation
+        related_info = {}
+        if lead_id:
+            lead = execute_single(
+                "SELECT first_name, last_name FROM leads WHERE id = :id",
+                {"id": lead_id},
+            )
+            if lead:
+                related_info["lead"] = {
+                    "id": lead_id,
+                    "name": f"{lead.get('first_name', '')} {lead.get('last_name', '')}".strip(),
+                }
+
+        if loan_id:
+            loan = execute_single(
+                "SELECT loan_number, borrower_name FROM loans WHERE id = :id",
+                {"id": loan_id},
+            )
+            if loan:
+                related_info["loan"] = {
+                    "id": loan_id,
+                    "number": loan.get("loan_number"),
+                    "borrower": loan.get("borrower_name"),
+                }
+
+        created_tasks.append({
+            "task_id": task_id,
+            "title": title,
+            "description": description,
+            "due_date": due_date,
+            "priority": priority,
+            "category": category,
+            "assigned_to": assigned_to,
+            "lead_id": lead_id,
+            "loan_id": loan_id,
+            "status": "pending",
+            "related": related_info,
+            "created_at": datetime.now().isoformat(),
+        })
+
+    data = {
+        "tasks_created": created_tasks,
+        "total_created": len(created_tasks),
+        "errors": errors,
+        "total_errors": len(errors),
+    }
+
+    if not created_tasks:
+        return ToolResult.error(
+            f"No tasks created — {len(errors)} error(s): {errors}"
+        )
+
+    summary_parts = [f"{len(created_tasks)} task(s) created"]
+    if errors:
+        summary_parts.append(f"{len(errors)} skipped due to errors")
+
+    # Build a brief list of who got tasks
+    names = []
+    for t in created_tasks:
+        related = t.get("related", {})
+        name = (
+            related.get("lead", {}).get("name")
+            or related.get("loan", {}).get("borrower")
+            or t["title"]
+        )
+        names.append(name)
+    if len(names) <= 5:
+        summary_parts.append("for: " + ", ".join(names))
+    else:
+        summary_parts.append(f"for {len(names)} borrowers")
+
+    return ToolResult.success(
+        data=data,
+        message=" | ".join(summary_parts),
     )
 
 

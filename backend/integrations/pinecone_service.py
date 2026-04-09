@@ -3,13 +3,71 @@ Pinecone Vector Database Service
 Handles conversation memory storage and semantic search for AI context retrieval
 """
 import os
+import hashlib
 import logging
+import threading
+import time
+from collections import OrderedDict
 from typing import List, Dict, Optional
 from datetime import datetime
 from pinecone import Pinecone, ServerlessSpec
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
+
+
+class EmbeddingCache:
+    """
+    Thread-safe LRU cache for OpenAI embeddings.
+
+    Embeddings are deterministic (same text -> same vector), so caching is safe.
+    Saves 200-300ms per cache hit by avoiding the OpenAI API round-trip.
+    """
+
+    def __init__(self, max_size: int = 1000):
+        self._cache: OrderedDict[str, List[float]] = OrderedDict()
+        self._max_size = max_size
+        self._lock = threading.Lock()
+        self._hits = 0
+        self._misses = 0
+
+    def _hash_text(self, text: str) -> str:
+        """Generate a stable hash key for input text."""
+        return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+    def get(self, text: str) -> Optional[List[float]]:
+        """Look up cached embedding. Returns None on miss."""
+        key = self._hash_text(text)
+        with self._lock:
+            if key in self._cache:
+                # Move to end (most recently used)
+                self._cache.move_to_end(key)
+                self._hits += 1
+                return self._cache[key]
+            self._misses += 1
+            return None
+
+    def put(self, text: str, embedding: List[float]) -> None:
+        """Store embedding in cache, evicting oldest entry if at capacity."""
+        key = self._hash_text(text)
+        with self._lock:
+            if key in self._cache:
+                self._cache.move_to_end(key)
+            else:
+                if len(self._cache) >= self._max_size:
+                    self._cache.popitem(last=False)  # Evict LRU
+            self._cache[key] = embedding
+
+    def stats(self) -> Dict:
+        """Return cache hit/miss statistics."""
+        total = self._hits + self._misses
+        return {
+            "hits": self._hits,
+            "misses": self._misses,
+            "hit_rate": round(self._hits / total * 100, 1) if total > 0 else 0,
+            "size": len(self._cache),
+            "max_size": self._max_size,
+        }
 
 
 class VectorMemoryService:
@@ -19,6 +77,10 @@ class VectorMemoryService:
         self.pinecone_api_key = os.getenv("PINECONE_API_KEY", "")
         self.openai_api_key = os.getenv("OPENAI_API_KEY", "")
         self.index_name = "crm-conversations"
+
+        # Embedding cache: saves 200-300ms per hit by skipping OpenAI API call.
+        # 1000 entries * ~6KB per embedding = ~6MB memory — acceptable for single instance.
+        self._embedding_cache = EmbeddingCache(max_size=1000)
 
         # Check if we have credentials
         if not self.pinecone_api_key or not self.openai_api_key:
@@ -57,13 +119,31 @@ class VectorMemoryService:
             self.enabled = False
 
     def _generate_embedding(self, text: str) -> List[float]:
-        """Generate vector embedding for text using OpenAI"""
+        """Generate vector embedding for text using OpenAI.
+
+        Uses an in-memory LRU cache (1000 entries) to avoid redundant API calls.
+        Same text always produces the same embedding, so caching is safe.
+        Saves 200-300ms per cache hit.
+        """
+        # Check cache first
+        cached = self._embedding_cache.get(text)
+        if cached is not None:
+            logger.debug("Embedding cache HIT (saved ~200ms)")
+            return cached
+
         try:
+            start = time.time()
             response = self.openai.embeddings.create(
                 input=text,
                 model="text-embedding-3-small"  # 1536 dimensions, $0.02 per 1M tokens
             )
-            return response.data[0].embedding
+            embedding = response.data[0].embedding
+            elapsed_ms = (time.time() - start) * 1000
+            logger.debug(f"Embedding generated in {elapsed_ms:.0f}ms (cache MISS)")
+
+            # Store in cache for future hits
+            self._embedding_cache.put(text, embedding)
+            return embedding
         except Exception as e:
             logger.error(f"Error generating embedding: {e}")
             return []
@@ -212,6 +292,10 @@ class VectorMemoryService:
         except Exception as e:
             logger.error(f"Error getting conversation count: {e}")
             return 0
+
+    def get_embedding_cache_stats(self) -> Dict:
+        """Return embedding cache performance statistics."""
+        return self._embedding_cache.stats()
 
 
 # Global instance

@@ -191,7 +191,7 @@ api.interceptors.response.use(
 // Authentication
 export const authAPI = {
   login: async (email, password) => {
-    const response = await axios.post(`${API_BASE_URL}/api/v1/auth/login`, {
+    const response = await api.post('/api/v1/auth/login', {
       x1: email,
       x2: password,
     });
@@ -588,6 +588,8 @@ export const aiAPI = {
     // Use the AgentOrchestrator-powered endpoint for smarter responses
     const response = await api.post('/api/v1/ai/orchestrator-chat', {
       message,
+      lead_id: context.lead_id || null,
+      loan_id: context.loan_id || null,
       context: {
         coaching_mode: isCoachingMode,
         user_context: userContext
@@ -609,8 +611,10 @@ export const aiAPI = {
       ...data
     };
   },
-  // Streaming version of processCommand for real-time responses
-  // Uses LangGraph endpoint and simulates streaming for smooth UI delivery
+  // Streaming version of processCommand for real-time responses.
+  // Attempts true SSE streaming via /orchestrator-chat-stream first
+  // (tokens appear as they are generated), then falls back to the
+  // non-streaming /langgraph-chat endpoint with simulated chunking.
   processCommandStream: async (message, onContent, onStatus, onDone, onError, documentContext = null) => {
     const token = localStorage.getItem('token');
 
@@ -623,6 +627,76 @@ export const aiAPI = {
         body.document_context = documentContext;
       }
 
+      // --- Attempt true SSE streaming first ---
+      try {
+        const sseResponse = await fetch(`${API_BASE_URL}/api/v1/ai/orchestrator-chat-stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (sseResponse.ok && sseResponse.headers.get('content-type')?.includes('text/event-stream')) {
+          // True SSE stream available — read tokens in real-time
+          const reader = sseResponse.body.getReader();
+          const decoder = new TextDecoder();
+          let fullResponse = '';
+          let buffer = '';
+          let metadata = {};
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Process complete SSE lines
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || ''; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+              if (!line.startsWith('data: ')) continue;
+              try {
+                const payload = JSON.parse(line.slice(6));
+
+                if (payload.content && onContent) {
+                  fullResponse += payload.content;
+                  onContent(payload.content);
+                } else if (payload.tool_use && onStatus) {
+                  onStatus(`Using tool: ${payload.tool_use}...`);
+                } else if (payload.error && onError) {
+                  onError(payload.error);
+                  return;
+                } else if (payload.done) {
+                  metadata = {
+                    session_id: payload.session_id,
+                    engine: payload.engine || 'langgraph',
+                  };
+                }
+              } catch (_parseErr) {
+                // Skip malformed SSE lines
+              }
+            }
+          }
+
+          // Signal completion
+          if (onDone) {
+            onDone(fullResponse, {
+              full_response: fullResponse,
+              engine: metadata.engine || 'langgraph',
+              ...metadata,
+            });
+          }
+          return; // SSE path succeeded — skip fallback
+        }
+        // If response is not SSE (e.g. 404 or wrong content-type), fall through to non-streaming
+      } catch (sseErr) {
+        console.warn('SSE streaming unavailable, falling back to non-streaming:', sseErr.message);
+      }
+
+      // --- Fallback: non-streaming endpoint with simulated chunking ---
       const response = await fetch(`${API_BASE_URL}/api/v1/ai/langgraph-chat`, {
         method: 'POST',
         headers: {
@@ -718,7 +792,18 @@ export const aiAPI = {
     });
     return response.data;
   },
-  // AI Feedback methods
+  // Inline thumbs-up/down feedback on individual AI responses
+  submitInlineFeedback: async ({ sessionId, messageId, rating, userQuestion, aiResponse }) => {
+    const response = await api.post('/api/v1/ai/feedback', {
+      session_id: sessionId,
+      message_id: messageId,
+      rating,
+      user_question: userQuestion,
+      ai_response: aiResponse,
+    });
+    return response.data;
+  },
+  // AI Feedback methods (detailed report-wrong-answer flow)
   submitFeedback: async (feedbackData) => {
     const response = await api.post('/api/v1/ai-feedback/', feedbackData);
     return response.data;

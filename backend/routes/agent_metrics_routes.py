@@ -145,3 +145,30 @@ def register_agent_metrics_routes(app, get_db, get_current_user, **kwargs):
                 message="Failed to retrieve error patterns",
                 status_code=500,
             )
+
+    # -----------------------------------------------------------------------
+    # GET /api/admin/agent-metrics/response-times — Real-time response time percentiles
+    # -----------------------------------------------------------------------
+    @app.get("/api/admin/agent-metrics/response-times", tags=["Agent Metrics"])
+    async def get_response_time_stats(
+        current_user=Depends(get_current_user),
+    ):
+        """
+        Return real-time response time percentiles from in-memory tracker.
+
+        Includes p50, p75, p90, p95, p99 plus breakdowns by intent and model.
+        Data is from the current server process lifetime (not persisted).
+        """
+        _require_admin(current_user)
+
+        try:
+            from agents.orchestration.performance_tracker import get_response_time_tracker
+            stats = get_response_time_tracker().get_stats()
+            return success_response(data=stats)
+        except Exception as e:
+            logger.exception(f"Failed to retrieve response time stats: {e}")
+            return error_response(
+                code=ErrorCodes.INTERNAL_ERROR,
+                message="Failed to retrieve response time stats",
+                status_code=500,
+            )

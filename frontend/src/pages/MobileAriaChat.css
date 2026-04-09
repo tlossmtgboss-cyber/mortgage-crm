@@ -33,6 +33,8 @@
   flex-direction: column;
   height: 100vh;
   height: 100dvh; /* Dynamic viewport — handles iOS Safari toolbar */
+  /* Reserve space for MobileBottomNav (56px + safe area) */
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
   background: var(--mac-bg);
   position: relative;
   max-width: 600px;
@@ -664,7 +666,6 @@
 .mac__input-area {
   flex-shrink: 0;
   padding: 8px 12px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   background: var(--mac-input-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);

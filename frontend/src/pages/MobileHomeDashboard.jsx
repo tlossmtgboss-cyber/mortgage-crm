@@ -4,6 +4,7 @@ import api from '../services/api';
 import { getCurrentUser } from '../utils/auth';
 import { ensureArray } from '../utils/arrayHelpers';
 import { initAuditLogger, auditLog, AUDIT_EVENTS } from '../services/mobileAuditLogger';
+import MobileBottomNav from '../components/mobile/MobileBottomNav';
 import './MobileHomeDashboard.css';
 
 /**
@@ -897,6 +898,8 @@ const MobileHomeDashboard = () => {
 
       {/* Spacer for bottom nav */}
       <div className="mhd-bottom-spacer" />
+
+      <MobileBottomNav />
     </div>
   );
 };

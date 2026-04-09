@@ -18,7 +18,9 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
   const [memoryStats, setMemoryStats] = useState(null);
   const [isListening, setIsListening] = useState(false);
   const [showCallIntelligence, setShowCallIntelligence] = useState(false);
+  const [feedbackGiven, setFeedbackGiven] = useState({});
   const recognitionRef = useRef(null);
+  const sessionIdRef = useRef(`aria-${Date.now()}`);
 
   useEffect(() => {
     if (isOpen) {
@@ -85,9 +87,8 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
     setLoading(true);
 
     try {
-      // Call Smart AI API with memory
-      const response = await aiAPI.smartChat(inputValue, {
-        include_context: true,
+      // Call the full LangGraph orchestrator with 215 tools (email, tasks, pipeline, etc.)
+      const response = await aiAPI.processCommand(inputValue, {
         lead_id: context.lead_id,
         loan_id: context.loan_id,
         ...context
@@ -96,10 +97,12 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
       const aiMessage = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: response.response,
+        content: response.response || response.explanation || '',
         timestamp: new Date().toISOString(),
-        contextUsed: response.context_used,
-        contextCount: response.context_count,
+        intent: response.intent,
+        agentUsed: response.agent_used,
+        actionsExecuted: response.actions_executed,
+        followUpSuggestions: response.follow_up_suggestions,
       };
 
       setMessages((prev) => [...prev, aiMessage]);
@@ -111,7 +114,7 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
       const errorMessage = {
         id: Date.now() + 1,
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please make sure the AI Memory System is configured with Pinecone and OpenAI API keys.',
+        content: 'Sorry, I encountered an error processing your request. Please try again.',
         timestamp: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -167,6 +170,33 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
 
     recognitionRef.current = recognition;
     recognition.start();
+  };
+
+  const handleFeedback = async (message, rating) => {
+    if (feedbackGiven[message.id]) return;
+
+    setFeedbackGiven(prev => ({ ...prev, [message.id]: rating }));
+
+    // Find the preceding user message for context
+    const msgIndex = messages.findIndex(m => m.id === message.id);
+    const precedingUserMsg = messages.slice(0, msgIndex).reverse().find(m => m.role === 'user');
+
+    try {
+      await aiAPI.submitInlineFeedback({
+        sessionId: sessionIdRef.current,
+        messageId: String(message.id),
+        rating,
+        userQuestion: precedingUserMsg?.content,
+        aiResponse: message.content,
+      });
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+      setFeedbackGiven(prev => {
+        const updated = { ...prev };
+        delete updated[message.id];
+        return updated;
+      });
+    }
   };
 
   if (!isOpen) return null;
@@ -229,11 +259,35 @@ function AIAssistant({ isOpen, onClose, context = {} }) {
             className={`message ${message.role === 'user' ? 'message-user' : 'message-assistant'}`}
           >
             <div className="message-content">{message.content}</div>
-            <div className="message-timestamp">
-              {new Date(message.timestamp).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit',
-              })}
+            <div className="message-meta">
+              <span className="message-timestamp">
+                {new Date(message.timestamp).toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
+              </span>
+              {message.role === 'assistant' && (
+                <span className="message-feedback">
+                  <button
+                    className={`feedback-btn${feedbackGiven[message.id] === 'positive' ? ' active' : ''}`}
+                    onClick={() => handleFeedback(message, 'positive')}
+                    disabled={!!feedbackGiven[message.id]}
+                    title="Helpful response"
+                    aria-label="Thumbs up"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                  </button>
+                  <button
+                    className={`feedback-btn${feedbackGiven[message.id] === 'negative' ? ' active negative' : ''}`}
+                    onClick={() => handleFeedback(message, 'negative')}
+                    disabled={!!feedbackGiven[message.id]}
+                    title="Unhelpful response"
+                    aria-label="Thumbs down"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z"/><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3"/></svg>
+                  </button>
+                </span>
+              )}
             </div>
           </div>
         ))}

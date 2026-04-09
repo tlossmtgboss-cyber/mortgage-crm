@@ -15,6 +15,7 @@ import { leadsAPI } from '../services/api';
 import MobileLeadCard, { MobileLeadCardSkeleton } from '../components/mobile/MobileLeadCard';
 import { useVirtualList } from '../hooks/useVirtualList';
 import { toast } from '../utils/toast';
+import MobileBottomNav from '../components/mobile/MobileBottomNav';
 import './MobileLeadsList.css';
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -452,6 +453,8 @@ export default function MobileLeadsList() {
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
       </button>
+
+      <MobileBottomNav />
     </div>
   );
 }

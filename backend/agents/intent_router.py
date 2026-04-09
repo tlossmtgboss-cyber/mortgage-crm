@@ -990,7 +990,7 @@ async def classify_intent_llm(
         # only the user query varies per call
         response = anthropic_client.messages.create(
             model=os.getenv("ANTHROPIC_FAST_MODEL", "claude-haiku-4-5-20251001"),  # Fastest model for classification
-            max_tokens=20,
+            max_tokens=10,  # Intent is a single word — 10 tokens is plenty
             system=[
                 {
                     "type": "text",
@@ -1002,7 +1002,7 @@ async def classify_intent_llm(
                 "role": "user",
                 "content": f"Query: {query}\n\nCategory:"
             }],
-            timeout=30.0,
+            timeout=5.0,  # Intent classification should complete in <1s
         )
 
         intent = response.content[0].text.strip().lower()
