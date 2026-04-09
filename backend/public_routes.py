@@ -2136,7 +2136,8 @@ class SMSOptInRequest(BaseModel):
     last_name: str
     phone: str  # E.164 format: +1XXXXXXXXXX
     email: Optional[str] = None
-    consent_text: str
+    sms_consent: bool = False
+    consent_text: Optional[str] = None
     consent_source: str = "web_form"
     consent_page_url: Optional[str] = None
 
