@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import { Capacitor } from '@capacitor/core';
 import { authAPI, API_BASE_URL } from '../services/api';
-import { setAuth } from '../utils/auth';
+import { setAuth, isAuthenticated } from '../utils/auth';
 import { getUserEffectiveRole, getDefaultRouteForRole } from '../config/roleConfig';
 import { useBiometricLogin } from '../hooks/useBiometricLogin';
 import { haptics } from '../services/nativeServices';
@@ -70,8 +71,8 @@ function Login() {
 
     await setAuth(data.access_token, data.user);
 
-    const savedToken = localStorage.getItem('token');
-    if (!savedToken) {
+    const authenticated = await isAuthenticated();
+    if (!authenticated) {
       throw new Error('Could not save authentication');
     }
 
@@ -81,7 +82,13 @@ function Login() {
       return;
     }
 
-    // Determine role-based default route
+    // On native mobile, go straight to Aria voice home
+    if (Capacitor.isNativePlatform()) {
+      navigate('/aria-voice');
+      return;
+    }
+
+    // Determine role-based default route (web)
     const permissionRole = data.user?.permission_role || 'sales';
     const legacyRole = data.user?.role || null;
     const effectiveRole = getUserEffectiveRole(permissionRole, legacyRole);
@@ -119,6 +126,8 @@ function Login() {
     }
   };
 
+  const mobileDefault = Capacitor.isNativePlatform() ? '/aria-voice' : '/dashboard';
+
   const handleEnableBiometric = async () => {
     if (pendingCredentials) {
       const enabled = await enableBiometricLogin(pendingCredentials.email, pendingCredentials.password);
@@ -129,14 +138,14 @@ function Login() {
     // Continue with login regardless
     setShowEnableBiometric(false);
     if (pendingCredentials) {
-      navigate(redirectTo || '/dashboard');
+      navigate(redirectTo || mobileDefault);
     }
   };
 
   const handleSkipBiometric = () => {
     setShowEnableBiometric(false);
     if (pendingCredentials) {
-      navigate(redirectTo || '/dashboard');
+      navigate(redirectTo || mobileDefault);
     }
   };
 
@@ -180,8 +189,8 @@ function Login() {
     <div className="login-container">
       <div className="login-box">
         <div className="login-header">
-          <h1>Mortgage CRM</h1>
-          <p>Agentic AI Platform</p>
+          <h1>Aria</h1>
+          <p>AI-Powered Loan Officer OS</p>
         </div>
 
         {/* Biometric Login Button */}

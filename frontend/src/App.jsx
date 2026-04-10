@@ -164,6 +164,11 @@ const MobileLeadsList = lazyRetry(() => import('./pages/MobileLeadsList'));
 const MobilePipelineView = lazyRetry(() => import('./pages/MobilePipelineView'));
 const MobileNotificationCenter = lazyRetry(() => import('./pages/MobileNotificationCenter'));
 import MobileErrorBoundary from './components/mobile/MobileErrorBoundary';
+const AriaVoiceHome = lazyRetry(() => import('./pages/aria-mobile/AriaVoiceHome'));
+const MobileCalendar = lazyRetry(() => import('./pages/aria-mobile/MobileCalendar'));
+const MobileTasks = lazyRetry(() => import('./pages/aria-mobile/MobileTasks'));
+const MobileAppointmentDetail = lazyRetry(() => import('./pages/aria-mobile/MobileAppointmentDetail'));
+const MobileCallIntel = lazyRetry(() => import('./pages/aria-mobile/MobileCallIntel'));
 const BriefingPage = lazyRetry(() => import('./pages/BriefingPage'));
 const PowerDialer = lazyRetry(() => import('./pages/PowerDialer'));
 const UserCreationWizard = lazyRetry(() => import('./pages/UserCreationWizard'));
@@ -670,6 +675,12 @@ function App() {
           <Route path="/mobile/leads" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileLeadsList /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           <Route path="/mobile/pipeline" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobilePipelineView /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           <Route path="/aria/notifications" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileNotificationCenter /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
+          {/* Aria Mobile Redesign — voice-first 5-screen app */}
+          <Route path="/aria-voice" element={<MobileErrorBoundary><PrivateRoute><LazyPage><AriaVoiceHome /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
+          <Route path="/mobile-calendar" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileCalendar /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
+          <Route path="/mobile-tasks" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileTasks /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
+          <Route path="/mobile-appointment/:id" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileAppointmentDetail /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
+          <Route path="/mobile-ci" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileCallIntel /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/signup" element={<AdminOnboarding />} />

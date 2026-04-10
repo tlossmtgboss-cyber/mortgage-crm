@@ -1,0 +1,246 @@
+/* ============================================================================
+   MobileTasks — Task list screen (light theme)
+   ============================================================================ */
+
+.mt-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #F5F5F7;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* --------------------------------------------------------------------------
+   Header
+   -------------------------------------------------------------------------- */
+
+.mt-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #fff;
+  padding-top: env(safe-area-inset-top, 0px);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.mt-header-title {
+  margin: 0;
+  padding: 16px 20px 2px;
+  font-size: 22px;
+  font-weight: 700;
+  color: #1a1a1a;
+  line-height: 1.2;
+}
+
+.mt-header-summary {
+  margin: 0;
+  padding: 0 20px 14px;
+  font-size: 13px;
+  font-weight: 400;
+  color: #888;
+  line-height: 1.3;
+}
+
+/* --------------------------------------------------------------------------
+   Body — scrollable area
+   -------------------------------------------------------------------------- */
+
+.mt-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 16px calc(80px + env(safe-area-inset-bottom, 0px));
+}
+
+/* --------------------------------------------------------------------------
+   Section
+   -------------------------------------------------------------------------- */
+
+.mt-section {
+  margin-bottom: 20px;
+}
+
+.mt-section-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #888;
+  padding: 0 4px 8px;
+}
+
+.mt-section-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* --------------------------------------------------------------------------
+   Task card
+   -------------------------------------------------------------------------- */
+
+.mt-task-card {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px 14px;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: opacity 0.2s ease;
+}
+
+.mt-task-card--done {
+  opacity: 0.7;
+}
+
+/* --------------------------------------------------------------------------
+   Checkbox
+   -------------------------------------------------------------------------- */
+
+.mt-checkbox {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #ddd;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.mt-checkbox:active {
+  transform: scale(0.9);
+}
+
+.mt-checkbox--checked {
+  background: #34A853;
+  border-color: #34A853;
+}
+
+/* --------------------------------------------------------------------------
+   Task info
+   -------------------------------------------------------------------------- */
+
+.mt-task-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mt-task-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: #1a1a1a;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mt-task-name--done {
+  text-decoration: line-through;
+  color: #999;
+}
+
+.mt-task-subtitle {
+  font-size: 12px;
+  font-weight: 400;
+  color: #888;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --------------------------------------------------------------------------
+   Badge
+   -------------------------------------------------------------------------- */
+
+.mt-badge {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: 100px;
+  white-space: nowrap;
+}
+
+.mt-badge-red {
+  background: #FEE8E8;
+  color: #C0392B;
+}
+
+.mt-badge-blue {
+  background: #E8F0FE;
+  color: #1a73e8;
+}
+
+.mt-badge-green {
+  background: #E6F4EA;
+  color: #1E7E34;
+}
+
+.mt-badge-yellow {
+  background: #FEF9E7;
+  color: #B7770D;
+}
+
+/* --------------------------------------------------------------------------
+   Loading state
+   -------------------------------------------------------------------------- */
+
+.mt-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 0;
+}
+
+.mt-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2.5px solid #e0e0e0;
+  border-top-color: #1a73e8;
+  animation: mt-spin 0.7s linear infinite;
+}
+
+@keyframes mt-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* --------------------------------------------------------------------------
+   Empty state
+   -------------------------------------------------------------------------- */
+
+.mt-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  text-align: center;
+}
+
+.mt-empty-text {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: #999;
+}

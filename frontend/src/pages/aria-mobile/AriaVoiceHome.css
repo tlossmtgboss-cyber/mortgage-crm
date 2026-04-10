@@ -1,0 +1,378 @@
+/* ============================================================================
+   AriaVoiceHome — Voice assistant home screen
+   Dark theme, immersive full-screen layout
+   ============================================================================ */
+
+.aria-voice-home {
+  --avh-bg: #060A10;
+  --avh-accent: #7EB8F7;
+  --avh-accent-rgb: 126, 184, 247;
+  --avh-secondary-rgb: 155, 127, 232;
+  --avh-text-muted: rgba(255, 255, 255, 0.4);
+  --avh-text-dim: rgba(255, 255, 255, 0.18);
+  --avh-font-display: 'Cormorant Garamond', serif;
+  --avh-font-body: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --avh-ring-outer: 180px;
+  --avh-ring-mid: 138px;
+  --avh-ring-inner: 100px;
+
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse at 50% 35%, rgba(var(--avh-accent-rgb), 0.09) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 80%, rgba(var(--avh-secondary-rgb), 0.06) 0%, transparent 50%),
+    var(--avh-bg);
+  color: #fff;
+  font-family: var(--avh-font-body);
+  -webkit-user-select: none;
+  user-select: none;
+  position: relative;
+  overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   Safe-area top padding
+   -------------------------------------------------------------------------- */
+
+.avh-status-bar {
+  flex-shrink: 0;
+  height: 56px;
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* --------------------------------------------------------------------------
+   Top bar — Call Intelligence button
+   -------------------------------------------------------------------------- */
+
+.avh-top-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 20px;
+  flex-shrink: 0;
+}
+
+.avh-ci-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid rgba(var(--avh-accent-rgb), 0.25);
+  background: rgba(var(--avh-accent-rgb), 0.1);
+  color: var(--avh-accent);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--avh-font-body);
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.avh-ci-button:active {
+  transform: scale(0.95);
+  background: rgba(var(--avh-accent-rgb), 0.18);
+}
+
+.avh-ci-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(var(--avh-accent-rgb), 0.25);
+}
+
+.avh-ci-icon-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--avh-accent);
+}
+
+/* --------------------------------------------------------------------------
+   Center content — title, orb, and label
+   -------------------------------------------------------------------------- */
+
+.avh-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 20px;
+  gap: 0;
+}
+
+/* Title */
+.avh-title {
+  font-family: var(--avh-font-display);
+  font-size: 56px;
+  font-weight: 400;
+  line-height: 1.1;
+  margin: 0 0 6px;
+  background: linear-gradient(180deg, #ffffff 20%, var(--avh-accent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Subtitle */
+.avh-subtitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--avh-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 40px;
+}
+
+/* --------------------------------------------------------------------------
+   Mic orb — concentric rings
+   -------------------------------------------------------------------------- */
+
+.avh-orb-container {
+  position: relative;
+  width: var(--avh-ring-outer);
+  height: var(--avh-ring-outer);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 24px;
+}
+
+/* Ring base styles */
+.avh-ring {
+  position: absolute;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Outer ring */
+.avh-ring--outer {
+  width: var(--avh-ring-outer);
+  height: var(--avh-ring-outer);
+  border: 1px solid rgba(var(--avh-accent-rgb), 0.08);
+  background: rgba(var(--avh-accent-rgb), 0.02);
+}
+
+/* Middle ring */
+.avh-ring--mid {
+  width: var(--avh-ring-mid);
+  height: var(--avh-ring-mid);
+  border: 1px solid rgba(var(--avh-accent-rgb), 0.14);
+  background: rgba(var(--avh-accent-rgb), 0.04);
+}
+
+/* Inner ring — tappable */
+.avh-ring--inner {
+  width: var(--avh-ring-inner);
+  height: var(--avh-ring-inner);
+  border: 1.5px solid rgba(var(--avh-accent-rgb), 0.3);
+  background: rgba(var(--avh-accent-rgb), 0.08);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.avh-ring--inner:active {
+  transform: scale(0.95);
+  background: rgba(var(--avh-accent-rgb), 0.15);
+}
+
+/* --------------------------------------------------------------------------
+   Listening state — pulsing rings
+   -------------------------------------------------------------------------- */
+
+.avh-orb-container--listening .avh-ring--outer {
+  animation: avh-pulse-outer 2.5s ease-in-out infinite;
+}
+
+.avh-orb-container--listening .avh-ring--mid {
+  animation: avh-pulse-mid 2.5s ease-in-out 0.15s infinite;
+}
+
+.avh-orb-container--listening .avh-ring--inner {
+  animation: avh-pulse-inner 2.5s ease-in-out 0.3s infinite;
+  border-color: rgba(var(--avh-accent-rgb), 0.5);
+  background: rgba(var(--avh-accent-rgb), 0.12);
+}
+
+@keyframes avh-pulse-outer {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.85; }
+}
+
+@keyframes avh-pulse-mid {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+}
+
+@keyframes avh-pulse-inner {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.95; }
+}
+
+/* --------------------------------------------------------------------------
+   Processing state — spinner on inner ring
+   -------------------------------------------------------------------------- */
+
+.avh-orb-container--processing .avh-ring--inner {
+  border-color: transparent;
+  border-top-color: var(--avh-accent);
+  border-right-color: rgba(var(--avh-accent-rgb), 0.3);
+  animation: avh-spin 0.9s linear infinite;
+}
+
+@keyframes avh-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* --------------------------------------------------------------------------
+   Speaking state — gentle glow
+   -------------------------------------------------------------------------- */
+
+.avh-orb-container--speaking .avh-ring--inner {
+  box-shadow: 0 0 30px rgba(var(--avh-accent-rgb), 0.25);
+  border-color: rgba(var(--avh-accent-rgb), 0.45);
+  background: rgba(var(--avh-accent-rgb), 0.12);
+}
+
+.avh-orb-container--speaking .avh-ring--outer {
+  animation: avh-glow 2s ease-in-out infinite;
+}
+
+@keyframes avh-glow {
+  0%, 100% { border-color: rgba(var(--avh-accent-rgb), 0.08); }
+  50% { border-color: rgba(var(--avh-accent-rgb), 0.18); }
+}
+
+/* --------------------------------------------------------------------------
+   Mic icon
+   -------------------------------------------------------------------------- */
+
+.avh-mic-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--avh-accent);
+}
+
+.avh-mic-icon svg {
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   Tap label
+   -------------------------------------------------------------------------- */
+
+.avh-tap-label {
+  font-size: 13px;
+  color: var(--avh-text-muted);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+/* --------------------------------------------------------------------------
+   Transcript overlay
+   -------------------------------------------------------------------------- */
+
+.avh-transcript-overlay {
+  position: absolute;
+  bottom: calc(var(--avh-ring-outer) + 70px);
+  left: 20px;
+  right: 20px;
+  text-align: center;
+}
+
+.avh-transcript-text {
+  font-size: 18px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.4;
+  padding: 12px 16px;
+  background: rgba(var(--avh-accent-rgb), 0.06);
+  border: 1px solid rgba(var(--avh-accent-rgb), 0.12);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* --------------------------------------------------------------------------
+   Response toast
+   -------------------------------------------------------------------------- */
+
+.avh-response-toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 56px + 48px);
+  left: 16px;
+  right: 16px;
+  z-index: 100;
+  animation: avh-toast-in 0.3s ease-out;
+}
+
+.avh-response-toast-inner {
+  padding: 14px 18px;
+  background: rgba(14, 20, 32, 0.94);
+  border: 1px solid rgba(var(--avh-accent-rgb), 0.15);
+  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  line-height: 1.5;
+  max-height: 200px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@keyframes avh-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.avh-response-toast--exiting {
+  animation: avh-toast-out 0.25s ease-in forwards;
+}
+
+@keyframes avh-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Footer
+   -------------------------------------------------------------------------- */
+
+.avh-footer {
+  flex-shrink: 0;
+  text-align: center;
+  padding: 0 20px 12px;
+}
+
+.avh-powered {
+  font-size: 11px;
+  color: var(--avh-text-dim);
+  font-weight: 400;
+  letter-spacing: 0.02em;
+}
