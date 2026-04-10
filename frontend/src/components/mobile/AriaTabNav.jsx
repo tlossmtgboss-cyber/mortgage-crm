@@ -1,14 +1,7 @@
 import React, { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { haptics } from '../../services/nativeServices';
 import './AriaTabNav.css';
-
-let haptics = null;
-try {
-  const ns = require('../../services/nativeServices');
-  haptics = ns.haptics;
-} catch (e) {
-  // Native services unavailable (web fallback)
-}
 
 // ============================================================================
 // Tab configuration
@@ -87,16 +80,12 @@ export default function AriaTabNav({
   const navigate = useNavigate();
 
   const handleTabPress = useCallback((tab) => {
-    if (haptics) {
-      try { haptics.light(); } catch (e) { /* ignore */ }
-    }
+    haptics.light();
     navigate(tab.path);
   }, [navigate]);
 
   const handleFabPress = useCallback(() => {
-    if (haptics) {
-      try { haptics.medium(); } catch (e) { /* ignore */ }
-    }
+    haptics.medium();
     if (onFabPress) {
       onFabPress();
     }
