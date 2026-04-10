@@ -516,19 +516,24 @@ def _serialize(val):
     return str(val)
 
 
-def _write_audit_batch(entries: list):
-    """Write audit log entries in a background thread to avoid holding two pool
-    connections simultaneously (the caller's session + this write connection).
+# Bounded thread pool for audit writes — serializes all audit INSERTs through
+# a single worker thread so at most ONE extra DB connection is used for auditing.
+# Previously each db.commit() spawned an unbounded daemon thread, which under
+# load could open dozens of concurrent connections and exhaust Railway's ~20
+# PostgreSQL connection limit.
+from concurrent.futures import ThreadPoolExecutor
+_audit_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="audit")
 
-    Previously this ran synchronously inside after_flush, which meant every
-    db.commit() needed TWO pool connections at once.  With pool_size=3 +
-    max_overflow=5 (8 total), concurrent requests could exhaust the pool and
-    cause TimeoutError → 500 Internal Server Error on login and other routes.
+
+def _write_audit_batch(entries: list):
+    """Write audit log entries via the bounded audit executor.
+
+    Uses a single-worker ThreadPoolExecutor so at most one DB connection is
+    held for audit writes at any time.  Excess batches queue up instead of
+    opening new connections.
     """
     import json as _json
 
-    # Snapshot the data needed — entries are plain dicts, already safe to pass
-    # across threads.  Capture timestamp now so it reflects commit time.
     ts = datetime.now(timezone.utc)
 
     def _bg_write():
@@ -560,8 +565,7 @@ def _write_audit_batch(entries: list):
         except Exception as e:
             logger.warning(f"Mutation audit batch write failed: {e}")
 
-    thread = threading.Thread(target=_bg_write, daemon=True)
-    thread.start()
+    _audit_executor.submit(_bg_write)
 
 
 # Initialize on module load
