@@ -158,6 +158,12 @@ const Support = lazyRetry(() => import('./pages/Support'));
 const AriaVoiceApp = lazyRetry(() => import('./pages/AriaVoiceApp'));
 const AriaCalendarPage = lazyRetry(() => import('./pages/aria/AriaCalendarPage'));
 const AriaMortgageCalculator = lazyRetry(() => import('./pages/aria/AriaMortgageCalculator'));
+const MobileAriaChat = lazyRetry(() => import('./pages/MobileAriaChat'));
+const MobileHomeDashboard = lazyRetry(() => import('./pages/MobileHomeDashboard'));
+const MobileLeadsList = lazyRetry(() => import('./pages/MobileLeadsList'));
+const MobilePipelineView = lazyRetry(() => import('./pages/MobilePipelineView'));
+const MobileNotificationCenter = lazyRetry(() => import('./pages/MobileNotificationCenter'));
+import MobileErrorBoundary from './components/mobile/MobileErrorBoundary';
 const BriefingPage = lazyRetry(() => import('./pages/BriefingPage'));
 const PowerDialer = lazyRetry(() => import('./pages/PowerDialer'));
 const UserCreationWizard = lazyRetry(() => import('./pages/UserCreationWizard'));
@@ -658,6 +664,12 @@ function App() {
           <Route path="/aria" element={<PrivateRoute><LazyPage><AriaVoiceApp /></LazyPage></PrivateRoute>} />
           <Route path="/aria/calendar" element={<PrivateRoute><LazyPage><AriaCalendarPage /></LazyPage></PrivateRoute>} />
           <Route path="/aria/calculator" element={<PrivateRoute><LazyPage><AriaMortgageCalculator /></LazyPage></PrivateRoute>} />
+          {/* Mobile-native routes (no Navigation wrapper, no app-layout) */}
+          <Route path="/mobile-aria" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileAriaChat /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
+          <Route path="/mobile-home" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileHomeDashboard /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
+          <Route path="/mobile/leads" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileLeadsList /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
+          <Route path="/mobile/pipeline" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobilePipelineView /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
+          <Route path="/aria/notifications" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileNotificationCenter /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/signup" element={<AdminOnboarding />} />
