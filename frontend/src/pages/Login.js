@@ -16,6 +16,7 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const [showEnableBiometric, setShowEnableBiometric] = useState(false);
   const [pendingCredentials, setPendingCredentials] = useState(null);
+  const [pendingRoute, setPendingRoute] = useState(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const rawRedirect = searchParams.get('redirect') || null;
@@ -41,29 +42,9 @@ function Login() {
     }
   }, [biometricAvailable, hasStoredCredentials]);
 
-  const handleBiometricLogin = async () => {
-    setError('');
-    setLoading(true);
-
-    try {
-      const credentials = await authenticateWithBiometrics();
-
-      if (credentials) {
-        // Login with stored credentials
-        await performLogin(credentials.username, credentials.password);
-        haptics.success();
-      }
-    } catch (err) {
-      console.error('Biometric login error:', err);
-      haptics.error();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const performLogin = async (loginEmail, loginPassword) => {
+  // Authenticate only — returns user data, does NOT navigate
+  const authenticate = async (loginEmail, loginPassword) => {
     const data = await authAPI.login(loginEmail, loginPassword);
-    // Login successful
 
     if (!data.access_token) {
       throw new Error('No token received from server');
@@ -76,25 +57,36 @@ function Login() {
       throw new Error('Could not save authentication');
     }
 
-    // Check for redirect parameter first, then use role-based default route
-    if (redirectTo) {
-      navigate(redirectTo);
-      return;
-    }
+    return data;
+  };
 
-    // On native mobile, go straight to Aria voice home
-    if (Capacitor.isNativePlatform()) {
-      navigate('/aria-voice');
-      return;
-    }
-
-    // Determine role-based default route (web)
-    const permissionRole = data.user?.permission_role || 'sales';
-    const legacyRole = data.user?.role || null;
+  const getPostLoginRoute = (data) => {
+    if (redirectTo) return redirectTo;
+    if (Capacitor.isNativePlatform()) return '/aria-voice';
+    const permissionRole = data?.user?.permission_role || 'sales';
+    const legacyRole = data?.user?.role || null;
     const effectiveRole = getUserEffectiveRole(permissionRole, legacyRole);
-    const defaultRoute = getDefaultRouteForRole(effectiveRole);
+    return getDefaultRouteForRole(effectiveRole);
+  };
 
-    navigate(defaultRoute);
+  const handleBiometricLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const credentials = await authenticateWithBiometrics();
+
+      if (credentials) {
+        const data = await authenticate(credentials.username, credentials.password);
+        haptics.success();
+        navigate(getPostLoginRoute(data));
+      }
+    } catch (err) {
+      console.error('Biometric login error:', err);
+      haptics.error();
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -102,20 +94,20 @@ function Login() {
     setError('');
     setLoading(true);
 
-    // Attempting login
-
     try {
-      await performLogin(email, password);
+      const data = await authenticate(email, password);
 
       // If biometric is available but not set up, offer to enable it
       if (biometricAvailable && !hasStoredCredentials) {
         setPendingCredentials({ email, password });
+        setPendingRoute(getPostLoginRoute(data));
         setShowEnableBiometric(true);
         setLoading(false);
         return;
       }
 
       haptics.success();
+      navigate(getPostLoginRoute(data));
     } catch (err) {
       console.error('Login error:', err);
       const errorMessage = err.response?.data?.detail || err.response?.data?.error || err.message || 'Login failed. Please check your credentials and try again.';
@@ -126,8 +118,6 @@ function Login() {
     }
   };
 
-  const mobileDefault = Capacitor.isNativePlatform() ? '/aria-voice' : '/dashboard';
-
   const handleEnableBiometric = async () => {
     if (pendingCredentials) {
       const enabled = await enableBiometricLogin(pendingCredentials.email, pendingCredentials.password);
@@ -135,18 +125,13 @@ function Login() {
         haptics.success();
       }
     }
-    // Continue with login regardless
     setShowEnableBiometric(false);
-    if (pendingCredentials) {
-      navigate(redirectTo || mobileDefault);
-    }
+    navigate(pendingRoute || '/aria-voice');
   };
 
   const handleSkipBiometric = () => {
     setShowEnableBiometric(false);
-    if (pendingCredentials) {
-      navigate(redirectTo || mobileDefault);
-    }
+    navigate(pendingRoute || '/aria-voice');
   };
 
   // Show biometric enable prompt
