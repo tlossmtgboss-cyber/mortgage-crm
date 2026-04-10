@@ -8,8 +8,7 @@ const config: CapacitorConfig = {
   appName: 'Perennia AI',
   webDir: 'build',
   server: {
-    // Production: no dev server URL, uses bundled assets
-    // Only allow navigation to production domains
+    url: 'https://app.perenniaai.com',
     allowNavigation: [
       'perenniaai.com',
       'app.perenniaai.com',
