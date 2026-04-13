@@ -218,6 +218,7 @@ const MobileTasks = lazyRetry(() => import('./pages/aria-mobile/MobileTasks'));
 const MobileAppointmentDetail = lazyRetry(() => import('./pages/aria-mobile/MobileAppointmentDetail'));
 const MobileCallIntel = lazyRetry(() => import('./pages/aria-mobile/MobileCallIntel'));
 const AriaVoiceOnboarding = lazyRetry(() => import('./pages/aria-mobile/AriaVoiceOnboarding'));
+const AriaChatScreen = lazyRetry(() => import('./pages/aria-mobile/AriaChatScreen'));
 const BriefingPage = lazyRetry(() => import('./pages/BriefingPage'));
 const PowerDialer = lazyRetry(() => import('./pages/PowerDialer'));
 const UserCreationWizard = lazyRetry(() => import('./pages/UserCreationWizard'));
@@ -3713,6 +3714,14 @@ function App() {
             element={
               <PrivateRoute>
                 <LazyPage><AriaVoiceOnboarding /></LazyPage>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/aria-chat"
+            element={
+              <PrivateRoute>
+                <LazyPage><AriaChatScreen /></LazyPage>
               </PrivateRoute>
             }
           />

@@ -1741,6 +1741,16 @@ except Exception as e:
     logger.warning(f"Voice profile routes not loaded: {e}")
 
 # ============================================================================
+# ARIA CHAT ROUTES — Conversational intelligence (WebSocket + REST)
+# ============================================================================
+try:
+    from routes.aria_chat_routes import router as aria_chat_router
+    app.include_router(aria_chat_router, tags=["Aria Chat"])
+    logger.info("Aria chat routes loaded")
+except Exception as e:
+    logger.warning(f"Aria chat routes not loaded: {e}")
+
+# ============================================================================
 # SCHEDULER ENHANCEMENT ROUTES (March 2026 sprint)
 # ============================================================================
 

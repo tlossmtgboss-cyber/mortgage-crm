@@ -1,0 +1,310 @@
+/**
+ * AriaChatScreen.css
+ * Perennia AI — Aria Chat Interface Styles
+ */
+
+.ac-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  background: #060A10;
+  color: #E8F0FF;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.ac-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid #1E3050;
+  flex-shrink: 0;
+}
+
+.ac-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ac-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.ac-status--on { background: #4ADE80; }
+.ac-status--off { background: #F87171; }
+
+.ac-header-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: #7EB8F7;
+}
+
+.ac-header-sub {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: #5A7AAA;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+/* ── Messages area ──────────────────────────────────────── */
+.ac-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* User bubble */
+.ac-user-row {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ac-user-bubble {
+  background: #2A4A7F;
+  border-radius: 16px 16px 4px 16px;
+  padding: 12px 16px;
+  max-width: 80%;
+}
+
+.ac-user-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #E8F0FF;
+}
+
+/* Aria bubble */
+.ac-aria-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.ac-aria-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #1E3A6E;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #2A4A7F;
+  flex-shrink: 0;
+}
+
+.ac-aria-avatar span {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 14px;
+  color: #7EB8F7;
+  font-weight: 600;
+}
+
+.ac-aria-bubble {
+  flex: 1;
+  background: #0D1520;
+  border-radius: 16px 16px 16px 4px;
+  padding: 12px 16px;
+  border: 1px solid #1E3050;
+  max-width: 85%;
+}
+
+.ac-aria-text {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #E8F0FF;
+  white-space: pre-wrap;
+}
+
+/* Confirmation card */
+.ac-confirm-card {
+  border-color: #2A4A7F;
+}
+
+.ac-confirm-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+
+.ac-cancel-btn {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid #1E3050;
+  background: transparent;
+  color: #5A7AAA;
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.ac-cancel-btn:hover {
+  border-color: #7EB8F7;
+  color: #7EB8F7;
+}
+
+.ac-confirm-btn {
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, #2A4A7F, #3A7AC8);
+  color: #E8F0FF;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.ac-confirm-btn:hover { opacity: 0.9; }
+
+/* Task complete card */
+.ac-task-card {
+  border-color: rgba(74, 222, 128, 0.25);
+  background: rgba(74, 222, 128, 0.04);
+}
+
+.ac-task-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ac-task-check {
+  font-size: 14px;
+  color: #4ADE80;
+}
+
+.ac-task-title {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  color: #4ADE80;
+}
+
+.ac-task-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+
+.ac-task-key {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: #5A7AAA;
+  text-transform: capitalize;
+}
+
+.ac-task-val {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: #E8F0FF;
+  max-width: 60%;
+  text-align: right;
+}
+
+/* Typing indicator */
+.ac-typing-bubble {
+  padding: 12px 16px;
+}
+
+.ac-typing-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.ac-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #7EB8F7;
+  animation: ac-dot-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes ac-dot-pulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+/* ── Input bar ──────────────────────────────────────────── */
+.ac-input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 12px;
+  border-top: 1px solid #1E3050;
+  background: #0D1520;
+  flex-shrink: 0;
+}
+
+.ac-input {
+  flex: 1;
+  background: #111D2E;
+  border: 1px solid #1E3050;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  color: #E8F0FF;
+  resize: none;
+  max-height: 100px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.ac-input::placeholder {
+  color: #2A3F60;
+}
+
+.ac-input:focus {
+  border-color: #2A4A7F;
+}
+
+.ac-send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #2A4A7F;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  flex-shrink: 0;
+}
+
+.ac-send--disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ac-send-icon {
+  font-size: 18px;
+  color: #E8F0FF;
+}
+
+/* ── Safe area for iOS ──────────────────────────────────── */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .ac-root {
+    padding-top: env(safe-area-inset-top);
+  }
+  .ac-input-bar {
+    padding-bottom: calc(10px + env(safe-area-inset-bottom));
+  }
+}
