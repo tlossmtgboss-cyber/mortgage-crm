@@ -33,7 +33,7 @@
       "destination": "https://api.perenniaai.com/api/:path*"
     },
     {
-      "source": "/((?!api|token|static|_next|favicon.ico).*)",
+      "source": "/((?!api|token|static|_next|favicon.ico|aria-test\\.html).*)",
       "destination": "/index.html"
     }
   ]
