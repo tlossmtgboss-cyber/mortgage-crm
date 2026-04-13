@@ -2,6 +2,10 @@
 from dotenv import load_dotenv
 load_dotenv()
 
+# Increase recursion limit — FastAPI's merged_lifespan chains deeply with many routers
+import sys
+sys.setrecursionlimit(3000)
+
 # Suppress warnings in production to avoid Railway rate limiting (500 logs/sec limit)
 import warnings
 import os as _os
