@@ -1,7 +1,7 @@
 /* Perennia AI — Service Worker for Offline Support */
 /* Caches app shell, handles API fallback, queues offline mutations, push notifications */
 
-const CACHE_NAME = 'perennia-v1';
+const CACHE_NAME = 'perennia-v2';
 const API_CACHE_NAME = 'perennia-api-v1';
 const OFFLINE_QUEUE_DB = 'perennia-offline-queue';
 const OFFLINE_QUEUE_STORE = 'mutations';
@@ -249,7 +249,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets and navigation: cache-first
+  // Navigation requests (HTML pages): network-first so deploys take effect immediately
+  if (event.request.mode === 'navigate') {
+    event.respondWith(networkFirst(event.request));
+    return;
+  }
+
+  // Static assets (JS, CSS, images, fonts): cache-first
   event.respondWith(cacheFirst(event.request));
 });
 
