@@ -375,6 +375,7 @@ class ReviewQueueItem:
             "status": self.status,
             "reviewed_by": self.reviewed_by,
             "reviewed_at": self.reviewed_at.isoformat() if self.reviewed_at else None,
+            "reviewer_notes": self.reviewer_notes,
             "final_value": self.final_value,
             "created_at": self.created_at.isoformat(),
         }

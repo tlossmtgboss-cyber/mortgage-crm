@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { toast } from 'react-hot-toast';
 import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -199,7 +200,7 @@ const WaitlistManager = ({ appointmentTypeId, token }) => {
         fetchWaitlist();
       } else {
         const data = await res.json();
-        alert(data.detail || 'Failed to offer slot');
+        toast.error(data.detail || 'Failed to offer slot');
       }
     } catch (err) {
       console.error('Offer failed:', err);

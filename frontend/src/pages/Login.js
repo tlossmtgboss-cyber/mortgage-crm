@@ -7,6 +7,7 @@ import { setAuth, isAuthenticated } from '../utils/auth';
 import { getUserEffectiveRole, getDefaultRouteForRole } from '../config/roleConfig';
 import { useBiometricLogin } from '../hooks/useBiometricLogin';
 import { haptics } from '../services/nativeServices';
+import { consumePendingDeepLink } from '../services/deepLinkRouter';
 import './Login.css';
 
 function Login() {
@@ -50,7 +51,7 @@ function Login() {
       throw new Error('No token received from server');
     }
 
-    await setAuth(data.access_token, data.user);
+    await setAuth(data.access_token, data.user, data.refresh_token);
 
     const authenticated = await isAuthenticated();
     if (!authenticated) {
@@ -62,7 +63,10 @@ function Login() {
 
   const getPostLoginRoute = (data) => {
     if (redirectTo) return redirectTo;
-    if (Capacitor.isNativePlatform()) return '/aria-voice';
+    // Check for a pending deep link queued before auth (e.g. push notification tap)
+    const pendingDeepLink = consumePendingDeepLink();
+    if (pendingDeepLink) return pendingDeepLink;
+    if (Capacitor.isNativePlatform()) return '/dashboard';
     const permissionRole = data?.user?.permission_role || 'sales';
     const legacyRole = data?.user?.role || null;
     const effectiveRole = getUserEffectiveRole(permissionRole, legacyRole);
@@ -126,12 +130,12 @@ function Login() {
       }
     }
     setShowEnableBiometric(false);
-    navigate(pendingRoute || '/aria-voice');
+    navigate(pendingRoute || '/dashboard');
   };
 
   const handleSkipBiometric = () => {
     setShowEnableBiometric(false);
-    navigate(pendingRoute || '/aria-voice');
+    navigate(pendingRoute || '/dashboard');
   };
 
   // Show biometric enable prompt

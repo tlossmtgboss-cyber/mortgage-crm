@@ -95,13 +95,18 @@ app.add_middleware(
     tenant_db_manager=None  # Will be set from app.state at runtime
 )
 
-# Your existing CORS middleware
+# Your existing CORS middleware — NEVER use wildcard origins in production
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=[
+        "https://app.perenniaai.com",
+        "https://api.perenniaai.com",
+        "https://www.perenniaai.com",
+        "http://localhost:3000",  # dev only
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token", "X-Request-ID"],
 )
 
 

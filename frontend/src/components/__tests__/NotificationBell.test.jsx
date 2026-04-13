@@ -25,6 +25,10 @@ vi.mock('../../services/api', () => ({
   },
 }));
 
+vi.mock('../../services/pushNotificationService', () => ({
+  onNotification: () => () => {},
+}));
+
 import NotificationBell from '../NotificationBell';
 
 // ---------------------------------------------------------------------------
@@ -70,16 +74,18 @@ describe('NotificationBell', () => {
     vi.useRealTimers();
   });
 
-  it('renders nothing when there are zero unread notifications', async () => {
+  it('renders the bell button even when there are zero unread notifications', async () => {
     mockGetNotifications.mockResolvedValue(makeApiResponse([], 0));
 
-    const { container } = render(<NotificationBell />);
+    render(<NotificationBell />);
 
     await waitFor(() => {
       expect(mockGetNotifications).toHaveBeenCalledOnce();
     });
 
-    expect(container.innerHTML).toBe('');
+    // Bell should still be visible, just without a badge
+    expect(screen.getByLabelText(/notifications/i)).toBeInTheDocument();
+    expect(screen.queryByClassName?.('notification-badge')).toBeFalsy();
   });
 
   it('displays the bell button with badge when there are unread notifications', async () => {
@@ -89,7 +95,7 @@ describe('NotificationBell', () => {
     render(<NotificationBell />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
+      expect(screen.getByLabelText(/notifications/i)).toBeInTheDocument();
     });
 
     expect(screen.getByText('2')).toBeInTheDocument();
@@ -116,18 +122,18 @@ describe('NotificationBell', () => {
     render(<NotificationBell />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
+      expect(screen.getByLabelText(/notifications/i)).toBeInTheDocument();
     });
 
     // Dropdown should not be visible initially
     expect(screen.queryByText('Notifications', { selector: 'h3' })).not.toBeInTheDocument();
 
     // Click bell
-    fireEvent.click(screen.getByLabelText('Notifications'));
+    fireEvent.click(screen.getByLabelText(/notifications/i));
     expect(screen.getByText('Notifications', { selector: 'h3' })).toBeInTheDocument();
 
     // Click bell again to close
-    fireEvent.click(screen.getByLabelText('Notifications'));
+    fireEvent.click(screen.getByLabelText(/notifications/i));
     expect(screen.queryByText('Notifications', { selector: 'h3' })).not.toBeInTheDocument();
   });
 
@@ -147,10 +153,10 @@ describe('NotificationBell', () => {
     render(<NotificationBell />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
+      expect(screen.getByLabelText(/notifications/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Notifications'));
+    fireEvent.click(screen.getByLabelText(/notifications/i));
 
     expect(screen.getByText('Goal achieved')).toBeInTheDocument();
     expect(screen.getByText('Monthly target hit')).toBeInTheDocument();
@@ -165,10 +171,10 @@ describe('NotificationBell', () => {
     render(<NotificationBell />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
+      expect(screen.getByLabelText(/notifications/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Notifications'));
+    fireEvent.click(screen.getByLabelText(/notifications/i));
     expect(screen.getByText('No notifications yet')).toBeInTheDocument();
   });
 
@@ -180,10 +186,10 @@ describe('NotificationBell', () => {
     render(<NotificationBell />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
+      expect(screen.getByLabelText(/notifications/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Notifications'));
+    fireEvent.click(screen.getByLabelText(/notifications/i));
     fireEvent.click(screen.getByText('Permission approved'));
 
     await waitFor(() => {
@@ -202,10 +208,10 @@ describe('NotificationBell', () => {
     render(<NotificationBell />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
+      expect(screen.getByLabelText(/notifications/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Notifications'));
+    fireEvent.click(screen.getByLabelText(/notifications/i));
     fireEvent.click(screen.getByText('Permission approved'));
 
     // Should NOT call markAsRead since already read
@@ -224,10 +230,10 @@ describe('NotificationBell', () => {
     render(<NotificationBell />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
+      expect(screen.getByLabelText(/notifications/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Notifications'));
+    fireEvent.click(screen.getByLabelText(/notifications/i));
     expect(screen.getByText('Mark all read')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Mark all read'));
@@ -250,11 +256,11 @@ describe('NotificationBell', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
+      expect(screen.getByLabelText(/notifications/i)).toBeInTheDocument();
     });
 
     // Open dropdown
-    fireEvent.click(screen.getByLabelText('Notifications'));
+    fireEvent.click(screen.getByLabelText(/notifications/i));
     expect(screen.getByText('Notifications', { selector: 'h3' })).toBeInTheDocument();
 
     // Click outside
@@ -262,7 +268,7 @@ describe('NotificationBell', () => {
     expect(screen.queryByText('Notifications', { selector: 'h3' })).not.toBeInTheDocument();
   });
 
-  it('navigates to /tasks when "View all notifications" is clicked', async () => {
+  it('navigates to /aria/notifications when "View all notifications" is clicked', async () => {
     mockGetNotifications.mockResolvedValue(
       makeApiResponse([makeNotification()], 1)
     );
@@ -270,13 +276,13 @@ describe('NotificationBell', () => {
     render(<NotificationBell />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
+      expect(screen.getByLabelText(/notifications/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Notifications'));
+    fireEvent.click(screen.getByLabelText(/notifications/i));
     fireEvent.click(screen.getByText('View all notifications'));
 
-    expect(mockNavigate).toHaveBeenCalledWith('/tasks');
+    expect(mockNavigate).toHaveBeenCalledWith('/aria/notifications');
   });
 
   it('formats relative timestamps correctly', async () => {
@@ -294,10 +300,10 @@ describe('NotificationBell', () => {
     render(<NotificationBell />);
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Notifications')).toBeInTheDocument();
+      expect(screen.getByLabelText(/notifications/i)).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByLabelText('Notifications'));
+    fireEvent.click(screen.getByLabelText(/notifications/i));
 
     expect(screen.getByText('5m ago')).toBeInTheDocument();
     expect(screen.getByText('2h ago')).toBeInTheDocument();

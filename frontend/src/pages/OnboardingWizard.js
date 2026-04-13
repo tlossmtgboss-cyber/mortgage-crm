@@ -181,9 +181,9 @@ function OnboardingWizard() {
         {currentStep === 1 && (
           <div className="onboarding-step welcome-step">
             <div className="step-icon">👋</div>
-            <h1>Welcome to Mortgage CRM!</h1>
+            <h1>Welcome to Aria!</h1>
             <p className="step-subtitle">
-              Let's get your AI-powered CRM set up in just 5 minutes
+              Let's get your AI-powered platform set up in just 5 minutes
             </p>
 
             <div className="welcome-features">

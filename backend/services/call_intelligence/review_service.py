@@ -281,22 +281,35 @@ class HumanReviewService:
             logger.error(f"Failed to get pending reviews: {safe_error}")
             return []
 
-    async def get_review_by_id(self, review_id: str) -> Optional[ReviewQueueItem]:
-        """Get a specific review item by ID."""
+    async def get_review_by_id(
+        self,
+        review_id: str,
+        organization_id: Optional[int] = None,
+    ) -> Optional[ReviewQueueItem]:
+        """Get a specific review item by ID, with optional tenant isolation."""
         from sqlalchemy import text
 
         try:
+            filters = ["id = :review_id"]
+            params: Dict[str, Any] = {"review_id": review_id}
+
+            if organization_id is not None:
+                filters.append("organization_id = :org_id")
+                params["org_id"] = organization_id
+
+            where_clause = " AND ".join(filters)
+
             result = self.db.execute(
-                text("""
+                text(f"""
                     SELECT
                         id, call_id, loan_id, extraction_type, field_name,
                         extracted_value, confidence_score, source_text,
                         review_status, reviewed_by, reviewed_at, reviewer_notes,
                         final_value, created_at
                     FROM extraction_review_queue
-                    WHERE id = :review_id
+                    WHERE {where_clause}
                 """),
-                {"review_id": review_id}
+                params,
             ).fetchone()
 
             if result:
@@ -321,6 +334,73 @@ class HumanReviewService:
             logger.warning(f"Failed to get review {review_id}: {e}")
 
         return None
+
+    async def get_reviews_for_call(
+        self,
+        call_id: str,
+        organization_id: Optional[int] = None,
+    ) -> List[ReviewQueueItem]:
+        """
+        Get all reviews associated with a specific call.
+
+        Args:
+            call_id: Call identifier
+            organization_id: Filter by organization for tenant isolation
+
+        Returns:
+            List of ReviewQueueItems for the call
+        """
+        from sqlalchemy import text
+
+        filters = ["call_id = :call_id"]
+        params: Dict[str, Any] = {"call_id": call_id}
+
+        if organization_id is not None:
+            filters.append("organization_id = :org_id")
+            params["org_id"] = organization_id
+
+        where_clause = " AND ".join(filters)
+
+        try:
+            result = self.db.execute(
+                text(f"""
+                    SELECT
+                        id, call_id, loan_id, extraction_type, field_name,
+                        extracted_value, confidence_score, source_text,
+                        review_status, reviewed_by, reviewed_at, reviewer_notes,
+                        final_value, created_at
+                    FROM extraction_review_queue
+                    WHERE {where_clause}
+                    ORDER BY confidence_score ASC, created_at ASC
+                """),
+                params,
+            ).fetchall()
+
+            items = []
+            for row in result:
+                items.append(ReviewQueueItem(
+                    review_id=str(row[0]),
+                    call_id=row[1],
+                    loan_id=row[2],
+                    extraction_type=row[3],
+                    field_name=row[4],
+                    extracted_value=row[5],
+                    confidence_score=row[6],
+                    source_text=row[7] or "",
+                    status=row[8],
+                    reviewed_by=row[9],
+                    reviewed_at=row[10],
+                    reviewer_notes=row[11],
+                    final_value=row[12],
+                    created_at=row[13],
+                ))
+
+            return items
+
+        except Exception as e:
+            safe_error = mask_pii_for_logging(str(e))
+            logger.error(f"Failed to get reviews for call {call_id}: {safe_error}")
+            return []
 
     async def submit_review(
         self,

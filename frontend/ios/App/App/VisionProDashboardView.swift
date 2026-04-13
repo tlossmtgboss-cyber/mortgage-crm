@@ -50,8 +50,8 @@ struct DashboardTask: Identifiable {
         }
     }
 
-    /// Map a CarPlayModels.TaskItem to a DashboardTask for display.
-    static func from(_ item: TaskItem) -> DashboardTask {
+    /// Map a CarPlayModels.CPTaskItem to a DashboardTask for display.
+    static func from(_ item: CPTaskItem) -> DashboardTask {
         let priority: TaskPriority
         switch item.priority.lowercased() {
         case "high":   priority = .high
@@ -125,8 +125,8 @@ struct DashboardRateAlert: Identifiable {
         }
     }
 
-    /// Map a CarPlayModels.RateAlert to a DashboardRateAlert for display.
-    static func from(_ alert: RateAlert) -> DashboardRateAlert {
+    /// Map a CarPlayModels.CPRateAlert to a DashboardRateAlert for display.
+    static func from(_ alert: CPRateAlert) -> DashboardRateAlert {
         let direction: Direction = alert.changeDirection.lowercased() == "down" ? .down : .up
         let change = abs(alert.currentRate - alert.previousRate)
 
@@ -175,39 +175,41 @@ final class VisionProDashboardViewModel: ObservableObject {
     private func fetchPipelineData() async throws -> [PipelineStageCard] {
         let dashboard = try await CarPlayAPIService.shared.fetchDashboard()
 
-        // Map DashboardData aggregate counts into stage cards.
+        // Map dashboard summary counts into stage cards.
         // Only include stages that have a non-zero count so the grid stays relevant.
+        let ps = dashboard.pipelineSummary
         var cards: [PipelineStageCard] = []
 
-        if dashboard.totalLeads > 0 {
-            cards.append(PipelineStageCard(stage: "Leads", count: dashboard.totalLeads, icon: "person.3.fill", color: .blue))
+        if dashboard.newLeadCount > 0 {
+            cards.append(PipelineStageCard(stage: "New Leads", count: dashboard.newLeadCount, icon: "person.3.fill", color: .blue))
         }
-        if dashboard.totalLoans > 0 {
-            cards.append(PipelineStageCard(stage: "Loans", count: dashboard.totalLoans, icon: "doc.text.fill", color: .indigo))
+        if dashboard.activeLoanCount > 0 {
+            cards.append(PipelineStageCard(stage: "Active Loans", count: dashboard.activeLoanCount, icon: "doc.text.fill", color: .indigo))
         }
-        if dashboard.activeLoans > 0 {
-            cards.append(PipelineStageCard(stage: "Active", count: dashboard.activeLoans, icon: "gearshape.2.fill", color: .purple))
+        if (ps?.applicationCount ?? 0) > 0 {
+            cards.append(PipelineStageCard(stage: "Application", count: ps!.applicationCount, icon: "pencil.and.list.clipboard", color: .teal))
         }
-        if dashboard.pendingTasks > 0 {
-            cards.append(PipelineStageCard(stage: "Pending Tasks", count: dashboard.pendingTasks, icon: "checklist", color: .orange))
+        if (ps?.processingCount ?? 0) > 0 {
+            cards.append(PipelineStageCard(stage: "Processing", count: ps!.processingCount, icon: "gearshape.2.fill", color: .purple))
         }
-        if dashboard.urgentTasks > 0 {
-            cards.append(PipelineStageCard(stage: "Urgent", count: dashboard.urgentTasks, icon: "exclamationmark.triangle.fill", color: .red))
+        if (ps?.underwritingCount ?? 0) > 0 {
+            cards.append(PipelineStageCard(stage: "Underwriting", count: ps!.underwritingCount, icon: "doc.text.magnifyingglass", color: .orange))
         }
-        if dashboard.fundedThisMonth > 0 {
-            cards.append(PipelineStageCard(stage: "Funded", count: dashboard.fundedThisMonth, icon: "banknote.fill", color: .green))
+        if dashboard.urgentTaskCount > 0 {
+            cards.append(PipelineStageCard(stage: "Urgent Tasks", count: dashboard.urgentTaskCount, icon: "exclamationmark.triangle.fill", color: .red))
+        }
+        if (ps?.clearToCloseCount ?? 0) > 0 {
+            cards.append(PipelineStageCard(stage: "Clear to Close", count: ps!.clearToCloseCount, icon: "checkmark.seal.fill", color: .green))
         }
 
         // If everything came back zero, still show the primary counts so the
         // dashboard is not completely empty.
         if cards.isEmpty {
             cards = [
-                PipelineStageCard(stage: "Leads", count: dashboard.totalLeads, icon: "person.3.fill", color: .blue),
-                PipelineStageCard(stage: "Loans", count: dashboard.totalLoans, icon: "doc.text.fill", color: .indigo),
-                PipelineStageCard(stage: "Active", count: dashboard.activeLoans, icon: "gearshape.2.fill", color: .purple),
-                PipelineStageCard(stage: "Pending Tasks", count: dashboard.pendingTasks, icon: "checklist", color: .orange),
-                PipelineStageCard(stage: "Urgent", count: dashboard.urgentTasks, icon: "exclamationmark.triangle.fill", color: .red),
-                PipelineStageCard(stage: "Funded", count: dashboard.fundedThisMonth, icon: "banknote.fill", color: .green),
+                PipelineStageCard(stage: "New Leads", count: dashboard.newLeadCount, icon: "person.3.fill", color: .blue),
+                PipelineStageCard(stage: "Active Loans", count: dashboard.activeLoanCount, icon: "doc.text.fill", color: .indigo),
+                PipelineStageCard(stage: "Urgent Tasks", count: dashboard.urgentTaskCount, icon: "exclamationmark.triangle.fill", color: .red),
+                PipelineStageCard(stage: "Appointments", count: dashboard.todayAppointmentCount, icon: "calendar", color: .orange),
             ]
         }
 
@@ -595,10 +597,15 @@ final class VisionProDashboardHostingController: UIHostingController<VisionProDa
         super.viewDidLoad()
         title = "Perennia AI Dashboard"
 
+        #if os(visionOS)
+        preferredContentSize = VisionProWindowConfig.preferredSize
+        view.backgroundColor = .clear
+        #else
         if VisionProSupport.isVisionPro {
             preferredContentSize = VisionProSupport.preferredContentSize
             view.backgroundColor = .clear
         }
+        #endif
     }
 }
 

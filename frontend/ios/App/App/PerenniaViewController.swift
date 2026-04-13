@@ -2,22 +2,18 @@
  * PerenniaViewController.swift
  * Custom Capacitor ViewController for Perennia AI
  *
- * Registers custom native plugins with the Capacitor bridge and applies
- * certificate pinning to ALL WKWebView traffic (HTML, JS, CSS, fetch/XHR).
+ * Registers custom native plugins with the Capacitor bridge.
  *
- * Without this, only URLSession-based requests go through the pinning
- * delegate in CertificatePinning.swift — WKWebView uses its own TLS stack.
+ * Certificate pinning for WKWebView is only enabled in Release builds.
+ * In DEBUG builds, Capacitor's default navigation delegate is left intact
+ * to avoid interfering with local loading via capacitor://localhost.
  */
 
 import UIKit
 import Capacitor
 import WebKit
 
-class PerenniaViewController: CAPBridgeViewController, WKNavigationDelegate {
-
-    /// Stores Capacitor's original WKNavigationDelegate so we can forward all
-    /// delegate callbacks we don't need to intercept ourselves.
-    private weak var originalNavigationDelegate: WKNavigationDelegate?
+class PerenniaViewController: CAPBridgeViewController {
 
     override open func capacitorDidLoad() {
         // Register custom native plugins
@@ -29,77 +25,103 @@ class PerenniaViewController: CAPBridgeViewController, WKNavigationDelegate {
         bridge?.registerPluginInstance(LiveActivityPlugin())
         bridge?.registerPluginInstance(ShareExtensionBridge())
         bridge?.registerPluginInstance(PinnedFetchPlugin())
+        bridge?.registerPluginInstance(SensitiveScreenPlugin())
+
+        // Provide the Capacitor bridge to PushNotificationRouter for deep link navigation
+        if #available(iOS 13.0, *) {
+            PushNotificationRouter.shared.bridge = bridge
+        }
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
 
-        // Store Capacitor's original navigation delegate before overriding.
-        originalNavigationDelegate = webView?.navigationDelegate
-
-        // Inject ourselves as the WKWebView navigation delegate for TLS pinning.
-        // We forward all non-intercepted calls to the original delegate so
-        // Capacitor's deep-link and custom-scheme handling still works.
-        webView?.navigationDelegate = self
-
-        // Check device integrity before loading web content.
-        // The actual JS-facing check runs via the plugin when JS calls it.
-        // Native enforcement: disable screenshot capture if MDM policy requires it.
-        let integrity = DeviceIntegrityPlugin()
-        DispatchQueue.global().async {
-            // The actual check runs via the plugin when JS calls it
-            // Native enforcement: disable screenshot if MDM requires it
-            _ = integrity
-        }
+        #if !DEBUG
+        // In Release builds, install certificate pinning on the WebView.
+        // We create a dedicated pinning delegate that forwards all other
+        // calls back to Capacitor's original delegate safely.
+        let pinningDelegate = PinningNavigationDelegate(
+            original: webView?.navigationDelegate
+        )
+        webView?.navigationDelegate = pinningDelegate
+        // Retain the delegate (webView.navigationDelegate is weak)
+        objc_setAssociatedObject(self, &AssociatedKeys.pinningDelegate, pinningDelegate, .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+        #endif
     }
 
     // MARK: - Public API
 
     /// Clears all sensitive data from the WebView and secure storage.
-    /// Call this on logout to ensure no session artifacts remain.
-    public func clearSensitiveData() {
+    /// The completion handler fires after WebView data removal finishes,
+    /// ensuring all async cleanup is done before the caller proceeds.
+    public func clearSensitiveData(completion: (() -> Void)? = nil) {
+        let group = DispatchGroup()
+        group.enter()
+
         let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
-        let dateFrom = Date(timeIntervalSince1970: 0)
         WKWebsiteDataStore.default().removeData(
             ofTypes: dataTypes,
-            modifiedSince: dateFrom
+            modifiedSince: Date(timeIntervalSince1970: 0)
         ) {
-            // WebView data cleared
+            group.leave()
         }
 
         KeychainService.shared.deleteAll()
         EncryptedCacheService.shared.clearAll()
         AuditLogger.shared.log(event: .logout)
+
+        group.notify(queue: .main) {
+            completion?()
+        }
+    }
+}
+
+// MARK: - Associated Object Key
+
+private struct AssociatedKeys {
+    static var pinningDelegate = 0
+}
+
+// MARK: - Pinning Navigation Delegate (Release only)
+
+/// A WKNavigationDelegate that intercepts TLS challenges for certificate
+/// pinning while forwarding everything else to Capacitor's original delegate.
+///
+/// Unlike making the ViewController itself the delegate, this class uses
+/// NSObject message forwarding so any delegate method Capacitor implements
+/// is automatically forwarded — no risk of swallowing completion handlers.
+private class PinningNavigationDelegate: NSObject, WKNavigationDelegate {
+
+    private weak var original: WKNavigationDelegate?
+
+    init(original: WKNavigationDelegate?) {
+        self.original = original
+        super.init()
     }
 
-    // MARK: - WKNavigationDelegate — Certificate Pinning
+    // MARK: - Certificate Pinning
 
-    /// Intercepts TLS authentication challenges for all WKWebView requests
-    /// and validates the server certificate against our pinned SPKI hashes.
     func webView(
         _ webView: WKWebView,
         didReceive challenge: URLAuthenticationChallenge,
         completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
     ) {
-        // Delegate to the shared pinning logic in CertificatePinning.swift.
-        // When pinning is disabled (DEBUG builds), this falls through to
-        // default handling automatically.
         pinWebViewChallenge(challenge, completionHandler: completionHandler)
     }
 
-    // MARK: - WKNavigationDelegate — Pass-through for Capacitor
+    // MARK: - Safe Forwarding
 
-    // Forward standard navigation decisions so Capacitor's deep-link and
-    // custom-scheme handling still works.
+    // For methods with completion handlers, we MUST always call the handler.
+    // Check if the original implements the method; if not, call handler directly.
 
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
         decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
     ) {
-        if let original = originalNavigationDelegate,
-           original.responds(to: #selector(WKNavigationDelegate.webView(_:decidePolicyFor:decisionHandler:) as ((WKNavigationDelegate) -> (WKWebView, WKNavigationAction, @escaping (WKNavigationActionPolicy) -> Void) -> Void)?)) {
+        if let original = original {
             original.webView?(webView, decidePolicyFor: navigationAction, decisionHandler: decisionHandler)
+                ?? decisionHandler(.allow)
         } else {
             decisionHandler(.allow)
         }
@@ -110,56 +132,37 @@ class PerenniaViewController: CAPBridgeViewController, WKNavigationDelegate {
         decidePolicyFor navigationResponse: WKNavigationResponse,
         decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void
     ) {
-        if let original = originalNavigationDelegate,
-           original.responds(to: #selector(WKNavigationDelegate.webView(_:decidePolicyFor:decisionHandler:) as ((WKNavigationDelegate) -> (WKWebView, WKNavigationResponse, @escaping (WKNavigationResponsePolicy) -> Void) -> Void)?)) {
+        if let original = original {
             original.webView?(webView, decidePolicyFor: navigationResponse, decisionHandler: decisionHandler)
+                ?? decisionHandler(.allow)
         } else {
             decisionHandler(.allow)
         }
     }
 
+    // Methods without completion handlers — safe to forward with optional chaining.
+
     func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
-        originalNavigationDelegate?.webView?(webView, didCommit: navigation)
+        original?.webView?(webView, didCommit: navigation)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        originalNavigationDelegate?.webView?(webView, didFinish: navigation)
+        original?.webView?(webView, didFinish: navigation)
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
-        originalNavigationDelegate?.webView?(webView, didFail: navigation, withError: error)
+        original?.webView?(webView, didFail: navigation, withError: error)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        let nsError = error as NSError
+        if nsError.code == NSURLErrorCancelled || nsError.code == NSURLErrorServerCertificateUntrusted {
+            AuditLogger.shared.log(event: .certificatePinFailure, details: ["error_code": "\(nsError.code)"])
+        }
+        original?.webView?(webView, didFailProvisionalNavigation: navigation, withError: error)
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        originalNavigationDelegate?.webViewWebContentProcessDidTerminate?(webView)
-    }
-
-    /// Show a user-visible error when a pinning failure cancels the page load.
-    func webView(
-        _ webView: WKWebView,
-        didFailProvisionalNavigation navigation: WKNavigation!,
-        withError error: Error
-    ) {
-        let nsError = error as NSError
-        // NSURLErrorCancelled (-999) is fired when we cancel via pinning rejection.
-        // NSURLErrorServerCertificateUntrusted (-1202) may also appear.
-        if nsError.code == NSURLErrorCancelled || nsError.code == NSURLErrorServerCertificateUntrusted {
-            AuditLogger.shared.log(event: .certificatePinFailure, details: ["error_code": "\(nsError.code)"])
-
-            let html = """
-            <html>
-            <head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-            <body style="font-family:-apple-system,sans-serif;text-align:center;padding:60px 20px;">
-              <h2>Secure Connection Failed</h2>
-              <p>The app could not verify the identity of the server. This may indicate a network security issue.</p>
-              <p style="color:#888;font-size:13px;">Error \(nsError.code)</p>
-            </body>
-            </html>
-            """
-            webView.loadHTMLString(html, baseURL: nil)
-        }
-
-        // Forward to original delegate as well
-        originalNavigationDelegate?.webView?(webView, didFailProvisionalNavigation: navigation, withError: error)
+        original?.webViewWebContentProcessDidTerminate?(webView)
     }
 }

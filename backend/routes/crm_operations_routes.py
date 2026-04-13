@@ -409,6 +409,14 @@ async def get_pipeline_analytics(
     Uses raw SQL to avoid enum validation issues with legacy data.
     """
     from sqlalchemy import text
+    from services.cache_service import cache_get, cache_set
+
+    user_id = getattr(current_user, "id", None)
+    org_id = getattr(current_user, "organization_id", None)
+    cache_key = f"pipeline:analytics:user:{user_id}:org:{org_id}:v1"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     try:
         # Use raw SQL to avoid ORM enum issues
@@ -431,11 +439,13 @@ async def get_pipeline_analytics(
 
         total_volume = sum([l.amount for l in loans_data if l.amount]) or 0
 
-        return {
+        response = {
             "total_loans": len(loans_data),
             "total_volume": total_volume,
             "stage_breakdown": stage_breakdown
         }
+        cache_set(cache_key, response, ttl=30)
+        return response
     except Exception as e:
         logger.error(f"Error in pipeline analytics: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail="Database error")

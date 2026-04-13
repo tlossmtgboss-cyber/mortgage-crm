@@ -412,13 +412,18 @@ class UnifiedIncomeCalculator:
         """
         Calculate W2 Hourly income.
 
+        Per Fannie Mae B3-3.1-01 (updated 03/04/2026):
+        Only the most recent W-2 is required for fixed/stable base hourly
+        income. Year 2 W-2 data is optional and used for trending analysis
+        only. Confidence is NOT penalized for missing year 2 W-2.
+
         Formula: Per Hour × # of hours × 52/12 = Monthly Income
 
         Uses lowest of:
         - Current hourly calculation
         - YTD average
         - YTD + 1 year average
-        - YTD + 2 year average
+        - YTD + 2 year average (if year 2 W-2 provided)
         """
         self._reset_steps()
         steps = []
@@ -510,6 +515,8 @@ class UnifiedIncomeCalculator:
                 declining = True
                 warnings.append("Income is declining - used conservative calculation")
 
+        # Per B3-3.1-01 (03/04/2026): Year 2 W-2 is no longer required for
+        # stable base income. Confidence is not penalized for missing year 2.
         return IncomeCalculationResult(
             success=True,
             income_type=UnifiedIncomeType.W2_HOURLY,
@@ -518,8 +525,8 @@ class UnifiedIncomeCalculator:
             calculation_method="W2_HOURLY_LOWEST",
             averaging_method=AveragingMethod.USE_LOWEST,
             calculation_steps=steps,
-            confidence_score=90 if data.w2_year2_earnings else 75,
-            confidence_level=ConfidenceLevel.HIGH if data.w2_year2_earnings else ConfidenceLevel.MEDIUM,
+            confidence_score=90,
+            confidence_level=ConfidenceLevel.HIGH,
             flags={"declining_income": declining},
             warnings=warnings,
         )
@@ -531,6 +538,11 @@ class UnifiedIncomeCalculator:
     def calculate_w2_salary(self, data: W2SalaryData) -> IncomeCalculationResult:
         """
         Calculate W2 Salary income.
+
+        Per Fannie Mae B3-3.1-01 (updated 03/04/2026):
+        Only the most recent W-2 is required for fixed/stable base salary
+        income. Year 2 W-2 data is optional. Confidence is NOT penalized
+        for missing year 2 W-2.
 
         Frequency multipliers:
         - Monthly × 1
@@ -626,6 +638,10 @@ class UnifiedIncomeCalculator:
     def calculate_ot_bonus(self, data: OTBonusData) -> IncomeCalculationResult:
         """
         Calculate Overtime & Bonus income.
+
+        Per Fannie Mae B3-3.1-01 (03/04/2026): 2-year W-2 history is STILL
+        required for variable income (OT/bonus). The reduced requirement only
+        applies to fixed/stable base income.
 
         Uses 2-year averaging, selecting lowest of:
         - YTD Average
@@ -730,6 +746,10 @@ class UnifiedIncomeCalculator:
     def calculate_commission(self, data: CommissionData) -> IncomeCalculationResult:
         """
         Calculate Commission income.
+
+        Per Fannie Mae B3-3.1-01 (03/04/2026): 2-year W-2 history is STILL
+        required for commission income. The reduced requirement only applies
+        to fixed/stable base income.
 
         Commission - 2106 Unreimbursed Expenses = Net Commission Income
         Uses 2-year averaging of net income.

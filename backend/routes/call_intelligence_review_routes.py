@@ -14,7 +14,7 @@ Endpoints:
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
@@ -89,38 +89,30 @@ class ReviewListResponse(BaseModel):
 
 
 # =============================================================================
-# Dependencies (injected from main app via set_dependencies)
+# Dependencies
 # =============================================================================
 
 from database import get_db
-
-_get_current_user = None
-
-
-def set_dependencies(user_dependency):
-    """Store reference to main app's get_current_user dependency."""
-    global _get_current_user
-    _get_current_user = user_dependency
-
-
-async def get_current_user(request: Request, db=Depends(get_db)):
-    """Current user dependency - delegates to main app's auth."""
-    auth_header = request.headers.get("Authorization", "")
-    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-
-    if not token:
-        raise HTTPException(status_code=401, detail="Could not validate credentials")
-
-    if _get_current_user is None:
-        raise HTTPException(status_code=503, detail="Authentication service not initialized")
-
-    return await _get_current_user(token=token, request=request, db=db)
+from auth.dependencies import get_current_user
 
 
 def get_review_service(db=Depends(get_db)):
     """Get review service instance."""
     from services.call_intelligence import HumanReviewService
     return HumanReviewService(db)
+
+
+def _build_review_decision(review_id: str, decision: str, reviewer_id: int,
+                           final_value=None, notes=None):
+    """Construct a ReviewDecision data contract from individual parameters."""
+    from services.call_intelligence.data_contracts import ReviewDecision
+    return ReviewDecision(
+        review_id=review_id,
+        decision=decision,
+        reviewer_id=reviewer_id,
+        final_value=final_value,
+        notes=notes,
+    )
 
 
 # =============================================================================
@@ -187,8 +179,17 @@ async def get_review_stats(
     """
     org_id = current_user.get("organization_id") or current_user.get("org_id")
     try:
-        stats = await service.get_stats(loan_id=loan_id, days=days, organization_id=org_id)
-        return ReviewStatsResponse(**stats.to_dict())
+        stats = await service.get_review_stats(loan_id=loan_id, days=days, organization_id=org_id)
+        return ReviewStatsResponse(
+            total_pending=stats.get("pending", 0),
+            total_approved=stats.get("approved", 0),
+            total_rejected=stats.get("rejected", 0),
+            total_modified=stats.get("modified", 0),
+            by_extraction_type={},
+            by_priority={},
+            avg_review_time_hours=0.0,
+            oldest_pending_hours=0.0,
+        )
 
     except Exception as e:
         logger.exception("Failed to get review stats")
@@ -251,7 +252,7 @@ async def get_review(
     """
     org_id = current_user.get("organization_id") or current_user.get("org_id")
     try:
-        item = await service.get_review(review_id, organization_id=org_id)
+        item = await service.get_review_by_id(review_id, organization_id=org_id)
 
         if not item:
             raise HTTPException(status_code=404, detail=f"Review {review_id} not found")
@@ -298,22 +299,30 @@ async def submit_review_decision(
 
     org_id = current_user.get("organization_id") or current_user.get("org_id")
     try:
-        result = await service.submit_review(
+        decision_obj = _build_review_decision(
             review_id=review_id,
             decision=request.decision,
             reviewer_id=current_user["id"],
             final_value=request.final_value,
             notes=request.notes,
-            organization_id=org_id,
+        )
+        result = await service.submit_review(
+            review_id=review_id,
+            decision=decision_obj,
         )
 
-        if not result.success:
-            raise HTTPException(
-                status_code=400,
-                detail=result.errors[0] if result.errors else "Review submission failed"
-            )
+        if not result.get("success"):
+            error_msg = result.get("error", "Review submission failed")
+            raise HTTPException(status_code=400, detail=error_msg)
 
-        return ReviewDecisionResponse(**result.to_dict())
+        return ReviewDecisionResponse(
+            success=True,
+            review_id=review_id,
+            decision=request.decision,
+            message=f"Review {request.decision} successfully",
+            updated_loan_field=result.get("updated_loan_field", False),
+            errors=[],
+        )
 
     except HTTPException:
         raise
@@ -349,22 +358,25 @@ async def submit_bulk_decisions(
     org_id = current_user.get("organization_id") or current_user.get("org_id")
     for item in decisions:
         try:
-            result = await service.submit_review(
+            decision_obj = _build_review_decision(
                 review_id=item["review_id"],
                 decision=item["decision"],
                 reviewer_id=current_user["id"],
                 final_value=item.get("final_value"),
                 notes=item.get("notes"),
-                organization_id=org_id,
+            )
+            result = await service.submit_review(
+                review_id=item["review_id"],
+                decision=decision_obj,
             )
 
-            if result.success:
+            if result.get("success"):
                 results["succeeded"] += 1
             else:
                 results["failed"] += 1
                 results["errors"].append({
                     "review_id": item["review_id"],
-                    "error": result.errors[0] if result.errors else "Unknown error",
+                    "error": result.get("error", "Unknown error"),
                 })
 
         except Exception as e:

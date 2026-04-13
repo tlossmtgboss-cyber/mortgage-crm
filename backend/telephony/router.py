@@ -728,7 +728,7 @@ async def api_click_to_dial(
     """Initiate a single click-to-dial call"""
     import os
     from sqlalchemy import func
-    from datetime import datetime, timedelta
+    from datetime import datetime, timedelta, timezone
     from database.models import CallLog
 
     # Rate limit: max 10 click-to-dial calls per minute per user

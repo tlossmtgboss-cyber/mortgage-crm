@@ -11,7 +11,7 @@ Enterprise Readiness (Checks 9.5-9.7, 9.6, 9.8):
   see branch data, loan officers see only their own data.
 - CSV export endpoint (Check 9.8): GET /api/v1/scorecard/export?format=csv
 """
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -314,6 +314,7 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
 
     @app.get("/api/v1/scorecard/export")
     async def export_scorecard(
+        request: Request,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         format: str = Query("csv", description="Export format (csv)"),
@@ -463,6 +464,18 @@ def register_scorecard_routes(app, get_db, get_current_user, Lead, Loan, LoanSta
 
         output.seek(0)
         filename = f"scorecard_{start_date_str}_to_{end_date_str}.csv"
+
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            org_id = scope.get("org_id")
+            log_export_event(
+                db=db, user_id=current_user.id, organization_id=org_id,
+                resource_type="scorecard", export_format="csv",
+                ip_address=_get_client_ip(request),
+                details={"start_date": start_date_str, "end_date": end_date_str, "funded_count": funded_count},
+            )
+        except Exception:
+            pass
 
         return StreamingResponse(
             iter([output.getvalue()]),

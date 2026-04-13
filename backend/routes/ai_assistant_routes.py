@@ -439,13 +439,19 @@ async def execute_ai_function(
 
             # Update NMLS
             if nmls_number:
-                if hasattr(target_user, 'nmls_number'):
-                    target_user.nmls_number = nmls_number
-                else:
-                    if not target_user.user_metadata:
-                        target_user.user_metadata = {}
-                    target_user.user_metadata['nmls_number'] = nmls_number
-                updates.append(f"NMLS: {nmls_number}")
+                from utils.validators import validate_nmls
+                try:
+                    cleaned_nmls = validate_nmls(nmls_number)
+                except ValueError as ve:
+                    return {"success": False, "error": str(ve)}
+                if cleaned_nmls:
+                    if hasattr(target_user, 'nmls_number'):
+                        target_user.nmls_number = cleaned_nmls
+                    else:
+                        if not target_user.user_metadata:
+                            target_user.user_metadata = {}
+                        target_user.user_metadata['nmls_number'] = cleaned_nmls
+                    updates.append(f"NMLS: {cleaned_nmls}")
 
             db.commit()
 

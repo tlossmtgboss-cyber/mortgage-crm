@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { usePermissions } from '../contexts/PermissionContext';
 import { agentAPI, agentGymAPI, agentChatAPI } from '../services/api';
 import './AgentGym.css';
 
@@ -28,6 +29,11 @@ function AgentGym() {
   const [searchParams] = useSearchParams();
   const preselectedAgentId = searchParams.get('agent');
   const chatEndRef = useRef(null);
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - only admins can access Agent Gym
+  const canAccessAgentGym = isAdmin || hasAnyPermission(['admin.manage', 'agents.manage', 'system.admin']) ||
+    userRole === 'admin' || userRole === 'site_admin';
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -340,6 +346,21 @@ function AgentGym() {
           <p>{error}</p>
           <button className="retry-btn" onClick={() => window.location.reload()}>
             <i className="fas fa-redo"></i> Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // Access denied if user doesn't have agent management permissions
+  if (!canAccessAgentGym) {
+    return (
+      <div className="agent-gym">
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access Agent Gym.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')} style={{ marginTop: '16px' }}>
+            Return to Dashboard
           </button>
         </div>
       </div>

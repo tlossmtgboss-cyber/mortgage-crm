@@ -122,27 +122,9 @@ if [ "$SKIP_WEB_BUILD" != "true" ]; then
     log_step "Step 1/8: Building web assets..."
     cd "$FRONTEND_DIR"
 
-    if [ "$BUILD_TYPE" != "debug" ]; then
-        # Use production capacitor config
-        if [ -f "capacitor.config.production.ts" ]; then
-            log_info "Using production Capacitor config..."
-            cp capacitor.config.ts capacitor.config.dev.ts.bak
-            cp capacitor.config.production.ts capacitor.config.ts
-        fi
-    fi
-
     if ! npm run build; then
-        # Restore dev config before exiting on failure
-        if [ -f "capacitor.config.dev.ts.bak" ]; then
-            mv capacitor.config.dev.ts.bak capacitor.config.ts
-        fi
         log_error "Web build failed."
         exit $EXIT_WEB_BUILD_FAIL
-    fi
-
-    # Restore dev config if backed up
-    if [ -f "capacitor.config.dev.ts.bak" ]; then
-        mv capacitor.config.dev.ts.bak capacitor.config.ts
     fi
 else
     log_step "Step 1/8: Skipping web build (SKIP_WEB_BUILD=true)"

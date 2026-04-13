@@ -160,7 +160,6 @@ After a successful build:
 | `ios/release.xcconfig` | Release build settings |
 | `ios/ExportOptions-appstore.plist` | IPA export configuration |
 | `ios/App/App/App.entitlements.release` | Production entitlements |
-| `capacitor.config.production.ts` | Production Capacitor config |
 
 ## Troubleshooting
 

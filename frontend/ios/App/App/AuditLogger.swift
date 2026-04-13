@@ -14,7 +14,6 @@
 import Foundation
 import os.log
 import CryptoKit
-import Capacitor
 
 // MARK: - AuditLogger
 
@@ -100,6 +99,7 @@ final class AuditLogger: @unchecked Sendable {
 
     private var entries: [AuditEntry] = []
     private var deviceInfo: AuditEntry.DeviceInfo
+    private var foregroundSyncTimer: Timer?
 
     // MARK: - Hash Chain (Tamper Evidence)
 
@@ -307,7 +307,7 @@ final class AuditLogger: @unchecked Sendable {
         guard let token = KeychainService.shared.authToken else { return 0 }
 
         do {
-            var request = URLRequest(url: URL(string: "https://api.perenniaai.com/api/v1/security/audit-log")!)
+            var request = URLRequest(url: URL(string: "\(APIConfig.apiBaseURL)/api/v1/security/audit-log")!)
             request.httpMethod = "POST"
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -344,6 +344,24 @@ final class AuditLogger: @unchecked Sendable {
             os_log(.error, log: log, "Audit sync failed: %{public}@", error.localizedDescription)
         }
         return 0
+    }
+
+    /// Start a repeating timer that syncs audit logs to the backend while the app is in the foreground.
+    /// This prevents data loss if the app crashes before backgrounding — a SOC 2 compliance requirement.
+    /// - Parameter interval: Sync interval in seconds (default 300 = 5 minutes).
+    func startForegroundSync(interval: TimeInterval = 300) {
+        stopForegroundSync()
+        foregroundSyncTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
+            guard let self = self else { return }
+            Task { await self.syncToBackend() }
+        }
+        RunLoop.main.add(foregroundSyncTimer!, forMode: .common)
+    }
+
+    /// Stop the foreground periodic sync timer.
+    func stopForegroundSync() {
+        foregroundSyncTimer?.invalidate()
+        foregroundSyncTimer = nil
     }
 
     /// Clear all entries (on account deletion or compliance request).
@@ -428,69 +446,6 @@ extension EncryptedCacheService {
     }
 }
 
-// MARK: - AuditLogPlugin (Capacitor Bridge)
-
-@available(iOS 14.0, *)
-public class AuditLogPlugin: CAPPlugin, CAPBridgedPlugin {
-    public let identifier = "AuditLogPlugin"
-    public let jsName = "AuditLog"
-    public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "logEvent", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getRecentLogs", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "syncToBackend", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getUnsyncedCount", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "verifyIntegrity", returnType: CAPPluginReturnPromise),
-    ]
-
-    @objc func logEvent(_ call: CAPPluginCall) {
-        guard let eventType = call.getString("event"),
-              let event = AuditLogger.EventType(rawValue: eventType) else {
-            call.reject("Invalid event type")
-            return
-        }
-
-        let details = call.getObject("details") as? [String: String] ?? [:]
-        AuditLogger.shared.log(event: event, details: details)
-        call.resolve()
-    }
-
-    @objc func getRecentLogs(_ call: CAPPluginCall) {
-        let limit = call.getInt("limit") ?? 50
-        let logs = AuditLogger.shared.getRecentLogs(limit: limit)
-        let mapped = logs.map { entry -> [String: Any] in
-            return [
-                "id": entry.id,
-                "timestamp": entry.timestamp,
-                "event": entry.event.rawValue,
-                "details": entry.details,
-                "synced": entry.synced,
-                "previousHash": entry.previousHash,
-                "hash": entry.hash
-            ]
-        }
-        call.resolve(["logs": mapped])
-    }
-
-    @objc func syncToBackend(_ call: CAPPluginCall) {
-        Task {
-            let count = await AuditLogger.shared.syncToBackend()
-            call.resolve(["synced": count])
-        }
-    }
-
-    @objc func getUnsyncedCount(_ call: CAPPluginCall) {
-        call.resolve(["count": AuditLogger.shared.unsyncedCount])
-    }
-
-    @objc func verifyIntegrity(_ call: CAPPluginCall) {
-        let result = AuditLogger.shared.verifyChainIntegrity()
-        var response: [String: Any] = [
-            "valid": result.valid,
-            "totalEntries": AuditLogger.shared.getRecentLogs(limit: Int.max).count
-        ]
-        if let brokenAt = result.brokenAt {
-            response["brokenAt"] = brokenAt
-        }
-        call.resolve(response)
-    }
-}
+// MARK: - AuditLogPlugin
+// The Capacitor plugin bridge (AuditLogPlugin) has been extracted to
+// AuditLogPlugin.swift for better code organization.

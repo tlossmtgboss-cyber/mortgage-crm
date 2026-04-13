@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { notificationsApi } from '../services/api';
+import { onNotification as onPushNotification } from '../services/pushNotificationService';
 import './NotificationBell.css';
 
 const NotificationBell = () => {
@@ -10,6 +11,16 @@ const NotificationBell = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef(null);
+
+  const loadNotifications = useCallback(async () => {
+    try {
+      const response = await notificationsApi.getNotifications(false, 10);
+      setNotifications(response.data.notifications || []);
+      setUnreadCount(response.data.unread_count || 0);
+    } catch (err) {
+      console.error('Error loading notifications:', err);
+    }
+  }, []);
 
   useEffect(() => {
     loadNotifications();
@@ -26,21 +37,17 @@ const NotificationBell = () => {
 
     document.addEventListener('mousedown', handleClickOutside);
 
+    // Listen for push notifications to refresh the list immediately
+    const unsubscribePush = onPushNotification(() => {
+      loadNotifications();
+    });
+
     return () => {
       clearInterval(interval);
       document.removeEventListener('mousedown', handleClickOutside);
+      unsubscribePush();
     };
-  }, []);
-
-  const loadNotifications = async () => {
-    try {
-      const response = await notificationsApi.getNotifications(false, 10);
-      setNotifications(response.data.notifications || []);
-      setUnreadCount(response.data.unread_count || 0);
-    } catch (err) {
-      console.error('Error loading notifications:', err);
-    }
-  };
+  }, [loadNotifications]);
 
   const handleBellClick = () => {
     setShowDropdown(!showDropdown);
@@ -84,6 +91,13 @@ const NotificationBell = () => {
 
   const getNotificationIcon = (type) => {
     const icons = {
+      'LOAN_UPDATE': '📋',
+      'LEAD_NEW': '👤',
+      'TASK_DUE': '📅',
+      'RATE_LOCK_EXPIRING': '🔒',
+      'DOCUMENT_NEEDED': '📄',
+      'CLOSING_REMINDER': '🏠',
+      'COMPLIANCE_ALERT': '⚠️',
       'permission_approved': '✅',
       'permission_denied': '❌',
       'milestone_due': '📅',
@@ -106,20 +120,30 @@ const NotificationBell = () => {
     return date.toLocaleDateString();
   };
 
-  // Only show bell when there are unread notifications
-  if (unreadCount === 0) {
-    return null;
-  }
-
   return (
     <div className="notification-bell-container" ref={dropdownRef}>
       <button
         className="notification-bell-button"
         onClick={handleBellClick}
-        aria-label="Notifications"
+        aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : 'Notifications'}
       >
-        <span className="bell-icon">🔔</span>
-        <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+        <svg
+          className="bell-icon-svg"
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+        </svg>
+        {unreadCount > 0 && (
+          <span className="notification-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>
+        )}
       </button>
 
       {showDropdown && (
@@ -167,7 +191,7 @@ const NotificationBell = () => {
           {notifications.length > 0 && (
             <div className="notification-dropdown-footer">
               <button onClick={() => {
-                navigate('/tasks');
+                navigate('/aria/notifications');
                 setShowDropdown(false);
               }} className="view-all-btn">
                 View all notifications

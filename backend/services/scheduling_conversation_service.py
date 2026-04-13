@@ -738,7 +738,7 @@ Return ONLY valid JSON:
 
                 # Push notification to LO
                 try:
-                    from services.notification_service import send_push_notification
+                    from services.push_notification_service import send_push_notification
                     send_push_notification(
                         user_id=user_id,
                         title="Appointment Booked",

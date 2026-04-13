@@ -10,7 +10,7 @@ API endpoints for the permission management system including:
 - Access & Audit (audit log, impersonation history, active sessions, revoke sessions)
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text, or_
@@ -1081,6 +1081,7 @@ async def get_certifications_by_department(
 
 @router.get("/compliance/export")
 async def export_compliance_report(
+    request: Request,
     format: str = 'csv',
     current_user = Depends(get_current_user_dep()),
     db: Session = Depends(get_db_dep())
@@ -1130,6 +1131,18 @@ async def export_compliance_report(
 
             # Return CSV
             output.seek(0)
+
+            try:
+                from utils.export_audit import log_export_event, _get_client_ip
+                log_export_event(
+                    db=db, user_id=getattr(current_user, "id", 0),
+                    organization_id=getattr(current_user, "organization_id", None),
+                    resource_type="compliance_report", export_format="csv",
+                    ip_address=_get_client_ip(request),
+                )
+            except Exception:
+                pass
+
             return StreamingResponse(
                 iter([output.getvalue()]),
                 media_type="text/csv",

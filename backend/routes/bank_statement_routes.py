@@ -9,7 +9,7 @@ import logging
 import os
 from datetime import datetime, timezone
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -352,6 +352,7 @@ async def extract_from_documents(
 
 @router.get("/worksheets/{worksheet_id}/download")
 async def download_worksheet(
+    request: Request,
     worksheet_id: int,
     db: Session = Depends(get_db),
 ):
@@ -414,6 +415,18 @@ async def download_worksheet(
     )
 
     filename = f"Bank_Statement_Worksheet_{worksheet.borrower_name.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+
+    try:
+        from utils.export_audit import log_export_event, _get_client_ip
+        log_export_event(
+            db=db, user_id=getattr(worksheet, "created_by_id", 0) or 0,
+            organization_id=getattr(worksheet, "organization_id", None),
+            resource_type="bank_statement_worksheet", export_format="xlsx",
+            ip_address=_get_client_ip(request),
+            details={"worksheet_id": worksheet_id, "borrower_name": worksheet.borrower_name},
+        )
+    except Exception:
+        pass
 
     return StreamingResponse(
         excel_buffer,

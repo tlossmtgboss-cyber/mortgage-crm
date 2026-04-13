@@ -1,17 +1,25 @@
 /**
  * Secure Storage Layer for Perennia AI Mobile App
  *
- * Enterprise-grade storage with encryption-at-rest on top of Capacitor Preferences.
- * Provides data classification, tamper detection, and transparent migration from
- * the legacy storage.js utility.
+ * Enterprise-grade storage with AES-256-GCM encryption-at-rest on top of
+ * Capacitor Preferences. Provides data classification, authenticated encryption,
+ * and transparent migration from legacy storage formats.
  *
  * Architecture:
  * - RESTRICTED data: Handled exclusively by OS keychain via NativeBiometric (never touches Preferences)
- * - SENSITIVE data: Encrypted with a device-derived key before writing to Preferences
+ * - SENSITIVE data: Encrypted with AES-256-GCM before writing to Preferences
  * - INTERNAL data: Stored in Preferences with integrity checksums
  * - PUBLIC data: Stored in Preferences as-is
  *
- * On web (non-native), falls back to localStorage with base64 obfuscation for sensitive keys.
+ * On web (non-native), falls back to localStorage with AES-256-GCM encryption
+ * for sensitive keys. The AES key is stored in sessionStorage (cleared when tab closes).
+ *
+ * GLBA compliance: Uses Web Crypto API AES-256-GCM which provides both
+ * confidentiality and integrity (authenticated encryption). The GCM authentication
+ * tag replaces the previous FNV-1a checksum for tamper detection.
+ *
+ * Backward compatibility: Old XOR-encrypted envelopes (v1) are transparently
+ * decrypted and re-encrypted with AES-GCM on read.
  */
 
 import { Capacitor } from '@capacitor/core';
@@ -33,10 +41,32 @@ const KEY_FINGERPRINT_KEY = '_ss_meta_key_fingerprint';
 const SCHEMA_VERSION_KEY = '_ss_meta_schema_version';
 
 /** Current schema version — bump when storage format changes */
-const CURRENT_SCHEMA_VERSION = 1;
+const CURRENT_SCHEMA_VERSION = 2;
 
 /** Server identifier used with NativeBiometric credential store */
 const KEYCHAIN_SERVER = 'com.perenniaai.secure-storage';
+
+/** Whether Web Crypto API with AES-GCM is available */
+const HAS_WEB_CRYPTO = (() => {
+  try {
+    return (
+      typeof crypto !== 'undefined' &&
+      typeof crypto.subtle !== 'undefined' &&
+      typeof crypto.subtle.generateKey === 'function' &&
+      typeof crypto.subtle.encrypt === 'function' &&
+      typeof crypto.subtle.decrypt === 'function'
+    );
+  } catch {
+    return false;
+  }
+})();
+
+if (!HAS_WEB_CRYPTO) {
+  console.warn(
+    'Secure storage: Web Crypto API not available. Falling back to XOR cipher. ' +
+    'This does NOT meet GLBA encryption requirements. Upgrade to a modern browser.'
+  );
+}
 
 /**
  * Data classification levels.
@@ -105,93 +135,6 @@ const KEY_CLASSIFICATION = {
 };
 
 // ---------------------------------------------------------------------------
-// Encryption primitives
-// ---------------------------------------------------------------------------
-
-/**
- * Derives an encryption key from a seed string. The key is expanded to 256 bits
- * using a simple but effective mixing function. This is not AES — it is an XOR
- * cipher with key stretching, suitable for obfuscation-at-rest where the key
- * itself is protected by the OS keychain.
- *
- * On native, the seed comes from a random value stored in the device keychain
- * (NativeBiometric credential store), so an attacker who reads Preferences
- * cannot decrypt without also compromising the keychain.
- *
- * On web, the seed is a per-browser fingerprint stored in sessionStorage,
- * providing protection only against trivial localStorage scraping.
- */
-function deriveKeyBytes(seed) {
-  const encoder = new TextEncoder();
-  const seedBytes = encoder.encode(seed);
-  const keyLength = 32; // 256 bits
-  const key = new Uint8Array(keyLength);
-
-  // Fill key by mixing seed bytes with position-dependent scrambling
-  for (let i = 0; i < keyLength; i++) {
-    // Combine seed byte, position, and a prime multiplier for diffusion
-    key[i] = (seedBytes[i % seedBytes.length] ^ (i * 167)) & 0xff;
-  }
-
-  // Second pass: cascade each byte into the next for avalanche effect
-  for (let i = 1; i < keyLength; i++) {
-    key[i] = (key[i] + key[i - 1] * 31) & 0xff;
-  }
-
-  return key;
-}
-
-/**
- * Encrypts a plaintext string using XOR with the derived key.
- * Returns a base64-encoded ciphertext.
- */
-function encrypt(plaintext, keyBytes) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plaintext);
-  const encrypted = new Uint8Array(data.length);
-
-  for (let i = 0; i < data.length; i++) {
-    encrypted[i] = data[i] ^ keyBytes[i % keyBytes.length];
-  }
-
-  return uint8ToBase64(encrypted);
-}
-
-/**
- * Decrypts a base64-encoded ciphertext using XOR with the derived key.
- * Returns the original plaintext string.
- */
-function decrypt(cipherBase64, keyBytes) {
-  const encrypted = base64ToUint8(cipherBase64);
-  const decrypted = new Uint8Array(encrypted.length);
-
-  for (let i = 0; i < encrypted.length; i++) {
-    decrypted[i] = encrypted[i] ^ keyBytes[i % keyBytes.length];
-  }
-
-  const decoder = new TextDecoder();
-  return decoder.decode(decrypted);
-}
-
-/**
- * Computes a simple checksum of a string for tamper detection.
- * Uses a 32-bit FNV-1a hash, returned as an 8-character hex string.
- */
-function computeChecksum(value) {
-  let hash = 0x811c9dc5; // FNV offset basis
-  const encoder = new TextEncoder();
-  const bytes = encoder.encode(value);
-
-  for (let i = 0; i < bytes.length; i++) {
-    hash ^= bytes[i];
-    hash = Math.imul(hash, 0x01000193); // FNV prime
-  }
-
-  // Convert to unsigned 32-bit and then to hex
-  return (hash >>> 0).toString(16).padStart(8, '0');
-}
-
-// ---------------------------------------------------------------------------
 // Base64 helpers (browser-safe, no atob/btoa unicode issues)
 // ---------------------------------------------------------------------------
 
@@ -213,48 +156,248 @@ function base64ToUint8(base64) {
 }
 
 // ---------------------------------------------------------------------------
+// Legacy XOR cipher (kept for backward-compatible decryption of v1 envelopes)
+// ---------------------------------------------------------------------------
+
+/**
+ * Derives XOR key bytes from a seed string (legacy v1 format).
+ * @private — only used for migrating old data
+ */
+function _legacyDeriveKeyBytes(seed) {
+  const encoder = new TextEncoder();
+  const seedBytes = encoder.encode(seed);
+  const keyLength = 32;
+  const key = new Uint8Array(keyLength);
+
+  for (let i = 0; i < keyLength; i++) {
+    key[i] = (seedBytes[i % seedBytes.length] ^ (i * 167)) & 0xff;
+  }
+
+  for (let i = 1; i < keyLength; i++) {
+    key[i] = (key[i] + key[i - 1] * 31) & 0xff;
+  }
+
+  return key;
+}
+
+/**
+ * Decrypts XOR-encrypted data (legacy v1 format).
+ * @private — only used for migrating old data
+ */
+function _legacyDecrypt(cipherBase64, keyBytes) {
+  const encrypted = base64ToUint8(cipherBase64);
+  const decrypted = new Uint8Array(encrypted.length);
+
+  for (let i = 0; i < encrypted.length; i++) {
+    decrypted[i] = encrypted[i] ^ keyBytes[i % keyBytes.length];
+  }
+
+  const decoder = new TextDecoder();
+  return decoder.decode(decrypted);
+}
+
+/**
+ * Computes FNV-1a checksum (legacy v1 format — used for integrity verification
+ * during migration only).
+ * @private
+ */
+function _legacyComputeChecksum(value) {
+  let hash = 0x811c9dc5;
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode(value);
+
+  for (let i = 0; i < bytes.length; i++) {
+    hash ^= bytes[i];
+    hash = Math.imul(hash, 0x01000193);
+  }
+
+  return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+// ---------------------------------------------------------------------------
+// AES-256-GCM encryption primitives
+// ---------------------------------------------------------------------------
+
+/**
+ * Encrypts plaintext using AES-256-GCM.
+ *
+ * Returns a base64-encoded string containing: IV (12 bytes) || ciphertext || auth tag (16 bytes).
+ * The GCM authentication tag provides both integrity and authenticity — no separate
+ * checksum is needed.
+ *
+ * @param {string} plaintext - The string to encrypt
+ * @param {CryptoKey} cryptoKey - AES-256-GCM CryptoKey
+ * @returns {Promise<string>} base64-encoded IV+ciphertext+tag
+ */
+async function aesGcmEncrypt(plaintext, cryptoKey) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plaintext);
+
+  // Generate a random 96-bit IV (NIST recommended for GCM)
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  const cipherBuffer = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    data
+  );
+
+  // Prepend IV to ciphertext+tag so we can extract it on decrypt
+  const cipherArray = new Uint8Array(cipherBuffer);
+  const combined = new Uint8Array(iv.length + cipherArray.length);
+  combined.set(iv, 0);
+  combined.set(cipherArray, iv.length);
+
+  return uint8ToBase64(combined);
+}
+
+/**
+ * Decrypts AES-256-GCM encrypted data.
+ *
+ * Expects the input to be base64-encoded: IV (12 bytes) || ciphertext || auth tag.
+ * If the authentication tag does not verify, this throws (GCM guarantees integrity).
+ *
+ * @param {string} cipherBase64 - base64-encoded IV+ciphertext+tag
+ * @param {CryptoKey} cryptoKey - AES-256-GCM CryptoKey
+ * @returns {Promise<string>} decrypted plaintext
+ * @throws {DOMException} if authentication fails (data tampered)
+ */
+async function aesGcmDecrypt(cipherBase64, cryptoKey) {
+  const combined = base64ToUint8(cipherBase64);
+
+  // Extract IV (first 12 bytes) and ciphertext+tag (remainder)
+  const iv = combined.slice(0, 12);
+  const ciphertext = combined.slice(12);
+
+  const plainBuffer = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    ciphertext
+  );
+
+  const decoder = new TextDecoder();
+  return decoder.decode(plainBuffer);
+}
+
+// ---------------------------------------------------------------------------
+// Fallback XOR encryption (only used when Web Crypto API is unavailable)
+// ---------------------------------------------------------------------------
+
+/**
+ * XOR-based encrypt for environments without Web Crypto API.
+ * NOT real encryption — only obfuscation. Used as a last resort.
+ * @private
+ */
+function _fallbackEncrypt(plaintext, keyBytes) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(plaintext);
+  const encrypted = new Uint8Array(data.length);
+
+  for (let i = 0; i < data.length; i++) {
+    encrypted[i] = data[i] ^ keyBytes[i % keyBytes.length];
+  }
+
+  return uint8ToBase64(encrypted);
+}
+
+/**
+ * XOR-based decrypt for environments without Web Crypto API.
+ * @private
+ */
+function _fallbackDecrypt(cipherBase64, keyBytes) {
+  return _legacyDecrypt(cipherBase64, keyBytes);
+}
+
+/**
+ * FNV-1a checksum for the fallback path (no GCM auth tag available).
+ * @private
+ */
+function _fallbackComputeChecksum(value) {
+  return _legacyComputeChecksum(value);
+}
+
+// ---------------------------------------------------------------------------
 // Storage envelope format
 // ---------------------------------------------------------------------------
 
 /**
- * Wraps a value in a storage envelope that includes metadata for integrity
- * verification and format identification.
+ * Wraps a value in a storage envelope that includes metadata for format
+ * identification and — for v2 AES-GCM — authenticated encryption.
  *
- * Envelope JSON structure:
+ * v2 envelope JSON structure (AES-GCM):
  * {
- *   v: 1,          // envelope version
- *   c: "SENSITIVE", // classification
- *   d: "...",       // data (encrypted or plain depending on classification)
- *   h: "abc123de", // checksum of original plaintext
- *   t: 1711900000  // timestamp (ms since epoch)
+ *   v: 2,            // envelope version
+ *   c: "SENSITIVE",  // classification
+ *   d: "...",        // data (AES-GCM encrypted for SENSITIVE, plain otherwise)
+ *   t: 1711900000    // timestamp (ms since epoch)
+ * }
+ *
+ * For non-SENSITIVE data (INTERNAL classification), a checksum is still stored:
+ * {
+ *   v: 2,
+ *   c: "INTERNAL",
+ *   d: "...",        // plaintext data
+ *   h: "abc123de",   // FNV-1a checksum for non-encrypted integrity
+ *   t: 1711900000
+ * }
+ *
+ * v1 envelope (legacy XOR — read-only for migration):
+ * {
+ *   v: 1,
+ *   c: "SENSITIVE",
+ *   d: "...",        // XOR-encrypted data
+ *   h: "abc123de",   // FNV-1a checksum
+ *   t: 1711900000
  * }
  */
-function createEnvelope(value, classification, keyBytes) {
+async function createEnvelope(value, classification, cryptoKey, fallbackKeyBytes) {
   const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-  const checksum = computeChecksum(serialized);
 
   let storedData;
-  if (classification === DATA_CLASSIFICATION.SENSITIVE && keyBytes) {
-    storedData = encrypt(serialized, keyBytes);
+  let checksum = undefined;
+
+  if (classification === DATA_CLASSIFICATION.SENSITIVE) {
+    if (cryptoKey) {
+      // AES-256-GCM — GCM tag provides integrity, no separate checksum needed
+      storedData = await aesGcmEncrypt(serialized, cryptoKey);
+    } else if (fallbackKeyBytes) {
+      // Fallback XOR — include checksum since XOR has no integrity
+      storedData = _fallbackEncrypt(serialized, fallbackKeyBytes);
+      checksum = _fallbackComputeChecksum(serialized);
+    } else {
+      storedData = serialized;
+    }
   } else {
     storedData = serialized;
+    // Non-encrypted data still gets a checksum for tamper detection
+    checksum = _fallbackComputeChecksum(serialized);
   }
 
-  return JSON.stringify({
-    v: 1,
+  const envelope = {
+    v: 2,
     c: classification,
     d: storedData,
-    h: checksum,
     t: Date.now(),
-  });
+  };
+
+  if (checksum !== undefined) {
+    envelope.h = checksum;
+  }
+
+  return JSON.stringify(envelope);
 }
 
 /**
  * Opens a storage envelope, decrypting if necessary and verifying integrity.
- * Returns { value, valid, classification, timestamp } or null if the envelope
- * is malformed.
+ *
+ * Handles both v2 (AES-GCM) and v1 (XOR) envelopes transparently.
+ * For v1 SENSITIVE envelopes, decrypts using the legacy XOR key and flags
+ * `needsReEncrypt: true` so the caller can re-encrypt with AES-GCM.
+ *
+ * Returns { value, valid, classification, timestamp, legacy, needsReEncrypt }
+ * or null if the envelope is malformed.
  */
-function openEnvelope(envelopeStr, keyBytes) {
+async function openEnvelope(envelopeStr, cryptoKey, fallbackKeyBytes, legacyKeyBytes) {
   if (!envelopeStr) return null;
 
   try {
@@ -262,40 +405,119 @@ function openEnvelope(envelopeStr, keyBytes) {
 
     // Not an envelope — legacy raw value
     if (typeof envelope !== 'object' || envelope.v === undefined) {
-      return { value: envelopeStr, valid: true, classification: null, timestamp: null, legacy: true };
+      return { value: envelopeStr, valid: true, classification: null, timestamp: null, legacy: true, needsReEncrypt: false };
     }
 
-    let plaintext;
-    if (envelope.c === DATA_CLASSIFICATION.SENSITIVE && keyBytes) {
-      try {
-        plaintext = decrypt(envelope.d, keyBytes);
-      } catch (e) {
-        // Decryption failed — key may have changed
-        console.warn('Secure storage: decryption failed, key may have rotated');
-        return { value: null, valid: false, classification: envelope.c, timestamp: envelope.t, legacy: false };
+    // ------- v2 envelope (AES-GCM) -------
+    if (envelope.v === 2) {
+      let plaintext;
+
+      if (envelope.c === DATA_CLASSIFICATION.SENSITIVE) {
+        if (cryptoKey) {
+          try {
+            // AES-GCM decrypt — authentication tag is verified automatically.
+            // If tampered, this throws a DOMException.
+            plaintext = await aesGcmDecrypt(envelope.d, cryptoKey);
+          } catch (e) {
+            // GCM authentication failed — data tampered or key changed
+            console.warn('Secure storage: AES-GCM decryption/authentication failed');
+            return { value: null, valid: false, classification: envelope.c, timestamp: envelope.t, legacy: false, needsReEncrypt: false };
+          }
+        } else if (fallbackKeyBytes) {
+          // Fallback XOR decrypt
+          try {
+            plaintext = _fallbackDecrypt(envelope.d, fallbackKeyBytes);
+          } catch (e) {
+            console.warn('Secure storage: fallback decryption failed');
+            return { value: null, valid: false, classification: envelope.c, timestamp: envelope.t, legacy: false, needsReEncrypt: false };
+          }
+          // Verify checksum for fallback path
+          if (envelope.h) {
+            const expectedChecksum = _fallbackComputeChecksum(plaintext);
+            if (expectedChecksum !== envelope.h) {
+              console.warn('Secure storage: checksum mismatch — possible tampering detected');
+              return { value: null, valid: false, classification: envelope.c, timestamp: envelope.t, legacy: false, needsReEncrypt: false };
+            }
+          }
+        } else {
+          plaintext = envelope.d;
+        }
+
+        return {
+          value: plaintext,
+          valid: true,
+          classification: envelope.c,
+          timestamp: envelope.t,
+          legacy: false,
+          needsReEncrypt: false,
+        };
       }
-    } else {
+
+      // Non-SENSITIVE v2 envelope — verify checksum if present
       plaintext = envelope.d;
+      let valid = true;
+      if (envelope.h) {
+        const expectedChecksum = _fallbackComputeChecksum(plaintext);
+        valid = expectedChecksum === envelope.h;
+        if (!valid) {
+          console.warn('Secure storage: checksum mismatch — possible tampering detected');
+        }
+      }
+
+      return {
+        value: plaintext,
+        valid,
+        classification: envelope.c,
+        timestamp: envelope.t,
+        legacy: false,
+        needsReEncrypt: false,
+      };
     }
 
-    // Verify checksum
-    const expectedChecksum = computeChecksum(plaintext);
-    const valid = expectedChecksum === envelope.h;
+    // ------- v1 envelope (legacy XOR) — migration path -------
+    if (envelope.v === 1) {
+      let plaintext;
+      const effectiveLegacyKey = legacyKeyBytes || fallbackKeyBytes;
 
-    if (!valid) {
-      console.warn('Secure storage: checksum mismatch — possible tampering detected');
+      if (envelope.c === DATA_CLASSIFICATION.SENSITIVE && effectiveLegacyKey) {
+        try {
+          plaintext = _legacyDecrypt(envelope.d, effectiveLegacyKey);
+        } catch (e) {
+          console.warn('Secure storage: legacy XOR decryption failed, key may have rotated');
+          return { value: null, valid: false, classification: envelope.c, timestamp: envelope.t, legacy: false, needsReEncrypt: false };
+        }
+      } else {
+        plaintext = envelope.d;
+      }
+
+      // Verify legacy checksum
+      let valid = true;
+      if (envelope.h) {
+        const expectedChecksum = _legacyComputeChecksum(plaintext);
+        valid = expectedChecksum === envelope.h;
+        if (!valid) {
+          console.warn('Secure storage: legacy checksum mismatch — possible tampering detected');
+        }
+      }
+
+      return {
+        value: plaintext,
+        valid,
+        classification: envelope.c,
+        timestamp: envelope.t,
+        legacy: false,
+        // Flag that this v1 data should be re-encrypted with AES-GCM
+        needsReEncrypt: valid && envelope.c === DATA_CLASSIFICATION.SENSITIVE,
+      };
     }
 
-    return {
-      value: plaintext,
-      valid,
-      classification: envelope.c,
-      timestamp: envelope.t,
-      legacy: false,
-    };
+    // Unknown envelope version
+    console.warn(`Secure storage: unknown envelope version ${envelope.v}`);
+    return { value: envelope.d, valid: true, classification: envelope.c, timestamp: envelope.t, legacy: true, needsReEncrypt: false };
+
   } catch (e) {
     // Not valid JSON — treat as legacy raw value
-    return { value: envelopeStr, valid: true, classification: null, timestamp: null, legacy: true };
+    return { value: envelopeStr, valid: true, classification: null, timestamp: null, legacy: true, needsReEncrypt: false };
   }
 }
 
@@ -313,13 +535,27 @@ function generateRandomSeed() {
 }
 
 /**
- * Manages the encryption key lifecycle. The key seed is:
- * - On native: stored in the OS keychain via NativeBiometric credential store
- * - On web: stored in sessionStorage (cleared when the tab closes)
+ * Manages the encryption key lifecycle.
+ *
+ * For AES-GCM (primary path):
+ * - Generates a 256-bit AES-GCM CryptoKey via Web Crypto API
+ * - Exports the key as JWK for storage
+ * - On native: stores JWK in Capacitor Preferences
+ * - On web: stores JWK in sessionStorage (cleared when tab closes)
+ *
+ * For XOR fallback (no Web Crypto):
+ * - Falls back to the legacy seed-based XOR approach
+ *
+ * Also maintains the legacy XOR key bytes for decrypting old v1 envelopes.
  */
 class KeyManager {
   constructor() {
-    this._keyBytes = null;
+    /** @type {CryptoKey|null} AES-256-GCM CryptoKey (null if Web Crypto unavailable) */
+    this._cryptoKey = null;
+    /** @type {Uint8Array|null} XOR key bytes — used as fallback OR for legacy v1 decryption */
+    this._fallbackKeyBytes = null;
+    /** @type {Uint8Array|null} Legacy XOR key bytes from old seed — for decrypting v1 envelopes */
+    this._legacyKeyBytes = null;
     this._initialized = false;
     this._initPromise = null;
   }
@@ -339,89 +575,125 @@ class KeyManager {
 
   async _doInitialize() {
     try {
-      let seed;
+      // Always load/create legacy key bytes for v1 migration
+      await this._loadLegacyKey();
 
-      if (isNative) {
-        seed = await this._getNativeKeySeed();
+      if (HAS_WEB_CRYPTO) {
+        // Primary path: AES-256-GCM
+        await this._loadOrCreateAesKey();
       } else {
-        seed = this._getWebKeySeed();
+        // Fallback: XOR cipher (same as legacy, just reuse legacy key)
+        this._fallbackKeyBytes = this._legacyKeyBytes;
       }
-
-      this._keyBytes = deriveKeyBytes(seed);
     } catch (error) {
       console.error('Secure storage: key initialization failed, using fallback', error);
-      // Fallback to a static key — less secure but prevents data loss
-      this._keyBytes = deriveKeyBytes('perennia-fallback-' + navigator.userAgent.slice(0, 32));
+      // Last-resort fallback key
+      const fallbackSeed = 'perennia-fallback-' + navigator.userAgent.slice(0, 32);
+      this._fallbackKeyBytes = _legacyDeriveKeyBytes(fallbackSeed);
+      this._legacyKeyBytes = this._fallbackKeyBytes;
     }
   }
 
   /**
-   * Retrieves or creates the encryption key seed from the native keychain.
+   * Load the legacy XOR key seed so we can decrypt old v1 envelopes.
+   * This reads from the SAME location the old KeyManager stored its seed.
    */
-  async _getNativeKeySeed() {
+  async _loadLegacyKey() {
     try {
-      const { NativeBiometric } = await import('capacitor-native-biometric');
+      let seed = null;
 
-      // Try to retrieve existing seed
-      try {
-        const creds = await NativeBiometric.getCredentials({ server: KEYCHAIN_SERVER });
-        if (creds && creds.password) {
-          return creds.password;
+      if (isNative) {
+        // Try keychain first (where the old code stored it)
+        try {
+          const { NativeBiometric } = await import('@capgo/capacitor-native-biometric');
+          const creds = await NativeBiometric.getCredentials({ server: KEYCHAIN_SERVER });
+          if (creds && creds.password) {
+            seed = creds.password;
+          }
+        } catch {
+          // No keychain creds — try Preferences fallback
         }
-      } catch (e) {
-        // No credentials stored yet — this is expected on first launch
+
+        if (!seed) {
+          const seedKey = '_ss_internal_key_seed';
+          const { value } = await Preferences.get({ key: seedKey });
+          if (value) seed = value;
+        }
+      } else {
+        // Web: old seed was in sessionStorage
+        seed = sessionStorage.getItem('_ss_web_key_seed');
       }
 
-      // Generate and store a new seed
-      const seed = generateRandomSeed();
-      await NativeBiometric.setCredentials({
-        username: 'secure-storage-key',
-        password: seed,
-        server: KEYCHAIN_SERVER,
-      });
-
-      return seed;
+      if (seed) {
+        this._legacyKeyBytes = _legacyDeriveKeyBytes(seed);
+      }
     } catch (error) {
-      console.warn('Secure storage: keychain unavailable, falling back to Preferences', error);
-      // Fallback: store seed in Preferences (less secure but functional)
-      return this._getPreferencesKeySeed();
+      console.warn('Secure storage: could not load legacy key for migration', error);
     }
   }
 
   /**
-   * Retrieves or creates the encryption key seed stored in Preferences.
-   * Used as a fallback when the keychain is unavailable.
+   * Load an existing AES-256-GCM key from storage, or generate a new one.
    */
-  async _getPreferencesKeySeed() {
-    const seedKey = '_ss_internal_key_seed';
-    const { value } = await Preferences.get({ key: seedKey });
+  async _loadOrCreateAesKey() {
+    const storageKey = '_ss_aes_key_jwk';
 
-    if (value) return value;
-
-    const seed = generateRandomSeed();
-    await Preferences.set({ key: seedKey, value: seed });
-    return seed;
-  }
-
-  /**
-   * Retrieves or creates the encryption key seed for web environments.
-   * Uses sessionStorage so the key lives only as long as the browser tab.
-   */
-  _getWebKeySeed() {
-    const seedKey = '_ss_web_key_seed';
-    let seed = sessionStorage.getItem(seedKey);
-
-    if (!seed) {
-      seed = generateRandomSeed();
-      sessionStorage.setItem(seedKey, seed);
+    // Try to load existing exported key
+    let jwkStr = null;
+    if (isNative) {
+      const { value } = await Preferences.get({ key: storageKey });
+      jwkStr = value;
+    } else {
+      jwkStr = sessionStorage.getItem(storageKey);
     }
 
-    return seed;
+    if (jwkStr) {
+      try {
+        const jwk = JSON.parse(jwkStr);
+        this._cryptoKey = await crypto.subtle.importKey(
+          'jwk',
+          jwk,
+          { name: 'AES-GCM' },
+          true,  // extractable — needed to re-export for storage
+          ['encrypt', 'decrypt']
+        );
+        return;
+      } catch (e) {
+        console.warn('Secure storage: stored AES key import failed, generating new key', e);
+      }
+    }
+
+    // Generate new AES-256-GCM key
+    this._cryptoKey = await crypto.subtle.generateKey(
+      { name: 'AES-GCM', length: 256 },
+      true,  // extractable — we need to export for persistent storage
+      ['encrypt', 'decrypt']
+    );
+
+    // Export as JWK and persist
+    const jwk = await crypto.subtle.exportKey('jwk', this._cryptoKey);
+    const jwkString = JSON.stringify(jwk);
+
+    if (isNative) {
+      await Preferences.set({ key: storageKey, value: jwkString });
+    } else {
+      sessionStorage.setItem(storageKey, jwkString);
+    }
   }
 
-  /** Returns the derived key bytes. Must call initialize() first. */
-  getKeyBytes() {
-    return this._keyBytes;
+  /** Returns the AES-256-GCM CryptoKey (null if Web Crypto unavailable). */
+  getCryptoKey() {
+    return this._cryptoKey;
+  }
+
+  /** Returns XOR fallback key bytes (used when Web Crypto is unavailable). */
+  getFallbackKeyBytes() {
+    return this._fallbackKeyBytes;
+  }
+
+  /** Returns legacy XOR key bytes for decrypting v1 envelopes during migration. */
+  getLegacyKeyBytes() {
+    return this._legacyKeyBytes;
   }
 
   /** Whether the key manager has been initialized. */
@@ -486,7 +758,12 @@ class SecureStorage {
     }
 
     const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-    const envelope = createEnvelope(serialized, DATA_CLASSIFICATION.SENSITIVE, this._keyManager.getKeyBytes());
+    const envelope = await createEnvelope(
+      serialized,
+      DATA_CLASSIFICATION.SENSITIVE,
+      this._keyManager.getCryptoKey(),
+      this._keyManager.getFallbackKeyBytes()
+    );
 
     await this._rawSet(SECURE_PREFIX + key, envelope);
   }
@@ -503,7 +780,12 @@ class SecureStorage {
     const raw = await this._rawGet(SECURE_PREFIX + key);
     if (raw === null) return null;
 
-    const result = openEnvelope(raw, this._keyManager.getKeyBytes());
+    const result = await openEnvelope(
+      raw,
+      this._keyManager.getCryptoKey(),
+      this._keyManager.getFallbackKeyBytes(),
+      this._keyManager.getLegacyKeyBytes()
+    );
     if (!result) return null;
 
     if (!result.valid) {
@@ -511,6 +793,22 @@ class SecureStorage {
       // Remove tampered data
       await this._rawRemove(SECURE_PREFIX + key);
       return null;
+    }
+
+    // If this was a v1 XOR envelope, re-encrypt with AES-GCM
+    if (result.needsReEncrypt && result.value !== null) {
+      try {
+        const newEnvelope = await createEnvelope(
+          result.value,
+          DATA_CLASSIFICATION.SENSITIVE,
+          this._keyManager.getCryptoKey(),
+          this._keyManager.getFallbackKeyBytes()
+        );
+        await this._rawSet(SECURE_PREFIX + key, newEnvelope);
+      } catch (e) {
+        // Non-fatal — data was read successfully, just couldn't upgrade encryption
+        console.warn('Secure storage: failed to re-encrypt legacy data with AES-GCM', e);
+      }
     }
 
     return result.value;
@@ -543,7 +841,7 @@ class SecureStorage {
     }
 
     const serialized = typeof value === 'string' ? value : JSON.stringify(value);
-    const envelope = createEnvelope(serialized, classification, null);
+    const envelope = await createEnvelope(serialized, classification, null, null);
 
     await this._rawSet(SECURE_PREFIX + key, envelope);
   }
@@ -567,7 +865,12 @@ class SecureStorage {
     const raw = await this._rawGet(SECURE_PREFIX + key);
     if (raw === null) return null;
 
-    const result = openEnvelope(raw, this._keyManager.getKeyBytes());
+    const result = await openEnvelope(
+      raw,
+      this._keyManager.getCryptoKey(),
+      this._keyManager.getFallbackKeyBytes(),
+      this._keyManager.getLegacyKeyBytes()
+    );
     if (!result) return null;
 
     if (!result.valid) {
@@ -699,7 +1002,7 @@ class SecureStorage {
 
     const allKeys = await this._getAllKeys();
     return allKeys
-      .filter((k) => k.startsWith(SECURE_PREFIX) && !k.startsWith('_ss_meta_') && !k.startsWith('_ss_internal_'))
+      .filter((k) => k.startsWith(SECURE_PREFIX) && !k.startsWith('_ss_meta_') && !k.startsWith('_ss_internal_') && !k.startsWith('_ss_aes_'))
       .map((k) => k.slice(SECURE_PREFIX.length));
   }
 
@@ -739,7 +1042,12 @@ class SecureStorage {
       const raw = await this._rawGet(SECURE_PREFIX + key);
       if (raw === null) continue;
 
-      const result = openEnvelope(raw, this._keyManager.getKeyBytes());
+      const result = await openEnvelope(
+        raw,
+        this._keyManager.getCryptoKey(),
+        this._keyManager.getFallbackKeyBytes(),
+        this._keyManager.getLegacyKeyBytes()
+      );
 
       if (!result) {
         report.invalid.push(key);
@@ -844,11 +1152,15 @@ class SecureStorage {
   // -------------------------------------------------------------------------
 
   /**
-   * Transparently migrates data from the legacy storage format (raw values
-   * stored directly by storage.js) into the new envelope format.
+   * Transparently migrates data from legacy formats:
    *
-   * Legacy keys are those written by the old storage.js utility — they exist
-   * without the SECURE_PREFIX and contain raw (non-enveloped) values.
+   * 1. Raw values from the old storage.js utility (no envelope, no prefix)
+   *    -> Wrapped in v2 envelope with AES-GCM encryption
+   *
+   * 2. v1 XOR-encrypted envelopes (schema version 1)
+   *    -> Decrypted with legacy XOR key, re-encrypted with AES-GCM
+   *
+   * Migration is idempotent and runs once per session.
    */
   async _migrateIfNeeded() {
     if (this._migrated) return;
@@ -863,47 +1175,114 @@ class SecureStorage {
         return;
       }
 
-      // Migrate legacy keys
-      const legacyKeys = [
-        'token', 'user', 'impersonation', 'dashboardOrder',
-        'userRole', 'assignedRoles', 'activeRole', 'canSwitchRoles',
-        'viewAsRole', 'role_preview', 'original_user_backup',
-        'original_token_backup', 'moduleCache',
-      ];
+      // ---------- Schema 0 -> 1 or 2: Migrate legacy raw keys ----------
+      if (currentVersion < 1) {
+        const legacyKeys = [
+          'token', 'user', 'impersonation', 'dashboardOrder',
+          'userRole', 'assignedRoles', 'activeRole', 'canSwitchRoles',
+          'viewAsRole', 'role_preview', 'original_user_backup',
+          'original_token_backup', 'moduleCache',
+        ];
 
-      let migratedCount = 0;
+        let migratedCount = 0;
 
-      for (const key of legacyKeys) {
-        // Check if legacy (non-prefixed) value exists
-        const legacyValue = await this._rawGet(key);
-        if (legacyValue === null) continue;
+        for (const key of legacyKeys) {
+          const legacyValue = await this._rawGet(key);
+          if (legacyValue === null) continue;
 
-        // Check if we already have a migrated version
-        const existingSecure = await this._rawGet(SECURE_PREFIX + key);
-        if (existingSecure !== null) continue;
+          const existingSecure = await this._rawGet(SECURE_PREFIX + key);
+          if (existingSecure !== null) continue;
 
-        // Migrate: write to new format
-        const classification = this._classifyKey(key);
-        const keyBytes = classification === DATA_CLASSIFICATION.SENSITIVE
-          ? this._keyManager.getKeyBytes()
-          : null;
-        const envelope = createEnvelope(legacyValue, classification, keyBytes);
-        await this._rawSet(SECURE_PREFIX + key, envelope);
+          const classification = this._classifyKey(key);
+          const envelope = await createEnvelope(
+            legacyValue,
+            classification,
+            classification === DATA_CLASSIFICATION.SENSITIVE ? this._keyManager.getCryptoKey() : null,
+            classification === DATA_CLASSIFICATION.SENSITIVE ? this._keyManager.getFallbackKeyBytes() : null
+          );
+          await this._rawSet(SECURE_PREFIX + key, envelope);
 
-        migratedCount++;
+          migratedCount++;
+        }
+
+        if (migratedCount > 0) {
+          console.log(`Secure storage: migrated ${migratedCount} keys from legacy format`);
+        }
       }
 
-      if (migratedCount > 0) {
-        console.log(`Secure storage: migrated ${migratedCount} keys from legacy format`);
+      // ---------- Schema 1 -> 2: Re-encrypt v1 XOR envelopes with AES-GCM ----------
+      if (currentVersion >= 1 && currentVersion < 2 && HAS_WEB_CRYPTO) {
+        const allKeys = await this._getAllKeys();
+        let reEncryptedCount = 0;
+
+        for (const rawKey of allKeys) {
+          if (!rawKey.startsWith(SECURE_PREFIX)) continue;
+          if (rawKey.startsWith('_ss_meta_') || rawKey.startsWith('_ss_internal_') || rawKey.startsWith('_ss_aes_')) continue;
+
+          const envelopeStr = await this._rawGet(rawKey);
+          if (!envelopeStr) continue;
+
+          try {
+            const envelope = JSON.parse(envelopeStr);
+            if (typeof envelope !== 'object' || envelope.v !== 1) continue;
+
+            // Only re-encrypt SENSITIVE v1 envelopes
+            if (envelope.c !== DATA_CLASSIFICATION.SENSITIVE) continue;
+
+            const legacyKeyBytes = this._keyManager.getLegacyKeyBytes();
+            if (!legacyKeyBytes) continue;
+
+            // Decrypt with legacy XOR
+            const plaintext = _legacyDecrypt(envelope.d, legacyKeyBytes);
+
+            // Verify old checksum
+            if (envelope.h) {
+              const expectedChecksum = _legacyComputeChecksum(plaintext);
+              if (expectedChecksum !== envelope.h) {
+                console.warn(`Secure storage: skipping migration of tampered key ${rawKey}`);
+                continue;
+              }
+            }
+
+            // Re-encrypt with AES-GCM
+            const newEnvelope = await createEnvelope(
+              plaintext,
+              DATA_CLASSIFICATION.SENSITIVE,
+              this._keyManager.getCryptoKey(),
+              this._keyManager.getFallbackKeyBytes()
+            );
+            await this._rawSet(rawKey, newEnvelope);
+            reEncryptedCount++;
+          } catch {
+            // Skip keys that fail to parse/decrypt
+            continue;
+          }
+        }
+
+        if (reEncryptedCount > 0) {
+          console.log(`Secure storage: re-encrypted ${reEncryptedCount} keys from XOR to AES-GCM`);
+        }
       }
 
       // Store key fingerprint for future tamper detection
-      const keyBytes = this._keyManager.getKeyBytes();
-      if (keyBytes) {
-        const fingerprint = computeChecksum(
-          Array.from(keyBytes.slice(0, 8), (b) => b.toString(16)).join('')
-        );
-        await this._rawSet(KEY_FINGERPRINT_KEY, fingerprint);
+      const cryptoKey = this._keyManager.getCryptoKey();
+      if (cryptoKey) {
+        try {
+          const jwk = await crypto.subtle.exportKey('jwk', cryptoKey);
+          // Use first 16 chars of the key material as fingerprint
+          const fingerprint = _fallbackComputeChecksum(jwk.k ? jwk.k.slice(0, 16) : 'aes-gcm');
+          await this._rawSet(KEY_FINGERPRINT_KEY, fingerprint);
+        } catch {
+          // Non-critical
+        }
+      } else {
+        const keyBytes = this._keyManager.getFallbackKeyBytes();
+        if (keyBytes) {
+          const fingerprint = _fallbackComputeChecksum(
+            Array.from(keyBytes.slice(0, 8), (b) => b.toString(16)).join('')
+          );
+          await this._rawSet(KEY_FINGERPRINT_KEY, fingerprint);
+        }
       }
 
       // Mark migration complete

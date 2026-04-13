@@ -1,35 +1,97 @@
 /* ============================================================
    AnalyticsCard — reusable metric display card
+   Design system: --color-primary: #217F8D, --color-success: #217F8D,
+   --color-warning: #A84B2F, --color-error: #C0152F
    ============================================================ */
 
 .analytics-card {
   background: var(--color-bg-surface);
   border: 1px solid var(--color-border-light);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-md);
+  box-shadow: var(--shadow-sm);
   padding: var(--space-lg);
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
   /* Default: no left accent border */
   border-left: 3px solid transparent;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 /* ── Status modifiers ── */
 .analytics-card--success {
-  border-left-color: var(--color-success);
+  border-left-color: var(--color-success, #217F8D);
 }
 
 .analytics-card--warning {
-  border-left-color: var(--color-warning);
+  border-left-color: var(--color-warning, #A84B2F);
 }
 
 .analytics-card--error {
-  border-left-color: var(--color-error);
+  border-left-color: var(--color-error, #C0152F);
 }
 
-/* ── Header: icon + title ── */
+/* ── Clickable modifier ── */
+.analytics-card--clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.analytics-card--clickable:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.analytics-card--clickable:active {
+  transform: translateY(0);
+  box-shadow: var(--shadow-sm);
+}
+
+.analytics-card--clickable:focus-visible {
+  outline: 2px solid var(--color-primary, #217F8D);
+  outline-offset: 2px;
+}
+
+/* ── Size variants ── */
+.analytics-card--sm {
+  padding: var(--space-sm) var(--space-md);
+  gap: var(--space-xs);
+}
+
+.analytics-card--sm .analytics-card__title {
+  font-size: calc(var(--font-xs) * 0.9);
+}
+
+.analytics-card--sm .analytics-card__value {
+  font-size: var(--font-xl);
+}
+
+.analytics-card--sm .analytics-card__subtitle {
+  font-size: calc(var(--font-xs) * 0.9);
+}
+
+.analytics-card--sm .analytics-card__trend {
+  font-size: var(--font-xs);
+}
+
+.analytics-card--lg {
+  padding: var(--space-xl, 2rem) var(--space-lg);
+  gap: var(--space-md);
+}
+
+.analytics-card--lg .analytics-card__value {
+  font-size: var(--font-4xl, 2.5rem);
+}
+
+.analytics-card--lg .analytics-card__subtitle {
+  font-size: var(--font-sm);
+}
+
+.analytics-card--lg .analytics-card__trend {
+  font-size: var(--font-md, 1rem);
+}
+
+/* ── Header: icon + title + tooltip ── */
 .analytics-card__header {
   display: flex;
   align-items: center;
@@ -51,7 +113,33 @@
   line-height: var(--line-tight);
 }
 
-/* ── Body: value + subtitle ── */
+/* ── Tooltip trigger ── */
+.analytics-card__tooltip-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-tertiary);
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  cursor: help;
+  flex-shrink: 0;
+  margin-left: auto;
+  border: 1px solid var(--color-border-light);
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.analytics-card__tooltip-trigger:hover {
+  background: var(--color-primary, #217F8D);
+  color: #fff;
+  border-color: var(--color-primary, #217F8D);
+}
+
+/* ── Body: value + subtitle + comparison ── */
 .analytics-card__body {
   display: flex;
   flex-direction: column;
@@ -72,6 +160,28 @@
   line-height: var(--line-normal);
 }
 
+/* ── Comparison (previousValue) ── */
+.analytics-card__comparison {
+  font-size: var(--font-xs);
+  color: var(--color-text-tertiary);
+  line-height: var(--line-normal);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.analytics-card__comparison-arrow {
+  font-weight: var(--weight-bold);
+}
+
+.analytics-card__comparison-arrow--up {
+  color: var(--color-success, #217F8D);
+}
+
+.analytics-card__comparison-arrow--down {
+  color: var(--color-error, #C0152F);
+}
+
 /* ── Footer: trend ── */
 .analytics-card__footer {
   display: flex;
@@ -89,13 +199,68 @@
 }
 
 .analytics-card__trend--positive {
-  color: var(--color-success);
+  color: var(--color-success, #217F8D);
   background: rgba(33, 127, 141, 0.08);
 }
 
 .analytics-card__trend--negative {
-  color: var(--color-error);
+  color: var(--color-error, #C0152F);
   background: rgba(192, 21, 47, 0.08);
+}
+
+/* ── Sparkline ── */
+.analytics-card__sparkline {
+  display: flex;
+  align-items: center;
+  padding-top: var(--space-xs);
+}
+
+.analytics-card__sparkline svg {
+  display: block;
+}
+
+.analytics-card__sparkline-line {
+  animation: sparkline-draw 0.8s ease-out forwards;
+}
+
+@keyframes sparkline-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ── Loading / skeleton shimmer ── */
+.analytics-card__skeleton {
+  display: block;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--color-bg-secondary) 25%,
+    var(--color-border-light) 50%,
+    var(--color-bg-secondary) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+}
+
+.analytics-card__skeleton--value {
+  width: 60%;
+  height: 1.8em;
+}
+
+.analytics-card__skeleton--subtitle {
+  width: 40%;
+  height: 0.9em;
+  margin-top: var(--space-xs);
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ── Children slot ── */
@@ -113,5 +278,25 @@
 
   .analytics-card__value {
     font-size: var(--font-2xl);
+  }
+
+  .analytics-card--lg .analytics-card__value {
+    font-size: var(--font-3xl);
+  }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  .analytics-card__sparkline-line {
+    animation: none;
+    stroke-dashoffset: 0 !important;
+  }
+
+  .analytics-card__skeleton {
+    animation: none;
+  }
+
+  .analytics-card--clickable:hover {
+    transform: none;
   }
 }

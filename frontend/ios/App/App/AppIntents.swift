@@ -27,7 +27,7 @@ import UIKit
 @available(iOS 16.0, *)
 struct PerenniaAPIClient {
 
-    static let baseURL = "https://api.perenniaai.com"
+    static let baseURL = APIConfig.apiBaseURL
 
     /// Retrieve the stored auth token from Keychain, or nil if the user is not logged in.
     static var authToken: String? {
@@ -190,31 +190,44 @@ struct CheckPipelineIntent: AppIntent {
     static var openAppWhenRun: Bool = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        // GET /api/v1/loans/ returns a bare JSON array
         let loans = try await PerenniaAPIClient.getArray(path: "/api/v1/loans/")
 
         if loans.isEmpty {
             return .result(dialog: "Your pipeline is empty. No active loans found.")
         }
 
-        // Count loans by stage
+        // Terminal stages to exclude from "active" count
+        let terminalStages: Set<String> = [
+            "FUNDED", "CANCELLED", "DENIED", "DEAD", "WITHDRAWN", "DOES_NOT_QUALIFY"
+        ]
+
+        // Count loans by stage (stages are stored UPPERCASE in the DB)
         var stageCount: [String: Int] = [:]
+        var activeCount = 0
         for loan in loans {
-            let stage = (loan["stage"] as? String ?? "Unknown").capitalized
+            let stage = loan["stage"] as? String ?? "UNKNOWN"
             stageCount[stage, default: 0] += 1
+            if !terminalStages.contains(stage.uppercased()) {
+                activeCount += 1
+            }
         }
 
         let total = loans.count
 
         // Build the stage breakdown, sorted by count descending
+        // Format stage names: "CLEAR_TO_CLOSE" -> "Clear To Close"
         let sorted = stageCount.sorted { $0.value > $1.value }
         var lines: [String] = []
         for (stage, count) in sorted {
-            let label = stage.replacingOccurrences(of: "_", with: " ")
+            let label = stage
+                .replacingOccurrences(of: "_", with: " ")
+                .capitalized
             lines.append("\(label): \(count)")
         }
 
         let breakdown = lines.joined(separator: "\n")
-        let summary = "You have \(total) loan\(total == 1 ? "" : "s") in your pipeline.\n\n\(breakdown)"
+        let summary = "You have \(total) loan\(total == 1 ? "" : "s") (\(activeCount) active) in your pipeline.\n\n\(breakdown)"
 
         return .result(dialog: "\(summary)")
     }
@@ -252,18 +265,13 @@ struct AddLeadIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        // Split name into first/last
-        let components = name.trimmingCharacters(in: .whitespaces).split(
-            separator: " ", maxSplits: 1
-        )
-        let firstName = String(components.first ?? "")
-        let lastName = components.count > 1 ? String(components[1]) : ""
+        // Backend LeadCreate schema expects `name` (combined full name), not first_name/last_name.
+        // Also requires at least one of: email or phone (DB constraint ck_lead_has_contact).
+        let trimmedName = name.trimmingCharacters(in: .whitespaces)
 
         var body: [String: Any] = [
-            "first_name": firstName,
-            "last_name": lastName,
-            "source": "Siri",
-            "stage": "New"
+            "name": trimmedName,
+            "source": "Siri"
         ]
 
         if let phone = phone, !phone.isEmpty {
@@ -273,18 +281,20 @@ struct AddLeadIntent: AppIntent {
             body["email"] = email
         }
 
+        // If neither phone nor email provided, prompt user — DB requires at least one
+        if body["phone"] == nil && body["email"] == nil {
+            return .result(
+                dialog: "A phone number or email is required to create a lead. Please try again with at least one."
+            )
+        }
+
         let result = try await PerenniaAPIClient.post(
             path: "/api/v1/leads/",
             body: body
         )
 
-        let createdName = [
-            result["first_name"] as? String,
-            result["last_name"] as? String
-        ].compactMap { $0 }.joined(separator: " ")
-
-        let displayName = createdName.isEmpty ? name : createdName
-        return .result(dialog: "Lead \"\(displayName)\" has been created in Perennia AI.")
+        let createdName = result["name"] as? String ?? trimmedName
+        return .result(dialog: "Lead \"\(createdName)\" has been created in Perennia AI.")
     }
 }
 
@@ -312,17 +322,16 @@ struct CallBorrowerIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
+        // Backend search endpoint is GET /api/v1/leads/search?q=... (not ?search= on /leads/)
         let leads = try await PerenniaAPIClient.getArray(
-            path: "/api/v1/leads/",
-            queryItems: [URLQueryItem(name: "search", value: name)]
+            path: "/api/v1/leads/search",
+            queryItems: [URLQueryItem(name: "q", value: name)]
         )
 
         // Filter leads that have a phone number
+        // Note: Lead model has `phone` field only (no `mobile_phone`)
         let withPhone = leads.filter { lead in
             if let phone = lead["phone"] as? String, !phone.isEmpty {
-                return true
-            }
-            if let mobile = lead["mobile_phone"] as? String, !mobile.isEmpty {
                 return true
             }
             return false
@@ -340,12 +349,10 @@ struct CallBorrowerIntent: AppIntent {
             target = withPhone[0]
         } else {
             // Show the top matches and use the first one.
-            // Full disambiguation would require a custom entity query (future enhancement).
+            // Backend returns `name` (combined full name) as the primary display field.
             let names = withPhone.prefix(5).compactMap { lead -> String? in
-                let first = lead["first_name"] as? String ?? ""
-                let last = lead["last_name"] as? String ?? ""
-                let full = "\(first) \(last)".trimmingCharacters(in: .whitespaces)
-                return full.isEmpty ? nil : full
+                let leadName = lead["name"] as? String ?? ""
+                return leadName.isEmpty ? nil : leadName
             }
 
             if withPhone.count <= 5 {
@@ -361,13 +368,9 @@ struct CallBorrowerIntent: AppIntent {
             }
         }
 
-        let phoneNumber = (target["phone"] as? String)
-            ?? (target["mobile_phone"] as? String)
-            ?? ""
-
-        let firstName = target["first_name"] as? String ?? ""
-        let lastName = target["last_name"] as? String ?? ""
-        let displayName = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+        let phoneNumber = target["phone"] as? String ?? ""
+        let displayName = target["name"] as? String
+            ?? "\(target["first_name"] as? String ?? "") \(target["last_name"] as? String ?? "")".trimmingCharacters(in: .whitespaces)
 
         // Clean phone number for tel:// URL
         let cleaned = phoneNumber.components(separatedBy: CharacterSet.decimalDigits.inverted).joined()
@@ -402,35 +405,51 @@ struct CheckTasksIntent: AppIntent {
     static var openAppWhenRun: Bool = false
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let today = Self.todayString()
-
-        let tasks = try await PerenniaAPIClient.getArray(
+        // GET /api/v1/mobile/tasks?status=pending returns {"tasks": [...], "count": N}
+        // The endpoint doesn't support a `due` date filter, so we fetch pending tasks
+        // and filter client-side for those due today or overdue.
+        let response = try await PerenniaAPIClient.get(
             path: "/api/v1/mobile/tasks",
-            queryItems: [URLQueryItem(name: "due", value: today)]
+            queryItems: [URLQueryItem(name: "status", value: "pending")]
         )
 
-        if tasks.isEmpty {
+        // Extract tasks array from the wrapped response
+        guard let tasksArray = response["tasks"] as? [[String: Any]] else {
+            return .result(dialog: "You have no tasks due today. Nice work!")
+        }
+
+        // Filter tasks due today or overdue
+        let today = Self.todayString()
+        let todayTasks = tasksArray.filter { task in
+            guard let dueDate = task["due_date"] as? String else { return false }
+            // Check if due date starts with today's date (YYYY-MM-DD prefix of ISO 8601)
+            let datePrefix = String(dueDate.prefix(10))
+            let isOverdue = task["is_overdue"] as? Bool ?? false
+            return datePrefix == today || datePrefix < today || isOverdue
+        }
+
+        if todayTasks.isEmpty {
             return .result(dialog: "You have no tasks due today. Nice work!")
         }
 
         var lines: [String] = []
-        for (index, task) in tasks.prefix(10).enumerated() {
+        for (index, task) in todayTasks.prefix(10).enumerated() {
             let title = task["title"] as? String
-                ?? task["name"] as? String
                 ?? task["description"] as? String
                 ?? "Untitled task"
-            let status = task["status"] as? String ?? ""
-            let statusIcon = status.lowercased() == "completed" ? "[done]" : "[open]"
+            let isOverdue = task["is_overdue"] as? Bool ?? false
+            let priority = task["priority"] as? String ?? ""
+            let statusIcon = isOverdue ? "[overdue]" : (priority == "high" ? "[high]" : "[open]")
             lines.append("\(index + 1). \(statusIcon) \(title)")
         }
 
-        let remaining = tasks.count > 10 ? "\n...and \(tasks.count - 10) more." : ""
-        let header = "You have \(tasks.count) task\(tasks.count == 1 ? "" : "s") due today:\n\n"
+        let remaining = todayTasks.count > 10 ? "\n...and \(todayTasks.count - 10) more." : ""
+        let header = "You have \(todayTasks.count) task\(todayTasks.count == 1 ? "" : "s") due today or overdue:\n\n"
 
         return .result(dialog: "\(header)\(lines.joined(separator: "\n"))\(remaining)")
     }
 
-    /// Format today's date as YYYY-MM-DD for the API query parameter.
+    /// Format today's date as YYYY-MM-DD for client-side filtering.
     private static func todayString() -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -465,10 +484,10 @@ struct QuickNoteIntent: AppIntent {
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        // Search for the lead by name
+        // Search for the lead by name using GET /api/v1/leads/search?q=...
         let leads = try await PerenniaAPIClient.getArray(
-            path: "/api/v1/leads/",
-            queryItems: [URLQueryItem(name: "search", value: leadName)]
+            path: "/api/v1/leads/search",
+            queryItems: [URLQueryItem(name: "q", value: leadName)]
         )
 
         guard let lead = leads.first else {
@@ -481,22 +500,23 @@ struct QuickNoteIntent: AppIntent {
             throw PerenniaIntentError.unexpectedResponse
         }
 
-        // Post the note as an activity entry
+        // Post the note as an activity via POST /api/v1/activities/
+        // ActivityCreate schema: type (ActivityType enum), content (str), lead_id (optional int)
+        // ActivityType values: "Email", "Call", "Meeting", "Note", "SMS", "Document"
         let body: [String: Any] = [
-            "type": "note",
+            "type": "Note",
             "content": note,
-            "source": "siri"
+            "lead_id": leadId
         ]
 
         _ = try await PerenniaAPIClient.post(
-            path: "/api/v1/leads/\(leadId)/activities",
+            path: "/api/v1/activities/",
             body: body
         )
 
-        let firstName = lead["first_name"] as? String ?? ""
-        let lastName = lead["last_name"] as? String ?? ""
-        let displayName = "\(firstName) \(lastName)".trimmingCharacters(in: .whitespaces)
+        // Backend returns `name` (combined full name) as the primary field
+        let displayName = lead["name"] as? String ?? leadName
 
-        return .result(dialog: "Note added to \(displayName.isEmpty ? leadName : displayName)'s record.")
+        return .result(dialog: "Note added to \(displayName)'s record.")
     }
 }

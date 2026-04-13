@@ -17,10 +17,11 @@
  * All code is gated behind #if os(visionOS) so iOS builds are unaffected.
  */
 
+import UIKit
+
 #if os(visionOS)
 
 import SwiftUI
-import UIKit
 
 // MARK: - Window Configuration
 
@@ -169,17 +170,27 @@ final class PerenniaAPIService: ObservableObject {
     private var refreshTask: Task<Void, Never>?
 
     private init() {
-        // Use the production API domain from Info.plist / build config.
-        // Falls back to the standard domain if not configured.
-        let domain = Bundle.main.object(forInfoDictionaryKey: "PERENNIA_API_DOMAIN") as? String
-            ?? "api.perenniaai.com"
-        self.baseURL = URL(string: "https://\(domain)")!
+        // Centralized in APIConfig (overridable via Info.plist API_BASE_URL).
+        self.baseURL = URL(string: APIConfig.apiBaseURL)!
 
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 15
         config.timeoutIntervalForResource = 30
         config.waitsForConnectivity = true
         self.session = URLSession(configuration: config)
+
+        // If a token already exists in the keychain (e.g., app relaunch
+        // with an active session), use it so data loads immediately rather
+        // than waiting for the Capacitor bridge to inject one.
+        // Note: didSet is not called during init, so we schedule an
+        // initial refresh via Task if a token is available.
+        if let existingToken = KeychainService.shared.authToken,
+           !KeychainService.shared.isTokenExpired {
+            self.authToken = existingToken
+            Task { [weak self] in
+                await self?.refreshAll()
+            }
+        }
     }
 
     // MARK: Public API
@@ -218,14 +229,15 @@ final class PerenniaAPIService: ObservableObject {
 
     // MARK: Endpoints
 
-    /// Fetches the pipeline summary (stage counts and values).
+    /// Fetches the pipeline summary from the dashboard summary endpoint.
+    /// GET /api/v1/dashboard/summary returns camelCase JSON.
     func fetchPipelineSummary() async -> PipelineSummary {
-        guard let data = await get(path: "/api/v1/pipeline/metrics") else {
+        guard let data = await get(path: "/api/v1/dashboard/summary") else {
             return pipelineSummary // Keep stale data on failure
         }
 
         do {
-            let decoded = try JSONDecoder().decode(PipelineSummaryResponse.self, from: data)
+            let decoded = try JSONDecoder().decode(DashboardSummaryResponse.self, from: data)
             lastError = nil
             return PipelineSummary(from: decoded)
         } catch {
@@ -237,7 +249,10 @@ final class PerenniaAPIService: ObservableObject {
 
     /// Fetches recent notifications.
     func fetchNotifications() async -> [PerenniaNotification] {
-        guard let data = await get(path: "/api/v1/notifications?limit=20&unread=true") else {
+        guard let data = await get(path: "/api/v1/mobile/notifications", query: [
+            URLQueryItem(name: "limit", value: "20"),
+            URLQueryItem(name: "unread_only", value: "true"),
+        ]) else {
             return notifications
         }
 
@@ -254,13 +269,28 @@ final class PerenniaAPIService: ObservableObject {
 
     // MARK: HTTP
 
-    private func get(path: String) async -> Data? {
+    private func get(path: String, query: [URLQueryItem]? = nil) async -> Data? {
         guard let token = authToken else {
             lastError = "Not authenticated"
             return nil
         }
 
-        let url = baseURL.appendingPathComponent(path)
+        // Build URL with URLComponents so query parameters are properly encoded.
+        // appendingPathComponent percent-encodes '?' and '&', breaking query strings.
+        guard var components = URLComponents(string: baseURL.absoluteString + path) else {
+            lastError = "Invalid URL for \(path)"
+            NSLog("[VisionPro API] Cannot construct URL for path: \(path)")
+            return nil
+        }
+        if let query = query, !query.isEmpty {
+            components.queryItems = query
+        }
+        guard let url = components.url else {
+            lastError = "Invalid URL for \(path)"
+            NSLog("[VisionPro API] URLComponents failed for path: \(path)")
+            return nil
+        }
+
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -324,6 +354,31 @@ struct PipelineSummary: Equatable {
             )
         }
     }
+
+    /// Initialize from the dashboard/summary endpoint response.
+    init(from response: DashboardSummaryResponse) {
+        self.totalLeads = response.newLeadCount ?? 0
+        self.activeLoans = response.activeLoanCount ?? 0
+        self.totalPipelineValue = 0 // dashboard/summary does not return dollar amounts
+
+        // Build stage breakdown from pipelineSummary counts
+        var stageList: [PipelineStage] = []
+        if let ps = response.pipelineSummary {
+            if (ps.applicationCount ?? 0) > 0 {
+                stageList.append(PipelineStage(name: "APPLICATION", count: ps.applicationCount ?? 0, totalValue: 0))
+            }
+            if (ps.processingCount ?? 0) > 0 {
+                stageList.append(PipelineStage(name: "PROCESSING", count: ps.processingCount ?? 0, totalValue: 0))
+            }
+            if (ps.underwritingCount ?? 0) > 0 {
+                stageList.append(PipelineStage(name: "UNDERWRITING", count: ps.underwritingCount ?? 0, totalValue: 0))
+            }
+            if (ps.clearToCloseCount ?? 0) > 0 {
+                stageList.append(PipelineStage(name: "CLEAR_TO_CLOSE", count: ps.clearToCloseCount ?? 0, totalValue: 0))
+            }
+        }
+        self.stages = stageList
+    }
 }
 
 /// A single stage in the pipeline with count and dollar value.
@@ -375,8 +430,26 @@ struct PerenniaNotification: Identifiable {
     }
 }
 
-// MARK: - API Response DTOs (snake_case to match Python backend)
+// MARK: - API Response DTOs
 
+/// Response from GET /api/v1/dashboard/summary (camelCase keys).
+struct DashboardSummaryResponse: Decodable {
+    let urgentTaskCount: Int?
+    let activeLoanCount: Int?
+    let rateAlertCount: Int?
+    let newLeadCount: Int?
+    let todayAppointmentCount: Int?
+    let pipelineSummary: DashboardPipelineSummary?
+
+    struct DashboardPipelineSummary: Decodable {
+        let applicationCount: Int?
+        let processingCount: Int?
+        let underwritingCount: Int?
+        let clearToCloseCount: Int?
+    }
+}
+
+/// Legacy response DTO kept for backward compatibility.
 struct PipelineSummaryResponse: Decodable {
     let total_leads: Int?
     let active_loans: Int?
@@ -401,6 +474,14 @@ struct NotificationItem: Decodable {
     let type: String?
     let is_read: Bool?
     let created_at: String?
+}
+
+#else
+
+// iOS fallback — provides a stub so references compile on non-visionOS targets.
+enum VisionProSupport {
+    static let isVisionPro = false
+    static let preferredContentSize = CGSize(width: 1280, height: 960)
 }
 
 #endif

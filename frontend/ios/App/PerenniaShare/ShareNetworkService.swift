@@ -42,12 +42,17 @@ final class ShareNetworkService {
 
     /// Reads the auth token from the shared iOS Keychain using the same
     /// service/account identifiers as KeychainService.swift in the main app.
+    ///
+    /// MUST match KeychainService constants:
+    ///   - serviceName = "com.perenniaai.crm.keychain"
+    ///   - Key.accessToken = "access_token"
+    ///   - sharedAccessGroup = "group.com.perenniaai.crm"
     private static func getAuthTokenFromKeychain() -> String? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: "com.perenniaai.crm.auth",
+            kSecAttrService as String: "com.perenniaai.crm.keychain",
             kSecAttrAccount as String: "access_token",
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+            kSecAttrAccessGroup as String: appGroupID,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]

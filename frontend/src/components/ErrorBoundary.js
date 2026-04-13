@@ -1,5 +1,4 @@
 import React from 'react';
-import html2canvas from 'html2canvas';
 import './ErrorBoundary.css';
 
 class ErrorBoundary extends React.Component {
@@ -9,15 +8,6 @@ class ErrorBoundary extends React.Component {
       hasError: false,
       error: null,
       errorInfo: null,
-      isFixing: false,
-      fixStatus: '',
-      fixAttempts: 0,
-      screenshot: null,
-      aiAnalysis: null,
-      fixRecommendation: '',
-      fixStrategy: '',
-      filesAffected: [],
-      confidence: ''
     };
   }
 
@@ -26,7 +16,7 @@ class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('Error caught by boundary:', error, errorInfo);
+    console.error('[ErrorBoundary] Caught error:', error, errorInfo);
 
     // Auto-reload on ChunkLoadError (stale chunks after deployment)
     const errorMessage = error?.message || error?.toString() || '';
@@ -39,243 +29,90 @@ class ErrorBoundary extends React.Component {
       return;
     }
 
-    // Check if there's a pre-captured screenshot
-    const preErrorScreenshot = window.__preErrorScreenshot;
-    if (preErrorScreenshot) {
-      console.log('Using pre-captured screenshot');
-      this.setState({
-        error,
-        errorInfo,
-        screenshot: preErrorScreenshot
-      });
-      // Clear it so it doesn't get used again
-      window.__preErrorScreenshot = null;
-    } else {
-      this.setState({
-        error,
-        errorInfo
-      });
-    }
-  }
+    this.setState({ error, errorInfo });
 
-  captureScreenshot = async () => {
-    try {
-      const canvas = await html2canvas(document.body, {
-        allowTaint: true,
-        useCORS: true,
-        logging: false,
-        width: window.innerWidth,
-        height: window.innerHeight
-      });
-
-      return canvas.toDataURL('image/png');
-    } catch (error) {
-      console.error('Screenshot capture failed:', error);
-      return null;
-    }
-  };
-
-  handleAutoFix = async () => {
-    this.setState({ isFixing: true, fixStatus: 'Preparing error analysis...' });
-
-    // Use existing screenshot if already captured, otherwise capture now
-    let screenshot = this.state.screenshot;
-
-    if (!screenshot) {
-      this.setState({ fixStatus: 'Capturing screenshot...' });
-      screenshot = await this.captureScreenshot();
-
-      if (!screenshot) {
-        this.setState({
-          fixStatus: 'Failed to capture screenshot',
-          isFixing: false
-        });
-        return;
-      }
-
-      this.setState({ screenshot });
-    }
-
-    this.setState({
-      fixStatus: 'Sending error details to AI...',
-      fixAttempts: this.state.fixAttempts + 1
-    });
-
+    // Post to error reporting endpoint if available
     try {
       const token = localStorage.getItem('token');
       const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
         ? 'https://api.perenniaai.com'
         : 'http://localhost:8000';
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/auto-fix-error`, {
+      fetch(`${API_BASE_URL}/api/v1/client-errors`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
         body: JSON.stringify({
-          error_message: this.state.error?.toString() || 'Unknown error',
-          error_stack: this.state.error?.stack || '',
-          component_stack: this.state.errorInfo?.componentStack || '',
-          screenshot: screenshot,
-          attempt_number: this.state.fixAttempts,
+          error_message: error?.toString() || 'Unknown error',
+          error_stack: error?.stack || '',
+          component_stack: errorInfo?.componentStack || '',
           url: window.location.href,
-          user_agent: navigator.userAgent
-        })
+          user_agent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+        }),
+      }).catch(() => {
+        // Silently fail — error reporting should never cause more errors
       });
-
-      const data = await response.json();
-
-      if (data.success) {
-        this.setState({
-          fixStatus: data.message,
-          aiAnalysis: data.analysis,
-          fixRecommendation: data.recommendation,
-          fixStrategy: data.fix_strategy,
-          filesAffected: data.files_affected,
-          confidence: data.confidence,
-          isFixing: false
-        });
-
-        // Note: Not auto-reloading because fixes need manual review for safety
-      } else {
-        this.setState({
-          fixStatus: `Fix attempt ${this.state.fixAttempts} failed: ${data.message}`,
-          isFixing: false
-        });
-      }
-    } catch (error) {
-      console.error('Auto-fix failed:', error);
-      this.setState({
-        fixStatus: `Error communicating with AI: ${error.message}`,
-        isFixing: false
-      });
+    } catch {
+      // Silently fail
     }
+  }
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null, errorInfo: null });
+  };
+
+  handleGoHome = () => {
+    window.location.href = '/';
   };
 
   render() {
     if (this.state.hasError) {
+      const isDev = process.env.NODE_ENV === 'development';
+
       return (
-        <div className="error-boundary-container">
-          <div className="error-boundary-content">
-            <div className="error-boundary-header">
-              <h1>⚠️ Something went wrong</h1>
-              <p className="error-boundary-subtitle">
-                An error has been detected in the application
-              </p>
+        <div className="eb-fullpage-container" role="alert">
+          <div className="eb-fullpage-card">
+            <div className="eb-fullpage-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
             </div>
 
-            <div className="error-boundary-details">
-              <div className="error-message">
-                <strong>Error:</strong> {this.state.error?.toString()}
-              </div>
+            <h1 className="eb-fullpage-title">Something went wrong</h1>
+            <p className="eb-fullpage-message">
+              An unexpected error occurred. You can try again or return to the home page.
+            </p>
 
-              {this.state.error?.stack && (
-                <details className="error-stack">
-                  <summary>Stack Trace</summary>
-                  <pre>{this.state.error.stack}</pre>
-                </details>
-              )}
-
-              {this.state.errorInfo?.componentStack && (
-                <details className="error-component-stack">
-                  <summary>Component Stack</summary>
-                  <pre>{this.state.errorInfo.componentStack}</pre>
-                </details>
-              )}
-            </div>
-
-            <div className="error-boundary-actions">
-              <button
-                className="btn-auto-fix"
-                onClick={this.handleAutoFix}
-                disabled={this.state.isFixing}
-              >
-                {this.state.isFixing ? '🤖 AI is fixing...' : '🤖 Auto-Fix with AI'}
-              </button>
-
-              <button
-                className="btn-reload"
-                onClick={() => window.location.reload()}
-                disabled={this.state.isFixing}
-              >
-                🔄 Reload Page
-              </button>
-
-              <button
-                className="btn-dismiss"
-                onClick={() => this.setState({ hasError: false, error: null, errorInfo: null })}
-                disabled={this.state.isFixing}
-              >
-                ✕ Dismiss
-              </button>
-            </div>
-
-            {this.state.fixStatus && (
-              <div className={`fix-status ${this.state.isFixing ? 'fixing' : ''}`}>
-                {this.state.fixStatus}
-                {this.state.fixAttempts > 1 && (
-                  <span className="fix-attempts"> (Attempt {this.state.fixAttempts})</span>
+            {isDev && this.state.error && (
+              <details className="eb-fullpage-details">
+                <summary>Error Details (dev only)</summary>
+                <pre className="eb-fullpage-pre">{this.state.error.toString()}</pre>
+                {this.state.error.stack && (
+                  <pre className="eb-fullpage-pre eb-fullpage-stack">{this.state.error.stack}</pre>
                 )}
-              </div>
-            )}
-
-            {this.state.screenshot && (
-              <details className="error-screenshot">
-                <summary>Screenshot Captured</summary>
-                <img src={this.state.screenshot} alt="Error screenshot" />
+                {this.state.errorInfo?.componentStack && (
+                  <pre className="eb-fullpage-pre eb-fullpage-stack">{this.state.errorInfo.componentStack}</pre>
+                )}
               </details>
             )}
 
-            {this.state.aiAnalysis && (
-              <div className="ai-analysis-results">
-                <h3>🤖 AI Analysis Results</h3>
+            <div className="eb-fullpage-actions">
+              <button className="eb-fullpage-btn eb-fullpage-btn-primary" onClick={this.handleReset}>
+                Try Again
+              </button>
+              <button className="eb-fullpage-btn eb-fullpage-btn-secondary" onClick={() => window.location.reload()}>
+                Reload Page
+              </button>
+            </div>
 
-                <div className="analysis-section">
-                  <div className="analysis-badge">
-                    Confidence: <strong>{this.state.confidence}</strong>
-                  </div>
-                </div>
-
-                {this.state.aiAnalysis.root_cause && (
-                  <div className="analysis-section">
-                    <h4>🔍 Root Cause</h4>
-                    <p>{this.state.aiAnalysis.root_cause}</p>
-                  </div>
-                )}
-
-                {this.state.fixStrategy && (
-                  <div className="analysis-section">
-                    <h4>💡 Fix Strategy</h4>
-                    <p>{this.state.fixStrategy}</p>
-                  </div>
-                )}
-
-                {this.state.filesAffected && this.state.filesAffected.length > 0 && (
-                  <div className="analysis-section">
-                    <h4>📁 Files Affected</h4>
-                    <ul>
-                      {this.state.filesAffected.map((file, index) => (
-                        <li key={index}><code>{file}</code></li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {this.state.fixRecommendation && (
-                  <div className="analysis-section recommendation">
-                    <h4>⚠️ Recommendation</h4>
-                    <p>{this.state.fixRecommendation}</p>
-                  </div>
-                )}
-
-                <div className="analysis-section">
-                  <small style={{ color: '#666' }}>
-                    💡 Tip: Share this analysis with your development team to quickly resolve the issue.
-                  </small>
-                </div>
-              </div>
-            )}
+            <a href="/" className="eb-fullpage-home-link" onClick={(e) => { e.preventDefault(); this.handleGoHome(); }}>
+              Go Home
+            </a>
           </div>
         </div>
       );

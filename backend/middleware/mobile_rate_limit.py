@@ -105,8 +105,10 @@ MOBILE_RATE_LIMITS = {
     "/api/v1/audit/mobile-events": {"requests": 5, "window": 60},
 }
 
-# Default limit applied to any mobile request that does not match a specific path
-DEFAULT_MOBILE_LIMIT = {"requests": 60, "window": 60}
+# Default limits applied to any mobile request that does not match a specific path.
+# Authenticated users (identified by JWT user_id) get a higher ceiling.
+DEFAULT_MOBILE_LIMIT_AUTH = {"requests": 100, "window": 60}
+DEFAULT_MOBILE_LIMIT_UNAUTH = {"requests": 20, "window": 60}
 
 # Paths that get 2x burst allowance (LOs reconnecting after being offline)
 BURST_PATHS = frozenset({
@@ -116,7 +118,7 @@ BURST_PATHS = frozenset({
 # Burst multiplier for offline queue flush endpoints
 BURST_MULTIPLIER = 2
 
-# Paths to skip entirely (health checks, static assets)
+# Paths to skip entirely (health checks, static assets, certificate pinning)
 SKIP_PATHS = frozenset({
     "/health",
     "/api/health",
@@ -124,6 +126,11 @@ SKIP_PATHS = frozenset({
     "/openapi.json",
     "/redoc",
 })
+
+# Prefixes to skip entirely (certificate pinning must always be reachable)
+SKIP_PREFIXES = (
+    "/api/v1/security/certificate-pins",
+)
 
 # ---------------------------------------------------------------------------
 # Mobile Detection
@@ -296,8 +303,12 @@ def _build_rate_limit_key(request: Request, path_category: str) -> str:
 # ---------------------------------------------------------------------------
 
 
-def _get_limit_for_path(path: str) -> Tuple[str, int, int, bool]:
+def _get_limit_for_path(path: str, is_authenticated: bool = False) -> Tuple[str, int, int, bool]:
     """Find the rate limit config for a given path.
+
+    Args:
+        path: The request URL path.
+        is_authenticated: Whether the request has a resolved user_id.
 
     Returns:
         (path_category, requests_limit, window_seconds, is_burst_path)
@@ -312,7 +323,9 @@ def _get_limit_for_path(path: str) -> Tuple[str, int, int, bool]:
                 effective_limit *= BURST_MULTIPLIER
             return prefix, effective_limit, config["window"], is_burst
 
-    return "_default_mobile", DEFAULT_MOBILE_LIMIT["requests"], DEFAULT_MOBILE_LIMIT["window"], False
+    # No prefix match — use auth-aware default
+    default = DEFAULT_MOBILE_LIMIT_AUTH if is_authenticated else DEFAULT_MOBILE_LIMIT_UNAUTH
+    return "_default_mobile", default["requests"], default["window"], False
 
 
 # ---------------------------------------------------------------------------
@@ -350,12 +363,18 @@ class MobileRateLimitMiddleware(BaseHTTPMiddleware):
 
         path = request.url.path
 
-        # Skip health/docs/static
+        # Skip health/docs/static/certificate-pins
         if path in SKIP_PATHS:
             return await call_next(request)
+        if any(path.startswith(prefix) for prefix in SKIP_PREFIXES):
+            return await call_next(request)
+
+        # Determine auth state for default limit selection
+        user = getattr(getattr(request, "state", None), "user", None)
+        is_authenticated = getattr(user, "id", None) is not None if user else False
 
         # Determine rate limit for this path
-        path_category, limit, window, is_burst = _get_limit_for_path(path)
+        path_category, limit, window, is_burst = _get_limit_for_path(path, is_authenticated)
 
         # Build the rate limit key
         rl_key = _build_rate_limit_key(request, path_category)

@@ -18,41 +18,8 @@
 import Foundation
 import ActivityKit
 
-// MARK: - Activity Attributes
-
-struct ClosingActivityAttributes: ActivityAttributes {
-    /// Borrower's display name (e.g. "John & Jane Smith")
-    let borrowerName: String
-
-    /// Formatted loan amount (e.g. "$425,000")
-    let loanAmount: String
-
-    /// Property address (e.g. "123 Main St, Charleston, SC")
-    let propertyAddress: String
-
-    /// Internal loan ID for API correlation
-    let loanId: String
-
-    // MARK: - Content State (mutable, pushed via updates)
-
-    struct ContentState: Codable, Hashable {
-        /// Current loan stage as uppercase string (e.g. "UNDERWRITING")
-        let currentStage: String
-
-        /// Progress through the closing pipeline, 0.0 to 1.0
-        let stageProgress: Double
-
-        /// Timestamp of the last status change
-        let lastUpdate: Date
-
-        /// Human-readable description of what happens next
-        /// e.g. "Awaiting underwriter review", "Title company preparing docs"
-        let nextAction: String
-
-        /// Estimated closing date, nil if not yet determined
-        let estimatedClose: Date?
-    }
-}
+// ClosingActivityAttributes is defined in App/ClosingActivityAttributes.swift
+// and compiled into this target via shared source membership in the Xcode project.
 
 // MARK: - Stage Definitions
 

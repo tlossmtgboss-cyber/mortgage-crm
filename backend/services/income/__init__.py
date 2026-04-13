@@ -56,6 +56,12 @@ from .income_review_workflow import (
     get_income_review_orchestrator,
 )
 
+from .form_1084_service import (
+    Form1084Data,
+    Form1084Service,
+    get_form_1084_service,
+)
+
 __all__ = [
     # Legacy
     "IncomeCalculationService",
@@ -102,4 +108,9 @@ __all__ = [
     "IncomeReviewOrchestrator",
     "get_income_review_workflow",
     "get_income_review_orchestrator",
+
+    # Form 1084
+    "Form1084Data",
+    "Form1084Service",
+    "get_form_1084_service",
 ]

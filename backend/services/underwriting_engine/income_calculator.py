@@ -265,10 +265,13 @@ class IncomeCalculator:
         """
         Calculate W-2 employment income.
 
-        Per Fannie Mae B3-3.1-01:
+        Per Fannie Mae B3-3.1-01 (updated 03/04/2026):
         - Use current pay stub to verify employment and year-to-date earnings
         - Base income uses most recent pay period annualized
+        - Only the most recent W-2 is required for fixed/stable base income
         - Must verify 2-year employment history (can be different employers)
+        - NOTE: 2-year W-2 requirement STILL applies to variable income
+          (overtime, bonus, commission) -- see _calculate_variable_income()
         """
         employer_name = emp.get("employer_name", "Unknown Employer")
         base_monthly = Decimal(str(emp.get("base_monthly", 0)))
@@ -306,8 +309,10 @@ class IncomeCalculator:
             doc_status = "partial"
             status = IncomeStatus.NEEDS_DOCUMENTATION
 
+        # Per B3-3.1-01 (03/04/2026): Only most recent W-2 required for fixed base income.
+        # 2-year W-2 requirement still applies to variable income (OT/bonus/commission).
         if not emp.get("has_w2s"):
-            issues.append("W-2 forms required (2 years)")
+            issues.append("Most recent W-2 required for base employment income")
             doc_status = "partial" if doc_status == "complete" else doc_status
             status = IncomeStatus.NEEDS_DOCUMENTATION
 
@@ -321,18 +326,22 @@ class IncomeCalculator:
             documentation_status=doc_status,
             issues=issues,
             warnings=warnings,
-            guideline_reference="Fannie Mae B3-3.1-01",
+            guideline_reference="Fannie Mae B3-3.1-01 (03/04/2026)",
         )
 
     def _calculate_variable_income(self, var: Dict[str, Any]) -> IncomeItem:
         """
         Calculate variable income (overtime, bonus, commission).
 
-        Per Fannie Mae B3-3.1-01:
-        - Require 2-year history
+        Per Fannie Mae B3-3.1-01 (03/04/2026):
+        - Require 2-year W-2 history (UNCHANGED for variable income)
         - Average over 2 years (or 1 year if trending up)
         - If declining, use lower of 1-year average or 2-year average
         - Commission > 25% of income requires tax returns
+
+        NOTE: The 03/04/2026 update reduced W-2 requirements for fixed base
+        income only. Variable income (OT, bonus, commission) STILL requires
+        2 years of W-2s.
         """
         income_type_str = var.get("type", "overtime").lower()
         income_type_map = {

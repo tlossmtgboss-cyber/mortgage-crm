@@ -1,6 +1,7 @@
 import UIKit
 import Capacitor
 import UserNotifications
+import BackgroundTasks
 
 // MARK: - CarPlay Notification Names
 
@@ -36,6 +37,9 @@ struct PerformanceMetrics {
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
 
+    // Note: With UIApplicationSceneManifest in Info.plist, the window is created
+    // by MainSceneDelegate, not here. This property exists for backward compatibility
+    // only (e.g., non-scene fallback on very old iOS).
     var window: UIWindow?
 
     // MARK: - Launch Time Measurement
@@ -43,59 +47,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     /// Captured as early as possible (static initializer) so we have a baseline.
     private static let processStartTime = CFAbsoluteTimeGetCurrent()
 
-    // MARK: - Session Timeout
-
-    /// How long the app may remain inactive before the session is invalidated.
-    /// Default: 15 minutes. Clamped between 1 minute and 1 hour.
-    private var sessionTimeoutSeconds: TimeInterval = 900
-
-    /// UserDefaults key for persisting the last-active timestamp.
-    private static let lastActiveTimeKey = "com.perenniaai.session.lastActiveTime"
-
-    /// Update the session timeout interval (e.g. from MDM configuration).
-    /// The value is clamped to [60, 3600] seconds.
-    func updateSessionTimeout(_ seconds: TimeInterval) {
-        sessionTimeoutSeconds = max(60, min(3600, seconds))
-    }
-
-    /// Persist the current time as the last-active timestamp.
-    private func recordLastActiveTime() {
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: Self.lastActiveTimeKey)
-    }
-
-    /// Check whether the session has exceeded the timeout since the last recorded active time.
-    /// If so, clear the auth token, post a notification, and log the event.
-    private func enforceSessionTimeoutIfNeeded() {
-        let lastActive = UserDefaults.standard.double(forKey: Self.lastActiveTimeKey)
-        // If there's no recorded time yet (first launch or cleared), skip enforcement.
-        guard lastActive > 0 else { return }
-
-        let elapsed = Date().timeIntervalSince1970 - lastActive
-        guard elapsed > sessionTimeoutSeconds else { return }
-
-        // Only enforce if there is actually a session to invalidate.
-        guard KeychainService.shared.authToken != nil else { return }
-
-        // Invalidate the session.
-        KeychainService.shared.authToken = nil
-
-        // Log the timeout event.
-        AuditLogger.shared.log(event: .sessionEnd, details: [
-            "reason": "session_timeout",
-            "elapsed_seconds": String(format: "%.0f", elapsed),
-            "timeout_threshold": String(format: "%.0f", sessionTimeoutSeconds)
-        ])
-
-        NSLog("[SessionTimeout] Session invalidated after %.0f seconds of inactivity (threshold: %.0f)", elapsed, sessionTimeoutSeconds)
-
-        // Notify observers (the WebView bridge listens for this to redirect to login).
-        NotificationCenter.default.post(name: .sessionDidTimeout, object: nil)
-    }
-
     // MARK: - Application Lifecycle
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
 
         // --- Launch Time Measurement ---
         let launchDuration = CFAbsoluteTimeGetCurrent() - Self.processStartTime
@@ -106,25 +60,19 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             "memory_bytes": "\(PerformanceMetrics.memoryUsage)"
         ])
 
-        // Install app-switcher blur overlay to protect sensitive data
-        if let window = self.window {
-            AppSwitcherGuard.shared.install(on: window)
+        // Register actionable notification categories before requesting authorization
+        if #available(iOS 13.0, *) {
+            PushNotificationRouter.registerNotificationCategories()
         }
-
-        // Log app launch
-        AuditLogger.shared.log(event: .appForeground)
-
-        // Set file protection for data at rest
-        try? FileManager.default.setAttributes(
-            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-            ofItemAtPath: NSHomeDirectory()
-        )
 
         // Set up push notification delegate
         UNUserNotificationCenter.current().delegate = self
 
         // Request notification permissions
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
+            if let error = error {
+                NSLog("[Push] Authorization error: %@", error.localizedDescription)
+            }
             if granted {
                 DispatchQueue.main.async {
                     application.registerForRemoteNotifications()
@@ -132,35 +80,55 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
             }
         }
 
-        // Enable background fetch for CarPlay data refresh
-        application.setMinimumBackgroundFetchInterval(UIApplication.backgroundFetchIntervalMinimum)
+        // Register BGTaskScheduler tasks. Must happen in didFinishLaunchingWithOptions,
+        // before the app finishes launching, per Apple documentation.
+        if #available(iOS 13.0, *) {
+            BackgroundSyncManager.shared.registerBackgroundTasks()
+        }
+
+        // Note: AppSwitcherGuard, file protection, and PerformanceMonitor setup
+        // are handled by MainSceneDelegate, which owns the window in the scene
+        // lifecycle. Session timeout is also enforced by MainSceneDelegate.
 
         return true
     }
 
-    // MARK: - Multi-Scene Configuration
+    // MARK: - Scene Configuration
 
-    /// Returns the correct scene configuration for CarPlay vs the main app window.
-    /// The system calls this when a new scene session is being created.
-    func application(_ application: UIApplication,
-                     configurationForConnecting connectingSceneSession: UISceneSession,
-                     options: UIScene.ConnectionOptions) -> UISceneConfiguration {
+    /// Routes scene sessions to the correct delegate class.
+    /// - CarPlay scenes -> CarPlaySceneDelegate
+    /// - Default window scenes -> MainSceneDelegate (Capacitor WebView + lifecycle)
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+
         if connectingSceneSession.role == .carTemplateApplication {
-            let config = UISceneConfiguration(name: "CarPlay Configuration", sessionRole: .carTemplateApplication)
+            let config = UISceneConfiguration(
+                name: "CarPlay Configuration",
+                sessionRole: .carTemplateApplication
+            )
             if #available(iOS 14.0, *) {
                 config.delegateClass = CarPlaySceneDelegate.self
             }
             return config
         }
 
-        let config = UISceneConfiguration(name: "Default Configuration", sessionRole: .windowApplication)
+        // Default: main app window
+        let config = UISceneConfiguration(
+            name: "Default Configuration",
+            sessionRole: connectingSceneSession.role
+        )
+        config.delegateClass = MainSceneDelegate.self
         return config
     }
 
-    /// Called when the user discards a scene session (e.g., swiping away from the app switcher).
-    func application(_ application: UIApplication,
-                     didDiscardSceneSessions sceneSessions: Set<UISceneSession>) {
-        // Release any resources specific to the discarded scenes.
+    func application(
+        _ application: UIApplication,
+        didDiscardSceneSessions sceneSessions: Set<UISceneSession>
+    ) {
+        // Clean up resources for discarded scene sessions if needed.
     }
 
     // MARK: - Push Notification Registration
@@ -175,25 +143,55 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         NotificationCenter.default.post(name: .capacitorDidFailToRegisterForRemoteNotifications, object: error)
     }
 
+    // MARK: - Silent / Background Push Notifications
+
+    func application(_ application: UIApplication,
+                     didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                     fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+        // Route through PushNotificationRouter for cache refresh and CarPlay updates
+        if #available(iOS 13.0, *) {
+            PushNotificationRouter.shared.routeNotification(userInfo, completionHandler: completionHandler)
+        } else {
+            completionHandler(.noData)
+        }
+    }
+
     // MARK: - UNUserNotificationCenterDelegate
 
     // Handle notifications when app is in foreground
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        // Route CarPlay-relevant notifications to the CarPlay scene
-        routeToCarPlayIfRelevant(userInfo: notification.request.content.userInfo)
+        let userInfo = notification.request.content.userInfo
+
+        // Route to CarPlay and refresh caches via PushNotificationRouter
+        if #available(iOS 13.0, *) {
+            PushNotificationRouter.shared.routeNotification(userInfo)
+        }
+
+        // Also forward to legacy CarPlay routing
+        routeToCarPlayIfRelevant(userInfo: userInfo)
 
         // Show notification even when app is in foreground
         completionHandler([.banner, .badge, .sound])
     }
 
-    // Handle notification tap
+    // Handle notification tap and actions
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-        // Route CarPlay-relevant notifications to the CarPlay scene
-        routeToCarPlayIfRelevant(userInfo: response.notification.request.content.userInfo)
+        let userInfo = response.notification.request.content.userInfo
 
-        // Forward to Capacitor
-        NotificationCenter.default.post(name: Notification.Name("pushNotificationActionPerformed"), object: response)
-        completionHandler()
+        // Route CarPlay-relevant notifications to the CarPlay scene
+        routeToCarPlayIfRelevant(userInfo: userInfo)
+
+        // Handle notification actions and deep linking via PushNotificationRouter
+        if #available(iOS 13.0, *) {
+            PushNotificationRouter.shared.handleNotificationAction(response) {
+                // Forward to Capacitor after our handling is done
+                NotificationCenter.default.post(name: Notification.Name("pushNotificationActionPerformed"), object: response)
+                completionHandler()
+            }
+        } else {
+            NotificationCenter.default.post(name: Notification.Name("pushNotificationActionPerformed"), object: response)
+            completionHandler()
+        }
     }
 
     // MARK: - CarPlay Push Notification Routing
@@ -201,7 +199,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     /// Checks if a push notification is relevant to CarPlay and forwards it to the CarPlay scene.
     /// Relevant categories: new tasks, rate alerts, incoming calls, pipeline updates, appointment reminders.
     private func routeToCarPlayIfRelevant(userInfo: [AnyHashable: Any]) {
-        // Basic payload validation — require at least 'type', 'category', or 'aps' key
+        // Basic payload validation -- require at least 'type', 'category', or 'aps' key
         guard userInfo["type"] != nil || userInfo["category"] != nil || userInfo["aps"] != nil else {
             return
         }
@@ -231,82 +229,50 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
         }
     }
 
-    // MARK: - Background Fetch for CarPlay Data
+    // MARK: - Background Fetch (Legacy Fallback)
 
+    /// Legacy background fetch handler. BGTaskScheduler is the primary mechanism
+    /// (registered above). This serves as a fallback and delegates to BackgroundSyncManager.
     func application(_ application: UIApplication, performFetchWithCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-        // Refresh CarPlay data in background so the CarPlay scene stays current
-        guard #available(iOS 14.0, *) else {
-            completionHandler(.noData)
-            return
-        }
-
-        // Verify auth token exists before making network requests
         guard KeychainService.shared.authToken != nil else {
             completionHandler(.noData)
             return
         }
 
-        Task {
-            do {
-                _ = try await CarPlayAPIService.shared.fetchDashboard()
-                AuditLogger.shared.log(event: .dataAccess, details: ["source": "background_fetch"])
-                // Notify CarPlay scene that fresh data is available
-                await MainActor.run {
-                    NotificationCenter.default.post(name: .carPlayDataDidUpdate, object: nil, userInfo: ["source": "background_fetch"])
-                }
-                completionHandler(.newData)
-            } catch {
-                completionHandler(.failed)
+        if #available(iOS 13.0, *) {
+            Task {
+                let result = await BackgroundSyncManager.shared.performBackgroundFetch()
+                completionHandler(result)
             }
+        } else {
+            completionHandler(.noData)
         }
     }
 
-    // MARK: - Standard Lifecycle Callbacks
+    // MARK: - Memory Warning
 
-    func applicationWillResignActive(_ application: UIApplication) {
-        // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
-        // Use this method to pause ongoing tasks, disable timers, and invalidate graphics rendering callbacks. Games should use this method to pause the game.
-
-        // Record the time the app became inactive for session timeout enforcement.
-        recordLastActiveTime()
+    func applicationDidReceiveMemoryWarning(_ application: UIApplication) {
+        if #available(iOS 14.0, *) {
+            PerformanceMonitor.shared.recordMemoryWarning()
+        }
+        NSLog("[Memory] Received memory warning. Current usage: %llu bytes", PerformanceMetrics.memoryUsage)
     }
 
-    func applicationDidEnterBackground(_ application: UIApplication) {
-        // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
-        // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
-
-        // Flush audit logs to backend before backgrounding
-        Task { await AuditLogger.shared.syncToBackend() }
-    }
-
-    func applicationWillEnterForeground(_ application: UIApplication) {
-        // Called as part of the transition from the background to the active state; here you can undo many of the changes made on entering the background.
-    }
-
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
-
-        // Check whether the session has expired while the app was inactive/backgrounded.
-        enforceSessionTimeoutIfNeeded()
-    }
+    // MARK: - Termination
 
     func applicationWillTerminate(_ application: UIApplication) {
-        // Called when the application is about to terminate. Save data if appropriate. See also applicationDidEnterBackground:.
         AuditLogger.shared.log(event: .appTerminated)
     }
 
     // MARK: - URL & Universal Link Handling
 
     func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        // Called when the app was launched with a url. Feel free to add additional processing here,
-        // but if you want the App API to support tracking app url opens, make sure to keep this call
+        // Called when the app was launched with a URL (pre-scene or non-scene path).
         return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
     }
 
     func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
         // Called when the app was launched with an activity, including Universal Links.
-        // Feel free to add additional processing here, but if you want the App API to support
-        // tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
 

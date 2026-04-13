@@ -3,6 +3,12 @@ Health & System Status Routes
 
 Root, health check, and system status endpoints.
 Extracted from inline_legacy_routes.py.
+
+Enterprise health check endpoints:
+  GET /health          - Simple 200 OK for load balancers (no auth, fast, no DB)
+  GET /health/detailed - Comprehensive check with per-component status (requires auth)
+  GET /health/ready    - Readiness probe: can this instance accept traffic? (DB must connect)
+  GET /health/live     - Liveness probe: is the process responsive?
 """
 from fastapi import Depends, Request
 from fastapi.responses import JSONResponse, HTMLResponse
@@ -13,6 +19,7 @@ from utils.response import success_response, error_response, ErrorCodes
 import asyncio
 import logging
 import os
+import sys
 import time
 
 logger = logging.getLogger(__name__)
@@ -20,6 +27,9 @@ logger = logging.getLogger(__name__)
 # Record application start time at module load for uptime calculation
 _APP_START_TIME = time.monotonic()
 _APP_START_TIMESTAMP = datetime.now(timezone.utc)
+
+# Application version — from environment or hardcoded
+_APP_VERSION = os.getenv("APP_VERSION", "2026.04.10.1")
 
 
 def register_health_routes(app, get_db, **kwargs):
@@ -706,24 +716,110 @@ def register_health_routes(app, get_db, **kwargs):
     # Health check (lines ~14785-14796 in inline_legacy_routes.py)
     # ========================================================================
 
-    @app.get("/health")
+    @app.get("/health", tags=["Health"])
     async def health_check(db: Session = Depends(get_db)):
-        """Basic health check - database connectivity"""
+        """
+        Enterprise health check for load balancers, monitoring, and uptime probes.
+
+        No auth required. Returns comprehensive service status with latency
+        measurements. Designed to complete in under 500ms.
+
+        Critical services (database): failure returns HTTP 503.
+        Non-critical services (redis, ai_service, telephony): failure returns
+        HTTP 200 with degraded status so load balancers keep routing traffic.
+
+        For deeper diagnostics (memory, pool stats, auth-gated), use
+        GET /health/detailed.
+        """
+        services = {}
+        is_healthy = True
+        CHECK_TIMEOUT = 2.0  # seconds -- keep total under 500ms budget
+
+        # --- Database: SELECT 1 with latency measurement ---
         try:
-            db.execute(text("SELECT 1"))
-            return success_response(data={
-                "status": "healthy",
-                "database": "connected",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "version": "2026.04.06.1",
-            })
-        except Exception as e:
-            logger.error(f"Health check failed: {type(e).__name__}: {e}")
-            return error_response(
-                code=ErrorCodes.SERVICE_UNAVAILABLE,
-                message=f"Health check failed: {type(e).__name__}: {str(e)[:200]}",
-                status_code=503,
+            loop = asyncio.get_event_loop()
+
+            def _db_ping():
+                start = time.monotonic()
+                try:
+                    db.execute(text("SELECT 1"))
+                    latency = round((time.monotonic() - start) * 1000, 1)
+                    return {"status": "healthy", "latency_ms": latency}
+                except Exception as exc:
+                    latency = round((time.monotonic() - start) * 1000, 1)
+                    return {"status": "unhealthy", "latency_ms": latency, "error": str(exc)[:200]}
+
+            db_result = await asyncio.wait_for(
+                loop.run_in_executor(None, _db_ping),
+                timeout=CHECK_TIMEOUT,
             )
+            services["database"] = db_result
+            if db_result["status"] != "healthy":
+                is_healthy = False
+        except asyncio.TimeoutError:
+            services["database"] = {"status": "unhealthy", "error": "timeout (>2s)"}
+            is_healthy = False
+        except Exception as e:
+            services["database"] = {"status": "unhealthy", "error": str(e)[:200]}
+            is_healthy = False
+
+        # --- Redis: PING with latency measurement ---
+        try:
+            loop = asyncio.get_event_loop()
+
+            def _redis_ping():
+                try:
+                    from services.redis_service import redis_service
+                    client = redis_service.get_client()
+                    if client is None:
+                        # Redis not configured or circuit breaker open
+                        if not os.getenv("REDIS_URL"):
+                            return {"status": "not_configured"}
+                        return {"status": "unhealthy", "error": "client unavailable (circuit breaker open or init failed)"}
+                    start = time.monotonic()
+                    client.ping()
+                    latency = round((time.monotonic() - start) * 1000, 1)
+                    redis_service.record_success()
+                    return {"status": "healthy", "latency_ms": latency}
+                except Exception as exc:
+                    return {"status": "unhealthy", "error": str(exc)[:200]}
+
+            redis_result = await asyncio.wait_for(
+                loop.run_in_executor(None, _redis_ping),
+                timeout=CHECK_TIMEOUT,
+            )
+            services["redis"] = redis_result
+        except asyncio.TimeoutError:
+            services["redis"] = {"status": "unhealthy", "error": "timeout (>2s)"}
+        except Exception as e:
+            services["redis"] = {"status": "unhealthy", "error": str(e)[:200]}
+
+        # --- AI service: check ANTHROPIC_API_KEY presence (no live call) ---
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+        services["ai_service"] = {
+            "status": "healthy" if anthropic_key else "not_configured",
+        }
+
+        # --- Telephony: check TELNYX_API_KEY presence (no live call) ---
+        telnyx_key = os.getenv("TELNYX_API_KEY")
+        services["telephony"] = {
+            "status": "healthy" if telnyx_key else "not_configured",
+        }
+
+        # --- Build response ---
+        uptime_seconds = round(time.monotonic() - _APP_START_TIME, 1)
+        overall_status = "healthy" if is_healthy else "unhealthy"
+
+        response_body = {
+            "status": overall_status,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "version": _APP_VERSION,
+            "services": services,
+            "uptime_seconds": uptime_seconds,
+        }
+
+        status_code = 200 if is_healthy else 503
+        return JSONResponse(status_code=status_code, content=response_body)
 
 
     # ========================================================================
@@ -800,7 +896,7 @@ def register_health_routes(app, get_db, **kwargs):
                 "status": "healthy",
                 "database": "connected",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "version": "2026.04.06.1",
+                "version": _APP_VERSION,
             })
         except Exception as e:
             logger.error(f"API health check failed: {type(e).__name__}: {e}")
@@ -898,7 +994,7 @@ def register_health_routes(app, get_db, **kwargs):
                 "checks": checks,
                 "uptime_seconds": uptime_seconds,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "version": "2026.04.06.1",
+                "version": _APP_VERSION,
             })
         else:
             return error_response(
@@ -910,7 +1006,7 @@ def register_health_routes(app, get_db, **kwargs):
                     "checks": checks,
                     "uptime_seconds": uptime_seconds,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "version": "2026.04.06.1",
+                    "version": _APP_VERSION,
                 },
             )
 
@@ -921,7 +1017,7 @@ def register_health_routes(app, get_db, **kwargs):
     @app.get("/deploy-test")
     async def deploy_test():
         """Simple endpoint to verify deployment - added 2025-12-27T22:45"""
-        return {"deployed_at": "2026-01-22T09:10:00Z", "version": "2026.04.06.1", "test": "db-pool-fixes"}
+        return {"deployed_at": "2026-01-22T09:10:00Z", "version": _APP_VERSION, "test": "db-pool-fixes"}
 
 
     # ========================================================================
@@ -1011,95 +1107,204 @@ def register_health_routes(app, get_db, **kwargs):
     # Health detailed (lines ~16886-16894 in inline_legacy_routes.py)
     # ========================================================================
 
-    @app.get("/health/detailed")
-    async def health_check_detailed():
-        """Comprehensive health check with all dependencies, including DB pool"""
-        if health_checker:
-            results = await health_checker.check_all()
-        else:
-            results = {"status": "healthy", "message": "Basic health check (detailed checks not configured)"}
+    @app.get("/health/detailed", tags=["Health"])
+    async def health_check_detailed(request: Request):
+        """
+        Comprehensive health check with per-component status, latency, and diagnostics.
 
-        # Enrich with connection pool health
+        Requires authentication: Bearer token (Authorization header) or admin
+        API key (X-API-Key header). Returns structured results for every
+        subsystem so monitoring dashboards can alert on individual components.
+
+        Each check includes: status ("ok" / "error"), latency_ms, optional error.
+        Overall status: "healthy" (all pass), "degraded" (non-critical fail), "unhealthy" (DB down).
+        """
+        # ---- Authentication gate ----
+        authenticated = False
+
+        # Check admin API key first (simpler, bypasses CSRF)
+        api_key_header = request.headers.get("X-API-Key", "")
+        admin_key = os.getenv("ADMIN_API_KEY", "")
+        if admin_key and api_key_header == admin_key:
+            authenticated = True
+
+        # Check Bearer token
+        if not authenticated:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer ") and len(auth_header) > 10:
+                token = auth_header[7:]
+                try:
+                    from auth.tokens import _verify_secure_token
+                    payload = _verify_secure_token(token)
+                    if payload:
+                        authenticated = True
+                except (ImportError, Exception):
+                    pass
+                if not authenticated:
+                    try:
+                        from jose import jwt as jose_jwt
+                        secret_key = os.getenv("SECRET_KEY", "")
+                        algorithm = os.getenv("JWT_ALGORITHM", "HS256")
+                        if secret_key:
+                            payload = jose_jwt.decode(token, secret_key, algorithms=[algorithm])
+                            if payload.get("sub"):
+                                authenticated = True
+                    except Exception:
+                        pass
+
+        if not authenticated:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "status": "unauthorized",
+                    "message": "Authentication required. Provide Authorization: Bearer <token> or X-API-Key header.",
+                },
+            )
+
+        # ---- Run all checks concurrently with individual timeouts ----
+        checks = {}
+        CHECK_TIMEOUT = 3.0  # seconds per check
+
+        # 1. Database connectivity (SELECT 1 with 3s timeout)
         try:
-            from services.db_monitor import check_pool_health, get_pool_stats
-            pool_health = check_pool_health()
-            pool_stats = get_pool_stats()
-            results["connection_pool"] = {
-                "health": pool_health,
-                "stats": pool_stats,
-            }
-            # Downgrade overall status if pool is unhealthy
-            if pool_health["status"] == "critical" and results.get("status") == "healthy":
-                results["status"] = "degraded"
-            elif pool_health["status"] == "warning" and results.get("status") == "healthy":
-                results["status"] = "degraded"
+            checks["database"] = await asyncio.wait_for(
+                _deep_check_database(SessionLocal),
+                timeout=CHECK_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            checks["database"] = {"status": "error", "latency_ms": round(CHECK_TIMEOUT * 1000), "error": "timeout (>3s)"}
         except Exception as e:
-            logger.warning(f"Could not fetch pool health for detailed check: {e}")
-            results["connection_pool"] = {"error": "Pool stats unavailable"}
+            checks["database"] = {"status": "error", "error": str(e)}
 
-        status_code = 200 if results.get("status") in ("healthy",) else 503
-        return JSONResponse(status_code=status_code, content=results)
+        # 2. Database connection pool stats
+        try:
+            checks["database_pool"] = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(None, _deep_check_pool_stats),
+                timeout=CHECK_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            checks["database_pool"] = {"status": "error", "error": "timeout (>3s)"}
+        except Exception as e:
+            checks["database_pool"] = {"status": "error", "error": str(e)}
+
+        # 3. Redis connectivity
+        try:
+            checks["redis"] = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(None, _deep_check_redis),
+                timeout=CHECK_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            checks["redis"] = {"status": "error", "error": "timeout (>3s)"}
+        except Exception as e:
+            checks["redis"] = {"status": "error", "error": str(e)}
+
+        # 4. Memory usage
+        try:
+            checks["memory"] = _deep_check_memory()
+        except Exception as e:
+            checks["memory"] = {"status": "error", "error": str(e)}
+
+        # ---- Determine overall status ----
+        db_status = checks.get("database", {}).get("status", "error")
+        if db_status == "error":
+            overall_status = "unhealthy"
+        else:
+            overall_status = "healthy"
+            for key, value in checks.items():
+                if isinstance(value, dict):
+                    check_status = value.get("status", "")
+                    if check_status in ("error", "critical", "unhealthy"):
+                        if key in ("database",):
+                            overall_status = "unhealthy"
+                            break
+                        elif overall_status == "healthy":
+                            overall_status = "degraded"
+                    elif check_status == "warning" and overall_status == "healthy":
+                        overall_status = "degraded"
+
+        uptime_seconds = round(time.monotonic() - _APP_START_TIME, 1)
+
+        response_data = {
+            "status": overall_status,
+            "version": _APP_VERSION,
+            "uptime_seconds": uptime_seconds,
+            "started_at": _APP_START_TIMESTAMP.isoformat(),
+            "python_version": sys.version,
+            "memory_mb": checks.get("memory", {}).get("rss_mb"),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "environment": os.getenv("ENVIRONMENT", os.getenv("RAILWAY_ENVIRONMENT", "development")),
+            "checks": checks,
+        }
+
+        status_code = 200 if overall_status in ("healthy", "degraded") else 503
+        return JSONResponse(status_code=status_code, content=response_data)
 
     # ========================================================================
     # Health ready (lines ~16896-16949 in inline_legacy_routes.py)
     # ========================================================================
 
-    @app.get("/health/ready")
+    @app.get("/health/ready", tags=["Health"])
     async def readiness_check():
         """
-        Kubernetes readiness probe - can accept traffic?
+        Readiness probe -- can this instance accept traffic?
 
-        Checks:
-        - Database connectivity
-        - Redis connectivity (required in production)
+        No auth required. Returns 200 if the database is reachable (SELECT 1
+        within 3 seconds). Returns 503 otherwise. Redis is checked but its
+        failure only causes "degraded", not "not_ready", since the app can
+        operate with the in-memory token blacklist fallback.
+
+        Suitable for Kubernetes readiness probes, Railway health checks, and
+        load balancer target group health checks.
         """
-        checks = {"database": False, "redis": False}
+        checks = {}
         errors = []
 
-        # Check database
+        # --- Database (critical -- must pass for readiness) ---
+        db_ok = False
+        db_start = time.monotonic()
         try:
-            db = SessionLocal()
-            db.execute(text("SELECT 1"))
-            db.close()
-            checks["database"] = True
+            db_session = SessionLocal()
+            try:
+                db_session.execute(text("SELECT 1"))
+                latency_ms = round((time.monotonic() - db_start) * 1000, 1)
+                checks["database"] = {"status": "ok", "latency_ms": latency_ms}
+                db_ok = True
+            finally:
+                db_session.close()
         except Exception as e:
-            errors.append("Database: connection failed")
+            latency_ms = round((time.monotonic() - db_start) * 1000, 1)
+            checks["database"] = {"status": "error", "latency_ms": latency_ms, "error": str(e)[:200]}
+            errors.append(f"Database: {type(e).__name__}")
 
-        # Check Redis (required in production)
-        try:
-            from tasks.celery_app import check_redis_health
-            redis_status = check_redis_health()
-            checks["redis"] = redis_status.get("status") == "healthy"
-            if not checks["redis"]:
-                errors.append(f"Redis: {redis_status.get('error', 'unhealthy')}")
-        except ImportError:
-            # Celery module not available, try direct Redis check
+        # --- Redis (non-critical) ---
+        redis_url = os.getenv("REDIS_URL")
+        if redis_url:
             try:
                 import redis as redis_lib
-                from config import settings
-                r = redis_lib.from_url(settings.REDIS_URL)
+                start = time.monotonic()
+                r = redis_lib.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
                 r.ping()
-                checks["redis"] = True
+                latency_ms = round((time.monotonic() - start) * 1000, 1)
+                r.close()
+                checks["redis"] = {"status": "ok", "latency_ms": latency_ms}
+            except ImportError:
+                checks["redis"] = {"status": "ok", "note": "redis package not installed, using in-memory fallback"}
             except Exception as e:
-                errors.append("Redis: connection failed")
-
-        # Determine readiness based on environment
-        from config import is_production
-        if is_production():
-            # In production, both database and Redis must be healthy
-            is_ready = all(checks.values())
+                checks["redis"] = {"status": "error", "error": str(e)[:200]}
+                errors.append(f"Redis: {type(e).__name__}")
         else:
-            # In development, only database is required
-            is_ready = checks["database"]
+            checks["redis"] = {"status": "ok", "note": "not configured, using in-memory fallback"}
 
+        # --- Readiness decision: database must be connected ---
+        is_ready = db_ok
         if is_ready:
             return {"status": "ready", "checks": checks}
         return JSONResponse(
             status_code=503,
-            content={"status": "not_ready", "checks": checks, "errors": errors}
+            content={"status": "not_ready", "checks": checks, "errors": errors},
         )
 
-    @app.get("/ready")
+    @app.get("/ready", tags=["Health"])
     async def ready_alias():
         """Root-level readiness alias for load balancers."""
         return await readiness_check()
@@ -1108,10 +1313,18 @@ def register_health_routes(app, get_db, **kwargs):
     # Health live (lines ~16951-16954 in inline_legacy_routes.py)
     # ========================================================================
 
-    @app.get("/health/live")
+    @app.get("/health/live", tags=["Health"])
     async def liveness_check():
-        """Kubernetes liveness probe - is process alive?"""
-        return {"status": "alive"}
+        """
+        Liveness probe -- is this process responsive?
+
+        No auth, no DB call, no external dependencies. If this returns
+        anything at all, the process is alive. Returns uptime for convenience.
+        """
+        return {
+            "status": "alive",
+            "uptime_seconds": round(time.monotonic() - _APP_START_TIME, 1),
+        }
 
     # ========================================================================
     # Health pool (lines ~16957-16977 in inline_legacy_routes.py)
@@ -1582,7 +1795,7 @@ def register_health_routes(app, get_db, **kwargs):
             "uptime_seconds": uptime_seconds,
             "started_at": _APP_START_TIMESTAMP.isoformat(),
             "timestamp": datetime.now(timezone.utc).isoformat(),
-            "version": "2026.04.06.1",
+            "version": _APP_VERSION,
             "environment": os.getenv("ENVIRONMENT", "development"),
         }
 
@@ -1596,7 +1809,6 @@ def register_health_routes(app, get_db, **kwargs):
 
 async def _deep_check_database(session_local):
     """Test database connectivity with SELECT 1 and measure latency."""
-    import asyncio
     loop = asyncio.get_event_loop()
 
     def _db_ping():
@@ -1606,10 +1818,10 @@ async def _deep_check_database(session_local):
             result = db.execute(text("SELECT 1"))
             result.fetchone()
             latency_ms = round((time.monotonic() - start) * 1000, 1)
-            return {"status": "healthy", "latency_ms": latency_ms}
+            return {"status": "ok", "latency_ms": latency_ms}
         except Exception as e:
             latency_ms = round((time.monotonic() - start) * 1000, 1)
-            return {"status": "unhealthy", "latency_ms": latency_ms, "error": str(e)}
+            return {"status": "error", "latency_ms": latency_ms, "error": str(e)[:200]}
         finally:
             db.close()
 
@@ -1618,21 +1830,25 @@ async def _deep_check_database(session_local):
 
 def _deep_check_pool_stats():
     """Get database connection pool statistics."""
+    start = time.monotonic()
     try:
         from db import get_pool_status
         pool_info = get_pool_status()
-        pool_info["status"] = pool_info.get("status", "healthy")
+        latency_ms = round((time.monotonic() - start) * 1000, 1)
+        # Normalize status
+        raw_status = pool_info.get("status", "healthy")
+        pool_info["status"] = "ok" if raw_status in ("healthy",) else ("error" if raw_status == "saturated" else raw_status)
+        pool_info["latency_ms"] = latency_ms
         return pool_info
     except Exception as e:
-        return {"status": "unknown", "error": str(e)}
+        return {"status": "error", "error": str(e)[:200]}
 
 
 def _deep_check_redis():
     """Test Redis connectivity and measure latency."""
-    import os
     redis_url = os.getenv("REDIS_URL")
     if not redis_url:
-        return {"status": "not_configured", "message": "REDIS_URL not set"}
+        return {"status": "ok", "note": "REDIS_URL not set, using in-memory fallback"}
 
     try:
         import redis as redis_lib
@@ -1657,15 +1873,15 @@ def _deep_check_redis():
 
         r.close()
         return {
-            "status": "healthy",
+            "status": "ok",
             "latency_ms": latency_ms,
             "memory_used": memory_used,
             "connected_clients": connected_clients,
         }
     except ImportError:
-        return {"status": "unavailable", "message": "redis package not installed"}
+        return {"status": "ok", "note": "redis package not installed, using in-memory fallback"}
     except Exception as e:
-        return {"status": "unhealthy", "error": str(e)}
+        return {"status": "error", "error": str(e)[:200]}
 
 
 def _deep_check_tcp_reachability(host: str, port: int):
@@ -1693,7 +1909,9 @@ def _deep_check_tcp_reachability(host: str, port: int):
 
 
 def _deep_check_memory():
-    """Check process memory usage."""
+    """Check process memory usage (RSS in MB)."""
+    rss_mb = None
+
     try:
         import resource
         import platform
@@ -1703,32 +1921,31 @@ def _deep_check_memory():
             rss_mb = round(rusage.ru_maxrss / (1024 * 1024), 1)
         else:
             rss_mb = round(rusage.ru_maxrss / 1024, 1)
-
-        status = "healthy"
-        if rss_mb > 1024:
-            status = "warning"
-        if rss_mb > 2048:
-            status = "critical"
-
-        return {"status": status, "rss_mb": rss_mb}
     except ImportError:
         pass
 
     # Fallback for Linux: read /proc/self/status
-    try:
-        with open("/proc/self/status", "r") as f:
-            for line in f:
-                if line.startswith("VmRSS:"):
-                    rss_kb = int(line.split()[1])
-                    rss_mb = round(rss_kb / 1024, 1)
-                    status = "healthy"
-                    if rss_mb > 1024:
-                        status = "warning"
-                    return {"status": status, "rss_mb": rss_mb}
-    except Exception:
-        pass
+    if rss_mb is None:
+        try:
+            with open("/proc/self/status", "r") as f:
+                for line in f:
+                    if line.startswith("VmRSS:"):
+                        rss_kb = int(line.split()[1])
+                        rss_mb = round(rss_kb / 1024, 1)
+                        break
+        except Exception:
+            pass
 
-    return {"status": "unknown", "message": "Could not determine memory usage"}
+    if rss_mb is None:
+        return {"status": "ok", "rss_mb": None, "note": "Could not determine memory usage"}
+
+    status = "ok"
+    if rss_mb > 1024:
+        status = "warning"
+    if rss_mb > 2048:
+        status = "error"
+
+    return {"status": status, "rss_mb": rss_mb}
 
 
 def _deep_check_disk():

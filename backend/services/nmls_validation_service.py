@@ -14,6 +14,8 @@ from dataclasses import dataclass, field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from utils.validators import validate_nmls
+
 logger = logging.getLogger(__name__)
 
 
@@ -33,13 +35,14 @@ class NMLSValidationService:
         self.db = db
 
     def validate_nmls_format(self, nmls_id: Optional[str]) -> Optional[str]:
-        """Validate NMLS ID format (4-12 digits). Returns error or None."""
+        """Validate NMLS ID format (5-12 digits). Returns error message or None."""
         if not nmls_id:
             return "NMLS ID is missing"
-        nmls_id = nmls_id.strip()
-        if not re.match(r'^\d{4,12}$', nmls_id):
-            return f"NMLS ID '{nmls_id}' invalid format (must be 4-12 digits)"
-        return None
+        try:
+            validate_nmls(nmls_id)
+            return None
+        except ValueError:
+            return f"NMLS ID '{nmls_id}' invalid format — must be 5-12 digits"
 
     def check_license_status(
         self, candidate_id: int, organization_id: int

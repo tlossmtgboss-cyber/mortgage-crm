@@ -583,12 +583,26 @@ class NeedsListGenerator:
         instructions: Optional[str] = None,
         priority: str = "NORMAL",
         due_date: Optional[datetime] = None,
+        doc_type: Optional[str] = None,
+        requires_esign: bool = False,
     ) -> Dict[str, Any]:
         """Add a custom document request (not from template)."""
+        # Resolve doc_type string to enum, defaulting to OTHER
+        resolved_doc_type = DocType.OTHER
+        if doc_type:
+            try:
+                resolved_doc_type = DocType(doc_type)
+            except ValueError:
+                # Try uppercase match
+                try:
+                    resolved_doc_type = DocType[doc_type.upper()]
+                except (KeyError, AttributeError):
+                    resolved_doc_type = DocType.OTHER
+
         request = self._create_request(
             loan_id=loan_id,
             borrower_id=borrower_id,
-            doc_type=DocType.OTHER,
+            doc_type=resolved_doc_type,
             title=title,
             description=description,
             instructions=instructions,

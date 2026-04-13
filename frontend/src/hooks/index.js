@@ -20,6 +20,12 @@ export {
   useIsTabletLandscape,
 } from './useMediaQuery';
 
+// Network status
+export { useNetworkStatus } from './useNetworkStatus';
+
+// Sensitive screen protection (screen recording prevention)
+export { useSensitiveScreen, markCaptureDetected, clearCaptureDetected } from './useSensitiveScreen';
+
 // Realtor Portal hooks
 export {
   useLoanSync,

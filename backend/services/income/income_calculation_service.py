@@ -10,6 +10,12 @@ Implements mortgage underwriting income calculation logic:
 - Declining income rules
 
 Uses the lower of YTD-annualized or 2-year average when income is declining.
+
+Per Fannie Mae B3-3.1-01 (updated 03/04/2026):
+- Fixed/stable base W-2 employment income requires only the most recent
+  W-2 and pay stub. The 2-year W-2 requirement was removed for base income.
+- Variable income (overtime, bonus, commission) still requires 2 years of W-2s.
+- Self-employment income still requires 2 years of tax returns.
 """
 
 import logging
@@ -80,6 +86,16 @@ class IncomeCalculationService:
         """
         Calculate qualifying W-2 income.
 
+        Per Fannie Mae B3-3.1-01 (updated 03/04/2026):
+        For fixed/stable base employment income, only the most recent W-2
+        and pay stub are required. A second year W-2 is NOT required for
+        base income. If a second W-2 is provided, it is used for trending
+        analysis and declining-income checks only.
+
+        NOTE: Variable income (OT, bonus, commission) and self-employment
+        STILL require 2 years of W-2s/tax returns -- see calculate_hourly_income()
+        with has_overtime=True and calculate_self_employed_income().
+
         IMPORTANT: For paystubs, gross_pay is the PAY PERIOD amount, not annual!
         We must annualize using: gross_pay × pay_frequency_multiplier
 
@@ -88,7 +104,7 @@ class IncomeCalculationService:
 
         Uses the lower of:
         - Period-annualized income (most accurate for current pay rate)
-        - 2-year average from W-2s (if available)
+        - 2-year average from W-2s (if 2 W-2s provided, for declining income check)
 
         This protects against declining income situations.
         """
@@ -168,7 +184,9 @@ class IncomeCalculationService:
                 error="Could not calculate current income from paystubs"
             )
 
-        # Calculate 2-year average from W-2s if available
+        # Per B3-3.1-01 (03/04/2026): For fixed/stable base W-2 income,
+        # only the most recent W-2 is required. If 2 W-2s are provided,
+        # use them for trending/declining income analysis.
         two_year_average = None
         if w2s and len(w2s) >= 2:
             w2_incomes = []
@@ -196,6 +214,16 @@ class IncomeCalculationService:
                     if decline_pct > 10:
                         flags["declining_income"] = True
                         notes.append(f"Income declined {float(decline_pct):.1f}% year-over-year")
+        elif w2s and len(w2s) == 1:
+            # Single W-2 is sufficient for base income per B3-3.1-01 (03/04/2026)
+            wages = self._to_decimal(w2s[0].get("wages_tips_compensation"))
+            if wages:
+                steps.append({
+                    "step": f"W-2 Year {w2s[0].get('tax_year')}",
+                    "wages": float(wages),
+                    "note": "Single W-2 sufficient for stable base income per B3-3.1-01 (03/04/2026)"
+                })
+                notes.append("Single W-2 provided - acceptable for stable base income per B3-3.1-01 (03/04/2026)")
 
         # Use lower of current or 2-year average (standard underwriting practice)
         if two_year_average and current_annual > two_year_average:

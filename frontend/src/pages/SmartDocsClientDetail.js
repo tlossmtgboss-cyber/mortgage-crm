@@ -1098,6 +1098,8 @@ function SmartDocsClientDetail() {
         borrowerId={client?.borrowerId}
         borrowerName={client?.name}
         borrowerEmail={client?.email}
+        coBorrowerName={client?.coBorrowerName}
+        coBorrowerEmail={client?.coBorrowerEmail}
         onSuccess={() => {
           setRequestDocModalOpen(false);
           fetchClientData();

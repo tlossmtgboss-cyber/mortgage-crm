@@ -77,12 +77,19 @@ def run_migration():
         processing_started_at TIMESTAMPTZ,
         processing_completed_at TIMESTAMPTZ,
 
+        -- Multi-tenant
+        organization_id INTEGER,
+
         -- Timestamps
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
     );
 
+    -- Add organization_id if table already existed without it
+    ALTER TABLE call_sessions ADD COLUMN IF NOT EXISTS organization_id INTEGER;
+
     CREATE INDEX IF NOT EXISTS ix_call_sessions_status ON call_sessions(status);
+    CREATE INDEX IF NOT EXISTS ix_call_sessions_org_id ON call_sessions(organization_id);
     CREATE INDEX IF NOT EXISTS ix_call_sessions_loan_id ON call_sessions(loan_id);
     CREATE INDEX IF NOT EXISTS ix_call_sessions_lead_id ON call_sessions(lead_id);
     CREATE INDEX IF NOT EXISTS ix_call_sessions_started_at ON call_sessions(started_at);
@@ -114,9 +121,14 @@ def run_migration():
         talk_time_seconds INTEGER,
         word_count INTEGER,
 
+        -- Multi-tenant
+        organization_id INTEGER,
+
         -- Timestamps
         created_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    ALTER TABLE call_participants ADD COLUMN IF NOT EXISTS organization_id INTEGER;
 
     CREATE INDEX IF NOT EXISTS ix_call_participants_session ON call_participants(session_id);
     CREATE INDEX IF NOT EXISTS ix_call_participants_role ON call_participants(role);
@@ -157,10 +169,15 @@ def run_migration():
         started_at TIMESTAMPTZ,
         completed_at TIMESTAMPTZ,
 
+        -- Multi-tenant
+        organization_id INTEGER,
+
         -- Timestamps
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS organization_id INTEGER;
 
     CREATE INDEX IF NOT EXISTS ix_agent_runs_session ON agent_runs(session_id);
     CREATE INDEX IF NOT EXISTS ix_agent_runs_type ON agent_runs(agent_type);
@@ -179,10 +196,15 @@ def run_migration():
         -- Event data
         payload JSONB DEFAULT '{}'::jsonb,
 
+        -- Multi-tenant
+        organization_id INTEGER,
+
         -- Timing
         event_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         transcript_timestamp_ms INTEGER
     );
+
+    ALTER TABLE agent_events ADD COLUMN IF NOT EXISTS organization_id INTEGER;
 
     CREATE INDEX IF NOT EXISTS ix_agent_events_session ON agent_events(session_id);
     CREATE INDEX IF NOT EXISTS ix_agent_events_run ON agent_events(run_id);
@@ -228,10 +250,15 @@ def run_migration():
         metadata JSONB DEFAULT '{}'::jsonb,
         priority VARCHAR(20),
 
+        -- Multi-tenant
+        organization_id INTEGER,
+
         -- Timestamps
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    ALTER TABLE call_artifacts ADD COLUMN IF NOT EXISTS organization_id INTEGER;
 
     CREATE INDEX IF NOT EXISTS ix_call_artifacts_session ON call_artifacts(session_id);
     CREATE INDEX IF NOT EXISTS ix_call_artifacts_type ON call_artifacts(artifact_type);
@@ -269,10 +296,15 @@ def run_migration():
         applied_by UUID REFERENCES users(id),
         applied_at TIMESTAMPTZ,
 
+        -- Multi-tenant
+        organization_id INTEGER,
+
         -- Timestamps
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    ALTER TABLE intake_field_updates ADD COLUMN IF NOT EXISTS organization_id INTEGER;
 
     CREATE INDEX IF NOT EXISTS ix_intake_field_session ON intake_field_updates(session_id);
     CREATE INDEX IF NOT EXISTS ix_intake_field_entity ON intake_field_updates(entity_type, entity_id);
@@ -308,10 +340,15 @@ def run_migration():
         loan_id UUID,
         condition_id UUID,
 
+        -- Multi-tenant
+        organization_id INTEGER,
+
         -- Timestamps
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
     );
+
+    ALTER TABLE call_risk_flags ADD COLUMN IF NOT EXISTS organization_id INTEGER;
 
     CREATE INDEX IF NOT EXISTS ix_call_risk_flags_session ON call_risk_flags(session_id);
     CREATE INDEX IF NOT EXISTS ix_call_risk_flags_category ON call_risk_flags(risk_category);

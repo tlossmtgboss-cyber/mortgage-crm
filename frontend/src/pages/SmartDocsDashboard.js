@@ -10,6 +10,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
 import { smartDocsAPI } from '../services/smartDocsApi';
 import { API_BASE_URL } from '../services/api';
 import './SmartDocsDashboard.css';
@@ -26,6 +27,9 @@ const SmartDocsDashboard = () => {
   const [pagination, setPagination] = useState({ page: 1, limit: 20 });
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCards, setSelectedCards] = useState(new Set());
+  const [sortBy, setSortBy] = useState('nearest-due');
+  const showBatchToolbar = activeTab === 'documents-owed' && selectedCards.size > 0;
 
   // Fetch dashboard summary
   const fetchSummary = useCallback(async () => {
@@ -121,12 +125,88 @@ const SmartDocsDashboard = () => {
     );
   };
 
+  // Clear selections when tab changes
+  useEffect(() => {
+    setSelectedCards(new Set());
+  }, [activeTab]);
+
+  // Toggle card selection
+  const toggleCardSelection = (loanId) => {
+    setSelectedCards((prev) => {
+      const next = new Set(prev);
+      if (next.has(loanId)) {
+        next.delete(loanId);
+      } else {
+        next.add(loanId);
+      }
+      return next;
+    });
+  };
+
+  // Select / Deselect all visible cards
+  const toggleSelectAll = (applicants) => {
+    const allIds = applicants.map((a) => a.loan_id);
+    const allSelected = allIds.every((id) => selectedCards.has(id));
+    if (allSelected) {
+      setSelectedCards(new Set());
+    } else {
+      setSelectedCards(new Set(allIds));
+    }
+  };
+
+  // Batch send reminders (placeholder)
+  const handleBatchSendReminders = () => {
+    toast.info(`Sending reminders to ${selectedCards.size} client(s)...`);
+    // TODO: integrate with backend reminder endpoint
+    setSelectedCards(new Set());
+  };
+
+  // Batch export (placeholder)
+  const handleBatchExport = () => {
+    toast.info(`Exporting data for ${selectedCards.size} client(s)...`);
+    // TODO: integrate with backend export endpoint
+  };
+
+  // Single card send reminder (placeholder)
+  const handleSendReminder = (applicant) => {
+    toast.info(`Reminder sent to ${applicant.borrower_name}`);
+    // TODO: integrate with backend reminder endpoint
+  };
+
+  // Sort applicants
+  const sortApplicants = useCallback((applicants) => {
+    if (activeTab !== 'documents-owed') return applicants;
+    const sorted = [...applicants];
+    switch (sortBy) {
+      case 'most-overdue':
+        sorted.sort((a, b) => (b.overdue_count || 0) - (a.overdue_count || 0));
+        break;
+      case 'client-name':
+        sorted.sort((a, b) =>
+          (a.borrower_name || '').localeCompare(b.borrower_name || '')
+        );
+        break;
+      case 'most-docs-owed':
+        sorted.sort((a, b) => (b.outstanding_count || 0) - (a.outstanding_count || 0));
+        break;
+      case 'nearest-due':
+      default:
+        sorted.sort((a, b) => {
+          if (!a.nearest_due) return 1;
+          if (!b.nearest_due) return -1;
+          return new Date(a.nearest_due) - new Date(b.nearest_due);
+        });
+        break;
+    }
+    return sorted;
+  }, [activeTab, sortBy]);
+
   // Get filtered data based on active tab
   const getFilteredData = () => {
     if (activeTab === 'documents-uploaded') {
       return filterBySearch(pendingReview.applicants);
     } else if (activeTab === 'documents-owed') {
-      return filterBySearch(outstandingDocs.applicants);
+      return sortApplicants(filterBySearch(outstandingDocs.applicants));
     } else if (activeTab === 'completed') {
       return filterBySearch(completedClients.applicants);
     }
@@ -200,7 +280,9 @@ const SmartDocsDashboard = () => {
         {/* Search Bar */}
         <div className="search-section">
           <div className="search-input-wrapper">
-            <span className="search-icon">🔍</span>
+            <span className="search-icon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            </span>
             <input
               type="text"
               className="search-input"
@@ -225,9 +307,14 @@ const SmartDocsDashboard = () => {
               className={`summary-card outstanding ${activeTab === 'documents-owed' ? 'active' : ''}`}
               onClick={() => handleTabChange('documents-owed')}
             >
-              <div className="card-value">{summary.outstanding_requests?.applicants || 0}</div>
+              <div className="card-value animate-count-in">{summary.outstanding_requests?.applicants || 0}</div>
               <div className="card-label">Documents Owed</div>
               <div className="card-sub">
+                {(summary.outstanding_requests?.overdue || 0) > 0 && (
+                  <span className="trend-indicator trend-warning">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2L8 7H2L5 2Z" fill="currentColor"/></svg>
+                  </span>
+                )}
                 {summary.outstanding_requests?.overdue || 0} overdue
               </div>
             </div>
@@ -235,17 +322,31 @@ const SmartDocsDashboard = () => {
               className={`summary-card pending ${activeTab === 'documents-uploaded' ? 'active' : ''}`}
               onClick={() => handleTabChange('documents-uploaded')}
             >
-              <div className="card-value">{summary.pending_review?.applicants || 0}</div>
+              <div className="card-value animate-count-in">{summary.pending_review?.applicants || 0}</div>
               <div className="card-label">Documents Uploaded</div>
-              <div className="card-sub">{summary.pending_review?.documents || 0} documents to review</div>
+              <div className="card-sub">
+                {(summary.pending_review?.documents || 0) > 0 && (
+                  <span className="trend-indicator trend-info">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2L8 7H2L5 2Z" fill="currentColor"/></svg>
+                  </span>
+                )}
+                {summary.pending_review?.documents || 0} documents to review
+              </div>
             </div>
             <div
               className={`summary-card completed ${activeTab === 'completed' ? 'active' : ''}`}
               onClick={() => handleTabChange('completed')}
             >
-              <div className="card-value">{completedClients.total || 0}</div>
+              <div className="card-value animate-count-in">{completedClients.total || 0}</div>
               <div className="card-label">Completed</div>
-              <div className="card-sub">Finished financing</div>
+              <div className="card-sub">
+                {(completedClients.total || 0) > 0 && (
+                  <span className="trend-indicator trend-success">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M5 2L8 7H2L5 2Z" fill="currentColor"/></svg>
+                  </span>
+                )}
+                Finished financing
+              </div>
             </div>
           </div>
         )}
@@ -308,92 +409,185 @@ const SmartDocsDashboard = () => {
                 />
                 Show overdue only
               </label>
+              <div className="sort-dropdown-wrapper">
+                <label className="sort-label" htmlFor="sort-select">Sort by</label>
+                <select
+                  id="sort-select"
+                  className="sort-dropdown"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                >
+                  <option value="nearest-due">Nearest Due Date</option>
+                  <option value="most-overdue">Most Overdue</option>
+                  <option value="client-name">Client Name (A-Z)</option>
+                  <option value="most-docs-owed">Most Documents Owed</option>
+                </select>
+              </div>
             </div>
+
+            {filteredData.length > 0 && (
+              <div className="batch-select-row">
+                <label className="filter-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={filteredData.length > 0 && filteredData.every((a) => selectedCards.has(a.loan_id))}
+                    onChange={() => toggleSelectAll(filteredData)}
+                  />
+                  {filteredData.every((a) => selectedCards.has(a.loan_id)) ? 'Deselect All' : 'Select All'}
+                </label>
+              </div>
+            )}
+
             {filteredData.length === 0 ? (
-              <div className="empty-state">
-                <span className="empty-icon">✓</span>
+              <div className="empty-state empty-state-owed">
+                <div className="empty-illustration-owed">
+                  <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                    <circle cx="24" cy="24" r="22" stroke="var(--color-success)" strokeWidth="2" strokeDasharray="4 2" />
+                    <path d="M16 24L22 30L32 18" stroke="var(--color-success)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
                 <h3>{searchQuery ? 'No matching clients' : 'All documents collected!'}</h3>
-                <p>{searchQuery ? 'Try a different search term' : 'No outstanding document requests'}</p>
+                <p>{searchQuery ? 'Try a different search term' : 'Your pipeline is clean.'}</p>
               </div>
             ) : (
-              filteredData.map((applicant) => (
-                <div
-                  key={applicant.loan_id}
-                  className={`applicant-card ${applicant.overdue_count > 0 ? 'has-overdue' : ''}`}
-                >
-                  <div className="applicant-header">
-                    <div className="applicant-info">
-                      <h3
-                        className="clickable-name"
-                        onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
-                      >
-                        {applicant.borrower_name}
-                      </h3>
-                      <span className="loan-info">
-                        {applicant.loan_number || `Loan #${applicant.loan_id}`}
-                        {applicant.loan_purpose && ` • ${applicant.loan_purpose}`}
-                      </span>
-                    </div>
-                    <div className="docs-progress">
-                      <span className="docs-requested">
-                        {applicant.outstanding_count || 0} requested
-                      </span>
-                      <span className="docs-received">
-                        {applicant.received_count || 0} received
-                      </span>
-                      {applicant.overdue_count > 0 && (
-                        <span className="overdue-badge">
-                          {applicant.overdue_count} overdue
+              filteredData.map((applicant) => {
+                const received = applicant.received_count || 0;
+                const outstanding = applicant.outstanding_count || 0;
+                const total = received + outstanding;
+                const progressPct = total > 0 ? (received / total) * 100 : 0;
+                const isSelected = selectedCards.has(applicant.loan_id);
+
+                return (
+                  <div
+                    key={applicant.loan_id}
+                    className={`applicant-card ${applicant.overdue_count > 0 ? 'has-overdue' : ''} ${isSelected ? 'card-selected' : ''}`}
+                  >
+                    <div className="applicant-header">
+                      <div className="applicant-info-row">
+                        <input
+                          type="checkbox"
+                          className="card-checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleCardSelection(applicant.loan_id)}
+                        />
+                        <div className="applicant-info">
+                          <h3
+                            className="clickable-name"
+                            onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
+                          >
+                            {applicant.borrower_name}
+                          </h3>
+                          <span className="loan-info">
+                            {applicant.loan_number || `Loan #${applicant.loan_id}`}
+                            {applicant.loan_purpose && ` • ${applicant.loan_purpose}`}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="docs-progress">
+                        <span className="docs-requested">
+                          {outstanding} requested
                         </span>
+                        <span className="docs-received">
+                          {received} received
+                        </span>
+                        {applicant.overdue_count > 0 && (
+                          <span className="overdue-badge">
+                            {applicant.overdue_count} overdue
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="progress-bar-container">
+                      <div className="progress-bar-track">
+                        <div
+                          className="progress-bar-fill"
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+                      <span className="progress-bar-label">{received}/{total} collected</span>
+                    </div>
+
+                    <div className="requests-preview">
+                      {(applicant.requests || []).slice(0, 4).map((req) => {
+                        const dueInfo = formatDueDate(req.due_date);
+                        return (
+                          <div key={req.id} className={`request-chip ${req.is_overdue ? 'overdue' : ''}`}>
+                            <span className={`priority-dot ${getPriorityClass(req.priority)}`} />
+                            <span className="request-title">{req.title}</span>
+                            {req.due_date && (
+                              <span className={`due-date ${dueInfo.class}`}>
+                                {dueInfo.text}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {(applicant.requests || []).length > 4 && (
+                        <div className="request-chip more">
+                          +{applicant.requests.length - 4} more
+                        </div>
                       )}
                     </div>
-                  </div>
-                  <div className="requests-preview">
-                    {(applicant.requests || []).slice(0, 4).map((req) => {
-                      const dueInfo = formatDueDate(req.due_date);
-                      return (
-                        <div key={req.id} className={`request-chip ${req.is_overdue ? 'overdue' : ''}`}>
-                          <span className={`priority-dot ${getPriorityClass(req.priority)}`} />
-                          <span className="request-title">{req.title}</span>
-                          {req.due_date && (
-                            <span className={`due-date ${dueInfo.class}`}>
-                              {dueInfo.text}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {(applicant.requests || []).length > 4 && (
-                      <div className="request-chip more">
-                        +{applicant.requests.length - 4} more
+                    <div className="card-footer">
+                      <div className="card-footer-left">
+                        {applicant.nearest_due && (
+                          <span className={`nearest-due ${formatDueDate(applicant.nearest_due).class}`}>
+                            Next due: {formatDueDate(applicant.nearest_due).text}
+                          </span>
+                        )}
                       </div>
-                    )}
+                      <div className="card-actions">
+                        <button
+                          className="btn-action btn-action-secondary"
+                          onClick={(e) => { e.stopPropagation(); handleSendReminder(applicant); }}
+                        >
+                          Send Reminder
+                        </button>
+                        <button
+                          className="btn-action btn-action-primary"
+                          onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
+                        >
+                          Request Docs
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="card-footer">
-                    {applicant.nearest_due && (
-                      <span className={`nearest-due ${formatDueDate(applicant.nearest_due).class}`}>
-                        Next due: {formatDueDate(applicant.nearest_due).text}
-                      </span>
-                    )}
-                    <button
-                      className="btn-view"
-                      onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
-                    >
-                      View Documents →
-                    </button>
-                  </div>
+                );
+              })
+            )}
+
+            {/* Batch Operations Toolbar */}
+            {showBatchToolbar && (
+              <div className="batch-toolbar">
+                <span className="batch-toolbar-count">{selectedCards.size} selected</span>
+                <div className="batch-toolbar-actions">
+                  <button className="btn-batch" onClick={handleBatchSendReminders}>
+                    Send Reminders
+                  </button>
+                  <button className="btn-batch btn-batch-secondary" onClick={handleBatchExport}>
+                    Export
+                  </button>
                 </div>
-              ))
+              </div>
             )}
           </div>
         ) : activeTab === 'documents-uploaded' ? (
           /* Documents Uploaded Tab */
           <div className="applicants-list">
             {filteredData.length === 0 ? (
-              <div className="empty-state">
-                <span className="empty-icon">✓</span>
+              <div className="empty-state empty-state-uploaded">
+                <div className="empty-illustration-uploaded">
+                  <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                    <rect x="8" y="6" width="32" height="36" rx="4" stroke="var(--color-primary)" strokeWidth="2" />
+                    <path d="M16 20H32M16 26H28M16 32H24" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" />
+                    <circle cx="36" cy="36" r="8" fill="var(--color-success)" />
+                    <path d="M33 36L35 38L39 34" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
                 <h3>{searchQuery ? 'No matching clients' : 'All caught up!'}</h3>
-                <p>{searchQuery ? 'Try a different search term' : 'No documents pending review'}</p>
+                <p>{searchQuery ? 'Try a different search term' : 'No documents pending your review.'}</p>
               </div>
             ) : (
               filteredData.map((applicant) => (
@@ -452,10 +646,19 @@ const SmartDocsDashboard = () => {
           /* Completed Tab */
           <div className="applicants-list">
             {filteredData.length === 0 ? (
-              <div className="empty-state">
-                <span className="empty-icon">🎉</span>
+              <div className="empty-state empty-state-completed">
+                <div className="empty-illustration-completed">
+                  <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
+                    <rect x="6" y="12" width="44" height="32" rx="3" stroke="var(--color-text-tertiary)" strokeWidth="2" />
+                    <path d="M6 20H50" stroke="var(--color-text-tertiary)" strokeWidth="2" />
+                    <rect x="12" y="26" width="14" height="3" rx="1.5" fill="var(--color-border)" />
+                    <rect x="12" y="33" width="20" height="3" rx="1.5" fill="var(--color-border)" />
+                    <circle cx="42" cy="16" r="8" fill="var(--color-bg-secondary)" stroke="var(--color-text-tertiary)" strokeWidth="2" />
+                    <path d="M39 16L41 18L45 14" stroke="var(--color-text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
                 <h3>{searchQuery ? 'No matching clients' : 'No completed loans yet'}</h3>
-                <p>{searchQuery ? 'Try a different search term' : 'Funded loans will appear here'}</p>
+                <p>{searchQuery ? 'Try a different search term' : 'Funded loans will appear here as files close.'}</p>
               </div>
             ) : (
               filteredData.map((applicant) => (

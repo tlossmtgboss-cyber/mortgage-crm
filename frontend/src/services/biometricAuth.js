@@ -27,13 +27,15 @@
 
 import { useState, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { NativeBiometric } from 'capacitor-native-biometric';
+import { NativeBiometric } from '@capgo/capacitor-native-biometric';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const SERVER = 'api.perenniaai.com';
+// Must match the server key used by useBiometricLogin.js and sessionManager.js
+// so all biometric flows share the same keychain entry.
+const SERVER = 'com.perenniaai.crm';
 
 // ---------------------------------------------------------------------------
 // Availability

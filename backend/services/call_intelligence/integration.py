@@ -382,7 +382,7 @@ class CallIntelligenceIntegration:
             except Exception as e:
                 logger.warning(f"Failed to log CI results to activity feeds for call {call_id}: {e}")
 
-            return {
+            result = {
                 "success": True,
                 "call_id": call_id,
                 "loan_id": loan_id,
@@ -392,6 +392,25 @@ class CallIntelligenceIntegration:
                 "application_completion": audit_response.overall_completion if audit_response else None,
                 "tasks_created": len(audit_response.all_tasks) if audit_response else 0,
             }
+
+            # Step 6: Run post-call automation (summaries, tasks, SMS drafts, compliance)
+            if loan_id:
+                try:
+                    from services.call_intelligence.post_call_automation import PostCallAutomationService
+                    post_call_svc = PostCallAutomationService(self.db)
+                    post_call_result = await post_call_svc.process_call_end(
+                        call_id=call_id,
+                        loan_id=loan_id,
+                        org_id=organization_id,
+                        transcript=transcript,
+                        call_metadata=metadata,
+                    )
+                    result["post_call_automation"] = post_call_result
+                except Exception as exc:
+                    logger.warning("Post-call automation failed (non-fatal) for call %s: %s", call_id, exc)
+                    result["post_call_automation_error"] = str(exc)
+
+            return result
 
         except Exception as e:
             # Mask PII in exception message before logging

@@ -125,68 +125,69 @@ function ESignModal({
     setStep('sending');
 
     try {
-      // Get the document URL
-      const documentUrl = document.file_url || document.s3_url;
-      if (!documentUrl) {
-        throw new Error('Document URL not available');
+      // Get the document storage key (S3 key, not URL)
+      const storageKey = document.storage_key || document.s3_key
+        || document.file_url || document.s3_url;
+      if (!storageKey) {
+        throw new Error('Document storage key not available');
       }
 
-      // Step 1: Create the envelope
+      // Build recipients array matching backend EnvelopeRecipientInput schema
+      const recipients = signers.map((signer) => ({
+        name: signer.name,
+        email: signer.email,
+        type: signer.role === 'borrower' || signer.role === 'co_borrower' ? 'signer' : signer.role,
+        signing_order: signer.order,
+        auth_method: 'email_link',
+      }));
+
+      // Build fields array matching backend EnvelopeFieldInput schema
+      // (type/page/x/y/w/h/recipient_index — NOT field_type/page_number/x_position/signer_email)
+      const fields = [];
+      const baseY = 100; // 100 points from bottom of page
+
+      for (let i = 0; i < signers.length; i++) {
+        // Signature field
+        fields.push({
+          type: 'signature',
+          page: 1,
+          x: 72,
+          y: baseY + (i * 80),
+          w: 200,
+          h: 50,
+          recipient_index: i,
+          required: true,
+        });
+        // Date field next to signature
+        fields.push({
+          type: 'date_signed',
+          page: 1,
+          x: 300,
+          y: baseY + (i * 80),
+          w: 120,
+          h: 30,
+          recipient_index: i,
+          required: true,
+        });
+      }
+
+      // Single createEnvelope call with recipients + fields (batch)
       const envelopeData = {
-        name: `${document.doc_type || 'Document'} - E-Signature`,
-        document_url: documentUrl,
+        title: `${document.doc_type || 'Document'} - E-Signature`,
+        document_storage_key: storageKey,
+        original_filename: document.filename || document.file_name,
         loan_id: parseInt(loanId),
-        metadata: {
-          doc_type: document.doc_type,
-          doc_id: document.id,
-          loan_id: loanId,
-        },
+        recipients,
+        fields,
       };
 
       const createResponse = await esignApi.createEnvelope(envelopeData);
       const newEnvelope = createResponse.data || createResponse;
       setEnvelope(newEnvelope);
 
-      // Step 2: Add signers
-      for (const signer of signers) {
-        await esignApi.addSigner(newEnvelope.id, {
-          name: signer.name,
-          email: signer.email,
-          role: signer.role,
-          signing_order: signer.order,
-        });
-      }
-
-      // Step 3: Add default signature field for each signer
-      let fieldY = 100; // Start 100 points from bottom of page
-
-      for (let i = 0; i < signers.length; i++) {
-        await esignApi.addField(newEnvelope.id, {
-          field_type: 'signature',
-          page_number: 1,
-          x_position: 72, // 1 inch from left
-          y_position: fieldY + (i * 80),
-          width: 200,
-          height: 50,
-          signer_email: signers[i].email,
-          required: true,
-        });
-
-        // Add date field next to signature
-        await esignApi.addField(newEnvelope.id, {
-          field_type: 'date_signed',
-          page_number: 1,
-          x_position: 300, // Right of signature
-          y_position: fieldY + (i * 80),
-          width: 120,
-          height: 30,
-          signer_email: signers[i].email,
-          required: true,
-        });
-      }
-
-      // Step 4: Send the envelope
-      await esignApi.sendEnvelope(newEnvelope.id);
+      // Send the envelope using envelope_uuid (not integer id)
+      const envelopeUuid = newEnvelope.envelope_uuid || newEnvelope.id;
+      await esignApi.sendEnvelope(envelopeUuid);
 
       setStep('success');
 

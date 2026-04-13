@@ -18,6 +18,7 @@ import { App } from '@capacitor/app';
 import { isNative } from '../services/nativeServices';
 import { API_BASE_URL } from '../services/api';
 import { getItem, setItem, removeItem } from '../utils/storage';
+import { parseDeepLink } from '../services/deepLinkRouter';
 
 // ============================================================================
 // Storage keys for push notification state
@@ -216,10 +217,14 @@ function removeAllListeners() {
  * Navigate to the correct page based on notification payload.
  * Supports both warm start (app in background) and cold start (app killed).
  *
+ * Uses the deep link router's parseDeepLink for consistency with URL scheme
+ * and universal link handling. Falls back to pushState/popstate since this
+ * module runs outside React Router context.
+ *
  * Expected data shapes:
  *   { type: 'loan',   id: '123' }        -> /loans/123
  *   { type: 'lead',   id: '456' }        -> /leads/456
- *   { type: 'task',   id: '789' }        -> /tasks/789
+ *   { type: 'task',   id: '789' }        -> /tasks
  *   { type: 'route',  path: '/foo/bar' } -> /foo/bar
  *
  * @param {object} data - The notification data payload
@@ -232,15 +237,13 @@ function routeFromNotification(data) {
   if (data.path) {
     // Explicit path override
     targetPath = data.path;
-  } else if (data.type && data.id) {
-    const typeRoutes = {
-      loan: `/loans/${data.id}`,
-      lead: `/leads/${data.id}`,
-      task: `/tasks/${data.id}`,
-      client: `/clients/${data.id}`,
-      document: `/smart-docs/clients/${data.id}`,
-    };
-    targetPath = typeRoutes[data.type] || null;
+  } else if (data.type) {
+    // Use the deep link router's notification resolver for consistent routing
+    const deepLinkUrl = `perenniaai://notification?type=${encodeURIComponent(data.type)}${data.id ? `&id=${encodeURIComponent(data.id)}` : ''}`;
+    const { route } = parseDeepLink(deepLinkUrl);
+    if (route) {
+      targetPath = route;
+    }
   } else if (data.route) {
     // Legacy fallback
     targetPath = data.route;
@@ -248,11 +251,12 @@ function routeFromNotification(data) {
 
   if (targetPath) {
     console.log('Push: navigating to', targetPath);
-    // Use window.location for reliability on both warm and cold starts.
+    // Use pushState + popstate for reliability on both warm and cold starts.
     // React Router's navigate() may not be mounted yet on cold start.
+    // The initDeepLinkRouter in PushNotificationInitializer handles the
+    // navigate()-based routing for appUrlOpen events.
     window.location.hash = '';
     window.history.pushState({}, '', targetPath);
-    // Dispatch popstate so React Router picks it up
     window.dispatchEvent(new PopStateEvent('popstate'));
   }
 }

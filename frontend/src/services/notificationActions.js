@@ -115,7 +115,7 @@ export const NOTIFICATION_CATEGORIES = {
           const taskId = data.taskId || data.task_id;
           if (taskId && _apiClient) {
             try {
-              await _apiClient.patch(`/api/v1/tasks/${taskId}`, { status: 'completed' });
+              await _apiClient.patch(`/api/v1/tasks/${taskId}`, { type: 'Completed' });
               await haptics.success();
             } catch (err) {
               console.error('Failed to complete task from notification:', err);

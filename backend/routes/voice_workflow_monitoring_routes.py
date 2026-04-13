@@ -727,6 +727,17 @@ async def export_voice_workflow_gdpr_data(
             },
         )
 
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=current_user.id, organization_id=organization_id,
+                resource_type="voice_workflow_gdpr_data", export_format="json",
+                ip_address=_get_client_ip(request),
+                details={"workflow_count": len(workflows), "contact_phone_last4": normalized_phone[-4:] if len(normalized_phone) >= 4 else "****"},
+            )
+        except Exception:
+            pass
+
         return {
             "contact_phone": normalized_phone,
             "organization_id": organization_id,

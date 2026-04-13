@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api, { aiAPI, borrowerApplicationAPI } from '../services/api';
+import { toast } from '../utils/toast';
 import './SMSModal.css';
 
 const APP_BASE = process.env.REACT_APP_BASE_URL || 'https://app.perenniaai.com';
@@ -25,6 +26,47 @@ function SMSModal({ isOpen, onClose, lead }) {
   // Application link state
   const [appLinkAdded, setAppLinkAdded] = useState(false);
   const [appLinkLoading, setAppLinkLoading] = useState(false);
+
+  // TCPA consent state
+  const [tcpaStatus, setTcpaStatus] = useState(null); // null = loading, object = result
+  const [tcpaLoading, setTcpaLoading] = useState(false);
+
+  // Check TCPA consent status when modal opens
+  useEffect(() => {
+    if (isOpen && lead?.phone) {
+      const checkTcpaConsent = async () => {
+        setTcpaLoading(true);
+        setTcpaStatus(null);
+        try {
+          const response = await api.get(
+            `/api/v1/compliance/tcpa/consent/${encodeURIComponent(lead.phone)}`
+          );
+          setTcpaStatus(response.data);
+          if (response.data && !response.data.sms_permitted) {
+            toast.warning(
+              'TCPA consent not on file for this contact. SMS sending is blocked.'
+            );
+          }
+        } catch (err) {
+          // If the endpoint returns 404 or fails, treat as no consent
+          console.warn('TCPA consent check failed:', err);
+          setTcpaStatus({
+            has_active_consent: false,
+            sms_permitted: false,
+            message: 'Unable to verify TCPA consent status.',
+          });
+        } finally {
+          setTcpaLoading(false);
+        }
+      };
+      checkTcpaConsent();
+    } else if (!isOpen) {
+      setTcpaStatus(null);
+    }
+  }, [isOpen, lead?.phone]);
+
+  // Derived: is SMS blocked by TCPA?
+  const smsBlocked = tcpaStatus !== null && !tcpaStatus.sms_permitted;
 
   // Fetch booking links when modal opens
   useEffect(() => {
@@ -120,6 +162,16 @@ function SMSModal({ isOpen, onClose, lead }) {
       return;
     }
 
+    // Block send if TCPA consent is not active
+    if (smsBlocked) {
+      toast.error('Cannot send SMS -- TCPA consent is not on file for this contact.');
+      setResult({
+        status: 'error',
+        message: 'TCPA consent required. Obtain express written consent before sending SMS.',
+      });
+      return;
+    }
+
     setSending(true);
     setResult(null);
 
@@ -154,7 +206,7 @@ function SMSModal({ isOpen, onClose, lead }) {
   };
 
   const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && e.ctrlKey) {
+    if (e.key === 'Enter' && e.ctrlKey && !smsBlocked) {
       sendSMS();
     }
   };
@@ -162,6 +214,16 @@ function SMSModal({ isOpen, onClose, lead }) {
   const executeAITask = async () => {
     if (!aiTask.trim()) {
       setResult({ status: 'error', message: 'Please enter a task for the AI agent' });
+      return;
+    }
+
+    // Block AI agent if TCPA consent is not active
+    if (smsBlocked) {
+      toast.error('Cannot execute SMS task -- TCPA consent is not on file for this contact.');
+      setResult({
+        status: 'error',
+        message: 'TCPA consent required. Obtain express written consent before sending SMS.',
+      });
       return;
     }
 
@@ -231,6 +293,31 @@ function SMSModal({ isOpen, onClose, lead }) {
         </div>
 
         <div className="sms-modal-body">
+          {/* TCPA Consent Status Banner */}
+          {tcpaLoading && (
+            <div className="tcpa-banner tcpa-loading">
+              <span className="tcpa-icon">
+                <span className="spinner" style={{ width: 14, height: 14 }}></span>
+              </span>
+              <span>Checking TCPA consent status...</span>
+            </div>
+          )}
+          {!tcpaLoading && tcpaStatus && !tcpaStatus.sms_permitted && (
+            <div className="tcpa-banner tcpa-blocked">
+              <span className="tcpa-icon">&#x26D4;</span>
+              <div className="tcpa-text">
+                <strong>SMS Blocked -- No TCPA Consent</strong>
+                <p>{tcpaStatus.message || 'No active TCPA consent on file for this phone number. Obtain express written consent before sending SMS.'}</p>
+              </div>
+            </div>
+          )}
+          {!tcpaLoading && tcpaStatus && tcpaStatus.sms_permitted && (
+            <div className="tcpa-banner tcpa-permitted">
+              <span className="tcpa-icon">&#x2705;</span>
+              <span>TCPA consent active ({tcpaStatus.consent_type || 'verified'})</span>
+            </div>
+          )}
+
           {/* Mode Toggle */}
           <div className="mode-toggle">
             <button
@@ -398,14 +485,20 @@ function SMSModal({ isOpen, onClose, lead }) {
           </button>
           {mode === 'manual' ? (
             <button
-              className="btn-primary-sms"
+              className={`btn-primary-sms ${smsBlocked ? 'btn-blocked' : ''}`}
               onClick={sendSMS}
-              disabled={sending || !message.trim()}
+              disabled={sending || !message.trim() || smsBlocked || tcpaLoading}
+              title={smsBlocked ? 'SMS blocked -- no TCPA consent on file' : ''}
             >
               {sending ? (
                 <>
                   <span className="spinner"></span>
                   Sending...
+                </>
+              ) : smsBlocked ? (
+                <>
+                  <span>&#x26D4;</span>
+                  Consent Required
                 </>
               ) : (
                 <>
@@ -416,14 +509,20 @@ function SMSModal({ isOpen, onClose, lead }) {
             </button>
           ) : (
             <button
-              className="btn-primary-sms"
+              className={`btn-primary-sms ${smsBlocked ? 'btn-blocked' : ''}`}
               onClick={executeAITask}
-              disabled={aiRunning || !aiTask.trim()}
+              disabled={aiRunning || !aiTask.trim() || smsBlocked || tcpaLoading}
+              title={smsBlocked ? 'SMS blocked -- no TCPA consent on file' : ''}
             >
               {aiRunning ? (
                 <>
                   <span className="spinner"></span>
                   AI Working...
+                </>
+              ) : smsBlocked ? (
+                <>
+                  <span>&#x26D4;</span>
+                  Consent Required
                 </>
               ) : (
                 <>

@@ -6,9 +6,10 @@
  * - Start: Creates a new Live Activity for a loan entering the closing pipeline
  * - Update: Pushes stage changes to an active Live Activity
  * - End: Dismisses the activity when a loan reaches a terminal stage
+ * - Refresh: Fetches latest loan data from the backend and updates activities
  *
  * Constraints:
- * - iOS 16.1+ required for Live Activities
+ * - iOS 16.2+ required for Live Activities with push token support
  * - iOS limits concurrent activities to 5 per app
  * - Activities auto-expire 8 hours after last update (iOS policy)
  * - Push token support enables server-driven updates via ActivityKit push
@@ -94,15 +95,49 @@ private enum ClosingStage: String, CaseIterable {
 
 #endif
 
+// MARK: - Backend Loan Response Model
+
+/// Lightweight model for decoding loan data from the backend API.
+/// Matches the shape returned by GET /api/v1/loans/{loan_id}.
+private struct LoanResponse: Codable {
+    let id: Int
+    let borrowerName: String?
+    let amount: Double?
+    let stage: String?
+    let propertyAddress: String?
+    let closingDate: String?
+    let predictedCloseDate: String?
+    let nextAction: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case borrowerName = "borrower_name"
+        case amount
+        case stage
+        case propertyAddress = "property_address"
+        case closingDate = "closing_date"
+        case predictedCloseDate = "predicted_close_date"
+        case nextAction = "next_action"
+    }
+}
+
 // MARK: - LiveActivityManager
 
-@available(iOS 16.1, *)
+@available(iOS 16.2, *)
 final class LiveActivityManager {
 
     // MARK: - Singleton
 
     static let shared = LiveActivityManager()
-    private init() {}
+    private init() {
+        session = {
+            let config = URLSessionConfiguration.default
+            config.timeoutIntervalForRequest = 15
+            config.timeoutIntervalForResource = 30
+            config.waitsForConnectivity = false
+            return URLSession(configuration: config)
+        }()
+    }
 
     // MARK: - Constants
 
@@ -119,6 +154,10 @@ final class LiveActivityManager {
         subsystem: "com.perenniaai.crm",
         category: "LiveActivity"
     )
+
+    // MARK: - Networking
+
+    private let session: URLSession
 
     // MARK: - Active Activity Tracking
 
@@ -225,7 +264,6 @@ final class LiveActivityManager {
                 ]
             )
 
-            // Observe push token updates in a detached task
             var result: [String: Any] = [
                 "activityId": activity.id,
                 "loanId": loanId,
@@ -238,6 +276,13 @@ final class LiveActivityManager {
                 let tokenString = pushToken.map { String(format: "%02x", $0) }.joined()
                 result["pushToken"] = tokenString
                 logger.info("Push token for loan \(loanId): \(tokenString.prefix(16))...")
+
+                // Register the ActivityKit push token with the backend
+                await registerPushTokenWithBackend(
+                    loanId: loanId,
+                    pushToken: tokenString,
+                    activityId: activity.id
+                )
             }
 
             // Start observing push token updates
@@ -391,6 +436,81 @@ final class LiveActivityManager {
         activeActivityIds.removeAll()
     }
 
+    // MARK: - Refresh from Backend
+
+    /// Fetch latest loan data from the backend and update all active Live Activities.
+    /// On network failure, activities retain their current (stale) data -- no crash.
+    ///
+    /// - Returns: Dictionary with refresh results per loan
+    func refreshFromBackend() async -> [String: Any] {
+        let activities = Activity<ClosingActivityAttributes>.activities
+        guard !activities.isEmpty else {
+            return ["refreshed": 0, "message": "No active activities to refresh"]
+        }
+
+        guard let token = KeychainService.shared.authToken else {
+            logger.warning("No auth token available for Live Activity refresh")
+            return ["refreshed": 0, "error": "Not authenticated"]
+        }
+
+        var refreshed = 0
+        var errors = 0
+
+        for activity in activities {
+            let loanId = activity.attributes.loanId
+            do {
+                let loanData = try await fetchLoanFromBackend(loanId: loanId, token: token)
+
+                let stage = loanData.stage ?? activity.content.state.currentStage
+                let closingStage = ClosingStage(fromRawStage: stage)
+                let progress = closingStage?.progress ?? activity.content.state.stageProgress
+
+                // Parse estimated close date from backend
+                let estimatedClose = parseISO8601Date(loanData.closingDate ?? loanData.predictedCloseDate)
+
+                let updatedState = ClosingActivityAttributes.ContentState(
+                    currentStage: stage,
+                    stageProgress: progress,
+                    lastUpdate: Date(),
+                    nextAction: loanData.nextAction ?? defaultNextAction(for: stage),
+                    estimatedClose: estimatedClose
+                )
+
+                let content = ActivityContent(
+                    state: updatedState,
+                    staleDate: staleDate()
+                )
+
+                // Check if this is a terminal stage
+                let terminalStages: Set<String> = [
+                    "FUNDED", "CANCELLED", "DENIED", "DEAD",
+                    "WITHDRAWN", "DOES_NOT_QUALIFY", "NURTURE"
+                ]
+                if terminalStages.contains(stage.uppercased()) {
+                    await activity.end(content, dismissalPolicy: .default)
+                    activeActivityIds.removeValue(forKey: loanId)
+                    logger.info("Ended activity for loan \(loanId) -- terminal stage \(stage)")
+                } else {
+                    await activity.update(content)
+                    logger.info("Refreshed activity for loan \(loanId) -> \(stage)")
+                }
+
+                refreshed += 1
+
+            } catch {
+                // Graceful fallback: keep stale data, log the error, don't crash
+                logger.error("Failed to refresh loan \(loanId): \(error.localizedDescription)")
+                errors += 1
+            }
+        }
+
+        return [
+            "refreshed": refreshed,
+            "errors": errors,
+            "total": activities.count
+        ]
+    }
+
     // MARK: - Query
 
     /// Get all currently active closing activities and their states.
@@ -421,6 +541,87 @@ final class LiveActivityManager {
             "activeCount": Activity<ClosingActivityAttributes>.activities.count,
             "maxAllowed": Self.maxConcurrentActivities
         ]
+    }
+
+    // MARK: - Private: Backend Communication
+
+    /// Fetch a single loan's data from the backend API.
+    /// Uses GET /api/v1/loans/{loanId} which returns the loan dict.
+    private func fetchLoanFromBackend(loanId: String, token: String) async throws -> LoanResponse {
+        let urlString = "\(APIConfig.apiBaseURL)/api/v1/loans/\(loanId)"
+        guard let url = URL(string: urlString) else {
+            throw LiveActivityError.invalidURL(urlString)
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue("PerenniaAI-iOS/LiveActivity", forHTTPHeaderField: "User-Agent")
+
+        let (data, response) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw LiveActivityError.invalidResponse
+        }
+
+        switch httpResponse.statusCode {
+        case 200...299:
+            let decoder = JSONDecoder()
+            return try decoder.decode(LoanResponse.self, from: data)
+        case 401, 403:
+            throw LiveActivityError.unauthorized
+        case 404:
+            throw LiveActivityError.loanNotFound(loanId)
+        default:
+            throw LiveActivityError.serverError(httpResponse.statusCode)
+        }
+    }
+
+    /// Register an ActivityKit push token with the backend so the server
+    /// can send Live Activity updates via APNs.
+    /// Uses POST /api/v1/push/register with platform "ios_live_activity".
+    /// Fails silently on error -- the activity still works client-side.
+    private func registerPushTokenWithBackend(
+        loanId: String,
+        pushToken: String,
+        activityId: String
+    ) async {
+        guard let token = KeychainService.shared.authToken else {
+            logger.warning("No auth token for push token registration")
+            return
+        }
+
+        guard let url = URL(string: "\(APIConfig.apiBaseURL)/api/v1/push/register") else {
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("PerenniaAI-iOS/LiveActivity", forHTTPHeaderField: "User-Agent")
+
+        let payload: [String: Any] = [
+            "device_token": pushToken,
+            "platform": "ios",
+            "device_name": "Live Activity - Loan \(loanId)",
+            "app_version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+        ]
+
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            let (_, response) = try await session.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) {
+                logger.info("Registered Live Activity push token for loan \(loanId)")
+            } else {
+                logger.warning("Push token registration returned non-200 for loan \(loanId)")
+            }
+        } catch {
+            // Fail silently -- push token registration is best-effort.
+            // The Live Activity still works via client-side updates.
+            logger.error("Push token registration failed for loan \(loanId): \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Private Helpers
@@ -478,9 +679,26 @@ final class LiveActivityManager {
         }
     }
 
+    /// Parse an ISO 8601 date string into a Date.
+    private func parseISO8601Date(_ dateString: String?) -> Date? {
+        guard let dateString = dateString else { return nil }
+
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+        if let date = formatter.date(from: dateString) {
+            return date
+        }
+
+        // Retry without fractional seconds
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: dateString)
+    }
+
     /// Observe push token updates for an activity.
     /// The push token can change during the activity's lifetime;
-    /// new tokens should be sent to the backend for server-driven updates.
+    /// new tokens are registered with the backend for server-driven updates
+    /// and also broadcast via NotificationCenter for the Capacitor plugin.
     private func observePushTokenUpdates(
         for activity: Activity<ClosingActivityAttributes>,
         loanId: String
@@ -489,7 +707,14 @@ final class LiveActivityManager {
             let tokenString = pushToken.map { String(format: "%02x", $0) }.joined()
             logger.info("Push token updated for loan \(loanId): \(tokenString.prefix(16))...")
 
-            // Post notification so the Capacitor plugin can forward to the backend
+            // Register the updated token with the backend
+            await registerPushTokenWithBackend(
+                loanId: loanId,
+                pushToken: tokenString,
+                activityId: activity.id
+            )
+
+            // Post notification so the Capacitor plugin can forward to JS
             await MainActor.run {
                 NotificationCenter.default.post(
                     name: Notification.Name("LiveActivityPushTokenUpdated"),
@@ -505,13 +730,41 @@ final class LiveActivityManager {
     }
 }
 
-// MARK: - Pre-iOS 16.1 Stub
+// MARK: - Live Activity Errors
 
-/// Provides a no-op fallback for devices running iOS < 16.1 so callers
+@available(iOS 16.2, *)
+extension LiveActivityManager {
+    enum LiveActivityError: LocalizedError {
+        case invalidURL(String)
+        case invalidResponse
+        case unauthorized
+        case loanNotFound(String)
+        case serverError(Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidURL(let url):
+                return "Invalid URL: \(url)"
+            case .invalidResponse:
+                return "Invalid server response"
+            case .unauthorized:
+                return "Authentication required"
+            case .loanNotFound(let id):
+                return "Loan \(id) not found"
+            case .serverError(let code):
+                return "Server error (\(code))"
+            }
+        }
+    }
+}
+
+// MARK: - Pre-iOS 16.2 Stub
+
+/// Provides a no-op fallback for devices running iOS < 16.2 so callers
 /// don't need availability checks at every call site.
 final class LiveActivityManagerCompat {
     static func isAvailable() -> Bool {
-        if #available(iOS 16.1, *) {
+        if #available(iOS 16.2, *) {
             return true
         }
         return false

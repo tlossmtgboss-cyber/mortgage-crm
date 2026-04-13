@@ -12,7 +12,7 @@ Endpoints:
 
 Registration pattern: function-based (same as scorecard_routes, admin_ops_routes)
 """
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -78,6 +78,7 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
 
     @app.post("/api/v1/admin/gdpr/export", tags=["GDPR"])
     async def export_org_data(
+        request: Request,
         db: Session = Depends(get_db),
         current_user=Depends(get_current_user),
     ):
@@ -159,18 +160,16 @@ def register_gdpr_routes(app, get_db, get_current_user, **kwargs):
 
             # Log the export in audit trail
             try:
-                db.execute(text("""
-                    INSERT INTO audit_logs
-                        (user_id, changed_by_id, change_type, entity_type, reason, after_state, timestamp, organization_id)
-                    VALUES
-                        (:user_id, :user_id, 'gdpr_export', 'data_export', 'gdpr_right_to_portability',
-                         :details, :ts, :org_id)
-                """), {
-                    "user_id": current_user.id,
-                    "org_id": org_id,
-                    "details": json.dumps({"tables": list(export_manifest["tables"].keys())}),
-                    "ts": datetime.now(timezone.utc),
-                })
+                from utils.export_audit import log_export_event, _get_client_ip
+                log_export_event(
+                    db=db, user_id=current_user.id, organization_id=org_id,
+                    resource_type="gdpr_org_data", export_format="zip",
+                    ip_address=_get_client_ip(request),
+                    details={
+                        "tables": list(export_manifest["tables"].keys()),
+                        "table_counts": export_manifest["tables"],
+                    },
+                )
                 db.commit()
             except Exception as audit_err:
                 logger.warning(f"Failed to log GDPR export audit: {audit_err}")

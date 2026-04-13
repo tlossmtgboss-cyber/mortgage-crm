@@ -336,7 +336,7 @@ const AriaVoiceApp = () => {
         const data = await authAPI.login(credentials.username, credentials.password);
 
         if (data.access_token) {
-          await setAuth(data.access_token, data.user);
+          await setAuth(data.access_token, data.user, data.refresh_token);
           setIsAuthenticated(true);
           haptics.success();
           return;

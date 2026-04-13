@@ -382,6 +382,7 @@ async def mark_comparison_converted(
 
 @router.get("/compare/{comparison_id}/pdf")
 async def download_comparison_pdf(
+    request: Request,
     comparison_id: str,
     db: Session = Depends(get_db),
 ):
@@ -431,6 +432,17 @@ async def download_comparison_pdf(
         # Generate PDF
         service = EstimateParserService(db)
         pdf_bytes = service.generate_comparison_pdf(comparison, comparison_id)
+
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=0, organization_id=None,
+                resource_type="loan_estimate_comparison", export_format="pdf",
+                ip_address=_get_client_ip(request),
+                details={"comparison_id": comparison_id},
+            )
+        except Exception:
+            pass
 
         return Response(
             content=pdf_bytes,

@@ -1686,6 +1686,7 @@ async def get_review_call(
 
 @router.get("/api/v1/apply/{token}/export/mismo")
 async def export_mismo_xml(
+    request: Request,
     token: str,
     db: Session = Depends(get_db_session())
 ):
@@ -1728,6 +1729,17 @@ async def export_mismo_xml(
         xml_content = generator.generate(data)
         filename = generator.generate_filename(str(application.id))
 
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=0, organization_id=getattr(application, "organization_id", None),
+                resource_type="borrower_application_mismo", export_format="xml",
+                ip_address=_get_client_ip(request),
+                details={"application_id": application.id},
+            )
+        except Exception:
+            pass
+
         return Response(
             content=xml_content,
             media_type="application/xml",
@@ -1744,6 +1756,7 @@ async def export_mismo_xml(
 
 @router.get("/api/v1/admin/applications/{application_id}/export/mismo")
 async def admin_export_mismo_xml(
+    request: Request,
     application_id: int,
     db: Session = Depends(get_db_session()),
     current_user = Depends(get_current_user_dep())
@@ -1778,6 +1791,18 @@ async def admin_export_mismo_xml(
 
         xml_content = generator.generate(data)
         filename = generator.generate_filename(str(application.id))
+
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=current_user.id,
+                organization_id=getattr(current_user, "organization_id", None),
+                resource_type="borrower_application_mismo", export_format="xml",
+                ip_address=_get_client_ip(request),
+                details={"application_id": application_id},
+            )
+        except Exception:
+            pass
 
         return Response(
             content=xml_content,
@@ -2209,6 +2234,7 @@ async def get_lo_application_documents(
 
 @router.get("/api/v1/lo/applications/{application_id}/export/mismo")
 async def export_application_mismo(
+    request: Request,
     application_id: int,
     db: Session = Depends(get_db_session()),
     current_user = Depends(get_current_user_dep())
@@ -2303,6 +2329,18 @@ async def export_application_mismo(
         </DEAL_SET>
     </DEAL_SETS>
 </MESSAGE>'''
+
+    try:
+        from utils.export_audit import log_export_event, _get_client_ip
+        log_export_event(
+            db=db, user_id=current_user.id,
+            organization_id=getattr(current_user, "organization_id", None),
+            resource_type="borrower_application_mismo", export_format="xml",
+            ip_address=_get_client_ip(request),
+            details={"application_id": application_id},
+        )
+    except Exception:
+        pass
 
     return Response(
         content=mismo_xml,

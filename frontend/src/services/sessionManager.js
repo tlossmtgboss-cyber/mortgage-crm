@@ -9,18 +9,42 @@
 import { App } from '@capacitor/app';
 import { biometrics, isNative } from './nativeServices';
 import { authAPI, API_BASE_URL } from './api';
+import { getMDMSessionTimeout } from './mdmConfig';
+import { clearAllAuthTokens } from '../utils/storage';
 
 // ============================================================================
 // CONFIGURATION
 // ============================================================================
 
 const SESSION_CONFIG = {
-  inactivityTimeout: 15 * 60 * 1000,       // 15 minutes
+  inactivityTimeout: 15 * 60 * 1000,       // 15 minutes (GLBA maximum)
   warningBefore: 2 * 60 * 1000,            // Warn 2 min before expiry
   backgroundTimeout: 5 * 60 * 1000,        // 5 min in background
   requireBiometricOnResume: true,           // Re-auth after background
   maxSessionDuration: 8 * 60 * 60 * 1000,  // 8 hour absolute max
+  tokenRefreshBeforeExpiry: 2 * 60 * 1000, // Refresh token 2 min before JWT expiry
 };
+
+// Apply MDM-managed session timeout override if available.
+// MDM can set a shorter timeout (never longer than 15 min for GLBA).
+function _applyMDMOverrides() {
+  try {
+    const mdmTimeout = getMDMSessionTimeout();
+    if (mdmTimeout && mdmTimeout > 0) {
+      // MDM can shorten but never exceed 15 min (GLBA ceiling)
+      const maxAllowed = 15 * 60 * 1000;
+      SESSION_CONFIG.inactivityTimeout = Math.min(mdmTimeout, maxAllowed);
+      // Adjust warning to be proportional (but at least 30s)
+      SESSION_CONFIG.warningBefore = Math.max(
+        30 * 1000,
+        Math.min(SESSION_CONFIG.warningBefore, SESSION_CONFIG.inactivityTimeout - 30 * 1000)
+      );
+      console.log(`[SessionManager] MDM timeout override: ${SESSION_CONFIG.inactivityTimeout / 1000}s`);
+    }
+  } catch (err) {
+    // MDM config not available — use defaults
+  }
+}
 
 const CREDENTIAL_SERVER = 'com.perenniaai.crm';
 
@@ -31,6 +55,7 @@ const CREDENTIAL_SERVER = 'com.perenniaai.crm';
 let _inactivityTimer = null;
 let _warningTimer = null;
 let _absoluteTimer = null;
+let _tokenRefreshTimer = null;
 let _sessionStartTime = null;
 let _lastActivityTime = null;
 let _backgroundEnteredAt = null;
@@ -39,7 +64,10 @@ let _isWarning = false;
 let _failedAttempts = 0;
 let _listeners = new Set();
 let _appStateListener = null;
+let _visibilityHandler = null;
 let _initialized = false;
+let _tokenRefreshRetries = 0;
+const _MAX_REFRESH_RETRIES = 5;
 
 // ============================================================================
 // INTERNAL HELPERS
@@ -68,6 +96,10 @@ function _clearTimers() {
   if (_absoluteTimer) {
     clearTimeout(_absoluteTimer);
     _absoluteTimer = null;
+  }
+  if (_tokenRefreshTimer) {
+    clearTimeout(_tokenRefreshTimer);
+    _tokenRefreshTimer = null;
   }
 }
 
@@ -138,9 +170,12 @@ function _forceLogout(reason) {
   _isWarning = false;
   _failedAttempts = 0;
 
-  // Clear auth state
+  // Clear auth state from ALL storage locations (localStorage + Capacitor Preferences).
+  // clearAllAuthTokens is async but we fire-and-forget since we're navigating away.
   localStorage.removeItem('token');
+  localStorage.removeItem('refresh_token');
   localStorage.removeItem('user');
+  clearAllAuthTokens().catch(() => {});
 
   _notifyListeners();
 
@@ -246,6 +281,9 @@ export function initSession() {
   const token = localStorage.getItem('token');
   if (!token) return;
 
+  // Apply MDM-managed session timeout before starting timers
+  _applyMDMOverrides();
+
   _initialized = true;
   _isLocked = false;
   _isWarning = false;
@@ -255,6 +293,9 @@ export function initSession() {
   _startInactivityTimer();
   _startAbsoluteTimer();
 
+  // Schedule proactive token refresh (avoids 401 during active use)
+  _scheduleTokenRefresh(token);
+
   // Listen for user activity
   _attachActivityListeners();
 
@@ -263,9 +304,10 @@ export function initSession() {
     _appStateListener = App.addListener('appStateChange', _handleAppStateChange);
   } else {
     // Web fallback: use visibility change
-    document.addEventListener('visibilitychange', () => {
+    _visibilityHandler = () => {
       _handleAppStateChange({ isActive: !document.hidden });
-    });
+    };
+    document.addEventListener('visibilitychange', _visibilityHandler);
   }
 
   console.log('[SessionManager] Initialized');
@@ -281,6 +323,11 @@ export function destroySession() {
   if (_appStateListener) {
     _appStateListener.remove();
     _appStateListener = null;
+  }
+
+  if (_visibilityHandler) {
+    document.removeEventListener('visibilitychange', _visibilityHandler);
+    _visibilityHandler = null;
   }
 
   _initialized = false;
@@ -348,11 +395,27 @@ export async function unlockWithBiometrics() {
       _isWarning = false;
       _failedAttempts = 0;
 
-      // Attempt silent token refresh
-      await _silentTokenRefresh();
+      // Attempt silent token refresh using localStorage refresh token
+      const refreshed = await _silentTokenRefresh();
+
+      // If silent refresh failed (expired refresh token), try keychain credentials
+      // The login page stores email+password under CREDENTIAL_SERVER via useBiometricLogin
+      if (!refreshed && isNative) {
+        console.log('[SessionManager] Silent refresh failed, trying keychain re-login');
+        const reloginOk = await _reloginFromKeychain();
+        if (!reloginOk) {
+          // No valid tokens and no keychain credentials — force full login
+          _forceLogout('token_expired');
+          return false;
+        }
+      }
 
       // Restart timers
       _startInactivityTimer();
+
+      // Schedule proactive token refresh for the current access token
+      const currentToken = localStorage.getItem('token');
+      if (currentToken) _scheduleTokenRefresh(currentToken);
 
       // Restart absolute timer with remaining time
       const totalElapsed = Date.now() - (_sessionStartTime || Date.now());
@@ -416,8 +479,11 @@ export async function unlockWithPassword(password) {
     const response = await authAPI.login(email, password);
 
     if (response && response.access_token) {
-      // Store the new token
+      // Store the new tokens
       localStorage.setItem('token', response.access_token);
+      if (response.refresh_token) {
+        localStorage.setItem('refresh_token', response.refresh_token);
+      }
 
       _isLocked = false;
       _isWarning = false;
@@ -425,6 +491,9 @@ export async function unlockWithPassword(password) {
 
       // Restart timers
       _startInactivityTimer();
+
+      // Schedule proactive token refresh for the new access token
+      _scheduleTokenRefresh(response.access_token);
 
       // Restart absolute timer with remaining time
       const totalElapsed = Date.now() - (_sessionStartTime || Date.now());
@@ -496,17 +565,27 @@ async function _silentTokenRefresh() {
     const token = localStorage.getItem('token');
     if (!token) return false;
 
-    // Attempt to hit a lightweight auth endpoint to validate/refresh the token
-    const response = await fetch(`${API_BASE_URL}/api/v1/auth/me`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
+    // Check token expiry client-side (no /auth/me endpoint exists)
+    const exp = _getTokenExp(token);
+    if (!exp) return true; // Can't parse — let API calls determine validity
+
+    const now = Math.floor(Date.now() / 1000);
+    if (exp > now + 120) {
+      // Token valid for more than 2 minutes — no refresh needed
+      return true;
+    }
+
+    // Token expired or expiring soon — try to refresh
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) return exp > now; // No refresh token — valid only if not expired
+
+    const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
     });
 
     if (response.ok) {
-      // Token is still valid — check for a refreshed token in the response
       const data = await response.json();
       if (data.access_token) {
         localStorage.setItem('token', data.access_token);
@@ -514,15 +593,153 @@ async function _silentTokenRefresh() {
       return true;
     }
 
-    if (response.status === 401) {
-      // Token expired — cannot recover without re-login
+    return exp > now; // Refresh failed — valid only if not expired
+  } catch (err) {
+    console.error('[SessionManager] Silent token refresh error:', err);
+    return true; // Network error — don't force logout
+  }
+}
+
+// ============================================================================
+// KEYCHAIN RE-LOGIN (fallback when refresh token is expired)
+// ============================================================================
+
+/**
+ * Attempt a full re-login using credentials stored in the iOS keychain.
+ * The login page stores email+password via useBiometricLogin under CREDENTIAL_SERVER.
+ * Biometric verification has already succeeded before this is called.
+ *
+ * @returns {Promise<boolean>} true if re-login succeeded
+ */
+async function _reloginFromKeychain() {
+  try {
+    const credentials = await biometrics.getCredentials(CREDENTIAL_SERVER);
+    if (!credentials?.username || !credentials?.password) {
+      console.log('[SessionManager] No keychain credentials found');
       return false;
     }
 
-    return true; // Non-auth errors are OK; token may still be valid
+    const response = await authAPI.login(credentials.username, credentials.password);
+    if (response && response.access_token) {
+      localStorage.setItem('token', response.access_token);
+      if (response.refresh_token) {
+        localStorage.setItem('refresh_token', response.refresh_token);
+      }
+      if (response.user) {
+        localStorage.setItem('user', JSON.stringify(response.user));
+      }
+      console.log('[SessionManager] Keychain re-login succeeded');
+      return true;
+    }
+
+    return false;
   } catch (err) {
-    console.error('[SessionManager] Silent token refresh error:', err);
-    return true; // Network error — don't force logout; let user try
+    console.error('[SessionManager] Keychain re-login error:', err);
+    return false;
+  }
+}
+
+// ============================================================================
+// PROACTIVE TOKEN REFRESH
+// ============================================================================
+
+/**
+ * Parse JWT payload to extract expiration time.
+ * Returns the `exp` claim as a Unix timestamp (seconds), or null.
+ */
+function _getTokenExp(token) {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return payload.exp || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Proactively refresh the access token BEFORE it expires.
+ *
+ * GLBA compliance requires that active users are never interrupted by a
+ * 401 mid-workflow. This function exchanges the refresh token for a new
+ * access token 2 minutes before the current access token expires, then
+ * reschedules itself for the new token's expiry.
+ */
+async function _proactiveTokenRefresh() {
+  if (_isLocked) return;
+
+  try {
+    const refreshToken = localStorage.getItem('refresh_token');
+    if (!refreshToken) {
+      console.log('[SessionManager] No refresh token — skipping proactive refresh');
+      return;
+    }
+
+    const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.access_token) {
+        localStorage.setItem('token', data.access_token);
+        _tokenRefreshRetries = 0;
+        console.log('[SessionManager] Proactive token refresh succeeded');
+        // Schedule next refresh based on new token's expiry
+        _scheduleTokenRefresh(data.access_token);
+      }
+    } else if (response.status === 401) {
+      // Refresh token is expired or revoked — user must re-login.
+      // Don't force logout here; the inactivity timer will handle it.
+      console.warn('[SessionManager] Refresh token rejected (401) — next API call will force re-login');
+    } else {
+      console.warn(`[SessionManager] Proactive refresh failed: ${response.status}`);
+      // Retry with exponential backoff on transient errors
+      _tokenRefreshRetries++;
+      if (_tokenRefreshRetries < _MAX_REFRESH_RETRIES) {
+        const backoffMs = Math.min(60000 * Math.pow(2, _tokenRefreshRetries - 1), 300000);
+        _tokenRefreshTimer = setTimeout(_proactiveTokenRefresh, backoffMs);
+      }
+    }
+  } catch (err) {
+    console.error('[SessionManager] Proactive token refresh error:', err);
+    // Retry with exponential backoff on network errors
+    _tokenRefreshRetries++;
+    if (_tokenRefreshRetries < _MAX_REFRESH_RETRIES) {
+      const backoffMs = Math.min(60000 * Math.pow(2, _tokenRefreshRetries - 1), 300000);
+      _tokenRefreshTimer = setTimeout(_proactiveTokenRefresh, backoffMs);
+    }
+  }
+}
+
+/**
+ * Schedule a proactive token refresh based on the access token's expiry.
+ * Fires `tokenRefreshBeforeExpiry` ms before the token's `exp` claim.
+ */
+function _scheduleTokenRefresh(token) {
+  if (_tokenRefreshTimer) {
+    clearTimeout(_tokenRefreshTimer);
+    _tokenRefreshTimer = null;
+  }
+
+  if (!token) return;
+
+  const exp = _getTokenExp(token);
+  if (!exp) return;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const msUntilExpiry = (exp - nowSec) * 1000;
+  const refreshIn = msUntilExpiry - SESSION_CONFIG.tokenRefreshBeforeExpiry;
+
+  if (refreshIn <= 0) {
+    // Token is already close to or past expiry — refresh immediately
+    _proactiveTokenRefresh();
+  } else {
+    console.log(`[SessionManager] Token refresh scheduled in ${Math.round(refreshIn / 1000)}s`);
+    _tokenRefreshTimer = setTimeout(_proactiveTokenRefresh, refreshIn);
   }
 }
 

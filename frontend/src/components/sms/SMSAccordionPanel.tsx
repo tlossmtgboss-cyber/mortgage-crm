@@ -555,6 +555,16 @@ export default function SMSAccordionPanel({
     () => initialMessages.filter(m => m.status === 'unread' && m.direction === 'inbound').length
   )
 
+  // TCPA consent state
+  const [tcpaStatus, setTcpaStatus] = useState<{
+    has_active_consent: boolean
+    sms_permitted: boolean
+    consent_type?: string | null
+    message: string
+  } | null>(null)
+  const [tcpaLoading, setTcpaLoading] = useState(false)
+  const smsBlocked = tcpaStatus !== null && !tcpaStatus.sms_permitted
+
   const threadRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -570,6 +580,45 @@ export default function SMSAccordionPanel({
       connectWS()
     }
   }, [selectedBorrowerIdx])
+
+  // Check TCPA consent when panel opens or phone changes
+  useEffect(() => {
+    if (!open || !activePhone) return
+    let cancelled = false
+    async function checkTcpa() {
+      setTcpaLoading(true)
+      setTcpaStatus(null)
+      try {
+        const res = await fetch(
+          `${resolvedApiBase}/api/v1/compliance/tcpa/consent/${encodeURIComponent(activePhone)}`,
+          { headers: getAuthHeaders() }
+        )
+        if (cancelled) return
+        if (res.ok) {
+          const data = await res.json()
+          setTcpaStatus(data)
+        } else {
+          setTcpaStatus({
+            has_active_consent: false,
+            sms_permitted: false,
+            message: 'Unable to verify TCPA consent status.',
+          })
+        }
+      } catch {
+        if (!cancelled) {
+          setTcpaStatus({
+            has_active_consent: false,
+            sms_permitted: false,
+            message: 'Unable to verify TCPA consent status.',
+          })
+        }
+      } finally {
+        if (!cancelled) setTcpaLoading(false)
+      }
+    }
+    checkTcpa()
+    return () => { cancelled = true }
+  }, [open, activePhone])
 
   // Fetch history on open
   useEffect(() => {
@@ -696,6 +745,7 @@ export default function SMSAccordionPanel({
 
   async function sendMessage() {
     if (!text.trim() && !staged.length) return
+    if (smsBlocked) return
     setSending(true)
 
     // Optimistic UI
@@ -773,7 +823,7 @@ export default function SMSAccordionPanel({
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey && !smsBlocked) {
       e.preventDefault()
       sendMessage()
     }
@@ -905,6 +955,53 @@ export default function SMSAccordionPanel({
             />
           )}
 
+          {/* TCPA Consent Status */}
+          {tcpaLoading && (
+            <div style={{
+              padding: '8px 12px',
+              background: '#f3f4f6',
+              borderTop: '1px solid #e5e7eb',
+              fontSize: 12,
+              color: '#6b7280',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}>
+              Checking TCPA consent...
+            </div>
+          )}
+          {!tcpaLoading && smsBlocked && (
+            <div style={{
+              padding: '10px 12px',
+              background: '#fef2f2',
+              borderTop: '1px solid #fca5a5',
+              fontSize: 12,
+              color: '#991b1b',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              fontWeight: 600,
+            }}>
+              <span style={{ fontSize: 16 }}>{'\u26D4'}</span>
+              <span>SMS Blocked -- No TCPA consent on file. {tcpaStatus?.message || ''}</span>
+            </div>
+          )}
+          {!tcpaLoading && tcpaStatus && tcpaStatus.sms_permitted && (
+            <div style={{
+              padding: '6px 12px',
+              background: '#f0fdf4',
+              borderTop: '1px solid #86efac',
+              fontSize: 11,
+              color: '#166534',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}>
+              <span>{'\u2705'}</span>
+              <span>TCPA consent active</span>
+            </div>
+          )}
+
           {/* Compose */}
           <div style={styles.compose}>
             <div style={styles.toolbar}>
@@ -930,26 +1027,34 @@ export default function SMSAccordionPanel({
             <div style={styles.composeRow}>
               <textarea
                 ref={textareaRef}
-                style={styles.textarea}
-                placeholder={`Reply to ${activeName}…`}
+                style={{
+                  ...styles.textarea,
+                  ...(smsBlocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
+                }}
+                placeholder={smsBlocked ? 'SMS blocked -- no TCPA consent on file' : `Reply to ${activeName}…`}
                 value={text}
                 rows={1}
                 onChange={e => {
-                  setText(e.target.value)
-                  autoResize(e.target)
+                  if (!smsBlocked) {
+                    setText(e.target.value)
+                    autoResize(e.target)
+                  }
                 }}
                 onKeyDown={handleKeyDown}
+                disabled={smsBlocked}
               />
               <button
                 style={{
                   ...styles.sendBtn,
-                  opacity: sending ? 0.6 : 1,
-                  cursor: sending ? 'not-allowed' : 'pointer',
+                  opacity: (sending || smsBlocked) ? 0.6 : 1,
+                  cursor: (sending || smsBlocked) ? 'not-allowed' : 'pointer',
+                  ...(smsBlocked ? { background: '#dc2626' } : {}),
                 }}
                 onClick={sendMessage}
-                disabled={sending}
+                disabled={sending || smsBlocked || tcpaLoading}
+                title={smsBlocked ? 'SMS blocked -- no TCPA consent on file' : ''}
               >
-                {sending ? 'Sending…' : 'Send'}
+                {sending ? 'Sending…' : smsBlocked ? '\u26D4 Blocked' : 'Send'}
               </button>
             </div>
           </div>

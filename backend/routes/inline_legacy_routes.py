@@ -856,6 +856,14 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load Client Profile routes: {e}")
 
+    # Include Task Snooze routes (push notification quick action: PATCH /api/v1/tasks/{id}/snooze)
+    try:
+        from routes.task_snooze_routes import router as task_snooze_router
+        app.include_router(task_snooze_router, tags=["Tasks"])
+        logger.info("✅ Task Snooze routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load Task Snooze routes: {e}")
+
     # Include Duplicate Detection routes
     try:
         from routes.duplicate_detection_routes import router as duplicate_detection_router
@@ -1135,14 +1143,8 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load Call Monitoring routes: {e}")
 
-    # Include Call Intelligence Review routes (human review queue for low-confidence extractions)
-    try:
-        from routes.call_intelligence_review_routes import router as ci_review_router, set_dependencies as set_ci_review_deps
-        set_ci_review_deps(get_current_user)
-        app.include_router(ci_review_router, tags=["Call Intelligence Reviews"])
-        logger.info("✅ Call Intelligence Review routes loaded")
-    except Exception as e:
-        logger.warning(f"⚠️ Could not load Call Intelligence Review routes: {e}")
+    # Call Intelligence Review routes loaded in main.py (uses auth.dependencies directly)
+    # No set_dependencies needed — auth imported canonically from auth.dependencies
 
     # Include Underwriting Guidelines routes (upload and manage AI underwriter guidelines)
     try:
@@ -1547,12 +1549,26 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Market Data routes not loaded: {e}")
 
+    # Include Notification Action routes (push notification quick-action endpoints)
+    try:
+        from routes.notification_action_routes import router as notification_action_router
+        app.include_router(notification_action_router, tags=["Notification Actions"])
+    except Exception as e:
+        logger.warning(f"⚠️ Notification Action routes not loaded: {e}")
+
     # Include Rate Lock Intelligence routes (integrated from external microservice)
     try:
         from routes.rate_lock_intelligence_routes import router as rate_lock_intelligence_router
         app.include_router(rate_lock_intelligence_router, tags=["Rate Lock Intelligence"])
     except Exception as e:
         logger.warning(f"⚠️ Rate Lock Intelligence routes not loaded: {e}")
+
+    # Include Rate Monitor alert routes (iOS CarPlay + BackgroundSyncManager compatible)
+    try:
+        from routes.rate_monitor_routes import router as rate_monitor_alert_router
+        app.include_router(rate_monitor_alert_router, tags=["Rate Monitor"])
+    except Exception as e:
+        logger.warning(f"Could not load rate monitor alert routes: {e}")
 
     # Include Rate Monitor routes (MUM refinance opportunity tracking)
     try:

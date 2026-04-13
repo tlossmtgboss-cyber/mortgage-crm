@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '../contexts/PermissionContext';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import { toast } from '../utils/toast';
 import './CompanyBrandingSettings.css';
@@ -10,6 +11,12 @@ const API_BASE_URL = window.location.hostname === 'localhost' || window.location
 
 const CompanyBrandingSettings = () => {
   const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - only admins/site admins can manage company branding
+  const canAccessBranding = isAdmin || hasAnyPermission(['admin.manage', 'settings.manage', 'branding.manage', 'system.admin']) ||
+    userRole === 'admin' || userRole === 'site_admin' || userRole === 'management';
+
   const [activeTab, setActiveTab] = useState('company');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -303,6 +310,21 @@ const CompanyBrandingSettings = () => {
         <div className="error-container">
           <p>Error loading settings: {error}</p>
           <button onClick={loadData}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  // Access denied if user doesn't have branding permissions
+  if (!canAccessBranding) {
+    return (
+      <div className="company-branding-settings">
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to manage company branding.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')} style={{ marginTop: '16px' }}>
+            Return to Dashboard
+          </button>
         </div>
       </div>
     );

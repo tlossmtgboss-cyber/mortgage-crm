@@ -1,0 +1,157 @@
+/* IncomeConfidenceBadge — canonical confidence display component */
+
+/* =========================================================================
+   Badge mode (pill)
+   ========================================================================= */
+
+.icb-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full, 9999px);
+  font-weight: var(--weight-semibold, 550);
+  white-space: nowrap;
+  line-height: 1;
+  user-select: none;
+}
+
+/* Sizes */
+.icb-badge--sm {
+  font-size: var(--font-xs, 11px);
+  padding: 2px 7px;
+}
+
+.icb-badge--md {
+  font-size: var(--font-sm, 13px);
+  padding: 3px 10px;
+}
+
+.icb-badge--lg {
+  font-size: 15px;
+  padding: 4px 12px;
+}
+
+/* Threshold colors — badge */
+.icb-badge--auto-approved {
+  background: var(--color-primary, #217F8D);
+  color: #fff;
+}
+
+.icb-badge--high {
+  background: rgba(33, 127, 141, 0.12);
+  color: var(--color-primary, #217F8D);
+}
+
+.icb-badge--medium {
+  background: rgba(168, 75, 47, 0.10);
+  color: var(--color-warning, #A84B2F);
+}
+
+.icb-badge--low {
+  background: rgba(192, 21, 47, 0.10);
+  color: var(--color-error, #C0152F);
+}
+
+/* Mount animation */
+.icb-badge--animated {
+  animation: icb-fade-in 0.25s ease-out;
+}
+
+@keyframes icb-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* =========================================================================
+   Bar mode (progress bar)
+   ========================================================================= */
+
+.icb-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Sizes — bar track width */
+.icb-bar--sm .icb-bar__track {
+  width: 72px;
+  height: 5px;
+}
+
+.icb-bar--md .icb-bar__track {
+  width: 100px;
+  height: 6px;
+}
+
+.icb-bar--lg .icb-bar__track {
+  width: 140px;
+  height: 8px;
+}
+
+.icb-bar__track {
+  border-radius: var(--radius-full, 9999px);
+  background: rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.icb-bar__fill {
+  height: 100%;
+  border-radius: var(--radius-full, 9999px);
+}
+
+.icb-bar__fill--animated {
+  transition: width 0.5s ease-out;
+}
+
+.icb-bar__text {
+  font-weight: var(--weight-semibold, 550);
+  white-space: nowrap;
+}
+
+/* Sizes — bar text */
+.icb-bar--sm .icb-bar__text {
+  font-size: var(--font-xs, 11px);
+}
+
+.icb-bar--md .icb-bar__text {
+  font-size: var(--font-sm, 13px);
+}
+
+.icb-bar--lg .icb-bar__text {
+  font-size: 15px;
+}
+
+/* Threshold colors — bar fill + text */
+.icb-bar--auto-approved .icb-bar__fill {
+  background: var(--color-primary, #217F8D);
+}
+.icb-bar--auto-approved .icb-bar__text {
+  color: var(--color-primary, #217F8D);
+}
+
+.icb-bar--high .icb-bar__fill {
+  background: var(--color-primary, #217F8D);
+}
+.icb-bar--high .icb-bar__text {
+  color: var(--color-primary, #217F8D);
+}
+
+.icb-bar--medium .icb-bar__fill {
+  background: var(--color-warning, #A84B2F);
+}
+.icb-bar--medium .icb-bar__text {
+  color: var(--color-warning, #A84B2F);
+}
+
+.icb-bar--low .icb-bar__fill {
+  background: var(--color-error, #C0152F);
+}
+.icb-bar--low .icb-bar__text {
+  color: var(--color-error, #C0152F);
+}

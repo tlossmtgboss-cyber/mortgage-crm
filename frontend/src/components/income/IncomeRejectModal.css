@@ -1,0 +1,383 @@
+/**
+ * IncomeRejectModal Styles
+ * Uses design system CSS variables throughout.
+ */
+
+/* Overlay */
+.income-reject-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  animation: incomeRejectFadeIn 0.15s ease-out;
+}
+
+@keyframes incomeRejectFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes incomeRejectSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Modal container */
+.income-reject-modal {
+  background: var(--color-bg-surface, #FFFFFF);
+  border-radius: var(--radius-lg, 12px);
+  width: 100%;
+  max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg, 0 10px 15px rgba(0, 0, 0, 0.1));
+  animation: incomeRejectSlideIn 0.2s ease-out;
+}
+
+/* Header */
+.income-reject-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.05));
+  flex-shrink: 0;
+}
+
+.income-reject-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.income-reject-warning-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-error, #C0152F);
+  flex-shrink: 0;
+}
+
+.income-reject-header h2 {
+  margin: 0;
+  font-size: var(--font-lg, 18px);
+  font-weight: var(--weight-bold, 600);
+  color: var(--color-text-primary, #1a1a1a);
+  line-height: 1.2;
+}
+
+.income-reject-close-btn {
+  background: none;
+  border: none;
+  font-size: 26px;
+  color: var(--color-text-tertiary, #999);
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm, 6px);
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+}
+
+.income-reject-close-btn:hover {
+  background: var(--color-border-light, rgba(139, 92, 68, 0.08));
+  color: var(--color-text-primary, #1a1a1a);
+}
+
+/* Body */
+.income-reject-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Income summary card */
+.income-reject-summary {
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.05));
+  border: 1px solid var(--color-border-light, rgba(139, 92, 68, 0.08));
+  border-radius: var(--radius-base, 8px);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+
+.income-reject-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.income-reject-summary-row + .income-reject-summary-row {
+  border-top: 1px solid var(--color-border-light, rgba(139, 92, 68, 0.08));
+  margin-top: 6px;
+  padding-top: 10px;
+}
+
+.income-reject-summary-label {
+  font-size: var(--font-sm, 13px);
+  color: var(--color-text-secondary, #666);
+  font-weight: var(--weight-semibold, 550);
+}
+
+.income-reject-summary-value {
+  font-size: var(--font-sm, 13px);
+  color: var(--color-text-primary, #1a1a1a);
+  font-family: inherit;
+}
+
+.income-reject-summary-amount {
+  font-weight: var(--weight-bold, 600);
+  font-size: var(--font-md, 16px);
+  color: var(--color-error, #C0152F);
+}
+
+/* Form fields */
+.income-reject-field {
+  margin-bottom: 16px;
+}
+
+.income-reject-label {
+  display: block;
+  font-size: var(--font-sm, 13px);
+  font-weight: var(--weight-semibold, 550);
+  color: var(--color-text-primary, #1a1a1a);
+  margin-bottom: 6px;
+}
+
+.income-reject-required {
+  color: var(--color-error, #C0152F);
+  margin-left: 2px;
+}
+
+.income-reject-optional {
+  color: var(--color-text-tertiary, #999);
+  font-weight: 400;
+  font-size: var(--font-xs, 11px);
+}
+
+/* Select */
+.income-reject-select {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: var(--font-sm, 13px);
+  border: 1px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-surface, #FFFFFF);
+  color: var(--color-text-primary, #1a1a1a);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23999' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.income-reject-select:focus {
+  outline: none;
+  border-color: var(--color-primary, #217F8D);
+  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.12);
+}
+
+/* Textarea */
+.income-reject-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: var(--font-sm, 13px);
+  font-family: inherit;
+  border: 1px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-surface, #FFFFFF);
+  color: var(--color-text-primary, #1a1a1a);
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.income-reject-textarea-sm {
+  min-height: 52px;
+}
+
+.income-reject-textarea:focus {
+  outline: none;
+  border-color: var(--color-primary, #217F8D);
+  box-shadow: 0 0 0 3px rgba(33, 127, 141, 0.12);
+}
+
+.income-reject-textarea::placeholder,
+.income-reject-select option[value=""] {
+  color: var(--color-text-tertiary, #999);
+}
+
+/* Character count */
+.income-reject-char-count {
+  margin-top: 4px;
+  text-align: right;
+  font-size: var(--font-xs, 11px);
+}
+
+.income-reject-char-remaining {
+  color: var(--color-warning, #A84B2F);
+}
+
+.income-reject-char-ok {
+  color: var(--color-text-tertiary, #999);
+}
+
+/* Checkbox row */
+.income-reject-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-light, rgba(139, 92, 68, 0.08));
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.05));
+  cursor: pointer;
+  margin-bottom: 16px;
+  transition: border-color 0.15s;
+}
+
+.income-reject-checkbox-row:hover {
+  border-color: var(--color-border, rgba(139, 92, 68, 0.15));
+}
+
+.income-reject-checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary, #217F8D);
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.income-reject-checkbox-label {
+  font-size: var(--font-sm, 13px);
+  color: var(--color-text-primary, #1a1a1a);
+  user-select: none;
+}
+
+/* Audit warning */
+.income-reject-audit-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(192, 21, 47, 0.06);
+  border: 1px solid rgba(192, 21, 47, 0.15);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--color-error, #C0152F);
+  font-size: var(--font-xs, 11px);
+  line-height: 1.5;
+}
+
+.income-reject-audit-warning svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* Footer */
+.income-reject-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-border, rgba(139, 92, 68, 0.15));
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.05));
+  flex-shrink: 0;
+}
+
+/* Buttons */
+.income-reject-btn {
+  padding: 9px 20px;
+  font-size: var(--font-sm, 13px);
+  font-weight: var(--weight-semibold, 550);
+  border-radius: var(--radius-sm, 6px);
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s, box-shadow 0.15s;
+  line-height: 1.2;
+}
+
+.income-reject-btn-cancel {
+  background: var(--color-bg-surface, #FFFFFF);
+  color: var(--color-text-secondary, #666);
+  border: 1px solid var(--color-border, rgba(139, 92, 68, 0.15));
+}
+
+.income-reject-btn-cancel:hover {
+  background: var(--color-bg-secondary, rgba(139, 92, 68, 0.05));
+  color: var(--color-text-primary, #1a1a1a);
+}
+
+.income-reject-btn-confirm {
+  background: var(--color-error, #C0152F);
+  color: #FFFFFF;
+}
+
+.income-reject-btn-confirm:hover:not(:disabled) {
+  background: #a3112a;
+  box-shadow: 0 2px 6px rgba(192, 21, 47, 0.3);
+}
+
+.income-reject-btn-confirm:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Revision variant - uses warning color instead of error */
+.income-reject-btn-revision {
+  background: var(--color-warning, #A84B2F);
+}
+
+.income-reject-btn-revision:hover:not(:disabled) {
+  background: #8f3f27;
+  box-shadow: 0 2px 6px rgba(168, 75, 47, 0.3);
+}
+
+/* Responsive */
+@media (max-width: 560px) {
+  .income-reject-modal {
+    max-width: 100%;
+  }
+
+  .income-reject-header {
+    padding: 14px 16px;
+  }
+
+  .income-reject-body {
+    padding: 16px;
+  }
+
+  .income-reject-footer {
+    padding: 12px 16px;
+  }
+
+  .income-reject-header h2 {
+    font-size: var(--font-md, 16px);
+  }
+}

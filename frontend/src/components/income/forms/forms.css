@@ -1,0 +1,167 @@
+/* Income Form Sub-Components — Shared Styles
+   Uses design system CSS variables where available,
+   falls back to the existing .uic-form-grid / .form-field
+   classes from UnifiedIncomeCalculator.css.
+   ---------------------------------------------------- */
+
+.income-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.income-form-grid.two-col {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.income-form-grid.three-col {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.income-form-grid.four-col {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 768px) {
+  .income-form-grid.two-col,
+  .income-form-grid.three-col,
+  .income-form-grid.four-col {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* IncomeFormField wrapper */
+.income-form-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.income-form-field.full-width {
+  grid-column: 1 / -1;
+}
+
+.income-form-field-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-secondary, #374151);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.income-form-field-label .required-asterisk {
+  color: var(--color-danger, #dc2626);
+  font-weight: 600;
+}
+
+.income-form-field-note {
+  font-size: 11px;
+  color: var(--color-text-muted, #6b7280);
+  font-style: italic;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+/* Inputs inside form fields */
+.income-form-field input,
+.income-form-field select,
+.income-form-field textarea {
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 6px;
+  font-size: 14px;
+  color: var(--color-text-primary, #1f2937);
+  background: var(--color-bg, #fff);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.income-form-field input:focus,
+.income-form-field select:focus,
+.income-form-field textarea:focus {
+  outline: none;
+  border-color: var(--color-primary, #2563eb);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.income-form-field input[type="number"] {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+}
+
+.income-form-field input::placeholder,
+.income-form-field textarea::placeholder {
+  color: var(--color-text-muted, #9ca3af);
+}
+
+.income-form-field input:disabled,
+.income-form-field select:disabled,
+.income-form-field textarea:disabled {
+  background: var(--color-bg-muted, #f3f4f6);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Checkbox variant */
+.income-form-field.checkbox-field {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.income-form-field.checkbox-field input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-primary, #2563eb);
+  padding: 0;
+}
+
+.income-form-field.checkbox-field .income-form-field-label {
+  margin-bottom: 0;
+}
+
+/* Section heading within a form */
+.income-form-section-heading {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary, #1f2937);
+}
+
+.income-form-description {
+  margin: 0 0 20px 0;
+  font-size: 14px;
+  color: var(--color-text-muted, #6b7280);
+}
+
+/* Dividers between form sections */
+.income-form-divider {
+  display: flex;
+  align-items: center;
+  margin: 24px 0 16px 0;
+}
+
+.income-form-divider::before,
+.income-form-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--color-border, #e5e7eb);
+}
+
+.income-form-divider span {
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text-muted, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Textarea for deposits */
+.income-form-field textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}

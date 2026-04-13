@@ -41,6 +41,8 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
+from utils.validators import validate_nmls
+
 logger = logging.getLogger(__name__)
 
 
@@ -67,8 +69,16 @@ LICENSE_TYPE_MLO = "mlo"            # Mortgage Loan Originator
 LICENSE_TYPE_BRANCH = "branch"       # Branch registration
 LICENSE_TYPE_COMPANY = "company"     # Company license
 
-# NMLS number format: 4-12 digits
-NMLS_PATTERN = re.compile(r"^\d{4,12}$")
+# NMLS number format: 5-12 digits (kept for backward compat; prefer validate_nmls())
+NMLS_PATTERN = re.compile(r"^\d{5,12}$")
+
+
+def _is_nmls_valid(nmls_value) -> bool:
+    """Return True if nmls_value passes format validation."""
+    try:
+        return validate_nmls(nmls_value) is not None
+    except ValueError:
+        return False
 
 
 class LicenseEnforcementService:
@@ -135,10 +145,11 @@ class LicenseEnforcementService:
             return result
 
         # Validate NMLS format
-        clean_nmls = str(nmls).strip().lstrip("#")
-        if not NMLS_PATTERN.match(clean_nmls):
+        try:
+            clean_nmls = validate_nmls(nmls)
+        except ValueError:
             result["license_status"] = "invalid_nmls"
-            result["warnings"].append(f"NMLS number '{nmls}' has invalid format (expected 4-12 digits)")
+            result["warnings"].append(f"Invalid NMLS format. Must be 5-12 digits.")
             return result
 
         # Check license data
@@ -286,7 +297,7 @@ class LicenseEnforcementService:
             "user_id": user_id,
             "user_name": f"{user.first_name or ''} {user.last_name or ''}".strip(),
             "nmls_number": nmls,
-            "nmls_valid": bool(nmls and NMLS_PATTERN.match(str(nmls).strip().lstrip("#"))),
+            "nmls_valid": bool(nmls and _is_nmls_valid(nmls)),
             "total_licenses": len(licenses),
             "active_states": active_states,
             "active_count": len(active_states),

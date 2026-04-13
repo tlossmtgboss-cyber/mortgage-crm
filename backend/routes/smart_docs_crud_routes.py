@@ -12,7 +12,7 @@ import re
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form, Query
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -560,6 +560,7 @@ async def get_document(
 
 @router.get("/document/{document_id}/download")
 async def download_document(
+    request: Request,
     document_id: int,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
@@ -597,6 +598,18 @@ async def download_document(
             status_code=500,
             detail=f"Failed to generate download URL: {result.get('error')}"
         )
+
+    try:
+        from utils.export_audit import log_export_event, _get_client_ip
+        log_export_event(
+            db=db, user_id=getattr(current_user, "id", 0),
+            organization_id=org_id, resource_type="document",
+            export_format=document.mime_type or "binary",
+            ip_address=_get_client_ip(request),
+            details={"document_id": document_id, "file_name": document.file_name},
+        )
+    except Exception:
+        pass
 
     return {
         "document_id": document.id,

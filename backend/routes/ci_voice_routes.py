@@ -2179,6 +2179,7 @@ async def get_compliance_dashboard(
 
 @router.get("/export/recordings")
 async def export_recordings(
+    request: Request,
     format: str = Query(default="csv", description="csv or json"),
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
@@ -2231,6 +2232,18 @@ async def export_recordings(
                     "qa_grade": row[7],
                     "qa_score": float(row[8]) if row[8] else None
                 })
+            try:
+                from utils.export_audit import log_export_event, _get_client_ip
+                user_id = current_user.get("id", 0) if isinstance(current_user, dict) else getattr(current_user, "id", 0)
+                org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
+                log_export_event(
+                    db=db, user_id=user_id, organization_id=org_id,
+                    resource_type="call_recordings", export_format="json",
+                    ip_address=_get_client_ip(request),
+                    details={"record_count": len(data)},
+                )
+            except Exception:
+                pass
             return {"recordings": data, "count": len(data)}
 
         else:  # CSV
@@ -2260,6 +2273,20 @@ async def export_recordings(
                 ])
 
             output.seek(0)
+
+            try:
+                from utils.export_audit import log_export_event, _get_client_ip
+                user_id = current_user.get("id", 0) if isinstance(current_user, dict) else getattr(current_user, "id", 0)
+                org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
+                log_export_event(
+                    db=db, user_id=user_id, organization_id=org_id,
+                    resource_type="call_recordings", export_format="csv",
+                    ip_address=_get_client_ip(request),
+                    details={"record_count": len(rows)},
+                )
+            except Exception:
+                pass
+
             return StreamingResponse(
                 iter([output.getvalue()]),
                 media_type="text/csv",

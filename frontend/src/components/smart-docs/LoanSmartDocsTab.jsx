@@ -264,6 +264,8 @@ function LoanSmartDocsTab({ loanId, borrowerId, borrowerName, borrowerEmail, coB
         borrowerId={borrowerId || 1}
         borrowerName={borrowerName}
         borrowerEmail={borrowerEmail}
+        coBorrowerName={coBorrowerName}
+        coBorrowerEmail={coBorrowerEmail}
         onSuccess={() => {
           setRequestDocModalOpen(false);
           fetchDocuments();

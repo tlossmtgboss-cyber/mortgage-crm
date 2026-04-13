@@ -128,6 +128,17 @@ async def export_ics(
 
     filename = f"schedule_{start_date}_{end_date}.ics"
 
+    try:
+        from utils.export_audit import log_export_event, _get_client_ip
+        log_export_event(
+            db=db, user_id=getattr(current_user, "id", 0),
+            organization_id=org_id, resource_type="schedule",
+            export_format="ics", ip_address=_get_client_ip(request),
+            details={"start_date": start_date, "end_date": end_date, "appointment_count": len(appointments)},
+        )
+    except Exception:
+        pass
+
     return StreamingResponse(
         iter([ics_content.encode("utf-8")]),
         media_type="text/calendar; charset=utf-8",
@@ -163,6 +174,17 @@ async def export_single_ics(
 
     safe_title = (appointment.title or "appointment").replace(" ", "_")[:50]
     filename = f"{safe_title}_{appointment_id}.ics"
+
+    try:
+        from utils.export_audit import log_export_event, _get_client_ip
+        log_export_event(
+            db=db, user_id=getattr(current_user, "id", 0),
+            organization_id=org_id, resource_type="appointment",
+            export_format="ics", ip_address=_get_client_ip(request),
+            details={"appointment_id": appointment_id},
+        )
+    except Exception:
+        pass
 
     return StreamingResponse(
         iter([ics_content.encode("utf-8")]),
@@ -216,6 +238,17 @@ async def export_pdf(
     content_type = CalendarExportService.pdf_content_type()
     extension = CalendarExportService.pdf_file_extension()
     filename = f"schedule_{start_date}_{end_date}.{extension}"
+
+    try:
+        from utils.export_audit import log_export_event, _get_client_ip
+        log_export_event(
+            db=db, user_id=getattr(current_user, "id", 0),
+            organization_id=org_id, resource_type="schedule",
+            export_format="pdf", ip_address=_get_client_ip(request),
+            details={"start_date": start_date, "end_date": end_date, "appointment_count": len(appointments)},
+        )
+    except Exception:
+        pass
 
     return StreamingResponse(
         iter([pdf_bytes]),

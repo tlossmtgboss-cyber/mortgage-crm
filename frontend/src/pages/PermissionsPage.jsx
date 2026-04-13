@@ -8,7 +8,9 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
+import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import './PermissionsPage.css';
 
@@ -43,6 +45,14 @@ const ROLE_COLORS = {
 // ============================================================================
 
 const PermissionsPage = () => {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin, isPlatformAdmin, isSiteAdmin } = usePermissions();
+
+  // Permission check - only admins can configure RBAC permissions
+  const canAccessPermissions = isAdmin || isPlatformAdmin || isSiteAdmin ||
+    hasAnyPermission(['admin.manage', 'permissions.manage', 'system.admin']) ||
+    userRole === 'admin' || userRole === 'site_admin';
+
   // State
   const [activeRole, setActiveRole] = useState('loan_officer');
   const [roles, setRoles] = useState([]);
@@ -324,6 +334,21 @@ const PermissionsPage = () => {
 
   const rolePerms = permissions[activeRole] || [];
   const activeRoleData = roles.find(r => r.key === activeRole);
+
+  // Access denied if user doesn't have admin permissions
+  if (!canAccessPermissions) {
+    return (
+      <div className="permissions-page">
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to manage role permissions.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')} style={{ marginTop: '16px' }}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

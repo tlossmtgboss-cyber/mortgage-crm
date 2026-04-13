@@ -1,0 +1,96 @@
+/* OfflineIndicator — top-of-screen connectivity banner (mobile only) */
+
+.offline-indicator {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 16px;
+  /* Account for iOS notch / status bar */
+  padding-top: calc(6px + env(safe-area-inset-top, 0px));
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  animation: offline-indicator-slide-in 0.3s ease-out;
+}
+
+/* Slide-in animation */
+@keyframes offline-indicator-slide-in {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+/* --- State variants --- */
+
+.offline-indicator--offline {
+  background: #fef3c7;
+  color: #92400e;
+  border-bottom: 1px solid #fbbf24;
+}
+
+.offline-indicator--syncing {
+  background: #dbeafe;
+  color: #1e40af;
+  border-bottom: 1px solid #60a5fa;
+}
+
+.offline-indicator--success {
+  background: #d1fae5;
+  color: #065f46;
+  border-bottom: 1px solid #34d399;
+}
+
+/* --- Spinner --- */
+
+.offline-indicator__spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: offline-indicator-spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes offline-indicator-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- Icon --- */
+
+.offline-indicator__icon {
+  flex-shrink: 0;
+  display: block;
+}
+
+/* --- Text --- */
+
+.offline-indicator__text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* --- Accessibility: reduced motion --- */
+
+@media (prefers-reduced-motion: reduce) {
+  .offline-indicator {
+    animation: none;
+  }
+  .offline-indicator__spinner {
+    animation: none;
+  }
+}

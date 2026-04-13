@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
+import { usePermissions } from '../contexts/PermissionContext';
 import './DataUpload.css';
 import AutoDataImport from '../components/data-management/AutoDataImport';
 
 function DataUpload() {
   const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - data import is admin/manager only
+  const canAccessDataUpload = isAdmin || hasAnyPermission(['admin.manage', 'data.import', 'data.manage', 'system.admin']) ||
+    userRole === 'admin' || userRole === 'site_admin' || userRole === 'management';
+
   const [importMode, setImportMode] = useState('auto'); // 'auto' or 'manual'
   const [uploadState, setUploadState] = useState('select'); // select, analyzing, questions, mapping, importing, complete
   const [file, setFile] = useState(null);
@@ -591,6 +598,21 @@ function DataUpload() {
     // Default based on file analysis
     return 'leads';
   };
+
+  // Access denied if user doesn't have data import permissions
+  if (!canAccessDataUpload) {
+    return (
+      <div className="data-upload-page">
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access Data Management.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')} style={{ marginTop: '16px' }}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="data-upload-page">

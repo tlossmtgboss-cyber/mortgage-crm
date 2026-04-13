@@ -907,10 +907,35 @@ async def _transcribe_and_process_recording(
         )
 
         # -----------------------------------------------------------------
-        # 2. Resolve organization_id (and optional loan_id) from call record
+        # 2a. Persist transcript to DB for historical access
         # -----------------------------------------------------------------
         db = SessionLocal()
 
+        try:
+            # call_logs has transcript_text + transcript_status columns
+            db.execute(sa_text("""
+                UPDATE call_logs
+                SET transcript_text = :transcript,
+                    transcript_status = 'completed'
+                WHERE call_sid = :call_id
+            """), {"transcript": full_text, "call_id": call_control_id})
+            db.commit()
+            logger.debug(
+                "Persisted transcript to call_logs for %s", call_control_id
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to persist transcript for call %s: %s",
+                call_control_id, exc,
+            )
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+        # -----------------------------------------------------------------
+        # 2b. Resolve organization_id (and optional loan_id) from call record
+        # -----------------------------------------------------------------
         org_id: Optional[int] = None
         loan_id: Optional[int] = None
 

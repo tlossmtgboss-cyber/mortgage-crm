@@ -40,7 +40,7 @@ import logging
 from datetime import datetime, date, timezone
 from typing import Optional, List
 
-from fastapi import Depends, HTTPException, Query, status
+from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -675,6 +675,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
         tags=["Compliance"],
     )
     async def export_hmda_lar(
+        request: Request,
         year: int = Query(None, description="Reporting year (defaults to current year)"),
         force: bool = Query(False, description="Force export even with validation errors"),
         db: Session = Depends(get_db),
@@ -758,6 +759,17 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
 
         content = output.getvalue()
         output.close()
+
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=current_user.id, organization_id=org_id,
+                resource_type="hmda_lar", export_format="txt",
+                ip_address=_get_client_ip(request),
+                details={"year": year, "reportable_loans": len(reportable)},
+            )
+        except Exception:
+            pass
 
         # Return as streaming response with appropriate headers
         return StreamingResponse(
@@ -1128,6 +1140,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
         tags=["Compliance"],
     )
     async def export_lead_data(
+        request: Request,
         lead_id: int,
         db: Session = Depends(get_db),
         current_user=Depends(get_current_user),
@@ -1201,6 +1214,17 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
         }
 
         # Audit trail for the export itself
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=current_user.id,
+                organization_id=getattr(current_user, "organization_id", None),
+                resource_type="lead_data", export_format="json",
+                ip_address=_get_client_ip(request),
+                details={"lead_id": lead_id},
+            )
+        except Exception:
+            pass
         logger.info(
             f"GDPR data export for lead {lead_id} by user {current_user.id}"
         )

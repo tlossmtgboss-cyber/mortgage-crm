@@ -1,0 +1,78 @@
+/* ============================================================================
+   Skeleton.css -- Base skeleton shimmer animation
+   Paired with components/common/Skeleton.js
+   Uses app theme tokens with hardcoded fallbacks.
+   ============================================================================ */
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+/* Base bone element */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--skeleton-bg, #f0f0f0) 25%,
+    var(--skeleton-shimmer, #f8f8f8) 37%,
+    var(--skeleton-bg, #f0f0f0) 63%
+  );
+  background-size: 800px 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  display: block;
+}
+
+/* Text variants */
+.skeleton-text {
+  margin-bottom: 6px;
+}
+
+.skeleton-text--sm {
+  height: 12px;
+}
+
+.skeleton-text--md {
+  height: 16px;
+}
+
+.skeleton-text--lg {
+  height: 20px;
+}
+
+/* Circle */
+.skeleton-circle {
+  flex-shrink: 0;
+}
+
+/* Rect */
+.skeleton-rect {
+  display: block;
+}
+
+/* Group container */
+.skeleton-group {
+  display: flex;
+}
+
+/* Staggered animation -- subtle wave effect */
+.skeleton-group--stagger > .skeleton {
+  animation-name: skeleton-shimmer;
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--skeleton-bg, #f0f0f0);
+  }
+}
+
+/* Dark mode support */
+[data-theme="dark"] .skeleton {
+  --skeleton-bg: #2a2d35;
+  --skeleton-shimmer: #3a3d45;
+}

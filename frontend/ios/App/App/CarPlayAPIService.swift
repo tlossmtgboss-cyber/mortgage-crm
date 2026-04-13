@@ -31,8 +31,8 @@ final class CarPlayAPIService: @unchecked Sendable {
 
     // MARK: - Constants
 
-    /// Production API base URL (backend on Railway).
-    private let baseURL = "https://api.perenniaai.com"
+    /// API base URL — centralized in APIConfig (overridable via Info.plist).
+    private let baseURL = APIConfig.apiBaseURL
 
     /// Cache TTL in seconds. CarPlay users browse tabs rapidly so we cache
     /// responses briefly to avoid redundant network requests.
@@ -84,10 +84,22 @@ final class CarPlayAPIService: @unchecked Sendable {
 
     // MARK: - Public API
 
-    /// Fetch pipeline dashboard metrics.
-    /// GET /api/v1/pipeline/metrics
-    func fetchDashboard() async throws -> DashboardData {
-        return try await get(path: "/api/v1/pipeline/metrics")
+    /// Fetch dashboard summary metrics.
+    /// GET /api/v1/dashboard/summary
+    ///
+    /// Note: This endpoint returns camelCase keys directly (not snake_case),
+    /// so we use a plain JSONDecoder instead of the shared `.convertFromSnakeCase`
+    /// decoder. CPDashboardData has explicit CodingKeys matching the camelCase response.
+    func fetchDashboard() async throws -> CPDashboardData {
+        let data = try await request(method: "GET", path: "/api/v1/dashboard/summary", query: nil, body: nil)
+        let plainDecoder = JSONDecoder()
+        do {
+            return try plainDecoder.decode(CPDashboardData.self, from: data)
+        } catch {
+            os_log("JSON decode error for /api/v1/dashboard/summary: %{public}@",
+                   log: log, type: .error, error.localizedDescription)
+            throw CarPlayAPIError.decodingFailed(path: "/api/v1/dashboard/summary", underlying: error)
+        }
     }
 
     /// Fetch pending tasks for the authenticated LO.
@@ -95,19 +107,22 @@ final class CarPlayAPIService: @unchecked Sendable {
     ///
     /// Uses the mobile tasks endpoint which queries the real `tasks` table
     /// and supports status filtering + overdue detection.
-    func fetchTasks() async throws -> [TaskItem] {
+    /// Response envelope: {"tasks": [...], "count": N, "filter": "..."}
+    /// The getArray helper extracts the "tasks" array via keyed-response fallback.
+    func fetchTasks() async throws -> [CPTaskItem] {
         return try await getArray(path: "/api/v1/mobile/tasks", query: [
             "status": "pending",
             "limit": "20",
         ])
     }
 
-    /// Fetch the most recently updated leads.
-    /// GET /api/v1/leads/?limit=20&sort=-updated_at
+    /// Fetch the most recently created leads (backend orders by created_at desc).
+    /// GET /api/v1/leads/?limit=20
+    /// Note: backend does not support a `sort` query param; it always returns
+    /// leads ordered by created_at descending.
     func fetchLeads() async throws -> [LeadItem] {
         return try await getArray(path: "/api/v1/leads/", query: [
             "limit": "20",
-            "sort": "-updated_at",
         ])
     }
 
@@ -120,18 +135,28 @@ final class CarPlayAPIService: @unchecked Sendable {
     }
 
     /// Fetch active rate monitor alerts.
-    /// GET /api/v1/rate-monitor/alerts
-    func fetchRateAlerts() async throws -> [RateAlert] {
-        return try await getArray(path: "/api/v1/rate-monitor/alerts", query: [
+    /// GET /api/v1/rate-monitor/alerts/carplay
+    func fetchRateAlerts() async throws -> [CPRateAlert] {
+        return try await getArray(path: "/api/v1/rate-monitor/alerts/carplay", query: [
             "limit": "20",
         ])
     }
 
     /// Fetch upcoming calendar events / appointments.
-    /// GET /api/v1/scheduler/appointments?upcoming=true&limit=10
+    /// GET /api/v1/scheduler/appointments?start_date=<today>&limit=10
+    ///
+    /// The scheduler appointments endpoint does not support an `upcoming`
+    /// param. Instead we pass today's date as `start_date` to fetch future
+    /// appointments. Response envelope: {"appointments": [...], "total": N}
+    /// — the getArray helper extracts the "appointments" array via keyed-response fallback.
     func fetchUpcomingEvents() async throws -> [CalendarEvent] {
+        let today = ISO8601DateFormatter.string(
+            from: Date(),
+            timeZone: .current,
+            formatOptions: [.withFullDate]
+        )
         return try await getArray(path: "/api/v1/scheduler/appointments", query: [
-            "upcoming": "true",
+            "start_date": today,
             "limit": "10",
         ])
     }

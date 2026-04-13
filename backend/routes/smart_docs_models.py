@@ -83,6 +83,9 @@ class AddCustomRequestBody(BaseModel):
     instructions: Optional[str] = None
     priority: str = "NORMAL"
     due_date: Optional[datetime] = None
+    doc_type: Optional[str] = None
+    requires_esign: bool = False
+    esign_initiated: bool = False
     # Notification options
     send_notification: bool = False
     borrower_email: Optional[str] = None

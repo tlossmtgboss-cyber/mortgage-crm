@@ -332,8 +332,8 @@ async function handleSSOCallback(callbackUrl) {
 
   const data = await exchangeResponse.json();
 
-  // Store auth tokens and user data
-  await setAuth(data.access_token, data.user);
+  // Store auth tokens and user data (including refresh token for proactive refresh)
+  await setAuth(data.access_token, data.user, data.refresh_token);
 
   // Store SSO-specific data for refresh flow
   if (data.refresh_token) {
@@ -399,11 +399,11 @@ async function refreshSSOToken() {
 
     const data = await response.json();
 
-    // Update stored token
+    // Update stored token (pass refresh token for proactive refresh)
     const currentUser = await getItem(STORAGE_KEYS.USER);
     const user = currentUser ? JSON.parse(currentUser) : null;
     if (user) {
-      await setAuth(data.access_token, user);
+      await setAuth(data.access_token, user, data.refresh_token);
     }
 
     // Update refresh token if a new one was issued

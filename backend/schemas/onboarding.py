@@ -3,6 +3,8 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 import re
 
+from utils.validators import validate_nmls
+
 
 class BusinessHours(BaseModel):
     """Business hours for each day of the week"""
@@ -37,11 +39,12 @@ class Step1Data(BaseModel):
         return v
 
     @validator('nmls_number')
-    def validate_nmls(cls, v):
-        """Validate NMLS number is numeric"""
-        if not v.isdigit():
-            raise ValueError('NMLS number must contain only digits')
-        return v
+    def validate_nmls_number(cls, v):
+        """Validate NMLS number format (5-12 digits)."""
+        result = validate_nmls(v)
+        if result is None:
+            raise ValueError('Invalid NMLS format. Must be 5-12 digits.')
+        return result
 
 
 class OnboardingProgressResponse(BaseModel):

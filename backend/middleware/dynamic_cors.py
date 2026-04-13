@@ -3,10 +3,14 @@ Dynamic CORS Middleware
 
 Custom CORS middleware that checks origins against database.
 Supports both static and dynamically configured custom domains.
+
+Environment-aware: localhost origins are only allowed in development mode.
+Production mode is detected via ENVIRONMENT or RAILWAY_ENVIRONMENT env vars.
 """
 
 import logging
-from typing import Callable
+import os
+from typing import Callable, Optional, Set
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -15,12 +19,30 @@ from starlette.types import ASGIApp
 logger = logging.getLogger(__name__)
 
 
+def _is_production() -> bool:
+    """Detect production environment from env vars."""
+    env = os.getenv("ENVIRONMENT", os.getenv("RAILWAY_ENVIRONMENT", "development"))
+    return env.lower() == "production"
+
+
+def _get_railway_public_domain() -> Optional[str]:
+    """Get this deployment's own Railway public domain (if any)."""
+    return os.getenv("RAILWAY_PUBLIC_DOMAIN")
+
+
 class DynamicCORSMiddleware(BaseHTTPMiddleware):
     """
     CORS middleware with dynamic origin checking.
 
     Uses CustomDomainService to check if origins are allowed,
     with caching for performance.
+
+    Security properties:
+    - Origins are checked against an explicit allowlist (never wildcard)
+    - localhost origins are only permitted in non-production environments
+    - railway.app subdomains are restricted to this deployment's own domain
+    - Custom domains are validated via database lookup (CustomDomainService)
+    - Wildcard values for methods/headers/expose_headers are rejected
     """
 
     # SECURITY: Explicit allowlists instead of wildcards
@@ -38,15 +60,38 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         "X-CSRF-Token",
         "X-Request-ID",
         "X-Visitor-ID",
+        "X-API-Key",
+        "X-Impersonation-Token",
+        "X-Mask-PII",
     ]
     DEFAULT_EXPOSE_HEADERS = [
         "Content-Length",
         "Content-Type",
         "X-Request-ID",
+        "X-Response-Time",
         "X-RateLimit-Limit",
         "X-RateLimit-Remaining",
         "X-RateLimit-Reset",
     ]
+
+    # Production origins (always allowed)
+    _PRODUCTION_ORIGINS: Set[str] = {
+        "https://perenniaai.com",
+        "https://www.perenniaai.com",
+        "https://app.perenniaai.com",
+        "https://api.perenniaai.com",
+        # Capacitor iOS/Android app origins (used in production builds)
+        "capacitor://localhost",
+        "ionic://localhost",
+        "http://localhost",
+    }
+
+    # Development-only origins (never allowed in production)
+    _DEV_ORIGINS: Set[str] = {
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:5173",
+    }
 
     def __init__(
         self,
@@ -59,12 +104,45 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
     ):
         super().__init__(app)
         self.allow_credentials = allow_credentials
-        # SECURITY FIX: Use explicit allowlists instead of wildcards
+        self.is_production = _is_production()
+        self._railway_domain = _get_railway_public_domain()
+
+        # SECURITY: Reject wildcard values — force explicit allowlists
+        if allow_methods == ["*"]:
+            logger.warning(
+                "CORS allow_methods=['*'] rejected — using explicit default list"
+            )
+            allow_methods = None
+        if allow_headers == ["*"]:
+            logger.warning(
+                "CORS allow_headers=['*'] rejected — using explicit default list"
+            )
+            allow_headers = None
+        if expose_headers == ["*"]:
+            logger.warning(
+                "CORS expose_headers=['*'] rejected — using explicit default list"
+            )
+            expose_headers = None
+
         self.allow_methods = allow_methods or self.DEFAULT_ALLOWED_METHODS
         self.allow_headers = allow_headers or self.DEFAULT_ALLOWED_HEADERS
         self.expose_headers = expose_headers or self.DEFAULT_EXPOSE_HEADERS
         self.max_age = max_age
         self._domain_service = None
+
+        # Build static origin set once at startup
+        self._static_origins: Set[str] = set(self._PRODUCTION_ORIGINS)
+        if not self.is_production:
+            self._static_origins.update(self._DEV_ORIGINS)
+        if self._railway_domain:
+            self._static_origins.add(f"https://{self._railway_domain}")
+
+        logger.info(
+            "CORS middleware initialized: production=%s, static_origins=%d, max_age=%d",
+            self.is_production,
+            len(self._static_origins),
+            self.max_age,
+        )
 
     @property
     def domain_service(self):
@@ -80,42 +158,50 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         return self._domain_service
 
     def is_allowed_origin(self, origin: str) -> bool:
-        """Check if origin is allowed."""
+        """Check if origin is allowed.
+
+        Order of checks:
+        1. Static origin set (production domains + dev domains if non-prod)
+        2. *.perenniaai.com subdomains (validated suffix match)
+        3. This deployment's own Railway domain (exact match, not all *.railway.app)
+        4. Custom domains via database lookup (CustomDomainService)
+        """
         if not origin:
             return False
 
-        # ALWAYS allow these domains first (before checking domain service)
-        # This ensures CORS works even if domain service fails
-        always_allowed = {
-            "http://localhost:3000",
-            "http://localhost:3001",
-            "http://localhost:5173",
-            "https://perenniaai.com",
-            "https://www.perenniaai.com",
-            "https://app.perenniaai.com",
-            "https://api.perenniaai.com",
-        }
-
-        if origin in always_allowed:
+        # 1. Check static origin set (fast path)
+        if origin in self._static_origins:
             return True
 
-        # Allow perenniaai.com subdomains (validated suffix match)
+        # 2. Allow perenniaai.com subdomains (validated suffix match)
         from urllib.parse import urlparse
         try:
             parsed = urlparse(origin)
             hostname = parsed.hostname or ""
         except Exception as e:
             logger.exception(f"Failed to parse origin URL '{origin}': {e}")
-            hostname = ""
+            return False
 
         if hostname == "perenniaai.com" or hostname.endswith(".perenniaai.com"):
             return True
 
-        # Allow railway.app subdomains (production hosting — suffix match only)
+        # 3. Railway.app: only allow this deployment's own domain, not all subdomains.
+        # In production, open *.railway.app is a security risk because any Railway
+        # user could deploy an app that sends credentialed cross-origin requests.
         if hostname.endswith(".railway.app"):
-            return True
+            if self._railway_domain and hostname == self._railway_domain:
+                return True
+            if not self.is_production:
+                # In development, allow any railway.app subdomain for convenience
+                return True
+            logger.warning(
+                "Rejected railway.app origin %s (not this deployment's domain %s)",
+                origin,
+                self._railway_domain,
+            )
+            return False
 
-        # Use domain service for custom domains if available
+        # 4. Use domain service for custom domains if available
         try:
             if self.domain_service:
                 return self.domain_service.is_allowed_origin(origin)
@@ -157,22 +243,30 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         return response
 
     def _add_cors_headers(self, response: Response, origin: str) -> None:
-        """Add CORS headers to response."""
+        """Add CORS headers to response.
+
+        Always uses the specific origin (never wildcard) since we validate
+        origins in is_allowed_origin() and allow_credentials=True requires
+        a specific origin per the CORS spec.
+        """
         response.headers["Access-Control-Allow-Origin"] = origin
 
         if self.allow_credentials:
             response.headers["Access-Control-Allow-Credentials"] = "true"
 
         if self.allow_methods:
-            methods = ", ".join(self.allow_methods) if self.allow_methods != ["*"] else "*"
-            response.headers["Access-Control-Allow-Methods"] = methods
+            response.headers["Access-Control-Allow-Methods"] = ", ".join(
+                self.allow_methods
+            )
 
         if self.allow_headers:
-            headers = ", ".join(self.allow_headers) if self.allow_headers != ["*"] else "*"
-            response.headers["Access-Control-Allow-Headers"] = headers
+            response.headers["Access-Control-Allow-Headers"] = ", ".join(
+                self.allow_headers
+            )
 
         if self.expose_headers:
-            expose = ", ".join(self.expose_headers) if self.expose_headers != ["*"] else "*"
-            response.headers["Access-Control-Expose-Headers"] = expose
+            response.headers["Access-Control-Expose-Headers"] = ", ".join(
+                self.expose_headers
+            )
 
         response.headers["Access-Control-Max-Age"] = str(self.max_age)

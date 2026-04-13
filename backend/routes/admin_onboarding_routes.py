@@ -22,6 +22,7 @@ from utils.error_handling import (
     success_response
 )
 from email_service import email_service
+from utils.validators import validate_nmls
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/admin-onboarding", tags=["Admin Onboarding"])
@@ -84,6 +85,10 @@ class UserProfileRequest(BaseModel):
     nmls_number: Optional[str] = Field(None, max_length=20)
     timezone: str = Field('America/New_York')
     headshot_url: Optional[str] = Field(None)
+
+    @validator('nmls_number')
+    def validate_nmls_number(cls, v):
+        return validate_nmls(v)
 
 
 class TeamInvite(BaseModel):

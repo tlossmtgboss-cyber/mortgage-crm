@@ -16,6 +16,8 @@ class ShareExtensionBridge: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "syncAuthToken", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPendingUploads", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "clearPendingUpload", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "getSharedItems", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearSharedItem", returnType: CAPPluginReturnPromise),
     ]
 
     private static let appGroupID = "group.com.perenniaai.crm"
@@ -94,6 +96,55 @@ class ShareExtensionBridge: CAPPlugin, CAPBridgedPlugin {
         }
 
         call.resolve(["removed": uploads.count < countBefore])
+    }
+
+    // MARK: - Shared Text/URL Items
+
+    /// Returns text/URL items shared via the share extension (links, text snippets).
+    @objc func getSharedItems(_ call: CAPPluginCall) {
+        guard let sharedDefaults = UserDefaults(suiteName: ShareExtensionBridge.appGroupID) else {
+            call.resolve(["items": []])
+            return
+        }
+
+        guard let data = sharedDefaults.data(forKey: "PendingSharedItems") else {
+            call.resolve(["items": []])
+            return
+        }
+
+        if let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
+            call.resolve(["items": items])
+        } else {
+            call.resolve(["items": []])
+        }
+    }
+
+    /// Removes a shared text/URL item after it has been processed by the main app.
+    @objc func clearSharedItem(_ call: CAPPluginCall) {
+        guard let itemId = call.getString("id") else {
+            call.reject("Missing item id")
+            return
+        }
+
+        guard let sharedDefaults = UserDefaults(suiteName: ShareExtensionBridge.appGroupID) else {
+            call.reject("Failed to access App Group UserDefaults")
+            return
+        }
+
+        guard let data = sharedDefaults.data(forKey: "PendingSharedItems"),
+              var items = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] else {
+            call.resolve(["removed": false])
+            return
+        }
+
+        let countBefore = items.count
+        items.removeAll { $0["id"] == itemId }
+
+        if let newData = try? JSONSerialization.data(withJSONObject: items) {
+            sharedDefaults.set(newData, forKey: "PendingSharedItems")
+        }
+
+        call.resolve(["removed": items.count < countBefore])
     }
 }
 

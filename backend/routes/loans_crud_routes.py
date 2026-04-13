@@ -543,6 +543,15 @@ async def create_loan(
 
         logger.info(f"Loan created: {db_loan.loan_number} (ID: {db_loan.id}, Stage: {db_loan.stage})")
 
+        # Invalidate pipeline cache for this org
+        try:
+            from services.cache_service import cache_delete_pattern
+            _org = getattr(db_loan, "organization_id", None)
+            if _org:
+                cache_delete_pattern(f"pipeline:*:org:{_org}:*")
+        except Exception as e:
+            logger.debug(f"Pipeline cache invalidation after create: {e}")
+
         # Build response dict BEFORE post-commit operations so a sync failure
         # cannot corrupt the ORM object or prevent returning the result (DATA-008)
         response = _loan_to_dict(db_loan)
@@ -584,11 +593,21 @@ async def get_loans(
 ):
     """Get all loans with optional stage filtering and permission-based access."""
     from sqlalchemy import text
+    from services.cache_service import cache_get, cache_set
+
     Loan, User = get_models()
     filter_loans_by_permissions = get_permission_functions()
 
     # Enforce pagination limits (PERF-001)
     limit, skip = clamp_pagination(limit, skip)
+
+    # Redis cache — keyed by user + org + query params, 30s TTL
+    user_id = getattr(current_user, "id", None)
+    org_id = getattr(current_user, "organization_id", None)
+    cache_key = f"pipeline:loans:user:{user_id}:org:{org_id}:s:{skip}:l:{limit}:st:{stage or 'all'}"
+    cached = cache_get(cache_key)
+    if cached is not None:
+        return cached
 
     try:
         query = db.query(Loan)
@@ -602,7 +621,7 @@ async def get_loans(
         # Resolve org-wide Production Assistant 1 name (single query for all loans)
         pa_name = None
         try:
-            org_id = current_user.organization_id or 1
+            _org_id = current_user.organization_id or 1
             pa_row = db.execute(text("""
                 SELECT COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, '') as name
                 FROM default_role_assignments dra
@@ -610,7 +629,7 @@ async def get_loans(
                 JOIN users u ON u.id = dra.user_id
                 WHERE dra.organization_id = :org_id AND r.name = 'Production Assistant 1'
                 LIMIT 1
-            """), {"org_id": org_id}).fetchone()
+            """), {"org_id": _org_id}).fetchone()
             if pa_row:
                 pa_name = pa_row[0] if pa_row[0] and pa_row[0].strip() else None
         except Exception as e:
@@ -621,6 +640,8 @@ async def get_loans(
             d = _loan_to_dict(loan)
             d["production_assistant"] = pa_name
             result.append(d)
+
+        cache_set(cache_key, result, ttl=30)
         return result
 
     except Exception as e:
@@ -840,6 +861,15 @@ async def update_loan(
         db.refresh(loan)
         logger.info(f"Loan updated: {loan.loan_number} (ID: {loan.id})")
 
+        # Invalidate pipeline cache for this org
+        try:
+            from services.cache_service import cache_delete_pattern
+            _org = getattr(loan, "organization_id", None)
+            if _org:
+                cache_delete_pattern(f"pipeline:*:org:{_org}:*")
+        except Exception as e:
+            logger.debug(f"Pipeline cache invalidation after update: {e}")
+
         # Wire to SLA tracking — detect stage changes
         if "stage" in update_data:
             new_stage = update_data["stage"]
@@ -887,6 +917,16 @@ async def update_loan(
                         logger.info(f"ACO review queued for loan {loan.id} on stage {new_stage}")
                     except Exception as e:
                         logger.warning(f"ACO review trigger failed for loan {loan.id}: {e}")
+
+                # Push notification to LO on stage change
+                try:
+                    from routes.push_notification_routes import notify_loan_update
+                    lo_id = getattr(loan, "loan_officer_id", None) or getattr(current_user, "id", None)
+                    borrower = getattr(loan, "borrower_name", None) or getattr(loan, "loan_number", None) or f"Loan #{loan.id}"
+                    if lo_id:
+                        notify_loan_update(db, lo_id, borrower, new_stage, str(loan.id))
+                except Exception as e:
+                    logger.debug(f"Push notification on stage change failed for loan {loan.id}: {e}")
 
                 # Calendar-Pipeline Bridge: suggest closing appointment on conditional approval
                 try:
@@ -937,9 +977,19 @@ async def delete_loan(
         raise HTTPException(status_code=404, detail="Loan not found")
 
     try:
+        _org = getattr(loan, "organization_id", None)
         db.delete(loan)
         db.commit()
         logger.info(f"Loan deleted: {loan.loan_number} (ID: {loan_id})")
+
+        # Invalidate pipeline cache for this org
+        try:
+            from services.cache_service import cache_delete_pattern
+            if _org:
+                cache_delete_pattern(f"pipeline:*:org:{_org}:*")
+        except Exception as e:
+            logger.debug(f"Pipeline cache invalidation after delete: {e}")
+
         return {"message": "Loan deleted successfully"}
     except Exception as e:
         logger.error(f"Error deleting loan: {e}", exc_info=True)
@@ -963,6 +1013,17 @@ async def bulk_delete_loans(
         ).filter(Loan.id.in_(loan_ids)).delete(synchronize_session=False)
         db.commit()
         logger.info(f"Bulk deleted {deleted} loans")
+
+        # Invalidate pipeline cache for this org
+        if deleted:
+            try:
+                from services.cache_service import cache_delete_pattern
+                _org = getattr(current_user, "organization_id", None)
+                if _org:
+                    cache_delete_pattern(f"pipeline:*:org:{_org}:*")
+            except Exception as e:
+                logger.debug(f"Pipeline cache invalidation after bulk delete: {e}")
+
         return {"deleted": deleted}
     except Exception as e:
         logger.error(f"Error bulk deleting loans: {e}", exc_info=True)

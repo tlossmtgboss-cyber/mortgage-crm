@@ -5,6 +5,7 @@ import api from '../services/api';
 import { useVirtualList } from '../hooks/useVirtualList';
 import { toast } from '../utils/toast';
 import MobileBottomNav from '../components/mobile/MobileBottomNav';
+import { CardSkeleton } from '../components/SkeletonLoader';
 import './MobilePipelineView.css';
 
 // ---------------------------------------------------------------------------
@@ -82,16 +83,8 @@ const truncate = (str, len = 40) => {
 };
 
 // ---------------------------------------------------------------------------
-// Skeleton card placeholder
+// Skeleton card placeholder -- uses shared SkeletonLoader component
 // ---------------------------------------------------------------------------
-const SkeletonCard = () => (
-  <div className="mp-card mp-card--skeleton" aria-hidden="true">
-    <div className="mp-skel mp-skel--name" />
-    <div className="mp-skel mp-skel--amount" />
-    <div className="mp-skel mp-skel--address" />
-    <div className="mp-skel mp-skel--footer" />
-  </div>
-);
 
 // ---------------------------------------------------------------------------
 // Loan Card
@@ -552,13 +545,7 @@ const MobilePipelineView = () => {
         onTouchEnd={handleTouchEnd}
       >
         {/* Loading skeleton */}
-        {isLoading && (
-          <>
-            <SkeletonCard />
-            <SkeletonCard />
-            <SkeletonCard />
-          </>
-        )}
+        {isLoading && <CardSkeleton count={4} />}
 
         {/* Error state */}
         {isError && !isLoading && (

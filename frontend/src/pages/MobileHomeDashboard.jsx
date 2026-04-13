@@ -5,6 +5,7 @@ import { getCurrentUser } from '../utils/auth';
 import { ensureArray } from '../utils/arrayHelpers';
 import { initAuditLogger, auditLog, AUDIT_EVENTS } from '../services/mobileAuditLogger';
 import MobileBottomNav from '../components/mobile/MobileBottomNav';
+import { StatsSkeleton as StatsSkeletonShared, ListSkeleton } from '../components/SkeletonLoader';
 import './MobileHomeDashboard.css';
 
 /**
@@ -94,63 +95,9 @@ function formatTime(dateStr) {
 }
 
 // ---------------------------------------------------------------------------
-// Skeleton loaders
+// Skeleton loaders -- shared SkeletonLoader replaces most inline skeletons.
+// StatsSkeleton and ListSkeleton imported from components/SkeletonLoader.
 // ---------------------------------------------------------------------------
-
-function StatsSkeleton() {
-  return (
-    <div className="mhd-stats-grid">
-      {[1, 2, 3, 4, 5].map((i) => (
-        <div key={i} className="mhd-stat-card mhd-skeleton-card">
-          <div className="mhd-skeleton-line mhd-skeleton-number" />
-          <div className="mhd-skeleton-line mhd-skeleton-label" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function AlertsSkeleton() {
-  return (
-    <div className="mhd-alerts">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="mhd-alert-item mhd-skeleton-card">
-          <div className="mhd-skeleton-line mhd-skeleton-wide" />
-          <div className="mhd-skeleton-line mhd-skeleton-narrow" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ScheduleSkeleton() {
-  return (
-    <div className="mhd-schedule-list">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="mhd-schedule-item mhd-skeleton-card">
-          <div className="mhd-skeleton-line mhd-skeleton-narrow" />
-          <div className="mhd-skeleton-line mhd-skeleton-wide" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ActivitySkeleton() {
-  return (
-    <div className="mhd-activity-list">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="mhd-activity-item mhd-skeleton-card">
-          <div className="mhd-skeleton-circle" />
-          <div style={{ flex: 1 }}>
-            <div className="mhd-skeleton-line mhd-skeleton-wide" />
-            <div className="mhd-skeleton-line mhd-skeleton-narrow" />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // SVG Icons (inline to avoid extra dependencies)
@@ -580,7 +527,7 @@ const MobileHomeDashboard = () => {
 
       {/* 2. Quick stats 2x2 */}
       {statsLoading ? (
-        <StatsSkeleton />
+        <StatsSkeletonShared count={5} />
       ) : (
         <div className="mhd-stats-grid">
           <button
@@ -656,7 +603,7 @@ const MobileHomeDashboard = () => {
         </div>
 
         {alertsLoading ? (
-          <AlertsSkeleton />
+          <ListSkeleton count={3} />
         ) : alerts && alerts.length > 0 ? (
           <div className="mhd-alerts">
             {alerts.map((alert) => (
@@ -693,7 +640,7 @@ const MobileHomeDashboard = () => {
         </div>
 
         {workflowTasksLoading ? (
-          <AlertsSkeleton />
+          <ListSkeleton count={3} />
         ) : workflowTasks && workflowTasks.length > 0 ? (
           <div className="mhd-workflow-tasks">
             {workflowTasks.map((task) => (
@@ -774,7 +721,7 @@ const MobileHomeDashboard = () => {
         </div>
 
         {scheduleLoading ? (
-          <ScheduleSkeleton />
+          <ListSkeleton count={3} />
         ) : schedule && schedule.length > 0 ? (
           <div className="mhd-schedule-list">
             {schedule.map((event) => (
@@ -872,7 +819,7 @@ const MobileHomeDashboard = () => {
         </div>
 
         {activityLoading ? (
-          <ActivitySkeleton />
+          <ListSkeleton count={3} />
         ) : activity && activity.length > 0 ? (
           <div className="mhd-activity-list">
             {activity.map((item) => (

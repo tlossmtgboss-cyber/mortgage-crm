@@ -21,7 +21,16 @@
 import Foundation
 import CoreSpotlight
 import UniformTypeIdentifiers
-import Capacitor
+
+// MARK: - Paginated Response Helper
+
+private struct SpotlightPaginatedResults<T: Decodable>: Decodable {
+    let results: [T]?
+    let data: [T]?
+    let items: [T]?
+    let tasks: [T]?
+    let leads: [T]?
+}
 
 // MARK: - Domain Constants
 
@@ -40,28 +49,32 @@ private enum SpotlightPrefix {
 // MARK: - API Response Models
 
 /// Minimal lead representation from /api/v1/leads/
+/// Backend returns `name` (combined full name) and optional `first_name`/`last_name`.
+/// There is no `company` field in the leads API response.
 private struct APILead: Decodable {
     let id: Int
+    let name: String?
     let first_name: String?
     let last_name: String?
     let email: String?
     let phone: String?
     let stage: String?
-    let company: String?
+    let source: String?
 }
 
 /// Minimal loan representation from /api/v1/loans/
+/// Backend returns `borrower_name` (single combined field) and `amount` (not `loan_amount`).
 private struct APILoan: Decodable {
     let id: Int
-    let borrower_first_name: String?
-    let borrower_last_name: String?
-    let loan_amount: Double?
+    let borrower_name: String?
+    let amount: Double?
     let stage: String?
     let property_address: String?
     let loan_number: String?
 }
 
-/// Minimal task representation from /api/v1/tasks/
+/// Minimal task representation from /api/v1/mobile/tasks
+/// The mobile tasks endpoint returns {"tasks": [...], "count": N, "filter": "..."}
 private struct APITask: Decodable {
     let id: Int
     let title: String?
@@ -69,6 +82,7 @@ private struct APITask: Decodable {
     let due_date: String?
     let priority: String?
     let status: String?
+    let is_overdue: Bool?
 }
 
 // MARK: - SpotlightIndexer
@@ -84,7 +98,7 @@ final class SpotlightIndexer {
 
     // MARK: - Configuration
 
-    private let apiBaseURL = "https://api.perenniaai.com"
+    private let apiBaseURL = APIConfig.apiBaseURL
     private let maxItemsPerCategory = 500
     private let leadExpirationDays: TimeInterval = 30 * 24 * 60 * 60  // 30 days
     private let taskExpirationDaysAfterDue: TimeInterval = 7 * 24 * 60 * 60  // 7 days after due
@@ -223,21 +237,21 @@ final class SpotlightIndexer {
             case "lead":
                 let lead = APILead(
                     id: id,
+                    name: data["name"] as? String,
                     first_name: data["first_name"] as? String,
                     last_name: data["last_name"] as? String,
                     email: data["email"] as? String,
                     phone: data["phone"] as? String,
                     stage: data["stage"] as? String,
-                    company: data["company"] as? String
+                    source: data["source"] as? String
                 )
                 item = self.searchableItem(forLead: lead)
 
             case "loan":
                 let loan = APILoan(
                     id: id,
-                    borrower_first_name: data["borrower_first_name"] as? String,
-                    borrower_last_name: data["borrower_last_name"] as? String,
-                    loan_amount: data["loan_amount"] as? Double,
+                    borrower_name: data["borrower_name"] as? String,
+                    amount: data["amount"] as? Double,
                     stage: data["stage"] as? String,
                     property_address: data["property_address"] as? String,
                     loan_number: data["loan_number"] as? String
@@ -251,7 +265,8 @@ final class SpotlightIndexer {
                     description: data["description"] as? String,
                     due_date: data["due_date"] as? String,
                     priority: data["priority"] as? String,
-                    status: data["status"] as? String
+                    status: data["status"] as? String,
+                    is_overdue: data["is_overdue"] as? Bool
                 )
                 item = self.searchableItem(forTask: task)
 
@@ -345,27 +360,90 @@ final class SpotlightIndexer {
     // MARK: - API Fetching
 
     /// Fetch leads from the API.
+    /// GET /api/v1/leads/ returns a bare JSON array. Supports `limit`, `skip`, `pipeline` params.
     private func fetchLeads(completion: @escaping ([APILead]) -> Void) {
         fetchFromAPI(
-            path: "/api/v1/leads/?limit=\(maxItemsPerCategory)&sort=-updated_at",
+            path: "/api/v1/leads/?limit=\(maxItemsPerCategory)&pipeline=all",
             completion: completion
         )
     }
 
     /// Fetch loans from the API.
+    /// GET /api/v1/loans/ returns a bare JSON array. Supports `limit`, `skip`, `stage` params.
     private func fetchLoans(completion: @escaping ([APILoan]) -> Void) {
         fetchFromAPI(
-            path: "/api/v1/loans/?limit=\(maxItemsPerCategory)&sort=-updated_at",
+            path: "/api/v1/loans/?limit=\(maxItemsPerCategory)",
             completion: completion
         )
     }
 
     /// Fetch pending tasks from the API.
+    /// GET /api/v1/mobile/tasks returns {"tasks": [...], "count": N, "filter": "..."}.
+    /// Uses the `status=pending` filter to get actionable tasks.
     private func fetchTasks(completion: @escaping ([APITask]) -> Void) {
-        fetchFromAPI(
-            path: "/api/v1/tasks/?limit=\(maxItemsPerCategory)&status=pending&sort=-due_date",
-            completion: completion
-        )
+        fetchTasksFromMobileAPI(completion: completion)
+    }
+
+    /// Fetch tasks from the mobile tasks endpoint which wraps results in {"tasks": [...]}.
+    private func fetchTasksFromMobileAPI(completion: @escaping ([APITask]) -> Void) {
+        guard let token = getAuthToken(),
+              let url = URL(string: apiBaseURL + "/api/v1/mobile/tasks?limit=\(maxItemsPerCategory)&status=pending") else {
+            completion([])
+            return
+        }
+
+        var request = URLRequest(url: url)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.timeoutInterval = 30
+
+        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+            guard let data = data, error == nil else {
+                if let error = error {
+                    NSLog("[SpotlightIndexer] API fetch error for mobile/tasks: %@", error.localizedDescription)
+                }
+                completion([])
+                return
+            }
+
+            // Check HTTP status
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+                NSLog("[SpotlightIndexer] API returned %d for mobile/tasks", httpResponse.statusCode)
+                if httpResponse.statusCode == 401 {
+                    AuditLogger.shared.log(event: .authFailure, details: [
+                        "source": "spotlight_index",
+                        "path": "/api/v1/mobile/tasks",
+                        "status": "401"
+                    ])
+                }
+                completion([])
+                return
+            }
+
+            let decoder = JSONDecoder()
+
+            // Mobile tasks endpoint returns {"tasks": [...], "count": N, "filter": "..."}
+            struct MobileTasksResponse: Decodable {
+                let tasks: [APITask]?
+                let count: Int?
+            }
+
+            if let wrapper = try? decoder.decode(MobileTasksResponse.self, from: data),
+               let tasks = wrapper.tasks {
+                completion(Array(tasks.prefix(self.maxItemsPerCategory)))
+                return
+            }
+
+            // Fallback: try bare array
+            if let items = try? decoder.decode([APITask].self, from: data) {
+                completion(Array(items.prefix(self.maxItemsPerCategory)))
+                return
+            }
+
+            NSLog("[SpotlightIndexer] Failed to decode mobile tasks response")
+            completion([])
+        }
+        task.resume()
     }
 
     /// Generic API fetch with JSON decoding.
@@ -415,16 +493,12 @@ final class SpotlightIndexer {
             }
 
             // Try paginated wrapper with common key names
-            struct PaginatedResults: Decodable {
-                let results: [T]?
-                let data: [T]?
-                let items: [T]?
-            }
-
-            if let wrapper = try? decoder.decode(PaginatedResults.self, from: data) {
-                let items = wrapper.results ?? wrapper.data ?? wrapper.items ?? []
-                completion(Array(items.prefix(self.maxItemsPerCategory)))
-                return
+            if let wrapper = try? decoder.decode(SpotlightPaginatedResults<T>.self, from: data) {
+                let items = wrapper.results ?? wrapper.data ?? wrapper.items ?? wrapper.tasks ?? wrapper.leads ?? []
+                if !items.isEmpty {
+                    completion(Array(items.prefix(self.maxItemsPerCategory)))
+                    return
+                }
             }
 
             NSLog("[SpotlightIndexer] Failed to decode response for %@", path)
@@ -447,9 +521,15 @@ final class SpotlightIndexer {
         attributes.displayName = "Lead \u{2014} \(stage)"
 
         // Content description: PII details (only visible after device unlock)
-        let firstName = lead.first_name ?? ""
-        let lastName = lead.last_name ?? ""
-        let fullName = [firstName, lastName].filter { !$0.isEmpty }.joined(separator: " ")
+        // Backend returns `name` (combined) as primary, with optional first_name/last_name
+        let fullName: String
+        if let name = lead.name, !name.isEmpty {
+            fullName = name
+        } else {
+            let firstName = lead.first_name ?? ""
+            let lastName = lead.last_name ?? ""
+            fullName = [firstName, lastName].filter { !$0.isEmpty }.joined(separator: " ")
+        }
         var descParts: [String] = []
         if !fullName.isEmpty { descParts.append(fullName) }
         if let phone = lead.phone, !phone.isEmpty {
@@ -458,8 +538,8 @@ final class SpotlightIndexer {
         if let email = lead.email, !email.isEmpty {
             descParts.append(email)
         }
-        if let company = lead.company, !company.isEmpty {
-            descParts.append(company)
+        if let source = lead.source, !source.isEmpty {
+            descParts.append(source)
         }
         attributes.contentDescription = descParts.isEmpty
             ? "Lead #\(lead.id)"
@@ -470,35 +550,29 @@ final class SpotlightIndexer {
 
         // Contact fields
         if let email = lead.email {
-            attributes.supportsEmailAddress = true as NSNumber
             attributes.emailAddresses = [email]
         }
         if let phone = lead.phone {
-            attributes.supportsPhoneCall = true as NSNumber
             attributes.phoneNumbers = [phone]
-        }
-        if let company = lead.company {
-            attributes.organizationName = company
         }
 
         // Thumbnail — system person icon
         attributes.thumbnailData = personIconData()
 
-        // Keywords for search
+        // Keywords for search — split name into parts for better matching
         var keywords = ["lead", "contact", "mortgage"]
-        if !firstName.isEmpty { keywords.append(firstName.lowercased()) }
-        if !lastName.isEmpty { keywords.append(lastName.lowercased()) }
+        let nameParts = fullName.lowercased().split(separator: " ").map(String.init)
+        keywords.append(contentsOf: nameParts)
         keywords.append(stage.lowercased())
         attributes.keywords = keywords
 
-        // Expiration
-        attributes.expirationDate = Date().addingTimeInterval(leadExpirationDays)
-
-        return CSSearchableItem(
+        let item = CSSearchableItem(
             uniqueIdentifier: uniqueID,
             domainIdentifier: SpotlightDomain.leads,
             attributeSet: attributes
         )
+        item.expirationDate = Date().addingTimeInterval(leadExpirationDays)
+        return item
     }
 
     /// Create a CSSearchableItem for a loan.
@@ -509,16 +583,15 @@ final class SpotlightIndexer {
         let uniqueID = "\(SpotlightPrefix.loan)\(loan.id)"
 
         // Title: non-PII label with stage (visible from lock screen)
-        let stage = loan.stage ?? "Application"
-        attributes.displayName = "Loan \u{2014} \(stage)"
+        let stage = loan.stage ?? "APPLICATION"
+        attributes.displayName = "Loan \u{2014} \(stage.capitalized)"
 
         // Content description: PII details (only visible after device unlock)
-        let firstName = loan.borrower_first_name ?? ""
-        let lastName = loan.borrower_last_name ?? ""
-        let borrowerName = [firstName, lastName].filter { !$0.isEmpty }.joined(separator: " ")
+        // Backend returns `borrower_name` (single combined field) and `amount` (not `loan_amount`)
+        let borrowerName = loan.borrower_name ?? ""
         var descParts: [String] = []
         if !borrowerName.isEmpty { descParts.append(borrowerName) }
-        if let amount = loan.loan_amount, amount > 0 {
+        if let amount = loan.amount, amount > 0 {
             let formatter = NumberFormatter()
             formatter.numberStyle = .currency
             formatter.currencyCode = "USD"
@@ -543,23 +616,22 @@ final class SpotlightIndexer {
         // Thumbnail — system document icon
         attributes.thumbnailData = documentIconData()
 
-        // Keywords
+        // Keywords — split borrower name into parts for better matching
         var keywords = ["loan", "mortgage", "pipeline"]
-        if !firstName.isEmpty { keywords.append(firstName.lowercased()) }
-        if !lastName.isEmpty { keywords.append(lastName.lowercased()) }
+        let nameParts = borrowerName.lowercased().split(separator: " ").map(String.init)
+        keywords.append(contentsOf: nameParts)
         keywords.append(stage.lowercased())
         if let loanNum = loan.loan_number { keywords.append(loanNum) }
         if let address = loan.property_address { keywords.append(address.lowercased()) }
         attributes.keywords = keywords
 
-        // Expiration
-        attributes.expirationDate = Date().addingTimeInterval(loanExpirationDays)
-
-        return CSSearchableItem(
+        let item = CSSearchableItem(
             uniqueIdentifier: uniqueID,
             domainIdentifier: SpotlightDomain.loans,
             attributeSet: attributes
         )
+        item.expirationDate = Date().addingTimeInterval(loanExpirationDays)
+        return item
     }
 
     /// Create a CSSearchableItem for a task.
@@ -603,18 +675,18 @@ final class SpotlightIndexer {
         if let priority = task.priority { keywords.append(priority.lowercased()) }
         attributes.keywords = keywords
 
-        // Expiration: 7 days after due date, or 30 days from now if no due date
-        if let dueDateStr = task.due_date, let dueDate = parseISO8601(dueDateStr) {
-            attributes.expirationDate = dueDate.addingTimeInterval(taskExpirationDaysAfterDue)
-        } else {
-            attributes.expirationDate = Date().addingTimeInterval(30 * 24 * 60 * 60)
-        }
-
-        return CSSearchableItem(
+        let item = CSSearchableItem(
             uniqueIdentifier: uniqueID,
             domainIdentifier: SpotlightDomain.tasks,
             attributeSet: attributes
         )
+        // Expiration: 7 days after due date, or 30 days from now if no due date
+        if let dueDateStr = task.due_date, let dueDate = parseISO8601(dueDateStr) {
+            item.expirationDate = dueDate.addingTimeInterval(taskExpirationDaysAfterDue)
+        } else {
+            item.expirationDate = Date().addingTimeInterval(30 * 24 * 60 * 60)
+        }
+        return item
     }
 
     // MARK: - Helpers
@@ -682,78 +754,5 @@ private extension UTType {
 }
 
 // MARK: - Capacitor Plugin
-
-/// Capacitor plugin that exposes Spotlight indexing to the React app.
-///
-/// Methods available from JavaScript:
-///   - SpotlightSearch.indexAllData({ force?: boolean })  — full re-index
-///   - SpotlightSearch.indexItem({ type, id, data })      — index one item
-///   - SpotlightSearch.removeItem({ type, id })           — remove one item
-///   - SpotlightSearch.removeAllItems()                   — clear all indexed data
-///   - SpotlightSearch.getIndexStatus()                   — check last index time
-@objc(SpotlightSearchPlugin)
-public class SpotlightSearchPlugin: CAPPlugin, CAPBridgedPlugin {
-
-    public let identifier = "SpotlightSearchPlugin"
-    public let jsName = "SpotlightSearch"
-    public let pluginMethods: [CAPPluginMethod] = [
-        CAPPluginMethod(name: "indexAllData", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "indexItem", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "removeItem", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "removeAllItems", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "getIndexStatus", returnType: CAPPluginReturnPromise)
-    ]
-
-    @objc func indexAllData(_ call: CAPPluginCall) {
-        let force = call.getBool("force") ?? false
-        SpotlightIndexer.shared.indexAllData(force: force)
-        call.resolve(["started": true])
-    }
-
-    @objc func indexItem(_ call: CAPPluginCall) {
-        guard let type = call.getString("type"),
-              let id = call.getInt("id") else {
-            call.reject("Missing required parameters: type, id")
-            return
-        }
-
-        let data = call.getObject("data") ?? [:]
-        var nativeData: [String: Any] = [:]
-        for (key, value) in data {
-            nativeData[key] = value
-        }
-
-        SpotlightIndexer.shared.indexItem(type: type, id: id, data: nativeData)
-        call.resolve(["indexed": true])
-    }
-
-    @objc func removeItem(_ call: CAPPluginCall) {
-        guard let type = call.getString("type"),
-              let id = call.getInt("id") else {
-            call.reject("Missing required parameters: type, id")
-            return
-        }
-
-        SpotlightIndexer.shared.removeItem(type: type, id: id)
-        call.resolve(["removed": true])
-    }
-
-    @objc func removeAllItems(_ call: CAPPluginCall) {
-        SpotlightIndexer.shared.removeAllItems()
-        call.resolve(["cleared": true])
-    }
-
-    @objc func getIndexStatus(_ call: CAPPluginCall) {
-        let indexer = SpotlightIndexer.shared
-        var result: [String: Any] = [
-            "shouldReindex": indexer.shouldReindex,
-            "isAuthenticated": KeychainService.shared.authToken != nil
-        ]
-
-        if let lastIndex = indexer.lastFullIndexDate {
-            result["lastIndexedAt"] = ISO8601DateFormatter().string(from: lastIndex)
-        }
-
-        call.resolve(result)
-    }
-}
+// The Capacitor plugin bridge (SpotlightSearchPlugin) has been extracted to
+// SpotlightSearchPlugin.swift for better code organization.

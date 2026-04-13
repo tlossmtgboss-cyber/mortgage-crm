@@ -5,13 +5,15 @@ ASGI middleware that establishes a correlation ID for every HTTP request,
 making it available throughout the request lifecycle via contextvars.
 
 Responsibilities:
-- Generates a unique request_id (UUID4 hex) for each incoming request
+- Generates a unique request_id (UUID4) for each incoming request
 - Accepts an incoming X-Request-ID header if present (distributed tracing)
-- Stores request_id in a ContextVar for access by any downstream code
+- Stores request_id in contextvars AND request.state for downstream access
 - Adds X-Request-ID to every response header
-- Logs request start and completion with duration_ms
-- Extracts user_id / org_id from request.state (set by auth middleware)
-- Skips logging for health-check and static asset paths
+- Structured JSON logging: method, path, status_code, response_time_ms,
+  user_id, organization_id, client_ip, user_agent
+- Log levels: INFO for 2xx/3xx, WARNING for 4xx, ERROR for 5xx
+- Skips health-check and static asset paths
+- PII protection: never logs request bodies; redacts sensitive query params
 
 This should be the outermost application middleware (added last in the
 FastAPI middleware stack) so that every piece of inner middleware and
@@ -82,8 +84,8 @@ def get_request_path() -> Optional[str]:
 # Configuration
 # ---------------------------------------------------------------------------
 
-# Paths that generate high volume and don't need per-request logging
-_SKIP_LOG_PATHS = frozenset({
+# Paths that generate high volume and provide no diagnostic value
+_SKIP_LOG_PATHS: frozenset[str] = frozenset({
     "/health",
     "/api/health",
     "/api/v1/health",
@@ -91,6 +93,57 @@ _SKIP_LOG_PATHS = frozenset({
     "/favicon.ico",
     "/robots.txt",
 })
+
+# Static file extensions -- skip logging to reduce noise
+_STATIC_EXTENSIONS: frozenset[str] = frozenset({
+    ".css", ".js", ".map", ".png", ".jpg", ".jpeg", ".gif",
+    ".svg", ".ico", ".woff", ".woff2", ".ttf", ".eot",
+})
+
+# Query param keys that must never appear in logs
+_SENSITIVE_QUERY_KEYS: frozenset[str] = frozenset({
+    "password", "token", "secret", "key",
+    "access_token", "refresh_token", "api_key",
+    "client_secret", "authorization",
+})
+
+
+def _is_static_path(path: str) -> bool:
+    """Check if the path looks like a static file request."""
+    dot_idx = path.rfind(".")
+    if dot_idx == -1:
+        return False
+    return path[dot_idx:].lower() in _STATIC_EXTENSIONS
+
+
+def _safe_query_string(query: str) -> Optional[str]:
+    """
+    Return query string with sensitive parameter values redacted.
+    Returns None if query is empty.
+    """
+    if not query:
+        return None
+    parts = []
+    for pair in query.split("&"):
+        eq_idx = pair.find("=")
+        if eq_idx == -1:
+            parts.append(pair)
+            continue
+        key = pair[:eq_idx].lower()
+        if key in _SENSITIVE_QUERY_KEYS:
+            parts.append(f"{pair[:eq_idx]}=[REDACTED]")
+        else:
+            parts.append(pair)
+    return "&".join(parts)
+
+
+def _get_client_ip(request: Request) -> Optional[str]:
+    """Extract client IP, preferring X-Forwarded-For for proxied requests."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        # First IP in the chain is the original client
+        return forwarded.split(",", 1)[0].strip()
+    return request.client.host if request.client else None
 
 
 def _extract_user_org(request: Request) -> tuple:
@@ -115,30 +168,49 @@ def _extract_user_org(request: Request) -> tuple:
     return user_id, org_id
 
 
+def _log_level_for_status(status_code: int) -> int:
+    """INFO for 2xx/3xx, WARNING for 4xx, ERROR for 5xx."""
+    if status_code >= 500:
+        return logging.ERROR
+    if status_code >= 400:
+        return logging.WARNING
+    return logging.INFO
+
+
 # ---------------------------------------------------------------------------
 # Middleware
 # ---------------------------------------------------------------------------
 
 class RequestContextMiddleware(BaseHTTPMiddleware):
     """
-    Outermost middleware that assigns a correlation ID to every request.
+    Outermost middleware that assigns a correlation ID to every request
+    and emits structured JSON logs for enterprise observability.
 
     1. Reads X-Request-ID from the incoming request (for distributed tracing)
-       or generates a new UUID4 hex string.
-    2. Stores request_id, method, and path in contextvars so that any logger
-       using RequestContextFilter (from utils.logging_config) automatically
-       includes them.
+       or generates a new UUID4.
+    2. Stores request_id in contextvars (for log injection via
+       RequestContextFilter) AND on request.state (for downstream handlers).
     3. Adds X-Request-ID to the response headers.
-    4. Logs request start and completion with duration_ms.
+    4. Emits a single structured log line per request on completion.
+    5. Skips health checks and static file requests.
     """
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        # 1. Generate or propagate correlation ID
-        request_id = request.headers.get(REQUEST_ID_HEADER) or uuid.uuid4().hex
         path = request.url.path
         method = request.method
 
-        # 2. Store in contextvars
+        # Fast exit for health checks and static files -- no logging, no overhead
+        if path in _SKIP_LOG_PATHS or _is_static_path(path):
+            response = await call_next(request)
+            return response
+
+        # 1. Generate or propagate correlation ID
+        request_id = request.headers.get(REQUEST_ID_HEADER) or uuid.uuid4().hex
+
+        # 2. Store on request.state so downstream handlers can access it
+        request.state.request_id = request_id
+
+        # 3. Store in contextvars for automatic log injection
         rid_token = _request_id_var.set(request_id)
         method_token = _method_var.set(method)
         path_token = _path_var.set(path)
@@ -148,20 +220,8 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         uid_token = _user_id_var.set(user_id)
         oid_token = _org_id_var.set(org_id)
 
-        skip_log = path in _SKIP_LOG_PATHS
-
-        if not skip_log:
-            logger.info(
-                "Request started",
-                extra={
-                    "event_type": "request_start",
-                    "request_id": request_id,
-                    "method": method,
-                    "path": path,
-                    "client_ip": request.client.host if request.client else None,
-                    "user_agent": (request.headers.get("user-agent") or "")[:200],
-                },
-            )
+        client_ip = _get_client_ip(request)
+        user_agent = (request.headers.get("user-agent") or "")[:200]
 
         start = time.monotonic()
         status_code = 500
@@ -171,22 +231,23 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
             status_code = response.status_code
         except Exception:
             duration_ms = round((time.monotonic() - start) * 1000, 2)
-            if not skip_log:
-                # Re-check user/org in case auth ran during the request
-                user_id_late, org_id_late = _extract_user_org(request)
-                logger.error(
-                    "Request failed with unhandled exception",
-                    extra={
-                        "event_type": "request_error",
-                        "request_id": request_id,
-                        "method": method,
-                        "path": path,
-                        "duration_ms": duration_ms,
-                        "user_id": user_id_late or user_id,
-                        "org_id": org_id_late or org_id,
-                    },
-                    exc_info=True,
-                )
+            # Re-check user/org in case auth ran during the request
+            user_id_late, org_id_late = _extract_user_org(request)
+            logger.error(
+                "Request failed with unhandled exception",
+                extra={
+                    "event_type": "request_error",
+                    "request_id": request_id,
+                    "method": method,
+                    "path": path,
+                    "response_time_ms": duration_ms,
+                    "user_id": user_id_late or user_id,
+                    "organization_id": org_id_late or org_id,
+                    "client_ip": client_ip,
+                    "user_agent": user_agent,
+                },
+                exc_info=True,
+            )
             raise
         finally:
             # Reset context vars to avoid leaking into other requests
@@ -198,29 +259,36 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
 
         duration_ms = round((time.monotonic() - start) * 1000, 2)
 
-        # 3. Add correlation ID to response
+        # 4. Add correlation ID and timing to response
         response.headers[REQUEST_ID_HEADER] = request_id
         response.headers["X-Response-Time"] = f"{duration_ms:.2f}ms"
 
-        if not skip_log:
-            # Re-check user/org in case auth ran during the request
-            user_id_late, org_id_late = _extract_user_org(request)
+        # Re-check user/org in case auth ran during the request
+        user_id_late, org_id_late = _extract_user_org(request)
 
-            log_level = logging.WARNING if status_code >= 400 else logging.INFO
-            logger.log(
-                log_level,
-                "Request completed",
-                extra={
-                    "event_type": "request_complete",
-                    "request_id": request_id,
-                    "method": method,
-                    "path": path,
-                    "status_code": status_code,
-                    "duration_ms": duration_ms,
-                    "user_id": user_id_late or user_id,
-                    "org_id": org_id_late or org_id,
-                    "response_size": response.headers.get("content-length"),
-                },
-            )
+        # 5. Single structured log line per completed request
+        log_level = _log_level_for_status(status_code)
+        logger.log(
+            log_level,
+            "%s %s %d %.0fms",
+            method,
+            path,
+            status_code,
+            duration_ms,
+            extra={
+                "event_type": "request_complete",
+                "request_id": request_id,
+                "method": method,
+                "path": path,
+                "query": _safe_query_string(request.url.query),
+                "status_code": status_code,
+                "response_time_ms": duration_ms,
+                "user_id": user_id_late or user_id,
+                "organization_id": org_id_late or org_id,
+                "client_ip": client_ip,
+                "user_agent": user_agent,
+                "response_size": response.headers.get("content-length"),
+            },
+        )
 
         return response

@@ -915,13 +915,57 @@ class ChannelAdapterService:
         body: str,
         context: Dict[str, Any],
     ) -> ChannelDeliveryResult:
-        """Send push notification (placeholder — requires push service integration)."""
-        # Push notifications would integrate with FCM/APNs
-        return ChannelDeliveryResult(
-            channel=ChannelType.PUSH,
-            status=DeliveryStatus.QUEUED,
-            message="Push notification queued",
-        )
+        """Send push notification via APNs/FCM to user's registered devices."""
+        if recipient_type != "user":
+            return ChannelDeliveryResult(
+                channel=ChannelType.PUSH,
+                status=DeliveryStatus.SKIPPED,
+                message=f"Push only supports user recipients, got {recipient_type}",
+            )
+
+        try:
+            from services.push_notification_service import send_push_to_user
+
+            title = context.get("subject") or context.get("title") or "Notification"
+            notification_type = context.get("notification_type", "general")
+            data = context.get("data")
+
+            result = send_push_to_user(
+                user_id=recipient_id,
+                title=title,
+                body=body[:500],
+                data=data,
+                notification_type=notification_type,
+                db=self.db,
+            )
+
+            sent = result.get("sent", 0)
+            if sent > 0:
+                return ChannelDeliveryResult(
+                    channel=ChannelType.PUSH,
+                    status=DeliveryStatus.SENT,
+                    message=f"Push sent to {sent} device(s)",
+                )
+            elif result.get("skipped", 0) > 0:
+                return ChannelDeliveryResult(
+                    channel=ChannelType.PUSH,
+                    status=DeliveryStatus.SKIPPED,
+                    message=result.get("reason", "No active devices or preference muted"),
+                )
+            else:
+                return ChannelDeliveryResult(
+                    channel=ChannelType.PUSH,
+                    status=DeliveryStatus.FAILED,
+                    message="Push failed for all devices",
+                )
+
+        except Exception as e:
+            logger.warning("Push notification send failed: %s", e)
+            return ChannelDeliveryResult(
+                channel=ChannelType.PUSH,
+                status=DeliveryStatus.FAILED,
+                message=f"Push send failed: {e}",
+            )
 
     def _send_in_app(
         self,

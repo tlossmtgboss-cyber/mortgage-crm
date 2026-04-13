@@ -742,6 +742,9 @@ from .device_token import PushNotificationPreference
 # GDPR recovery opt-outs
 from .recovery_opt_out import RecoveryOptOut
 
+# Mobile audit events (iOS AuditLogger hash-chain persistence, SOC 2)
+from .audit import MobileAuditEvent
+
 # GDPR data subject requests
 from .security import DataSubjectRequest
 
@@ -886,6 +889,11 @@ __all__ = [
     "SystemAlert",
     "SystemJobsLog",
     "Notification",
+
+    # =====================
+    # Mobile Audit (iOS hash-chain, SOC 2)
+    # =====================
+    "MobileAuditEvent",
 
     # =====================
     # Device Tokens (Push Notifications)

@@ -13,5 +13,6 @@ import SwiftUI
 struct PerenniaWidgetBundle: WidgetBundle {
     var body: some Widget {
         PerenniaWidget()
+        ClosingActivityLiveActivity()
     }
 }

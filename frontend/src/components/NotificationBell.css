@@ -25,6 +25,16 @@
   display: block;
 }
 
+.bell-icon-svg {
+  display: block;
+  color: #555;
+  transition: color 0.2s;
+}
+
+.notification-bell-button:hover .bell-icon-svg {
+  color: #0066cc;
+}
+
 .notification-badge {
   position: absolute;
   top: 0;
@@ -265,6 +275,14 @@
 
 /* Dark Mode Support (if needed) */
 @media (prefers-color-scheme: dark) {
+  .bell-icon-svg {
+    color: #ccc;
+  }
+
+  .notification-bell-button:hover .bell-icon-svg {
+    color: #4fc3f7;
+  }
+
   .notification-dropdown {
     background: #2a2a2a;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);

@@ -1,5 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { usePermissions } from '../contexts/PermissionContext';
 import { getAuthHeaders } from '../utils/auth';
 import './UserBulkUpload.css';
 
@@ -34,6 +36,13 @@ const FIELD_LABELS = {
 };
 
 function UserBulkUpload() {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - only admins can bulk upload users
+  const canBulkUpload = isAdmin || hasAnyPermission(['admin.manage', 'users.manage', 'users.create', 'system.admin']) ||
+    userRole === 'admin' || userRole === 'site_admin';
+
   const [stage, setStage] = useState(STAGES.UPLOAD);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -590,6 +599,21 @@ function UserBulkUpload() {
         return renderUploadStage();
     }
   };
+
+  // Access denied if user doesn't have bulk upload permissions
+  if (!canBulkUpload) {
+    return (
+      <div className="user-bulk-upload">
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to bulk upload users.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')} style={{ marginTop: '16px' }}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="user-bulk-upload">

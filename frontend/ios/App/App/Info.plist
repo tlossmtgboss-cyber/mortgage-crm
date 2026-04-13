@@ -83,6 +83,14 @@
 		<string>com.perenniaai.crm.viewProperty</string>
 		<string>com.perenniaai.crm.contactClient</string>
 		<string>com.perenniaai.crm.manageTask</string>
+		<string>com.perenniaai.crm.viewLead</string>
+		<string>com.perenniaai.crm.viewLoan</string>
+		<string>com.perenniaai.crm.viewTask</string>
+		<string>CheckPipelineIntent</string>
+		<string>AddLeadIntent</string>
+		<string>CallBorrowerIntent</string>
+		<string>CheckTasksIntent</string>
+		<string>QuickNoteIntent</string>
 	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
@@ -105,16 +113,21 @@
 					<key>UISceneConfigurationName</key>
 					<string>Default Configuration</string>
 					<key>UISceneDelegateClassName</key>
-					<string>$(PRODUCT_MODULE_NAME).AppDelegate</string>
+					<string>$(PRODUCT_MODULE_NAME).MainSceneDelegate</string>
 				</dict>
 			</array>
 		</dict>
 	</dict>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.perenniaai.crm.background-refresh</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
+		<string>processing</string>
 		<string>remote-notification</string>
 	</array>
 	<key>UILaunchStoryboardName</key>
@@ -140,26 +153,5 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<!-- MDM Managed App Configuration (AppConfig.org standard) -->
-	<key>com.apple.configuration.managed</key>
-	<dict>
-		<key>RequireBiometric</key>
-		<true/>
-		<key>SessionTimeoutMinutes</key>
-		<integer>15</integer>
-		<key>AllowScreenshots</key>
-		<true/>
-		<key>AllowClipboardSharing</key>
-		<true/>
-		<key>SSOProviderURL</key>
-		<string></string>
-		<key>MinimumOSVersion</key>
-		<string>15.0</string>
-		<key>AllowedDomains</key>
-		<array>
-			<string>api.perenniaai.com</string>
-			<string>app.perenniaai.com</string>
-		</array>
-	</dict>
 </dict>
 </plist>

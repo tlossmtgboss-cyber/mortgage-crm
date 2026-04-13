@@ -358,7 +358,8 @@ const useCallIntelligenceSession = ({
         return sid;
       } catch (err) {
         console.error('Failed to start session:', err);
-        setError('Failed to start recording session');
+        const detail = err.response?.data?.detail || err.message || 'Unknown error';
+        setError(`Failed to start recording session: ${detail}`);
         setIsStarting(false);
         return null;
       }

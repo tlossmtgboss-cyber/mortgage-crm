@@ -139,9 +139,18 @@ def configure_middleware(
         app.add_middleware(
             DynamicCORSMiddleware,
             allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
-            expose_headers=["*"],
+            # SECURITY: Use explicit allowlists — wildcards are rejected by the middleware
+            allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+            allow_headers=[
+                "Accept", "Accept-Language", "Authorization", "Content-Language",
+                "Content-Type", "Origin", "X-Requested-With", "X-CSRF-Token",
+                "X-Request-ID", "X-Visitor-ID", "X-API-Key", "X-Impersonation-Token",
+                "X-Mask-PII",
+            ],
+            expose_headers=[
+                "Content-Length", "Content-Type", "X-Request-ID", "X-Response-Time",
+                "X-RateLimit-Limit", "X-RateLimit-Remaining", "X-RateLimit-Reset",
+            ],
             max_age=3600,
         )
         logger.info("Dynamic CORS middleware enabled")

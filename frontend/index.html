@@ -5,12 +5,12 @@
     <link rel="icon" href="/favicon.ico" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#000000" />
-    <meta name="description" content="Agentic AI Mortgage CRM" />
+    <meta name="description" content="Aria — AI-Powered Loan Officer OS" />
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <meta name="cache-control" content="no-cache, no-store, must-revalidate, max-age=0, post-check=0, pre-check=0" />
-    <title>Mortgage CRM</title>
+    <title>Aria</title>
     <style>
       * {
         margin: 0;
@@ -61,23 +61,18 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script>
-      // Unregister all service workers and clear storage on load
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for (let registration of registrations) {
-            registration.unregister();
-            console.log('Service worker unregistered');
-          }
-        });
-      }
-
-      // Clear all caches
-      if ('caches' in window) {
-        caches.keys().then(function(names) {
-          for (let name of names) {
-            caches.delete(name);
-            console.log('Cache cleared:', name);
-          }
+      // Only register SW on web — WKWebView (iOS) doesn't support service workers
+      var isNative = (window.Capacitor && (
+        (typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
+        window.Capacitor.isNative
+      ));
+      if (!isNative && 'serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          navigator.serviceWorker.register('/sw.js').then(function(registration) {
+            console.log('Service worker registered, scope:', registration.scope);
+          }).catch(function(error) {
+            console.warn('Service worker registration failed:', error);
+          });
         });
       }
 

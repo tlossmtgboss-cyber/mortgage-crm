@@ -3,8 +3,17 @@
 
 const SW_URL = '/service-worker.js';
 
-// Check if service workers are supported
+// Check if running inside Capacitor native shell (iOS/Android)
+function isNativePlatform() {
+  return window.Capacitor?.isNativePlatform?.() || window.Capacitor?.isNative;
+}
+
+// Check if service workers are supported (and not in native WebView)
 function isServiceWorkerSupported() {
+  if (isNativePlatform()) {
+    // WKWebView (iOS) does not support service workers and will error
+    return false;
+  }
   return 'serviceWorker' in navigator;
 }
 

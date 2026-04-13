@@ -395,6 +395,17 @@ async def export_appointments_ics(
 
     filename = f"appointments-{start.strftime('%Y%m%d')}-{end.strftime('%Y%m%d')}.ics"
 
+    try:
+        from utils.export_audit import log_export_event, _get_client_ip
+        log_export_event(
+            db=db, user_id=user_id, organization_id=org_id,
+            resource_type="appointments", export_format="ics",
+            ip_address=_get_client_ip(request),
+            details={"start_date": start.isoformat(), "end_date": end.isoformat(), "appointment_count": len(appointments)},
+        )
+    except Exception:
+        pass
+
     return Response(
         content=ics_content,
         media_type="text/calendar",

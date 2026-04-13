@@ -121,6 +121,57 @@ export const DEEP_LINK_ROUTES = [
     resolve: () => '/settings',
     authRequired: true,
   },
+  // Aria / Chat
+  {
+    pattern: '/aria',
+    resolve: () => '/aria',
+    authRequired: true,
+  },
+  {
+    pattern: '/mobile-aria',
+    resolve: () => '/mobile-aria',
+    authRequired: true,
+  },
+  // Call Intelligence
+  {
+    pattern: '/call-intelligence/:id',
+    resolve: (p) => `/call-intelligence/${p.id}`,
+    authRequired: true,
+  },
+  {
+    pattern: '/call-intelligence',
+    resolve: () => '/call-intelligence',
+    authRequired: true,
+  },
+  {
+    pattern: '/mobile/call-intelligence',
+    resolve: () => '/mobile/call-intelligence',
+    authRequired: true,
+  },
+  // Rate Monitor
+  {
+    pattern: '/rate-monitor',
+    resolve: () => '/rate-monitor',
+    authRequired: true,
+  },
+  // Compliance
+  {
+    pattern: '/compliance',
+    resolve: () => '/compliance',
+    authRequired: true,
+  },
+  // Email Intelligence
+  {
+    pattern: '/email-intelligence',
+    resolve: () => '/email-intelligence',
+    authRequired: true,
+  },
+  // Notifications (mobile notification center)
+  {
+    pattern: '/aria/notifications',
+    resolve: () => '/aria/notifications',
+    authRequired: true,
+  },
 
   // -----------------------------------------------------------------------
   // Public routes (no auth gate)
@@ -357,6 +408,16 @@ function resolveNotificationLink(query) {
     workflow: id ? `/workflow/${id}` : '/workflow',
     pipeline: '/efficiency',
     notification: '/notifications',
+    chat: '/aria',
+    aria: '/aria',
+    call_intelligence: id ? `/call-intelligence/${id}` : '/call-intelligence',
+    call: id ? `/call-intelligence/${id}` : '/call-intelligence',
+    rate_alert: '/rate-monitor',
+    rate_lock: '/rate-monitor',
+    compliance: '/compliance',
+    email: '/email-intelligence',
+    settings: '/settings',
+    dashboard: '/dashboard',
   };
 
   const route = typeRouteMap[type];
@@ -453,6 +514,23 @@ export function initDeepLinkRouter(navigate) {
   });
   listeners.push(restoredPromise);
 
+  // Listen for pushNotificationNavigation custom events dispatched by native
+  // Swift code (PushNotificationRouter.navigateToRoute) when a user taps a
+  // push notification and the native layer injects JS into the WebView.
+  function handleNativeNavEvent(event) {
+    const route = event?.detail?.route;
+    if (route && route !== '/') {
+      console.log('[DeepLink] Native push navigation event:', route);
+      if (isAuthenticatedSync()) {
+        navigate(route);
+      } else {
+        storePendingRoute(route);
+        navigate('/login');
+      }
+    }
+  }
+  window.addEventListener('pushNotificationNavigation', handleNativeNavEvent);
+
   // Check if the app was cold-launched via a deep link by querying
   // the launch URL (getLaunchUrl).
   CapApp.getLaunchUrl().then((result) => {
@@ -470,6 +548,7 @@ export function initDeepLinkRouter(navigate) {
     for (const p of listeners) {
       p.then((handle) => handle.remove()).catch(() => {});
     }
+    window.removeEventListener('pushNotificationNavigation', handleNativeNavEvent);
   };
 
   return _cleanup;

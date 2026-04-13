@@ -1,0 +1,226 @@
+/* ============================================================================
+   SkeletonLoader.css -- Mobile skeleton loading states
+   Paired with components/SkeletonLoader.jsx
+   Prefix: skl- to avoid collisions
+   ============================================================================ */
+
+/* ---------------------------------------------------------------------------
+   Shimmer Animation
+   --------------------------------------------------------------------------- */
+
+@keyframes skl-shimmer {
+  0% {
+    background-position: -400px 0;
+  }
+  100% {
+    background-position: 400px 0;
+  }
+}
+
+/* Base bone element */
+.skl-bone {
+  background: linear-gradient(
+    90deg,
+    #e2e8f0 25%,
+    #f1f5f9 50%,
+    #e2e8f0 75%
+  );
+  background-size: 800px 100%;
+  animation: skl-shimmer 1.5s ease-in-out infinite;
+  display: block;
+}
+
+/* Container */
+.skl-container {
+  width: 100%;
+}
+
+/* ---------------------------------------------------------------------------
+   Card Skeleton (Pipeline loan cards)
+   --------------------------------------------------------------------------- */
+
+.skl-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.skl-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skl-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.skl-card__footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+   Stats Skeleton (Dashboard stat grid)
+   --------------------------------------------------------------------------- */
+
+.skl-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.skl-stat {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 48px;
+}
+
+/* Full-width last card when odd count */
+.skl-stats-grid .skl-stat:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+/* ---------------------------------------------------------------------------
+   Lead Skeleton
+   --------------------------------------------------------------------------- */
+
+.skl-lead-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skl-lead {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skl-lead__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.skl-lead__avatar {
+  flex-shrink: 0;
+}
+
+.skl-lead__info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.skl-lead__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------------------------------------------------------------------------
+   List Skeleton (Schedule, Activity, Alerts)
+   --------------------------------------------------------------------------- */
+
+.skl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skl-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.skl-list-row__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ---------------------------------------------------------------------------
+   Dashboard Skeleton (full page composite)
+   --------------------------------------------------------------------------- */
+
+.skl-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 0 4px;
+}
+
+.skl-dashboard__greeting {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+
+.skl-dashboard__section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.skl-dashboard__section-title {
+  margin-bottom: 2px;
+}
+
+/* ---------------------------------------------------------------------------
+   Reduced Motion
+   --------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .skl-bone {
+    animation: none;
+    background: #e2e8f0;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Dark Mode
+   --------------------------------------------------------------------------- */
+
+[data-theme="dark"] .skl-bone {
+  background: linear-gradient(
+    90deg,
+    #2a2d35 25%,
+    #3a3d45 50%,
+    #2a2d35 75%
+  );
+  background-size: 800px 100%;
+}
+
+[data-theme="dark"] .skl-card,
+[data-theme="dark"] .skl-stat,
+[data-theme="dark"] .skl-lead,
+[data-theme="dark"] .skl-list-row {
+  background: #1e2028;
+  border-color: #2a2d35;
+}

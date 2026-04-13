@@ -12,7 +12,7 @@ import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
-import { NativeBiometric, BiometryType } from 'capacitor-native-biometric';
+import { NativeBiometric, BiometryType } from '@capgo/capacitor-native-biometric';
 
 // Check if running on native platform
 export const isNative = Capacitor.isNativePlatform();

@@ -1,28 +1,45 @@
 """
 Mobile Tasks Routes
 
-GET /api/v1/mobile/tasks         — List tasks from the `tasks` table for the current user
-GET /api/v1/mobile/tasks/summary — Task count summaries for the mobile dashboard
+GET   /api/v1/mobile/tasks              — List tasks from the `tasks` table for the current user
+GET   /api/v1/mobile/tasks/summary      — Task count summaries for the mobile dashboard
+PATCH /api/v1/mobile/tasks/{id}         — Update a task (status, priority, title, due_date)
+PATCH /api/v1/mobile/tasks/{id}/snooze  — Snooze a task (push due_date forward)
 
 These endpoints query the real `tasks` table (NOT `ai_tasks`) and support
 status filtering, overdue detection, and optional workflow metadata via
 LEFT JOIN on workflow_task_instances.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Body
+from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from db import get_db
 from routes.auth_deps import require_auth, current_user_dep
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(
     prefix="/api/v1/mobile",
     tags=["Mobile Tasks"],
     dependencies=[Depends(require_auth)],
 )
+
+
+class SnoozeRequest(BaseModel):
+    """Request body for task snooze endpoint.
+
+    The frontend sends snooze_until as an ISO 8601 datetime string.
+    If omitted, defaults to 1 hour from now.
+    """
+    snooze_until: Optional[str] = None
+    duration_minutes: Optional[int] = None
 
 
 @router.get("/tasks")
@@ -202,3 +219,214 @@ async def get_mobile_tasks_summary(
         "completed_today": 0,
         "total_active": 0,
     }
+
+
+# ============================================================================
+# TASK UPDATE ENDPOINT
+# ============================================================================
+
+ALLOWED_STATUSES = {"pending", "in_progress", "completed"}
+ALLOWED_PRIORITIES = {"low", "medium", "high"}
+
+
+class TaskUpdateRequest(BaseModel):
+    """Partial update for a task. All fields optional."""
+    status: Optional[str] = None
+    priority: Optional[str] = None
+    title: Optional[str] = None
+    due_date: Optional[str] = None
+
+
+@router.patch("/tasks/{task_id}")
+async def update_mobile_task(
+    task_id: int,
+    body: TaskUpdateRequest,
+    current_user=Depends(current_user_dep),
+    db: Session = Depends(get_db),
+):
+    """Update a task — PATCH /api/v1/mobile/tasks/{task_id}
+
+    Supports partial updates to status, priority, title, and due_date.
+    Used by CarPlayAPIService.completeTask() and notification quick actions.
+    """
+    from database.models.task import Task
+
+    task = (
+        db.query(Task)
+        .filter(
+            Task.id == task_id,
+            Task.organization_id == current_user.organization_id,
+        )
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    now = datetime.now(timezone.utc)
+    changes = []
+
+    if body.status is not None:
+        normalized = body.status.lower()
+        if normalized not in ALLOWED_STATUSES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid status '{body.status}'. Allowed: {', '.join(sorted(ALLOWED_STATUSES))}",
+            )
+        task.status = normalized
+        changes.append(f"status={normalized}")
+        if normalized == "completed" and not task.completed_at:
+            task.completed_at = now
+
+    if body.priority is not None:
+        normalized = body.priority.lower()
+        if normalized not in ALLOWED_PRIORITIES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid priority '{body.priority}'. Allowed: {', '.join(sorted(ALLOWED_PRIORITIES))}",
+            )
+        task.priority = normalized
+        changes.append(f"priority={normalized}")
+
+    if body.title is not None:
+        task.title = body.title.strip()
+        changes.append("title updated")
+
+    if body.due_date is not None:
+        try:
+            new_due = datetime.fromisoformat(body.due_date.replace("Z", "+00:00"))
+            if new_due.tzinfo is None:
+                new_due = new_due.replace(tzinfo=timezone.utc)
+            task.due_date = new_due
+            changes.append(f"due_date={new_due.isoformat()}")
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(status_code=422, detail=f"Invalid due_date: {exc}")
+
+    if not changes:
+        raise HTTPException(status_code=422, detail="No valid fields to update")
+
+    task.updated_at = now
+
+    try:
+        db.commit()
+        db.refresh(task)
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Failed to update task %s: %s", task_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to update task")
+
+    logger.info(
+        "Task %s updated by user %s: %s",
+        task_id, current_user.id, ", ".join(changes),
+    )
+
+    return {
+        "success": True,
+        "task_id": task.id,
+        "status": task.status,
+        "priority": task.priority,
+        "title": task.title,
+        "due_date": task.due_date.isoformat() if task.due_date else None,
+        "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+    }
+
+
+# ============================================================================
+# SNOOZE ENDPOINT
+# ============================================================================
+
+async def _snooze_task(
+    task_id: int,
+    body: SnoozeRequest,
+    current_user,
+    db: Session,
+):
+    """Core snooze logic shared by both route paths.
+
+    Accepts either ``snooze_until`` (ISO datetime) or ``duration_minutes``.
+    Falls back to +60 minutes from now when neither is provided.
+
+    Updates the task's ``due_date`` to the resolved snooze time and returns
+    a success payload with the new due date.
+    """
+    from database.models.task import Task
+
+    task = (
+        db.query(Task)
+        .filter(
+            Task.id == task_id,
+            Task.organization_id == current_user.organization_id,
+        )
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    # Resolve the new due_date
+    now = datetime.now(timezone.utc)
+
+    if body.snooze_until:
+        try:
+            # Parse ISO 8601 string — handle both 'Z' suffix and +00:00
+            snooze_dt = datetime.fromisoformat(body.snooze_until.replace("Z", "+00:00"))
+            if snooze_dt.tzinfo is None:
+                snooze_dt = snooze_dt.replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid snooze_until datetime: {exc}",
+            )
+        if snooze_dt <= now:
+            raise HTTPException(
+                status_code=422,
+                detail="snooze_until must be in the future",
+            )
+        new_due = snooze_dt
+    elif body.duration_minutes and body.duration_minutes > 0:
+        new_due = now + timedelta(minutes=body.duration_minutes)
+    else:
+        # Default: snooze for 1 hour
+        new_due = now + timedelta(hours=1)
+
+    task.due_date = new_due
+    task.updated_at = now
+    # Reset status back to pending if it was something else
+    if task.status == "completed":
+        # Don't un-complete a completed task
+        pass
+    elif task.status != "pending":
+        task.status = "pending"
+
+    try:
+        db.commit()
+        db.refresh(task)
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Failed to snooze task %s: %s", task_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to snooze task")
+
+    logger.info(
+        "Task %s snoozed until %s by user %s",
+        task_id, new_due.isoformat(), current_user.id,
+    )
+
+    return {
+        "success": True,
+        "task_id": task.id,
+        "new_due_date": new_due.isoformat(),
+    }
+
+
+@router.patch("/tasks/{task_id}/snooze")
+async def snooze_mobile_task(
+    task_id: int,
+    body: SnoozeRequest = Body(default=SnoozeRequest()),
+    current_user=Depends(current_user_dep),
+    db: Session = Depends(get_db),
+):
+    """Snooze a task — PATCH /api/v1/mobile/tasks/{task_id}/snooze
+
+    Pushes the task's due_date forward. Accepts an explicit ``snooze_until``
+    ISO datetime or a ``duration_minutes`` offset. Defaults to +60 min.
+    """
+    return await _snooze_task(task_id, body, current_user, db)

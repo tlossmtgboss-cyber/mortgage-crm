@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core';
 import { ensureArray } from '../utils/arrayHelpers';
 import { getCSRFTokenFromCookie } from '../utils/security';
 import { pinnedAdapter } from '../utils/pinnedFetch';
+import { getItem, setItem, removeItem, STORAGE_KEYS, clearAllAuthTokens } from '../utils/storage';
 
 // Detect native mobile app FIRST — Capacitor serves from localhost,
 // so we must check isNativePlatform() before the hostname check.
@@ -68,13 +69,13 @@ const CSRF_METHODS = ['post', 'put', 'patch', 'delete'];
 // Add token, impersonation, and CSRF headers to requests
 api.interceptors.request.use(
   async (config) => {
-    const token = localStorage.getItem('token');
+    const token = await getItem(STORAGE_KEYS.TOKEN);
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
 
     // Add impersonation token if present
-    const impersonationData = localStorage.getItem('impersonation');
+    const impersonationData = await getItem(STORAGE_KEYS.IMPERSONATION);
     if (impersonationData) {
       try {
         const data = JSON.parse(impersonationData);
@@ -101,11 +102,196 @@ api.interceptors.request.use(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Offline detection — fail fast with a friendly error when navigator.onLine
+// is false, instead of waiting for a socket timeout.  For GET requests the
+// response interceptor below will also check and surface a clean message.
+// ---------------------------------------------------------------------------
+
+/** Simple in-memory cache for offline GET fallback (last successful response per URL). */
+const _offlineCache = new Map();
+const _OFFLINE_CACHE_MAX = 150;
+const _OFFLINE_CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+function _cacheSet(url, data) {
+  if (_offlineCache.size >= _OFFLINE_CACHE_MAX) {
+    // Evict oldest entry
+    const firstKey = _offlineCache.keys().next().value;
+    _offlineCache.delete(firstKey);
+  }
+  _offlineCache.set(url, { data, ts: Date.now() });
+}
+
+function _cacheGet(url) {
+  const entry = _offlineCache.get(url);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > _OFFLINE_CACHE_TTL) {
+    _offlineCache.delete(url);
+    return null;
+  }
+  return entry.data;
+}
+
+// Cache successful GET responses for offline fallback
+api.interceptors.response.use(
+  (response) => {
+    const method = (response.config?.method || 'get').toLowerCase();
+    if (method === 'get' && response.config?.url) {
+      _cacheSet(response.config.url, response.data);
+    }
+    return response;
+  },
+  (error) => Promise.reject(error)
+);
+
+// ---------------------------------------------------------------------------
+// Structured API error — every rejected promise from the interceptor carries
+// this shape so callers can rely on a consistent contract:
+//   { error: true, status, message, retryable, code, detail }
+// The original axios error is preserved as `_axiosError` for callers that
+// need low-level access (e.g. response headers).
+// ---------------------------------------------------------------------------
+
+/**
+ * Build a structured error object from an axios error.
+ * @param {number} status   HTTP status (0 for network errors)
+ * @param {string} message  User-facing message
+ * @param {object} opts     Additional fields (retryable, code, detail, _axiosError)
+ * @returns {Error}         Error instance with structured fields
+ */
+function _buildApiError(status, message, opts = {}) {
+  const err = new Error(message);
+  err.error = true;
+  err.status = status;
+  err.message = message;
+  err.retryable = opts.retryable ?? false;
+  err.code = opts.code || null;
+  err.detail = opts.detail || null;
+  if (opts._axiosError) {
+    err._axiosError = opts._axiosError;
+    // Preserve response for callers that inspect error.response
+    err.response = opts._axiosError.response;
+    err.config = opts._axiosError.config;
+  }
+  return err;
+}
+
+// ---------------------------------------------------------------------------
+// 429 retry with exponential backoff
+// ---------------------------------------------------------------------------
+const _429_MAX_RETRIES = 3;
+const _429_BASE_DELAY_MS = 1000; // 1s, 2s, 4s
+
+async function _retryWith429Backoff(config) {
+  const attempt = (config._429RetryCount || 0);
+  if (attempt >= _429_MAX_RETRIES) return null; // Give up
+
+  config._429RetryCount = attempt + 1;
+  const delay = _429_BASE_DELAY_MS * Math.pow(2, attempt);
+  // Add jitter (0-25% of delay) to avoid thundering herd
+  const jitter = Math.random() * delay * 0.25;
+  console.warn(`[API] 429 — retry ${config._429RetryCount}/${_429_MAX_RETRIES} in ${Math.round(delay + jitter)}ms`);
+
+  await new Promise((resolve) => setTimeout(resolve, delay + jitter));
+  return api.request(config);
+}
+
+// ---------------------------------------------------------------------------
+// 401 token refresh — attempt to refresh the access token once before
+// clearing auth state and redirecting to login.
+// Uses a single in-flight promise so concurrent 401s don't stampede.
+// ---------------------------------------------------------------------------
+let _refreshPromise = null;
+
+async function _attemptTokenRefresh() {
+  if (_refreshPromise) return _refreshPromise;
+
+  _refreshPromise = (async () => {
+    try {
+      const refreshToken = localStorage.getItem('refresh_token');
+      if (!refreshToken) return false;
+
+      const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.access_token) {
+          localStorage.setItem('token', data.access_token);
+          // Also persist via async storage for native apps
+          setItem(STORAGE_KEYS.TOKEN, data.access_token).catch(() => {});
+          if (data.refresh_token) {
+            localStorage.setItem('refresh_token', data.refresh_token);
+            setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token).catch(() => {});
+          }
+          console.log('[API] Token refresh succeeded');
+          return true;
+        }
+      }
+      return false;
+    } catch (err) {
+      console.error('[API] Token refresh failed:', err);
+      return false;
+    }
+  })();
+
+  try {
+    return await _refreshPromise;
+  } finally {
+    _refreshPromise = null;
+  }
+}
+
 // Handle response errors
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    // Log network errors for debugging
+    // --- Timeout handling ---
+    if (error.code === 'ECONNABORTED' || error.code === 'ERR_CANCELED') {
+      const msg = error.code === 'ECONNABORTED'
+        ? 'Request timed out. Please check your connection and try again.'
+        : 'Request was cancelled.';
+      return Promise.reject(_buildApiError(0, msg, {
+        retryable: error.code === 'ECONNABORTED',
+        code: error.code,
+        _axiosError: error,
+      }));
+    }
+
+    // --- Offline-aware error handling ---
+    // When there's no response (network error) and the browser reports offline,
+    // return cached data for GETs or a clear offline error for mutations.
+    if (!error.response && !navigator.onLine) {
+      const method = (error.config?.method || 'get').toLowerCase();
+      const url = error.config?.url;
+
+      if (method === 'get' && url) {
+        const cached = _cacheGet(url);
+        if (cached) {
+          console.info('[API] Offline — returning cached response for:', url.split('?')[0]);
+          return {
+            data: cached,
+            status: 200,
+            statusText: 'OK (offline cache)',
+            headers: {},
+            config: error.config,
+            _fromOfflineCache: true,
+          };
+        }
+      }
+
+      // For mutations or uncached GETs, reject with a structured offline error
+      return Promise.reject(_buildApiError(0, "You're offline. This action will be available when you reconnect.", {
+        retryable: true,
+        code: 'ERR_OFFLINE',
+        _axiosError: error,
+      }));
+    }
+
+    // --- Network error (online but no response — server unreachable, DNS, etc.) ---
     if (!error.response) {
       console.error('[API] Network error (no response):', {
         message: error.message,
@@ -115,15 +301,20 @@ api.interceptors.response.use(
         path: error.config?.url?.split('?')[0],
         status: 'no_response'
       });
+
+      return Promise.reject(_buildApiError(0, 'Network error. Please check your connection and try again.', {
+        retryable: true,
+        code: error.code || 'ERR_NETWORK',
+        _axiosError: error,
+      }));
     }
 
-    // Retry once on CSRF token failure (token may have expired)
+    // --- Retry once on CSRF token failure (token may have expired) ---
     if (
       error.response?.status === 403 &&
       error.response?.data?.code === 'CSRF_VALIDATION_FAILED' &&
       !error.config._csrfRetry
     ) {
-      // Force re-fetch CSRF token
       csrfTokenPromise = null;
       const newToken = await fetchCSRFToken();
       if (newToken) {
@@ -133,41 +324,37 @@ api.interceptors.response.use(
       }
     }
 
-    // Sanitize error messages to prevent leaking backend internals to the UI.
-    // For 500-level errors, replace the detail with a generic message.
-    // For client errors (4xx), keep user-friendly messages from the backend.
-    const SAFE_ERROR_MESSAGES = {
-      400: "Invalid request. Please check your input.",
-      401: "Session expired. Please log in again.",
-      403: "You don't have permission for this action.",
-      404: "The requested resource was not found.",
-      409: "A conflict occurred. Please refresh and try again.",
-      422: "Invalid data submitted.",
-      429: "Too many requests. Please wait a moment.",
-    };
-    if (error.response) {
-      const status = error.response.status;
-      if (status >= 500) {
-        // Never expose internal server errors to the UI
-        error.response.data = {
-          ...error.response.data,
-          detail: "An unexpected error occurred. Please try again later.",
-        };
-      } else if (!error.response.data?.detail && SAFE_ERROR_MESSAGES[status]) {
-        // Provide a safe fallback if no user-friendly detail was sent
-        error.response.data = {
-          ...error.response.data,
-          detail: SAFE_ERROR_MESSAGES[status],
-        };
+    // --- 429 Too Many Requests — retry with exponential backoff ---
+    if (error.response?.status === 429) {
+      // Respect Retry-After header if present
+      const retryAfter = error.response.headers?.['retry-after'];
+      if (retryAfter && !error.config._429RetryCount) {
+        const delaySec = parseInt(retryAfter, 10);
+        if (!isNaN(delaySec) && delaySec > 0 && delaySec <= 120) {
+          error.config._429RetryCount = 0;
+          await new Promise((resolve) => setTimeout(resolve, delaySec * 1000));
+          error.config._429RetryCount = 1;
+          return api.request(error.config);
+        }
       }
+
+      const retryResult = await _retryWith429Backoff(error.config);
+      if (retryResult) return retryResult;
+
+      // All retries exhausted
+      return Promise.reject(_buildApiError(429, 'Too many requests. Please wait a moment and try again.', {
+        retryable: true,
+        code: 'ERR_RATE_LIMITED',
+        _axiosError: error,
+      }));
     }
 
+    // --- 401 Unauthorized — attempt token refresh before logout ---
     if (error.response?.status === 401) {
-      // Don't redirect if already on login page or during logout
       const isLoginPage = window.location.pathname === '/login';
+      const isRefreshRequest = error.config?.url?.includes('/auth/refresh');
 
-      // Don't logout for third-party integration token errors (Salesforce, HubSpot, etc.)
-      // These 401s mean the integration token expired, not the user's CRM session
+      // Don't logout for third-party integration token errors
       const requestUrl = error.config?.url || '';
       const isIntegrationEndpoint =
         requestUrl.includes('/salesforce/') ||
@@ -178,15 +365,108 @@ api.interceptors.response.use(
         requestUrl.includes('/docusign/') ||
         requestUrl.includes('/calendly/');
 
-      if (!isLoginPage && !isIntegrationEndpoint) {
+      if (!isLoginPage && !isIntegrationEndpoint && !isRefreshRequest && !error.config._authRetry) {
+        // Attempt silent token refresh before giving up
+        const refreshed = await _attemptTokenRefresh();
+
+        if (refreshed) {
+          // Retry the original request with the new token
+          const newToken = localStorage.getItem('token');
+          error.config._authRetry = true;
+          error.config.headers.Authorization = `Bearer ${newToken}`;
+          return api.request(error.config);
+        }
+
+        // Refresh failed — clear auth from ALL storage locations and redirect
         localStorage.removeItem('token');
+        localStorage.removeItem('refresh_token');
         localStorage.removeItem('user');
+        clearAllAuthTokens().catch(() => {});
         window.location.href = '/login';
       }
+
+      return Promise.reject(_buildApiError(401, 'Session expired. Please log in again.', {
+        retryable: false,
+        code: 'ERR_UNAUTHORIZED',
+        _axiosError: error,
+      }));
     }
-    return Promise.reject(error);
+
+    // --- Sanitize error messages ---
+    // For 500-level errors, replace the detail with a generic message.
+    // For client errors (4xx), keep user-friendly messages from the backend.
+    const SAFE_ERROR_MESSAGES = {
+      400: "Invalid request. Please check your input.",
+      403: "You don't have permission for this action.",
+      404: "The requested resource was not found.",
+      409: "A conflict occurred. Please refresh and try again.",
+      422: "Invalid data submitted.",
+    };
+
+    const status = error.response.status;
+    let message;
+
+    if (status >= 500) {
+      message = "An unexpected error occurred. Please try again later.";
+      error.response.data = {
+        ...error.response.data,
+        detail: message,
+      };
+    } else {
+      message = error.response.data?.detail || SAFE_ERROR_MESSAGES[status] || 'An error occurred.';
+      if (!error.response.data?.detail && SAFE_ERROR_MESSAGES[status]) {
+        error.response.data = {
+          ...error.response.data,
+          detail: SAFE_ERROR_MESSAGES[status],
+        };
+      }
+    }
+
+    // --- 403 Permission error (non-CSRF) ---
+    if (status === 403) {
+      return Promise.reject(_buildApiError(403, message, {
+        retryable: false,
+        code: 'ERR_FORBIDDEN',
+        detail: error.response.data?.detail,
+        _axiosError: error,
+      }));
+    }
+
+    // --- All other errors — structured response ---
+    const retryable = status >= 500 || status === 408;
+    return Promise.reject(_buildApiError(status, message, {
+      retryable,
+      code: `ERR_HTTP_${status}`,
+      detail: error.response.data?.detail,
+      _axiosError: error,
+    }));
   }
 );
+
+// ---------------------------------------------------------------------------
+// Per-request timeout — callers can pass { timeout: 60000 } in the axios
+// config to override the default 30s.  This helper makes it explicit:
+//
+//   import { apiRequest } from './api';
+//   const data = await apiRequest('/api/v1/slow-endpoint', { timeout: 120000 });
+//
+// It also wraps the response in a consistent shape and catches structured errors.
+// ---------------------------------------------------------------------------
+
+/**
+ * Make an API request with an optional per-request timeout override.
+ *
+ * @param {string} url       The URL path (relative to API_BASE_URL)
+ * @param {object} [options] Axios config overrides (method, data, params, timeout, etc.)
+ * @returns {Promise<any>}   The response data
+ */
+export async function apiRequest(url, options = {}) {
+  const { timeout, ...rest } = options;
+  const config = { ...rest, url };
+  if (timeout) config.timeout = timeout;
+  const response = await api.request(config);
+  return response.data;
+}
 
 // Authentication
 export const authAPI = {
@@ -238,7 +518,7 @@ export const leadsAPI = {
         return;
       } catch (error) {
         lastError = error;
-        if (error.message === 'Network Error' && attempt < maxRetries) {
+        if ((error.retryable || error.message === 'Network Error') && attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, 1000));
           continue;
         }
@@ -256,7 +536,7 @@ export const leadsAPI = {
         return response.data;
       } catch (error) {
         lastError = error;
-        if (error.message === 'Network Error' && attempt < maxRetries) {
+        if ((error.retryable || error.message === 'Network Error') && attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, 1000));
           continue;
         }
@@ -277,7 +557,7 @@ export const leadsAPI = {
         return response.data;
       } catch (error) {
         lastError = error;
-        if (error.message === 'Network Error' && attempt < maxRetries) {
+        if ((error.retryable || error.message === 'Network Error') && attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, 1000));
           continue;
         }
@@ -312,7 +592,7 @@ export const loansAPI = {
       return response.data;
     } catch (error) {
       // Retry on Network Error (up to maxRetries times)
-      if (error.message === 'Network Error' && retryCount < maxRetries) {
+      if ((error.retryable || error.message === 'Network Error') && retryCount < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second
         return loansAPI.create(data, skipDuplicateCheck, retryCount + 1);
       }
@@ -2805,7 +3085,7 @@ export const purlAPI = {
       return response.data;
     } catch (error) {
       // Retry on Network Error (transient failures)
-      if (error.message === 'Network Error' && retryCount < maxRetries) {
+      if ((error.retryable || error.message === 'Network Error') && retryCount < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         return purlAPI.getWorkspaceByLead(leadId, retryCount + 1);
       }
@@ -2821,7 +3101,7 @@ export const purlAPI = {
       const response = await api.get(`/api/v1/purl-admin/workspaces/by-loan/${loanId}`);
       return response.data;
     } catch (error) {
-      if (error.message === 'Network Error' && retryCount < maxRetries) {
+      if ((error.retryable || error.message === 'Network Error') && retryCount < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         return purlAPI.getWorkspaceByLoan(loanId, retryCount + 1);
       }
@@ -2836,7 +3116,7 @@ export const purlAPI = {
       const response = await api.post('/api/v1/purl-admin/workspaces', data);
       return response.data;
     } catch (error) {
-      if (error.message === 'Network Error' && retryCount < maxRetries) {
+      if ((error.retryable || error.message === 'Network Error') && retryCount < maxRetries) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         return purlAPI.createWorkspace(data, retryCount + 1);
       }
@@ -3683,5 +3963,30 @@ export const agentMetricsAPI = {
     return response.data;
   },
 };
+
+/**
+ * Check if the browser is currently offline.
+ * Use this to guard UI actions before attempting API calls.
+ */
+export function isOffline() {
+  return !navigator.onLine;
+}
+
+/**
+ * Type guard to check if an error is a structured API error.
+ * Usage:
+ *   try { await leadsAPI.getAll(); }
+ *   catch (err) {
+ *     if (isApiError(err)) {
+ *       console.log(err.status, err.message, err.retryable);
+ *     }
+ *   }
+ *
+ * @param {any} err
+ * @returns {boolean} true if err has the structured API error shape
+ */
+export function isApiError(err) {
+  return err && err.error === true && typeof err.status === 'number';
+}
 
 export default api;

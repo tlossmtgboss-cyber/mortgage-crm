@@ -69,6 +69,8 @@ async def add_custom_request(
         instructions=body.instructions,
         priority=body.priority,
         due_date=body.due_date,
+        doc_type=body.doc_type,
+        requires_esign=body.requires_esign,
     )
 
     # Send notification if requested

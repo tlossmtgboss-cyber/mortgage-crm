@@ -103,6 +103,11 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         elif format == "pdf":
             pdf_bytes = report_exporter.generate_pdf(report_data, "sla_compliance")
             filename = f"sla_compliance_report_{datetime.now().strftime('%Y%m%d')}.pdf"
+            try:
+                from utils.export_audit import log_export_event, _get_client_ip
+                log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type="sla_compliance_report", export_format="pdf", ip_address=_get_client_ip(request), details={"period_days": period_days})
+            except Exception:
+                pass
             return StreamingResponse(
                 io.BytesIO(pdf_bytes),
                 media_type="application/pdf",
@@ -112,6 +117,11 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         elif format == "excel":
             xlsx_bytes = report_exporter.generate_excel(report_data, "sla_compliance")
             filename = f"sla_compliance_report_{datetime.now().strftime('%Y%m%d')}.xlsx"
+            try:
+                from utils.export_audit import log_export_event, _get_client_ip
+                log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type="sla_compliance_report", export_format="xlsx", ip_address=_get_client_ip(request), details={"period_days": period_days})
+            except Exception:
+                pass
             return StreamingResponse(
                 io.BytesIO(xlsx_bytes),
                 media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -148,6 +158,12 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         pdf_bytes = report_exporter.generate_pdf(report_data, body.report_type, body.title)
         filename = f"{body.report_type}_report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf"
 
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type=body.report_type, export_format="pdf", ip_address=_get_client_ip(request), details={"title": body.title})
+        except Exception:
+            pass
+
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
             media_type="application/pdf",
@@ -183,6 +199,12 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         xlsx_bytes = report_exporter.generate_excel(report_data, body.report_type, body.title)
         filename = f"{body.report_type}_report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
 
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type=body.report_type, export_format="xlsx", ip_address=_get_client_ip(request), details={"title": body.title})
+        except Exception:
+            pass
+
         return StreamingResponse(
             io.BytesIO(xlsx_bytes),
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -217,6 +239,12 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
 
         csv_bytes = report_exporter.generate_csv(report_data, body.report_type)
         filename = f"{body.report_type}_report_{datetime.now().strftime('%Y%m%d_%H%M')}.csv"
+
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(db=db, user_id=current_user.id, organization_id=org_id, resource_type=body.report_type, export_format="csv", ip_address=_get_client_ip(request), details={"title": body.title})
+        except Exception:
+            pass
 
         return StreamingResponse(
             io.BytesIO(csv_bytes),

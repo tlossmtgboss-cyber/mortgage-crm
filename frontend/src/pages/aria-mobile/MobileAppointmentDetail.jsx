@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import api from '../../services/api';
 import './MobileAppointmentDetail.css';
 
@@ -217,7 +218,7 @@ export default function MobileAppointmentDetail() {
       await api.patch(`/api/v1/scheduler/appointments/${id}`, { status: 'no_show' });
       navigate(-1);
     } catch {
-      alert('Failed to update appointment status. Please try again.');
+      toast.error('Failed to update appointment status. Please try again.');
     } finally {
       setActionLoading(false);
     }

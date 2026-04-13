@@ -60,11 +60,32 @@ final class VisionProDocumentViewModel: ObservableObject {
     @MainActor
     private func loadRemoteDocument() async {
         do {
-            let (data, response) = try await URLSession.shared.data(from: documentURL)
+            var request = URLRequest(url: documentURL)
+            request.httpMethod = "GET"
 
-            guard let httpResponse = response as? HTTPURLResponse,
-                  (200...299).contains(httpResponse.statusCode) else {
-                self.errorMessage = "Server returned an error."
+            // Attach auth token when fetching from the Perennia API backend,
+            // since document endpoints require authentication.
+            let apiHost = URL(string: APIConfig.apiBaseURL)?.host
+            if let apiHost = apiHost,
+               documentURL.host == apiHost,
+               let token = KeychainService.shared.authToken {
+                request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            }
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                self.errorMessage = "Invalid server response."
+                self.isLoading = false
+                return
+            }
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                if httpResponse.statusCode == 401 {
+                    self.errorMessage = "Authentication required. Please sign in again."
+                } else {
+                    self.errorMessage = "Server returned error \(httpResponse.statusCode)."
+                }
                 self.isLoading = false
                 return
             }
@@ -190,9 +211,11 @@ struct VisionProDocumentView: View {
             .accessibilityLabel("Zoom: \(Int(zoomScale * 100)) percent")
 
             // Share button
-            ShareLink(item: viewModel.documentURL) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.title3)
+            if #available(iOS 16.0, *) {
+                ShareLink(item: viewModel.documentURL) {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title3)
+                }
             }
         }
         .padding(.horizontal, 16)
@@ -527,12 +550,18 @@ final class VisionProDocumentHostingController: UIHostingController<VisionProDoc
     override func viewDidLoad() {
         super.viewDidLoad()
 
+        #if os(visionOS)
+        // Request a larger window for document viewing on Vision Pro
+        let docSize = CGSize(width: 1400, height: 1050)
+        preferredContentSize = docSize
+        view.backgroundColor = .clear
+        #else
         if VisionProSupport.isVisionPro {
-            // Request a larger window for document viewing on Vision Pro
             let docSize = CGSize(width: 1400, height: 1050)
             preferredContentSize = docSize
             view.backgroundColor = .clear
         }
+        #endif
     }
 }
 

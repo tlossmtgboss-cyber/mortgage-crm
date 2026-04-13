@@ -26,6 +26,14 @@ class ShareViewController: UIViewController {
         var thumbnail: UIImage?
     }
 
+    /// A non-file shared item (URL or text).
+    struct SharedTextItem {
+        enum Kind: String { case url, text }
+        let kind: Kind
+        let content: String
+        let title: String? // e.g., page title from Safari
+    }
+
     /// Unified target — either a lead (with its first loan) or a loan directly.
     struct Target {
         let displayName: String
@@ -36,6 +44,7 @@ class ShareViewController: UIViewController {
     // MARK: - State
 
     private var sharedFiles: [SharedFile] = []
+    private var sharedTextItems: [SharedTextItem] = []
     private var targets: [Target] = []
     private var selectedTargetIndex: Int = 0
     private var selectedDocType: DocumentType = .other
@@ -396,7 +405,7 @@ class ShareViewController: UIViewController {
         uploadButton.isHidden = true
     }
 
-    private func showSuccess(targetName: String, fileCount: Int) {
+    private func showSuccess(targetName: String, fileCount: Int, message: String? = nil) {
         progressContainer.isHidden = false
         progressBar.isHidden = true
         uploadButton.isEnabled = false
@@ -429,8 +438,14 @@ class ShareViewController: UIViewController {
         stack.addArrangedSubview(checkmark)
 
         let label = UILabel()
-        let fileText = fileCount == 1 ? "Document" : "\(fileCount) documents"
-        label.text = "\(fileText) uploaded to\n\(targetName)"
+        let successMessage: String
+        if let message = message {
+            successMessage = message
+        } else {
+            let fileText = fileCount == 1 ? "Document" : "\(fileCount) documents"
+            successMessage = "\(fileText) uploaded to\n\(targetName)"
+        }
+        label.text = successMessage
         label.font = .systemFont(ofSize: 16, weight: .medium)
         label.textAlignment = .center
         label.numberOfLines = 0
@@ -502,7 +517,18 @@ class ShareViewController: UIViewController {
     }
 
     @objc private func uploadTapped() {
-        guard !isUploading, !sharedFiles.isEmpty, !targets.isEmpty else { return }
+        guard !isUploading else { return }
+
+        // Handle text/URL-only shares (no files)
+        if sharedFiles.isEmpty && !sharedTextItems.isEmpty {
+            isUploading = true
+            uploadButton.isEnabled = false
+            cancelButton.isEnabled = false
+            saveTextItemsToAppGroup()
+            return
+        }
+
+        guard !sharedFiles.isEmpty, !targets.isEmpty else { return }
 
         isUploading = true
         uploadButton.isEnabled = false
@@ -510,6 +536,11 @@ class ShareViewController: UIViewController {
         progressContainer.isHidden = false
         progressBar.progress = 0
         progressBar.isHidden = false
+
+        // Also save any text items alongside the file upload
+        if !sharedTextItems.isEmpty {
+            saveTextItemsToAppGroup()
+        }
 
         let target = targets[selectedTargetIndex]
         let docType = selectedDocType.rawValue
@@ -568,6 +599,74 @@ class ShareViewController: UIViewController {
         }
     }
 
+    // MARK: - Save Text/URL Items
+
+    /// Saves shared text/URL items to the App Group container so the main app
+    /// can process them (e.g., attach a URL to a lead, create a note, etc.).
+    /// Posts a Darwin notification to wake the main app if it's running.
+    private func saveTextItemsToAppGroup() {
+        guard let containerURL = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: "group.com.perenniaai.crm"
+        ) else {
+            if sharedFiles.isEmpty {
+                showError("Could not access shared storage.", queued: false)
+            }
+            return
+        }
+
+        let sharedItemsDir = containerURL.appendingPathComponent("SharedItems", isDirectory: true)
+        try? FileManager.default.createDirectory(at: sharedItemsDir, withIntermediateDirectories: true)
+
+        let defaults = UserDefaults(suiteName: "group.com.perenniaai.crm")
+
+        // Load existing pending shared items
+        var pendingItems: [[String: String]] = []
+        if let data = defaults?.data(forKey: "PendingSharedItems"),
+           let existing = try? JSONSerialization.jsonObject(with: data) as? [[String: String]] {
+            pendingItems = existing
+        }
+
+        for item in sharedTextItems {
+            let entry: [String: String] = [
+                "id": UUID().uuidString,
+                "kind": item.kind.rawValue,
+                "content": item.content,
+                "title": item.title ?? "",
+                "sharedAt": ISO8601DateFormatter().string(from: Date()),
+            ]
+            pendingItems.append(entry)
+        }
+
+        // Save back
+        if let data = try? JSONSerialization.data(withJSONObject: pendingItems) {
+            defaults?.set(data, forKey: "PendingSharedItems")
+        }
+
+        // Post a Darwin notification so the main app picks up the new items
+        let notificationName = "com.perenniaai.crm.sharedItemReceived" as CFString
+        CFNotificationCenterPostNotification(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            CFNotificationName(notificationName),
+            nil, nil, true
+        )
+
+        // If this was a text/URL-only share, show success and dismiss
+        if sharedFiles.isEmpty {
+            let count = sharedTextItems.count
+            let itemLabel: String
+            if count == 1 {
+                itemLabel = sharedTextItems[0].kind == .url ? "Link" : "Text"
+            } else {
+                itemLabel = "\(count) items"
+            }
+            showSuccess(
+                targetName: "Perennia AI",
+                fileCount: count,
+                message: "\(itemLabel) saved to Perennia AI"
+            )
+        }
+    }
+
     private func queueFailedFiles(_ files: [SharedFile], target: Target, docType: String) {
         var allQueued = true
         for file in files {
@@ -596,21 +695,26 @@ class ShareViewController: UIViewController {
 
     private func loadSharedItems() {
         guard let extensionItems = extensionContext?.inputItems as? [NSExtensionItem] else {
-            fileCountLabel.text = "No files to share"
+            fileCountLabel.text = "No items to share"
             return
         }
 
         let group = DispatchGroup()
         var loadedFiles: [SharedFile] = []
+        var loadedTextItems: [SharedTextItem] = []
 
         for item in extensionItems {
             guard let attachments = item.attachments else { continue }
+            let itemTitle = item.attributedContentText?.string
 
             for provider in attachments {
                 group.enter()
-                loadAttachment(provider: provider) { file in
+                loadAttachment(provider: provider, itemTitle: itemTitle) { file, textItem in
                     if let file = file {
                         loadedFiles.append(file)
+                    }
+                    if let textItem = textItem {
+                        loadedTextItems.append(textItem)
                     }
                     group.leave()
                 }
@@ -620,16 +724,27 @@ class ShareViewController: UIViewController {
         group.notify(queue: .main) { [weak self] in
             guard let self = self else { return }
             self.sharedFiles = loadedFiles
-            self.fileCountLabel.text = loadedFiles.isEmpty
-                ? "No supported files found"
-                : "\(loadedFiles.count) file\(loadedFiles.count == 1 ? "" : "s") ready to upload"
+            self.sharedTextItems = loadedTextItems
+
+            if !loadedFiles.isEmpty {
+                self.fileCountLabel.text = "\(loadedFiles.count) file\(loadedFiles.count == 1 ? "" : "s") ready to upload"
+            } else if !loadedTextItems.isEmpty {
+                let desc = loadedTextItems.map { $0.kind == .url ? "link" : "text" }
+                let summary = desc.count == 1 ? "1 \(desc[0])" : "\(desc.count) items"
+                self.fileCountLabel.text = "\(summary) ready to save"
+                // For text/URL-only shares, change the button label
+                self.uploadButton.setTitle("Save", for: .normal)
+            } else {
+                self.fileCountLabel.text = "No supported items found"
+            }
+
             self.thumbnailCollectionView.reloadData()
             self.updateUploadButtonState()
         }
     }
 
-    private func loadAttachment(provider: NSItemProvider, completion: @escaping (SharedFile?) -> Void) {
-        // Try loading in order of specificity: PDF, image, data, URL
+    private func loadAttachment(provider: NSItemProvider, itemTitle: String? = nil, completion: @escaping (SharedFile?, SharedTextItem?) -> Void) {
+        // Try loading in order of specificity: PDF, image, data, URL, text
         let supportedTypes: [(UTType, String)] = [
             (.pdf, "application/pdf"),
             (.jpeg, "image/jpeg"),
@@ -643,10 +758,12 @@ class ShareViewController: UIViewController {
             if provider.hasItemConformingToTypeIdentifier(utType.identifier) {
                 provider.loadFileRepresentation(forTypeIdentifier: utType.identifier) { url, error in
                     guard let url = url, error == nil else {
-                        completion(nil)
+                        completion(nil, nil)
                         return
                     }
-                    self.readFileFromURL(url, mimeType: mimeType, completion: completion)
+                    self.readFileFromURL(url, mimeType: mimeType) { file in
+                        completion(file, nil)
+                    }
                 }
                 return
             }
@@ -664,43 +781,87 @@ class ShareViewController: UIViewController {
             if provider.hasItemConformingToTypeIdentifier(typeID) {
                 provider.loadFileRepresentation(forTypeIdentifier: typeID) { url, error in
                     guard let url = url, error == nil else {
-                        completion(nil)
+                        completion(nil, nil)
                         return
                     }
                     let mime = self.mimeTypeForExtension(url.pathExtension)
-                    self.readFileFromURL(url, mimeType: mime, completion: completion)
+                    self.readFileFromURL(url, mimeType: mime) { file in
+                        completion(file, nil)
+                    }
                 }
                 return
             }
         }
 
-        // Fallback: generic public.data
-        if provider.hasItemConformingToTypeIdentifier(UTType.data.identifier) {
+        // Fallback: generic public.data (files)
+        if provider.hasItemConformingToTypeIdentifier(UTType.data.identifier)
+            && !provider.hasItemConformingToTypeIdentifier(UTType.url.identifier)
+            && !provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
             provider.loadFileRepresentation(forTypeIdentifier: UTType.data.identifier) { url, error in
                 guard let url = url, error == nil else {
-                    completion(nil)
+                    completion(nil, nil)
                     return
                 }
                 let mime = self.mimeTypeForExtension(url.pathExtension)
-                self.readFileFromURL(url, mimeType: mime, completion: completion)
+                self.readFileFromURL(url, mimeType: mime) { file in
+                    completion(file, nil)
+                }
             }
             return
         }
 
-        // Fallback: URL (e.g., from Safari)
+        // URL sharing (e.g., from Safari, property listing links)
         if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier) {
             provider.loadItem(forTypeIdentifier: UTType.url.identifier, options: nil) { item, error in
-                guard let url = item as? URL, url.isFileURL, error == nil else {
-                    completion(nil)
+                guard error == nil else {
+                    completion(nil, nil)
                     return
                 }
-                let mime = self.mimeTypeForExtension(url.pathExtension)
-                self.readFileFromURL(url, mimeType: mime, completion: completion)
+                if let url = item as? URL {
+                    if url.isFileURL {
+                        // File URL — treat as a document
+                        let mime = self.mimeTypeForExtension(url.pathExtension)
+                        self.readFileFromURL(url, mimeType: mime) { file in
+                            completion(file, nil)
+                        }
+                    } else {
+                        // Web URL — store as a shared text item
+                        let textItem = SharedTextItem(
+                            kind: .url,
+                            content: url.absoluteString,
+                            title: itemTitle
+                        )
+                        completion(nil, textItem)
+                    }
+                } else {
+                    completion(nil, nil)
+                }
             }
             return
         }
 
-        completion(nil)
+        // Plain text sharing (notes, addresses, etc.)
+        if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier) {
+            provider.loadItem(forTypeIdentifier: UTType.plainText.identifier, options: nil) { item, error in
+                guard error == nil else {
+                    completion(nil, nil)
+                    return
+                }
+                if let text = item as? String, !text.isEmpty {
+                    let textItem = SharedTextItem(
+                        kind: .text,
+                        content: text,
+                        title: itemTitle
+                    )
+                    completion(nil, textItem)
+                } else {
+                    completion(nil, nil)
+                }
+            }
+            return
+        }
+
+        completion(nil, nil)
     }
 
     private func readFileFromURL(_ url: URL, mimeType: String, completion: @escaping (SharedFile?) -> Void) {
@@ -818,7 +979,9 @@ class ShareViewController: UIViewController {
     // MARK: - Helpers
 
     private func updateUploadButtonState() {
-        uploadButton.isEnabled = !sharedFiles.isEmpty && !targets.isEmpty && !isUploading
+        let hasFiles = !sharedFiles.isEmpty && !targets.isEmpty
+        let hasTextItems = !sharedTextItems.isEmpty
+        uploadButton.isEnabled = (hasFiles || hasTextItems) && !isUploading
     }
 
     private func mimeTypeForExtension(_ ext: String) -> String {

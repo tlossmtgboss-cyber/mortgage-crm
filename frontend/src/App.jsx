@@ -1,10 +1,10 @@
 import { useState, useEffect, lazy, Suspense } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { isAuthenticatedSync as isAuthenticated } from './utils/auth';
+import { isAuthenticatedSync as isAuthenticated, migrateAuthTokens } from './utils/auth';
 import { ImpersonationProvider } from './contexts/ImpersonationContext';
 import { PermissionProvider, usePermissions } from './contexts/PermissionContext';
 import { ModuleProvider, useModules } from './contexts/ModuleContext';
@@ -21,7 +21,12 @@ import GlobalLayoutFix from './components/GlobalLayoutFix';
 import GlobalSearch from './components/GlobalSearch';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import UpdateRequiredModal from './components/mobile/UpdateRequiredModal';
+import SessionTimeoutModal from './components/mobile/SessionTimeoutModal';
 import { checkForUpdate, clearVersionCache } from './services/appVersionCheck';
+import { initializePushNotifications, teardownPushNotifications } from './services/pushNotificationService';
+import { initNotificationActions } from './services/notificationActions';
+import { initDeepLinkRouter, consumePendingDeepLink } from './services/deepLinkRouter';
+import { API_BASE_URL } from './services/api';
 import './App.css';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
@@ -38,6 +43,49 @@ import ApplicationSubmitted from './pages/ApplicationSubmitted';
 // Redirect to an external URL (outside React Router)
 function ExternalRedirect({ to }) {
   useEffect(() => { window.location.href = to; }, [to]);
+  return null;
+}
+
+/**
+ * Invisible component that initializes push notifications and notification
+ * action routing inside the Router context (so useNavigate is available).
+ * Renders nothing.
+ */
+function PushNotificationInitializer() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Wire up notification action routing with the router's navigate function
+    initNotificationActions(navigate);
+
+    // Initialize deep link router (listens for appUrlOpen, custom scheme, cold launch)
+    const cleanupDeepLinks = initDeepLinkRouter(navigate);
+
+    // Auto-initialize push if user is already authenticated
+    if (isAuthenticated()) {
+      // Consume any pending deep link that was queued before login
+      const pendingRoute = consumePendingDeepLink();
+      if (pendingRoute) {
+        navigate(pendingRoute);
+      }
+
+      // Delay to avoid blocking initial render
+      const timer = setTimeout(() => {
+        initializePushNotifications().catch((err) =>
+          console.warn('Push notification auto-init failed:', err)
+        );
+      }, 3000);
+      return () => {
+        clearTimeout(timer);
+        if (cleanupDeepLinks) cleanupDeepLinks();
+      };
+    }
+
+    return () => {
+      if (cleanupDeepLinks) cleanupDeepLinks();
+    };
+  }, [navigate]);
+
   return null;
 }
 
@@ -169,6 +217,7 @@ const MobileCalendar = lazyRetry(() => import('./pages/aria-mobile/MobileCalenda
 const MobileTasks = lazyRetry(() => import('./pages/aria-mobile/MobileTasks'));
 const MobileAppointmentDetail = lazyRetry(() => import('./pages/aria-mobile/MobileAppointmentDetail'));
 const MobileCallIntel = lazyRetry(() => import('./pages/aria-mobile/MobileCallIntel'));
+const AriaVoiceOnboarding = lazyRetry(() => import('./pages/aria-mobile/AriaVoiceOnboarding'));
 const BriefingPage = lazyRetry(() => import('./pages/BriefingPage'));
 const PowerDialer = lazyRetry(() => import('./pages/PowerDialer'));
 const UserCreationWizard = lazyRetry(() => import('./pages/UserCreationWizard'));
@@ -361,12 +410,6 @@ function PageLoadingFallback() {
 // Keep backward-compatible alias
 const PageLoader = PageLoadingFallback;
 
-// Use HTTPS Railway URL in production, localhost for development
-const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-const API_BASE_URL = isProduction
-  ? 'https://api.perenniaai.com'
-  : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
-
 function PrivateRoute({ children }) {
   const { loading: permissionsLoading } = usePermissions();
   const { loading: modulesLoading } = useModules();
@@ -412,13 +455,67 @@ function LazyPage({ children }) {
   );
 }
 
+// Floating action button for Aria — only on native (iOS) authenticated screens
+function AriaFAB() {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  if (!Capacitor.isNativePlatform()) return null;
+  if (!isAuthenticated()) return null;
+
+  // Hide on public/auth pages and when already on Aria
+  const hiddenPaths = ['/login', '/register', '/forgot-password', '/reset-password',
+    '/verify-account', '/verify-email-sent', '/aria-voice', '/aria',
+    '/mobile-aria', '/apply'];
+  if (hiddenPaths.some(p => location.pathname === p || location.pathname.startsWith(p + '/'))) {
+    return null;
+  }
+
+  return (
+    <button
+      onClick={() => navigate('/aria-voice')}
+      aria-label="Open Aria voice assistant"
+      style={{
+        position: 'fixed',
+        bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
+        right: '20px',
+        width: '56px',
+        height: '56px',
+        borderRadius: '50%',
+        background: 'linear-gradient(135deg, #1a2744 0%, #2a4a7f 100%)',
+        border: 'none',
+        boxShadow: '0 4px 12px rgba(26, 39, 68, 0.4)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        cursor: 'pointer',
+        zIndex: 9998,
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+        WebkitTapHighlightColor: 'transparent',
+      }}
+      onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
+      onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+    >
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 1C11.2044 1 10.4413 1.31607 9.87868 1.87868C9.31607 2.44129 9 3.20435 9 4V12C9 12.7956 9.31607 13.5587 9.87868 14.1213C10.4413 14.6839 11.2044 15 12 15C12.7956 15 13.5587 14.6839 14.1213 14.1213C14.6839 13.5587 15 12.7956 15 12V4C15 3.20435 14.6839 2.44129 14.1213 1.87868C13.5587 1.31607 12.7956 1 12 1Z" fill="white"/>
+        <path d="M19 10V12C19 13.8565 18.2625 15.637 16.9497 16.9497C15.637 18.2625 13.8565 19 12 19C10.1435 19 8.36301 18.2625 7.05025 16.9497C5.7375 15.637 5 13.8565 5 12V10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M12 19V23" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M8 23H16" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    </button>
+  );
+}
+
 function App() {
   // --- App version check state ---
   const [versionStatus, setVersionStatus] = useState(null);
   const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
 
-  // Hide Capacitor splash screen on mount
+  // Hide Capacitor splash screen on mount and migrate auth tokens
   useEffect(() => {
+    // Migrate any localStorage-only auth tokens to Capacitor Preferences
+    // before the app makes its first authenticated API call. No-op on web.
+    migrateAuthTokens().catch(() => {});
     SplashScreen.hide().catch(() => {});
   }, []);
 
@@ -439,27 +536,8 @@ function App() {
     return () => { listener.then(l => l.remove()); };
   }, []);
 
-  // Handle deep links when app is opened via universal link
-  useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
-
-    const listener = CapApp.addListener('appUrlOpen', (event) => {
-      try {
-        const url = new URL(event.url);
-        const path = url.pathname + url.search;
-        if (path && path !== '/') {
-          window.history.pushState({}, '', path);
-          window.dispatchEvent(new PopStateEvent('popstate'));
-        }
-      } catch (e) {
-        console.error('Deep link error:', e);
-      }
-    });
-
-    return () => {
-      listener.then(l => l.remove());
-    };
-  }, []);
+  // Deep link handling is managed by initDeepLinkRouter() in PushNotificationInitializer.
+  // It handles appUrlOpen, custom scheme (perenniaai://), and cold launch URLs.
 
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [coachOpen, setCoachOpen] = useState(false);
@@ -515,6 +593,18 @@ function App() {
           reconciliation: 0,
           smartDocs: 0
         });
+        // Clean up push notification registration on logout
+        teardownPushNotifications();
+      }
+
+      // Initialize push notifications on login
+      if (type === 'login') {
+        // Delay slightly so auth token is fully persisted
+        setTimeout(() => {
+          initializePushNotifications().catch((err) =>
+            console.warn('Push notification init failed after login:', err)
+          );
+        }, 2000);
       }
     };
 
@@ -608,6 +698,8 @@ function App() {
       <ThemeProvider>
       <ErrorBoundary>
         <OfflineIndicator />
+        {/* GLBA-compliant session timeout — warns at 13min, locks at 15min of inactivity */}
+        <SessionTimeoutModal />
         {/* Optional update banner (dismissible) */}
         {versionStatus?.updateAvailable && !updateBannerDismissed && (
           <UpdateRequiredModal
@@ -622,6 +714,7 @@ function App() {
         <ModuleProvider>
         <BrandingProvider>
           <Router>
+            <PushNotificationInitializer />
             <GlobalLayoutFix />
             <ImpersonationBanner />
             <div className="app">
@@ -3616,6 +3709,14 @@ function App() {
             }
           />
           <Route
+            path="/voice-onboarding"
+            element={
+              <PrivateRoute>
+                <LazyPage><AriaVoiceOnboarding /></LazyPage>
+              </PrivateRoute>
+            }
+          />
+          <Route
             path="/live-call-whisper"
             element={
               <PrivateRoute>
@@ -4711,6 +4812,8 @@ function App() {
         />
         {/* Global Search - floating, triggered by Cmd+K */}
         <GlobalSearch />
+        {/* Aria FAB - floating mic button on native mobile */}
+        <AriaFAB />
         </div>
       </Router>
         </BrandingProvider>

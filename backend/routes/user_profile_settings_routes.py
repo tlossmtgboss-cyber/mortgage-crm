@@ -23,6 +23,7 @@ from utils.error_handling import (
     DatabaseException,
     success_response
 )
+from utils.validators import validate_nmls
 
 logger = logging.getLogger(__name__)
 
@@ -89,14 +90,8 @@ class ProfileUpdate(BaseModel):
         return v
 
     @validator('nmls_number')
-    def validate_nmls(cls, v):
-        if v is None or v == '':
-            return None
-        # NMLS numbers are typically 5-10 digits
-        cleaned = re.sub(r'[^\d]', '', v)
-        if not re.match(r'^\d{5,10}$', cleaned):
-            raise ValueError('NMLS number should be 5-10 digits')
-        return cleaned
+    def validate_nmls_number(cls, v):
+        return validate_nmls(v)
 
     @validator('timezone')
     def validate_timezone(cls, v):
@@ -242,6 +237,10 @@ class FullProfileUpdate(BaseModel):
         if not re.match(r'^\+?[\d]{7,15}$', cleaned):
             raise ValueError('Invalid phone number format')
         return v
+
+    @validator('nmls_number')
+    def validate_nmls_number(cls, v):
+        return validate_nmls(v)
 
     @validator('work_hours_start', 'work_hours_end')
     def validate_time_format(cls, v):
@@ -698,6 +697,10 @@ class UserMeUpdate(BaseModel):
     work_days: Optional[List[str]] = None
     daily_hours: Optional[Dict[str, Dict[str, str]]] = None
     blocked_times: Optional[List[Dict[str, Any]]] = None
+
+    @validator('nmls_number')
+    def validate_nmls_number(cls, v):
+        return validate_nmls(v)
 
 
 @users_router.get("/me")

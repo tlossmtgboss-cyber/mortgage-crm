@@ -11,7 +11,7 @@ Provides endpoints for:
 - Run rate analysis and forecasting
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -1212,6 +1212,7 @@ async def list_efficiency_reports(
 
 @router.get("/export")
 async def export_sla_report(
+    request: Request,
     start_date: date = Query(None),
     end_date: date = Query(None),
     format: str = Query("csv", description="Export format (csv)"),
@@ -1310,6 +1311,18 @@ async def export_sla_report(
 
     output.seek(0)
     filename = f"sla_report_{start_date.isoformat()}_to_{end_date.isoformat()}.csv"
+
+    try:
+        from utils.export_audit import log_export_event, _get_client_ip
+        org_id = getattr(current_user, "organization_id", None)
+        log_export_event(
+            db=db, user_id=current_user.id, organization_id=org_id,
+            resource_type="sla_report", export_format="csv",
+            ip_address=_get_client_ip(request),
+            details={"start_date": start_date.isoformat(), "end_date": end_date.isoformat()},
+        )
+    except Exception:
+        pass
 
     return StreamingResponse(
         iter([output.getvalue()]),

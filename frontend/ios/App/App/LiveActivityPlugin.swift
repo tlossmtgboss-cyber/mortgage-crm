@@ -3,7 +3,7 @@
  * Perennia AI - Capacitor Plugin for Live Activity Management
  *
  * Bridges LiveActivityManager to the React/Capacitor JavaScript layer.
- * Exposes methods to start, update, end, and query Live Activities
+ * Exposes methods to start, update, end, refresh, and query Live Activities
  * for loan closing status.
  *
  * JS usage (via Capacitor):
@@ -26,6 +26,9 @@
  *     nextAction: 'Title company preparing docs',
  *     estimatedClose: '2026-04-21T00:00:00Z'
  *   });
+ *
+ *   // Refresh all from backend
+ *   await LiveActivity.refreshFromBackend();
  *
  *   // End
  *   await LiveActivity.endClosingActivity({
@@ -51,6 +54,7 @@ public class LiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "endClosingActivity", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "endAllActivities", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getActiveActivities", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "refreshFromBackend", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "checkAvailability", returnType: CAPPluginReturnPromise)
     ]
 
@@ -99,8 +103,8 @@ public class LiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
     ///
     /// Returns: { activityId, loanId, stage, progress, pushToken? } or { error }
     @objc func startClosingActivity(_ call: CAPPluginCall) {
-        guard #available(iOS 16.1, *) else {
-            call.reject("Live Activities require iOS 16.1 or later")
+        guard #available(iOS 16.2, *) else {
+            call.reject("Live Activities require iOS 16.2 or later")
             return
         }
 
@@ -147,8 +151,8 @@ public class LiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
     ///
     /// Returns: { activityId, loanId, stage, progress, updated } or { error }
     @objc func updateClosingActivity(_ call: CAPPluginCall) {
-        guard #available(iOS 16.1, *) else {
-            call.reject("Live Activities require iOS 16.1 or later")
+        guard #available(iOS 16.2, *) else {
+            call.reject("Live Activities require iOS 16.2 or later")
             return
         }
 
@@ -192,8 +196,8 @@ public class LiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
     ///
     /// Returns: { activityId, loanId, finalStage, ended } or { error }
     @objc func endClosingActivity(_ call: CAPPluginCall) {
-        guard #available(iOS 16.1, *) else {
-            call.reject("Live Activities require iOS 16.1 or later")
+        guard #available(iOS 16.2, *) else {
+            call.reject("Live Activities require iOS 16.2 or later")
             return
         }
 
@@ -228,19 +232,13 @@ public class LiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
     ///
     /// Returns: { ended: true, count: N }
     @objc func endAllActivities(_ call: CAPPluginCall) {
-        guard #available(iOS 16.1, *) else {
-            call.reject("Live Activities require iOS 16.1 or later")
+        guard #available(iOS 16.2, *) else {
+            call.reject("Live Activities require iOS 16.2 or later")
             return
         }
 
         Task {
-            let count: Int
-            if #available(iOS 16.1, *) {
-                count = Activity<ClosingActivityAttributes>.activities.count
-            } else {
-                count = 0
-            }
-
+            let count = Activity<ClosingActivityAttributes>.activities.count
             await LiveActivityManager.shared.endAllActivities()
 
             call.resolve([
@@ -256,7 +254,7 @@ public class LiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
     ///
     /// Returns: { activities: [{ activityId, loanId, borrowerName, currentStage, ... }] }
     @objc func getActiveActivities(_ call: CAPPluginCall) {
-        guard #available(iOS 16.1, *) else {
+        guard #available(iOS 16.2, *) else {
             call.resolve(["activities": []])
             return
         }
@@ -265,12 +263,30 @@ public class LiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve(["activities": activities.map { sanitizeForJS($0) }])
     }
 
+    // MARK: - Refresh from Backend
+
+    /// Fetch latest data from the backend for all active Live Activities.
+    /// Activities that fail to refresh keep their stale data (graceful degradation).
+    ///
+    /// Returns: { refreshed: N, errors: N, total: N }
+    @objc func refreshFromBackend(_ call: CAPPluginCall) {
+        guard #available(iOS 16.2, *) else {
+            call.resolve(["refreshed": 0, "error": "Live Activities require iOS 16.2 or later"])
+            return
+        }
+
+        Task {
+            let result = await LiveActivityManager.shared.refreshFromBackend()
+            call.resolve(self.sanitizeForJS(result))
+        }
+    }
+
     // MARK: - Check Availability
 
     /// Check whether Live Activities are available and enabled on this device.
     ///
     /// Returns: {
-    ///   available: Bool,          // iOS 16.1+ device
+    ///   available: Bool,          // iOS 16.2+ device
     ///   areActivitiesEnabled: Bool, // User has not disabled in Settings
     ///   frequentPushesEnabled: Bool,
     ///   activeCount: Int,
@@ -281,7 +297,7 @@ public class LiveActivityPlugin: CAPPlugin, CAPBridgedPlugin {
             "available": LiveActivityManagerCompat.isAvailable()
         ]
 
-        if #available(iOS 16.1, *) {
+        if #available(iOS 16.2, *) {
             let info = LiveActivityManager.shared.areActivitiesAvailable()
             for (key, value) in info {
                 result[key] = value

@@ -1797,19 +1797,42 @@ class NotificationCenterService:
         severity: str,
         notification_type: str,
     ) -> bool:
-        """Send a push notification to a user.
+        """Send a push notification to a user via APNs/FCM.
 
-        Push delivery is a placeholder; when a push provider (Firebase,
-        OneSignal, etc.) is integrated, this method will delegate to it.
+        Delegates to PushNotificationService which handles APNs JWT auth,
+        HTTP/2 delivery, token invalidation on 410, and FCM.
         """
-        logger.debug(
-            "Push notification queued for user %s (provider not configured): %s",
-            user_id,
-            title,
-        )
-        # Push infrastructure not yet integrated; return False so
-        # push_sent stays False on the record until a provider is wired up.
-        return False
+        try:
+            from services.push_notification_service import send_push_to_user
+
+            data = {
+                "type": notification_type,
+                "severity": severity,
+                "route": "/smart-docs",
+            }
+
+            result = send_push_to_user(
+                user_id=user_id,
+                title=title,
+                body=body,
+                data=data,
+                notification_type=notification_type,
+            )
+
+            sent = result.get("sent", 0)
+            if sent > 0:
+                logger.info("Push notification sent to user %s: %s", user_id, title)
+                return True
+            else:
+                logger.debug(
+                    "Push notification not delivered to user %s (sent=%d, skipped=%d): %s",
+                    user_id, sent, result.get("skipped", 0), title,
+                )
+                return False
+
+        except Exception as e:
+            logger.warning("Push notification failed for user %s: %s", user_id, e)
+            return False
 
 
 # =============================================================================

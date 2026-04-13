@@ -865,6 +865,7 @@ async def send_reminder(
 
 @router.get("/envelopes/{envelope_uuid}/download")
 async def download_signed_document(
+    request: Request,
     envelope_uuid: str,
     db: Session = Depends(get_db),
     current_user: Any = Depends(get_current_user),
@@ -899,6 +900,19 @@ async def download_signed_document(
             description="Signed document downloaded",
             metadata={"by_user_id": current_user.id},
         )
+
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=current_user.id,
+                organization_id=getattr(current_user, "organization_id", None),
+                resource_type="signed_document", export_format="pdf",
+                ip_address=_get_client_ip(request),
+                details={"envelope_uuid": envelope_uuid, "is_signed": envelope.signed_document_storage_key is not None},
+            )
+        except Exception:
+            pass
+
         db.commit()
 
         return {

@@ -2,12 +2,6 @@
 from dotenv import load_dotenv
 load_dotenv()
 
-# Increase recursion limit for FastAPI's merged_lifespan chain.
-# Each app.include_router() adds a nesting level; with 400+ routers the default
-# limit of 1000 is exceeded, causing RecursionError on startup.
-import sys
-sys.setrecursionlimit(4000)
-
 # Suppress warnings in production to avoid Railway rate limiting (500 logs/sec limit)
 import warnings
 import os as _os
@@ -152,36 +146,29 @@ try:
     from auth.config import get_auth_settings
     _USE_SECURE_TOKENS = True
 
-    # Initialize centralized Redis service and token blacklist
-    from services.redis_service import redis_service as _redis_service
+    # Initialize token blacklist with Redis if configured
     _redis_url = os.getenv("REDIS_URL")
-    _redis_ok = _redis_service.initialize(_redis_url)
     if _redis_url:
         token_blacklist.initialize(_redis_url)
-        if _redis_ok:
-            logger.info("Token blacklist initialized with Redis (validated)")
-        else:
-            logger.warning("Token blacklist initialized with Redis URL but connectivity unverified")
+        # Validate Redis connectivity at startup
+        try:
+            import redis
+            _r = redis.from_url(_redis_url, socket_timeout=5)
+            _r.ping()
+            logger.info("Redis connection verified")
+            _r.close()
+        except Exception as e:
+            logger.error(f"Redis connection FAILED: {e} — token revocation and rate limiting may not work")
+        logger.info("Token blacklist initialized with Redis")
     else:
         _env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
         if _env in ("production", "staging"):
             logger.error("REDIS_URL not set — token revocation disabled in production")
         else:
             logger.warning("REDIS_URL not set — using in-memory token blacklist (dev only)")
-
 except ImportError as e:
     logger.warning(f"⚠️ Secure auth module not available, using legacy JWT: {e}")
     _USE_SECURE_TOKENS = False
-
-# Install encryption key rotation support (RotatingFernet) if both keys present.
-# This is independent of the auth module — EncryptedString columns in lead_loan,
-# borrower, core, and communication models use encryption_utils.EncryptionManager.
-try:
-    from services.encryption_key_rotation import install_rotating_fernet
-    if install_rotating_fernet():
-        logger.info("Encryption key rotation active (DATA_ENCRYPTION_KEY_PREVIOUS is set)")
-except Exception as _rot_err:
-    logger.warning(f"Encryption key rotation setup skipped: {_rot_err}")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
@@ -413,6 +400,16 @@ app.add_middleware(RequestTrackingMiddleware, shutdown_handler=graceful_shutdown
 # Security middleware runs first, then CORS wraps everything including error responses
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestValidationMiddleware)
+
+# Request Validator — Content-Type (415), Content-Length / size limit (413),
+# path traversal, null-byte, SQL injection, and XSS checks.
+try:
+    from middleware.request_validator import RequestValidatorMiddleware
+    app.add_middleware(RequestValidatorMiddleware)
+    logger.info("✅ Request validator middleware enabled (Content-Type, size limit, injection checks)")
+except Exception as e:
+    logger.warning(f"⚠️ Request validator middleware not loaded: {e}")
+
 app.add_middleware(IPBlockingMiddleware)
 # Rate limiting - per-user for authenticated, per-IP for anonymous
 # Supports role-based tiers (admin/power_user/standard/anonymous) and endpoint-specific limits
@@ -449,6 +446,27 @@ try:
     logger.info("✅ Performance monitoring middleware enabled")
 except Exception as e:
     logger.warning(f"⚠️ Performance monitoring middleware not loaded: {e}")
+
+# Per-User/Per-IP API Rate Limiting — sliding window, Redis-backed with in-memory fallback
+# Enforces hard per-identity ceilings with prefix-specific tuning (AI=30/min, pipeline=120/min, etc.)
+# Must be added BEFORE TenantContextMiddleware (LIFO: Tenant sets user, then this reads it)
+try:
+    from middleware.api_rate_limit import APIRateLimitMiddleware
+    app.add_middleware(APIRateLimitMiddleware)
+    logger.info("API rate limiting middleware enabled (per-user/per-IP sliding window)")
+except Exception as e:
+    logger.warning(f"API rate limiting middleware not loaded: {e}")
+
+# Mobile-Specific Rate Limiting — in-memory sliding window, no Redis required
+# Applies only to requests from mobile apps (Capacitor/iOS/Android via User-Agent or X-Mobile-App header)
+# Auth: 100 req/min, unauth: 20 req/min, with per-endpoint overrides for dashboard/sync/auth
+# Must be added BEFORE TenantContextMiddleware (LIFO: inner = runs after Tenant sets user)
+try:
+    from middleware.mobile_rate_limit import MobileRateLimitMiddleware
+    app.add_middleware(MobileRateLimitMiddleware)
+    logger.info("Mobile rate limiting middleware enabled (per-user/per-IP, mobile UA only)")
+except Exception as e:
+    logger.warning(f"Mobile rate limiting middleware not loaded: {e}")
 
 # Per-Tenant Rate Limiting — in-memory sliding window, no Redis required
 # Must be added BEFORE TenantContextMiddleware (LIFO: Tenant Context added later
@@ -561,6 +579,18 @@ except Exception as e:
     dd_metrics = None
 
 # ============================================================================
+# CACHE-CONTROL MIDDLEWARE — Sets Cache-Control headers for mobile API responses
+# Dashboard/pipeline: private, max-age=60 | Config: public, max-age=300
+# User data (leads/loans/tasks): private, no-cache | Health: no-store
+# ============================================================================
+try:
+    from middleware.cache_control import CacheControlMiddleware
+    app.add_middleware(CacheControlMiddleware)
+    logger.info("✅ Cache-Control middleware enabled (path-based response caching)")
+except Exception as e:
+    logger.warning(f"⚠️ Cache-Control middleware not loaded: {e}")
+
+# ============================================================================
 # CORS MIDDLEWARE — MUST be added LAST to be the absolute outermost middleware
 # In Starlette/FastAPI, middleware is LIFO: last added = outermost = first to execute.
 # This ensures CORS headers are present on ALL responses, including errors from
@@ -574,7 +604,8 @@ try:
         allow_headers=[
             "Accept", "Accept-Language", "Authorization", "Content-Language",
             "Content-Type", "Origin", "X-Requested-With", "X-CSRF-Token",
-            "X-Request-ID", "X-Visitor-ID", "X-Impersonation-Token",
+            "X-Request-ID", "X-Visitor-ID", "X-API-Key", "X-Impersonation-Token",
+            "X-Mask-PII",
         ],
         expose_headers=[
             "Content-Length", "Content-Type", "X-Request-ID", "X-Response-Time",
@@ -1670,6 +1701,46 @@ except Exception as e:
     logger.warning(f"Mobile analytics routes not loaded: {e}")
 
 # ============================================================================
+# MOBILE DASHBOARD ROUTES — Proxy endpoints for iOS PerenniaWidget
+# ============================================================================
+try:
+    from routes.mobile_dashboard_routes import router as mobile_dashboard_router
+    app.include_router(mobile_dashboard_router, tags=["Mobile Dashboard"])
+    logger.info("Mobile dashboard routes loaded")
+except Exception as e:
+    logger.warning(f"Mobile dashboard routes not loaded: {e}")
+
+# ============================================================================
+# MOBILE NOTIFICATION ROUTES — Notifications for iOS VisionPro + mobile app
+# ============================================================================
+try:
+    from routes.mobile_notification_routes import router as mobile_notification_router
+    app.include_router(mobile_notification_router, tags=["Mobile Notifications"])
+    logger.info("Mobile notification routes loaded")
+except Exception as e:
+    logger.warning(f"Mobile notification routes not loaded: {e}")
+
+# ============================================================================
+# MOBILE SYNC ROUTES — Offline sync queue for mobile clients
+# ============================================================================
+try:
+    from routes.mobile_sync_routes import router as mobile_sync_router
+    app.include_router(mobile_sync_router, tags=["Mobile Sync"])
+    logger.info("Mobile sync routes loaded")
+except Exception as e:
+    logger.warning(f"Mobile sync routes not loaded: {e}")
+
+# ============================================================================
+# VOICE PROFILE ROUTES — Aria voice enrollment, verification, GDPR delete
+# ============================================================================
+try:
+    from routes.voice_profile_routes import router as voice_profile_router
+    app.include_router(voice_profile_router, tags=["Voice Profile"])
+    logger.info("Voice profile routes loaded")
+except Exception as e:
+    logger.warning(f"Voice profile routes not loaded: {e}")
+
+# ============================================================================
 # SCHEDULER ENHANCEMENT ROUTES (March 2026 sprint)
 # ============================================================================
 
@@ -1716,14 +1787,6 @@ try:
     logger.info("AI outbound calling routes loaded")
 except Exception as e:
     logger.warning(f"AI outbound calling routes skipped: {e}")
-
-# AI Email — compose, send, template send via Microsoft Graph
-try:
-    from routes.ai_email_routes import router as ai_email_router
-    app.include_router(ai_email_router, tags=["AI Email"])
-    logger.info("AI Email routes loaded")
-except Exception as e:
-    logger.warning(f"AI Email routes skipped: {e}")
 
 # SMS scheduler webhook routes
 try:
@@ -1904,80 +1967,6 @@ except Exception as e:
     logger.warning(f"SMS conversation routes skipped: {e}")
 
 # ============================================================================
-# ENGAGEMENT ENGINE ROUTES — Live Transfer, LO Availability, AMD, Drip, etc.
-# ============================================================================
-try:
-    from routes.live_transfer_routes import router as live_transfer_router
-    app.include_router(live_transfer_router, tags=["Live Transfer"])
-    logger.info("✅ Live transfer routes loaded")
-except Exception as e:
-    logger.warning(f"Live transfer routes skipped: {e}")
-
-try:
-    from routes.lo_availability_routes import router as lo_availability_router
-    app.include_router(lo_availability_router, tags=["LO Availability"])
-    logger.info("✅ LO availability routes loaded")
-except Exception as e:
-    logger.warning(f"LO availability routes skipped: {e}")
-
-try:
-    from routes.speed_to_lead_call_routes import router as stl_call_router
-    app.include_router(stl_call_router, tags=["Speed to Lead Auto-Call"])
-    logger.info("✅ Speed-to-lead auto-call routes loaded")
-except Exception as e:
-    logger.warning(f"Speed-to-lead auto-call routes skipped: {e}")
-
-try:
-    from routes.amd_voicemail_routes import router as amd_voicemail_router
-    app.include_router(amd_voicemail_router, tags=["AMD Voicemail"])
-    logger.info("✅ AMD voicemail routes loaded")
-except Exception as e:
-    logger.warning(f"AMD voicemail routes skipped: {e}")
-
-try:
-    from routes.drip_sequence_routes import router as drip_sequence_router
-    app.include_router(drip_sequence_router, tags=["Drip Sequences"])
-    logger.info("✅ Drip sequence routes loaded")
-except Exception as e:
-    logger.warning(f"Drip sequence routes skipped: {e}")
-
-try:
-    from routes.engagement_dashboard_routes import router as engagement_dashboard_router
-    app.include_router(engagement_dashboard_router, tags=["Engagement Dashboard"])
-    logger.info("✅ Engagement dashboard routes loaded")
-except Exception as e:
-    logger.warning(f"Engagement dashboard routes skipped: {e}")
-
-try:
-    from routes.engagement_health_routes import router as engagement_health_router
-    app.include_router(engagement_health_router)
-    logger.info("Engagement health routes registered")
-except Exception as e:
-    logger.warning(f"Engagement health routes not loaded: {e}")
-
-try:
-    from routes.script_customization_routes import router as script_customization_router
-    app.include_router(script_customization_router, tags=["Script Customization"])
-    logger.info("✅ Script customization routes loaded")
-except Exception as e:
-    logger.warning(f"Script customization routes skipped: {e}")
-
-try:
-    from routes.lead_routing_routes import router as lead_routing_router
-    app.include_router(lead_routing_router, tags=["Lead Routing"])
-    logger.info("✅ Lead routing routes loaded")
-except Exception as e:
-    logger.warning(f"Lead routing routes skipped: {e}")
-
-try:
-    from routes.call_monitoring_routes import router as call_monitoring_router, set_dependencies as set_call_monitor_deps
-    set_call_monitor_deps(user_dependency=get_current_user)
-    app.include_router(call_monitoring_router, tags=["Call Monitoring"])
-    logger.info("✅ Call monitoring routes loaded")
-except Exception as e:
-    logger.warning(f"Call monitoring routes skipped: {e}")
-
-# ============================================================================
 # APP VERSION COMPATIBILITY ROUTES (unauthenticated — mobile pre-login)
 # ============================================================================
 try:
@@ -2137,7 +2126,7 @@ except Exception as e:
 # --- Health & system status ---
 try:
     from routes.health_routes import register_health_routes
-    register_health_routes(app=app, get_db=get_db)
+    register_health_routes(app=app, get_db=get_db, SessionLocal=SessionLocal)
     logger.info("Health routes loaded")
 except Exception as e:
     logger.warning(f"Health routes failed to load: {e}")
@@ -2222,18 +2211,6 @@ try:
     logger.info("Compliance routes loaded")
 except Exception as e:
     logger.warning(f"Compliance routes failed to load: {e}")
-
-# --- Compliance Validation (TRID, ECOA, HMDA, stage-transition) ---
-try:
-    from routes.compliance_validation_routes import register_compliance_validation_routes
-    register_compliance_validation_routes(
-        app=app,
-        get_db=get_db,
-        get_current_user=get_current_user,
-    )
-    logger.info("Compliance validation routes loaded")
-except Exception as e:
-    logger.warning(f"Compliance validation routes failed to load: {e}")
 
 # --- Data import (CSV/Excel lead import, field mapping, rollback) ---
 try:
@@ -2604,6 +2581,179 @@ try:
     logger.info("Debug data routes loaded")
 except Exception as e:
     logger.warning(f"Debug data routes failed to load: {e}")
+
+# ============================================================================
+# NEW ROUTE REGISTRATIONS — Security, Dashboard, CRM, Telephony, Compliance
+# ============================================================================
+
+# --- Security Audit (penetration test logging, vulnerability tracking) ---
+try:
+    from routes.security_audit_routes import router as security_audit_router
+    app.include_router(security_audit_router, tags=["Security Audit"])
+    logger.info("Security audit routes loaded")
+except Exception as e:
+    logger.warning(f"Security audit routes skipped: {e}")
+
+# --- Security Certificate Pinning (SPKI hash serving, pin failure reporting) ---
+try:
+    from routes.security_certificate_routes import router as security_certificate_router
+    app.include_router(security_certificate_router, tags=["Security Certificates"])
+    logger.info("Security certificate routes loaded")
+except Exception as e:
+    logger.warning(f"Security certificate routes skipped: {e}")
+
+# --- Security Dashboard (admin security overview, IP blocking) ---
+try:
+    from routes.security_dashboard_routes import router as security_dashboard_router
+    app.include_router(security_dashboard_router, tags=["Security Dashboard"])
+    logger.info("Security dashboard routes loaded")
+except Exception as e:
+    logger.warning(f"Security dashboard routes skipped: {e}")
+
+# --- Dashboard Summary (pipeline, lead, loan summary stats) ---
+try:
+    from routes.dashboard_summary_routes import router as dashboard_summary_router
+    app.include_router(dashboard_summary_router, tags=["Dashboard"])
+    logger.info("Dashboard summary routes loaded")
+except Exception as e:
+    logger.warning(f"Dashboard summary routes skipped: {e}")
+
+# --- Engagement Health (engagement subsystem health checks) ---
+try:
+    from routes.engagement_health_routes import router as engagement_health_router
+    app.include_router(engagement_health_router, tags=["Engagement Health"])
+    logger.info("Engagement health routes loaded")
+except Exception as e:
+    logger.warning(f"Engagement health routes skipped: {e}")
+
+# --- Form 1084 (Fannie Mae Cash Flow Analysis generation) ---
+try:
+    from routes.form_1084_routes import router as form_1084_router
+    app.include_router(form_1084_router, tags=["Form 1084"])
+    logger.info("Form 1084 routes loaded")
+except Exception as e:
+    logger.warning(f"Form 1084 routes skipped: {e}")
+
+# --- LO Availability (real-time presence, transfer readiness) ---
+try:
+    from routes.lo_availability_routes import router as lo_availability_router
+    app.include_router(lo_availability_router, tags=["LO Availability"])
+    logger.info("LO availability routes loaded")
+except Exception as e:
+    logger.warning(f"LO availability routes skipped: {e}")
+
+# --- Email Response Queue (AI-assisted email handling with approval workflow) ---
+try:
+    from routes.email_response_queue_routes import router as email_response_queue_router
+    from routes.email_response_queue_routes import set_dependencies as set_email_queue_deps
+    from database.models import User as _UserModelEQ
+    set_email_queue_deps(_UserModelEQ, get_current_user, get_db)
+    app.include_router(email_response_queue_router, tags=["Email Response Queue"])
+    logger.info("Email response queue routes loaded")
+except Exception as e:
+    logger.warning(f"Email response queue routes skipped: {e}")
+
+# --- Live Transfer (warm/cold call transfer with LO whisper audio) ---
+try:
+    from routes.live_transfer_routes import router as live_transfer_router
+    app.include_router(live_transfer_router, tags=["Live Transfer"])
+    logger.info("Live transfer routes loaded")
+except Exception as e:
+    logger.warning(f"Live transfer routes skipped: {e}")
+
+# --- AMD Voicemail (answering machine detection → auto voicemail drop) ---
+try:
+    from routes.amd_voicemail_routes import router as amd_voicemail_router
+    app.include_router(amd_voicemail_router, tags=["AMD Voicemail"])
+    logger.info("AMD voicemail routes loaded")
+except Exception as e:
+    logger.warning(f"AMD voicemail routes skipped: {e}")
+
+# --- Speed to Lead (instant lead response triggers) ---
+try:
+    from routes.speed_to_lead_routes import router as speed_to_lead_router
+    app.include_router(speed_to_lead_router, tags=["Speed to Lead"])
+    logger.info("Speed to Lead routes loaded")
+except Exception as e:
+    logger.warning(f"Speed to Lead routes skipped: {e}")
+
+# --- Speed to Lead Calls (auto-dial new leads for fastest contact) ---
+try:
+    from routes.speed_to_lead_call_routes import router as speed_to_lead_call_router
+    app.include_router(speed_to_lead_call_router, tags=["Speed to Lead"])
+    logger.info("Speed to Lead call routes loaded")
+except Exception as e:
+    logger.warning(f"Speed to Lead call routes skipped: {e}")
+
+# --- SMS Compliance (opt-out handling, DNC enforcement) ---
+try:
+    from routes.sms_compliance_routes import router as sms_compliance_router
+    app.include_router(sms_compliance_router, tags=["SMS Compliance"])
+    logger.info("SMS compliance routes loaded")
+except Exception as e:
+    logger.warning(f"SMS compliance routes skipped: {e}")
+
+# --- Lead Routing (round-robin, rules-based lead distribution) ---
+try:
+    from routes.lead_routing_routes import router as lead_routing_router
+    app.include_router(lead_routing_router, tags=["Lead Routing"])
+    logger.info("Lead routing routes loaded")
+except Exception as e:
+    logger.warning(f"Lead routing routes skipped: {e}")
+
+# --- Compliance Validation (TRID, ECOA, HMDA, stage-transition checks) ---
+try:
+    from routes.compliance_validation_routes import register_compliance_validation_routes
+    register_compliance_validation_routes(
+        app=app,
+        get_db=get_db,
+        get_current_user=get_current_user,
+    )
+    logger.info("Compliance validation routes loaded")
+except Exception as e:
+    logger.warning(f"Compliance validation routes skipped: {e}")
+
+# --- Command Center (unified action items dashboard) ---
+try:
+    from routes.command_center_routes import router as command_center_router
+    from routes.command_center_routes import set_dependencies as set_command_center_deps
+    from database.models import User as _UserModelCC, Lead as _LeadModelCC, Loan as _LoanModelCC
+    from database.models.task import Task as _TaskModelCC
+    from database.models.ai import AIAction as _AIActionModelCC
+    set_command_center_deps(
+        _UserModelCC, _TaskModelCC, _LeadModelCC, _LoanModelCC, _AIActionModelCC,
+        get_current_user_flexible, get_db
+    )
+    app.include_router(command_center_router, tags=["Command Center"])
+    logger.info("Command center routes loaded")
+except Exception as e:
+    logger.warning(f"Command center routes skipped: {e}")
+
+# --- Meeting Routes (meeting link generation, room endpoints) ---
+try:
+    from routes.meeting_routes import router as meeting_router
+    from routes.meeting_routes import set_dependencies as set_meeting_deps
+    set_meeting_deps(get_db, get_current_user, {})
+    app.include_router(meeting_router, tags=["Meetings"])
+    logger.info("Meeting routes loaded")
+except Exception as e:
+    logger.warning(f"Meeting routes skipped: {e}")
+
+# --- Call Intelligence Review Queue ---
+try:
+    from routes.call_intelligence_review_routes import router as ci_review_router
+    app.include_router(ci_review_router, tags=["Call Intelligence Reviews"])
+    logger.info("Call intelligence review routes loaded")
+except Exception as e:
+    logger.warning(f"Call intelligence review routes skipped: {e}")
+
+# --- Rate Monitor (iOS-compatible alerts) ---
+try:
+    from routes.rate_monitor_routes import router as rate_monitor_ios_router
+    app.include_router(rate_monitor_ios_router, tags=["Rate Monitor"])
+    logger.info("Rate monitor iOS routes loaded")
+except Exception as e:
+    logger.warning(f"Rate monitor iOS routes skipped: {e}")
 
 # ============================================================================
 # STARTUP EVENT — Initialize scheduler for workflow task generation
@@ -3067,6 +3217,15 @@ async def startup_event():
         logger.error(f"CRITICAL: Missing route registrations: {missing}")
     else:
         logger.info(f"✅ All {len(critical_paths)} critical route groups verified")
+
+    # Verify certificate pins against live TLS chains (non-blocking background task)
+    try:
+        from routes.security_certificate_routes import _run_startup_pin_check
+        import asyncio
+        asyncio.create_task(_run_startup_pin_check())
+        logger.info("Certificate pin verification scheduled (background)")
+    except Exception as e:
+        logger.warning(f"Certificate pin verification skipped: {e}")
 
 
 def _run_critical_schema_migrations():

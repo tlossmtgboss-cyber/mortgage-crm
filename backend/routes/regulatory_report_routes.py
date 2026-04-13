@@ -8,7 +8,7 @@ HMDA LAR export, state regulatory filing generation, and compliance report manag
     GET  /api/v1/admin/compliance/reports               — List generated reports
     GET  /api/v1/admin/compliance/reports/{id}/download  — Download report file
 """
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from pydantic import BaseModel
@@ -499,6 +499,7 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
     # ==================================================================
     @app.get("/api/v1/admin/compliance/reports/{report_id}/download", tags=["Regulatory Reports"])
     async def download_regulatory_report(
+        request: Request,
         report_id: int,
         db: Session = Depends(get_db),
         current_user=Depends(get_current_user),
@@ -516,6 +517,17 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
 
         if not row:
             raise HTTPException(status_code=404, detail="Report not found")
+
+        try:
+            from utils.export_audit import log_export_event, _get_client_ip
+            log_export_event(
+                db=db, user_id=current_user.id, organization_id=org_id,
+                resource_type="regulatory_report", export_format=row[2] or "json",
+                ip_address=_get_client_ip(request),
+                details={"report_id": report_id, "report_type": row[0], "record_count": row[6]},
+            )
+        except Exception:
+            pass
 
         return {
             "report_type": row[0],

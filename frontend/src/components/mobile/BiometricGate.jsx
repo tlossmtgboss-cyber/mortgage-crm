@@ -8,7 +8,7 @@
  * Behavior:
  * - On native with biometrics: shows verification screen, prompts biometric auth
  * - On web or when biometric unavailable: renders children immediately
- * - Caches auth for 5 minutes (configurable via AUTH_CACHE_MS)
+ * - Caches auth for 30 minutes (configurable via AUTH_CACHE_MS)
  * - User can disable via preference toggle in Security settings
  * - Rate limited: max 5 attempts per 30 seconds
  *
@@ -33,7 +33,8 @@ import './BiometricGate.css';
 // Constants
 // ---------------------------------------------------------------------------
 
-const AUTH_CACHE_MS = 5 * 60 * 1000; // 5 minutes
+// 30-minute auth cache — re-prompt on inactivity, not per-document access
+const AUTH_CACHE_MS = 30 * 60 * 1000;
 const RATE_LIMIT_WINDOW_MS = 30 * 1000; // 30 seconds
 const RATE_LIMIT_MAX_ATTEMPTS = 5;
 
@@ -203,7 +204,7 @@ function BiometricGate({
       return;
     }
 
-    // Check 5-minute cache
+    // Check 30-minute auth cache
     if (lastAuthTime && Date.now() - lastAuthTime < AUTH_CACHE_MS) {
       setIsAuthenticated(true);
       setIsChecking(false);

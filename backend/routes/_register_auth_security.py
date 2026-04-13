@@ -152,6 +152,14 @@ def register_auth_security_routes(app, get_db, get_current_user, get_current_use
     except Exception as e:
         logger.warning(f"Could not load User Roles routes: {e}")
 
+    # Include Certificate Pinning routes (iOS app pin refresh + failure reporting)
+    try:
+        from routes.security_certificate_routes import router as security_certificate_router
+        app.include_router(security_certificate_router)
+        logger.info("Certificate pinning routes loaded (certificate-pins, pin-failure)")
+    except Exception as e:
+        logger.warning(f"Certificate pinning routes not loaded: {e}")
+
     # Include Security Monitoring routes (Admin Dashboard Security Tab)
     try:
         from routes.security_monitoring_routes import router as security_monitoring_router, set_dependencies as set_security_monitoring_deps

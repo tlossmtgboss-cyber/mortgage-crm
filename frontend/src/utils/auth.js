@@ -1,7 +1,10 @@
-import { getItem, setItem, removeItem, getJSON, setJSON, STORAGE_KEYS } from './storage';
+import { getItem, setItem, removeItem, getJSON, setJSON, STORAGE_KEYS, clearAllAuthTokens, migrateTokensToSecureStorage } from './storage';
 
-export const setAuth = async (token, user) => {
+export const setAuth = async (token, user, refreshToken) => {
   await setItem(STORAGE_KEYS.TOKEN, token);
+  if (refreshToken) {
+    await setItem(STORAGE_KEYS.REFRESH_TOKEN, refreshToken);
+  }
   await setJSON(STORAGE_KEYS.USER, user);
   // Dispatch custom event to notify contexts of auth change
   window.dispatchEvent(new CustomEvent('authChange', { detail: { type: 'login', user } }));
@@ -14,11 +17,19 @@ export const getAuth = async () => {
 };
 
 export const clearAuth = async () => {
-  await removeItem(STORAGE_KEYS.TOKEN);
-  await removeItem(STORAGE_KEYS.USER);
+  // Clear from ALL storage locations (Preferences + localStorage) to prevent
+  // stale tokens surviving in one store after logout.
+  await clearAllAuthTokens();
   // Dispatch custom event to notify contexts of auth change
   window.dispatchEvent(new CustomEvent('authChange', { detail: { type: 'logout' } }));
 };
+
+/**
+ * Migrate any localStorage-only auth tokens to Capacitor Preferences.
+ * Call once on app startup (before auth checks) to ensure the secure store
+ * is authoritative on native platforms. No-op on web.
+ */
+export const migrateAuthTokens = migrateTokensToSecureStorage;
 
 export const isAuthenticated = async () => {
   const token = await getItem(STORAGE_KEYS.TOKEN);

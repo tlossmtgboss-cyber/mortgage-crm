@@ -59,10 +59,10 @@ struct PerenniaShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: CallBorrowerIntent(),
             phrases: [
-                "Call borrower \(\.$name) in \(.applicationName)",
-                "Call \(\.$name) in \(.applicationName)",
-                "Phone \(\.$name) in \(.applicationName)",
-                "Dial \(\.$name) in \(.applicationName)"
+                "Call a borrower in \(.applicationName)",
+                "Call borrower in \(.applicationName)",
+                "Phone a borrower in \(.applicationName)",
+                "Dial a borrower in \(.applicationName)"
             ],
             shortTitle: "Call Borrower",
             systemImageName: "phone.fill"
@@ -92,8 +92,8 @@ struct PerenniaShortcuts: AppShortcutsProvider {
             phrases: [
                 "Add a note in \(.applicationName)",
                 "Quick note in \(.applicationName)",
-                "Note for \(\.$leadName) in \(.applicationName)",
-                "Add note to \(\.$leadName) in \(.applicationName)"
+                "Note for a lead in \(.applicationName)",
+                "Add note to a lead in \(.applicationName)"
             ],
             shortTitle: "Quick Note",
             systemImageName: "note.text.badge.plus"

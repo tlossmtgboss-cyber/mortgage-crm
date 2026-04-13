@@ -275,19 +275,6 @@ export default function BorrowerLogin() {
             </form>
           )}
 
-          {/* Demo/Testing Button */}
-          <div className="demo-section">
-            <div className="demo-divider">
-              <span>For Testing</span>
-            </div>
-            <button
-              className="btn-demo"
-              onClick={() => navigate('/apply/start')}
-            >
-              Skip Login (Demo Mode)
-            </button>
-          </div>
-
           <div className="login-footer">
             <p className="consent-notice">
               By continuing, you agree to receive communications about your loan application.

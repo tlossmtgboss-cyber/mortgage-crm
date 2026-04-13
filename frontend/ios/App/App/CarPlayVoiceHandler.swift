@@ -213,23 +213,18 @@ final class CarPlayVoiceHandler {
 
         var parts: [String] = []
         parts.append("Here's your pipeline summary.")
-        parts.append("You have \(data.activeLoans) active loans worth \(data.spokenPipeline).")
+        parts.append("You have \(data.spokenActiveLoanSummary).")
 
-        if data.pendingTasks > 0 {
-            parts.append("\(data.pendingTasks) pending tasks.")
+        if data.urgentTaskCount > 0 {
+            parts.append("\(data.urgentTaskCount) urgent tasks need attention.")
         }
-        if data.urgentTasks > 0 {
-            parts.append("\(data.urgentTasks) are urgent.")
+        if data.todayAppointmentCount > 0 {
+            parts.append("\(data.todayAppointmentCount) appointments on your calendar today.")
         }
-        if data.todayEvents > 0 {
-            parts.append("\(data.todayEvents) events on your calendar today.")
+        if data.newLeadCount > 0 {
+            parts.append("\(data.newLeadCount) new leads this week.")
         }
-        if data.fundedThisMonth > 0 {
-            parts.append("\(data.fundedThisMonth) loans funded this month.")
-        }
-        if data.totalLeads > 0 {
-            parts.append("\(data.totalLeads) total leads in your pipeline.")
-        }
+        parts.append(data.spokenPipelineBreakdown)
 
         return parts.joined(separator: " ")
     }
@@ -242,17 +237,20 @@ final class CarPlayVoiceHandler {
         let leads = try await api.fetchLeads()
         let normalizedName = name.lowercased()
 
-        // Try exact full name match first, then partial
-        let match = leads.first { lead in
+        // Try exact full name match first, then partial, then word-part match.
+        // Broken into separate steps to avoid Swift type-checker timeout on
+        // deeply chained ?? expressions with closures.
+        let exactMatch: LeadItem? = leads.first { lead in
             lead.fullName.lowercased() == normalizedName
-        } ?? leads.first { lead in
-            lead.fullName.lowercased().contains(normalizedName)
-        } ?? leads.first { lead in
-            // Match on first name or last name alone
-            let first = (lead.firstName ?? "").lowercased()
-            let last = (lead.lastName ?? "").lowercased()
-            return first == normalizedName || last == normalizedName
         }
+        let partialMatch: LeadItem? = leads.first { lead in
+            lead.fullName.lowercased().contains(normalizedName)
+        }
+        let wordMatch: LeadItem? = leads.first { lead in
+            let nameParts = lead.fullName.lowercased().split(separator: " ").map(String.init)
+            return nameParts.contains(normalizedName)
+        }
+        let match = exactMatch ?? partialMatch ?? wordMatch
 
         guard let lead = match else {
             return "I couldn't find a contact named \(name) in your recent leads. Try saying the full name."
@@ -282,7 +280,9 @@ final class CarPlayVoiceHandler {
 
         // Sort by priority rank to complete the most urgent task
         let sorted = tasks.sorted { $0.priorityRank < $1.priorityRank }
-        let topTask = sorted.first!
+        guard let topTask = sorted.first else {
+            return "No tasks available to complete."
+        }
 
         try await api.completeTask(id: topTask.id)
 
@@ -413,7 +413,7 @@ final class CarPlayVoiceHandler {
         for loan in loans {
             let stage = loan.spokenStage
             stageCounts[stage, default: 0] += 1
-            totalAmount += loan.loanAmount ?? 0
+            totalAmount += loan.amount ?? 0
         }
 
         var parts: [String] = ["You have \(loans.count) loan\(loans.count == 1 ? "" : "s") in your pipeline."]

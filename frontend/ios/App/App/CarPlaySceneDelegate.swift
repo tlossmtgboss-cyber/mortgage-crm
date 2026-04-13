@@ -14,18 +14,18 @@ private final class CarPlayDataCache {
 
     private let queue = DispatchQueue(label: "com.perenniaai.carplay.cache", attributes: .concurrent)
 
-    private var _dashboard: DashboardData?
-    private var _tasks: [TaskItem] = []
+    private var _dashboard: CPDashboardData?
+    private var _tasks: [CPTaskItem] = []
     private var _leads: [LeadItem] = []
     private var _loans: [LoanItem] = []
-    private var _rateAlerts: [RateAlert] = []
+    private var _rateAlerts: [CPRateAlert] = []
     private var _events: [CalendarEvent] = []
 
-    var dashboard: DashboardData? {
+    var dashboard: CPDashboardData? {
         get { queue.sync { _dashboard } }
         set { queue.async(flags: .barrier) { self._dashboard = newValue } }
     }
-    var tasks: [TaskItem] {
+    var tasks: [CPTaskItem] {
         get { queue.sync { _tasks } }
         set { queue.async(flags: .barrier) { self._tasks = newValue } }
     }
@@ -37,7 +37,7 @@ private final class CarPlayDataCache {
         get { queue.sync { _loans } }
         set { queue.async(flags: .barrier) { self._loans = newValue } }
     }
-    var rateAlerts: [RateAlert] {
+    var rateAlerts: [CPRateAlert] {
         get { queue.sync { _rateAlerts } }
         set { queue.async(flags: .barrier) { self._rateAlerts = newValue } }
     }
@@ -181,6 +181,9 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     // MARK: - Push Notification Observers
 
     private func registerNotificationObservers() {
+        // Remove any existing observers first to prevent accumulation on reconnect
+        removeNotificationObservers()
+
         let taskObserver = NotificationCenter.default.addObserver(
             forName: Notification.Name("PerenniaTaskUpdated"), object: nil, queue: .main
         ) { [weak self] _ in
@@ -238,7 +241,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
                 self.cache.rateAlerts = rateAlerts
 
                 let urgentTaskCount = tasks.filter { $0.priority == "high" || $0.priority == "urgent" }.count
-                let todayEventCount = events.filter { Calendar.current.isDateInToday($0.startTime) }.count
+                let todayEventCount = events.filter { Calendar.current.isDateInToday(($0.startDate ?? .distantPast)) }.count
 
                 await MainActor.run {
                     self.updateDashboardTemplate(
@@ -272,8 +275,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     }
 
     private func updateDashboardTemplate(
-        dashboard: DashboardData,
-        rateAlerts: [RateAlert],
+        dashboard: CPDashboardData,
+        rateAlerts: [CPRateAlert],
         urgentTaskCount: Int,
         todayEventCount: Int
     ) {
@@ -282,26 +285,27 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
               let dashboardTemplate = tabBar.templates[TabIndex.dashboard.rawValue] as? CPListTemplate else { return }
 
         // Pipeline summary section
+        let ps = dashboard.pipelineSummary
         let pipelineItems: [CPListItem] = [
             makeItem(
-                text: "Total Leads",
-                detail: "\(dashboard.totalLeads)",
+                text: "New Leads",
+                detail: "\(dashboard.newLeadCount)",
                 image: "person.3.fill"
             ),
             makeItem(
                 text: "Active Loans",
-                detail: "\(dashboard.activeLoans)",
+                detail: "\(dashboard.activeLoanCount)",
                 image: "doc.text.fill"
             ),
             makeItem(
-                text: "Funded This Month",
-                detail: "\(dashboard.fundedThisMonth)",
-                image: "checkmark.seal.fill"
+                text: "In Underwriting",
+                detail: "\(ps?.underwritingCount ?? 0)",
+                image: "doc.text.magnifyingglass"
             ),
             makeItem(
-                text: "Pipeline Value",
-                detail: formatCurrency(dashboard.pipelineValue),
-                image: "dollarsign.circle.fill"
+                text: "Clear to Close",
+                detail: "\(ps?.clearToCloseCount ?? 0)",
+                image: "checkmark.seal.fill"
             )
         ]
         let pipelineSection = CPListSection(items: pipelineItems, header: "Pipeline", sectionIndexTitle: nil)
@@ -337,12 +341,13 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         for alert in rateAlerts.prefix(4) {
             let direction = alert.changeDirection == "up" ? "^" : (alert.changeDirection == "down" ? "v" : "-")
             let spokenDirection = alert.changeDirection == "up" ? "up" : (alert.changeDirection == "down" ? "down" : "unchanged")
+            let bpChange = abs(alert.basisPointChange)
             let item = makeItem(
-                text: alert.productName,
-                detail: "\(alert.currentRate)% \(direction) \(alert.changeAmount)%",
+                text: alert.spokenRateType,
+                detail: "\(alert.currentRate)% \(direction) \(bpChange)bp",
                 image: alert.changeDirection == "down" ? "arrow.down.right" : "arrow.up.right"
             )
-            item.accessibilityLabel = "\(alert.productName): \(alert.currentRate) percent, \(spokenDirection) \(alert.changeAmount) percent"
+            item.accessibilityLabel = "\(alert.spokenRateType): \(alert.currentRate) percent, \(spokenDirection) \(bpChange) basis points"
             rateItems.append(item)
         }
         if rateItems.isEmpty {
@@ -401,13 +406,13 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         var leadItems: [CPListItem] = []
         for lead in leads.prefix(12) {
             let item = makeItem(
-                text: lead.name,
-                detail: "\(lead.stage) - \(lead.lastActivity)",
+                text: lead.fullName,
+                detail: "\(lead.stage) - \(lead.updatedAt)",
                 image: "person.fill"
             )
             item.accessibilityHint = "Double tap to view details"
-            item.handler = { [weak self] _, completion in
-                self?.showContactDetail(leadId: lead.id, name: lead.name, stage: lead.stage, lastActivity: lead.lastActivity)
+            item.handler = { [weak self] (_, completion: @escaping () -> Void) in
+                self?.showContactDetail(leadId: lead.id, name: lead.fullName, stage: lead.stage, lastActivity: lead.updatedAt)
                 completion()
             }
             leadItems.append(item)
@@ -423,12 +428,12 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         var borrowerItems: [CPListItem] = []
         for loan in loans.prefix(12) {
             let item = makeItem(
-                text: loan.borrowerName,
-                detail: "\(loan.stage) - \(formatCurrency(loan.loanAmount))",
+                text: loan.borrowerName ?? "Unknown Borrower",
+                detail: "\(loan.stage) - \(formatCurrency(loan.amount ?? 0))",
                 image: "person.text.rectangle.fill"
             )
             item.accessibilityHint = "Double tap to view loan details"
-            item.handler = { [weak self] _, completion in
+            item.handler = { [weak self] (_, completion: @escaping () -> Void) in
                 self?.showBorrowerDetail(loan: loan)
                 completion()
             }
@@ -474,20 +479,21 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         let stageItem = makeItem(text: "Stage", detail: loan.stage, image: "flag.fill")
         stageItem.isEnabled = false
 
-        let amountItem = makeItem(text: "Loan Amount", detail: formatCurrency(loan.loanAmount), image: "dollarsign.circle")
+        let amountItem = makeItem(text: "Loan Amount", detail: formatCurrency(loan.amount ?? 0), image: "dollarsign.circle")
         amountItem.isEnabled = false
 
-        let typeItem = makeItem(text: "Loan Type", detail: loan.loanType, image: "doc.text")
+        let typeItem = makeItem(text: "Loan Type", detail: loan.loanType ?? "N/A", image: "doc.text")
         typeItem.isEnabled = false
 
-        let callItem = makeItem(text: "Call \(loan.borrowerName)", detail: "Initiate call via Perennia", image: "phone.fill")
+        let borrowerDisplay = loan.borrowerName ?? "Unknown"
+        let callItem = makeItem(text: "Call \(borrowerDisplay)", detail: "Initiate call via Perennia", image: "phone.fill")
         callItem.accessibilityHint = "Double tap to start a phone call"
-        callItem.handler = { [weak self] _, completion in
-            self?.initiateCall(leadId: loan.leadId, name: loan.borrowerName)
+        callItem.handler = { [weak self] (_, completion: @escaping () -> Void) in
+            self?.initiateCall(leadId: loan.id, name: borrowerDisplay)
             completion()
         }
 
-        let detailTemplate = CPListTemplate(title: loan.borrowerName, sections: [
+        let detailTemplate = CPListTemplate(title: borrowerDisplay, sections: [
             CPListSection(items: [stageItem, amountItem, typeItem]),
             CPListSection(items: [callItem], header: "Actions", sectionIndexTitle: nil)
         ])
@@ -495,12 +501,12 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         interfaceController.pushTemplate(detailTemplate, animated: true, completion: nil)
     }
 
-    private func initiateCall(leadId: Int, name: String) {
+    private func initiateCall(leadId: Int, name: String, phone: String? = nil) {
         Task { [weak self] in
             guard let self = self else { return }
             do {
-                let callInitiation = try await self.api.callContact(leadId: leadId)
-                logger.info("Call initiated for \(name): \(callInitiation.status)")
+                let callInitiation = try await self.api.callContact(phoneNumber: phone ?? "", contactName: name, leadId: leadId)
+                logger.info("Call initiated for \(name): success=\(callInitiation.success)")
                 await MainActor.run {
                     self.showAlert(title: "Calling \(name)", message: "Call is being connected...")
                 }
@@ -543,7 +549,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         }
     }
 
-    private func updateTasksTemplate(tasks: [TaskItem]) {
+    private func updateTasksTemplate(tasks: [CPTaskItem]) {
         guard let tabBar = tabBarTemplate,
               tabBar.templates.count > TabIndex.tasks.rawValue,
               let tasksTemplate = tabBar.templates[TabIndex.tasks.rawValue] as? CPListTemplate else { return }
@@ -553,16 +559,18 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         let endOfToday = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 1, to: now)!)
         let endOfWeek = calendar.startOfDay(for: calendar.date(byAdding: .day, value: 7, to: now)!)
 
-        var overdue: [TaskItem] = []
-        var dueToday: [TaskItem] = []
-        var thisWeek: [TaskItem] = []
+        var overdue: [CPTaskItem] = []
+        var dueToday: [CPTaskItem] = []
+        var thisWeek: [CPTaskItem] = []
 
+        let iso = ISO8601DateFormatter()
         for task in tasks {
-            if task.dueDate < now && task.dueDate < calendar.startOfDay(for: now) {
+            guard let dueDateStr = task.dueDate, let dueDate = iso.date(from: dueDateStr) else { continue }
+            if dueDate < now && dueDate < calendar.startOfDay(for: now) {
                 overdue.append(task)
-            } else if task.dueDate < endOfToday {
+            } else if dueDate < endOfToday {
                 dueToday.append(task)
-            } else if task.dueDate < endOfWeek {
+            } else if dueDate < endOfWeek {
                 thisWeek.append(task)
             }
         }
@@ -602,7 +610,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         tasksTemplate.updateSections(sections)
     }
 
-    private func buildTaskListItem(task: TaskItem) -> CPListItem {
+    private func buildTaskListItem(task: CPTaskItem) -> CPListItem {
         let priorityIcon: String
         let spokenPriority: String
         switch task.priority.lowercased() {
@@ -624,37 +632,46 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         dateFormatter.dateStyle = .short
         dateFormatter.timeStyle = .short
 
-        var detail = dateFormatter.string(from: task.dueDate)
-        if let contact = task.contactName, !contact.isEmpty {
+        let iso = ISO8601DateFormatter()
+        let parsedDue = task.dueDate.flatMap { iso.date(from: $0) }
+
+        var detail = parsedDue.map { dateFormatter.string(from: $0) } ?? "No due date"
+        if let contact = task.leadName, !contact.isEmpty {
             detail += " - \(contact)"
         }
 
         let item = makeItem(text: task.title, detail: detail, image: priorityIcon)
-        // Override the combined label to include spoken priority
-        var accessLabel = "\(spokenPriority): \(task.title), due \(dateFormatter.string(from: task.dueDate))"
-        if let contact = task.contactName, !contact.isEmpty {
+        var accessLabel = "\(spokenPriority): \(task.title)"
+        if let dueDate = parsedDue {
+            accessLabel += ", due \(dateFormatter.string(from: dueDate))"
+        }
+        if let contact = task.leadName, !contact.isEmpty {
             accessLabel += ", for \(contact)"
         }
         item.accessibilityLabel = accessLabel
         item.accessibilityHint = "Double tap to view task details"
-        item.handler = { [weak self] _, completion in
+        item.handler = { [weak self] (_, completion: @escaping () -> Void) in
             self?.showTaskDetail(task: task)
             completion()
         }
         return item
     }
 
-    private func showTaskDetail(task: TaskItem) {
+    private func showTaskDetail(task: CPTaskItem) {
         guard let interfaceController = interfaceController else { return }
 
         let dateFormatter = DateFormatter()
         dateFormatter.dateStyle = .medium
         dateFormatter.timeStyle = .short
 
+        let iso = ISO8601DateFormatter()
+        let parsedDue = task.dueDate.flatMap { iso.date(from: $0) }
+
         let titleItem = makeItem(text: "Task", detail: task.title, image: "doc.text")
         titleItem.isEnabled = false
 
-        let dueItem = makeItem(text: "Due", detail: dateFormatter.string(from: task.dueDate), image: "clock.fill")
+        let dueDetail = parsedDue.map { dateFormatter.string(from: $0) } ?? "No due date"
+        let dueItem = makeItem(text: "Due", detail: dueDetail, image: "clock.fill")
         dueItem.isEnabled = false
 
         let priorityItem = makeItem(text: "Priority", detail: task.priority.capitalized, image: "flag.fill")
@@ -662,7 +679,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
         var infoItems = [titleItem, dueItem, priorityItem]
 
-        if let contactName = task.contactName, !contactName.isEmpty {
+        if let contactName = task.leadName, !contactName.isEmpty {
             let contactItem = makeItem(text: "Contact", detail: contactName, image: "person.fill")
             contactItem.isEnabled = false
             infoItems.append(contactItem)
@@ -684,7 +701,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         interfaceController.pushTemplate(detailTemplate, animated: true, completion: nil)
     }
 
-    private func completeTask(task: TaskItem) {
+    private func completeTask(task: CPTaskItem) {
         Task { [weak self] in
             guard let self = self else { return }
             do {
@@ -744,8 +761,8 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
         // Filter to today's events and sort by start time
         let todayEvents = events
-            .filter { Calendar.current.isDateInToday($0.startTime) }
-            .sorted { $0.startTime < $1.startTime }
+            .filter { Calendar.current.isDateInToday(($0.startDate ?? .distantPast)) }
+            .sorted { ($0.startDate ?? .distantPast) < ($1.startDate ?? .distantPast) }
 
         var items: [CPListItem] = []
 
@@ -754,7 +771,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         timeFormatter.timeStyle = .short
 
         for event in todayEvents.prefix(12) {
-            let timeString = timeFormatter.string(from: event.startTime)
+            let timeString = event.startDate.map { timeFormatter.string(from: $0) } ?? event.formattedTime
             var detail = timeString
             if let location = event.location, !location.isEmpty {
                 detail += " - \(location)"
@@ -764,7 +781,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
 
             let item = makeItem(text: event.title, detail: detail, image: "calendar")
             item.accessibilityHint = "Double tap to view event details"
-            item.handler = { [weak self] _, completion in
+            item.handler = { [weak self] (_, completion: @escaping () -> Void) in
                 self?.showEventDetail(event: event)
                 completion()
             }
@@ -788,7 +805,11 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
         timeFormatter.dateStyle = .none
         timeFormatter.timeStyle = .short
 
-        let timeRange = "\(timeFormatter.string(from: event.startTime)) - \(timeFormatter.string(from: event.endTime))"
+        let startStr = event.startDate.map { timeFormatter.string(from: $0) } ?? event.formattedTime
+        let iso = ISO8601DateFormatter()
+        let endDate = event.scheduledEnd.flatMap { iso.date(from: $0) }
+        let endStr = endDate.map { timeFormatter.string(from: $0) } ?? event.scheduledEnd ?? ""
+        let timeRange = "\(startStr) - \(endStr)"
 
         let titleItem = makeItem(text: "Event", detail: event.title, image: "calendar")
         titleItem.isEnabled = false
@@ -817,7 +838,7 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
             navigateItem.handler = { _, completion in
                 // Open Apple Maps with the location
                 let encodedAddress = location.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
-                if let url = URL(string: "http://maps.apple.com/?q=\(encodedAddress)") {
+                if let url = URL(string: "https://maps.apple.com/?q=\(encodedAddress)") {
                     DispatchQueue.main.async {
                         UIApplication.shared.open(url, options: [:], completionHandler: nil)
                     }
@@ -839,15 +860,13 @@ class CarPlaySceneDelegate: UIResponder, CPTemplateApplicationSceneDelegate {
     // MARK: - Drill-down Shortcuts (from Dashboard)
 
     private func drillIntoTasks() {
-        // Switch to tasks tab
-        guard let tabBar = tabBarTemplate else { return }
-        tabBar.selectedTemplate = tabBar.templates[TabIndex.tasks.rawValue]
+        // Refresh tasks data (CPTabBarTemplate tab selection is user-driven)
+        loadTasks()
     }
 
     private func drillIntoSchedule() {
-        // Switch to schedule tab
-        guard let tabBar = tabBarTemplate else { return }
-        tabBar.selectedTemplate = tabBar.templates[TabIndex.schedule.rawValue]
+        // Refresh schedule data (CPTabBarTemplate tab selection is user-driven)
+        loadSchedule()
     }
 
     // MARK: - Error Handling for Tabs

@@ -14,6 +14,8 @@ RUN apt-get update && apt-get install -y \
     libcairo2-dev \
     pkg-config \
     curl \
+    ffmpeg \
+    libsndfile1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy pinned requirements lockfile for reproducible builds

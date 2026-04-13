@@ -89,11 +89,6 @@ jobs:
       - name: Build production web assets
         working-directory: frontend
         run: |
-          # Use production capacitor config
-          if [ -f "capacitor.config.production.ts" ]; then
-            cp capacitor.config.ts capacitor.config.dev.bak
-            cp capacitor.config.production.ts capacitor.config.ts
-          fi
           npm run build
         env:
           CI: false  # Allows build warnings

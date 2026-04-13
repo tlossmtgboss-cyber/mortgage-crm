@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { usePermissions } from '../contexts/PermissionContext';
 import CategoryTasksModal from '../components/CategoryTasksModal';
 import PermissionsStep from '../components/onboarding/steps/PermissionsStep';
 import FeatureSelection from '../components/FeatureSelection';
@@ -44,6 +46,13 @@ const STEP_LABELS = {
 };
 
 function UserCreationWizard() {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - only admins/managers can create users
+  const canCreateUsers = isAdmin || hasAnyPermission(['admin.manage', 'users.manage', 'users.create', 'team.manage', 'system.admin']) ||
+    userRole === 'admin' || userRole === 'site_admin' || userRole === 'management';
+
   const [currentStep, setCurrentStep] = useState(STEPS.BASIC_INFO);
   const [sessionId, setSessionId] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -859,6 +868,21 @@ function UserCreationWizard() {
         <div className="loading-state">
           <div className="spinner"></div>
           <p>Loading wizard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Access denied if user doesn't have user creation permissions
+  if (!canCreateUsers) {
+    return (
+      <div className="user-creation-wizard">
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to create users.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')} style={{ marginTop: '16px' }}>
+            Return to Dashboard
+          </button>
         </div>
       </div>
     );

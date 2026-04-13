@@ -1,9 +1,18 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '../contexts/PermissionContext';
 import InviteManagementTable from '../components/admin/InviteManagementTable';
 import EmployeeInviteWizard from '../components/admin/EmployeeInviteWizard';
 import './EmployeeOnboardingAdmin.css';
 
 function EmployeeOnboardingAdmin() {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - only admins/managers can onboard employees
+  const canAccessOnboarding = isAdmin || hasAnyPermission(['admin.manage', 'team.manage', 'users.manage', 'system.admin']) ||
+    userRole === 'admin' || userRole === 'site_admin' || userRole === 'management';
+
   const [showWizard, setShowWizard] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -20,6 +29,21 @@ function EmployeeOnboardingAdmin() {
     // Trigger table refresh
     setRefreshKey(prev => prev + 1);
   };
+
+  // Access denied if user doesn't have admin permissions
+  if (!canAccessOnboarding) {
+    return (
+      <div className="employee-onboarding-admin">
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to access Employee Onboarding.</p>
+          <button className="btn-primary" onClick={() => navigate('/dashboard')} style={{ marginTop: '16px' }}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="employee-onboarding-admin">

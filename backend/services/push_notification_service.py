@@ -638,3 +638,191 @@ class PushNotificationService:
             except Exception:
                 pass
             self._httpx_client = None
+
+
+# =============================================================================
+# Module-level convenience functions
+# =============================================================================
+# These are importable by other services that need a quick fire-and-forget push.
+# e.g.  from services.push_notification_service import send_push_to_user
+
+_singleton_service: Optional[PushNotificationService] = None
+
+
+def _get_service() -> PushNotificationService:
+    global _singleton_service
+    if _singleton_service is None:
+        _singleton_service = PushNotificationService()
+    return _singleton_service
+
+
+def send_push_to_user(
+    user_id: int,
+    title: str,
+    body: str,
+    data: Optional[Dict[str, Any]] = None,
+    notification_type: str = "general",
+    db: Optional[Session] = None,
+) -> Dict[str, int]:
+    """Send a push notification to a user's registered devices.
+
+    If no db session is provided, creates one from the session factory.
+    Gracefully returns zeros if push sending fails for any reason.
+    """
+    try:
+        if db is None:
+            from db import SessionLocal
+            db = SessionLocal()
+            _owns_session = True
+        else:
+            _owns_session = False
+
+        try:
+            service = _get_service()
+            result = service.send_to_user(
+                db=db,
+                user_id=user_id,
+                title=title,
+                body=body,
+                data=data or {},
+                notification_type=notification_type,
+            )
+            return result
+        finally:
+            if _owns_session:
+                db.close()
+
+    except Exception as e:
+        logger.error("send_push_to_user failed for user %d: %s", user_id, e)
+        return {"sent": 0, "failed": 0, "skipped": 0}
+
+
+def send_push_notification(
+    user_id: int,
+    title: str,
+    body: str,
+    data: Optional[Dict[str, Any]] = None,
+    notification_type: str = "general",
+    db: Optional[Session] = None,
+) -> Dict[str, int]:
+    """Alias for send_push_to_user — matches the import expected by
+    scheduling_conversation_service and other callers.
+    """
+    return send_push_to_user(
+        user_id=user_id,
+        title=title,
+        body=body,
+        data=data,
+        notification_type=notification_type,
+        db=db,
+    )
+
+
+def send_push_to_org(
+    org_id: int,
+    title: str,
+    body: str,
+    data: Optional[Dict[str, Any]] = None,
+    notification_type: str = "general",
+    db: Optional[Session] = None,
+) -> Dict[str, int]:
+    """Send a push notification to all users in an organization.
+
+    If no db session is provided, creates one from the session factory.
+    """
+    try:
+        if db is None:
+            from db import SessionLocal
+            db = SessionLocal()
+            _owns_session = True
+        else:
+            _owns_session = False
+
+        try:
+            from database.models.device_token import DeviceToken
+            # Get distinct user IDs with active tokens in this org
+            user_ids = [
+                row[0] for row in db.query(DeviceToken.user_id).filter(
+                    DeviceToken.organization_id == org_id,
+                    DeviceToken.is_active == True,
+                ).distinct().all()
+            ]
+
+            service = _get_service()
+            return service.send_to_users(
+                db=db,
+                user_ids=user_ids,
+                title=title,
+                body=body,
+                data=data or {},
+                notification_type=notification_type,
+            )
+        finally:
+            if _owns_session:
+                db.close()
+
+    except Exception as e:
+        logger.error("send_push_to_org failed for org %d: %s", org_id, e)
+        return {"sent": 0, "failed": 0, "skipped": 0}
+
+
+async def send_notification_with_push(
+    user_id: int,
+    title: str,
+    body: str,
+    data: Optional[Dict[str, Any]] = None,
+    db: Optional[Session] = None,
+    notification_type: str = "general",
+) -> Dict[str, Any]:
+    """Async helper that creates an in-app notification AND sends a push.
+
+    Other services should call this when they want both an in-app record
+    and an actual device push in a single call.
+    """
+    result = {"in_app": False, "push": {"sent": 0, "failed": 0, "skipped": 0}}
+
+    if db is None:
+        from db import SessionLocal
+        db = SessionLocal()
+        _owns_session = True
+    else:
+        _owns_session = False
+
+    try:
+        # 1) Create in-app notification record
+        try:
+            from database.models.security import Notification
+            notif = Notification(
+                user_id=user_id,
+                title=title,
+                message=body[:500],
+                type=notification_type,
+                is_read=False,
+            )
+            db.add(notif)
+            db.flush()
+            result["in_app"] = True
+        except Exception as e:
+            logger.warning("In-app notification creation failed: %s", e)
+
+        # 2) Send push notification to registered devices
+        service = _get_service()
+        push_result = service.send_to_user(
+            db=db,
+            user_id=user_id,
+            title=title,
+            body=body,
+            data=data or {},
+            notification_type=notification_type,
+        )
+        result["push"] = push_result
+
+        db.commit()
+    except Exception as e:
+        logger.error("send_notification_with_push failed: %s", e)
+        db.rollback()
+    finally:
+        if _owns_session:
+            db.close()
+
+    return result

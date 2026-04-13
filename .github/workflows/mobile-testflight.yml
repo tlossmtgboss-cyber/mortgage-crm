@@ -151,11 +151,6 @@ jobs:
       - name: Build web assets
         working-directory: frontend
         run: |
-          # Swap in production capacitor config if available
-          if [ -f "capacitor.config.production.ts" ]; then
-            cp capacitor.config.ts capacitor.config.dev.bak
-            cp capacitor.config.production.ts capacitor.config.ts
-          fi
           npm run build
         env:
           CI: false
@@ -168,10 +163,6 @@ jobs:
       - name: Sync Capacitor
         working-directory: frontend
         run: |
-          # Restore dev config if we swapped it
-          if [ -f "capacitor.config.dev.bak" ]; then
-            mv capacitor.config.dev.bak capacitor.config.ts
-          fi
           rm -f ios/App/App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
           npx cap sync ios
 

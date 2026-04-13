@@ -116,8 +116,8 @@ struct CertificatePinningConfig {
         ),
         "app.perenniaai.com": PinnedDomainConfig(
             spkiHashes: [
-                // Primary cert pin — current production certificate (retrieved 2026-04-01)
-                "R5ekDjTy4aandy7hssjUE5P7a2loTg3iSpEA4bjNkQw=",
+                // Primary cert pin — current production certificate (verified 2026-04-10)
+                "amKlKR/XR507OEn640jX8dUOfmFxM+fz1umrpwlbi5s=",
                 // Backup pin — ISRG Root X1 (Let's Encrypt root CA)
                 "C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=",
                 // Backup pin — Let's Encrypt R3 intermediate
@@ -141,10 +141,10 @@ struct CertificatePinningConfig {
     }
 
     /// Backend endpoint for reporting pin validation failures.
-    static let reportURL = URL(string: "https://api.perenniaai.com/api/v1/security/pin-failure")!
+    static let reportURL = URL(string: "\(APIConfig.apiBaseURL)/api/v1/security/pin-failure")!
 
     /// Backend endpoint for fetching fresh pin configuration.
-    static let remotePinURL = URL(string: "https://api.perenniaai.com/api/v1/security/certificate-pins")!
+    static let remotePinURL = URL(string: "\(APIConfig.apiBaseURL)/api/v1/security/certificate-pins")!
 
     /// How often to refresh pins from the remote endpoint (24 hours).
     static let pinRefreshInterval: TimeInterval = 24 * 60 * 60

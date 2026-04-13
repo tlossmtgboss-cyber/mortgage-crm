@@ -19,6 +19,9 @@ import SwiftUI
 import WidgetKit
 import ActivityKit
 
+// ClosingActivityAttributes and ClosingStage are defined in ClosingActivity.swift
+// (same widget target). Do NOT redeclare them here.
+
 // MARK: - Color Theme
 
 /// Stage-aware color provider
@@ -493,36 +496,57 @@ struct ExpandedBottomView: View {
 
 // MARK: - Previews
 
+// NOTE: #Preview macro with Live Activities (as: .content, using:) generates
+// a @main entry point that conflicts with PerenniaWidgetBundle's @main.
+// Use traditional PreviewProvider instead to avoid the
+// "'main' attribute cannot be used in a module that contains top-level code" error.
+
 #if DEBUG
-@available(iOS 17.0, *)
-#Preview("Lock Screen", as: .content, using: ClosingActivityAttributes(
-    borrowerName: "John & Jane Smith",
-    loanAmount: "$425,000",
-    propertyAddress: "123 Main St, Charleston, SC 29401",
-    loanId: "loan-abc-123"
-)) {
-    ClosingActivityLiveActivity()
-} contentStates: {
-    ClosingActivityAttributes.ContentState(
+@available(iOS 16.1, *)
+struct ClosingActivityLiveActivity_Previews: PreviewProvider {
+    static let sampleAttributes = ClosingActivityAttributes(
+        borrowerName: "John & Jane Smith",
+        loanAmount: "$425,000",
+        propertyAddress: "123 Main St, Charleston, SC 29401",
+        loanId: "loan-abc-123"
+    )
+
+    static let underwritingState = ClosingActivityAttributes.ContentState(
         currentStage: "UNDERWRITING",
         stageProgress: 0.35,
         lastUpdate: Date(),
         nextAction: "Awaiting underwriter review",
         estimatedClose: Calendar.current.date(byAdding: .day, value: 14, to: Date())
     )
-    ClosingActivityAttributes.ContentState(
+
+    static let ctcState = ClosingActivityAttributes.ContentState(
         currentStage: "CTC",
         stageProgress: 0.65,
         lastUpdate: Date(),
         nextAction: "Title company preparing documents",
         estimatedClose: Calendar.current.date(byAdding: .day, value: 7, to: Date())
     )
-    ClosingActivityAttributes.ContentState(
+
+    static let fundedState = ClosingActivityAttributes.ContentState(
         currentStage: "FUNDED",
         stageProgress: 1.0,
         lastUpdate: Date(),
         nextAction: "Loan funded — congratulations!",
         estimatedClose: nil
     )
+
+    static var previews: some View {
+        Group {
+            LockScreenView(attributes: sampleAttributes, state: underwritingState)
+                .previewDisplayName("Lock Screen — Underwriting")
+
+            LockScreenView(attributes: sampleAttributes, state: ctcState)
+                .previewDisplayName("Lock Screen — CTC")
+
+            LockScreenView(attributes: sampleAttributes, state: fundedState)
+                .previewDisplayName("Lock Screen — Funded")
+        }
+        .previewLayout(.sizeThatFits)
+    }
 }
 #endif

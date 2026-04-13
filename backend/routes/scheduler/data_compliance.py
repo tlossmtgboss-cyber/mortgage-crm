@@ -288,6 +288,18 @@ async def export_borrower_data(
         changes={"borrower_email_masked": _mask_email(email), "counts": export_payload["counts"]},
         request=request,
     )
+
+    try:
+        from utils.export_audit import log_export_event, _get_client_ip
+        log_export_event(
+            db=db, user_id=getattr(user, "id", 0), organization_id=org_id,
+            resource_type="borrower_scheduler_data", export_format="json",
+            ip_address=_get_client_ip(request),
+            details={"borrower_email_masked": _mask_email(email), "counts": export_payload["counts"]},
+        )
+    except Exception:
+        pass
+
     db.commit()
 
     logger.info(
@@ -744,6 +756,18 @@ async def export_audit_log(
         changes={"days": days, "count": len(entries)},
         request=request,
     )
+
+    try:
+        from utils.export_audit import log_export_event, _get_client_ip
+        log_export_event(
+            db=db, user_id=getattr(user, "id", 0), organization_id=org_id,
+            resource_type="scheduler_audit_log", export_format="json",
+            ip_address=_get_client_ip(request),
+            details={"days": days, "entry_count": len(entries)},
+        )
+    except Exception:
+        pass
+
     db.commit()
 
     return {

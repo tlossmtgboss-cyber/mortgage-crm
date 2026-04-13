@@ -9,6 +9,7 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { useSessionTimeout } from '../../hooks/useSessionTimeout';
 import { biometrics, isNative, haptics } from '../../services/nativeServices';
 import { destroySession } from '../../services/sessionManager';
+import { clearAllAuthTokens } from '../../utils/storage';
 import './SessionTimeoutModal.css';
 
 const MAX_ATTEMPTS = 3;
@@ -170,15 +171,21 @@ export default function SessionTimeoutModal() {
 
   const handleForgotPassword = useCallback(() => {
     destroySession();
+    // Clear auth from both localStorage and Capacitor Preferences
     localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
+    clearAllAuthTokens().catch(() => {});
     window.location.href = '/login?forgot=1';
   }, []);
 
   const handleFullLogout = useCallback(() => {
     destroySession();
+    // Clear auth from both localStorage and Capacitor Preferences
     localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     localStorage.removeItem('user');
+    clearAllAuthTokens().catch(() => {});
     window.location.href = '/login';
   }, []);
 

@@ -86,6 +86,14 @@ _CONTENT_TYPE_SKIP_PREFIXES: tuple[str, ...] = (
     "/openapi.json",
 )
 
+# Additional path substrings that bypass Content-Type enforcement
+# (file uploads, document endpoints, webhook callbacks).
+_CONTENT_TYPE_SKIP_SUBSTRINGS: tuple[str, ...] = (
+    "/upload",
+    "/document",
+    "/webhook",
+)
+
 
 # ---------------------------------------------------------------------------
 # SQL injection patterns
@@ -273,7 +281,10 @@ class RequestValidatorMiddleware(BaseHTTPMiddleware):
             content_type = request.headers.get("content-type", "")
             cl = request.headers.get("content-length", "0")
             has_body = cl not in ("0", "")
-            path_skip = any(path.startswith(prefix) for prefix in _CONTENT_TYPE_SKIP_PREFIXES)
+            path_skip = (
+                any(path.startswith(prefix) for prefix in _CONTENT_TYPE_SKIP_PREFIXES)
+                or any(substr in path.lower() for substr in _CONTENT_TYPE_SKIP_SUBSTRINGS)
+            )
 
             if has_body and not path_skip:
                 ct_lower = content_type.lower()
@@ -284,8 +295,8 @@ class RequestValidatorMiddleware(BaseHTTPMiddleware):
                         content_type, request_id, client_ip, path, request.method,
                     )
                     return JSONResponse(
-                        status_code=400,
-                        content={"detail": "Bad request"},
+                        status_code=415,
+                        content={"detail": "Unsupported Media Type"},
                     )
 
         # ------------------------------------------------------------------

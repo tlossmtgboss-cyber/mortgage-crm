@@ -2,45 +2,11 @@ import UIKit
 import BackgroundTasks
 import os.log
 
-// MARK: - Data Models for CarPlay Cache
+// MARK: - Data Models for Background Sync / CarPlay Cache
+//
+// CPDashboardData, CPTaskItem, and CPRateAlert are defined in CarPlayModels.swift.
+// This file only defines CarPlayContact (used exclusively by BackgroundSyncManager).
 
-/// Dashboard summary data cached for CarPlay display.
-struct DashboardData: Codable {
-    let urgentTaskCount: Int
-    let activeLoanCount: Int
-    let rateAlertCount: Int
-    let newLeadCount: Int
-    let todayAppointmentCount: Int
-    let pipelineSummary: PipelineSummary?
-
-    struct PipelineSummary: Codable {
-        let applicationCount: Int
-        let processingCount: Int
-        let underwritingCount: Int
-        let clearToCloseCount: Int
-    }
-}
-
-/// A single task item for CarPlay task lists.
-struct TaskItem: Codable, Identifiable {
-    let id: String
-    let title: String
-    let subtitle: String
-    let dueDate: Date?
-    let priority: TaskPriority
-    let isOverdue: Bool
-    let relatedContactName: String?
-    let relatedContactPhone: String?
-
-    enum TaskPriority: String, Codable {
-        case urgent
-        case high
-        case normal
-        case low
-    }
-}
-
-/// A contact/lead for CarPlay contact lists.
 struct CarPlayContact: Codable, Identifiable {
     let id: String
     let name: String
@@ -49,16 +15,82 @@ struct CarPlayContact: Codable, Identifiable {
     let lastContactedAt: Date?
     let loanStage: String?
     let isHotLead: Bool
-}
 
-/// A rate alert for CarPlay display.
-struct RateAlert: Codable, Identifiable {
-    let id: String
-    let productName: String
-    let currentRate: Double
-    let previousRate: Double
-    let changeDirection: String  // "up" or "down"
-    let timestamp: Date
+    // MARK: - Cached Date Formatters (avoid per-decode allocations)
+
+    private static let iso8601Formatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let iso8601NoFracFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    /// The /api/v1/leads/ endpoint returns a flat array of lead objects.
+    /// The backend sends a combined `name` field, plus `first_name` and `last_name`.
+    /// The stage field is `stage` (not `loan_stage`).
+    /// `last_contacted_at` and `is_hot_lead` are not returned by the leads endpoint
+    /// but are handled gracefully with defaults.
+    enum CodingKeys: String, CodingKey {
+        case id
+        case name
+        case firstName = "first_name"
+        case lastName = "last_name"
+        case phone
+        case email
+        case lastContactedAt = "last_contacted_at"
+        case loanStage = "stage"
+        case isHotLead = "is_hot_lead"
+        case updatedAt = "updated_at"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // id may come as Int or String from the backend
+        if let intId = try? c.decode(Int.self, forKey: .id) {
+            id = String(intId)
+        } else {
+            id = try c.decode(String.self, forKey: .id)
+        }
+        // Build display name: try combined "name" first, then "first_name" + "last_name"
+        if let n = try? c.decode(String.self, forKey: .name), !n.isEmpty {
+            name = n
+        } else {
+            let first = try? c.decode(String.self, forKey: .firstName)
+            let last = try? c.decode(String.self, forKey: .lastName)
+            let parts = [first, last].compactMap { $0 }.filter { !$0.isEmpty }
+            name = parts.isEmpty ? "Unknown" : parts.joined(separator: " ")
+        }
+        phone = try c.decodeIfPresent(String.self, forKey: .phone)
+        email = try c.decodeIfPresent(String.self, forKey: .email)
+        // updated_at serves as a proxy for last contact time
+        if let updatedStr = try? c.decode(String.self, forKey: .updatedAt) {
+            lastContactedAt = CarPlayContact.iso8601Formatter.date(from: updatedStr)
+                ?? CarPlayContact.iso8601NoFracFormatter.date(from: updatedStr)
+        } else {
+            lastContactedAt = try c.decodeIfPresent(Date.self, forKey: .lastContactedAt)
+        }
+        loanStage = try c.decodeIfPresent(String.self, forKey: .loanStage)
+        isHotLead = try c.decodeIfPresent(Bool.self, forKey: .isHotLead) ?? false
+    }
+
+    /// Manual Encodable conformance because CodingKeys includes decode-only
+    /// keys (firstName, lastName, updatedAt) that have no matching stored
+    /// properties, preventing the compiler from auto-synthesizing encode(to:).
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encodeIfPresent(phone, forKey: .phone)
+        try c.encodeIfPresent(email, forKey: .email)
+        try c.encodeIfPresent(lastContactedAt, forKey: .lastContactedAt)
+        try c.encodeIfPresent(loanStage, forKey: .loanStage)
+        try c.encode(isHotLead, forKey: .isHotLead)
+    }
 }
 
 // MARK: - Cache Keys
@@ -89,6 +121,27 @@ final class BackgroundSyncManager {
 
     static let shared = BackgroundSyncManager()
 
+    // MARK: - Cached Date Formatters (avoid per-decode allocations)
+
+    private static let iso8601Formatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+
+    private static let iso8601NoFracFormatter: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    private static let noTZFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        f.timeZone = TimeZone(identifier: "UTC")
+        return f
+    }()
+
     // MARK: - Private Properties
 
     private let logger = Logger(subsystem: "com.perenniaai.crm", category: "BackgroundSync")
@@ -97,10 +150,16 @@ final class BackgroundSyncManager {
     private let session: URLSession
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    /// Decoder with convertFromSnakeCase for CPTaskItem, CPRateAlert, etc.
+    private let snakeCaseDecoder: JSONDecoder
     private let syncQueue = DispatchQueue(label: "com.perenniaai.crm.sync", qos: .utility)
 
-    /// Minimum interval between syncs to avoid excessive API calls (5 minutes).
-    private let minimumSyncInterval: TimeInterval = 300
+    /// Default minimum interval between syncs (5 minutes).
+    private let defaultSyncInterval: TimeInterval = 300
+
+    /// Minimum interval between syncs to avoid excessive API calls.
+    /// Increases on 429 rate-limit responses and resets on successful syncs.
+    private var minimumSyncInterval: TimeInterval = 300
 
     /// Whether a sync is currently in progress (atomic via syncQueue).
     private var _isSyncing = false
@@ -112,7 +171,7 @@ final class BackgroundSyncManager {
     // MARK: - Initialization
 
     private init() {
-        self.apiBaseURL = "https://api.perenniaai.com"
+        self.apiBaseURL = APIConfig.apiBaseURL
 
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 15
@@ -125,7 +184,38 @@ final class BackgroundSyncManager {
         self.encoder.dateEncodingStrategy = .iso8601
 
         self.decoder = JSONDecoder()
-        self.decoder.dateDecodingStrategy = .iso8601
+        // The backend returns ISO 8601 dates in various forms:
+        //   "2026-04-13T12:00:00" (no timezone)
+        //   "2026-04-13T12:00:00+00:00" (with timezone)
+        //   "2026-04-13T12:00:00.123456" (with fractional seconds)
+        // Use a custom strategy that tries multiple formats.
+        self.decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateStr = try container.decode(String.self)
+
+            // Try ISO8601 with fractional seconds first
+            if let date = BackgroundSyncManager.iso8601Formatter.date(from: dateStr) {
+                return date
+            }
+
+            // Try standard ISO8601
+            if let date = BackgroundSyncManager.iso8601NoFracFormatter.date(from: dateStr) {
+                return date
+            }
+
+            // Try without timezone (assume UTC)
+            if let date = BackgroundSyncManager.noTZFormatter.date(from: dateStr) {
+                return date
+            }
+
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Cannot decode date: \(dateStr)")
+        }
+
+        // Snake-case decoder for models that rely on convertFromSnakeCase
+        // (CPTaskItem, CPRateAlert use camelCase CodingKey case names
+        // and depend on the decoder converting snake_case JSON keys).
+        self.snakeCaseDecoder = JSONDecoder()
+        self.snakeCaseDecoder.keyDecodingStrategy = .convertFromSnakeCase
 
         logger.info("BackgroundSyncManager initialized")
     }
@@ -242,32 +332,43 @@ final class BackgroundSyncManager {
         logger.info("Auth token updated for background sync")
     }
 
-    /// Clear stored auth token on logout.
+    /// Store the refresh token for session renewal. Called alongside setAuthToken after login.
+    func setRefreshToken(_ token: String) {
+        KeychainService.shared.refreshToken = token
+        logger.info("Refresh token updated for background sync")
+    }
+
+    /// Clear stored auth and refresh tokens on logout.
     func clearAuthToken() {
         KeychainService.shared.authToken = nil
-        logger.info("Auth token cleared")
+        KeychainService.shared.refreshToken = nil
+        logger.info("Auth and refresh tokens cleared")
     }
 
     private func getAuthToken() -> String? {
         return KeychainService.shared.authToken
     }
 
+    private func getRefreshToken() -> String? {
+        return KeychainService.shared.refreshToken
+    }
+
     // MARK: - Cache Access (for CarPlay)
 
     /// Retrieve cached dashboard data for CarPlay display.
-    func getCachedDashboard() -> DashboardData? {
+    func getCachedDashboard() -> CPDashboardData? {
         return EncryptedCacheService.shared.retrieve(
             key: CacheKey.dashboard,
-            type: DashboardData.self,
+            type: CPDashboardData.self,
             maxAge: 3600 // 1 hour
         )
     }
 
     /// Retrieve cached tasks for CarPlay display.
-    func getCachedTasks() -> [TaskItem]? {
+    func getCachedTasks() -> [CPTaskItem]? {
         return EncryptedCacheService.shared.retrieve(
             key: CacheKey.tasks,
-            type: [TaskItem].self,
+            type: [CPTaskItem].self,
             maxAge: 3600
         )
     }
@@ -282,10 +383,10 @@ final class BackgroundSyncManager {
     }
 
     /// Retrieve cached rate alerts for CarPlay display.
-    func getCachedRateAlerts() -> [RateAlert]? {
+    func getCachedRateAlerts() -> [CPRateAlert]? {
         return EncryptedCacheService.shared.retrieve(
             key: CacheKey.rateAlerts,
-            type: [RateAlert].self,
+            type: [CPRateAlert].self,
             maxAge: 3600
         )
     }
@@ -307,6 +408,9 @@ final class BackgroundSyncManager {
             UserDefaults.standard.removeObject(forKey: CacheKey.lastSync)
         }
         KeychainService.shared.authToken = nil
+        KeychainService.shared.refreshToken = nil
+        // Reset backoff interval
+        minimumSyncInterval = defaultSyncInterval
         logger.info("All CarPlay caches cleared")
     }
 
@@ -386,7 +490,14 @@ final class BackgroundSyncManager {
         // Token is still fresh — no refresh needed
         if !isTokenNearExpiry(token) { return true }
 
-        // Attempt refresh
+        // Need a refresh token to request a new access token.
+        // The /api/v1/auth/refresh endpoint expects {"refresh_token": "..."} in the body.
+        guard let refreshToken = getRefreshToken() else {
+            logger.warning("Access token near expiry but no refresh token available — cannot refresh")
+            // If token hasn't fully expired yet, try to use it as-is
+            return true
+        }
+
         guard let url = URL(string: "\(apiBaseURL)/api/v1/auth/refresh") else { return false }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -395,22 +506,35 @@ final class BackgroundSyncManager {
         request.setValue("PerenniaAI-iOS/1.0 BackgroundSync", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = 10
 
+        // Send refresh token in request body as the backend expects
+        let body: [String: String] = ["refresh_token": refreshToken]
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
         do {
             let (data, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else { return false }
 
             if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
                 if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                   let newToken = json["access_token"] as? String ?? json["token"] as? String {
+                   let newToken = json["access_token"] as? String {
                     KeychainService.shared.authToken = newToken
+                    // The /api/v1/auth/refresh endpoint rotates tokens — store the new refresh token
+                    if let newRefresh = json["refresh_token"] as? String {
+                        KeychainService.shared.refreshToken = newRefresh
+                    }
                     logger.info("Token refreshed successfully")
                     return true
                 }
             } else if httpResponse.statusCode == 401 || httpResponse.statusCode == 403 {
                 // Refresh token is also expired — clear and require re-login
                 KeychainService.shared.authToken = nil
+                KeychainService.shared.refreshToken = nil
                 logger.warning("Token refresh failed with \(httpResponse.statusCode) — user must re-login")
                 return false
+            } else if httpResponse.statusCode == 429 {
+                logger.warning("Rate limited during token refresh — will retry later")
+                // Don't clear tokens, just let the existing (possibly still valid) token be used
+                return true
             }
         } catch {
             logger.error("Token refresh error: \(error.localizedDescription)")
@@ -513,39 +637,44 @@ final class BackgroundSyncManager {
         // Update last sync timestamp
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: CacheKey.lastSync)
 
+        // Reset backoff interval on successful sync
+        if minimumSyncInterval != defaultSyncInterval {
+            logger.info("Resetting sync interval from \(self.minimumSyncInterval)s back to \(self.defaultSyncInterval)s after successful sync")
+            minimumSyncInterval = defaultSyncInterval
+        }
+
         return hasNewData
     }
 
-    private func fetchDashboard() async throws -> DashboardData {
+    private func fetchDashboard() async throws -> CPDashboardData {
         let data = try await apiRequest(path: "/api/v1/dashboard/summary")
-        return try decoder.decode(DashboardData.self, from: data)
+        return try decoder.decode(CPDashboardData.self, from: data)
     }
 
-    private func fetchTasks() async throws -> [TaskItem] {
-        let data = try await apiRequest(path: "/api/v1/tasks", queryItems: [
+    private func fetchTasks() async throws -> [CPTaskItem] {
+        let data = try await apiRequest(path: "/api/v1/mobile/tasks", queryItems: [
             URLQueryItem(name: "status", value: "pending"),
-            URLQueryItem(name: "limit", value: "20"),
-            URLQueryItem(name: "sort", value: "due_date")
+            URLQueryItem(name: "limit", value: "20")
         ])
 
         // The API may return tasks in a wrapper object or as a direct array.
+        // CPTaskItem uses convertFromSnakeCase (CodingKey names are camelCase).
         // Try direct array first, then wrapper.
-        if let tasks = try? decoder.decode([TaskItem].self, from: data) {
+        if let tasks = try? snakeCaseDecoder.decode([CPTaskItem].self, from: data) {
             return tasks
         }
 
         // Try wrapper: { "tasks": [...] }
         struct TasksWrapper: Codable {
-            let tasks: [TaskItem]
+            let tasks: [CPTaskItem]
         }
-        let wrapper = try decoder.decode(TasksWrapper.self, from: data)
+        let wrapper = try snakeCaseDecoder.decode(TasksWrapper.self, from: data)
         return wrapper.tasks
     }
 
     private func fetchContacts() async throws -> [CarPlayContact] {
-        let data = try await apiRequest(path: "/api/v1/leads", queryItems: [
-            URLQueryItem(name: "limit", value: "20"),
-            URLQueryItem(name: "sort", value: "last_contacted_at")
+        let data = try await apiRequest(path: "/api/v1/leads/", queryItems: [
+            URLQueryItem(name: "limit", value: "20")
         ])
 
         // Try direct array first, then wrapper.
@@ -560,20 +689,21 @@ final class BackgroundSyncManager {
         return wrapper.leads
     }
 
-    private func fetchRateAlerts() async throws -> [RateAlert] {
+    private func fetchRateAlerts() async throws -> [CPRateAlert] {
         let data = try await apiRequest(path: "/api/v1/rate-alerts", queryItems: [
             URLQueryItem(name: "limit", value: "10"),
             URLQueryItem(name: "status", value: "active")
         ])
 
-        if let alerts = try? decoder.decode([RateAlert].self, from: data) {
+        // CPRateAlert uses convertFromSnakeCase (CodingKey names are camelCase).
+        if let alerts = try? snakeCaseDecoder.decode([CPRateAlert].self, from: data) {
             return alerts
         }
 
         struct AlertsWrapper: Codable {
-            let alerts: [RateAlert]
+            let alerts: [CPRateAlert]
         }
-        let wrapper = try decoder.decode(AlertsWrapper.self, from: data)
+        let wrapper = try snakeCaseDecoder.decode(AlertsWrapper.self, from: data)
         return wrapper.alerts
     }
 
@@ -604,7 +734,22 @@ final class BackgroundSyncManager {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("PerenniaAI-iOS/BackgroundSync", forHTTPHeaderField: "User-Agent")
 
-        let (data, response) = try await session.data(for: request)
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch let urlError as URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed:
+                logger.info("No network connectivity for \(path)")
+                throw SyncError.noNetwork
+            case .timedOut:
+                logger.warning("Request timed out for \(path)")
+                throw SyncError.httpError(statusCode: 0)
+            default:
+                throw urlError
+            }
+        }
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw SyncError.invalidResponse
@@ -625,8 +770,13 @@ final class BackgroundSyncManager {
             logger.warning("Auth token expired during background sync (retry=\(isRetry))")
             throw SyncError.authExpired
         case 429:
-            logger.warning("Rate limited during background sync")
+            logger.info("Rate limited by server for \(path) — will back off")
+            // Double the minimum sync interval temporarily (capped at 30 min)
+            minimumSyncInterval = min(minimumSyncInterval * 2, 1800)
             throw SyncError.rateLimited
+        case 500...599:
+            logger.error("Server error \(httpResponse.statusCode) for \(path)")
+            throw SyncError.serverError(statusCode: httpResponse.statusCode)
         default:
             logger.error("API error \(httpResponse.statusCode) for \(path)")
             throw SyncError.httpError(statusCode: httpResponse.statusCode)
@@ -635,10 +785,10 @@ final class BackgroundSyncManager {
 
     // MARK: - Private: Caching
 
-    private func cacheData(dashboard: DashboardData? = nil,
-                           tasks: [TaskItem]? = nil,
+    private func cacheData(dashboard: CPDashboardData? = nil,
+                           tasks: [CPTaskItem]? = nil,
                            contacts: [CarPlayContact]? = nil,
-                           rateAlerts: [RateAlert]? = nil) {
+                           rateAlerts: [CPRateAlert]? = nil) {
         if let dashboard = dashboard {
             EncryptedCacheService.shared.store(key: CacheKey.dashboard, value: dashboard)
         }
@@ -662,7 +812,7 @@ final class BackgroundSyncManager {
         return elapsed >= minimumSyncInterval
     }
 
-    private func dashboardEquals(_ a: DashboardData?, _ b: DashboardData) -> Bool {
+    private func dashboardEquals(_ a: CPDashboardData?, _ b: CPDashboardData) -> Bool {
         guard let a = a else { return false }
         return a.urgentTaskCount == b.urgentTaskCount
             && a.activeLoanCount == b.activeLoanCount
@@ -698,6 +848,8 @@ extension BackgroundSyncManager {
         case invalidResponse
         case authExpired
         case rateLimited
+        case noNetwork
+        case serverError(statusCode: Int)
         case httpError(statusCode: Int)
 
         var errorDescription: String? {
@@ -712,6 +864,10 @@ extension BackgroundSyncManager {
                 return "Authentication token has expired"
             case .rateLimited:
                 return "API rate limit exceeded"
+            case .noNetwork:
+                return "No network connectivity"
+            case .serverError(let code):
+                return "Server error \(code)"
             case .httpError(let code):
                 return "HTTP error \(code)"
             }

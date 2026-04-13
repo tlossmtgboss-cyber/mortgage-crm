@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { toast } from 'react-hot-toast';
 import { teamCalendarAPI, teamAPI, schedulerAPI } from '../services/api';
 import './TeamCalendar.css';
 
@@ -354,7 +355,7 @@ function TeamCalendar() {
       fetchData();
     } catch (err) {
       const detail = err?.response?.data?.detail || err.message;
-      alert(`Reassign failed: ${detail}`);
+      toast.error(`Reassign failed: ${detail}`);
     } finally {
       setReassigning(false);
     }
@@ -402,7 +403,7 @@ function TeamCalendar() {
       fetchData();
     } catch (err) {
       const detail = err?.response?.data?.detail || err.message;
-      alert(`Failed to create appointment: ${detail}`);
+      toast.error(`Failed to create appointment: ${detail}`);
     }
   };
 

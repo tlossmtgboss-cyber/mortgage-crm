@@ -574,13 +574,17 @@ class SpeedToLeadService:
         event: AcquisitionEvent,
         result: SpeedToLeadResult,
     ):
-        """Send push notification to LO"""
+        """Send push notification to LO — in-app record + APNs device push."""
         action = {"action": SpeedToLeadAction.PUSH_NOTIFICATION.value, "lo_id": lo_info.get("id")}
         result.actions_attempted.append(action)
 
+        lo_id = lo_info.get("id")
+        lead_name = lead_info.get("first_name", "New lead")
+        title = "Hot Lead Alert"
+        body = f"New hot lead: {lead_name} - {event.event_type}"
+
         try:
-            # For now, create a notification record
-            # In production, this would use Firebase/WebPush
+            # 1) Create in-app notification record
             from sqlalchemy import text
 
             self.db.execute(text("""
@@ -592,9 +596,9 @@ class SpeedToLeadService:
                     false, :created_at, :data
                 )
             """), {
-                "user_id": lo_info.get("id"),
-                "title": "Hot Lead Alert",
-                "message": f"New hot lead: {lead_info.get('first_name', '')} - {event.event_type}",
+                "user_id": lo_id,
+                "title": title,
+                "message": body,
                 "created_at": datetime.now(timezone.utc),
                 "data": str({
                     "lead_id": lead_info.get("id"),
@@ -604,9 +608,27 @@ class SpeedToLeadService:
             })
             self.db.commit()
 
+            # 2) Send actual device push via APNs/FCM
+            try:
+                from services.push_notification_service import send_push_to_user
+                send_push_to_user(
+                    user_id=lo_id,
+                    title=title,
+                    body=body,
+                    data={
+                        "type": "lead_assigned",
+                        "lead_id": str(lead_info.get("id", "")),
+                        "route": "/leads",
+                    },
+                    notification_type="lead_assigned",
+                    db=self.db,
+                )
+            except Exception as push_err:
+                logger.debug(f"Device push failed (in-app still created): {push_err}")
+
             result.actions_completed.append(SpeedToLeadAction.PUSH_NOTIFICATION)
             action["success"] = True
-            logger.info(f"Push notification sent to LO {lo_info['id']} for lead {lead_info['id']}")
+            logger.info(f"Push notification sent to LO {lo_id} for lead {lead_info['id']}")
 
         except Exception as e:
             action["success"] = False

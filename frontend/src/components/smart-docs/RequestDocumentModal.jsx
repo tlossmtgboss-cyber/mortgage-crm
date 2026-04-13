@@ -9,8 +9,9 @@
  * - LOE template support per document
  */
 
-import React, { useState, useCallback } from 'react';
-import { addCustomRequest } from '../../services/smartDocsApi';
+import React, { useState, useCallback, useRef } from 'react';
+import { addCustomRequest, uploadDocument } from '../../services/smartDocsApi';
+import { esignApi } from '../../services/esignApi';
 import './RequestDocumentModal.css';
 
 const DOCUMENT_TYPES = [
@@ -37,6 +38,19 @@ const LOE_TEMPLATES = [
   { value: 'custom', label: 'Custom Letter of Explanation', prompt: '' },
 ];
 
+const SIGNER_OPTIONS = [
+  { value: 'borrower', label: 'Borrower' },
+  { value: 'co_borrower', label: 'Co-Borrower' },
+  { value: 'both', label: 'Both Borrower & Co-Borrower' },
+];
+
+const ESIGN_FIELD_DEFAULTS = {
+  includeSignature: true,
+  includeExplanation: true,
+  includeDateStamp: true,
+  explanationPrompt: '',
+};
+
 let _docIdCounter = 0;
 function createEmptyDoc() {
   _docIdCounter += 1;
@@ -47,6 +61,11 @@ function createEmptyDoc() {
     instructions: '',
     requireEsign: false,
     loeTemplate: 'custom',
+    // E-sign fields
+    esignFile: null,
+    esignFileName: '',
+    esignSigner: 'borrower',
+    esignFields: { ...ESIGN_FIELD_DEFAULTS },
   };
 }
 
@@ -57,6 +76,8 @@ function RequestDocumentModal({
   borrowerId,
   borrowerName,
   borrowerEmail,
+  coBorrowerName,
+  coBorrowerEmail,
   onSuccess,
 }) {
   // Document queue state
@@ -112,6 +133,76 @@ function RequestDocumentModal({
     ));
   }, [activeIndex]);
 
+  // E-sign file upload ref
+  const fileInputRef = useRef(null);
+
+  // [SEC-001] Validate PDF magic bytes + MIME + extension
+  const validatePdfFile = useCallback((file) => {
+    return new Promise((resolve, reject) => {
+      if (!file) return reject('No file selected');
+      const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+      if (!isPdf) return reject('Please upload a PDF document for e-signature.');
+      if (file.size > 25 * 1024 * 1024) return reject('File size must be under 25 MB.');
+      // Validate magic bytes (%PDF-)
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const arr = new Uint8Array(event.target.result);
+        const header = String.fromCharCode(arr[0], arr[1], arr[2], arr[3], arr[4]);
+        if (header !== '%PDF-') {
+          return reject('The file does not appear to be a valid PDF document.');
+        }
+        resolve(file);
+      };
+      reader.onerror = () => reject('Failed to read file.');
+      reader.readAsArrayBuffer(file.slice(0, 5));
+    });
+  }, []);
+
+  const handleEsignFileSelect = useCallback(async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      await validatePdfFile(file);
+      setDocuments(prev => prev.map((doc, i) =>
+        i === activeIndex ? { ...doc, esignFile: file, esignFileName: file.name } : doc
+      ));
+      setError(null);
+    } catch (err) {
+      setError(typeof err === 'string' ? err : err.message);
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }, [activeIndex, validatePdfFile]);
+
+  const handleRemoveEsignFile = useCallback(() => {
+    setDocuments(prev => prev.map((doc, i) =>
+      i === activeIndex ? { ...doc, esignFile: null, esignFileName: '' } : doc
+    ));
+  }, [activeIndex]);
+
+  const handleEsignFieldToggle = useCallback((field, value) => {
+    setDocuments(prev => prev.map((doc, i) =>
+      i === activeIndex
+        ? { ...doc, esignFields: { ...doc.esignFields, [field]: value } }
+        : doc
+    ));
+  }, [activeIndex]);
+
+  const handleFileDrop = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    try {
+      await validatePdfFile(file);
+      setDocuments(prev => prev.map((doc, i) =>
+        i === activeIndex ? { ...doc, esignFile: file, esignFileName: file.name } : doc
+      ));
+      setError(null);
+    } catch (err) {
+      setError(typeof err === 'string' ? err : err.message);
+    }
+  }, [activeIndex, validatePdfFile]);
+
   const addDocument = useCallback(() => {
     const newDoc = createEmptyDoc();
     setDocuments(prev => {
@@ -140,33 +231,169 @@ function RequestDocumentModal({
       return;
     }
 
+    // [FUNC-004] Fix: validate e-sign docs have files uploaded
+    const esignWithoutFile = documents.filter(d => d.requireEsign && !d.esignFile);
+    if (esignWithoutFile.length > 0) {
+      setError('Please upload a PDF for all documents requiring e-signature.');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     setSubmitProgress({ done: 0, total: documents.length });
 
-    const requests = documents.map(doc => ({
-      title: doc.title.trim(),
-      description: `${doc.docType} requested`,
-      instructions: doc.instructions.trim(),
-      priority,
-      due_date: dueDate || null,
-      send_notification: sendNotification,
-      borrower_email: borrowerEmail,
-      borrower_name: borrowerName,
-      doc_type: doc.docType,
-      requires_esign: doc.requireEsign,
-    }));
-
-    // Submit one by one, tracking progress
     const results = [];
-    for (let i = 0; i < requests.length; i++) {
+    for (let i = 0; i < documents.length; i++) {
+      const doc = documents[i];
+      let stepName = 'creating request';
       try {
-        const result = await addCustomRequest(loanId, borrowerId, requests[i]);
-        results.push({ success: true, title: requests[i].title, result });
+        // Step 1: Create the document request
+        const requestPayload = {
+          title: doc.title.trim(),
+          description: `${doc.docType} requested`,
+          instructions: doc.instructions.trim(),
+          priority,
+          due_date: dueDate || null,
+          send_notification: sendNotification,
+          borrower_email: borrowerEmail,
+          borrower_name: borrowerName,
+          doc_type: doc.docType,
+          requires_esign: doc.requireEsign,
+          esign_initiated: doc.requireEsign && !!doc.esignFile,
+        };
+        const result = await addCustomRequest(loanId, borrowerId, requestPayload);
+        const requestId = result?.id || result?.data?.id;
+
+        // Step 2: If e-sign with uploaded file, create envelope + fields
+        if (doc.requireEsign && doc.esignFile) {
+          // 2a: Upload the document
+          stepName = 'uploading document';
+          const uploadResult = await uploadDocument(
+            doc.esignFile, loanId, borrowerId, requestId, doc.docType
+          );
+          // [FUNC-007] Extract S3 storage key (not URL)
+          const storageKey = uploadResult?.storage_key
+            || uploadResult?.data?.storage_key
+            || uploadResult?.s3_key
+            || uploadResult?.data?.s3_key;
+          const originalFilename = uploadResult?.filename
+            || uploadResult?.data?.filename
+            || doc.esignFileName;
+
+          if (!storageKey) {
+            throw new Error('Document upload did not return a storage key');
+          }
+
+          // 2b: Build recipients list
+          stepName = 'creating e-sign envelope';
+          const recipientsPayload = [];
+          if (doc.esignSigner === 'borrower' || doc.esignSigner === 'both') {
+            recipientsPayload.push({
+              name: borrowerName || 'Borrower',
+              email: borrowerEmail || '',
+              type: 'signer',
+              signing_order: 1,
+              auth_method: 'email_link',
+            });
+          }
+          if (doc.esignSigner === 'co_borrower' || doc.esignSigner === 'both') {
+            recipientsPayload.push({
+              name: coBorrowerName || 'Co-Borrower',
+              email: coBorrowerEmail || '',
+              type: 'signer',
+              signing_order: doc.esignSigner === 'both' ? 2 : 1,
+              auth_method: 'email_link',
+            });
+          }
+
+          // 2c: Build fields list using backend field names
+          // [FUNC-001/003] Use type/page/x/y/w/h/recipient_index (not field_type/page_number/x_position/signer_email)
+          const fieldsPayload = [];
+          const baseY = 500; // PDF points from bottom
+
+          // [SEC-003] Sanitize explanation prompt
+          const sanitizedPrompt = (doc.esignFields.explanationPrompt || 'Please provide your explanation')
+            .replace(/[<>"'&]/g, '')
+            .slice(0, 500);
+
+          for (let s = 0; s < recipientsPayload.length; s++) {
+            const yOffset = s * 160;
+
+            if (doc.esignFields.includeExplanation) {
+              fieldsPayload.push({
+                type: 'text',
+                page: 1,
+                x: 72,
+                y: baseY - yOffset + 100,
+                w: 400,
+                h: 60,
+                recipient_index: s,
+                required: true,
+                placeholder: sanitizedPrompt,
+              });
+            }
+            if (doc.esignFields.includeSignature) {
+              fieldsPayload.push({
+                type: 'signature',
+                page: 1,
+                x: 72,
+                y: baseY - yOffset,
+                w: 200,
+                h: 50,
+                recipient_index: s,
+                required: true,
+              });
+            }
+            if (doc.esignFields.includeDateStamp) {
+              fieldsPayload.push({
+                type: 'date_signed',
+                page: 1,
+                x: 300,
+                y: baseY - yOffset,
+                w: 120,
+                h: 30,
+                recipient_index: s,
+                required: true,
+              });
+            }
+          }
+
+          // [PERF-001] Single createEnvelope call with recipients + fields (batch)
+          const envelopeData = {
+            title: `${doc.title.trim()} - E-Signature`,
+            document_storage_key: storageKey,
+            original_filename: originalFilename,
+            loan_id: parseInt(loanId),
+            recipients: recipientsPayload,
+            fields: fieldsPayload.length > 0 ? fieldsPayload : undefined,
+          };
+          const envelopeResult = await esignApi.createEnvelope(envelopeData);
+          const envelope = envelopeResult.data || envelopeResult;
+
+          // [FUNC-002] Use envelope_uuid for send (not integer id)
+          stepName = 'sending for signature';
+          const envelopeUuid = envelope.envelope_uuid || envelope.id;
+          await esignApi.sendEnvelope(envelopeUuid);
+
+          results.push({ success: true, title: doc.title, esign: true });
+        } else {
+          results.push({ success: true, title: doc.title, esign: false });
+        }
       } catch (err) {
-        results.push({ success: false, title: requests[i].title, error: err.message });
+        // [OBS-001] Step-specific error messages
+        console.error(`Request submission error at step "${stepName}":`, err);
+        const isPartial = stepName !== 'creating request';
+        results.push({
+          success: false,
+          title: doc.title,
+          error: isPartial
+            ? `Failed at ${stepName}: ${err.message}`
+            : err.message,
+          // [DATA-001] Flag partial creation so user knows request exists but e-sign failed
+          warning: isPartial ? 'Document request was created but e-signature setup failed.' : undefined,
+        });
       }
-      setSubmitProgress({ done: i + 1, total: requests.length });
+      setSubmitProgress({ done: i + 1, total: documents.length });
     }
 
     setSubmitting(false);
@@ -230,7 +457,9 @@ function RequestDocumentModal({
                 <div key={i} className={`submit-result-item ${r.success ? 'success' : 'failed'}`}>
                   <span className="result-indicator">{r.success ? '\u2713' : '\u2717'}</span>
                   <span>{r.title}</span>
+                  {r.esign && <span className="esign-sent-badge">E-Sign Sent</span>}
                   {!r.success && <span className="result-error">{r.error}</span>}
+                  {r.warning && <span className="result-warning">{r.warning}</span>}
                 </div>
               ))}
             </div>
@@ -349,6 +578,132 @@ function RequestDocumentModal({
                     <span>Require E-Signature</span>
                   </label>
                 </div>
+
+                {/* E-Sign Configuration (shown when e-sign is checked) */}
+                {activeDoc.requireEsign && (
+                  <div className="esign-config-section">
+                    <div className="esign-config-header">E-Signature Setup</div>
+
+                    {/* Upload Document */}
+                    <div className="form-section">
+                      <label>Upload Document for Signing</label>
+                      {activeDoc.esignFile ? (
+                        <div className="esign-file-attached">
+                          <span className="file-icon">&#128196;</span>
+                          <div className="file-info">
+                            <span className="file-name">{activeDoc.esignFileName}</span>
+                            <span className="file-size">
+                              {(activeDoc.esignFile.size / 1024).toFixed(0)} KB
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            className="file-remove-btn"
+                            onClick={handleRemoveEsignFile}
+                            title="Remove file"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ) : (
+                        <div
+                          className="esign-dropzone"
+                          onClick={() => fileInputRef.current?.click()}
+                          onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('dragover'); }}
+                          onDragLeave={(e) => e.currentTarget.classList.remove('dragover')}
+                          onDrop={(e) => { e.currentTarget.classList.remove('dragover'); handleFileDrop(e); }}
+                        >
+                          <span className="dropzone-icon">&#8593;</span>
+                          <span className="dropzone-text">
+                            Drag & drop a PDF here, or <strong>click to browse</strong>
+                          </span>
+                          <span className="dropzone-hint">PDF only, max 25 MB</span>
+                        </div>
+                      )}
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".pdf,application/pdf"
+                        style={{ display: 'none' }}
+                        onChange={handleEsignFileSelect}
+                      />
+                    </div>
+
+                    {/* Signer Selection */}
+                    <div className="form-section">
+                      <label>Who Needs to Sign?</label>
+                      <select
+                        value={activeDoc.esignSigner}
+                        onChange={(e) => updateActiveDoc('esignSigner', e.target.value)}
+                        className="form-select"
+                      >
+                        {SIGNER_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {opt.label}
+                            {opt.value === 'borrower' && borrowerName ? ` (${borrowerName})` : ''}
+                            {opt.value === 'co_borrower' && coBorrowerName ? ` (${coBorrowerName})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Field Placement Options */}
+                    <div className="form-section">
+                      <label>Fields to Place on Document</label>
+                      <div className="esign-fields-config">
+                        <label className="esign-field-toggle">
+                          <input
+                            type="checkbox"
+                            checked={activeDoc.esignFields.includeSignature}
+                            onChange={(e) => handleEsignFieldToggle('includeSignature', e.target.checked)}
+                          />
+                          <span className="field-toggle-label">
+                            <span className="field-toggle-icon" style={{ color: '#1a73e8' }}>&#9997;</span>
+                            Signature
+                          </span>
+                        </label>
+
+                        <label className="esign-field-toggle">
+                          <input
+                            type="checkbox"
+                            checked={activeDoc.esignFields.includeExplanation}
+                            onChange={(e) => handleEsignFieldToggle('includeExplanation', e.target.checked)}
+                          />
+                          <span className="field-toggle-label">
+                            <span className="field-toggle-icon" style={{ color: '#6d4c41' }}>&#9998;</span>
+                            Explanation Text Area
+                          </span>
+                        </label>
+
+                        <label className="esign-field-toggle">
+                          <input
+                            type="checkbox"
+                            checked={activeDoc.esignFields.includeDateStamp}
+                            onChange={(e) => handleEsignFieldToggle('includeDateStamp', e.target.checked)}
+                          />
+                          <span className="field-toggle-label">
+                            <span className="field-toggle-icon" style={{ color: '#00897b' }}>&#128197;</span>
+                            Date Stamp
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Explanation Prompt (when explanation is toggled on) */}
+                    {activeDoc.esignFields.includeExplanation && (
+                      <div className="form-section">
+                        <label>Explanation Prompt for Borrower</label>
+                        <input
+                          type="text"
+                          value={activeDoc.esignFields.explanationPrompt}
+                          onChange={(e) => handleEsignFieldToggle('explanationPrompt', e.target.value)}
+                          placeholder="e.g., Please explain the recent credit inquiry from (company) on (date)"
+                          className="form-input"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 

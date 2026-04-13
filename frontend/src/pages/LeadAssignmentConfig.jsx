@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
+import { usePermissions } from '../contexts/PermissionContext';
 import { getAuthHeaders } from '../utils/auth';
 import { API_BASE_URL } from '../services/api';
 
@@ -75,6 +77,13 @@ const US_STATES = [
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function LeadAssignmentConfig() {
+  const navigate = useNavigate();
+  const { userRole, hasAnyPermission, isAdmin } = usePermissions();
+
+  // Permission check - only admins/managers can configure lead assignment
+  const canAccessLeadAssignment = isAdmin || hasAnyPermission(['admin.manage', 'leads.assign', 'leads.manage', 'system.admin']) ||
+    userRole === 'admin' || userRole === 'site_admin' || userRole === 'management';
+
   const [section, setSection] = useState('team');
   const [loading, setLoading] = useState(true);
 
@@ -142,6 +151,21 @@ export default function LeadAssignmentConfig() {
     { key: 'audit',      label: 'Audit Log',         icon: '📋' },
     { key: 'stats',      label: 'Stats',             icon: '📊' },
   ];
+
+  // Access denied if user doesn't have lead assignment permissions
+  if (!canAccessLeadAssignment) {
+    return (
+      <div style={s.container}>
+        <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+          <h2>Access Denied</h2>
+          <p>You don't have permission to configure lead assignment.</p>
+          <button onClick={() => navigate('/dashboard')} style={{ marginTop: '16px', padding: '10px 24px', backgroundColor: '#3b82f6', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) return <div style={s.container}><div style={s.loading}>Loading team &amp; assignment configuration...</div></div>;
 

@@ -13,7 +13,7 @@ import MetricKit
 import os.signpost
 
 @available(iOS 14.0, *)
-final class PerformanceMonitor {
+final class PerformanceMonitor: NSObject {
 
     static let shared = PerformanceMonitor()
 
@@ -25,25 +25,39 @@ final class PerformanceMonitor {
     /// Set at process start (static initializer runs before main)
     static let processStartTime = CFAbsoluteTimeGetCurrent()
 
-    private(set) var appLaunchDuration: TimeInterval = 0
-    private(set) var firstFrameDuration: TimeInterval = 0
+    /// Thread-safe storage for launch metrics (written once, read from summary)
+    private var _appLaunchDuration: TimeInterval = 0
+    private var _firstFrameDuration: TimeInterval = 0
+
+    private(set) var appLaunchDuration: TimeInterval {
+        get { monitorQueue.sync { _appLaunchDuration } }
+        set { monitorQueue.sync { _appLaunchDuration = newValue } }
+    }
+
+    private(set) var firstFrameDuration: TimeInterval {
+        get { monitorQueue.sync { _firstFrameDuration } }
+        set { monitorQueue.sync { _firstFrameDuration = newValue } }
+    }
 
     /// Call from applicationDidFinishLaunching
     func recordAppLaunch() {
-        appLaunchDuration = CFAbsoluteTimeGetCurrent() - Self.processStartTime
-        endSignpost("AppLaunch") // Pair with beginSignpost at process start
-        logger.info("App launch (didFinishLaunching): \(String(format: "%.3f", self.appLaunchDuration))s")
+        let launchDuration = CFAbsoluteTimeGetCurrent() - Self.processStartTime
+        appLaunchDuration = launchDuration
+        beginSignpost("AppLaunch")
+        endSignpost("AppLaunch")
+        logger.info("App launch (didFinishLaunching): \(String(format: "%.3f", launchDuration))s")
 
-        // Measure time to first frame
+        // Measure time to first frame on the next run loop iteration
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            self.firstFrameDuration = CFAbsoluteTimeGetCurrent() - Self.processStartTime
-            self.logger.info("First frame rendered: \(String(format: "%.3f", self.firstFrameDuration))s")
+            let frameDuration = CFAbsoluteTimeGetCurrent() - Self.processStartTime
+            self.firstFrameDuration = frameDuration
+            self.logger.info("First frame rendered: \(String(format: "%.3f", frameDuration))s")
 
             // Log launch metrics
             self.logMetrics(event: "app_launch", data: [
-                "launch_duration_ms": Int(self.appLaunchDuration * 1000),
-                "first_frame_ms": Int(self.firstFrameDuration * 1000)
+                "launch_duration_ms": Int(launchDuration * 1000),
+                "first_frame_ms": Int(frameDuration * 1000)
             ])
         }
     }
@@ -70,16 +84,22 @@ final class PerformanceMonitor {
 
     // MARK: - Memory Pressure
 
-    private var memoryWarningCount = 0
+    private var _memoryWarningCount = 0
+    private var memoryWarningCount: Int {
+        get { monitorQueue.sync { _memoryWarningCount } }
+    }
 
     /// Call from applicationDidReceiveMemoryWarning
     func recordMemoryWarning() {
-        memoryWarningCount += 1
+        let count: Int = monitorQueue.sync {
+            _memoryWarningCount += 1
+            return _memoryWarningCount
+        }
         let mem = residentMemoryFormatted
-        logger.warning("Memory warning #\(self.memoryWarningCount) — current usage: \(mem)")
+        logger.warning("Memory warning #\(count) — current usage: \(mem)")
 
         logMetrics(event: "memory_warning", data: [
-            "warning_count": memoryWarningCount,
+            "warning_count": count,
             "resident_mb": Int(Double(residentMemory) / 1_048_576.0)
         ])
     }
@@ -109,10 +129,10 @@ final class PerformanceMonitor {
     }
 
     private func captureHealthSnapshot() {
-        monitorQueue.async { [weak self] in
+        // UIDevice properties must be read on the main thread
+        DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
-            let memMB = Int(Double(self.residentMemory) / 1_048_576.0)
             let batteryLevel = Int(UIDevice.current.batteryLevel * 100)
             let batteryState: String = {
                 switch UIDevice.current.batteryState {
@@ -122,28 +142,35 @@ final class PerformanceMonitor {
                 default: return "unknown"
                 }
             }()
-            let thermalState: String = {
-                switch ProcessInfo.processInfo.thermalState {
-                case .nominal: return "nominal"
-                case .fair: return "fair"
-                case .serious: return "serious"
-                case .critical: return "critical"
-                @unknown default: return "unknown"
+
+            // Move heavy work off the main thread
+            self.monitorQueue.async { [weak self] in
+                guard let self = self else { return }
+
+                let memMB = Int(Double(self.residentMemory) / 1_048_576.0)
+                let thermalState: String = {
+                    switch ProcessInfo.processInfo.thermalState {
+                    case .nominal: return "nominal"
+                    case .fair: return "fair"
+                    case .serious: return "serious"
+                    case .critical: return "critical"
+                    @unknown default: return "unknown"
+                    }
+                }()
+
+                self.logger.debug("Health: mem=\(memMB)MB battery=\(batteryLevel)% thermal=\(thermalState)")
+
+                // Alert on concerning states
+                if memMB > 300 {
+                    self.logger.warning("High memory usage: \(memMB)MB")
                 }
-            }()
-
-            self.logger.debug("Health: mem=\(memMB)MB battery=\(batteryLevel)% thermal=\(thermalState)")
-
-            // Alert on concerning states
-            if memMB > 300 {
-                self.logger.warning("High memory usage: \(memMB)MB")
-            }
-            if thermalState == "serious" || thermalState == "critical" {
-                self.logger.warning("Thermal pressure: \(thermalState)")
-                self.logMetrics(event: "thermal_pressure", data: [
-                    "state": thermalState,
-                    "resident_mb": memMB
-                ])
+                if thermalState == "serious" || thermalState == "critical" {
+                    self.logger.warning("Thermal pressure: \(thermalState)")
+                    self.logMetrics(event: "thermal_pressure", data: [
+                        "state": thermalState,
+                        "resident_mb": memMB
+                    ])
+                }
             }
         }
     }
@@ -170,19 +197,23 @@ final class PerformanceMonitor {
         }
     }
 
-    /// Average request latency over recent requests
+    /// Average request latency over recent requests (thread-safe)
     var averageRequestLatencyMs: Int {
-        guard !requestTimings.isEmpty else { return 0 }
-        let total = requestTimings.reduce(0) { $0 + $1.durationMs }
-        return total / requestTimings.count
+        return monitorQueue.sync {
+            guard !requestTimings.isEmpty else { return 0 }
+            let total = requestTimings.reduce(0) { $0 + $1.durationMs }
+            return total / requestTimings.count
+        }
     }
 
-    /// P95 request latency
+    /// P95 request latency (thread-safe)
     var p95RequestLatencyMs: Int {
-        guard !requestTimings.isEmpty else { return 0 }
-        let sorted = requestTimings.map(\.durationMs).sorted()
-        let index = Int(Double(sorted.count) * 0.95)
-        return sorted[min(index, sorted.count - 1)]
+        return monitorQueue.sync {
+            guard requestTimings.count > 0 else { return 0 }
+            let sorted = requestTimings.map(\.durationMs).sorted()
+            let p95Index = min(Int(Double(sorted.count - 1) * 0.95), sorted.count - 1)
+            return sorted[p95Index]
+        }
     }
 
     // MARK: - Metrics Reporting
@@ -191,7 +222,7 @@ final class PerformanceMonitor {
         // Log to AuditLogger using featureAccess event type for performance telemetry
         AuditLogger.shared.log(
             event: .featureAccess,
-            details: ["performance_event": event] + data.mapValues { "\($0)" }
+            details: ["performance_event": event].merging(data.mapValues { "\($0)" }) { _, new in new }
         )
     }
 
@@ -222,19 +253,29 @@ final class PerformanceMonitor {
 
     private let payloadStorageKey = "com.perenniaai.metrickit.payloads"
     private let payloadIndexKey = "com.perenniaai.metrickit.payloadIndex"
+    private let maxPayloadEntries = 50
 
     private func storeMetricPayload(_ jsonData: Data, type: String) {
         monitorQueue.async { [weak self] in
             guard let self = self else { return }
             let key = "\(self.payloadStorageKey).\(type).\(Int(Date().timeIntervalSince1970))"
 
-            if #available(iOS 14.0, *) {
-                EncryptedCacheService.shared.store(key: key, value: jsonData)
-            }
+            EncryptedCacheService.shared.store(key: key, value: jsonData)
 
-            // Track in index
+            // Track in index, evicting oldest entries if over capacity
             var index = UserDefaults.standard.stringArray(forKey: self.payloadIndexKey) ?? []
             index.append(key)
+
+            if index.count > self.maxPayloadEntries {
+                let overflow = index.count - self.maxPayloadEntries
+                let evicted = Array(index.prefix(overflow))
+                index = Array(index.dropFirst(overflow))
+                // Clean up evicted entries from cache
+                for evictedKey in evicted {
+                    EncryptedCacheService.shared.delete(key: evictedKey)
+                }
+            }
+
             UserDefaults.standard.set(index, forKey: self.payloadIndexKey)
         }
     }
@@ -245,11 +286,9 @@ final class PerformanceMonitor {
         let index = UserDefaults.standard.stringArray(forKey: payloadIndexKey) ?? []
 
         for key in index {
-            if #available(iOS 14.0, *) {
-                if let data: Data = EncryptedCacheService.shared.retrieve(key: key, type: Data.self) {
-                    let type = key.contains(".diagnostic.") ? "diagnostic" : "performance"
-                    results.append((type: type, data: data))
-                }
+            if let data: Data = EncryptedCacheService.shared.retrieve(key: key, type: Data.self) {
+                let type = key.contains(".diagnostic.") ? "diagnostic" : "performance"
+                results.append((type: type, data: data))
             }
         }
         return results
@@ -259,9 +298,7 @@ final class PerformanceMonitor {
     func clearSyncedPayloads() {
         let index = UserDefaults.standard.stringArray(forKey: payloadIndexKey) ?? []
         for key in index {
-            if #available(iOS 14.0, *) {
-                EncryptedCacheService.shared.delete(key: key)
-            }
+            EncryptedCacheService.shared.delete(key: key)
         }
         UserDefaults.standard.removeObject(forKey: payloadIndexKey)
     }
@@ -285,20 +322,25 @@ final class PerformanceMonitor {
         os_signpost(.event, log: Self.signpostLog, name: name)
     }
 
-    private init() {
-        // Enable battery monitoring
-        UIDevice.current.isBatteryMonitoringEnabled = true
+    private override init() {
+        super.init()
+
+        // Enable battery monitoring (UIDevice must be accessed on main thread)
+        if Thread.isMainThread {
+            UIDevice.current.isBatteryMonitoringEnabled = true
+        } else {
+            DispatchQueue.main.async {
+                UIDevice.current.isBatteryMonitoringEnabled = true
+            }
+        }
 
         // Register for MetricKit payloads (crash reports + performance)
-        if #available(iOS 14.0, *) {
-            MXMetricManager.shared.add(self)
-        }
+        MXMetricManager.shared.add(self)
     }
 
     deinit {
-        if #available(iOS 14.0, *) {
-            MXMetricManager.shared.remove(self)
-        }
+        healthCheckTimer?.invalidate()
+        MXMetricManager.shared.remove(self)
     }
 }
 
@@ -322,9 +364,8 @@ extension PerformanceMonitor: MXMetricManagerSubscriber {
             logger.info("MetricKit payload received: \(metrics.description)")
 
             // Store payload JSON for backend sync
-            if let jsonData = payload.jsonRepresentation() {
-                storeMetricPayload(jsonData, type: "performance")
-            }
+            let jsonData = payload.jsonRepresentation()
+            storeMetricPayload(jsonData, type: "performance")
         }
     }
 
@@ -350,9 +391,8 @@ extension PerformanceMonitor: MXMetricManagerSubscriber {
             }
 
             // Store diagnostic JSON for backend sync
-            if let jsonData = payload.jsonRepresentation() {
-                storeMetricPayload(jsonData, type: "diagnostic")
-            }
+            let jsonData = payload.jsonRepresentation()
+            storeMetricPayload(jsonData, type: "diagnostic")
         }
     }
 }

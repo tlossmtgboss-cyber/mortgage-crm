@@ -1467,6 +1467,80 @@ async def get_client_calls(
 
 
 # =============================================================================
+# LOAN CALL HISTORY
+# =============================================================================
+
+@router.get("/loan/{loan_id}/calls", response_model=Dict[str, Any])
+async def get_loan_calls(
+    loan_id: str,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get call history for a loan from the call_logs table.
+
+    Used by the Loan detail view to show call activity on a file.
+    """
+    try:
+        org_id = current_user.get("organization_id")
+        query = """
+            SELECT cl.id, cl.call_sid, cl.contact_phone AS from_number,
+                   cl.caller_id_used AS to_number,
+                   CASE WHEN cl.agent_id = :user_id THEN 'outbound' ELSE 'inbound' END AS direction,
+                   cl.outcome AS status, cl.duration_seconds AS duration,
+                   cl.recording_url, cl.transcript_text, cl.transcript_status,
+                   cl.created_at
+            FROM call_logs cl
+            WHERE cl.loan_id = :loan_id
+        """
+        params: Dict[str, Any] = {
+            "loan_id": loan_id,
+            "user_id": current_user.get("id"),
+        }
+
+        if org_id:
+            query += " AND cl.organization_id = :org_id"
+            params["org_id"] = org_id
+
+        # Get total count
+        count_result = db.execute(
+            text(f"SELECT COUNT(*) FROM call_logs cl WHERE cl.loan_id = :loan_id"
+                 + (" AND cl.organization_id = :org_id" if org_id else "")),
+            params,
+        )
+        total = count_result.scalar() or 0
+
+        query += " ORDER BY cl.created_at DESC LIMIT :limit OFFSET :offset"
+        params["limit"] = limit
+        params["offset"] = offset
+
+        result = db.execute(text(query), params)
+        calls = [dict(row._mapping) for row in result]
+
+        # Convert types for JSON serialization
+        for call in calls:
+            for key in call:
+                if isinstance(call[key], UUID):
+                    call[key] = str(call[key])
+                elif isinstance(call[key], datetime):
+                    call[key] = call[key].isoformat()
+
+        return {
+            "loan_id": loan_id,
+            "calls": calls,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
+
+    except Exception as e:
+        logger.error(f"Error getting loan calls: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =============================================================================
 # CI VOICE INTEGRATION
 # =============================================================================
 
@@ -2501,6 +2575,355 @@ async def create_review_task(
         logger.error(f"Error creating review task for session {session_id}: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# =============================================================================
+# RECORDING PLAYBACK (MOBILE APP)
+# =============================================================================
+
+class TranscriptSegmentResponse(BaseModel):
+    """A single transcript segment with timing for playback sync."""
+    speaker: Optional[str] = None
+    speaker_label: Optional[str] = None
+    text: str
+    start_time_ms: int
+    end_time_ms: int
+    confidence: Optional[float] = None
+
+
+class RecordingPlaybackResponse(BaseModel):
+    """Full recording playback payload with synced transcript."""
+    call_id: str
+    source: str  # 'call_session', 'ci_recording', 'vapi', 'dialer'
+    recording_url: Optional[str] = None
+    stereo_recording_url: Optional[str] = None
+    duration_seconds: Optional[int] = None
+    transcript_text: Optional[str] = None
+    transcript_segments: Optional[List[TranscriptSegmentResponse]] = None
+    summary: Optional[str] = None
+    participants: Optional[List[Dict[str, Any]]] = None
+    created_at: Optional[str] = None
+
+
+def _maybe_presign_url(url: Optional[str], org_id: Optional[int] = None) -> Optional[str]:
+    """
+    If the URL points to an S3/R2 bucket, generate a presigned download URL
+    with 1-hour expiry.  Otherwise return the URL unchanged.
+    """
+    if not url:
+        return None
+
+    # Detect S3/R2 storage paths (s3://, bucket references, or internal storage keys)
+    is_s3 = (
+        url.startswith("s3://")
+        or ".s3." in url
+        or ".r2." in url
+        or url.startswith("recordings/")
+        or url.startswith("call-recordings/")
+    )
+
+    if not is_s3:
+        return url
+
+    try:
+        from services.perennia_s3_service import PerenniaS3Service
+
+        s3_service = PerenniaS3Service()
+
+        # Extract storage key from full S3 URL or use as-is if already a key
+        storage_key = url
+        if url.startswith("s3://"):
+            # s3://bucket-name/path/to/file -> path/to/file
+            parts = url.replace("s3://", "").split("/", 1)
+            storage_key = parts[1] if len(parts) > 1 else parts[0]
+        elif "amazonaws.com/" in url or ".r2." in url:
+            # https://bucket.s3.amazonaws.com/key -> key
+            storage_key = url.split(".com/", 1)[-1].split("?")[0]
+
+        result = s3_service.get_presigned_download_url(
+            storage_key=storage_key,
+            expires_in=3600,  # 1 hour
+            organization_id=org_id,
+        )
+        if result.get("success"):
+            return result["presigned_url"]
+
+        logger.warning(f"Presigned URL generation failed: {result}")
+        return url
+    except Exception as e:
+        logger.warning(f"Could not generate presigned URL for {url[:60]}...: {e}")
+        return url
+
+
+def _parse_transcript_segments_from_text(transcript: Optional[str]) -> Optional[List[Dict[str, Any]]]:
+    """
+    Best-effort parse of timestamped transcript text into segments.
+
+    Supports common formats:
+      [00:01:23] Speaker A: Hello world
+      [00:01:23 - 00:01:30] Speaker A: Hello world
+      (0:01:23) Speaker A: Hello world
+    """
+    if not transcript:
+        return None
+
+    import re
+    # Match lines like: [HH:MM:SS] Speaker: text  or  [MM:SS] Speaker: text
+    pattern = re.compile(
+        r'[\[\(]'
+        r'(?:(\d{1,2}):)?(\d{1,2}):(\d{2})'       # start time  HH:MM:SS or MM:SS
+        r'(?:\s*[-–]\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{2}))?'  # optional end time
+        r'[\]\)]\s*'
+        r'(?:([^:]{1,40}):\s*)?'                     # optional speaker label
+        r'(.+)'                                       # text
+    )
+
+    segments = []
+    for match in pattern.finditer(transcript):
+        h1, m1, s1 = match.group(1) or "0", match.group(2), match.group(3)
+        start_ms = (int(h1) * 3600 + int(m1) * 60 + int(s1)) * 1000
+
+        h2, m2, s2 = match.group(4), match.group(5), match.group(6)
+        if m2 and s2:
+            end_ms = (int(h2 or "0") * 3600 + int(m2) * 60 + int(s2)) * 1000
+        else:
+            end_ms = start_ms + 5000  # default 5-second segment
+
+        segments.append({
+            "speaker": (match.group(7) or "").strip() or None,
+            "speaker_label": None,
+            "text": match.group(8).strip(),
+            "start_time_ms": start_ms,
+            "end_time_ms": end_ms,
+            "confidence": None,
+        })
+
+    return segments if segments else None
+
+
+@router.get(
+    "/calls/{call_id}/recording",
+    response_model=RecordingPlaybackResponse,
+    summary="Get recording with synced transcript for playback",
+)
+async def get_recording_playback(
+    call_id: str,
+    db: Session = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Retrieve a call recording URL and its synced transcript for mobile playback.
+
+    Searches across all call storage:
+    1. call_sessions -> ci_call_recordings (richest data, has timed segments)
+    2. vapi_calls
+    3. call_logs (dialer)
+
+    If the recording is stored in S3/R2, a presigned URL (1-hour expiry) is
+    returned.  If the transcript has per-segment timestamps, they are returned
+    in ``transcript_segments`` for playback sync on the mobile player.
+    """
+    org_id = current_user.get("organization_id")
+
+    # -----------------------------------------------------------------
+    # 1. Try call_sessions + ci_call_recordings (best data source)
+    # -----------------------------------------------------------------
+    session_sql = """
+        SELECT
+            cs.id              AS session_id,
+            cs.full_transcript,
+            cs.duration_seconds,
+            cs.started_at,
+            cs.participants,
+            r.recording_url,
+            r.recording_storage_path,
+            r.duration_seconds  AS rec_duration,
+            t.id               AS transcription_id,
+            t.full_text         AS transcription_text
+        FROM call_sessions cs
+        LEFT JOIN ci_call_recordings r ON r.id = cs.recording_id
+        LEFT JOIN ci_call_transcriptions t ON t.recording_id = r.id
+        WHERE (
+            CAST(cs.id AS TEXT) = :call_id
+            OR CAST(cs.recording_id AS TEXT) = :call_id
+            OR r.external_call_id = :call_id
+        )
+    """
+    session_params: Dict[str, Any] = {"call_id": call_id}
+
+    if org_id:
+        session_sql += " AND cs.organization_id = :org_id"
+        session_params["org_id"] = org_id
+
+    session_sql += " LIMIT 1"
+
+    try:
+        row = db.execute(text(session_sql), session_params).fetchone()
+    except Exception as e:
+        logger.debug(f"call_sessions query failed (table may not exist): {e}")
+        row = None
+
+    if row:
+        row_map = dict(row._mapping)
+        session_id = str(row_map["session_id"])
+        recording_url = row_map.get("recording_url") or row_map.get("recording_storage_path")
+        transcript_text = row_map.get("transcription_text") or row_map.get("full_transcript")
+        duration = row_map.get("rec_duration") or row_map.get("duration_seconds")
+        transcription_id = row_map.get("transcription_id")
+
+        # Fetch timed segments from ci_transcription_segments if available
+        segments: Optional[List[TranscriptSegmentResponse]] = None
+        if transcription_id:
+            try:
+                seg_rows = db.execute(text("""
+                    SELECT speaker, speaker_label, text,
+                           start_time_ms, end_time_ms, confidence
+                    FROM ci_transcription_segments
+                    WHERE transcription_id = :tid
+                    ORDER BY segment_index
+                """), {"tid": str(transcription_id)}).fetchall()
+
+                if seg_rows:
+                    segments = [
+                        TranscriptSegmentResponse(
+                            speaker=sr[0],
+                            speaker_label=sr[1],
+                            text=sr[2],
+                            start_time_ms=sr[3],
+                            end_time_ms=sr[4],
+                            confidence=float(sr[5]) if sr[5] is not None else None,
+                        )
+                        for sr in seg_rows
+                    ]
+            except Exception as e:
+                logger.debug(f"Segment query failed: {e}")
+
+        # If no DB segments, try parsing timestamps from transcript text
+        if not segments:
+            parsed = _parse_transcript_segments_from_text(transcript_text)
+            if parsed:
+                segments = [TranscriptSegmentResponse(**s) for s in parsed]
+
+        # Also try to pull agent_events transcript chunks as fallback segments
+        if not segments:
+            try:
+                event_rows = db.execute(text("""
+                    SELECT payload, transcript_timestamp_ms
+                    FROM agent_events
+                    WHERE session_id = :sid
+                      AND event_type = 'transcript_chunk'
+                    ORDER BY transcript_timestamp_ms NULLS LAST, event_time
+                """), {"sid": session_id}).fetchall()
+
+                if event_rows:
+                    segments = []
+                    for er in event_rows:
+                        payload = er[0] if isinstance(er[0], dict) else {}
+                        ts_ms = er[1] or payload.get("start_time_ms", 0)
+                        segments.append(TranscriptSegmentResponse(
+                            speaker=payload.get("speaker_label") or payload.get("speaker"),
+                            speaker_label=payload.get("speaker_label"),
+                            text=payload.get("text", ""),
+                            start_time_ms=ts_ms,
+                            end_time_ms=payload.get("end_time_ms", ts_ms + 5000),
+                            confidence=payload.get("confidence"),
+                        ))
+            except Exception as e:
+                logger.debug(f"agent_events segment fallback failed: {e}")
+
+        # Fetch summary from scribe artifacts
+        summary = None
+        try:
+            summary_row = db.execute(text("""
+                SELECT content FROM call_artifacts
+                WHERE session_id = :sid
+                  AND artifact_type IN ('summary', 'scribe_recap')
+                ORDER BY created_at DESC LIMIT 1
+            """), {"sid": session_id}).fetchone()
+            if summary_row:
+                summary = summary_row[0]
+        except Exception as e:
+            logger.debug(f"Summary query failed: {e}")
+
+        # Parse participants
+        raw_participants = row_map.get("participants") or []
+        participants = raw_participants if isinstance(raw_participants, list) else []
+
+        return RecordingPlaybackResponse(
+            call_id=session_id,
+            source="call_session",
+            recording_url=_maybe_presign_url(recording_url, org_id),
+            duration_seconds=duration,
+            transcript_text=transcript_text,
+            transcript_segments=segments if segments else None,
+            summary=summary,
+            participants=participants,
+            created_at=row_map["started_at"].isoformat() if row_map.get("started_at") else None,
+        )
+
+    # -----------------------------------------------------------------
+    # 2. Try vapi_calls
+    # -----------------------------------------------------------------
+    vapi_row = db.execute(text("""
+        SELECT vapi_call_id, recording_url, stereo_recording_url,
+               transcript, summary, duration, lead_id, created_at
+        FROM vapi_calls
+        WHERE (vapi_call_id = :cid OR CAST(id AS TEXT) = :cid)
+          AND (organization_id = :org_id OR organization_id IS NULL)
+        LIMIT 1
+    """), {"cid": call_id, "org_id": org_id}).fetchone()
+
+    if vapi_row:
+        transcript_text = vapi_row[3]
+        segments = None
+        parsed = _parse_transcript_segments_from_text(transcript_text)
+        if parsed:
+            segments = [TranscriptSegmentResponse(**s) for s in parsed]
+
+        return RecordingPlaybackResponse(
+            call_id=vapi_row[0],
+            source="vapi",
+            recording_url=_maybe_presign_url(vapi_row[1], org_id),
+            stereo_recording_url=_maybe_presign_url(vapi_row[2], org_id),
+            duration_seconds=vapi_row[5],
+            transcript_text=transcript_text,
+            transcript_segments=segments,
+            summary=vapi_row[4],
+            created_at=vapi_row[7].isoformat() if vapi_row[7] else None,
+        )
+
+    # -----------------------------------------------------------------
+    # 3. Fallback: call_logs (dialer)
+    # -----------------------------------------------------------------
+    dialer_row = db.execute(text("""
+        SELECT COALESCE(call_sid, CAST(id AS TEXT)),
+               recording_url, stereo_recording_url,
+               transcript_text, duration_seconds, lead_id, created_at
+        FROM call_logs
+        WHERE (call_sid = :cid OR CAST(id AS TEXT) = :cid)
+          AND (organization_id = :org_id OR organization_id IS NULL)
+        LIMIT 1
+    """), {"cid": call_id, "org_id": org_id}).fetchone()
+
+    if dialer_row:
+        transcript_text = dialer_row[3]
+        segments = None
+        parsed = _parse_transcript_segments_from_text(transcript_text)
+        if parsed:
+            segments = [TranscriptSegmentResponse(**s) for s in parsed]
+
+        return RecordingPlaybackResponse(
+            call_id=dialer_row[0] or call_id,
+            source="dialer",
+            recording_url=_maybe_presign_url(dialer_row[1], org_id),
+            stereo_recording_url=_maybe_presign_url(dialer_row[2], org_id),
+            duration_seconds=dialer_row[4],
+            transcript_text=transcript_text,
+            transcript_segments=segments,
+            created_at=dialer_row[6].isoformat() if dialer_row[6] else None,
+        )
+
+    raise HTTPException(status_code=404, detail="Call recording not found")
 
 
 # =============================================================================

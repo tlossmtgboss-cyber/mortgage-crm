@@ -1,13 +1,11 @@
 {
   "images" : [
     {
-      "filename" : "carplay-icon.png",
       "idiom" : "car",
       "scale" : "2x",
       "size" : "60x60"
     },
     {
-      "filename" : "carplay-icon@3x.png",
       "idiom" : "car",
       "scale" : "3x",
       "size" : "60x60"
