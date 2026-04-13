@@ -12,7 +12,7 @@
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import toast from 'react-hot-toast';
+import { toast } from '../utils/toast';
 import { callMonitoringAPI } from '../services/api';
 import { haptics } from '../services/nativeServices';
 import { auditLog, AUDIT_EVENTS } from '../services/mobileAuditLogger';

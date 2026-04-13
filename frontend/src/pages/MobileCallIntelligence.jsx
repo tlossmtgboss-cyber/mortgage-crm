@@ -19,7 +19,7 @@
 
 import React, { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import toast from 'react-hot-toast';
+import { toast } from '../utils/toast';
 import { haptics } from '../services/nativeServices';
 import useCallMonitor from '../hooks/useCallMonitor';
 import useCallTranscription from '../hooks/useCallTranscription';

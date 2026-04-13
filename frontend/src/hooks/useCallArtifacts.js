@@ -11,7 +11,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import toast from 'react-hot-toast';
+import { toast } from '../utils/toast';
 import { callMonitoringAPI } from '../services/api';
 import { haptics } from '../services/nativeServices';
 

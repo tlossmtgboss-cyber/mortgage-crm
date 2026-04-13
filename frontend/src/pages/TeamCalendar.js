@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { toast } from 'react-hot-toast';
+import { toast } from '../utils/toast';
 import { teamCalendarAPI, teamAPI, schedulerAPI } from '../services/api';
 import './TeamCalendar.css';
 

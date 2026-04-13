@@ -216,8 +216,8 @@ const useCallTranscription = ({ sessionIdRef, attemptClientDetection }) => {
       const speechService = await import('../services/speechService');
       const available = await speechService.isAvailable();
       if (!available) {
-        const toast = (await import('react-hot-toast')).default;
-        toast.error('Speech recognition is not supported on this device.');
+        const { toast: t } = await import('../utils/toast');
+        t.error('Speech recognition is not supported on this device.');
         return false;
       }
 

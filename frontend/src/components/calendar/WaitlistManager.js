@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { toast } from 'react-hot-toast';
+import { toast } from '../../utils/toast';
 import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
