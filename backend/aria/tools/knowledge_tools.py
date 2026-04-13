@@ -41,7 +41,9 @@ Provide your answer in 2-4 sentences. Include specific numbers, limits, or thres
         return {
             "text": answer_text,
             "sources": ["Mortgage industry guidelines"],
-            "confidence": 0.85,
+            "confidence": None,
+            "rag_enabled": False,
+            "disclaimer": "Response based on general AI knowledge. Not sourced from official mortgage guidelines. Verify with compliance team before acting.",
         }
 
     async def run_income_analysis(self, loan_id: int, org_id: str) -> Dict:

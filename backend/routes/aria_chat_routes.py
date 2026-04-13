@@ -21,7 +21,10 @@ Aria streams responses back as JSON events:
 import json
 import logging
 import asyncio
-from typing import Dict, Any
+import re
+import time
+import threading
+from typing import Dict, Any, List, Tuple
 from uuid import uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
@@ -32,6 +35,55 @@ from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/aria", tags=["aria"])
+
+# ─── WebSocket rate limiting ────────────────────────────────────────────────
+# In-memory per-user message rate limiter: max 10 messages per 60-second window.
+# Timestamps older than the window are pruned on each check.
+
+WS_RATE_LIMIT_MAX = 10
+WS_RATE_LIMIT_WINDOW = 60  # seconds
+
+_ws_rate_buckets: Dict[str, List[float]] = {}
+_ws_rate_lock = threading.Lock()
+
+# Max tracked user keys before evicting oldest-activity entries
+_WS_RATE_MAX_KEYS = 5_000
+
+
+def _ws_rate_check(user_id: str) -> bool:
+    """Return True if the message is allowed, False if rate-limited."""
+    now = time.monotonic()
+    cutoff = now - WS_RATE_LIMIT_WINDOW
+
+    with _ws_rate_lock:
+        # Lazy eviction when bucket count grows too large
+        if len(_ws_rate_buckets) > _WS_RATE_MAX_KEYS:
+            # Drop entries with no recent activity
+            stale_keys = [
+                k for k, ts_list in _ws_rate_buckets.items()
+                if not ts_list or ts_list[-1] < cutoff
+            ]
+            for k in stale_keys:
+                _ws_rate_buckets.pop(k, None)
+
+        timestamps = _ws_rate_buckets.get(user_id, [])
+        # Prune expired timestamps
+        timestamps = [t for t in timestamps if t > cutoff]
+
+        if len(timestamps) >= WS_RATE_LIMIT_MAX:
+            _ws_rate_buckets[user_id] = timestamps
+            return False
+
+        timestamps.append(now)
+        _ws_rate_buckets[user_id] = timestamps
+        return True
+
+
+# ─── Input validation helpers ───────────────────────────────────────────────
+
+WS_MAX_MESSAGE_LENGTH = 2000
+_VALID_WS_TYPES = {"message", "confirm", "voice_transcript", "pong"}
+_HTML_TAG_RE = re.compile(r'<[^>]+>')
 
 
 def _get_session_store():
@@ -81,10 +133,11 @@ async def aria_websocket(
     await websocket.accept()
     session_id = str(uuid4())
     session_store = _get_session_store()
+    uid = str(user.user_id)
 
     state = await session_store.get_or_create(
         session_id=session_id,
-        user_id=str(user.user_id),
+        user_id=uid,
         org_id=str(user.org_id),
         user_name=user.full_name,
         user_role=user.role,
@@ -93,9 +146,12 @@ async def aria_websocket(
     # Send greeting
     from aria.core.context_loader import AriaContextLoader
     context_loader = AriaContextLoader()
-    context = await context_loader.load_full(str(user.user_id))
+    context = await context_loader.load_full(uid)
     greeting = _build_greeting(user.full_name, context)
     await websocket.send_json({"type": "greeting", "content": greeting})
+
+    # Start heartbeat background task (ping every 30s)
+    heartbeat_task = asyncio.create_task(_heartbeat_loop(websocket))
 
     try:
         while True:
@@ -106,34 +162,61 @@ async def aria_websocket(
                 await websocket.send_json({"type": "error", "message": "Invalid JSON"})
                 continue
 
-            msg_type = msg.get("type", "message")
-            user_content = msg.get("content", "")
-
-            # Handle confirmation
-            if msg_type == "confirm":
-                confirmed = msg.get("value", False)
-                if confirmed and state.get("phase") == "confirming":
-                    await websocket.send_json({"type": "typing"})
-                    state = {**state, "phase": "executing"}
-                    state = await _run_graph_step(state, websocket)
-                else:
-                    await websocket.send_json({
-                        "type": "done",
-                        "content": "No problem — what would you like to change?"
-                    })
-                    state = {**state, "phase": "understanding"}
+            # ── Validate JSON structure ──────────────────────────────────
+            if not isinstance(msg, dict):
+                await websocket.send_json({"type": "error", "message": "Message must be a JSON object"})
                 continue
 
-            # Handle new message
-            if msg_type in ("message", "voice_transcript"):
-                human_msg = HumanMessage(content=user_content)
-                state = {**state, "messages": state.get("messages", []) + [human_msg]}
+            msg_type = msg.get("type", "message")
 
-                if state.get("phase") == "slot_filling":
-                    state = await _run_slot_answer(state, websocket)
-                else:
-                    await websocket.send_json({"type": "typing"})
-                    state = await _run_graph_step(state, websocket)
+            # Handle pong responses to our heartbeat pings
+            if msg_type == "pong":
+                continue
+
+            # Validate message type
+            if msg_type not in _VALID_WS_TYPES:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Invalid message type. Expected one of: message, confirm, voice_transcript"
+                })
+                continue
+
+            # ── Rate limiting ────────────────────────────────────────────
+            if not _ws_rate_check(uid):
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Rate limit exceeded. Please wait before sending more messages."
+                })
+                continue
+
+            # ── Validate content field ───────────────────────────────────
+            user_content = msg.get("content", "")
+            if not isinstance(user_content, str):
+                await websocket.send_json({"type": "error", "message": "Content must be a string"})
+                continue
+
+            if len(user_content) > WS_MAX_MESSAGE_LENGTH:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Message too long. Maximum {WS_MAX_MESSAGE_LENGTH} characters."
+                })
+                continue
+
+            # Strip HTML tags from content
+            user_content = _HTML_TAG_RE.sub('', user_content)
+
+            # Handle confirmation — convert to a HumanMessage and let the graph route it
+            if msg_type == "confirm":
+                confirmed = msg.get("value", False)
+                user_content = "Yes, go ahead" if confirmed else "No, cancel that"
+
+            # Handle all messages (including confirm converted above)
+            if msg_type in ("message", "voice_transcript", "confirm"):
+                human_msg = HumanMessage(content=user_content)
+                state["messages"] = state.get("messages", []) + [human_msg]
+
+                await websocket.send_json({"type": "typing"})
+                state = await _run_graph_step(state, websocket)
 
                 if state.get("phase") == "confirming" and state.get("confirmation_preview"):
                     await websocket.send_json({
@@ -150,8 +233,26 @@ async def aria_websocket(
         logger.error(f"Aria WS error: {e}", exc_info=True)
         try:
             await websocket.send_json({"type": "error", "message": "Something went wrong. Try again?"})
-        except Exception:
+        except Exception as send_err:
+            logger.warning(f"Failed to send error message to WS client: {send_err}")
+    finally:
+        heartbeat_task.cancel()
+        try:
+            await heartbeat_task
+        except asyncio.CancelledError:
             pass
+
+
+async def _heartbeat_loop(websocket: WebSocket):
+    """Send a ping every 30 seconds to keep the connection alive and detect stale clients."""
+    try:
+        while True:
+            await asyncio.sleep(30)
+            await websocket.send_json({"type": "ping"})
+    except (WebSocketDisconnect, asyncio.CancelledError):
+        pass
+    except Exception as e:
+        logger.warning(f"Heartbeat loop error: {e}")
 
 
 async def _run_graph_step(state, websocket: WebSocket):
@@ -175,23 +276,6 @@ async def _run_graph_step(state, websocket: WebSocket):
         })
 
     return new_state
-
-
-async def _run_slot_answer(state, websocket: WebSocket):
-    """Parse user's answer to a slot question and continue."""
-    from aria.core.conversation_engine import slot_answer_node, slot_fill_node, confirmation_node
-
-    state = await slot_answer_node(state)
-
-    if state.get("missing_slots"):
-        state = await slot_fill_node(state)
-        ai_msgs = [m for m in state.get("messages", []) if isinstance(m, AIMessage)]
-        if ai_msgs:
-            await websocket.send_json({"type": "done", "content": ai_msgs[-1].content})
-    else:
-        state = await confirmation_node(state)
-
-    return state
 
 
 def _build_greeting(user_name: str, context: Dict[str, Any]) -> str:

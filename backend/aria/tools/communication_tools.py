@@ -118,6 +118,7 @@ class CommunicationTools:
                 "with": with_contact["name"],
                 "task_id": task.get("id"),
                 "calendar_link": None,
+                "note": "Calendar invite not yet integrated. Task created as reminder.",
             }
         except Exception as e:
             logger.error(f"Aria schedule call failed: {e}", exc_info=True)

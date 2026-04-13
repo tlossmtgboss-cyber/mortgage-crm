@@ -170,12 +170,12 @@ Respond ONLY with valid JSON in this exact format:
         extracted = {"intent": None, "confidence": 0.0, "slots": {}, "is_chitchat": True}
 
     if extracted.get("is_chitchat") or not extracted.get("intent"):
-        return {**state, "phase": DialoguePhase.CHITCHAT, "intent": None, "slots": {}}
+        return {"phase": DialoguePhase.CHITCHAT, "intent": None, "slots": {}}
 
     intent_name = extracted["intent"]
     intent = registry.get_intent(intent_name)
     if not intent:
-        return {**state, "phase": DialoguePhase.CHITCHAT, "intent": None, "slots": {}}
+        return {"phase": DialoguePhase.CHITCHAT, "intent": None, "slots": {}}
 
     merged_slots = {**state.get("slots", {})}
     for k, v in extracted.get("slots", {}).items():
@@ -188,7 +188,6 @@ Respond ONLY with valid JSON in this exact format:
     ]
 
     return {
-        **state,
         "intent": intent_name,
         "slots": merged_slots,
         "missing_slots": missing,
@@ -201,7 +200,7 @@ async def slot_fill_node(state: AriaState) -> AriaState:
     """Ask the user for the next missing slot — one question at a time."""
     intent = IntentRegistry.get().get_intent(state["intent"])
     if not intent or not state["missing_slots"]:
-        return {**state, "phase": DialoguePhase.CONFIRMING}
+        return {"phase": DialoguePhase.CONFIRMING}
 
     next_slot_name = state["missing_slots"][0]
     slot_spec = intent.get_slot(next_slot_name)
@@ -234,7 +233,6 @@ present them as options. Keep it brief and warm.
     question = response.content.strip()
 
     return {
-        **state,
         "phase": DialoguePhase.SLOT_FILLING,
         "current_slot_question": question,
         "messages": [AIMessage(content=question)],
@@ -244,7 +242,7 @@ present them as options. Keep it brief and warm.
 async def slot_answer_node(state: AriaState) -> AriaState:
     """Parse the user's answer to the last slot question and extract the value."""
     if not state.get("current_slot_question") or not state.get("missing_slots"):
-        return state
+        return {}
 
     last_user_message = next(
         (m.content for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
@@ -281,9 +279,9 @@ Respond ONLY with JSON: {{"value": "extracted_value_or_null", "confident": true_
         remaining_missing = state["missing_slots"]
 
     return {
-        **state,
         "slots": updated_slots,
         "missing_slots": remaining_missing,
+        "current_slot_question": None,  # Clear so dispatch knows answer was processed
         "phase": DialoguePhase.CONFIRMING if not remaining_missing else DialoguePhase.SLOT_FILLING,
     }
 
@@ -292,10 +290,10 @@ async def confirmation_node(state: AriaState) -> AriaState:
     """Build a preview of what Aria is about to do and present for confirmation."""
     intent = IntentRegistry.get().get_intent(state["intent"])
     if not intent:
-        return {**state, "phase": DialoguePhase.EXECUTING}
+        return {"phase": DialoguePhase.EXECUTING}
 
     if not intent.requires_confirmation:
-        return {**state, "phase": DialoguePhase.EXECUTING}
+        return {"phase": DialoguePhase.EXECUTING}
 
     context_loader = AriaContextLoader()
     preview_context = await context_loader.build_preview_context(
@@ -327,7 +325,6 @@ Keep it conversational and under 100 words unless showing a document preview.
     confirmation = response.content.strip()
 
     return {
-        **state,
         "phase": DialoguePhase.CONFIRMING,
         "confirmation_preview": confirmation,
         "messages": [AIMessage(content=confirmation)],
@@ -345,7 +342,6 @@ async def execute_node(state: AriaState) -> AriaState:
             org_id=state["org_id"],
         )
         return {
-            **state,
             "task_result": result,
             "phase": DialoguePhase.RESPONDING,
             "error": None,
@@ -353,7 +349,6 @@ async def execute_node(state: AriaState) -> AriaState:
     except Exception as e:
         logger.error(f"Task execution failed: {e}", exc_info=True)
         return {
-            **state,
             "task_result": None,
             "phase": DialoguePhase.RESPONDING,
             "error": str(e),
@@ -371,11 +366,11 @@ async def response_node(state: AriaState) -> AriaState:
             SystemMessage(content=system),
             *state["messages"],
         ])
-        return {**state, "messages": [AIMessage(content=response.content)]}
+        return {"messages": [AIMessage(content=response.content)]}
 
     if state.get("error"):
         error_response = f"I ran into an issue with that: {state['error']}. Want me to try again?"
-        return {**state, "messages": [AIMessage(content=error_response)]}
+        return {"messages": [AIMessage(content=error_response)]}
 
     result = state.get("task_result", {})
     intent = IntentRegistry.get().get_intent(state["intent"])
@@ -396,13 +391,53 @@ Write a brief, warm completion message that:
     ])
 
     return {
-        **state,
         "messages": [AIMessage(content=response.content)],
         "phase": DialoguePhase.RESPONDING,
     }
 
 
+# ─── Entry router nodes ──────────────────────────────────────────────────────
+
+MAX_SLOT_ITERATIONS = 15
+
+
+async def dispatch_node(state: AriaState) -> dict:
+    """Entry point for each turn. Checks iteration limit."""
+    count = state.get("iteration_count", 0)
+    if count >= MAX_SLOT_ITERATIONS:
+        return {
+            "phase": DialoguePhase.RESPONDING,
+            "error": "I seem to be going in circles. Let me start fresh — what would you like to do?",
+        }
+    return {}
+
+
+async def check_confirm_node(state: AriaState) -> dict:
+    """Pass-through node for confirmation check. Routing via should_execute edges."""
+    return {}
+
+
 # ─── Routing logic ────────────────────────────────────────────────────────────
+
+def route_dispatch(state: AriaState) -> str:
+    """Route incoming messages based on current dialogue phase."""
+    # Hit iteration limit — go straight to error response
+    if state.get("error") and state.get("iteration_count", 0) >= MAX_SLOT_ITERATIONS:
+        return "response"
+
+    phase = state.get("phase", "")
+
+    # User answered a slot-filling question (current_slot_question is still set)
+    if phase == DialoguePhase.SLOT_FILLING and state.get("current_slot_question"):
+        return "slot_answer"
+
+    # User responding to confirmation prompt
+    if phase == DialoguePhase.CONFIRMING:
+        return "check_confirm"
+
+    # Default: NLU on the new message
+    return "nlu"
+
 
 def route_after_nlu(state: AriaState) -> str:
     if state["phase"] == DialoguePhase.CHITCHAT:
@@ -412,10 +447,6 @@ def route_after_nlu(state: AriaState) -> str:
     return "confirmation"
 
 
-def route_after_slot_fill(state: AriaState) -> str:
-    return END
-
-
 def route_after_slot_answer(state: AriaState) -> str:
     if state["missing_slots"]:
         return "slot_fill"
@@ -423,10 +454,15 @@ def route_after_slot_answer(state: AriaState) -> str:
 
 
 def route_after_confirmation(state: AriaState) -> str:
+    """If no confirmation needed (phase set to EXECUTING), go straight to execute."""
+    if state["phase"] == DialoguePhase.EXECUTING:
+        return "execute"
+    # Confirmation shown — return to user and wait for yes/no
     return END
 
 
 def should_execute(state: AriaState) -> str:
+    """Check if user confirmed or denied the pending action."""
     last_message = next(
         (m.content.lower() for m in reversed(state["messages"]) if isinstance(m, HumanMessage)),
         ""
@@ -443,6 +479,7 @@ def should_execute(state: AriaState) -> str:
         return "execute"
     if negative:
         return "response"
+    # Ambiguous — re-run NLU to understand what they said
     return "nlu"
 
 
@@ -451,25 +488,56 @@ def should_execute(state: AriaState) -> str:
 def build_aria_graph() -> StateGraph:
     graph = StateGraph(AriaState)
 
-    graph.add_node("nlu",          nlu_node)
-    graph.add_node("slot_fill",    slot_fill_node)
-    graph.add_node("slot_answer",  slot_answer_node)
-    graph.add_node("confirmation", confirmation_node)
-    graph.add_node("execute",      execute_node)
-    graph.add_node("response",     response_node)
+    # Nodes
+    graph.add_node("dispatch",      dispatch_node)
+    graph.add_node("nlu",           nlu_node)
+    graph.add_node("slot_fill",     slot_fill_node)
+    graph.add_node("slot_answer",   slot_answer_node)
+    graph.add_node("confirmation",  confirmation_node)
+    graph.add_node("check_confirm", check_confirm_node)
+    graph.add_node("execute",       execute_node)
+    graph.add_node("response",      response_node)
 
-    graph.set_entry_point("nlu")
+    # Entry point — dispatch routes based on current dialogue phase
+    graph.set_entry_point("dispatch")
 
+    graph.add_conditional_edges("dispatch", route_dispatch, {
+        "nlu":           "nlu",
+        "slot_answer":   "slot_answer",
+        "check_confirm": "check_confirm",
+        "response":      "response",
+    })
+
+    # NLU routes: chitchat → response, missing slots → slot_fill, ready → confirmation
     graph.add_conditional_edges("nlu", route_after_nlu, {
         "slot_fill":    "slot_fill",
         "confirmation": "confirmation",
         "response":     "response",
     })
 
+    # Slot fill asks question then returns to user (END)
     graph.add_edge("slot_fill", END)
-    graph.add_edge("slot_answer", "slot_fill")
 
-    graph.add_conditional_edges("confirmation", lambda s: END, {END: END})
+    # Slot answer: more slots needed → slot_fill, all done → confirmation
+    graph.add_conditional_edges("slot_answer", route_after_slot_answer, {
+        "slot_fill":    "slot_fill",
+        "confirmation": "confirmation",
+    })
+
+    # Confirmation: no-confirm intents → execute immediately; otherwise wait for user
+    graph.add_conditional_edges("confirmation", route_after_confirmation, {
+        "execute": "execute",
+        END:       END,
+    })
+
+    # User's yes/no response: confirmed → execute, denied → response, unclear → nlu
+    graph.add_conditional_edges("check_confirm", should_execute, {
+        "execute":  "execute",
+        "response": "response",
+        "nlu":      "nlu",
+    })
+
+    # Execute → response → END
     graph.add_edge("execute", "response")
     graph.add_edge("response", END)
 

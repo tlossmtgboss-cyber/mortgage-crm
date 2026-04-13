@@ -22,25 +22,89 @@ class AriaWebSocket {
     this.onMessage = handlers.onMessage;
     this.onConnect = handlers.onConnect;
     this.onDisconnect = handlers.onDisconnect;
+    this.onReconnecting = handlers.onReconnecting || (() => {});
+    this.onSessionExpired = handlers.onSessionExpired || (() => {});
     this.ws = null;
+    this.intentionalClose = false;
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 5;
+    this.reconnectTimer = null;
+    this.pendingMessages = [];
   }
 
   connect() {
     this.ws = new WebSocket(`${WS_URL}?token=${this.token}`);
-    this.ws.onopen = () => this.onConnect();
-    this.ws.onclose = () => this.onDisconnect();
+    this.ws.onopen = () => {
+      this.reconnectAttempts = 0;
+      this.onConnect();
+      this._flushPendingMessages();
+    };
+    this.ws.onclose = () => {
+      this.onDisconnect();
+      if (!this.intentionalClose) {
+        this._attemptReconnect();
+      }
+    };
     this.ws.onmessage = (e) => {
-      try { this.onMessage(JSON.parse(e.data)); } catch {}
+      try {
+        this.onMessage(JSON.parse(e.data));
+      } catch (err) {
+        console.error('Failed to parse message:', err);
+      }
     };
   }
 
   send(data) {
     if (this.ws?.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(data));
+    } else {
+      // Queue message for delivery on reconnect
+      this.pendingMessages.push(data);
+      if (this.pendingMessages.length > 20) {
+        this.pendingMessages.shift(); // drop oldest
+      }
     }
   }
 
-  disconnect() { this.ws?.close(); }
+  disconnect() {
+    this.intentionalClose = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+    this.ws?.close();
+  }
+
+  _attemptReconnect() {
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+      this.onDisconnect(); // signal final disconnected state
+      return;
+    }
+
+    // Re-read token in case it was refreshed
+    const freshToken = localStorage.getItem('access_token');
+    if (!freshToken) {
+      this.onSessionExpired();
+      return;
+    }
+    this.token = freshToken;
+
+    const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
+    this.reconnectAttempts++;
+    this.onReconnecting(this.reconnectAttempts);
+
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      this.connect();
+    }, delay);
+  }
+
+  _flushPendingMessages() {
+    const queued = this.pendingMessages.splice(0);
+    for (const msg of queued) {
+      this.send(msg);
+    }
+  }
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -48,6 +112,7 @@ export default function AriaChatScreen() {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [connected, setConnected] = useState(false);
+  const [connStatus, setConnStatus] = useState('disconnected'); // 'connected' | 'reconnecting' | 'disconnected' | 'expired'
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef(null);
   const wsRef = useRef(null);
@@ -67,11 +132,16 @@ export default function AriaChatScreen() {
 
   const initWs = async () => {
     const token = localStorage.getItem('access_token');
-    if (!token) return;
+    if (!token) {
+      setConnStatus('expired');
+      return;
+    }
 
     wsRef.current = new AriaWebSocket(token, {
-      onConnect: () => setConnected(true),
-      onDisconnect: () => setConnected(false),
+      onConnect: () => { setConnected(true); setConnStatus('connected'); },
+      onDisconnect: () => { setConnected(false); setConnStatus('disconnected'); },
+      onReconnecting: () => { setConnStatus('reconnecting'); },
+      onSessionExpired: () => { setConnected(false); setConnStatus('expired'); },
       onMessage: handleWsMessage,
     });
     wsRef.current.connect();
@@ -179,7 +249,12 @@ export default function AriaChatScreen() {
           <div className={`ac-status-dot ${connected ? 'ac-status--on' : 'ac-status--off'}`} />
           <span className="ac-header-title">Aria</span>
         </div>
-        <span className="ac-header-sub">AI Assistant</span>
+        <span className="ac-header-sub">
+          {connStatus === 'connected' && 'AI Assistant'}
+          {connStatus === 'reconnecting' && 'Reconnecting...'}
+          {connStatus === 'disconnected' && 'Disconnected'}
+          {connStatus === 'expired' && 'Session expired'}
+        </span>
       </div>
 
       {/* Messages */}
