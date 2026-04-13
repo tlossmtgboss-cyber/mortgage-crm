@@ -13,8 +13,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- Stores the compiled speaker embedding for each enrolled user.
 -- One row per user. Upserted on re-enrollment.
 CREATE TABLE IF NOT EXISTS voice_profiles (
-    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id              SERIAL      PRIMARY KEY,
+    user_id         INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     embedding       vector(256),                          -- resemblyzer d-vector, L2-normalised
     samples_count   INT         NOT NULL DEFAULT 0,       -- how many samples contributed
     enrolled_at     TIMESTAMPTZ,
@@ -34,8 +34,8 @@ CREATE INDEX IF NOT EXISTS idx_voice_profiles_embedding
 -- Raw audio sample metadata. Audio files live in S3/R2.
 -- Rows are retained for 90 days then purged by a scheduled job.
 CREATE TABLE IF NOT EXISTS voice_samples (
-    id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id          SERIAL      PRIMARY KEY,
+    user_id     INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     prompt_id   TEXT        NOT NULL,     -- matches VoicePrompt.id in mobile
     category    TEXT        NOT NULL      CHECK (category IN ('intro','professional','natural','numeric','emotional')),
     s3_key      TEXT        NOT NULL,     -- object key in S3/R2 bucket

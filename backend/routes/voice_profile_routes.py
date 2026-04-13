@@ -177,18 +177,18 @@ def upload_voice_sample(
         pass
 
     # Insert sample record
-    sample_id = str(uuid.uuid4())
-    db.execute(text("""
-        INSERT INTO voice_samples (id, user_id, prompt_id, category, s3_key, duration_s)
-        VALUES (:id, :user_id, :prompt_id, :category, :s3_key, :duration_s)
+    result = db.execute(text("""
+        INSERT INTO voice_samples (user_id, prompt_id, category, s3_key, duration_s)
+        VALUES (:user_id, :prompt_id, :category, :s3_key, :duration_s)
+        RETURNING id
     """), {
-        "id": sample_id,
         "user_id": user_id,
         "prompt_id": prompt_id,
         "category": category,
         "s3_key": s3_key,
         "duration_s": duration_s,
     })
+    sample_id = str(result.scalar())
     db.commit()
 
     # Count total samples
