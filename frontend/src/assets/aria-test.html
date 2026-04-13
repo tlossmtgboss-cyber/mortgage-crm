@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#060A10">
+<title>Aria — Perennia AI</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #060A10;
+    --surface: #0D1520;
+    --surface2: #111D2E;
+    --surface3: #162236;
+    --border: #1E3050;
+    --blue: #7EB8F7;
+    --blue-dim: #2A4A7F;
+    --blue-glow: #4A8FD4;
+    --text: #E8F0FF;
+    --muted: #5A7AAA;
+    --dim: #2A3F60;
+    --green: #4ADE80;
+    --red: #F87171;
+    --amber: #FBBF24;
+    --purple: #A78BFA;
+    --font-body: 'DM Sans', -apple-system, sans-serif;
+    --font-mono: 'DM Mono', monospace;
+    --font-display: 'Cormorant Garamond', Georgia, serif;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: var(--font-body);
+    background: var(--bg);
+    color: var(--text);
+    height: 100dvh;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Login Screen ─────────────────────────────────────── */
+  #login-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100dvh;
+    padding: 24px;
+    gap: 20px;
+  }
+
+  #login-screen .logo {
+    font-family: var(--font-display);
+    font-size: 36px;
+    font-weight: 600;
+    color: var(--blue);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  #login-screen .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+
+  #login-screen form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+    max-width: 360px;
+  }
+
+  #login-screen input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  #login-screen input:focus {
+    border-color: var(--blue);
+  }
+
+  #login-screen input::placeholder {
+    color: var(--dim);
+  }
+
+  #login-screen button {
+    background: linear-gradient(135deg, var(--blue), var(--blue-glow));
+    color: #060A10;
+    border: none;
+    border-radius: 10px;
+    padding: 14px;
+    font-family: var(--font-body);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.2s;
+  }
+
+  #login-screen button:active { opacity: 0.8; }
+  #login-screen button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  #login-error {
+    color: var(--red);
+    font-size: 13px;
+    text-align: center;
+    min-height: 18px;
+  }
+
+  .server-toggle {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .server-toggle select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 8px;
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    outline: none;
+  }
+
+  /* ── Chat Screen ──────────────────────────────────────── */
+  #chat-screen {
+    display: none;
+    flex-direction: column;
+    height: 100dvh;
+  }
+
+  .chat-header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: calc(var(--safe-top) + 12px) 16px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+
+  .chat-header .avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue), var(--purple));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    color: #060A10;
+    flex-shrink: 0;
+  }
+
+  .chat-header .info { flex: 1; }
+  .chat-header .name { font-weight: 600; font-size: 16px; }
+
+  .chat-header .status {
+    font-size: 12px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .status-dot.connected { background: var(--green); }
+  .status-dot.reconnecting { background: var(--amber); animation: pulse 1s infinite; }
+  .status-dot.disconnected { background: var(--red); }
+
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  .chat-header .logout-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--muted);
+    padding: 6px 12px;
+    font-size: 12px;
+    font-family: var(--font-body);
+    cursor: pointer;
+  }
+
+  .chat-header .logout-btn:active { background: var(--surface2); }
+
+  /* ── Messages ─────────────────────────────────────────── */
+  .messages-container {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .message {
+    max-width: 85%;
+    padding: 12px 16px;
+    border-radius: 16px;
+    font-size: 15px;
+    line-height: 1.5;
+    word-wrap: break-word;
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  .message.user {
+    align-self: flex-end;
+    background: linear-gradient(135deg, var(--blue), var(--blue-glow));
+    color: #060A10;
+    border-bottom-right-radius: 4px;
+  }
+
+  .message.aria {
+    align-self: flex-start;
+    background: var(--surface2);
+    color: var(--text);
+    border-bottom-left-radius: 4px;
+  }
+
+  .message.system {
+    align-self: center;
+    background: none;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 4px;
+    max-width: 100%;
+    text-align: center;
+  }
+
+  .message.error {
+    align-self: center;
+    background: rgba(248, 113, 113, 0.1);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    color: var(--red);
+    font-size: 13px;
+    text-align: center;
+    max-width: 90%;
+  }
+
+  /* ── Confirmation Card ────────────────────────────────── */
+  .confirmation-card {
+    align-self: flex-start;
+    max-width: 90%;
+    background: var(--surface);
+    border: 1px solid var(--blue-dim);
+    border-radius: 16px;
+    overflow: hidden;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .confirmation-card .card-header {
+    background: linear-gradient(135deg, rgba(126,184,247,0.1), rgba(74,143,212,0.1));
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--blue);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .confirmation-card .card-body {
+    padding: 14px 16px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text);
+    white-space: pre-wrap;
+  }
+
+  .confirmation-card .card-actions {
+    display: flex;
+    border-top: 1px solid var(--border);
+  }
+
+  .confirmation-card .card-actions button {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    font-family: var(--font-body);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .card-actions .confirm-btn {
+    background: linear-gradient(135deg, var(--blue), var(--blue-glow));
+    color: #060A10;
+  }
+
+  .card-actions .cancel-btn {
+    background: var(--surface2);
+    color: var(--muted);
+    border-right: 1px solid var(--border);
+  }
+
+  .card-actions button:active { opacity: 0.8; }
+
+  /* ── Task Complete Card ───────────────────────────────── */
+  .task-card {
+    align-self: flex-start;
+    max-width: 90%;
+    background: var(--surface);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    border-radius: 16px;
+    overflow: hidden;
+    animation: fadeIn 0.3s ease;
+  }
+
+  .task-card .card-header {
+    background: rgba(74, 222, 128, 0.08);
+    padding: 10px 16px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--green);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .task-card .card-body {
+    padding: 14px 16px;
+    font-size: 13px;
+    font-family: var(--font-mono);
+    color: var(--muted);
+    line-height: 1.6;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .task-card .card-body .result-key {
+    color: var(--blue);
+  }
+
+  .task-card .card-body .result-val {
+    color: var(--text);
+  }
+
+  /* ── Typing Indicator ─────────────────────────────────── */
+  .typing-indicator {
+    align-self: flex-start;
+    display: flex;
+    gap: 5px;
+    padding: 12px 18px;
+    background: var(--surface2);
+    border-radius: 16px;
+    border-bottom-left-radius: 4px;
+  }
+
+  .typing-indicator .dot {
+    width: 7px;
+    height: 7px;
+    background: var(--muted);
+    border-radius: 50%;
+    animation: typingBounce 1.2s infinite;
+  }
+
+  .typing-indicator .dot:nth-child(2) { animation-delay: 0.15s; }
+  .typing-indicator .dot:nth-child(3) { animation-delay: 0.3s; }
+
+  @keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+    30% { transform: translateY(-6px); opacity: 1; }
+  }
+
+  /* ── Input Bar ────────────────────────────────────────── */
+  .input-bar {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 10px 12px calc(var(--safe-bottom) + 10px);
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .input-bar textarea {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 10px 16px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.4;
+    resize: none;
+    outline: none;
+    max-height: 120px;
+    min-height: 40px;
+    overflow-y: auto;
+    transition: border-color 0.2s;
+  }
+
+  .input-bar textarea:focus { border-color: var(--blue-dim); }
+  .input-bar textarea::placeholder { color: var(--dim); }
+
+  .input-bar .send-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--blue), var(--blue-glow));
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+
+  .send-btn:active { transform: scale(0.92); }
+  .send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .send-btn svg {
+    width: 18px;
+    height: 18px;
+    fill: #060A10;
+    transform: rotate(-45deg) translate(1px, -1px);
+  }
+
+  /* ── Quick Actions ────────────────────────────────────── */
+  .quick-actions {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding: 8px 16px;
+    flex-shrink: 0;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .quick-actions::-webkit-scrollbar { display: none; }
+
+  .quick-action {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 7px 14px;
+    color: var(--muted);
+    font-size: 13px;
+    font-family: var(--font-body);
+    white-space: nowrap;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+
+  .quick-action:active {
+    background: var(--surface3);
+    color: var(--blue);
+    border-color: var(--blue-dim);
+  }
+
+  /* ── Scrollbar ────────────────────────────────────────── */
+  .messages-container::-webkit-scrollbar { width: 4px; }
+  .messages-container::-webkit-scrollbar-track { background: transparent; }
+  .messages-container::-webkit-scrollbar-thumb { background: var(--dim); border-radius: 2px; }
+
+  /* ── Responsive ───────────────────────────────────────── */
+  @media (min-width: 600px) {
+    #chat-screen {
+      max-width: 480px;
+      margin: 0 auto;
+      border-left: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════ LOGIN SCREEN ═══════════════ -->
+<div id="login-screen">
+  <div class="logo">Perennia AI</div>
+  <div class="subtitle">Aria Mobile Test Console</div>
+  <form id="login-form" onsubmit="return handleLogin(event)">
+    <input type="email" id="login-email" placeholder="Email" required autocomplete="email">
+    <input type="password" id="login-password" placeholder="Password" required autocomplete="current-password">
+    <div class="server-toggle">
+      <span>Server:</span>
+      <select id="server-select">
+        <option value="https://api.perenniaai.com">api.perenniaai.com (prod)</option>
+        <option value="http://localhost:8000">localhost:8000 (dev)</option>
+      </select>
+    </div>
+    <button type="submit" id="login-btn">Sign In</button>
+    <div id="login-error"></div>
+  </form>
+</div>
+
+<!-- ═══════════════ CHAT SCREEN ═══════════════ -->
+<div id="chat-screen">
+  <div class="chat-header">
+    <div class="avatar">A</div>
+    <div class="info">
+      <div class="name">Aria</div>
+      <div class="status" id="conn-status">
+        <span class="status-dot disconnected" id="status-dot"></span>
+        <span id="status-text">Connecting...</span>
+      </div>
+    </div>
+    <button class="logout-btn" onclick="handleLogout()">Sign Out</button>
+  </div>
+
+  <div class="messages-container" id="messages"></div>
+
+  <div class="quick-actions" id="quick-actions">
+    <button class="quick-action" onclick="sendQuick('What\'s my pipeline look like?')">Pipeline status</button>
+    <button class="quick-action" onclick="sendQuick('Send a pre-approval letter')">Pre-approval</button>
+    <button class="quick-action" onclick="sendQuick('What are FHA credit score requirements?')">FHA guidelines</button>
+    <button class="quick-action" onclick="sendQuick('Create a task to follow up with my newest lead')">Create task</button>
+    <button class="quick-action" onclick="sendQuick('Text my last borrower a status update')">Send SMS</button>
+  </div>
+
+  <div class="input-bar">
+    <textarea id="msg-input" placeholder="Message Aria..." rows="1"
+              onkeydown="handleInputKey(event)" oninput="autoGrow(this)"></textarea>
+    <button class="send-btn" id="send-btn" onclick="sendMessage()" disabled>
+      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<script>
+// ─── State ──────────────────────────────────────────────────────────────────
+let API_BASE = 'https://api.perenniaai.com';
+let WS_URL = '';
+let token = null;
+let ws = null;
+let reconnectAttempts = 0;
+const MAX_RECONNECT = 5;
+let reconnectTimer = null;
+let intentionalClose = false;
+let pendingMessages = [];
+let streamBuffer = '';
+let isStreaming = false;
+let heartbeatExpected = false;
+
+// ─── Login ──────────────────────────────────────────────────────────────────
+async function handleLogin(e) {
+  e.preventDefault();
+  const email = document.getElementById('login-email').value;
+  const password = document.getElementById('login-password').value;
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-error');
+
+  API_BASE = document.getElementById('server-select').value;
+  WS_URL = API_BASE.replace('http', 'ws') + '/api/v1/aria/ws';
+
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+  errEl.textContent = '';
+
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.detail || data.message || `Login failed (${res.status})`);
+    }
+
+    const data = await res.json();
+    token = data.access_token || data.token;
+    if (!token) throw new Error('No token in response');
+
+    localStorage.setItem('access_token', token);
+    localStorage.setItem('aria_test_email', email);
+
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('chat-screen').style.display = 'flex';
+    connectWebSocket();
+  } catch (err) {
+    errEl.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign In';
+  }
+}
+
+function handleLogout() {
+  intentionalClose = true;
+  if (ws) ws.close();
+  token = null;
+  localStorage.removeItem('access_token');
+  document.getElementById('chat-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('messages').innerHTML = '';
+  setConnStatus('disconnected', 'Disconnected');
+}
+
+// ─── WebSocket ──────────────────────────────────────────────────────────────
+function connectWebSocket() {
+  if (!token) return;
+  intentionalClose = false;
+
+  setConnStatus('reconnecting', 'Connecting...');
+
+  ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
+
+  ws.onopen = () => {
+    reconnectAttempts = 0;
+    setConnStatus('connected', 'Online');
+    flushPending();
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      handleServerMessage(msg);
+    } catch (err) {
+      console.error('Failed to parse WS message:', err, e.data);
+    }
+  };
+
+  ws.onclose = (e) => {
+    if (intentionalClose) {
+      setConnStatus('disconnected', 'Disconnected');
+      return;
+    }
+    if (e.code === 4001) {
+      setConnStatus('disconnected', 'Session expired');
+      addSystemMessage('Session expired. Please sign in again.');
+      return;
+    }
+    attemptReconnect();
+  };
+
+  ws.onerror = () => {};
+}
+
+function attemptReconnect() {
+  if (reconnectTimer) return;
+  if (reconnectAttempts >= MAX_RECONNECT) {
+    setConnStatus('disconnected', 'Connection lost');
+    addSystemMessage('Unable to reconnect. Please refresh the page.');
+    return;
+  }
+
+  const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
+  reconnectAttempts++;
+  setConnStatus('reconnecting', `Reconnecting (${reconnectAttempts}/${MAX_RECONNECT})...`);
+
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    token = localStorage.getItem('access_token');
+    if (!token) {
+      setConnStatus('disconnected', 'Session expired');
+      return;
+    }
+    connectWebSocket();
+  }, delay);
+}
+
+function flushPending() {
+  while (pendingMessages.length > 0) {
+    const msg = pendingMessages.shift();
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg));
+    }
+  }
+}
+
+function setConnStatus(state, text) {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  dot.className = 'status-dot ' + state;
+  txt.textContent = text;
+}
+
+// ─── Message Handling ───────────────────────────────────────────────────────
+function handleServerMessage(msg) {
+  switch (msg.type) {
+    case 'greeting':
+      addAriaMessage(msg.content);
+      break;
+
+    case 'typing':
+      showTyping();
+      break;
+
+    case 'chunk':
+      if (!isStreaming) {
+        hideTyping();
+        isStreaming = true;
+        streamBuffer = '';
+      }
+      streamBuffer += msg.content;
+      updateStreamBubble(streamBuffer);
+      break;
+
+    case 'done':
+      hideTyping();
+      isStreaming = false;
+      streamBuffer = '';
+      removeStreamBubble();
+      if (msg.content) addAriaMessage(msg.content);
+      break;
+
+    case 'confirmation_required':
+      hideTyping();
+      addConfirmationCard(msg.preview);
+      break;
+
+    case 'task_complete':
+      addTaskCard(msg.result);
+      break;
+
+    case 'error':
+      hideTyping();
+      addErrorMessage(msg.message);
+      break;
+
+    case 'ping':
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'pong' }));
+      }
+      break;
+  }
+}
+
+// ─── Send ───────────────────────────────────────────────────────────────────
+function sendMessage() {
+  const input = document.getElementById('msg-input');
+  const text = input.value.trim();
+  if (!text) return;
+
+  addUserMessage(text);
+  input.value = '';
+  input.style.height = 'auto';
+  document.getElementById('send-btn').disabled = true;
+
+  const payload = { type: 'message', content: text };
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(payload));
+  } else {
+    pendingMessages.push(payload);
+    if (pendingMessages.length > 20) pendingMessages.shift();
+  }
+
+  hideQuickActions();
+}
+
+function sendQuick(text) {
+  document.getElementById('msg-input').value = text;
+  sendMessage();
+}
+
+function sendConfirmation(confirmed) {
+  const payload = { type: 'confirm', content: confirmed ? 'Yes, go ahead' : 'No, cancel that', value: confirmed };
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(payload));
+  }
+  addUserMessage(confirmed ? 'Yes, go ahead' : 'No, cancel');
+  // Disable the buttons
+  document.querySelectorAll('.confirmation-card .card-actions button').forEach(b => b.disabled = true);
+}
+
+// ─── DOM Builders ───────────────────────────────────────────────────────────
+const messagesEl = document.getElementById('messages');
+
+function scrollToBottom() {
+  requestAnimationFrame(() => {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  });
+}
+
+function addUserMessage(text) {
+  const el = document.createElement('div');
+  el.className = 'message user';
+  el.textContent = text;
+  messagesEl.appendChild(el);
+  scrollToBottom();
+}
+
+function addAriaMessage(text) {
+  const el = document.createElement('div');
+  el.className = 'message aria';
+  el.innerHTML = formatText(text);
+  messagesEl.appendChild(el);
+  scrollToBottom();
+}
+
+function addSystemMessage(text) {
+  const el = document.createElement('div');
+  el.className = 'message system';
+  el.textContent = text;
+  messagesEl.appendChild(el);
+  scrollToBottom();
+}
+
+function addErrorMessage(text) {
+  const el = document.createElement('div');
+  el.className = 'message error';
+  el.textContent = text;
+  messagesEl.appendChild(el);
+  scrollToBottom();
+}
+
+function addConfirmationCard(preview) {
+  const card = document.createElement('div');
+  card.className = 'confirmation-card';
+  card.innerHTML = `
+    <div class="card-header">Confirm Action</div>
+    <div class="card-body">${formatText(preview)}</div>
+    <div class="card-actions">
+      <button class="cancel-btn" onclick="sendConfirmation(false)">Cancel</button>
+      <button class="confirm-btn" onclick="sendConfirmation(true)">Confirm</button>
+    </div>
+  `;
+  messagesEl.appendChild(card);
+  scrollToBottom();
+}
+
+function addTaskCard(result) {
+  const card = document.createElement('div');
+  card.className = 'task-card';
+  let body = '';
+  if (result && typeof result === 'object') {
+    for (const [k, v] of Object.entries(result)) {
+      body += `<span class="result-key">${k}:</span> <span class="result-val">${v}</span>\n`;
+    }
+  }
+  card.innerHTML = `
+    <div class="card-header">Task Complete</div>
+    <div class="card-body">${body}</div>
+  `;
+  messagesEl.appendChild(card);
+  scrollToBottom();
+}
+
+function showTyping() {
+  if (document.getElementById('typing-indicator')) return;
+  const el = document.createElement('div');
+  el.className = 'typing-indicator';
+  el.id = 'typing-indicator';
+  el.innerHTML = '<div class="dot"></div><div class="dot"></div><div class="dot"></div>';
+  messagesEl.appendChild(el);
+  scrollToBottom();
+}
+
+function hideTyping() {
+  const el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+function updateStreamBubble(text) {
+  let el = document.getElementById('stream-bubble');
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'message aria';
+    el.id = 'stream-bubble';
+    messagesEl.appendChild(el);
+  }
+  el.innerHTML = formatText(text);
+  scrollToBottom();
+}
+
+function removeStreamBubble() {
+  const el = document.getElementById('stream-bubble');
+  if (el) el.remove();
+}
+
+function hideQuickActions() {
+  const el = document.getElementById('quick-actions');
+  el.style.display = 'none';
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+function formatText(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\n/g, '<br>');
+}
+
+function autoGrow(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  document.getElementById('send-btn').disabled = !el.value.trim();
+}
+
+function handleInputKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+// ─── Init ───────────────────────────────────────────────────────────────────
+// Auto-fill email if we have it
+const savedEmail = localStorage.getItem('aria_test_email');
+if (savedEmail) document.getElementById('login-email').value = savedEmail;
+
+// Check for existing token
+const existingToken = localStorage.getItem('access_token');
+if (existingToken) {
+  token = existingToken;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('chat-screen').style.display = 'flex';
+  API_BASE = document.getElementById('server-select').value;
+  WS_URL = API_BASE.replace('http', 'ws') + '/api/v1/aria/ws';
+  connectWebSocket();
+}
+</script>
+</body>
+</html>

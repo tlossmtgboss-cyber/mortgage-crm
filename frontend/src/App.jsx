@@ -219,6 +219,7 @@ const MobileAppointmentDetail = lazyRetry(() => import('./pages/aria-mobile/Mobi
 const MobileCallIntel = lazyRetry(() => import('./pages/aria-mobile/MobileCallIntel'));
 const AriaVoiceOnboarding = lazyRetry(() => import('./pages/aria-mobile/AriaVoiceOnboarding'));
 const AriaChatScreen = lazyRetry(() => import('./pages/aria-mobile/AriaChatScreen'));
+const AriaTestPage = lazyRetry(() => import('./pages/AriaTestPage'));
 const BriefingPage = lazyRetry(() => import('./pages/BriefingPage'));
 const PowerDialer = lazyRetry(() => import('./pages/PowerDialer'));
 const UserCreationWizard = lazyRetry(() => import('./pages/UserCreationWizard'));
@@ -467,7 +468,7 @@ function AriaFAB() {
   // Hide on public/auth pages and when already on Aria
   const hiddenPaths = ['/login', '/register', '/forgot-password', '/reset-password',
     '/verify-account', '/verify-email-sent', '/aria-voice', '/aria',
-    '/mobile-aria', '/apply'];
+    '/mobile-aria', '/apply', '/aria-test'];
   if (hiddenPaths.some(p => location.pathname === p || location.pathname.startsWith(p + '/'))) {
     return null;
   }
@@ -727,6 +728,7 @@ function App() {
               ? <Navigate to="/aria" />
               : <ExternalRedirect to="https://www.perenniaai.com" />
           } />
+          <Route path="/aria-test" element={<LazyPage><AriaTestPage /></LazyPage>} />
           <Route path="/apply" element={<BuyerIntake />} />
           <Route path="/apply/preview" element={<LazyPage><ApplicationPreview /></LazyPage>} />
           <Route path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
