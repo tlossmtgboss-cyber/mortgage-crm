@@ -318,9 +318,11 @@ _background_task: Optional[asyncio.Task] = None
 
 
 async def _periodic_pin_check():
-    """Background coroutine that runs verify_certificate_pins() every 6 hours.
+    """Background coroutine that runs verify_certificate_pins() and
+    checks certificate expiry every 6 hours.
 
-    Stores results in _last_verification and logs warnings on mismatches.
+    Stores results in _last_verification and logs warnings on mismatches
+    or approaching certificate expiry (< 30 days).
     Runs indefinitely until the task is cancelled.
     """
     while True:
@@ -340,6 +342,31 @@ async def _periodic_pin_check():
                         )
             else:
                 logger.info("PERIODIC PIN CHECK: All domains passed pin verification")
+
+            # Certificate expiry check — warn when any cert expires within 30 days
+            for domain in CERTIFICATE_PINS:
+                try:
+                    expiry_info = await loop.run_in_executor(
+                        None, _get_certificate_expiry, domain,
+                    )
+                    days = expiry_info.get("days_remaining")
+                    if days is not None and days < 30:
+                        logger.warning(
+                            "CERT EXPIRY WARNING: %s expires on %s (%d days remaining). "
+                            "Rotate certificate and update CERTIFICATE_PINS before expiry.",
+                            domain,
+                            expiry_info.get("expires"),
+                            days,
+                        )
+                    elif days is not None:
+                        logger.info(
+                            "CERT EXPIRY CHECK: %s — OK (%d days remaining)",
+                            domain,
+                            days,
+                        )
+                except Exception as exc:
+                    logger.debug("Cert expiry check for %s failed: %s", domain, exc)
+
         except asyncio.CancelledError:
             logger.info("Periodic pin check task cancelled")
             return
