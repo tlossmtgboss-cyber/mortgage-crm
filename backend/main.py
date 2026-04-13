@@ -2548,6 +2548,13 @@ try:
 except Exception as e:
     logger.warning(f"AI activity routes not loaded: {e}")
 
+try:
+    from routes.aria_test_routes import register_aria_test_routes
+    register_aria_test_routes(app=app)
+    logger.info("✓ Aria test page registered at /aria-test")
+except Exception as e:
+    logger.warning(f"Aria test page not loaded: {e}")
+
 # ============================================================================
 # POST-LEGACY ROUTES — Depend on functions exported from inline_legacy_routes
 # ============================================================================
