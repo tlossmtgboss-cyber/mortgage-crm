@@ -9,6 +9,7 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAriaVoice } from '../../hooks/useAriaVoice';
 import { sendMessage } from '../../services/mobileAriaApi';
+import api from '../../services/api';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
 import './AriaVoiceHome.css';
 
@@ -21,50 +22,56 @@ function generateSessionId() {
 }
 
 // ---------------------------------------------------------------------------
-// TTS — speak Aria's response aloud using the browser SpeechSynthesis API
+// TTS — speak Aria's response via ElevenLabs (backend-proxied)
+// Falls back to browser SpeechSynthesis if the API call fails.
 // ---------------------------------------------------------------------------
 
-let _ariaVoice = null;
+let _currentAudio = null;
 
-function pickAriaVoice() {
-  if (_ariaVoice) return _ariaVoice;
-  const voices = window.speechSynthesis?.getVoices() || [];
-  // Prefer a natural-sounding female English voice
-  const preferred = [
-    'Samantha', 'Karen', 'Moira', 'Tessa',         // macOS / iOS
-    'Google US English', 'Google UK English Female', // Chrome
-    'Microsoft Zira', 'Microsoft Jenny',             // Windows
-  ];
-  for (const name of preferred) {
-    const match = voices.find((v) => v.name.includes(name) && v.lang.startsWith('en'));
-    if (match) { _ariaVoice = match; return match; }
+async function speakText(text, { onEnd, signal } = {}) {
+  stopSpeaking();
+
+  try {
+    const res = await api.post('/api/v1/mobile-voice/tts/synthesize', {
+      text,
+      provider: 'elevenlabs',
+    }, { signal });
+
+    if (signal?.aborted) return;
+
+    const { audio: b64 } = res.data;
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'audio/mpeg' });
+    const url = URL.createObjectURL(blob);
+
+    const audio = new Audio(url);
+    _currentAudio = audio;
+    audio.onended = () => { URL.revokeObjectURL(url); _currentAudio = null; onEnd?.(); };
+    audio.onerror = () => { URL.revokeObjectURL(url); _currentAudio = null; onEnd?.(); };
+    audio.play();
+  } catch (err) {
+    if (err?.name === 'CanceledError' || signal?.aborted) return;
+    console.warn('[AriaVoice] ElevenLabs TTS failed, falling back to browser:', err.message);
+    // Fallback to browser SpeechSynthesis
+    const synth = window.speechSynthesis;
+    if (!synth) { onEnd?.(); return; }
+    synth.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.onend = () => onEnd?.();
+    utterance.onerror = () => onEnd?.();
+    synth.speak(utterance);
   }
-  // Fallback: any English female voice, or first English voice
-  const english = voices.filter((v) => v.lang.startsWith('en'));
-  _ariaVoice = english[0] || voices[0] || null;
-  return _ariaVoice;
-}
-
-function speakText(text, { onEnd } = {}) {
-  const synth = window.speechSynthesis;
-  if (!synth) { onEnd?.(); return null; }
-
-  synth.cancel(); // stop any in-progress speech
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  const voice = pickAriaVoice();
-  if (voice) utterance.voice = voice;
-  utterance.rate = 1.0;
-  utterance.pitch = 1.05;
-  utterance.volume = 1.0;
-  utterance.onend = () => onEnd?.();
-  utterance.onerror = () => onEnd?.();
-
-  synth.speak(utterance);
-  return utterance;
 }
 
 function stopSpeaking() {
+  if (_currentAudio) {
+    _currentAudio.pause();
+    _currentAudio.currentTime = 0;
+    _currentAudio = null;
+  }
   window.speechSynthesis?.cancel();
 }
 
@@ -99,15 +106,7 @@ export default function AriaVoiceHome() {
   const toastTimerRef = useRef(null);
   const abortRef = useRef(null);
 
-  // Preload TTS voices (Chrome loads them asynchronously)
-  useEffect(() => {
-    const synth = window.speechSynthesis;
-    if (!synth) return;
-    pickAriaVoice();
-    const handleVoicesChanged = () => { _ariaVoice = null; pickAriaVoice(); };
-    synth.addEventListener('voiceschanged', handleVoicesChanged);
-    return () => synth.removeEventListener('voiceschanged', handleVoicesChanged);
-  }, []);
+  const ttsAbortRef = useRef(null);
 
   // ---- Voice hook ----
   const handleFinalTranscript = useCallback(async (text) => {
@@ -125,8 +124,10 @@ export default function AriaVoiceHome() {
         setToastExiting(false);
         setShowToast(true);
 
-        // Speak the response aloud
+        // Speak the response aloud via ElevenLabs
+        ttsAbortRef.current = new AbortController();
         speakText(result.response, {
+          signal: ttsAbortRef.current.signal,
           onEnd: () => {
             setVoiceState('idle');
             // Dismiss toast shortly after speech ends
@@ -172,9 +173,8 @@ export default function AriaVoiceHome() {
     return () => {
       clearTimeout(toastTimerRef.current);
       stopSpeaking();
-      if (abortRef.current) {
-        abortRef.current.abort();
-      }
+      if (abortRef.current) abortRef.current.abort();
+      if (ttsAbortRef.current) ttsAbortRef.current.abort();
     };
   }, []);
 

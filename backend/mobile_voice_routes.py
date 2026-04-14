@@ -799,8 +799,8 @@ async def synthesize_text(request: dict):
     if not text:
         raise HTTPException(400, "Text is required")
 
-    if len(text) > 500:
-        raise HTTPException(400, "Text too long (max 500 characters)")
+    if len(text) > 3000:
+        raise HTTPException(400, "Text too long (max 3000 characters)")
 
     try:
         # If provider is specified, use that provider with the voice_id

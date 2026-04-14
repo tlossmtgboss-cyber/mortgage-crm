@@ -1744,6 +1744,13 @@ try:
 except Exception as e:
     logger.warning(f"Voice profile routes not loaded: {e}")
 
+try:
+    from mobile_voice_routes import router as mobile_voice_router
+    app.include_router(mobile_voice_router, tags=["Mobile Voice"])
+    logger.info("Mobile voice routes loaded (ElevenLabs TTS)")
+except Exception as e:
+    logger.warning(f"Mobile voice routes not loaded: {e}")
+
 # ============================================================================
 # ARIA CHAT ROUTES — Conversational intelligence (WebSocket + REST)
 # ============================================================================
