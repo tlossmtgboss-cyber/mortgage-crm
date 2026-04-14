@@ -231,11 +231,11 @@ class OpenAITTSClient:
         }
 
         payload = {
-            "model": "tts-1",  # Fast model for low latency
+            "model": "tts-1-hd",  # HD model for natural-sounding voice
             "input": text,
             "voice": self.voice,
             "response_format": "mp3",
-            "speed": 1.05
+            "speed": 1.0
         }
 
         async with httpx.AsyncClient() as client:

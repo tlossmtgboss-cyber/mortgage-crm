@@ -34,12 +34,15 @@ async function speakText(text, { onEnd, signal } = {}) {
   try {
     const res = await api.post('/api/v1/mobile-voice/tts/synthesize', {
       text,
-      provider: 'elevenlabs',
     }, { signal });
 
     if (signal?.aborted) return;
 
-    const { audio: b64 } = res.data;
+    const b64 = res.data?.audio;
+    if (!b64 || b64.length < 100) {
+      throw new Error('Empty audio response from TTS API');
+    }
+
     const binary = atob(b64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -50,10 +53,10 @@ async function speakText(text, { onEnd, signal } = {}) {
     _currentAudio = audio;
     audio.onended = () => { URL.revokeObjectURL(url); _currentAudio = null; onEnd?.(); };
     audio.onerror = () => { URL.revokeObjectURL(url); _currentAudio = null; onEnd?.(); };
-    audio.play();
+    await audio.play();
   } catch (err) {
     if (err?.name === 'CanceledError' || signal?.aborted) return;
-    console.warn('[AriaVoice] ElevenLabs TTS failed, falling back to browser:', err.message);
+    console.warn('[AriaVoice] TTS API failed, using browser voice:', err.message);
     // Fallback to browser SpeechSynthesis
     const synth = window.speechSynthesis;
     if (!synth) { onEnd?.(); return; }
@@ -118,15 +121,18 @@ export default function AriaVoiceHome() {
       abortRef.current = new AbortController();
       const result = await sendMessage(text, sessionId, {}, { signal: abortRef.current.signal });
 
-      if (result && result.response) {
+      // Extract response text — handle both success and error shapes
+      const responseText = result?.response || result?.final_response || result?.message;
+
+      if (responseText) {
         setVoiceState('speaking');
-        setResponseText(result.response);
+        setResponseText(responseText);
         setToastExiting(false);
         setShowToast(true);
 
-        // Speak the response aloud via ElevenLabs
+        // Speak the response aloud via TTS
         ttsAbortRef.current = new AbortController();
-        speakText(result.response, {
+        speakText(responseText, {
           signal: ttsAbortRef.current.signal,
           onEnd: () => {
             setVoiceState('idle');
@@ -140,7 +146,18 @@ export default function AriaVoiceHome() {
           },
         });
       } else {
+        // Show error feedback instead of silently going idle
+        const errMsg = result?.error || 'Sorry, I couldn\'t process that. Try again.';
+        setResponseText(errMsg);
+        setToastExiting(false);
+        setShowToast(true);
         setVoiceState('idle');
+        // Auto-dismiss error toast
+        clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => {
+          setToastExiting(true);
+          setTimeout(() => { setShowToast(false); setToastExiting(false); setResponseText(null); }, 250);
+        }, 5000);
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
