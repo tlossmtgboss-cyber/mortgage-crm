@@ -1,29 +1,11 @@
-import { useEffect, useRef } from 'react';
-import ariaTestHtml from '../assets/aria-test.html?raw';
+import { useEffect } from 'react';
 
 export default function AriaTestPage() {
-  const iframeRef = useRef(null);
-
   useEffect(() => {
-    // Hide the SPA chrome — this page should be full-screen
-    document.body.style.overflow = 'hidden';
-    return () => { document.body.style.overflow = ''; };
+    // Redirect to the static HTML file which runs in the top-level
+    // window context with proper Origin header for CORS
+    window.location.replace('/static/aria-test.html');
   }, []);
 
-  return (
-    <iframe
-      ref={iframeRef}
-      srcDoc={ariaTestHtml}
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        border: 'none',
-        zIndex: 9999,
-      }}
-      title="Aria Test Console"
-    />
-  );
+  return null;
 }
