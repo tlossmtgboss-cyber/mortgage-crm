@@ -17,8 +17,27 @@ import './AriaVoiceHome.css';
 // Helpers
 // ---------------------------------------------------------------------------
 
-function generateSessionId() {
-  return 'aria-voice-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+function getOrCreateSessionId() {
+  const STORAGE_KEY = 'aria-voice-session-id';
+  const EXPIRY_KEY = 'aria-voice-session-expiry';
+  const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+  try {
+    const existing = sessionStorage.getItem(STORAGE_KEY);
+    const expiry = sessionStorage.getItem(EXPIRY_KEY);
+    if (existing && expiry && Date.now() < Number(expiry)) {
+      // Refresh expiry on use
+      sessionStorage.setItem(EXPIRY_KEY, String(Date.now() + SESSION_TTL_MS));
+      return existing;
+    }
+  } catch { /* sessionStorage unavailable */ }
+
+  const id = 'aria-voice-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+  try {
+    sessionStorage.setItem(STORAGE_KEY, id);
+    sessionStorage.setItem(EXPIRY_KEY, String(Date.now() + SESSION_TTL_MS));
+  } catch { /* sessionStorage unavailable */ }
+  return id;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +121,7 @@ export default function AriaVoiceHome() {
 
   // Voice state: 'idle' | 'listening' | 'processing' | 'speaking'
   const [voiceState, setVoiceState] = useState('idle');
-  const [sessionId] = useState(() => generateSessionId());
+  const [sessionId] = useState(() => getOrCreateSessionId());
   const [responseText, setResponseText] = useState(null);
   const [showToast, setShowToast] = useState(false);
   const [toastExiting, setToastExiting] = useState(false);
@@ -170,6 +189,7 @@ export default function AriaVoiceHome() {
   const {
     isRecording,
     transcript,
+    error: voiceError,
     toggleRecording,
   } = useAriaVoice({
     onFinalTranscript: handleFinalTranscript,
@@ -219,6 +239,7 @@ export default function AriaVoiceHome() {
 
   // ---- Tap label text ----
   const tapLabelText = (() => {
+    if (voiceError && voiceState === 'idle') return voiceError;
     switch (voiceState) {
       case 'listening': return 'Listening...';
       case 'processing': return 'Thinking...';

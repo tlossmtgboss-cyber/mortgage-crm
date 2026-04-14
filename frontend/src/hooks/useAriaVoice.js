@@ -16,6 +16,7 @@ export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-U
   const [isRecording, setIsRecording] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [error, setError] = useState(null);
 
   const controllerRef = useRef(null);
   const shouldBeRecordingRef = useRef(false);
@@ -56,12 +57,15 @@ export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-U
           // Reset retry count on successful result
           retryCountRef.current = 0;
         },
-        onError: (error) => {
-          console.error('[useAriaVoice] Speech error:', error);
-          if (error === 'not-allowed' || error === 'permission-denied') {
+        onError: (err) => {
+          console.error('[useAriaVoice] Speech error:', err);
+          if (err === 'not-allowed' || err === 'permission-denied') {
             shouldBeRecordingRef.current = false;
             setIsRecording(false);
             setTranscript('');
+            setError('Microphone access denied. Please enable it in Settings.');
+          } else {
+            setError('Speech recognition error. Tap to try again.');
           }
         },
         onEnd: () => {
@@ -78,6 +82,7 @@ export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-U
             // Circuit breaker: stop after max retries
             shouldBeRecordingRef.current = false;
             setIsRecording(false);
+            setError('Speech recognition stopped. Tap the mic to try again.');
           }
         },
       });
@@ -95,6 +100,7 @@ export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-U
     if (!isSupported || shouldBeRecordingRef.current) return;
 
     setTranscript('');
+    setError(null);
     shouldBeRecordingRef.current = true;
     retryCountRef.current = 0;
     setIsRecording(true);
@@ -142,6 +148,7 @@ export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-U
     isRecording,
     isSupported,
     transcript,
+    error,
     startRecording,
     stopRecording,
     toggleRecording,

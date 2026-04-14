@@ -302,9 +302,9 @@ async def orchestrator_chat(
         if not session_id:
             session_id = str(uuid.uuid4())
 
-        # Load conversation history
+        # Load conversation history (scoped to current user for multi-tenant safety)
         try:
-            conversation_history = ConvMemory.get_session_messages(db, session_id)
+            conversation_history = ConvMemory.get_session_messages(db, session_id, user_id=current_user.id)
         except Exception as e:
             logger.warning(f"Failed to load conversation history: {e}")
             conversation_history = []

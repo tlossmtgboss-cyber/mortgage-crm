@@ -786,15 +786,28 @@ async def get_voice_status():
 
 
 @router.post("/tts/synthesize")
-async def synthesize_text(request: dict):
+async def synthesize_text(request: Request):
     """
     HTTP endpoint for text-to-speech synthesis.
     Returns audio as base64-encoded mp3.
+    Requires authentication (JWT or API key).
     Supports voice_id and provider parameters for voice selection.
     """
-    text = request.get("text", "")
-    voice_id = request.get("voice_id")  # e.g., "en-US-Neural2-C"
-    provider = request.get("provider")  # e.g., "google", "elevenlabs", "openai"
+    # Auth check — require valid JWT or API key
+    from auth.dependencies import get_current_user_flexible
+    try:
+        current_user = await get_current_user_flexible(request)
+        if not current_user:
+            raise HTTPException(401, "Authentication required")
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(401, "Authentication required")
+
+    data = await request.json()
+    text = data.get("text", "")
+    voice_id = data.get("voice_id")  # e.g., "en-US-Neural2-C"
+    provider = data.get("provider")  # e.g., "google", "elevenlabs", "openai"
 
     if not text:
         raise HTTPException(400, "Text is required")
