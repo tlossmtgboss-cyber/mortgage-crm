@@ -1,15 +1,16 @@
 /* ============================================================================
-   MobileCallIntel — Call Intelligence detail screen
-   Dark theme, consistent with AriaVoiceHome
+   MobileCallIntel — Call Intelligence Screen
+   Dark theme with deep space background and blue glow
    ============================================================================ */
 
 .mci-screen {
   --mci-bg: #060A10;
   --mci-accent: #7EB8F7;
   --mci-accent-rgb: 126, 184, 247;
-  --mci-secondary-rgb: 155, 127, 232;
-  --mci-red: #FF6B6B;
-  --mci-red-rgb: 255, 107, 107;
+  --mci-purple-rgb: 155, 127, 232;
+  --mci-red: #FF5555;
+  --mci-red-rgb: 255, 85, 85;
+  --mci-green: #34A853;
   --mci-text-muted: rgba(255, 255, 255, 0.4);
   --mci-text-dim: rgba(255, 255, 255, 0.18);
   --mci-font-display: 'Cormorant Garamond', serif;
@@ -21,7 +22,7 @@
   min-height: 100dvh;
   background:
     radial-gradient(ellipse at 50% 35%, rgba(var(--mci-accent-rgb), 0.07) 0%, transparent 60%),
-    radial-gradient(ellipse at 80% 80%, rgba(var(--mci-secondary-rgb), 0.045) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(var(--mci-purple-rgb), 0.045) 0%, transparent 50%),
     var(--mci-bg);
   color: #fff;
   font-family: var(--mci-font-body);
@@ -29,6 +30,22 @@
   user-select: none;
   position: relative;
   overflow: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   Background glow
+   -------------------------------------------------------------------------- */
+
+.mci-glow {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  background: var(--mci-accent);
+  opacity: 0.04;
+  border-radius: 0 0 50% 50%;
+  pointer-events: none;
 }
 
 /* --------------------------------------------------------------------------
@@ -42,27 +59,26 @@
 }
 
 /* --------------------------------------------------------------------------
-   Header
+   Top bar (back + end call)
    -------------------------------------------------------------------------- */
 
-.mci-header {
-  flex-shrink: 0;
-  padding: 0 20px 16px;
-}
-
-.mci-header-top {
+.mci-top-bar {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  align-items: center;
+  padding: 12px 20px 4px;
+  flex-shrink: 0;
 }
 
 .mci-back-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   background: none;
   border: none;
   color: var(--mci-accent);
   font-family: var(--mci-font-body);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 500;
   padding: 6px 0;
   cursor: pointer;
@@ -75,62 +91,142 @@
   opacity: 0.6;
 }
 
-/* Live badge */
-.mci-live-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
+.mci-end-call-btn {
+  background: rgba(244, 67, 54, 0.15);
+  border: 1px solid rgba(244, 67, 54, 0.35);
   border-radius: 20px;
-  background: rgba(255, 68, 68, 0.15);
-  border: 1px solid rgba(255, 68, 68, 0.3);
+  padding: 7px 16px;
+  color: #FF6B6B;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--mci-font-body);
+  cursor: pointer;
+  transition: background 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mci-end-call-btn:hover {
+  background: rgba(244, 67, 54, 0.25);
+}
+
+/* --------------------------------------------------------------------------
+   Live banner (active call)
+   -------------------------------------------------------------------------- */
+
+.mci-live-banner {
+  margin: 10px 20px 12px;
+  background: rgba(var(--mci-accent-rgb), 0.07);
+  border: 1px solid rgba(var(--mci-accent-rgb), 0.18);
+  border-radius: 16px;
+  padding: 13px;
+  flex-shrink: 0;
+}
+
+.mci-banner-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.mci-banner-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  flex: 1;
+  margin-right: 10px;
+}
+
+.mci-live-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(255, 68, 68, 0.18);
+  border: 1px solid rgba(255, 68, 68, 0.35);
+  border-radius: 20px;
+  padding: 3px 10px;
 }
 
 .mci-live-dot {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--mci-red);
-  animation: mci-pulse-dot 1.5s ease-in-out infinite;
 }
 
-@keyframes mci-pulse-dot {
+.mci-live-dot--animated {
+  animation: mci-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mci-pulse {
   0%, 100% {
-    opacity: 1;
+    opacity: 0.6;
     transform: scale(1);
   }
   50% {
-    opacity: 0.5;
-    transform: scale(0.75);
+    opacity: 1;
+    transform: scale(1.3);
   }
 }
 
-.mci-live-text {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--mci-red);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+.mci-live-txt {
+  font-size: 11px;
+  color: #FF7070;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.mci-banner-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.38);
+  margin: 0 0 9px;
+}
+
+/* --------------------------------------------------------------------------
+   Idle header (no active call)
+   -------------------------------------------------------------------------- */
+
+.mci-idle-header {
+  padding: 10px 20px 6px;
+  flex-shrink: 0;
 }
 
 .mci-title {
   font-family: var(--mci-font-display);
-  font-size: 28px;
-  font-weight: 400;
-  line-height: 1.15;
-  margin: 0 0 4px;
+  font-size: 32px;
+  font-weight: 500;
   color: #fff;
+  margin: 0 0 6px;
+  line-height: 1.15;
 }
 
 .mci-subtitle {
-  font-size: 13px;
-  font-weight: 400;
+  font-size: 14px;
   color: var(--mci-text-muted);
+  letter-spacing: 0.3px;
   margin: 0;
 }
 
 /* --------------------------------------------------------------------------
-   Scrollable body
+   Error banner
+   -------------------------------------------------------------------------- */
+
+.mci-error-banner {
+  margin: 0 20px 8px;
+  background: rgba(244, 67, 54, 0.12);
+  border-radius: 10px;
+  padding: 10px;
+  border: 1px solid rgba(244, 67, 54, 0.25);
+  flex-shrink: 0;
+}
+
+.mci-error-text {
+  color: #FF6B6B;
+  font-size: 13px;
+}
+
+/* --------------------------------------------------------------------------
+   Active call body (scrollable agent cards)
    -------------------------------------------------------------------------- */
 
 .mci-body {
@@ -141,183 +237,128 @@
   padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
 }
 
+.mci-body--cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* --------------------------------------------------------------------------
-   Card base
+   Idle body (agent list + start button)
    -------------------------------------------------------------------------- */
 
-.mci-card {
-  background: rgba(var(--mci-accent-rgb), 0.06);
-  border: 1px solid rgba(var(--mci-accent-rgb), 0.12);
+.mci-idle-body {
+  flex: 1;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.mci-agent-list {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 16px;
   padding: 16px;
-  margin-bottom: 16px;
-}
-
-/* --------------------------------------------------------------------------
-   Active call card
-   -------------------------------------------------------------------------- */
-
-.mci-active-card {
-  composes: mci-card;
-}
-
-.mci-call-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
-  margin: 0 0 4px;
-}
-
-.mci-call-meta {
-  font-size: 12px;
-  color: var(--mci-text-muted);
-  margin: 0;
-}
-
-.mci-divider {
-  height: 1px;
-  background: rgba(var(--mci-accent-rgb), 0.1);
-  margin: 12px 0;
-  border: none;
-}
-
-/* --------------------------------------------------------------------------
-   Agent rows
-   -------------------------------------------------------------------------- */
-
-.mci-agents-title {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--mci-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin: 0 0 10px;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
 .mci-agent-row {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 0;
+  align-items: flex-start;
+  gap: 12px;
 }
 
 .mci-agent-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.mci-agent-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.mci-agent-row-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 2px;
+}
+
+.mci-agent-row-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.38);
+  line-height: 18px;
+}
+
+/* --------------------------------------------------------------------------
+   Start call button
+   -------------------------------------------------------------------------- */
+
+.mci-start-btn {
+  background: var(--mci-accent);
+  border-radius: 16px;
+  padding: 16px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  font-family: var(--mci-font-body);
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.mci-start-btn:active {
+  transform: scale(0.98);
+}
+
+.mci-start-btn--disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.mci-start-btn-dot {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  flex-shrink: 0;
+  background: var(--mci-bg);
 }
 
-.mci-agent-name {
-  font-size: 13px;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.7);
-  flex: 1;
-  min-width: 0;
-}
-
-.mci-agent-status {
-  font-size: 11px;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.35);
-  flex-shrink: 0;
-}
-
-/* Standby state — muted dots */
-.mci-agent-row--standby .mci-agent-dot {
-  opacity: 0.3;
-}
-
-.mci-agent-row--standby .mci-agent-name {
-  color: rgba(255, 255, 255, 0.35);
-}
-
-.mci-agent-row--standby .mci-agent-status {
-  color: rgba(255, 255, 255, 0.2);
-}
-
-/* --------------------------------------------------------------------------
-   Recent calls section
-   -------------------------------------------------------------------------- */
-
-.mci-section-title {
-  font-size: 13px;
+.mci-start-btn-text {
+  font-size: 16px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.5);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin: 24px 0 12px;
+  color: var(--mci-bg);
 }
 
-.mci-recent-card {
-  composes: mci-card;
-  transition: opacity 0.2s ease;
+.mci-start-btn-spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(6, 10, 16, 0.3);
+  border-top-color: var(--mci-bg);
+  border-radius: 50%;
+  animation: mci-spin 0.7s linear infinite;
 }
 
-.mci-recent-card:nth-child(1) {
-  opacity: 0.7;
+@keyframes mci-spin {
+  to { transform: rotate(360deg); }
 }
 
-.mci-recent-card:nth-child(2) {
-  opacity: 0.5;
-}
-
-.mci-recent-card:nth-child(n+3) {
-  opacity: 0.4;
-}
-
-.mci-recent-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.8);
-  margin: 0 0 4px;
-}
-
-.mci-recent-meta {
+.mci-start-hint {
   font-size: 12px;
-  color: var(--mci-text-muted);
+  color: rgba(255, 255, 255, 0.28);
+  text-align: center;
+  letter-spacing: 0.2px;
   margin: 0;
-}
-
-/* --------------------------------------------------------------------------
-   Empty state
-   -------------------------------------------------------------------------- */
-
-.mci-empty {
-  text-align: center;
-  padding: 32px 16px;
-}
-
-.mci-empty-text {
-  font-size: 14px;
-  color: var(--mci-text-muted);
-  margin: 0;
-}
-
-/* --------------------------------------------------------------------------
-   Loading state
-   -------------------------------------------------------------------------- */
-
-.mci-loading {
-  text-align: center;
-  padding: 48px 16px;
-}
-
-.mci-loading-text {
-  font-size: 13px;
-  color: var(--mci-text-dim);
-}
-
-/* --------------------------------------------------------------------------
-   Error state
-   -------------------------------------------------------------------------- */
-
-.mci-error {
-  text-align: center;
-  padding: 24px 16px;
-}
-
-.mci-error-text {
-  font-size: 13px;
-  color: rgba(255, 107, 107, 0.7);
 }

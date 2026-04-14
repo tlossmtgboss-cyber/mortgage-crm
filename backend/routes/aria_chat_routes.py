@@ -99,8 +99,8 @@ def _get_aria_graph():
 def _verify_ws_token(token: str):
     """Verify a JWT token for WebSocket auth (no Depends available in WS)."""
     try:
-        from auth.tokens import _verify_secure_token
-        payload = _verify_secure_token(token)
+        from auth.tokens import verify_access_token
+        payload = verify_access_token(token)
         if not payload:
             return None
 
@@ -108,7 +108,7 @@ def _verify_ws_token(token: str):
             def __init__(self, p):
                 self.id = p.get("sub") or p.get("user_id")
                 self.user_id = self.id
-                self.org_id = p.get("org_id") or p.get("organization_id", "")
+                self.org_id = p.get("tenant_id") or p.get("org_id") or p.get("organization_id", "")
                 self.full_name = p.get("name", "")
                 self.role = p.get("role", "user")
                 self.organization_id = self.org_id

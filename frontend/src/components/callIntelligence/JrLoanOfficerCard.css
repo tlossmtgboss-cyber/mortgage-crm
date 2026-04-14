@@ -1,0 +1,164 @@
+/* ─────────────────────────────────────────────────────────────
+   JR. LOAN OFFICER CARD — CSS
+   ───────────────────────────────────────────────────────────── */
+
+.jr-lo-card {
+  background-color: rgba(155, 127, 232, 0.07);
+  border: 1px solid rgba(155, 127, 232, 0.22);
+  border-radius: 14px;
+  padding: 13px;
+}
+
+/* Header */
+.jr-lo-card__header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.jr-lo-card__title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+}
+
+.jr-lo-card__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 4.5px;
+  background-color: #9B7FE8;
+}
+
+.jr-lo-card__agent-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+
+.jr-lo-card__tag-filling {
+  background-color: rgba(155, 127, 232, 0.18);
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+
+.jr-lo-card__tag-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #B8A0F0;
+}
+
+/* Grid */
+.jr-lo-card__grid {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 10px;
+}
+
+.jr-lo-card__field {
+  width: calc(50% - 4px);
+  background-color: rgba(155, 127, 232, 0.08);
+  border: 1px solid rgba(155, 127, 232, 0.18);
+  border-radius: 9px;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
+.jr-lo-card__field--highlighted {
+  background-color: rgba(155, 127, 232, 0.2);
+  border-color: rgba(155, 127, 232, 0.45);
+}
+
+.jr-lo-card__field-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+}
+
+.jr-lo-card__field-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.jr-lo-card__field-val--pending {
+  color: rgba(255, 255, 255, 0.28);
+  font-weight: 400;
+  font-style: italic;
+}
+
+/* Progress */
+.jr-lo-card__progress-wrap {
+  margin-bottom: 4px;
+}
+
+.jr-lo-card__progress-header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  margin-bottom: 5px;
+}
+
+.jr-lo-card__progress-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.jr-lo-card__progress-pct {
+  font-size: 11px;
+  font-weight: 600;
+  color: #B8A0F0;
+}
+
+.jr-lo-card__progress-track {
+  height: 4px;
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.jr-lo-card__progress-fill {
+  height: 100%;
+  border-radius: 2px;
+  background-color: #9B7FE8;
+  transition: width 0.4s ease;
+}
+
+.jr-lo-card__progress-sub {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.28);
+}
+
+/* View button */
+.jr-lo-card__view-btn {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0;
+  background-color: rgba(155, 127, 232, 0.15);
+  border-radius: 9px;
+  border: none;
+  cursor: pointer;
+  width: 100%;
+  transition: background-color 0.2s ease;
+}
+
+.jr-lo-card__view-btn:hover {
+  background-color: rgba(155, 127, 232, 0.25);
+}
+
+.jr-lo-card__view-btn-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: #B8A0F0;
+}

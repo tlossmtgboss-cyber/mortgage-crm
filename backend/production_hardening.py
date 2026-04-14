@@ -622,8 +622,10 @@ def setup_production_hardening(app: FastAPI, engine=None):
     # Initialize Sentry
     init_sentry(app)
 
-    # Add request ID middleware
-    app.add_middleware(RequestIDMiddleware)
+    # NOTE: RequestIDMiddleware removed — RequestContextMiddleware (added in
+    # main.py) already sets X-Request-ID on every response and stores it in
+    # request.state.  Having two BaseHTTPMiddleware instances both writing the
+    # same header caused h11 Content-Length corruption.
 
     # Add exception handlers
     app.add_exception_handler(Exception, global_exception_handler)

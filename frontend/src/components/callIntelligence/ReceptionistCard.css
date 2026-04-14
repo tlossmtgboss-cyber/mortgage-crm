@@ -1,0 +1,166 @@
+/* ─────────────────────────────────────────────────────────────
+   RECEPTIONIST CARD — CSS
+   ───────────────────────────────────────────────────────────── */
+
+.receptionist-card {
+  background-color: rgba(52, 168, 83, 0.06);
+  border: 1px solid rgba(52, 168, 83, 0.2);
+  border-radius: 14px;
+  padding: 13px;
+}
+
+/* Header */
+.receptionist-card__header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.receptionist-card__title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+}
+
+.receptionist-card__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 4.5px;
+  background-color: #34A853;
+}
+
+.receptionist-card__agent-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+
+.receptionist-card__tag-wrap {
+  background-color: rgba(52, 168, 83, 0.18);
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+
+.receptionist-card__tag-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #5FD080;
+}
+
+/* Waiting */
+.receptionist-card__waiting-wrap {
+  padding-bottom: 4px;
+}
+
+.receptionist-card__waiting-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  font-style: italic;
+  margin-bottom: 5px;
+}
+
+.receptionist-card__waiting-hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.28);
+  line-height: 16px;
+}
+
+/* Appointment card */
+.receptionist-card__appt-card {
+  background-color: rgba(52, 168, 83, 0.08);
+  border: 1px solid rgba(52, 168, 83, 0.2);
+  border-radius: 10px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.receptionist-card__appt-top {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.receptionist-card__appt-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  flex: 1;
+  margin-right: 8px;
+}
+
+.receptionist-card__appt-badge {
+  padding: 2px 8px;
+  border-radius: 7px;
+}
+
+.receptionist-card__appt-badge-text {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.receptionist-card__appt-detail {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.42);
+  line-height: 17px;
+}
+
+/* Action row */
+.receptionist-card__action-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(52, 168, 83, 0.1);
+  margin-top: 4px;
+}
+
+.receptionist-card__action-check {
+  font-size: 12px;
+  color: #34A853;
+}
+
+.receptionist-card__action-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.38);
+}
+
+/* Stats */
+.receptionist-card__stats-row {
+  display: flex;
+  flex-direction: row;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(52, 168, 83, 0.1);
+}
+
+.receptionist-card__stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.receptionist-card__stat-val {
+  font-size: 15px;
+  font-weight: 600;
+  color: #34A853;
+}
+
+.receptionist-card__stat-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.28);
+  margin-top: 2px;
+}
+
+.receptionist-card__stat-divider {
+  width: 1px;
+  background-color: rgba(255, 255, 255, 0.06);
+}

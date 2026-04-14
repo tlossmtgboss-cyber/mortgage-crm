@@ -1,323 +1,270 @@
 /**
- * MobileCallIntel — Screen 5: Call Intelligence for Perennia AI mobile.
+ * MobileCallIntel — Call Intelligence Screen for Perennia AI.
  *
- * Shows live call monitoring with AI agent statuses and recent call history.
- * Accessed from AriaVoiceHome via the Call Intelligence button.
- * This is a detail/modal view — no AriaTabNav.
+ * Activated when LO starts a call with Call Intelligence enabled.
+ * All 4 AI agents work in real time during the call:
+ *   - Note Taker: live transcription + topic extraction
+ *   - Jr. Loan Officer: auto-fills loan application from conversation
+ *   - Auditor: flags red flags, requests documents, creates tasks
+ *   - Receptionist: schedules appointments, sends invites
+ *
+ * Idle state shows agent list + start button.
+ * Active state shows live banner + 4 agent cards.
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { callMonitoringAPI } from '../../services/api';
+import { toast } from 'react-toastify';
+
+import { CallIntelligenceApi } from '../../services/callIntelligenceApi';
+import { useCallIntelligence } from '../../hooks/useCallIntelligence';
+import { getCurrentUserId } from '../../utils/auth';
+
+import NoteTakerCard from '../../components/callIntelligence/NoteTakerCard';
+import JrLoanOfficerCard from '../../components/callIntelligence/JrLoanOfficerCard';
+import AuditorCard from '../../components/callIntelligence/AuditorCard';
+import ReceptionistCard from '../../components/callIntelligence/ReceptionistCard';
+import LiveWaveform from '../../components/callIntelligence/LiveWaveform';
+
 import './MobileCallIntel.css';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
-const AI_AGENTS = [
-  { name: 'Sentiment Analyzer', color: '#34A853' },
-  { name: 'Objection Detector', color: '#7EB8F7' },
-  { name: 'Coaching Agent',     color: '#9B7FE8' },
-  { name: 'Compliance Monitor', color: '#FBBC04' },
-  { name: 'Summary Writer',     color: '#7EB8F7' },
+// ── Agent descriptions for idle state ────────────────────────
+const AGENTS = [
+  { color: '#7EB8F7', name: 'Note Taker',       desc: 'Live call transcription & topic extraction' },
+  { color: '#9B7FE8', name: 'Jr. Loan Officer',  desc: 'Auto-fills loan application from the conversation' },
+  { color: '#FBBC04', name: 'Auditor',            desc: 'Flags red flags, requests documents, creates tasks' },
+  { color: '#34A853', name: 'Receptionist',        desc: 'Schedules appointments, sends invites to both calendars' },
 ];
 
-const POLL_INTERVAL_MS = 3000;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Format a duration in seconds to "Xm Ys" or "Xh Ym".
- */
-function formatDuration(seconds) {
-  if (!seconds || seconds < 0) return '--';
-  const m = Math.floor(seconds / 60);
-  const s = Math.round(seconds % 60);
-  if (m >= 60) {
-    const h = Math.floor(m / 60);
-    const rm = m % 60;
-    return `${h}h ${rm}m`;
-  }
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+// ── Helpers ──────────────────────────────────────────────────
+function formatDuration(s) {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-/**
- * How many minutes ago a timestamp was.
- */
-function minutesAgo(isoString) {
-  if (!isoString) return 0;
-  const diff = Date.now() - new Date(isoString).getTime();
-  return Math.max(0, Math.floor(diff / 60000));
-}
-
-/**
- * Format an ISO date to a short display string.
- */
-function formatDate(isoString) {
-  if (!isoString) return '';
-  const d = new Date(isoString);
-  const now = new Date();
-  const isToday =
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate();
-
-  if (isToday) {
-    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-  }
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
-}
-
-/**
- * Get caller display name from a session object.
- */
-function getCallerName(session) {
-  return session.caller_name || session.client_name || 'Unknown Caller';
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
+// ── Component ────────────────────────────────────────────────
 export default function MobileCallIntel() {
   const navigate = useNavigate();
 
-  const [sessions, setSessions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [activeSession, setActiveSession] = useState(null);
-  const [agentStatuses, setAgentStatuses] = useState({});
+  const [sessionId, setSessionId] = useState(null);
+  const [callActive, setCallActive] = useState(false);
+  const [startingCall, setStartingCall] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [wsUrl, setWsUrl] = useState(null);
 
-  const pollRef = useRef(null);
+  const timerRef = useRef(null);
 
-  // ---- Fetch sessions on mount ----
-  const fetchSessions = useCallback(async () => {
+  // All 4 agent states managed by this hook
+  const { state: ciState, disconnect, reset } = useCallIntelligence(wsUrl);
+
+  // Check for existing active session on mount
+  useEffect(() => {
+    (async () => {
+      const userId = getCurrentUserId();
+      if (!userId) return;
+      const active = await CallIntelligenceApi.getActiveSession(userId);
+      if (active) {
+        setSessionId(active.session_id);
+        setCallActive(true);
+        setWsUrl(CallIntelligenceApi.getWebSocketUrl(active.session_id));
+        setDuration(active.duration_seconds || 0);
+      }
+    })();
+  }, []);
+
+  // Duration timer
+  useEffect(() => {
+    if (callActive) {
+      timerRef.current = setInterval(() => setDuration((d) => d + 1), 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [callActive]);
+
+  // ── Start a new call with all agents ──────────────────────
+  const handleStartCall = useCallback(async () => {
+    // In production: open a dialer sheet to pick a borrower + phone number
+    const confirmed = window.confirm(
+      'Start Call Intelligence\n\n' +
+      'In production, this opens your contacts/borrower search to select who to call. ' +
+      'The dialer initiates via Telnyx and all 4 agents activate automatically.\n\n' +
+      'Click OK to simulate a dev call.'
+    );
+    if (!confirmed) return;
+
+    setStartingCall(true);
     try {
-      const data = await callMonitoringAPI.listSessions({ limit: 10 });
-      const list = Array.isArray(data) ? data : (data?.sessions || []);
-      setSessions(list);
-
-      // Identify active session
-      const active = list.find(
-        (s) => s.status === 'active' || s.status === 'in_progress'
-      );
-      setActiveSession(active || null);
-      setError(null);
-    } catch (err) {
-      console.error('[MobileCallIntel] Failed to fetch sessions:', err);
-      setError('Unable to load call sessions');
+      const userId = getCurrentUserId();
+      const result = await CallIntelligenceApi.startCall({
+        borrower_phone: '+16514141454',
+        borrower_name: 'Kevin Mercer',
+        borrower_email: 'kevinmercer@gmail.com',
+        appointment_type: 'Initial Discovery',
+        lo_user_id: userId ?? '',
+      });
+      setSessionId(result.session_id);
+      setCallActive(true);
+      setDuration(0);
+      setWsUrl(CallIntelligenceApi.getWebSocketUrl(result.session_id));
+    } catch (e) {
+      toast.error('Failed to start call. Check API connection.');
     } finally {
-      setLoading(false);
+      setStartingCall(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+  // ── End call ──────────────────────────────────────────────
+  const handleEndCall = useCallback(() => {
+    const confirmed = window.confirm(
+      'End Call\n\n' +
+      'Ending the call will save the transcript, application draft, tasks, and appointments. Continue?'
+    );
+    if (!confirmed) return;
 
-  // ---- Poll active session for agent updates ----
-  useEffect(() => {
-    if (!activeSession?.id) {
-      // Clear poll if no active session
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      return;
-    }
-
-    const poll = async () => {
+    (async () => {
       try {
-        const data = await callMonitoringAPI.getSession(activeSession.id);
-        if (data) {
-          // Update active session with fresh data
-          setActiveSession(data);
-
-          // Extract agent statuses if returned
-          if (data.agent_statuses) {
-            setAgentStatuses(data.agent_statuses);
-          }
-
-          // If session ended, refresh full list
-          if (data.status !== 'active' && data.status !== 'in_progress') {
-            fetchSessions();
-          }
-        }
-      } catch (err) {
-        console.error('[MobileCallIntel] Poll error:', err);
+        if (sessionId) await CallIntelligenceApi.endCall(sessionId);
+      } catch (e) {
+        console.error('[MobileCallIntel] endCall error:', e);
       }
-    };
+      disconnect();
+      setCallActive(false);
+      setSessionId(null);
+      setWsUrl(null);
+      setDuration(0);
+      reset();
+      toast.success('Call ended. Your transcript, application draft, tasks, and appointments have been saved.');
+    })();
+  }, [sessionId, disconnect, reset]);
 
-    pollRef.current = setInterval(poll, POLL_INTERVAL_MS);
-
-    return () => {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-    };
-  }, [activeSession?.id, fetchSessions]);
-
-  // ---- Computed values ----
-  const hasActiveCall = !!activeSession;
-  const completedSessions = sessions.filter(
-    (s) => s.status !== 'active' && s.status !== 'in_progress'
-  );
-  const agentCount = AI_AGENTS.length;
-
-  // ---- Build agent status text ----
-  const getAgentStatus = (agentName) => {
-    // Check if server returned per-agent statuses
-    const key = agentName.toLowerCase().replace(/\s+/g, '_');
-    if (agentStatuses[key]) {
-      return agentStatuses[key];
-    }
-    return hasActiveCall ? 'Listening...' : 'Standby';
+  // ── View full application (opened by Jr LO card) ──────────
+  const handleViewApplication = () => {
+    toast.info('Coming soon: Opens the full 1003 loan application pre-filled by the Jr. Loan Officer agent.');
   };
 
-  // ---- Render ----
+  // ── Render ────────────────────────────────────────────────
   return (
     <div className="mci-screen">
       {/* Safe-area padding */}
       <div className="mci-status-bar" />
 
-      {/* Header */}
-      <div className="mci-header">
-        <div className="mci-header-top">
+      {/* Background glow */}
+      <div className="mci-glow" />
+
+      {/* Top bar */}
+      <div className="mci-top-bar">
+        <button
+          className="mci-back-btn"
+          onClick={() => navigate('/aria-voice')}
+          type="button"
+        >
+          <svg width="11" height="18" viewBox="0 0 10 16" fill="none">
+            <path d="M8 2L2 8l6 6" stroke="#7EB8F7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          <span>Back</span>
+        </button>
+
+        {callActive && (
+          <button className="mci-end-call-btn" onClick={handleEndCall} type="button">
+            End Call
+          </button>
+        )}
+      </div>
+
+      {/* Active call banner */}
+      {callActive && ciState.session ? (
+        <div className="mci-live-banner">
+          <div className="mci-banner-top">
+            <span className="mci-banner-name">
+              {ciState.session.borrower_name} &mdash; {ciState.session.appointment_type}
+            </span>
+            <div className="mci-live-pill">
+              <span className="mci-live-dot mci-live-dot--animated" />
+              <span className="mci-live-txt">LIVE</span>
+            </div>
+          </div>
+          <p className="mci-banner-meta">
+            {formatDuration(duration)} elapsed &middot; {ciState.session.borrower_phone} &middot; 4 agents active
+          </p>
+          <LiveWaveform isActive={ciState.is_connected} />
+        </div>
+      ) : (
+        /* Idle state -- no active call */
+        <div className="mci-idle-header">
+          <h1 className="mci-title">Call Intelligence</h1>
+          <p className="mci-subtitle">
+            {callActive ? '4 AI agents working' : 'Tap below to activate on your next call'}
+          </p>
+        </div>
+      )}
+
+      {/* Error banner */}
+      {ciState.error && (
+        <div className="mci-error-banner">
+          <span className="mci-error-text">{ciState.error}</span>
+        </div>
+      )}
+
+      {/* AGENT CARDS -- shown during active call */}
+      {callActive && sessionId ? (
+        <div className="mci-body mci-body--cards">
+          <NoteTakerCard
+            state={ciState.note_taker}
+            callDurationSeconds={duration}
+          />
+          <JrLoanOfficerCard
+            state={ciState.jr_loan_officer}
+            onViewApplication={handleViewApplication}
+          />
+          <AuditorCard
+            state={ciState.auditor}
+            sessionId={sessionId}
+          />
+          <ReceptionistCard
+            state={ciState.receptionist}
+          />
+        </div>
+      ) : (
+        /* Idle -- show explainer + start button */
+        <div className="mci-idle-body">
+          <div className="mci-agent-list">
+            {AGENTS.map((agent) => (
+              <div key={agent.name} className="mci-agent-row">
+                <div
+                  className="mci-agent-dot"
+                  style={{ backgroundColor: agent.color }}
+                />
+                <div className="mci-agent-info">
+                  <span className="mci-agent-row-name">{agent.name}</span>
+                  <span className="mci-agent-row-desc">{agent.desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <button
-            className="mci-back-btn"
-            onClick={() => navigate('/aria-voice')}
+            className={`mci-start-btn ${startingCall ? 'mci-start-btn--disabled' : ''}`}
+            onClick={handleStartCall}
+            disabled={startingCall}
             type="button"
           >
-            &larr; Back
-          </button>
-          {hasActiveCall && (
-            <div className="mci-live-badge">
-              <span className="mci-live-dot" />
-              <span className="mci-live-text">Live</span>
-            </div>
-          )}
-        </div>
-
-        <h1 className="mci-title">Call Intelligence</h1>
-        <p className="mci-subtitle">{agentCount} AI Agents Monitoring</p>
-      </div>
-
-      {/* Scrollable body */}
-      <div className="mci-body">
-        {loading && (
-          <div className="mci-loading">
-            <span className="mci-loading-text">Loading sessions...</span>
-          </div>
-        )}
-
-        {error && !loading && (
-          <div className="mci-error">
-            <span className="mci-error-text">{error}</span>
-          </div>
-        )}
-
-        {!loading && !error && (
-          <>
-            {/* ---- Active Call Card ---- */}
-            {hasActiveCall ? (
-              <div className="mci-card">
-                <p className="mci-call-title">
-                  {getCallerName(activeSession)}
-                  {activeSession.call_type ? ` \u2014 ${activeSession.call_type}` : ''}
-                </p>
-                <p className="mci-call-meta">
-                  Started {minutesAgo(activeSession.started_at)} min ago
-                  {activeSession.phone_number
-                    ? ` \u00B7 ${activeSession.phone_number}`
-                    : ''}
-                </p>
-
-                <hr className="mci-divider" />
-
-                <p className="mci-agents-title">Active Agents</p>
-                {AI_AGENTS.map((agent) => (
-                  <div className="mci-agent-row" key={agent.name}>
-                    <span
-                      className="mci-agent-dot"
-                      style={{ background: agent.color }}
-                    />
-                    <span className="mci-agent-name">{agent.name}</span>
-                    <span className="mci-agent-status">
-                      {getAgentStatus(agent.name)}
-                    </span>
-                  </div>
-                ))}
-              </div>
+            {startingCall ? (
+              <span className="mci-start-btn-spinner" />
             ) : (
-              /* ---- No active call — agents in standby ---- */
-              <div className="mci-card">
-                <div className="mci-empty">
-                  <p className="mci-empty-text">No active calls</p>
-                </div>
-
-                <hr className="mci-divider" />
-
-                <p className="mci-agents-title">Agents</p>
-                {AI_AGENTS.map((agent) => (
-                  <div
-                    className="mci-agent-row mci-agent-row--standby"
-                    key={agent.name}
-                  >
-                    <span
-                      className="mci-agent-dot"
-                      style={{ background: agent.color }}
-                    />
-                    <span className="mci-agent-name">{agent.name}</span>
-                    <span className="mci-agent-status">Standby</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ---- Recent Calls ---- */}
-            {completedSessions.length > 0 && (
               <>
-                <p className="mci-section-title">Recent Calls</p>
-                {completedSessions.map((session) => (
-                  <div className="mci-recent-card" key={session.id}>
-                    <p className="mci-recent-title">
-                      Recent &mdash; {getCallerName(session)}
-                    </p>
-                    <p className="mci-recent-meta">
-                      {formatDate(session.started_at)}
-                      {session.duration
-                        ? ` \u00B7 ${formatDuration(session.duration)}`
-                        : session.ended_at && session.started_at
-                        ? ` \u00B7 ${formatDuration(
-                            (new Date(session.ended_at) -
-                              new Date(session.started_at)) /
-                              1000
-                          )}`
-                        : ''}
-                      {session.call_type
-                        ? ` \u00B7 ${session.call_type}`
-                        : ''}
-                    </p>
-                  </div>
-                ))}
+                <span className="mci-start-btn-dot" />
+                <span className="mci-start-btn-text">Start Call with Intelligence</span>
               </>
             )}
+          </button>
 
-            {/* No sessions at all */}
-            {!hasActiveCall && completedSessions.length === 0 && (
-              <div className="mci-empty" style={{ marginTop: 16 }}>
-                <p className="mci-empty-text">
-                  No recent call sessions found
-                </p>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+          <p className="mci-start-hint">
+            All 4 agents activate the moment your call connects
+          </p>
+        </div>
+      )}
     </div>
   );
 }

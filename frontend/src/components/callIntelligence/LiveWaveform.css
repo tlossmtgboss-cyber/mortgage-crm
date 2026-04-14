@@ -1,0 +1,41 @@
+/* ─────────────────────────────────────────────────────────────
+   LIVE WAVEFORM — CSS
+   ───────────────────────────────────────────────────────────── */
+
+@keyframes live-waveform-pulse {
+  0%, 100% {
+    transform: scaleY(0.3);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+.live-waveform {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  overflow: hidden;
+}
+
+.live-waveform__bar {
+  width: 3px;
+  border-radius: 2px;
+  background-color: #7EB8F7;
+  align-self: center;
+  transform-origin: center center;
+}
+
+.live-waveform__bar--active {
+  animation-name: live-waveform-pulse;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+.live-waveform__bar--inactive {
+  height: 4px;
+  opacity: 0.3;
+  transition: height 0.3s ease, opacity 0.3s ease;
+}

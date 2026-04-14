@@ -26,7 +26,8 @@ const TABS = [
 const BORDER_COLORS = {
   pre_purchase: '#7EB8F7',
   pre_purchase_consultation: '#7EB8F7',
-  annual_review: '#9B7FE8',
+  initial_discovery: '#f44336',
+  annual_review: '#FBBC04',
   closing: '#34A853',
   pending: '#FBBC04',
   high_priority: '#f44336',
@@ -75,6 +76,7 @@ function getBorderColor(appointment) {
   }
   const type = (appointment.appointment_type || appointment.type || '').toLowerCase().replace(/\s+/g, '_');
   if (type.includes('closing')) return BORDER_COLORS.closing;
+  if (type.includes('initial') || type.includes('discovery')) return BORDER_COLORS.initial_discovery;
   if (type.includes('annual') || type.includes('review')) return BORDER_COLORS.annual_review;
   if (type.includes('pre_purchase') || type.includes('consultation')) return BORDER_COLORS.pre_purchase;
   return BORDER_COLORS.default;

@@ -1,0 +1,249 @@
+/* ─────────────────────────────────────────────────────────────
+   AUDITOR CARD — CSS
+   ───────────────────────────────────────────────────────────── */
+
+.auditor-card {
+  background-color: rgba(251, 188, 4, 0.05);
+  border: 1px solid rgba(251, 188, 4, 0.2);
+  border-radius: 14px;
+  padding: 13px;
+}
+
+/* Header */
+.auditor-card__header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.auditor-card__title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+}
+
+.auditor-card__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 4.5px;
+  background-color: #FBBC04;
+}
+
+.auditor-card__agent-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+
+.auditor-card__tag-wrap {
+  background-color: rgba(251, 188, 4, 0.18);
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+
+.auditor-card__tag-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #FBBC04;
+}
+
+/* Tabs */
+.auditor-card__tab-row {
+  display: flex;
+  flex-direction: row;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.auditor-card__tab {
+  padding: 5px 12px;
+  border-radius: 20px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.auditor-card__tab--active {
+  background-color: rgba(251, 188, 4, 0.15);
+}
+
+.auditor-card__tab-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  font-weight: 500;
+}
+
+.auditor-card__tab--active .auditor-card__tab-text {
+  color: #FBBC04;
+}
+
+.auditor-card__tab-count {
+  font-weight: 700;
+}
+
+/* Content */
+.auditor-card__content {
+  /* container for tab content */
+}
+
+.auditor-card__empty-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.28);
+  font-style: italic;
+}
+
+/* Flag items */
+.auditor-card__flag-item {
+  display: flex;
+  flex-direction: row;
+  gap: 9px;
+  align-items: flex-start;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.auditor-card__flag-item--dismissed {
+  opacity: 0.4;
+}
+
+.auditor-card__flag-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.auditor-card__flag-icon-text {
+  font-size: 12px;
+}
+
+.auditor-card__flag-body {
+  flex: 1;
+}
+
+.auditor-card__flag-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 2px;
+}
+
+.auditor-card__flag-title--dismissed {
+  text-decoration: line-through;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.auditor-card__flag-desc {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.38);
+  line-height: 16px;
+}
+
+.auditor-card__dismiss-btn {
+  padding: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.auditor-card__dismiss-btn:hover {
+  opacity: 0.8;
+}
+
+.auditor-card__dismiss-text {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* Doc items */
+.auditor-card__doc-item {
+  display: flex;
+  flex-direction: row;
+  gap: 9px;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.auditor-card__doc-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background-color: rgba(126, 184, 247, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auditor-card__doc-icon-text {
+  font-size: 12px;
+}
+
+.auditor-card__doc-body {
+  flex: 1;
+}
+
+.auditor-card__doc-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.auditor-card__doc-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.auditor-card__doc-status {
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+
+.auditor-card__doc-status-text {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Task items */
+.auditor-card__task-item {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.auditor-card__task-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.auditor-card__task-body {
+  flex: 1;
+}
+
+.auditor-card__task-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+  margin-bottom: 2px;
+}
+
+.auditor-card__task-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.35);
+}

@@ -95,11 +95,39 @@ class AuditMiddleware(BaseHTTPMiddleware):
         app.add_middleware(AuditMiddleware)
     """
 
+    def __init__(self, app):
+        super().__init__(app)
+        self._table_exists: Optional[bool] = None  # checked once on first request
+
+    def _check_table_exists(self) -> bool:
+        """One-time check whether soc2_audit_log table exists."""
+        try:
+            from db import SessionLocal
+            session = SessionLocal()
+            try:
+                session.execute(text("SELECT 1 FROM soc2_audit_log LIMIT 0"))
+                return True
+            except Exception:
+                session.rollback()
+                return False
+            finally:
+                session.close()
+        except Exception:
+            return False
+
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
         # Skip excluded paths
         if request.url.path in AUDIT_EXCLUDE_PATHS:
+            return await call_next(request)
+
+        # One-time check: if soc2_audit_log table doesn't exist, pass through
+        if self._table_exists is None:
+            self._table_exists = self._check_table_exists()
+            if not self._table_exists:
+                logger.warning("soc2_audit_log table not found — audit middleware disabled")
+        if not self._table_exists:
             return await call_next(request)
 
         # Generate correlation ID
@@ -150,9 +178,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
             response.status_code, success, severity, description,
         )
 
-        # Add correlation headers to response
-        response.headers["X-Request-Id"] = request_id
-        response.headers["X-Response-Time"] = f"{duration_ms:.0f}ms"
+        # NOTE: Do NOT modify response headers here — other middlewares
+        # (request_context, structured_logging) already set X-Request-Id
+        # and X-Response-Time. Duplicate header writes from stacked
+        # BaseHTTPMiddleware cause h11 Content-Length corruption.
 
         return response
 

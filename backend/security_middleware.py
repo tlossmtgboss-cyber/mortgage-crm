@@ -36,8 +36,10 @@ TEST_API_KEY = os.getenv("TEST_API_KEY", "")
 
 class SecurityStats:
     """Shared state for security metrics accessible by dashboard endpoint"""
+    BLOCK_DURATION = 900  # 15 minutes — matches failed-attempt window
+
     def __init__(self):
-        self.blocked_ips: Set[str] = set()
+        self.blocked_ips: Dict[str, float] = {}  # ip -> blocked_at timestamp
         self.failed_attempts: Dict[str, list] = defaultdict(list)
         self.request_history: Dict[str, list] = defaultdict(list)
         self.suspicious_requests: list = []
@@ -85,7 +87,7 @@ class SecurityStats:
             "middleware_status": self.middleware_status,
             "ip_blocking": {
                 "blocked_count": len(self.blocked_ips),
-                "blocked_ips": list(self.blocked_ips)[:50],  # Limit to 50 for display
+                "blocked_ips": list(self.blocked_ips.keys())[:50],
             },
             "rate_limiting": {
                 "active_keys": active_rate_limits,
@@ -116,12 +118,26 @@ class SecurityStats:
             },
         }
 
+    def is_blocked(self, ip: str) -> bool:
+        """Check if IP is currently blocked (respects expiry)"""
+        if ip not in self.blocked_ips:
+            return False
+        if time.time() - self.blocked_ips[ip] >= self.BLOCK_DURATION:
+            # Block expired — auto-clear
+            del self.blocked_ips[ip]
+            self.failed_attempts.pop(ip, None)
+            return False
+        return True
+
+    def block_ip(self, ip: str):
+        """Block an IP with timestamp"""
+        self.blocked_ips[ip] = time.time()
+
     def unblock_ip(self, ip: str) -> bool:
         """Unblock an IP address"""
         if ip in self.blocked_ips:
-            self.blocked_ips.discard(ip)
-            if ip in self.failed_attempts:
-                del self.failed_attempts[ip]
+            del self.blocked_ips[ip]
+            self.failed_attempts.pop(ip, None)
             return True
         return False
 
@@ -890,7 +906,6 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         # Use shared state for dashboard access
         self.failed_attempts = security_stats.failed_attempts
-        self.blocked_ips = security_stats.blocked_ips
 
     async def dispatch(self, request: Request, call_next):
         path = request.url.path
@@ -918,15 +933,13 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         # Always allow localhost in development (clear any stale blocks)
         if client_ip in ("127.0.0.1", "::1", "localhost"):
             logger.info(f"IPBlockingMiddleware: localhost detected, clearing blocks")
-            if client_ip in self.blocked_ips:
-                logger.info(f"Clearing stale block for localhost: {client_ip}")
-                self.blocked_ips.discard(client_ip)
+            security_stats.unblock_ip(client_ip)
             if environment == "development":
                 logger.info(f"IPBlockingMiddleware: allowing localhost in development")
                 return await call_next(request)
 
-        # Check if IP is blocked
-        if client_ip in self.blocked_ips:
+        # Check if IP is blocked (auto-expires after 15 minutes)
+        if security_stats.is_blocked(client_ip):
             logger.warning(f"Blocked request from banned IP: {client_ip}")
             return JSONResponse(
                 status_code=403,
@@ -936,7 +949,7 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         # Check for suspicious patterns in URL
         if self._is_suspicious_request(request):
             logger.warning(f"Suspicious request from {client_ip}: {request.url.path}")
-            self.blocked_ips.add(client_ip)
+            security_stats.block_ip(client_ip)
             return JSONResponse(
                 status_code=403,
                 content={"detail": "Suspicious activity detected"}
@@ -1001,7 +1014,7 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
         # Block after 5 failed attempts in 15 minutes
         if len(self.failed_attempts[ip]) >= 5:
             logger.warning(f"Blocking IP {ip} due to multiple failed login attempts")
-            self.blocked_ips.add(ip)
+            security_stats.block_ip(ip)
 
 
 # ============================================================================

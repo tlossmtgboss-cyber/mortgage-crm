@@ -263,6 +263,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         response.headers[REQUEST_ID_HEADER] = request_id
         response.headers["X-Response-Time"] = f"{duration_ms:.2f}ms"
 
+        # 4a. Drop Content-Length so h11 uses chunked transfer encoding.
+        # Stacked BaseHTTPMiddleware re-streams the body but preserves the
+        # original Content-Length, causing h11.LocalProtocolError when the
+        # streamed bytes don't match.  Removing it is safe — uvicorn/h11
+        # falls back to chunked encoding automatically.
+        if "content-length" in response.headers:
+            del response.headers["content-length"]
+
         # Re-check user/org in case auth ran during the request
         user_id_late, org_id_late = _extract_user_org(request)
 

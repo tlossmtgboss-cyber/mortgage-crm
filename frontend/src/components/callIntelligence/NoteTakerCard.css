@@ -1,0 +1,191 @@
+/* ─────────────────────────────────────────────────────────────
+   NOTE TAKER CARD — CSS
+   ───────────────────────────────────────────────────────────── */
+
+.note-taker-card {
+  background-color: rgba(126, 184, 247, 0.06);
+  border: 1px solid rgba(126, 184, 247, 0.18);
+  border-radius: 14px;
+  padding: 13px;
+}
+
+/* Header */
+.note-taker-card__header {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.note-taker-card__title-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+}
+
+.note-taker-card__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 4.5px;
+  background-color: #7EB8F7;
+}
+
+.note-taker-card__agent-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+}
+
+.note-taker-card__tag-live {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 5px;
+  background-color: rgba(126, 184, 247, 0.15);
+  padding: 3px 9px;
+  border-radius: 20px;
+}
+
+.note-taker-card__record-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background-color: #7EB8F7;
+}
+
+.note-taker-card__tag-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #7EB8F7;
+}
+
+/* Waiting */
+.note-taker-card__waiting {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.3);
+  font-style: italic;
+  margin-bottom: 10px;
+}
+
+/* Transcript */
+.note-taker-card__transcript-scroll {
+  max-height: 110px;
+  overflow-y: auto;
+  margin-bottom: 8px;
+}
+
+.note-taker-card__transcript-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.note-taker-card__transcript-row {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+
+.note-taker-card__speaker-badge {
+  padding: 2px 6px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.note-taker-card__speaker-badge--lo {
+  background-color: rgba(126, 184, 247, 0.2);
+}
+
+.note-taker-card__speaker-badge--client {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.note-taker-card__speaker-text {
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.note-taker-card__speaker-text--lo {
+  color: #7EB8F7;
+}
+
+.note-taker-card__speaker-text--client {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.note-taker-card__transcript-text {
+  flex: 1;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 18px;
+}
+
+.note-taker-card__transcript-text--partial {
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+}
+
+.note-taker-card__transcript-time {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.22);
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+/* Topics */
+.note-taker-card__topics-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.note-taker-card__topic-pill {
+  background-color: rgba(126, 184, 247, 0.1);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+.note-taker-card__topic-text {
+  font-size: 10px;
+  color: rgba(126, 184, 247, 0.8);
+}
+
+/* Footer */
+.note-taker-card__footer {
+  display: flex;
+  flex-direction: row;
+  padding-top: 8px;
+  border-top: 1px solid rgba(126, 184, 247, 0.1);
+}
+
+.note-taker-card__stat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.note-taker-card__stat-val {
+  font-size: 15px;
+  font-weight: 600;
+  color: #7EB8F7;
+  font-variant-numeric: tabular-nums;
+}
+
+.note-taker-card__stat-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.28);
+  margin-top: 2px;
+}
+
+.note-taker-card__stat-divider {
+  width: 1px;
+  background-color: rgba(255, 255, 255, 0.06);
+}
