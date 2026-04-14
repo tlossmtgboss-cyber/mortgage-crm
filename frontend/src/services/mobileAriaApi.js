@@ -85,6 +85,93 @@ export async function sendMessage(message, sessionId = null, options = {}, { sig
 }
 
 /**
+ * Stream a chat message to Aria via SSE.
+ *
+ * POST /api/v1/ai/orchestrator-chat-stream
+ *
+ * Calls `onChunk(text)` for each token as it arrives, and
+ * `onDone(fullText, sessionId)` when the stream completes.
+ * Returns an abort function the caller can use to cancel.
+ *
+ * @param {string} message
+ * @param {string|null} sessionId
+ * @param {Object} callbacks - { onChunk, onDone, onError }
+ * @returns {{ abort: () => void }}
+ */
+export function streamMessage(message, sessionId = null, { onChunk, onDone, onError } = {}) {
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      // Build auth header — read token the same way the axios instance does
+      const { getItem, STORAGE_KEYS } = await import('../utils/storage');
+      const token = await getItem(STORAGE_KEYS.AUTH_TOKEN);
+
+      const res = await fetch(`${api.defaults.baseURL}/api/v1/ai/orchestrator-chat-stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+        body: JSON.stringify({
+          message,
+          ...(sessionId && { session_id: sessionId }),
+        }),
+        signal: controller.signal,
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.detail || `HTTP ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete line in buffer
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.content) {
+              fullText += data.content;
+              onChunk?.(data.content, fullText);
+            }
+            if (data.done) {
+              onDone?.(fullText, data.session_id);
+            }
+            if (data.error) {
+              onError?.(data.error);
+            }
+          } catch { /* skip malformed SSE lines */ }
+        }
+      }
+
+      // If stream ended without a 'done' event, fire onDone anyway
+      if (fullText) {
+        onDone?.(fullText, sessionId);
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        console.error('[mobileAriaApi] streamMessage error:', err);
+        onError?.(err.message || 'Stream failed');
+      }
+    }
+  })();
+
+  return { abort: () => controller.abort() };
+}
+
+/**
  * Execute an autonomous task via Aria (send SMS, create task, schedule appointment, etc.).
  *
  * POST /api/v1/ai/autonomous-task

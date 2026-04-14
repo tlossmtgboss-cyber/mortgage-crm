@@ -381,7 +381,7 @@ async def orchestrator_chat_stream(
 
             # Load conversation history
             try:
-                conversation_history = ConvMemory.get_session_messages(db, session_id)
+                conversation_history = ConvMemory.get_session_messages(db, session_id, user_id=current_user.id)
             except Exception as e:
                 logger.warning(f"Failed to load conversation history in stream: {e}")
                 conversation_history = []

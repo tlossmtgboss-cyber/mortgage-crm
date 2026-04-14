@@ -2,13 +2,15 @@
  * AriaVoiceHome — Primary voice assistant interface for Perennia AI mobile.
  *
  * Full-screen dark layout with animated mic orb, speech recognition via
- * useAriaVoice, and AI responses via the orchestrator chat endpoint.
+ * useAriaVoice, streaming AI responses via SSE, and sentence-chunked
+ * TTS playback so Aria starts speaking within ~2s instead of waiting
+ * for the full response.
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAriaVoice } from '../../hooks/useAriaVoice';
-import { sendMessage } from '../../services/mobileAriaApi';
+import { streamMessage } from '../../services/mobileAriaApi';
 import api from '../../services/api';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
 import './AriaVoiceHome.css';
@@ -26,7 +28,6 @@ function getOrCreateSessionId() {
     const existing = sessionStorage.getItem(STORAGE_KEY);
     const expiry = sessionStorage.getItem(EXPIRY_KEY);
     if (existing && expiry && Date.now() < Number(expiry)) {
-      // Refresh expiry on use
       sessionStorage.setItem(EXPIRY_KEY, String(Date.now() + SESSION_TTL_MS));
       return existing;
     }
@@ -41,60 +42,98 @@ function getOrCreateSessionId() {
 }
 
 // ---------------------------------------------------------------------------
-// TTS — speak Aria's response via ElevenLabs (backend-proxied)
-// Falls back to browser SpeechSynthesis if the API call fails.
+// Sentence splitter — splits streaming text into speakable chunks
 // ---------------------------------------------------------------------------
 
-let _currentAudio = null;
+const SENTENCE_END = /(?<=[.!?])\s+|(?<=\n)/;
 
-async function speakText(text, { onEnd, signal } = {}) {
-  stopSpeaking();
-
-  try {
-    const res = await api.post('/api/v1/mobile-voice/tts/synthesize', {
-      text,
-    }, { signal });
-
-    if (signal?.aborted) return;
-
-    const b64 = res.data?.audio;
-    if (!b64 || b64.length < 100) {
-      throw new Error('Empty audio response from TTS API');
-    }
-
-    const binary = atob(b64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: 'audio/mpeg' });
-    const url = URL.createObjectURL(blob);
-
-    const audio = new Audio(url);
-    _currentAudio = audio;
-    audio.onended = () => { URL.revokeObjectURL(url); _currentAudio = null; onEnd?.(); };
-    audio.onerror = () => { URL.revokeObjectURL(url); _currentAudio = null; onEnd?.(); };
-    await audio.play();
-  } catch (err) {
-    if (err?.name === 'CanceledError' || signal?.aborted) return;
-    console.warn('[AriaVoice] TTS API failed, using browser voice:', err.message);
-    // Fallback to browser SpeechSynthesis
-    const synth = window.speechSynthesis;
-    if (!synth) { onEnd?.(); return; }
-    synth.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.onend = () => onEnd?.();
-    utterance.onerror = () => onEnd?.();
-    synth.speak(utterance);
-  }
+function extractSentences(buffer) {
+  // Split on sentence boundaries; keep the last fragment as leftover
+  const parts = buffer.split(SENTENCE_END);
+  if (parts.length <= 1) return { sentences: [], leftover: buffer };
+  const leftover = parts.pop();
+  return { sentences: parts.filter(Boolean), leftover };
 }
 
-function stopSpeaking() {
-  if (_currentAudio) {
-    _currentAudio.pause();
-    _currentAudio.currentTime = 0;
-    _currentAudio = null;
+// ---------------------------------------------------------------------------
+// TTS Queue — plays sentences back-to-back via ElevenLabs
+// ---------------------------------------------------------------------------
+
+class TTSQueue {
+  constructor() {
+    this._queue = [];
+    this._playing = false;
+    this._aborted = false;
+    this._currentAudio = null;
+    this._onAllDone = null;
   }
-  window.speechSynthesis?.cancel();
+
+  enqueue(text) {
+    if (this._aborted || !text.trim()) return;
+    this._queue.push(text);
+    if (!this._playing) this._playNext();
+  }
+
+  async _playNext() {
+    if (this._aborted || this._queue.length === 0) {
+      this._playing = false;
+      this._onAllDone?.();
+      return;
+    }
+
+    this._playing = true;
+    const text = this._queue.shift();
+
+    try {
+      const res = await api.post('/api/v1/mobile-voice/tts/synthesize', { text });
+      if (this._aborted) return;
+
+      const b64 = res.data?.audio;
+      if (!b64 || b64.length < 100) throw new Error('Empty audio');
+
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+
+      await new Promise((resolve) => {
+        const audio = new Audio(url);
+        this._currentAudio = audio;
+        audio.onended = () => { URL.revokeObjectURL(url); this._currentAudio = null; resolve(); };
+        audio.onerror = () => { URL.revokeObjectURL(url); this._currentAudio = null; resolve(); };
+        audio.play().catch(resolve);
+      });
+    } catch (err) {
+      if (this._aborted) return;
+      console.warn('[TTSQueue] TTS failed for chunk, using browser voice:', err.message);
+      // Fallback to browser SpeechSynthesis for this chunk
+      await new Promise((resolve) => {
+        const synth = window.speechSynthesis;
+        if (!synth) { resolve(); return; }
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.onend = resolve;
+        utterance.onerror = resolve;
+        synth.speak(utterance);
+      });
+    }
+
+    if (!this._aborted) this._playNext();
+  }
+
+  stop() {
+    this._aborted = true;
+    this._queue = [];
+    if (this._currentAudio) {
+      this._currentAudio.pause();
+      this._currentAudio.currentTime = 0;
+      this._currentAudio = null;
+    }
+    window.speechSynthesis?.cancel();
+  }
+
+  onAllDone(fn) { this._onAllDone = fn; }
 }
 
 // ---------------------------------------------------------------------------
@@ -126,64 +165,91 @@ export default function AriaVoiceHome() {
   const [showToast, setShowToast] = useState(false);
   const [toastExiting, setToastExiting] = useState(false);
   const toastTimerRef = useRef(null);
-  const abortRef = useRef(null);
 
-  const ttsAbortRef = useRef(null);
+  const streamRef = useRef(null);   // { abort } from streamMessage
+  const ttsQueueRef = useRef(null); // TTSQueue instance
+  const bufferRef = useRef('');     // streaming text buffer for sentence splitting
 
   // ---- Voice hook ----
-  const handleFinalTranscript = useCallback(async (text) => {
+  const handleFinalTranscript = useCallback((text) => {
     if (!text || !text.trim()) return;
 
     setVoiceState('processing');
+    setResponseText(null);
+    setToastExiting(false);
+    setShowToast(false);
+    bufferRef.current = '';
 
-    try {
-      abortRef.current = new AbortController();
-      const result = await sendMessage(text, sessionId, {}, { signal: abortRef.current.signal });
+    // Stop any previous stream/TTS
+    streamRef.current?.abort();
+    ttsQueueRef.current?.stop();
 
-      // Extract response text — handle both success and error shapes
-      const responseText = result?.response || result?.final_response || result?.message;
+    const queue = new TTSQueue();
+    ttsQueueRef.current = queue;
 
-      if (responseText) {
-        setVoiceState('speaking');
-        setResponseText(responseText);
+    // When all queued audio finishes playing, dismiss toast
+    queue.onAllDone(() => {
+      setVoiceState('idle');
+      setToastExiting(true);
+      setTimeout(() => {
+        setShowToast(false);
         setToastExiting(false);
-        setShowToast(true);
+        setResponseText(null);
+      }, 250);
+    });
 
-        // Speak the response aloud via TTS
-        ttsAbortRef.current = new AbortController();
-        speakText(responseText, {
-          signal: ttsAbortRef.current.signal,
-          onEnd: () => {
-            setVoiceState('idle');
-            // Dismiss toast shortly after speech ends
-            setToastExiting(true);
-            setTimeout(() => {
-              setShowToast(false);
-              setToastExiting(false);
-              setResponseText(null);
-            }, 250);
-          },
-        });
-      } else {
-        // Show error feedback instead of silently going idle
-        const errMsg = result?.error || 'Sorry, I couldn\'t process that. Try again.';
-        setResponseText(errMsg);
-        setToastExiting(false);
+    let firstChunk = true;
+
+    streamRef.current = streamMessage(text, sessionId, {
+      onChunk: (_chunk, fullText) => {
+        // Show toast and switch to speaking on first content
+        if (firstChunk) {
+          firstChunk = false;
+          setVoiceState('speaking');
+          setShowToast(true);
+        }
+        setResponseText(fullText);
+
+        // Buffer text, extract complete sentences, enqueue for TTS
+        bufferRef.current = fullText;
+
+        // Find sentences in the full accumulated text that we haven't spoken yet
+        const { sentences, leftover } = extractSentences(fullText);
+        // Queue any new complete sentences
+        // We track what's already been queued by the queue length + what's playing
+        // Simpler: re-extract from fullText each time, only queue new ones
+        // Use a separate counter
+        const alreadyQueued = queue._sentenceCount || 0;
+        for (let i = alreadyQueued; i < sentences.length; i++) {
+          queue.enqueue(sentences[i]);
+        }
+        queue._sentenceCount = sentences.length;
+      },
+
+      onDone: (fullText) => {
+        setResponseText(fullText);
+        // Flush any remaining text that didn't end with punctuation
+        const { leftover } = extractSentences(fullText);
+        if (leftover && leftover.trim()) {
+          queue.enqueue(leftover);
+        }
+        // If nothing was queued at all (very short response), queue the whole thing
+        if (!queue._sentenceCount && fullText.trim()) {
+          queue.enqueue(fullText);
+        }
+      },
+
+      onError: (errMsg) => {
+        setResponseText(errMsg || 'Sorry, something went wrong. Try again.');
         setShowToast(true);
         setVoiceState('idle');
-        // Auto-dismiss error toast
         clearTimeout(toastTimerRef.current);
         toastTimerRef.current = setTimeout(() => {
           setToastExiting(true);
           setTimeout(() => { setShowToast(false); setToastExiting(false); setResponseText(null); }, 250);
         }, 5000);
-      }
-    } catch (err) {
-      if (err.name !== 'AbortError') {
-        console.error('[AriaVoiceHome] sendMessage error:', err);
-      }
-      setVoiceState('idle');
-    }
+      },
+    });
   }, [sessionId]);
 
   const {
@@ -200,7 +266,6 @@ export default function AriaVoiceHome() {
     if (isRecording && voiceState === 'idle') {
       setVoiceState('listening');
     } else if (!isRecording && voiceState === 'listening') {
-      // Only go idle if not transitioning to processing
       setVoiceState((prev) => (prev === 'listening' ? 'idle' : prev));
     }
   }, [isRecording, voiceState]);
@@ -209,18 +274,17 @@ export default function AriaVoiceHome() {
   useEffect(() => {
     return () => {
       clearTimeout(toastTimerRef.current);
-      stopSpeaking();
-      if (abortRef.current) abortRef.current.abort();
-      if (ttsAbortRef.current) ttsAbortRef.current.abort();
+      streamRef.current?.abort();
+      ttsQueueRef.current?.stop();
     };
   }, []);
 
   // ---- Handlers ----
   const handleMicTap = useCallback(() => {
     if (voiceState === 'processing') return;
-    // If Aria is speaking, stop her and go idle
     if (voiceState === 'speaking') {
-      stopSpeaking();
+      streamRef.current?.abort();
+      ttsQueueRef.current?.stop();
       setVoiceState('idle');
       return;
     }
@@ -282,11 +346,8 @@ export default function AriaVoiceHome() {
 
         {/* Mic orb */}
         <div className={orbContainerClass}>
-          {/* Outer ring */}
           <div className="avh-ring avh-ring--outer" />
-          {/* Middle ring */}
           <div className="avh-ring avh-ring--mid" />
-          {/* Inner ring — tappable */}
           <button
             className="avh-ring avh-ring--inner"
             onClick={handleMicTap}
@@ -302,7 +363,7 @@ export default function AriaVoiceHome() {
         <span className="avh-tap-label">{tapLabelText}</span>
       </div>
 
-      {/* Response toast */}
+      {/* Response toast — shows streaming text as it arrives */}
       {showToast && responseText && (
         <div className={`avh-response-toast ${toastExiting ? 'avh-response-toast--exiting' : ''}`}>
           <div className="avh-response-toast-inner">
