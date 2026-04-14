@@ -21,6 +21,54 @@ function generateSessionId() {
 }
 
 // ---------------------------------------------------------------------------
+// TTS — speak Aria's response aloud using the browser SpeechSynthesis API
+// ---------------------------------------------------------------------------
+
+let _ariaVoice = null;
+
+function pickAriaVoice() {
+  if (_ariaVoice) return _ariaVoice;
+  const voices = window.speechSynthesis?.getVoices() || [];
+  // Prefer a natural-sounding female English voice
+  const preferred = [
+    'Samantha', 'Karen', 'Moira', 'Tessa',         // macOS / iOS
+    'Google US English', 'Google UK English Female', // Chrome
+    'Microsoft Zira', 'Microsoft Jenny',             // Windows
+  ];
+  for (const name of preferred) {
+    const match = voices.find((v) => v.name.includes(name) && v.lang.startsWith('en'));
+    if (match) { _ariaVoice = match; return match; }
+  }
+  // Fallback: any English female voice, or first English voice
+  const english = voices.filter((v) => v.lang.startsWith('en'));
+  _ariaVoice = english[0] || voices[0] || null;
+  return _ariaVoice;
+}
+
+function speakText(text, { onEnd } = {}) {
+  const synth = window.speechSynthesis;
+  if (!synth) { onEnd?.(); return null; }
+
+  synth.cancel(); // stop any in-progress speech
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  const voice = pickAriaVoice();
+  if (voice) utterance.voice = voice;
+  utterance.rate = 1.0;
+  utterance.pitch = 1.05;
+  utterance.volume = 1.0;
+  utterance.onend = () => onEnd?.();
+  utterance.onerror = () => onEnd?.();
+
+  synth.speak(utterance);
+  return utterance;
+}
+
+function stopSpeaking() {
+  window.speechSynthesis?.cancel();
+}
+
+// ---------------------------------------------------------------------------
 // Inline SVG: microphone icon
 // ---------------------------------------------------------------------------
 
@@ -51,6 +99,16 @@ export default function AriaVoiceHome() {
   const toastTimerRef = useRef(null);
   const abortRef = useRef(null);
 
+  // Preload TTS voices (Chrome loads them asynchronously)
+  useEffect(() => {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    pickAriaVoice();
+    const handleVoicesChanged = () => { _ariaVoice = null; pickAriaVoice(); };
+    synth.addEventListener('voiceschanged', handleVoicesChanged);
+    return () => synth.removeEventListener('voiceschanged', handleVoicesChanged);
+  }, []);
+
   // ---- Voice hook ----
   const handleFinalTranscript = useCallback(async (text) => {
     if (!text || !text.trim()) return;
@@ -67,19 +125,19 @@ export default function AriaVoiceHome() {
         setToastExiting(false);
         setShowToast(true);
 
-        // Auto-dismiss toast after 6 seconds
-        clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = setTimeout(() => {
-          setToastExiting(true);
-          setTimeout(() => {
-            setShowToast(false);
-            setToastExiting(false);
-            setResponseText(null);
-          }, 250);
-        }, 6000);
-
-        // Return to idle after brief speaking state
-        setTimeout(() => setVoiceState('idle'), 2000);
+        // Speak the response aloud
+        speakText(result.response, {
+          onEnd: () => {
+            setVoiceState('idle');
+            // Dismiss toast shortly after speech ends
+            setToastExiting(true);
+            setTimeout(() => {
+              setShowToast(false);
+              setToastExiting(false);
+              setResponseText(null);
+            }, 250);
+          },
+        });
       } else {
         setVoiceState('idle');
       }
@@ -113,6 +171,7 @@ export default function AriaVoiceHome() {
   useEffect(() => {
     return () => {
       clearTimeout(toastTimerRef.current);
+      stopSpeaking();
       if (abortRef.current) {
         abortRef.current.abort();
       }
@@ -122,6 +181,12 @@ export default function AriaVoiceHome() {
   // ---- Handlers ----
   const handleMicTap = useCallback(() => {
     if (voiceState === 'processing') return;
+    // If Aria is speaking, stop her and go idle
+    if (voiceState === 'speaking') {
+      stopSpeaking();
+      setVoiceState('idle');
+      return;
+    }
     toggleRecording();
   }, [voiceState, toggleRecording]);
 
