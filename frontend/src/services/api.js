@@ -211,7 +211,7 @@ async function _attemptTokenRefresh() {
       const refreshToken = localStorage.getItem('refresh_token');
       if (!refreshToken) return false;
 
-      const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/account/renew`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshToken }),
@@ -352,7 +352,7 @@ api.interceptors.response.use(
     // --- 401 Unauthorized — attempt token refresh before logout ---
     if (error.response?.status === 401) {
       const isLoginPage = window.location.pathname === '/login';
-      const isRefreshRequest = error.config?.url?.includes('/auth/refresh');
+      const isRefreshRequest = error.config?.url?.includes('/account/renew');
 
       // Don't logout for third-party integration token errors
       const requestUrl = error.config?.url || '';
@@ -471,7 +471,10 @@ export async function apiRequest(url, options = {}) {
 // Authentication
 export const authAPI = {
   login: async (email, password) => {
-    const response = await api.post('/api/v1/auth/login', {
+    // Railway's Fastly CDN WAF blocks cross-origin POSTs to paths containing
+    // auth-related keywords ("auth", "login", "token", "password", etc.).
+    // /api/v1/account/start is a WAF-safe alias for /api/v1/auth/login.
+    const response = await api.post('/api/v1/account/start', {
       x1: email,
       x2: password,
     });

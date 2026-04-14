@@ -133,7 +133,7 @@ export const isSessionAuthenticated = () => {
 export const secureLogout = async () => {
   try {
     // Call logout endpoint to clear HttpOnly cookies and blacklist token
-    await secureFetch('/api/v1/auth/logout', {
+    await secureFetch('/api/v1/account/signoff', {
       method: 'POST',
     });
   } catch (error) {

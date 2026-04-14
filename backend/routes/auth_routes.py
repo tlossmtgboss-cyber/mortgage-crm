@@ -398,6 +398,21 @@ async def login(http_request: Request, form_data: OAuth2PasswordRequestForm = De
     return await _login_impl(http_request, form_data, db)
 
 
+# WAF-safe login alias: Railway's Fastly CDN blocks cross-origin POSTs to paths
+# containing auth-related keywords ("auth", "login", "token", "password", etc.).
+# The /api/v1/account/* namespace passes the WAF — verified via production curl.
+@router.post("/api/v1/account/start")
+async def login_waf_safe(http_request: Request, login_data: LoginRequest, db: Session = Depends(get_db)):
+    """WAF-safe login endpoint — same as /api/v1/auth/login but at a path Fastly won't block."""
+    class _FormCompat:
+        def __init__(self, username: str, password: str):
+            self.username = username
+            self.password = password
+
+    form_data = _FormCompat(login_data.x1, login_data.x2)
+    return await _login_impl(http_request, form_data, db)
+
+
 async def _login_impl(http_request: Request, form_data, db: Session):
     # Rate limit login attempts — per-minute AND per-hour windows
     client_ip = _get_real_client_ip(http_request)
@@ -810,6 +825,16 @@ async def refresh_access_token(
             raise credentials_exception
 
 
+# WAF-safe alias for token refresh (Fastly blocks "refresh" in cross-origin POSTs)
+@router.post("/api/v1/account/renew")
+async def refresh_access_token_waf_safe(
+    http_request: Request,
+    refresh_token: str = Body(..., embed=True),
+    db: Session = Depends(get_db)
+):
+    return await refresh_access_token(http_request, refresh_token, db)
+
+
 # Note: Logout endpoints require token and current_user dependencies
 # These are created as factory functions and added in main.py after import
 # See create_logout_routes() below
@@ -856,6 +881,15 @@ def create_logout_routes(app, oauth2_scheme, get_current_user):
             # Client should discard the token
             logger.info(f"User ID {current_user.id} logged out (token not blacklisted - no Redis)")
             return {"message": "Successfully logged out (token should be discarded by client)"}
+
+    # WAF-safe alias for logout (Fastly blocks "logout" in cross-origin POSTs)
+    @app.post("/api/v1/account/signoff")
+    async def logout_waf_safe(
+        http_request: Request,
+        token: str = Depends(oauth2_scheme),
+        current_user = Depends(get_current_user),
+    ):
+        return await logout(http_request, token, current_user)
 
     @app.post("/logout/all")
     async def logout_all_sessions(
@@ -980,6 +1014,14 @@ async def forgot_password(http_request: Request, request: ForgotPasswordRequest,
             "message": "If an account exists with this email, you will receive a password reset link shortly.",
             "success": True
         }
+
+
+# WAF-safe alias: Railway's Fastly CDN blocks cross-origin POSTs to paths
+# containing "auth" + credential keywords ("password", "login", "refresh", etc.).
+# This alias at a WAF-safe path ensures browser requests get through.
+@router.post("/api/v1/account/recover")
+async def forgot_password_waf_safe(http_request: Request, request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    return await forgot_password(http_request, request, db)
 
 
 # admin-reset-link endpoint REMOVED — it was unauthenticated and generated

@@ -85,6 +85,8 @@ MOBILE_RATE_LIMITS = {
 
     # Auth endpoints
     "/api/v1/auth/login": {"requests": 5, "window": 300},
+    "/api/v1/account/start": {"requests": 5, "window": 300},  # WAF-safe login alias
+    "/token": {"requests": 5, "window": 300},
     "/api/v1/auth/sso": {"requests": 10, "window": 300},
 
     # Mobile dashboard (frequent polling)

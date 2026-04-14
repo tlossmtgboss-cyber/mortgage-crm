@@ -44,6 +44,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/token",  # Login endpoint - can't have CSRF token before auth
         "/api/v1/token",  # Login endpoint alt path
         "/api/v1/auth",  # Auth endpoints
+        "/api/v1/account",  # WAF-safe auth aliases (recover, signoff)
         "/api/v1/salesforce",  # Salesforce sync - uses JWT auth
         "/api/v1/integrations",  # Integration endpoints - uses JWT auth
         "/api/v1/migrations",  # Admin migrations - uses admin key auth

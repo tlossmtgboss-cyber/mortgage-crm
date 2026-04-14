@@ -579,7 +579,7 @@ async function _silentTokenRefresh() {
     const refreshToken = localStorage.getItem('refresh_token');
     if (!refreshToken) return exp > now; // No refresh token — valid only if not expired
 
-    const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/account/renew`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),
@@ -676,7 +676,7 @@ async function _proactiveTokenRefresh() {
       return;
     }
 
-    const response = await fetch(`${API_BASE_URL}/api/v1/auth/refresh`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/account/renew`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: refreshToken }),

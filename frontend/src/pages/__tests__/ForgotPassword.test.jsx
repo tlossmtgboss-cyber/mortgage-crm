@@ -187,7 +187,7 @@ describe('ForgotPassword', () => {
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(
-        'http://localhost:8000/api/v1/auth/forgot-password',
+        'http://localhost:8000/api/v1/account/recover',
         expect.objectContaining({
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

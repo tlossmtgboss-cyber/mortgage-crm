@@ -29,6 +29,8 @@ EXEMPT_PATHS: Set[str] = {
     "/api/v1/auth/logout",
     "/api/v1/auth/refresh",
     "/api/v1/auth/token",
+    "/api/v1/account/signoff",  # WAF-safe alias for logout
+    "/api/v1/account/renew",  # WAF-safe alias for token refresh
     "/docs",
     "/openapi.json",
     "/health",

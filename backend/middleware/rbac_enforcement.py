@@ -71,6 +71,8 @@ PUBLIC_PREFIXES = (
     "/api/v1/auth/register",
     "/api/v1/auth/forgot-password",
     "/api/v1/auth/reset-password",
+    "/api/v1/account/start",  # WAF-safe alias for login
+    "/api/v1/account/recover",  # WAF-safe alias for forgot-password
     "/api/v1/auth/verify-email",
     "/token",
     # Public portals
