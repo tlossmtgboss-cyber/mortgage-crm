@@ -87,13 +87,13 @@ else:
     # Railway has ~20 connections max.  Keep pool_size=0 so no connections are
     # pre-allocated on startup (all connections are overflow, created on demand
     # and released when idle).  This prevents crash-loop connection pileup.
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=0, max_overflow=5, max=5)")
+    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=0, max_overflow=3, max=3)")
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,           # CRITICAL: Verify connections before use (catches stale/dead connections)
         pool_size=0,                  # NO pre-allocated connections — all on-demand via overflow
-        max_overflow=5,               # Max 5 concurrent connections (all created on demand)
-        pool_recycle=120,             # Recycle connections every 2 min (frees slots faster)
+        max_overflow=3,               # Max 3 concurrent connections — keeps 2 instances under Railway's ~20 limit
+        pool_recycle=60,              # Recycle connections every 60s (frees slots faster during deploys)
         pool_timeout=10,              # Wait max 10s for a connection (fail fast)
         pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)
         pool_reset_on_return='rollback',  # Clean connections before reuse
