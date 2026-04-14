@@ -625,29 +625,41 @@ class SchedulerService:
                 logger.debug("Legacy appointments table doesn't exist, skipping")
                 appointments = []
             else:
-                legacy_query = text("""
-                    SELECT
-                        a.id as appointment_id,
-                        a.appointment_type,
-                        a.scheduled_at,
-                        a.meeting_link,
-                        a.lead_id,
-                        a.loan_id,
-                        l.first_name as borrower_first_name,
-                        l.email as borrower_email,
-                        l.phone as borrower_phone,
-                        l.organization_id as lead_org_id,
-                        u.full_name as lo_name
-                    FROM appointments a
-                    LEFT JOIN leads l ON l.id = a.lead_id
-                    LEFT JOIN users u ON u.id = a.assigned_to
-                    WHERE a.scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '24 hours'
-                    AND a.reminder_sent = false
-                    AND a.status = 'scheduled'
-                    AND (l.organization_id IS NOT NULL OR a.lead_id IS NULL)
-                """)
-                result = session.execute(legacy_query)
-                appointments = result.fetchall()
+                # Check if the legacy table has a lead_id column (schema varies)
+                has_lead_id = session.execute(text("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.columns
+                        WHERE table_name = 'appointments' AND column_name = 'lead_id'
+                    )
+                """)).scalar()
+
+                if has_lead_id:
+                    legacy_query = text("""
+                        SELECT
+                            a.id as appointment_id,
+                            a.appointment_type,
+                            a.scheduled_at,
+                            a.meeting_link,
+                            a.lead_id,
+                            a.loan_id,
+                            l.first_name as borrower_first_name,
+                            l.email as borrower_email,
+                            l.phone as borrower_phone,
+                            l.organization_id as lead_org_id,
+                            u.full_name as lo_name
+                        FROM appointments a
+                        LEFT JOIN leads l ON l.id = a.lead_id
+                        LEFT JOIN users u ON u.id = a.assigned_to
+                        WHERE a.scheduled_at BETWEEN NOW() AND NOW() + INTERVAL '24 hours'
+                        AND a.reminder_sent = false
+                        AND a.status = 'scheduled'
+                        AND (l.organization_id IS NOT NULL OR a.lead_id IS NULL)
+                    """)
+                    result = session.execute(legacy_query)
+                    appointments = result.fetchall()
+                else:
+                    logger.debug("Legacy appointments table missing lead_id column, skipping")
+                    appointments = []
 
             for appt in appointments:
                 try:
@@ -1450,29 +1462,46 @@ class SchedulerService:
         Two-step process:
         1. Transition active holds past their TTL to 'expired' status
         2. Delete expired/released records older than 1 hour
-
-        Delegates to ``run_hold_maintenance()`` in
-        ``routes/scheduler/maintenance.py``.
         """
         session = get_db_session()
 
         try:
-            from routes.scheduler.maintenance import run_hold_maintenance
+            # Check if the slot holds table exists before running maintenance
+            table_exists = session.execute(text("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables
+                    WHERE table_name = 'scheduler_slot_holds'
+                )
+            """)).scalar()
 
-            result = run_hold_maintenance(session)
+            if not table_exists:
+                return
+
+            # Expire active holds past their TTL
+            expired = session.execute(text("""
+                UPDATE scheduler_slot_holds
+                SET status = 'expired', updated_at = NOW()
+                WHERE status = 'active' AND expires_at < NOW()
+            """)).rowcount
+
+            # Delete old expired/released records (>1 hour old)
+            deleted = session.execute(text("""
+                DELETE FROM scheduler_slot_holds
+                WHERE status IN ('expired', 'released')
+                AND updated_at < NOW() - INTERVAL '1 hour'
+            """)).rowcount
+
             session.commit()
 
-            # Only log when something actually happened to avoid noise
-            if result["expired_count"] > 0 or result["deleted_count"] > 0:
+            if expired > 0 or deleted > 0:
                 logger.info(
                     "Slot hold maintenance: expired %d, deleted %d",
-                    result["expired_count"],
-                    result["deleted_count"],
+                    expired, deleted,
                 )
 
         except Exception as e:
             session.rollback()
-            logger.error(f"Slot hold maintenance job failed: {e}", exc_info=True)
+            logger.error(f"Slot hold maintenance job failed: {e}")
         finally:
             session.close()
 

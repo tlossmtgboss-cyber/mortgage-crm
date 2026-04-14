@@ -138,12 +138,12 @@ def _get_active_organizations(db: Session) -> List[Dict[str, Any]]:
     """Get all active organizations for multi-tenant execution."""
     try:
         result = db.execute(text("""
-            SELECT o.id, o.name, o.timezone
+            SELECT o.id, o.name
             FROM organizations o
             WHERE o.is_active = true
             ORDER BY o.id
         """))
-        return [{"id": row[0], "name": row[1], "timezone": row[2] or "America/New_York"} for row in result.fetchall()]
+        return [{"id": row[0], "name": row[1], "timezone": "America/New_York"} for row in result.fetchall()]
     except Exception as e:
         logger.error(f"Failed to fetch organizations: {e}")
         return []
@@ -330,7 +330,7 @@ def register_all_autonomous_agents(scheduler):
             name=f"Autonomous: {agent_def.description}",
             replace_existing=True,
             max_instances=1,
-            misfire_grace_time=300,  # 5 min grace period
+            misfire_grace_time=30,  # 30s grace — skip missed runs on restart to avoid connection burst
         )
         registered += 1
         logger.info(f"Scheduled autonomous agent: {name} ({agent_def.frequency.value})")
