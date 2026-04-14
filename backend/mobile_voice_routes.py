@@ -808,20 +808,20 @@ async def synthesize_text(request: dict):
             tts = GoogleTTSClient(voice_name=voice_id or GOOGLE_TTS_VOICE)
             audio = await tts.synthesize(text)
         elif provider == "elevenlabs" and ELEVENLABS_API_KEY:
-            tts = ElevenLabsTTSClient(voice_id=voice_id)
+            tts = ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID)
             audio = await tts.synthesize(text)
         elif provider == "openai" and OPENAI_API_KEY:
-            tts = OpenAITTSClient(voice=voice_id)
+            tts = OpenAITTSClient(voice=voice_id or "nova")
             audio = await tts.synthesize(text)
         # Fallback to default priority if no provider specified
         elif GOOGLE_TTS_ENABLED:
             tts = GoogleTTSClient(voice_name=voice_id if voice_id and voice_id.startswith("en-US") else GOOGLE_TTS_VOICE)
             audio = await tts.synthesize(text)
         elif ELEVENLABS_API_KEY:
-            tts = ElevenLabsTTSClient(voice_id=voice_id)
+            tts = ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID)
             audio = await tts.synthesize(text)
         elif OPENAI_API_KEY:
-            tts = OpenAITTSClient(voice=voice_id)
+            tts = OpenAITTSClient(voice=voice_id or "nova")
             audio = await tts.synthesize(text)
         else:
             raise HTTPException(500, "No TTS provider configured")
