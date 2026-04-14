@@ -643,7 +643,7 @@ export const ROLE_DASHBOARD_CONTAINERS = {
 export const ROLE_DEFAULT_ROUTES = {
   admin: '/admin',
   site_admin: '/admin',     // Site Administrator lands on Admin Panel (org-scoped)
-  loan_officer: '/dashboard',
+  loan_officer: '/aria-voice',
   production_assistant: '/dashboard',
   concierge: '/dashboard',  // Same as Production Assistant
   processor: '/loans',      // No dashboard, land on Active Loans

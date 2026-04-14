@@ -725,7 +725,7 @@ function App() {
           {/* Check for native platform OR loading from local IP (dev mode on device) */}
           <Route path="/" element={
             Capacitor.isNativePlatform() || window.location.hostname.startsWith('192.168.')
-              ? <Navigate to="/aria" />
+              ? <Navigate to="/aria-voice" />
               : <ExternalRedirect to="https://www.perenniaai.com" />
           } />
           <Route path="/aria-test" element={<LazyPage><AriaTestPage /></LazyPage>} />
