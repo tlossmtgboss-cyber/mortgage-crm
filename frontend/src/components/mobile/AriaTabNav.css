@@ -41,13 +41,15 @@
    -------------------------------------------------------------------------- */
 
 .aria-tab-btn {
-  display: flex;
+  display: inline-flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 3px;
   flex: 1;
-  padding: 4px 0 6px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 0 12px;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -69,7 +71,7 @@
    -------------------------------------------------------------------------- */
 
 .aria-tab-label {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   line-height: 1;
   letter-spacing: 0.02em;

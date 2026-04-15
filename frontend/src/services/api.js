@@ -443,6 +443,13 @@ api.interceptors.response.use(
   }
 );
 
+// Certificate pinning interceptors (native only — no-op on web)
+import certificatePinning from './certificatePinning';
+const pinRequestInterceptor = certificatePinning.createAxiosInterceptor();
+api.interceptors.request.use(pinRequestInterceptor);
+const pinResponseInterceptor = certificatePinning.createAxiosResponseInterceptor();
+api.interceptors.response.use(pinResponseInterceptor.onFulfilled, pinResponseInterceptor.onRejected);
+
 // ---------------------------------------------------------------------------
 // Per-request timeout — callers can pass { timeout: 60000 } in the axios
 // config to override the default 30s.  This helper makes it explicit:

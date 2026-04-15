@@ -30,8 +30,7 @@ export const getItem = async (key) => {
 export const setItem = async (key, value) => {
   if (isNative) {
     await Preferences.set({ key, value });
-    // Mirror to localStorage so synchronous readers (getAuthHeaders, etc.) work
-    try { localStorage.setItem(key, value); } catch (_) { /* WKWebView may restrict */ }
+    // NO localStorage mirror — tokens must not be exposed in WKWebView storage
   } else {
     localStorage.setItem(key, value);
   }
@@ -45,7 +44,7 @@ export const setItem = async (key, value) => {
 export const removeItem = async (key) => {
   if (isNative) {
     await Preferences.remove({ key });
-    try { localStorage.removeItem(key); } catch (_) { /* WKWebView may restrict */ }
+    // NO localStorage mirror
   } else {
     localStorage.removeItem(key);
   }

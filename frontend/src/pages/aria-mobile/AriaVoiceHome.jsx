@@ -10,9 +10,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAriaVoice } from '../../hooks/useAriaVoice';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { streamMessage } from '../../services/mobileAriaApi';
 import api from '../../services/api';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
+import { OfflineIndicator } from '../../components/mobile/OfflineIndicator';
 import './AriaVoiceHome.css';
 
 // ---------------------------------------------------------------------------
@@ -91,7 +93,9 @@ class TTSQueue {
     }
 
     this._playing = true;
-    const text = this._queue.shift();
+    // Batch up to 2 sentences for smoother playback and fewer API calls
+    const batch = this._queue.splice(0, Math.min(2, this._queue.length));
+    const text = batch.join(' ');
 
     try {
       const res = await api.post('/api/v1/mobile-voice/tts/synthesize', {
@@ -179,6 +183,29 @@ export default function AriaVoiceHome() {
   const streamRef = useRef(null);   // { abort } from streamMessage
   const ttsQueueRef = useRef(null); // TTSQueue instance
   const bufferRef = useRef('');     // streaming text buffer for sentence splitting
+
+  // ---- Network status ----
+  const { isOnline } = useNetworkStatus();
+
+  // Abort active voice flow if network drops mid-session
+  useEffect(() => {
+    if (!isOnline && voiceState !== 'idle') {
+      streamRef.current?.abort();
+      ttsQueueRef.current?.stop();
+      setVoiceState('idle');
+      setResponseText('Connection lost. Please try again when you are back online.');
+      setShowToast(true);
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => {
+        setToastExiting(true);
+        setTimeout(() => {
+          setShowToast(false);
+          setToastExiting(false);
+          setResponseText(null);
+        }, 250);
+      }, 5000);
+    }
+  }, [isOnline, voiceState]);
 
   // ---- Voice hook ----
   const handleFinalTranscript = useCallback((text) => {
@@ -346,6 +373,8 @@ export default function AriaVoiceHome() {
 
   return (
     <div className="aria-voice-home">
+      <OfflineIndicator />
+
       {/* Safe-area top padding */}
       <div className="avh-status-bar" />
 
@@ -387,6 +416,8 @@ export default function AriaVoiceHome() {
             className="avh-ring avh-ring--inner"
             onClick={handleMicTap}
             aria-label={voiceState === 'listening' ? 'Stop listening' : 'Start voice input'}
+            aria-pressed={voiceState === 'listening'}
+            aria-busy={voiceState === 'processing'}
             type="button"
           >
             <span className="avh-mic-icon">

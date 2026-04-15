@@ -114,7 +114,9 @@
   border-radius: 50%;
   border: 2px solid #ddd;
   background: transparent;
-  padding: 0;
+  padding: 11px;
+  margin: -11px;
+  box-sizing: content-box;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   outline: none;
@@ -173,7 +175,7 @@
 
 .mt-badge {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   line-height: 1;
   padding: 3px 8px;

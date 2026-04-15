@@ -31,6 +31,21 @@ if (!isNative && 'serviceWorker' in navigator) {
   });
 }
 
+// Initialize certificate pinning (native only — no-op on web)
+import certificatePinning from './services/certificatePinning';
+
+certificatePinning.initialize().then((result) => {
+  if (result?.method !== 'web_noop' && result?.method !== 'disabled') {
+    console.info('[Security] Certificate pinning active:', result.method);
+  }
+}).catch((err) => {
+  console.error('[Security] Certificate pinning failed:', err);
+});
+
+// Initialize in-memory token store (loads from Preferences/localStorage)
+import { initialize as initTokenStore } from './utils/tokenStore';
+initTokenStore();
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>

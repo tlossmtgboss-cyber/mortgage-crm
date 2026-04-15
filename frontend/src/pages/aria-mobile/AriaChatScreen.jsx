@@ -10,6 +10,8 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { OfflineIndicator } from '../../components/mobile/OfflineIndicator';
+import { getToken } from '../../utils/tokenStore';
 import './AriaChatScreen.css';
 
 const WS_BASE = import.meta.env.VITE_API_URL || 'https://api.perenniaai.com';
@@ -85,7 +87,7 @@ class AriaWebSocket {
     }
 
     // Re-read token in case it was refreshed
-    const freshToken = localStorage.getItem('access_token');
+    const freshToken = getToken();
     if (!freshToken) {
       this.onSessionExpired();
       return;
@@ -134,7 +136,7 @@ export default function AriaChatScreen() {
   }, []);
 
   const initWs = async () => {
-    const token = localStorage.getItem('access_token');
+    const token = getToken();
     if (!token) {
       setConnStatus('expired');
       return;
@@ -246,6 +248,8 @@ export default function AriaChatScreen() {
 
   return (
     <div className="ac-root">
+      <OfflineIndicator />
+
       {/* Header */}
       <div className="ac-header">
         <div className="ac-header-left">
@@ -289,6 +293,7 @@ export default function AriaChatScreen() {
           className={`ac-send-btn ${(!inputText.trim() || !connected) ? 'ac-send--disabled' : ''}`}
           onClick={handleSend}
           disabled={!inputText.trim() || !connected}
+          aria-label="Send message"
         >
           <span className="ac-send-icon">&uarr;</span>
         </button>

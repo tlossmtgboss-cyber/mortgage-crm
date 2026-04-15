@@ -455,7 +455,8 @@ class AriaVoiceAgent:
             result = await service.process_message(
                 message=transcript,
                 conversation_history=self.conversation_history[-10:],  # Keep last 5 exchanges for context
-                return_structured=False
+                return_structured=False,
+                voice_mode=True  # WebSocket voice gets same personality as HTTP streaming
             )
 
             logger.info(f"[AriaVoiceAgent] Orchestrator result keys: {result.keys() if isinstance(result, dict) else 'not a dict'}")

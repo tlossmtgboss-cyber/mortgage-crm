@@ -71,8 +71,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
   border-radius: 10px;
   border: 1px solid rgba(0, 0, 0, 0.08);
   background: #fafafa;
@@ -112,8 +114,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: none;
   background: #f0f0f2;
@@ -134,6 +138,8 @@
   border: none;
   border-radius: 16px;
   padding: 6px 16px;
+  min-height: 44px;
+  min-width: 44px;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
@@ -209,7 +215,7 @@
 }
 
 .mcal-today-badge {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #fff;
   background: #1a73e8;

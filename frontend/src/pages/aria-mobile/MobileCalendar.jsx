@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { schedulerAPI } from '../../services/api';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
+import PullToRefreshContainer from '../../components/mobile/PullToRefreshContainer';
 import './MobileCalendar.css';
 
 // ---------------------------------------------------------------------------
@@ -183,6 +184,7 @@ export default function MobileCalendar() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showMonthNav, setShowMonthNav] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   // Cache: Map of "YYYY-MM:tab" → fetched items array (max 6 entries)
   const cacheRef = useRef(new Map());
@@ -274,6 +276,19 @@ export default function MobileCalendar() {
 
   useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  // -------------------------------------------------------------------------
+  // Pull-to-refresh
+  // -------------------------------------------------------------------------
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      await fetchData();
+    } finally {
+      setRefreshing(false);
+    }
   }, [fetchData]);
 
   // -------------------------------------------------------------------------
@@ -390,7 +405,7 @@ export default function MobileCalendar() {
       </header>
 
       {/* ===== BODY ===== */}
-      <main className="mcal-body">
+      <PullToRefreshContainer onRefresh={handleRefresh} className="mcal-body">
         {loading ? (
           <SkeletonCards />
         ) : appointments.length === 0 ? (
@@ -416,7 +431,7 @@ export default function MobileCalendar() {
             );
           })
         )}
-      </main>
+      </PullToRefreshContainer>
 
       {/* ===== TAB NAV ===== */}
       <AriaTabNav

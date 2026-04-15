@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { tasksAPI } from '../../services/api';
 import { toast } from '../../utils/toast';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
+import PullToRefreshContainer from '../../components/mobile/PullToRefreshContainer';
 import './MobileTasks.css';
 
 // ============================================================================
@@ -80,7 +81,9 @@ function TaskCard({ task, todayStr, onToggle }) {
         className={`mt-checkbox ${done ? 'mt-checkbox--checked' : ''}`}
         onClick={() => onToggle(task)}
         type="button"
-        aria-label={done ? 'Mark incomplete' : 'Mark complete'}
+        role="checkbox"
+        aria-checked={done}
+        aria-label={`${name}: ${done ? 'Mark incomplete' : 'Mark complete'}`}
       >
         {done && <CheckIcon />}
       </button>
@@ -135,6 +138,7 @@ export default function MobileTasks() {
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const todayStr = useMemo(() => toDateStr(new Date()), []);
 
@@ -199,6 +203,18 @@ export default function MobileTasks() {
     }
   }, [page, loadingMore, hasMore, fetchTasks]);
 
+  // ---------- Pull-to-refresh ----------
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      setPage(0);
+      setHasMore(true);
+      await fetchTasks(0, false);
+    } finally {
+      setRefreshing(false);
+    }
+  }, [fetchTasks]);
+
   // ---------- Group tasks ----------
   const { overdue, today, upcoming } = useMemo(() => {
     const groups = { overdue: [], today: [], upcoming: [] };
@@ -257,7 +273,7 @@ export default function MobileTasks() {
       </header>
 
       {/* Body */}
-      <div className="mt-body">
+      <PullToRefreshContainer onRefresh={handleRefresh} className="mt-body">
         {loading && (
           <div className="mt-loading">
             <div className="mt-spinner" />
@@ -298,7 +314,7 @@ export default function MobileTasks() {
             )}
           </>
         )}
-      </div>
+      </PullToRefreshContainer>
 
       {/* Bottom nav */}
       <AriaTabNav

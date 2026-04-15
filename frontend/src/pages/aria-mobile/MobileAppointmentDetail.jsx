@@ -115,7 +115,7 @@ function ErrorState({ message }) {
   return (
     <div className="mad-container">
       <div className="mad-header">
-        <button className="mad-back-btn" onClick={() => navigate(-1)}>
+        <button className="mad-back-btn" onClick={() => navigate(-1)} aria-label="Go back">
           <span className="mad-back-chevron">&lsaquo;</span> Back
         </button>
       </div>
@@ -332,7 +332,7 @@ export default function MobileAppointmentDetail() {
     <div className="mad-container">
       {/* -- Header -- */}
       <div className="mad-header">
-        <button className="mad-back-btn" onClick={() => navigate(-1)}>
+        <button className="mad-back-btn" onClick={() => navigate(-1)} aria-label="Go back">
           <span className="mad-back-chevron">&lsaquo;</span> Back
         </button>
 

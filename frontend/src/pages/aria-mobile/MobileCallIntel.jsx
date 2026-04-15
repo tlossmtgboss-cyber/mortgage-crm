@@ -18,6 +18,7 @@ import { toast } from 'react-toastify';
 
 import { CallIntelligenceApi } from '../../services/callIntelligenceApi';
 import { useCallIntelligence } from '../../hooks/useCallIntelligence';
+import { OfflineIndicator } from '../../components/mobile/OfflineIndicator';
 import { getCurrentUserId } from '../../utils/auth';
 
 import NoteTakerCard from '../../components/callIntelligence/NoteTakerCard';
@@ -243,6 +244,8 @@ export default function MobileCallIntel({ borrowerContext }) {
   // ── Render ────────────────────────────────────────────────
   return (
     <div className="mci-screen">
+      <OfflineIndicator />
+
       {/* Safe-area padding */}
       <div className="mci-status-bar" />
 
@@ -255,6 +258,7 @@ export default function MobileCallIntel({ borrowerContext }) {
           className="mci-back-btn"
           onClick={() => navigate('/aria-voice')}
           type="button"
+          aria-label="Go back"
         >
           <svg width="11" height="18" viewBox="0 0 10 16" fill="none">
             <path d="M8 2L2 8l6 6" stroke="#7EB8F7" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
