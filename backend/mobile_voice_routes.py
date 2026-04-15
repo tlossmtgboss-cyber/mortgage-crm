@@ -197,10 +197,18 @@ class DeepgramSTTClient:
 class ElevenLabsTTSClient:
     """Streaming Text-to-Speech using ElevenLabs"""
 
-    def __init__(self, voice_id: str = ELEVENLABS_VOICE_ID):
+    DEFAULT_VOICE_SETTINGS = {
+        "stability": 0.5,
+        "similarity_boost": 0.75,
+        "style": 0.5,
+        "use_speaker_boost": True
+    }
+
+    def __init__(self, voice_id: str = ELEVENLABS_VOICE_ID, voice_settings: dict = None):
         self.api_key = ELEVENLABS_API_KEY
         self.voice_id = voice_id
         self.model_id = TTS_MODEL
+        self.voice_settings = voice_settings or self.DEFAULT_VOICE_SETTINGS
 
     async def synthesize_stream(self, text: str) -> AsyncGenerator[bytes, None]:
         """Stream audio synthesis from ElevenLabs"""
@@ -215,12 +223,7 @@ class ElevenLabsTTSClient:
         payload = {
             "text": text,
             "model_id": self.model_id,
-            "voice_settings": {
-                "stability": 0.5,
-                "similarity_boost": 0.75,
-                "style": 0.5,
-                "use_speaker_boost": True
-            },
+            "voice_settings": self.voice_settings,
             "optimize_streaming_latency": 3  # Optimize for low latency
         }
 
@@ -964,6 +967,7 @@ async def synthesize_text(request: Request):
     text = data.get("text", "")
     voice_id = data.get("voice_id")  # e.g., "en-US-Neural2-C"
     provider = data.get("provider")  # e.g., "google", "elevenlabs", "openai"
+    voice_settings = data.get("voice_settings")  # e.g., {stability, similarity_boost, style}
 
     if not text:
         raise HTTPException(400, "Text is required")
@@ -977,7 +981,7 @@ async def synthesize_text(request: Request):
             tts = GoogleTTSClient(voice_name=voice_id or GOOGLE_TTS_VOICE)
             audio = await tts.synthesize(text)
         elif provider == "elevenlabs" and ELEVENLABS_API_KEY:
-            tts = ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID)
+            tts = ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID, voice_settings=voice_settings)
             audio = await tts.synthesize(text)
         elif provider == "openai" and OPENAI_API_KEY:
             tts = OpenAITTSClient(voice=voice_id or "nova")
@@ -987,7 +991,7 @@ async def synthesize_text(request: Request):
             tts = GoogleTTSClient(voice_name=voice_id if voice_id and voice_id.startswith("en-US") else GOOGLE_TTS_VOICE)
             audio = await tts.synthesize(text)
         elif ELEVENLABS_API_KEY:
-            tts = ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID)
+            tts = ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID, voice_settings=voice_settings)
             audio = await tts.synthesize(text)
         elif OPENAI_API_KEY:
             tts = OpenAITTSClient(voice=voice_id or "nova")
