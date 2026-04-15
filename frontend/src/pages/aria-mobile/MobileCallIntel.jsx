@@ -36,13 +36,87 @@ const AGENTS = [
   { color: '#34A853', name: 'Receptionist',        desc: 'Schedules appointments, sends invites to both calendars' },
 ];
 
+// ── Inline ConfirmModal ─────────────────────────────────────
+function ConfirmModal({ open, title, message, confirmLabel, cancelLabel, destructive, onConfirm, onCancel }) {
+  const confirmBtnRef = useRef(null);
+  const cancelBtnRef = useRef(null);
+  const overlayRef = useRef(null);
+
+  // Focus the cancel button when modal opens; trap focus within modal
+  useEffect(() => {
+    if (!open) return;
+    const prev = document.activeElement;
+    if (cancelBtnRef.current) cancelBtnRef.current.focus();
+
+    function handleKeyDown(e) {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onCancel();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const focusable = [cancelBtnRef.current, confirmBtnRef.current].filter(Boolean);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+          if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+        } else {
+          if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+      }
+    }
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, true);
+      if (prev && prev.focus) prev.focus();
+    };
+  }, [open, onCancel]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="mci-confirm-overlay"
+      ref={overlayRef}
+      onClick={(e) => { if (e.target === overlayRef.current) onCancel(); }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mci-confirm-title"
+    >
+      <div className="mci-confirm-box">
+        <h2 id="mci-confirm-title" className="mci-confirm-title">{title}</h2>
+        <p className="mci-confirm-message">{message}</p>
+        <div className="mci-confirm-actions">
+          <button
+            ref={cancelBtnRef}
+            className="mci-confirm-cancel-btn"
+            onClick={onCancel}
+            type="button"
+          >
+            {cancelLabel || 'Cancel'}
+          </button>
+          <button
+            ref={confirmBtnRef}
+            className={`mci-confirm-ok-btn ${destructive ? 'mci-confirm-ok-btn--destructive' : ''}`}
+            onClick={onConfirm}
+            type="button"
+          >
+            {confirmLabel || 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Helpers ──────────────────────────────────────────────────
 function formatDuration(s) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
 // ── Component ────────────────────────────────────────────────
-export default function MobileCallIntel() {
+export default function MobileCallIntel({ borrowerContext }) {
   const navigate = useNavigate();
 
   const [sessionId, setSessionId] = useState(null);
@@ -51,10 +125,17 @@ export default function MobileCallIntel() {
   const [duration, setDuration] = useState(0);
   const [wsUrl, setWsUrl] = useState(null);
 
+  // Confirmation modal state
+  const [confirmModal, setConfirmModal] = useState({ open: false, title: '', message: '', confirmLabel: '', destructive: false, onConfirm: null });
+
   const timerRef = useRef(null);
 
   // All 4 agent states managed by this hook
   const { state: ciState, disconnect, reset } = useCallIntelligence(wsUrl);
+
+  const closeModal = useCallback(() => {
+    setConfirmModal((prev) => ({ ...prev, open: false, onConfirm: null }));
+  }, []);
 
   // Check for existing active session on mount
   useEffect(() => {
@@ -84,24 +165,15 @@ export default function MobileCallIntel() {
   }, [callActive]);
 
   // ── Start a new call with all agents ──────────────────────
-  const handleStartCall = useCallback(async () => {
-    // In production: open a dialer sheet to pick a borrower + phone number
-    const confirmed = window.confirm(
-      'Start Call Intelligence\n\n' +
-      'In production, this opens your contacts/borrower search to select who to call. ' +
-      'The dialer initiates via Telnyx and all 4 agents activate automatically.\n\n' +
-      'Click OK to simulate a dev call.'
-    );
-    if (!confirmed) return;
-
+  const startCall = useCallback(async (borrower) => {
     setStartingCall(true);
     try {
       const userId = getCurrentUserId();
       const result = await CallIntelligenceApi.startCall({
-        borrower_phone: '+16514141454',
-        borrower_name: 'Kevin Mercer',
-        borrower_email: 'kevinmercer@gmail.com',
-        appointment_type: 'Initial Discovery',
+        borrower_phone: borrower.phone,
+        borrower_name: borrower.name,
+        borrower_email: borrower.email,
+        appointment_type: borrower.appointmentType || 'Initial Discovery',
         lo_user_id: userId ?? '',
       });
       setSessionId(result.session_id);
@@ -115,29 +187,53 @@ export default function MobileCallIntel() {
     }
   }, []);
 
+  const handleStartCall = useCallback(() => {
+    // Require borrower context — no hardcoded fallback
+    if (!borrowerContext || !borrowerContext.phone || !borrowerContext.name || !borrowerContext.email) {
+      toast.error('Select a borrower to start call monitoring');
+      return;
+    }
+
+    setConfirmModal({
+      open: true,
+      title: 'Start Call Intelligence',
+      message: `Start a call with ${borrowerContext.name}? All 4 AI agents will activate automatically once the call connects.`,
+      confirmLabel: 'Start Call',
+      destructive: false,
+      onConfirm: () => {
+        closeModal();
+        startCall(borrowerContext);
+      },
+    });
+  }, [borrowerContext, startCall, closeModal]);
+
   // ── End call ──────────────────────────────────────────────
   const handleEndCall = useCallback(() => {
-    const confirmed = window.confirm(
-      'End Call\n\n' +
-      'Ending the call will save the transcript, application draft, tasks, and appointments. Continue?'
-    );
-    if (!confirmed) return;
-
-    (async () => {
-      try {
-        if (sessionId) await CallIntelligenceApi.endCall(sessionId);
-      } catch (e) {
-        console.error('[MobileCallIntel] endCall error:', e);
-      }
-      disconnect();
-      setCallActive(false);
-      setSessionId(null);
-      setWsUrl(null);
-      setDuration(0);
-      reset();
-      toast.success('Call ended. Your transcript, application draft, tasks, and appointments have been saved.');
-    })();
-  }, [sessionId, disconnect, reset]);
+    setConfirmModal({
+      open: true,
+      title: 'End Call',
+      message: 'Ending the call will save the transcript, application draft, tasks, and appointments. Continue?',
+      confirmLabel: 'End Call',
+      destructive: true,
+      onConfirm: () => {
+        closeModal();
+        (async () => {
+          try {
+            if (sessionId) await CallIntelligenceApi.endCall(sessionId);
+          } catch (e) {
+            console.error('[MobileCallIntel] endCall error:', e);
+          }
+          disconnect();
+          setCallActive(false);
+          setSessionId(null);
+          setWsUrl(null);
+          setDuration(0);
+          reset();
+          toast.success('Call ended. Your transcript, application draft, tasks, and appointments have been saved.');
+        })();
+      },
+    });
+  }, [sessionId, disconnect, reset, closeModal]);
 
   // ── View full application (opened by Jr LO card) ──────────
   const handleViewApplication = () => {
@@ -265,6 +361,17 @@ export default function MobileCallIntel() {
           </p>
         </div>
       )}
+
+      {/* Confirmation modal */}
+      <ConfirmModal
+        open={confirmModal.open}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        destructive={confirmModal.destructive}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={closeModal}
+      />
     </div>
   );
 }

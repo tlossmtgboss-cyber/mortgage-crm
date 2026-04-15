@@ -126,22 +126,53 @@ function TaskSection({ label, tasks, todayStr, onToggle }) {
 // MobileTasks
 // ============================================================================
 
+const PAGE_SIZE = 20;
+
 export default function MobileTasks() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const todayStr = useMemo(() => toDateStr(new Date()), []);
 
-  // ---------- Fetch tasks ----------
+  // ---------- Fetch tasks (initial + paginated) ----------
+  const fetchTasks = useCallback(async (pageNum, append = false) => {
+    try {
+      const data = await tasksAPI.getAll({
+        limit: PAGE_SIZE,
+        offset: pageNum * PAGE_SIZE,
+      });
+      const list = Array.isArray(data) ? data : (data?.tasks || []);
+      if (append) {
+        setTasks((prev) => [...prev, ...list]);
+      } else {
+        setTasks(list);
+      }
+      if (list.length < PAGE_SIZE) {
+        setHasMore(false);
+      }
+    } catch (err) {
+      if (!append) {
+        toast.error('Failed to load tasks');
+      } else {
+        toast.error('Failed to load more tasks');
+      }
+    }
+  }, []);
+
+  // ---------- Initial load ----------
   useEffect(() => {
     let cancelled = false;
     async function load() {
       try {
-        const data = await tasksAPI.getAll();
+        const data = await tasksAPI.getAll({ limit: PAGE_SIZE, offset: 0 });
         if (!cancelled) {
           const list = Array.isArray(data) ? data : (data?.tasks || []);
           setTasks(list);
+          if (list.length < PAGE_SIZE) setHasMore(false);
         }
       } catch (err) {
         if (!cancelled) {
@@ -154,6 +185,19 @@ export default function MobileTasks() {
     load();
     return () => { cancelled = true; };
   }, []);
+
+  // ---------- Load more ----------
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    const nextPage = page + 1;
+    try {
+      await fetchTasks(nextPage, true);
+      setPage(nextPage);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [page, loadingMore, hasMore, fetchTasks]);
 
   // ---------- Group tasks ----------
   const { overdue, today, upcoming } = useMemo(() => {
@@ -235,6 +279,23 @@ export default function MobileTasks() {
             <TaskSection label="Overdue" tasks={overdue} todayStr={todayStr} onToggle={handleToggle} />
             <TaskSection label="Today" tasks={today} todayStr={todayStr} onToggle={handleToggle} />
             <TaskSection label="Upcoming" tasks={upcoming} todayStr={todayStr} onToggle={handleToggle} />
+
+            {hasMore && (
+              <div className="mt-load-more-wrap">
+                <button
+                  className="mt-load-more-btn"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  type="button"
+                >
+                  {loadingMore ? (
+                    <span className="mt-load-more-spinner" />
+                  ) : (
+                    'Load more'
+                  )}
+                </button>
+              </div>
+            )}
           </>
         )}
       </div>

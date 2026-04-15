@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from '../../utils/toast';
 import api from '../../services/api';
@@ -175,6 +175,65 @@ const LocationIcon = () => (
 );
 
 // ---------------------------------------------------------------------------
+// ConfirmModal — inline confirmation dialog (replaces window.confirm)
+// ---------------------------------------------------------------------------
+
+function ConfirmModal({ open, title, message, confirmLabel, cancelLabel, destructive, onConfirm, onCancel }) {
+  const cancelRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    // Focus cancel button when modal opens
+    cancelRef.current?.focus();
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onCancel();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [open, onCancel]);
+
+  if (!open) return null;
+
+  return (
+    <div className="mad-confirm-overlay" onClick={onCancel}>
+      <div
+        className="mad-confirm-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mad-confirm-title"
+        aria-describedby="mad-confirm-message"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 id="mad-confirm-title" className="mad-confirm-dialog__title">
+          {title}
+        </h2>
+        <p id="mad-confirm-message" className="mad-confirm-dialog__message">
+          {message}
+        </p>
+        <div className="mad-confirm-dialog__actions">
+          <button
+            ref={cancelRef}
+            className="mad-confirm-dialog__btn mad-confirm-dialog__btn--cancel"
+            onClick={onCancel}
+          >
+            {cancelLabel || 'Cancel'}
+          </button>
+          <button
+            className={`mad-confirm-dialog__btn ${destructive ? 'mad-confirm-dialog__btn--destructive' : 'mad-confirm-dialog__btn--confirm'}`}
+            onClick={onConfirm}
+          >
+            {confirmLabel || 'Confirm'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -187,6 +246,7 @@ export default function MobileAppointmentDetail() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('details');
   const [actionLoading, setActionLoading] = useState(false);
+  const [confirmModal, setConfirmModal] = useState({ open: false });
 
   // Fetch appointment data
   const fetchAppointment = useCallback(async () => {
@@ -211,17 +271,27 @@ export default function MobileAppointmentDetail() {
   }, [id, fetchAppointment]);
 
   // Actions
-  const handleMarkNoShow = async () => {
-    if (!window.confirm('Mark this appointment as no-show?')) return;
-    try {
-      setActionLoading(true);
-      await api.patch(`/api/v1/scheduler/appointments/${id}`, { status: 'no_show' });
-      navigate(-1);
-    } catch {
-      toast.error('Failed to update appointment status. Please try again.');
-    } finally {
-      setActionLoading(false);
-    }
+  const handleMarkNoShow = () => {
+    setConfirmModal({
+      open: true,
+      title: 'Mark as No-Show',
+      message: 'Are you sure you want to mark this appointment as no-show? This action cannot be undone.',
+      confirmLabel: 'Mark No-Show',
+      cancelLabel: 'Cancel',
+      destructive: true,
+      onConfirm: async () => {
+        setConfirmModal({ open: false });
+        try {
+          setActionLoading(true);
+          await api.patch(`/api/v1/scheduler/appointments/${id}`, { status: 'no_show' });
+          navigate(-1);
+        } catch {
+          toast.error('Failed to update appointment status. Please try again.');
+        } finally {
+          setActionLoading(false);
+        }
+      },
+    });
   };
 
   const handleBookFollowUp = () => {
@@ -444,6 +514,18 @@ export default function MobileAppointmentDetail() {
           Book follow-up
         </button>
       </div>
+
+      {/* -- Confirm Modal -- */}
+      <ConfirmModal
+        open={confirmModal.open}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmLabel={confirmModal.confirmLabel}
+        cancelLabel={confirmModal.cancelLabel}
+        destructive={confirmModal.destructive}
+        onConfirm={confirmModal.onConfirm || (() => setConfirmModal({ open: false }))}
+        onCancel={() => setConfirmModal({ open: false })}
+      />
     </div>
   );
 }

@@ -33,8 +33,11 @@ class AriaWebSocket {
   }
 
   connect() {
-    this.ws = new WebSocket(`${WS_URL}?token=${this.token}`);
+    this.ws = new WebSocket(WS_URL);
     this.ws.onopen = () => {
+      // Authenticate via first message instead of URL query param
+      // to avoid token exposure in server logs, browser history, and proxy logs
+      this.ws.send(JSON.stringify({ type: 'auth', token: this.token }));
       this.reconnectAttempts = 0;
       this.onConnect();
       this._flushPendingMessages();

@@ -221,38 +221,113 @@
 }
 
 /* --------------------------------------------------------------------------
-   Processing state — spinner on inner ring
+   Processing state — organic breathing pulse
    -------------------------------------------------------------------------- */
 
 .avh-orb-container--processing .avh-ring--inner {
-  border-color: transparent;
-  border-top-color: var(--avh-accent);
-  border-right-color: rgba(var(--avh-accent-rgb), 0.3);
-  animation: avh-spin 0.9s linear infinite;
+  border-color: rgba(var(--avh-accent-rgb), 0.35);
+  background: rgba(var(--avh-accent-rgb), 0.1);
+  animation: avh-breathe 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
-@keyframes avh-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+.avh-orb-container--processing .avh-ring--mid {
+  animation: avh-breathe-mid 2.4s cubic-bezier(0.4, 0, 0.2, 1) 0.2s infinite;
+}
+
+.avh-orb-container--processing .avh-ring--outer {
+  animation: avh-breathe-outer 2.4s cubic-bezier(0.4, 0, 0.2, 1) 0.4s infinite;
+}
+
+@keyframes avh-breathe {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 16px rgba(var(--avh-accent-rgb), 0.15);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow: 0 0 28px rgba(var(--avh-accent-rgb), 0.3);
+  }
+}
+
+@keyframes avh-breathe-mid {
+  0%, 100% {
+    transform: scale(1);
+    border-color: rgba(var(--avh-accent-rgb), 0.14);
+  }
+  50% {
+    transform: scale(1.03);
+    border-color: rgba(var(--avh-accent-rgb), 0.25);
+  }
+}
+
+@keyframes avh-breathe-outer {
+  0%, 100% {
+    transform: scale(1);
+    border-color: rgba(var(--avh-accent-rgb), 0.08);
+  }
+  50% {
+    transform: scale(1.02);
+    border-color: rgba(var(--avh-accent-rgb), 0.16);
+  }
 }
 
 /* --------------------------------------------------------------------------
-   Speaking state — gentle glow
+   Speaking state — glow + subtle audio-reactive bounce
    -------------------------------------------------------------------------- */
 
 .avh-orb-container--speaking .avh-ring--inner {
-  box-shadow: 0 0 30px rgba(var(--avh-accent-rgb), 0.25);
-  border-color: rgba(var(--avh-accent-rgb), 0.45);
-  background: rgba(var(--avh-accent-rgb), 0.12);
+  box-shadow: 0 0 30px rgba(var(--avh-accent-rgb), 0.4), 0 0 60px rgba(var(--avh-accent-rgb), 0.2);
+  border-color: rgba(var(--avh-accent-rgb), 0.5);
+  background: rgba(var(--avh-accent-rgb), 0.14);
+  animation: avh-speak-bounce 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.avh-orb-container--speaking .avh-ring--mid {
+  animation: avh-speak-mid 1.8s ease-in-out infinite;
 }
 
 .avh-orb-container--speaking .avh-ring--outer {
-  animation: avh-glow 2s ease-in-out infinite;
+  animation: avh-speak-outer 2.2s ease-in-out infinite;
 }
 
-@keyframes avh-glow {
+@keyframes avh-speak-bounce {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 30px rgba(var(--avh-accent-rgb), 0.4), 0 0 60px rgba(var(--avh-accent-rgb), 0.2);
+  }
+  25% {
+    transform: scale(1.04);
+    box-shadow: 0 0 36px rgba(var(--avh-accent-rgb), 0.5), 0 0 70px rgba(var(--avh-accent-rgb), 0.25);
+  }
+  50% {
+    transform: scale(0.98);
+    box-shadow: 0 0 24px rgba(var(--avh-accent-rgb), 0.35), 0 0 50px rgba(var(--avh-accent-rgb), 0.15);
+  }
+  75% {
+    transform: scale(1.02);
+    box-shadow: 0 0 32px rgba(var(--avh-accent-rgb), 0.45), 0 0 64px rgba(var(--avh-accent-rgb), 0.2);
+  }
+}
+
+@keyframes avh-speak-mid {
+  0%, 100% {
+    transform: scale(1);
+    border-color: rgba(var(--avh-accent-rgb), 0.14);
+  }
+  40% {
+    transform: scale(1.03);
+    border-color: rgba(var(--avh-accent-rgb), 0.28);
+  }
+  70% {
+    transform: scale(0.99);
+    border-color: rgba(var(--avh-accent-rgb), 0.18);
+  }
+}
+
+@keyframes avh-speak-outer {
   0%, 100% { border-color: rgba(var(--avh-accent-rgb), 0.08); }
-  50% { border-color: rgba(var(--avh-accent-rgb), 0.18); }
+  35% { border-color: rgba(var(--avh-accent-rgb), 0.22); }
+  65% { border-color: rgba(var(--avh-accent-rgb), 0.12); }
 }
 
 /* --------------------------------------------------------------------------
@@ -291,9 +366,24 @@
   left: 20px;
   right: 20px;
   text-align: center;
+  transition: opacity 0.3s ease;
+}
+
+/* Fade out when transitioning to processing */
+.avh-transcript-overlay--processing {
+  opacity: 0.45;
+  animation: avh-transcript-fade 0.8s ease-out forwards;
+}
+
+@keyframes avh-transcript-fade {
+  0% { opacity: 0.85; }
+  100% { opacity: 0.35; }
 }
 
 .avh-transcript-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   font-size: 18px;
   font-weight: 400;
   color: rgba(255, 255, 255, 0.85);
@@ -304,6 +394,22 @@
   border-radius: 16px;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+/* Pulsing dot — active listening indicator */
+.avh-listening-dot {
+  flex-shrink: 0;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--avh-accent);
+  animation: avh-dot-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes avh-dot-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.75); }
 }
 
 /* --------------------------------------------------------------------------
@@ -375,4 +481,46 @@
   color: var(--avh-text-dim);
   font-weight: 400;
   letter-spacing: 0.02em;
+}
+
+/* --------------------------------------------------------------------------
+   Reduced motion — respect user accessibility preferences
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .avh-orb-container--listening .avh-ring--outer,
+  .avh-orb-container--listening .avh-ring--mid,
+  .avh-orb-container--listening .avh-ring--inner,
+  .avh-orb-container--processing .avh-ring--inner,
+  .avh-orb-container--processing .avh-ring--mid,
+  .avh-orb-container--processing .avh-ring--outer,
+  .avh-orb-container--speaking .avh-ring--inner,
+  .avh-orb-container--speaking .avh-ring--mid,
+  .avh-orb-container--speaking .avh-ring--outer,
+  .avh-listening-dot {
+    animation: none;
+  }
+
+  .avh-orb-container--processing .avh-ring--inner {
+    border-color: var(--avh-accent);
+    box-shadow: 0 0 20px rgba(var(--avh-accent-rgb), 0.25);
+  }
+
+  .avh-orb-container--speaking .avh-ring--inner {
+    box-shadow: 0 0 30px rgba(var(--avh-accent-rgb), 0.4);
+  }
+
+  .avh-listening-dot {
+    opacity: 1;
+  }
+
+  .avh-response-toast,
+  .avh-response-toast--exiting {
+    animation: none;
+  }
+
+  .avh-transcript-overlay--processing {
+    animation: none;
+    opacity: 0.4;
+  }
 }

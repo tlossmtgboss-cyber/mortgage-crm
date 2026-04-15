@@ -280,6 +280,7 @@ async def orchestrator_chat(
         message = _sanitize_message(data.get("message", ""))
         session_id = data.get("session_id")
         document_context = _sanitize_document_context(data.get("document_context"))
+        voice_mode = data.get("voice_mode", False)
 
         # Extract active entity context from CRM UI (lead/loan the user is viewing)
         active_lead_id = data.get("lead_id")
@@ -320,6 +321,7 @@ async def orchestrator_chat(
             document_context=document_context,
             active_lead_id=active_lead_id,
             active_loan_id=active_loan_id,
+            voice_mode=voice_mode,
         )
 
         # Save to conversation memory (non-fatal on failure)
@@ -370,6 +372,7 @@ async def orchestrator_chat_stream(
     data = await request.json()
     message = _sanitize_message(data.get("message", ""))
     session_id = data.get("session_id") or str(uuid.uuid4())
+    voice_mode = data.get("voice_mode", False)
 
     if not message:
         raise HTTPException(status_code=400, detail="Message is required")
@@ -391,7 +394,7 @@ async def orchestrator_chat_stream(
 
             # Stream response through the agent
             full_response = ""
-            async for chunk in service.process_message_stream(message, conversation_history):
+            async for chunk in service.process_message_stream(message, conversation_history, voice_mode=voice_mode):
                 chunk_type = chunk.get("type")
 
                 if chunk_type == "content":

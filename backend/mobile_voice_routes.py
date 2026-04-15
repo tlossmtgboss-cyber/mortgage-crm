@@ -12,8 +12,10 @@ import json
 import asyncio
 import base64
 import os
+import time
 import httpx
-from typing import Optional, Dict, Any, AsyncGenerator, TYPE_CHECKING
+from typing import Optional, Dict, Any, AsyncGenerator, List, TYPE_CHECKING
+from collections import defaultdict
 import uuid
 
 if TYPE_CHECKING:
@@ -41,6 +43,32 @@ GOOGLE_TTS_LANGUAGE = os.getenv("GOOGLE_TTS_LANGUAGE", "en-US")
 # Voice settings
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")  # Rachel - warm female voice
 TTS_MODEL = os.getenv("TTS_MODEL", "eleven_turbo_v2_5")  # Fast model for low latency
+
+# WebSocket idle timeout (30 minutes)
+WS_IDLE_TIMEOUT_SECONDS = 30 * 60
+# Idle check interval (60 seconds)
+WS_IDLE_CHECK_INTERVAL = 60
+# Max audio chunk size (1 MB)
+MAX_AUDIO_CHUNK_BYTES = 1_048_576
+
+# TTS rate limiter: in-memory tracking per user
+_tts_rate_limit: Dict[int, List[float]] = defaultdict(list)
+TTS_RATE_LIMIT_MAX = 30  # max requests
+TTS_RATE_LIMIT_WINDOW = 60  # per 60 seconds
+
+
+def _check_tts_rate_limit(user_id: int) -> bool:
+    """Return True if rate limit exceeded. Prunes stale entries."""
+    now = time.monotonic()
+    cutoff = now - TTS_RATE_LIMIT_WINDOW
+    timestamps = _tts_rate_limit[user_id]
+    # Prune old entries
+    _tts_rate_limit[user_id] = [t for t in timestamps if t > cutoff]
+    if len(_tts_rate_limit[user_id]) >= TTS_RATE_LIMIT_MAX:
+        return True
+    _tts_rate_limit[user_id].append(now)
+    return False
+
 
 # White-label voice assistant name — configurable per deployment/tenant (H-1)
 DEFAULT_VOICE_ASSISTANT_NAME = os.getenv("VOICE_ASSISTANT_NAME", "Aria")
@@ -333,15 +361,21 @@ class AriaVoiceAgent:
 
             logger.info(f"[AriaVoiceAgent] Processing via orchestrator: '{transcript}' for user {self.user_id}")
 
-            # Look up actual user from database
-            user_result = db.execute(
-                text("SELECT id, email, role, first_name, last_name FROM users WHERE email = :email"),
-                {"email": self.user_id}
-            ).fetchone()
+            # Look up real User model from database
+            current_user = db.query(User).filter(User.email == self.user_id).first()
 
-            if user_result:
-                # Create a mock user object with required attributes
-                class MockUser:
+            if not current_user:
+                logger.warning(
+                    f"[AriaVoiceAgent] Real User model not found for email={self.user_id}, falling back to mock"
+                )
+
+                # Fallback: try raw query for basic info, build a mock
+                user_result = db.execute(
+                    text("SELECT id, email, role, first_name, last_name FROM users WHERE email = :email"),
+                    {"email": self.user_id}
+                ).fetchone()
+
+                class _FallbackUser:
                     def __init__(self, id, email, role, first_name, last_name):
                         self.id = id
                         self.email = email
@@ -355,27 +389,25 @@ class AriaVoiceAgent:
                             return f"{self.first_name} {self.last_name}"
                         return self.first_name or self.last_name or ""
 
-                current_user = MockUser(
-                    id=user_result[0],
-                    email=user_result[1],
-                    role=user_result[2],
-                    first_name=user_result[3] or "",
-                    last_name=user_result[4] or ""
-                )
-            else:
-                # Fallback user object if not found
-                class MockUser:
-                    def __init__(self):
-                        self.id = 1
-                        self.email = self.user_id
-                        self.role = "loan_officer"
-                        self.first_name = "User"
-                        self.last_name = ""
-
-                    @property
-                    def name(self):
-                        return self.first_name
-                current_user = MockUser()
+                if user_result:
+                    current_user = _FallbackUser(
+                        id=user_result[0],
+                        email=user_result[1],
+                        role=user_result[2],
+                        first_name=user_result[3] or "",
+                        last_name=user_result[4] or ""
+                    )
+                else:
+                    logger.warning(
+                        f"[AriaVoiceAgent] No user record at all for email={self.user_id}, using stub"
+                    )
+                    current_user = _FallbackUser(
+                        id=1,
+                        email=self.user_id,
+                        role="loan_officer",
+                        first_name="User",
+                        last_name=""
+                    )
 
             # Initialize the AI service with database and user context
             service = AIAgentService(
@@ -475,6 +507,8 @@ class MobileVoiceSession:
         self.is_speaking = False
         self.pending_transcript = ""
         self.silence_timer = None
+        self.last_message_time = time.monotonic()
+        self._idle_check_task: Optional[asyncio.Task] = None
 
     async def start(self):
         """Initialize the voice session"""
@@ -512,9 +546,39 @@ class MobileVoiceSession:
             "tts_enabled": bool(ELEVENLABS_API_KEY or OPENAI_API_KEY)
         })
 
+        # Start idle timeout background check
+        self._idle_check_task = asyncio.create_task(self._idle_timeout_loop())
+
         # Play greeting - keep it casual and short
         greeting = "Hey! What's up?"
         await self._speak(greeting)
+
+    async def _idle_timeout_loop(self):
+        """Background task: close WebSocket if idle for WS_IDLE_TIMEOUT_SECONDS."""
+        try:
+            while self.is_active:
+                await asyncio.sleep(WS_IDLE_CHECK_INTERVAL)
+                if not self.is_active:
+                    break
+                elapsed = time.monotonic() - self.last_message_time
+                if elapsed >= WS_IDLE_TIMEOUT_SECONDS:
+                    logger.info(
+                        f"[MobileVoiceSession] Session {self.session_id} idle for "
+                        f"{elapsed:.0f}s, closing"
+                    )
+                    await self._send_event("error", {
+                        "message": "Connection closed due to inactivity"
+                    })
+                    try:
+                        await self.websocket.close(code=4002, reason="Idle timeout")
+                    except Exception:
+                        pass
+                    self.is_active = False
+                    break
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.error(f"[MobileVoiceSession] Idle check error: {e}")
 
     async def _on_transcript(self, result: Dict[str, Any]):
         """Handle incoming transcript from STT"""
@@ -581,13 +645,38 @@ class MobileVoiceSession:
 
     async def handle_message(self, message: Dict[str, Any]):
         """Handle incoming WebSocket message from mobile client"""
+        # Track activity for idle timeout
+        self.last_message_time = time.monotonic()
+
         msg_type = message.get("type", "")
 
         if msg_type == "audio":
             # Incoming audio from mobile app
             audio_data = message.get("data", "")
             if audio_data and self.stt_client:
+                # Validate chunk size before decoding
+                # Base64 is ~4/3 the size of raw bytes; check encoded length as proxy
+                if len(audio_data) > MAX_AUDIO_CHUNK_BYTES * 4 // 3 + 4:
+                    logger.warning(
+                        f"[MobileVoiceSession] Audio chunk too large: "
+                        f"{len(audio_data)} base64 chars, rejecting"
+                    )
+                    await self._send_event("error", {
+                        "message": "Audio chunk exceeds 1 MB limit"
+                    })
+                    return
+
                 audio_bytes = base64.b64decode(audio_data)
+
+                if len(audio_bytes) > MAX_AUDIO_CHUNK_BYTES:
+                    logger.warning(
+                        f"[MobileVoiceSession] Audio chunk too large: "
+                        f"{len(audio_bytes)} bytes, rejecting"
+                    )
+                    await self._send_event("error", {
+                        "message": "Audio chunk exceeds 1 MB limit"
+                    })
+                    return
                 logger.info(f"[MobileVoiceSession] Received audio: {len(audio_bytes)} bytes")
 
                 # Strip WAV header if present (first 44 bytes for standard WAV)
@@ -652,6 +741,9 @@ class MobileVoiceSession:
         """Close the voice session"""
         self.is_active = False
 
+        if self._idle_check_task and not self._idle_check_task.done():
+            self._idle_check_task.cancel()
+
         if self.stt_client:
             await self.stt_client.close()
 
@@ -675,8 +767,13 @@ async def mobile_voice_websocket(
     - Server streams back AI response audio
     - Both sides can interrupt the conversation
 
+    Authentication:
+    - Token in URL query param, Authorization header, or Sec-WebSocket-Protocol (existing)
+    - OR first message: {"type": "auth", "token": "jwt_token_here"} (new, 10s timeout)
+
     Message Types (Client -> Server):
-    - {"type": "audio", "data": "<base64-audio>"}
+    - {"type": "auth", "token": "jwt_token_here"} (first message only, if no URL token)
+    - {"type": "audio", "data": "<base64-audio>"} (max 1 MB decoded)
     - {"type": "start_listening"}
     - {"type": "stop_listening"}
     - {"type": "interrupt"}
@@ -697,20 +794,70 @@ async def mobile_voice_websocket(
     """
     logger.info(f"[MobileVoice] WebSocket connection attempt from {websocket.client}")
 
+    session = None
     try:
         await websocket.accept()
         logger.info("[MobileVoice] WebSocket accepted")
 
-        # Authenticate user from token (query param, header, or protocol)
+        # --- Authentication: URL params/headers first, fall back to first-message auth ---
         auth_user, auth_error = authenticate_websocket(websocket, db)
 
         if auth_user:
             user_id = auth_user.email
-            logger.info(f"[MobileVoice] Authenticated user ID: {auth_user.id}")
+            logger.info(f"[MobileVoice] Authenticated via URL/header, user ID: {auth_user.id}")
         else:
-            logger.warning(f"[MobileVoice] Auth failed: {auth_error}")
-            await websocket.close(code=4001, reason="Authentication required")
-            return
+            # No token in URL/headers — wait for first message auth
+            logger.info("[MobileVoice] No URL token, waiting for first-message auth")
+            try:
+                first_msg = await asyncio.wait_for(
+                    websocket.receive_json(), timeout=10.0
+                )
+            except asyncio.TimeoutError:
+                logger.warning("[MobileVoice] First-message auth timed out (10s)")
+                await websocket.close(code=4001, reason="Authentication timeout")
+                return
+            except Exception as recv_err:
+                logger.warning(f"[MobileVoice] Error receiving first message: {recv_err}")
+                await websocket.close(code=4001, reason="Authentication required")
+                return
+
+            if isinstance(first_msg, dict) and first_msg.get("type") == "auth":
+                token = first_msg.get("token", "")
+                if not token:
+                    logger.warning("[MobileVoice] Auth message missing token field")
+                    await websocket.close(code=4001, reason="Token missing in auth message")
+                    return
+
+                # Decode and look up user using same auth path
+                from utils.websocket_auth import decode_jwt_token, lookup_user_by_id, lookup_user_by_email
+                payload = decode_jwt_token(token)
+                if not payload:
+                    logger.warning("[MobileVoice] First-message token invalid")
+                    await websocket.close(code=4001, reason="Invalid authentication token")
+                    return
+
+                auth_user = None
+                uid = payload.get("user_id")
+                email = payload.get("sub")
+                if uid:
+                    try:
+                        auth_user = lookup_user_by_id(db, int(uid))
+                    except (ValueError, TypeError):
+                        pass
+                if not auth_user and email:
+                    auth_user = lookup_user_by_email(db, email)
+
+                if not auth_user:
+                    logger.warning("[MobileVoice] First-message auth: user not found")
+                    await websocket.close(code=4001, reason="User not found")
+                    return
+
+                user_id = auth_user.email
+                logger.info(f"[MobileVoice] Authenticated via first-message, user ID: {auth_user.id}")
+            else:
+                logger.warning(f"[MobileVoice] First message not auth type: {first_msg.get('type') if isinstance(first_msg, dict) else 'non-dict'}")
+                await websocket.close(code=4001, reason="Authentication required")
+                return
 
         # Create voice session
         session = MobileVoiceSession(websocket, user_id, db)
@@ -718,8 +865,11 @@ async def mobile_voice_websocket(
 
         # Main message loop
         try:
-            while True:
+            while session.is_active:
                 message = await websocket.receive_json()
+                # Skip auth messages after initial auth (idempotent)
+                if isinstance(message, dict) and message.get("type") == "auth":
+                    continue
                 await session.handle_message(message)
 
         except WebSocketDisconnect:
@@ -732,14 +882,15 @@ async def mobile_voice_websocket(
                 "type": "error",
                 "message": "Internal server error"
             })
-        except Exception as e:
-            logger.warning(f"Error sending error to WebSocket client: {e}")
+        except Exception as send_err:
+            logger.warning(f"Error sending error to WebSocket client: {send_err}")
 
     finally:
-        try:
-            await session.close()
-        except Exception as e:
-            logger.warning(f"Error closing voice session: {e}")
+        if session:
+            try:
+                await session.close()
+            except Exception as e:
+                logger.warning(f"Error closing voice session: {e}")
 
 
 # =============================================================================
@@ -803,6 +954,11 @@ async def synthesize_text(request: Request):
         raise
     except Exception:
         raise HTTPException(401, "Authentication required")
+
+    # Rate limit: 30 requests/minute per user
+    if _check_tts_rate_limit(current_user.id):
+        logger.warning(f"[TTS] Rate limit exceeded for user {current_user.id}")
+        raise HTTPException(429, "Rate limit exceeded — max 30 requests per minute")
 
     data = await request.json()
     text = data.get("text", "")

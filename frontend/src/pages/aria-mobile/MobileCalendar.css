@@ -330,3 +330,39 @@
     opacity: 0.5;
   }
 }
+
+/* ---------------------------------------------------------------------------
+   Reduced motion
+   --------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .mcal-month-chevron {
+    transition: none;
+  }
+
+  .mcal-month-nav {
+    animation: none;
+  }
+
+  .mcal-nav-arrow {
+    transition: none;
+  }
+
+  .mcal-tab {
+    transition: none;
+  }
+
+  .mcal-card {
+    transition: none;
+  }
+
+  .mcal-card:active {
+    transform: none;
+  }
+
+  .mcal-skeleton-date,
+  .mcal-skeleton-card {
+    animation: none;
+    opacity: 0.7;
+  }
+}

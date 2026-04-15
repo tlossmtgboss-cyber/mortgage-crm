@@ -43,16 +43,25 @@ function getOrCreateSessionId() {
 
 // ---------------------------------------------------------------------------
 // Sentence splitter — splits streaming text into speakable chunks
+// Handles abbreviations, decimal numbers, and ellipsis without false splits
 // ---------------------------------------------------------------------------
 
-const SENTENCE_END = /(?<=[.!?])\s+|(?<=\n)/;
+const ABBREVIATIONS = /(?:Mr|Mrs|Ms|Dr|Jr|Sr|St|vs|etc|e\.g|i\.e)\./gi;
 
 function extractSentences(buffer) {
-  // Split on sentence boundaries; keep the last fragment as leftover
-  const parts = buffer.split(SENTENCE_END);
+  // Protect abbreviations by replacing dots with placeholder
+  let safe = buffer.replace(ABBREVIATIONS, (m) => m.replace(/\./g, '\x00'));
+  // Protect decimal numbers (3.5, $1,500.00)
+  safe = safe.replace(/(\d)\.(\d)/g, '$1\x00$2');
+  // Protect ellipsis
+  safe = safe.replace(/\.\.\./g, '\x00\x00\x00');
+  // Split on sentence boundaries
+  const parts = safe.split(/(?<=[.!?])\s+|(?<=\n)/);
   if (parts.length <= 1) return { sentences: [], leftover: buffer };
   const leftover = parts.pop();
-  return { sentences: parts.filter(Boolean), leftover };
+  // Restore dots
+  const sentences = parts.filter(Boolean).map((s) => s.replace(/\x00/g, '.'));
+  return { sentences, leftover: leftover.replace(/\x00/g, '.') };
 }
 
 // ---------------------------------------------------------------------------
@@ -85,7 +94,15 @@ class TTSQueue {
     const text = this._queue.shift();
 
     try {
-      const res = await api.post('/api/v1/mobile-voice/tts/synthesize', { text });
+      const res = await api.post('/api/v1/mobile-voice/tts/synthesize', {
+        text,
+        voice_settings: {
+          stability: 0.45,
+          similarity_boost: 0.78,
+          style: 0.35,
+          use_speaker_boost: true
+        }
+      });
       if (this._aborted) return;
 
       const b64 = res.data?.audio;
@@ -106,17 +123,9 @@ class TTSQueue {
       });
     } catch (err) {
       if (this._aborted) return;
-      console.warn('[TTSQueue] TTS failed for chunk, using browser voice:', err.message);
-      // Fallback to browser SpeechSynthesis for this chunk
-      await new Promise((resolve) => {
-        const synth = window.speechSynthesis;
-        if (!synth) { resolve(); return; }
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.0;
-        utterance.onend = resolve;
-        utterance.onerror = resolve;
-        synth.speak(utterance);
-      });
+      // Instead of browser SpeechSynthesis fallback, just skip audio for this chunk
+      // The text is already visible in the response toast
+      console.warn('[TTSQueue] TTS failed, text visible in response toast:', err.message);
     }
 
     if (!this._aborted) this._playNext();
@@ -130,7 +139,6 @@ class TTSQueue {
       this._currentAudio.currentTime = 0;
       this._currentAudio = null;
     }
-    window.speechSynthesis?.cancel();
   }
 
   onAllDone(fn) { this._onAllDone = fn; }
@@ -334,10 +342,13 @@ export default function AriaVoiceHome() {
 
       {/* Center content */}
       <div className="avh-center">
-        {/* Live transcript overlay */}
-        {voiceState === 'listening' && transcript && (
-          <div className="avh-transcript-overlay">
-            <p className="avh-transcript-text">{transcript}</p>
+        {/* Live transcript overlay — visible during listening and briefly during processing */}
+        {(voiceState === 'listening' || voiceState === 'processing') && transcript && (
+          <div className={`avh-transcript-overlay ${voiceState === 'processing' ? 'avh-transcript-overlay--processing' : ''}`}>
+            <p className="avh-transcript-text">
+              {voiceState === 'listening' && <span className="avh-listening-dot" />}
+              {transcript}
+            </p>
           </div>
         )}
 

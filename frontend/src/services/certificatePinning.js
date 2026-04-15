@@ -68,12 +68,12 @@ const PINNED_DOMAINS = {
       //     | openssl pkey -pubin -outform der \
       //     | openssl dgst -sha256 -binary \
       //     | openssl enc -base64
-      'sha256/PLACEHOLDER_PRIMARY_PIN_HASH_API',
+      'sha256/HVI1upeweRbk9q/xLQvpjEz4fwJnZN1SGRc/agwhKsA=',
       // Backup cert pin — pre-generated backup key pair for rotation
       // Generate a backup key pair, store the private key offline, and pin
       // the public key hash here. When the primary cert expires or is
       // compromised, issue a new cert with the backup key.
-      'sha256/PLACEHOLDER_BACKUP_PIN_HASH_API',
+      'sha256/AlSQhgtJirc8ahLyekmtX+Iw+v46yPYRLJt9Cq1GlB0=',
     ],
     includeSubdomains: true,
   },
@@ -86,9 +86,9 @@ const PINNED_DOMAINS = {
       //     | openssl pkey -pubin -outform der \
       //     | openssl dgst -sha256 -binary \
       //     | openssl enc -base64
-      'sha256/PLACEHOLDER_PRIMARY_PIN_HASH_APP',
+      'sha256/amKlKR/XR507OEn640jX8dUOfmFxM+fz1umrpwlbi5s=',
       // Backup cert pin — pre-generated backup key pair for rotation
-      'sha256/PLACEHOLDER_BACKUP_PIN_HASH_APP',
+      'sha256/AlSQhgtJirc8ahLyekmtX+Iw+v46yPYRLJt9Cq1GlB0=',
     ],
     includeSubdomains: true,
   },

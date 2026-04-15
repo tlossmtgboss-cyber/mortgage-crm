@@ -58,13 +58,15 @@ const useMobileAudioCapture = ({ sessionId, onTranscript, enabled = true }) => {
   const connectWebSocket = useCallback((sid) => {
     return new Promise((resolve, reject) => {
       const token = localStorage.getItem('token');
-      // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
-      const url = `${WS_BASE_URL}/api/v1/call-monitoring/sessions/${sid}/audio-stream?token=${token}`;
+      const url = `${WS_BASE_URL}/api/v1/call-monitoring/sessions/${sid}/audio-stream`;
 
       setConnectionStatus('connecting');
       const ws = new WebSocket(url);
 
       ws.onopen = () => {
+        // Authenticate via first message instead of URL query param
+        // to avoid token exposure in server logs, browser history, and proxy logs
+        ws.send(JSON.stringify({ type: 'auth', token }));
         console.log('[MobileAudioCapture] WebSocket connected');
         setConnectionStatus('connected');
         resolve(ws);

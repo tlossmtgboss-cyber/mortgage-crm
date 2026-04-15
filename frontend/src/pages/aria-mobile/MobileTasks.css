@@ -226,6 +226,54 @@
 }
 
 /* --------------------------------------------------------------------------
+   Load more
+   -------------------------------------------------------------------------- */
+
+.mt-load-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 20px;
+}
+
+.mt-load-more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+  height: 40px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 10px;
+  background: #0D1520;
+  color: #7EB8F7;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s ease;
+}
+
+.mt-load-more-btn:active {
+  opacity: 0.7;
+}
+
+.mt-load-more-btn:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.mt-load-more-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid rgba(126, 184, 247, 0.3);
+  border-top-color: #7EB8F7;
+  animation: mt-spin 0.7s linear infinite;
+}
+
+/* --------------------------------------------------------------------------
    Empty state
    -------------------------------------------------------------------------- */
 
@@ -243,4 +291,15 @@
   font-size: 15px;
   font-weight: 500;
   color: #999;
+}
+
+/* --------------------------------------------------------------------------
+   Reduced motion
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .mt-spinner,
+  .mt-load-more-spinner {
+    animation: none;
+  }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { schedulerAPI } from '../../services/api';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
@@ -184,42 +184,93 @@ export default function MobileCalendar() {
   const [loading, setLoading] = useState(true);
   const [showMonthNav, setShowMonthNav] = useState(false);
 
+  // Cache: Map of "YYYY-MM:tab" → fetched items array (max 6 entries)
+  const cacheRef = useRef(new Map());
+  const MAX_CACHE_SIZE = 6;
+
   // Derived
   const monthLabel = `${MONTH_NAMES[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
   const month = currentDate.getMonth() + 1;
   const year = currentDate.getFullYear();
 
   // -------------------------------------------------------------------------
-  // Data fetching
+  // Cache helpers
   // -------------------------------------------------------------------------
 
+  const getCacheKey = useCallback((m, y, tab) => `${y}-${String(m).padStart(2, '0')}:${tab}`, []);
+
+  const trimCache = useCallback(() => {
+    const cache = cacheRef.current;
+    while (cache.size > MAX_CACHE_SIZE) {
+      // Delete oldest entry (first key in insertion order)
+      const firstKey = cache.keys().next().value;
+      cache.delete(firstKey);
+    }
+  }, []);
+
+  // Clear cache on unmount
+  useEffect(() => {
+    return () => {
+      cacheRef.current.clear();
+    };
+  }, []);
+
+  // -------------------------------------------------------------------------
+  // Data fetching (with cache)
+  // -------------------------------------------------------------------------
+
+  const processResponse = useCallback((data, tab) => {
+    const items = Array.isArray(data) ? data : (data?.appointments || data?.items || []);
+    if (tab === 'closings') {
+      return items.filter((item) => {
+        const t = (item.appointment_type || item.type || '').toLowerCase();
+        return t.includes('closing') || t.includes('close');
+      });
+    }
+    return items;
+  }, []);
+
   const fetchData = useCallback(async () => {
-    setLoading(true);
+    const key = getCacheKey(month, year, activeTab);
+    const cached = cacheRef.current.get(key);
+
+    // If cached, show immediately without loading state
+    if (cached) {
+      setAppointments(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
+    // Always fetch fresh data in the background
     try {
       const params = { month, year };
       if (activeTab === 'closings') {
         params.type = 'closing';
       }
       const data = await schedulerAPI.getAppointments(params);
-      const items = Array.isArray(data) ? data : (data?.appointments || data?.items || []);
+      const filtered = processResponse(data, activeTab);
 
-      // Filter for closings tab
-      let filtered = items;
-      if (activeTab === 'closings') {
-        filtered = items.filter((item) => {
-          const t = (item.appointment_type || item.type || '').toLowerCase();
-          return t.includes('closing') || t.includes('close');
-        });
-      }
+      // Update cache
+      cacheRef.current.set(key, filtered);
+      trimCache();
 
-      setAppointments(filtered);
+      // Only update state if the data actually changed
+      setAppointments((prev) => {
+        const prevJson = JSON.stringify(prev);
+        const newJson = JSON.stringify(filtered);
+        return prevJson === newJson ? prev : filtered;
+      });
     } catch (err) {
       console.error('Failed to fetch appointments:', err);
-      setAppointments([]);
+      // Only clear if we had no cached data
+      if (!cached) {
+        setAppointments([]);
+      }
     } finally {
       setLoading(false);
     }
-  }, [month, year, activeTab]);
+  }, [month, year, activeTab, getCacheKey, processResponse, trimCache]);
 
   useEffect(() => {
     fetchData();

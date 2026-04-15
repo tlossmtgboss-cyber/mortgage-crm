@@ -115,6 +115,7 @@ export function streamMessage(message, sessionId = null, { onChunk, onDone, onEr
         },
         body: JSON.stringify({
           message,
+          voice_mode: true,
           ...(sessionId && { session_id: sessionId }),
         }),
         signal: controller.signal,

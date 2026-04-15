@@ -43,6 +43,38 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
+# =============================================================================
+# VOICE MODE INSTRUCTIONS — appended to system prompt when voice_mode=True
+# =============================================================================
+VOICE_MODE_INSTRUCTIONS = """
+
+VOICE MODE — You are speaking aloud via text-to-speech. Follow these rules strictly:
+
+RESPONSE FORMAT:
+- Maximum 2-3 short sentences per response
+- Use natural spoken language, NOT written language
+- NO bullet points, numbered lists, markdown, or formatting
+- NO asterisks, dashes, or special characters
+- Use contractions (I'm, you've, they're, it's, don't, won't)
+- Spell out numbers conversationally ("about fifteen hundred" not "1,500", "three loans" not "3 loans")
+- Spell out abbreviations ("FHA" say "F-H-A", "LTV" say "L-T-V")
+
+CONVERSATIONAL TONE:
+- Speak like a knowledgeable friend on a phone call, not a report generator
+- Use transition phrases naturally ("So here's the thing...", "Actually...", "Good news...")
+- Match the user's energy — if they're brief, be brief. If they're chatty, engage more
+- For greetings, be warm but brief: "Hey! What can I help with?"
+- For errors or unknowns, be honest and casual: "Hmm, I'm not finding that. Can you give me more details?"
+
+NEVER DO THESE IN VOICE MODE:
+- Never list items with bullets or numbers
+- Never say "here are some suggestions" then list them — instead, give your top recommendation directly
+- Never include URLs, file paths, or code
+- Never use parenthetical asides (like this)
+- Never say the word "pipeline" without context — say "your loan pipeline" or "your active deals"
+"""
+
+
 class AIAgentService:
     """
     Service class for the LangGraph AI Agent.
@@ -126,6 +158,7 @@ class AIAgentService:
         document_context: Optional[str] = None,
         active_lead_id: Optional[int] = None,
         active_loan_id: Optional[int] = None,
+        voice_mode: bool = False,
     ) -> Dict[str, Any]:
         """
         Process a user message through the LangGraph orchestrator.
@@ -137,6 +170,7 @@ class AIAgentService:
             document_context: Optional text extracted from a user-uploaded document
             active_lead_id: Lead ID the user is currently viewing in the CRM UI
             active_loan_id: Loan ID the user is currently viewing in the CRM UI
+            voice_mode: When True, append voice-specific instructions for TTS-friendly responses
 
         Returns:
             Response dictionary with text and metadata
@@ -145,6 +179,17 @@ class AIAgentService:
             # Run the orchestrator with two-phase tool loading
             # Phase 1: Quick intent classification (before loading tools)
             # Phase 2: Load only scoped tools for classified intent
+
+            # Inject voice mode instructions into document_context so they flow
+            # through the orchestrator pipeline to the LLM
+            effective_document_context = document_context
+            if voice_mode:
+                voice_prefix = f"[VOICE MODE INSTRUCTIONS]{VOICE_MODE_INSTRUCTIONS}[END VOICE MODE INSTRUCTIONS]"
+                if effective_document_context:
+                    effective_document_context = f"{voice_prefix}\n\n{effective_document_context}"
+                else:
+                    effective_document_context = voice_prefix
+
             result = await run_orchestrator(
                 message=message,
                 user_id=str(self.current_user.id),
@@ -158,7 +203,7 @@ class AIAgentService:
                 return_structured=return_structured,
                 db_session=self.db,  # Enable dynamic tool loading
                 current_user=self.current_user,  # Enable dynamic tool loading
-                document_context=document_context,
+                document_context=effective_document_context,
                 active_lead_id=active_lead_id,
                 active_loan_id=active_loan_id,
             )
@@ -180,7 +225,8 @@ class AIAgentService:
         message: str,
         conversation_history: Optional[list] = None,
         system_prompt: Optional[str] = None,
-        data_context: Optional[str] = None
+        data_context: Optional[str] = None,
+        voice_mode: bool = False,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Process a user message and stream the response in real-time.
@@ -193,6 +239,7 @@ class AIAgentService:
             conversation_history: Previous messages in the conversation
             system_prompt: Optional custom system prompt
             data_context: Optional data context to include
+            voice_mode: When True, append voice-specific instructions for TTS-friendly responses
 
         Yields:
             Response chunks with type and content:
@@ -206,8 +253,8 @@ class AIAgentService:
             # Build messages array
             messages = self._build_messages(message, conversation_history)
 
-            # Build system prompt with context
-            full_system_prompt = self._build_system_prompt(system_prompt, data_context)
+            # Build system prompt with context (includes voice instructions when voice_mode=True)
+            full_system_prompt = self._build_system_prompt(system_prompt, data_context, voice_mode=voice_mode)
 
             # Get tool definitions
             tools = self._get_tool_definitions()
@@ -582,7 +629,8 @@ class AIAgentService:
         custom_prompt: Optional[str] = None,
         data_context: Optional[str] = None,
         context_type: str = "mortgage",  # minimal, conversational, mortgage, tools, agent, full
-        user_message: Optional[str] = None  # For smart routing based on query content
+        user_message: Optional[str] = None,  # For smart routing based on query content
+        voice_mode: bool = False,  # When True, append voice-specific TTS instructions
     ) -> str:
         """
         Build the system prompt with context-aware optimization.
@@ -601,15 +649,17 @@ class AIAgentService:
                 - "agent": Multi-agent orchestration
                 - "full": Everything loaded
             user_message: Optional user message for smart routing (auto-detects optimal context)
+            voice_mode: When True, append voice-specific instructions for TTS-friendly output
 
         Returns:
             Optimized system prompt string
         """
         # If custom prompt provided, use it directly (backwards compatible)
         if custom_prompt:
-            if data_context:
-                return f"{custom_prompt}\n\n{data_context}"
-            return custom_prompt
+            result = f"{custom_prompt}\n\n{data_context}" if data_context else custom_prompt
+            if voice_mode:
+                result += VOICE_MODE_INSTRUCTIONS
+            return result
 
         # Try SMART routing based on user message content (highest priority)
         if user_message and PROMPT_OPTIMIZATION_AVAILABLE:
@@ -617,9 +667,10 @@ class AIAgentService:
                 base_prompt = smart_get_prompt(user_message)
                 base_prompt = self._inject_tenant_constraints(base_prompt)
                 logger.debug(f"[PROMPT_ROUTER] Smart-routed prompt for: '{user_message[:50]}...'")
-                if data_context:
-                    return f"{base_prompt}\n\n{data_context}"
-                return base_prompt
+                result = f"{base_prompt}\n\n{data_context}" if data_context else base_prompt
+                if voice_mode:
+                    result += VOICE_MODE_INSTRUCTIONS
+                return result
             except Exception as e:
                 logger.warning(f"Smart prompt routing failed: {e}")
 
@@ -651,9 +702,10 @@ class AIAgentService:
                 base_prompt = self._prompt_service.get_system_prompt(context)
                 base_prompt = self._inject_tenant_constraints(base_prompt)
 
-                if data_context:
-                    return f"{base_prompt}\n\n{data_context}"
-                return base_prompt
+                result = f"{base_prompt}\n\n{data_context}" if data_context else base_prompt
+                if voice_mode:
+                    result += VOICE_MODE_INSTRUCTIONS
+                return result
 
             except Exception as e:
                 logger.warning(f"Optimized prompt loading failed, using fallback: {e}")
@@ -682,10 +734,10 @@ SECURITY RULES (non-negotiable):
         # Inject tenant isolation constraints (AI-001)
         base_prompt = self._inject_tenant_constraints(base_prompt)
 
-        if data_context:
-            return f"{base_prompt}\n\n{data_context}"
-
-        return base_prompt
+        result = f"{base_prompt}\n\n{data_context}" if data_context else base_prompt
+        if voice_mode:
+            result += VOICE_MODE_INSTRUCTIONS
+        return result
 
     def _inject_tenant_constraints(self, prompt: str) -> str:
         """Inject per-tenant isolation constraints into the system prompt (AI-001).

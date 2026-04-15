@@ -362,3 +362,157 @@
   letter-spacing: 0.2px;
   margin: 0;
 }
+
+/* --------------------------------------------------------------------------
+   Confirm Modal
+   -------------------------------------------------------------------------- */
+
+.mci-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: mci-overlay-in 0.18s ease-out;
+}
+
+@keyframes mci-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.mci-confirm-box {
+  background: #0D1520;
+  border: 1px solid #1E3050;
+  border-radius: 18px;
+  padding: 24px 22px 20px;
+  width: 88%;
+  max-width: 340px;
+  animation: mci-modal-in 0.2s ease-out;
+}
+
+@keyframes mci-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.mci-confirm-title {
+  font-family: var(--mci-font-body);
+  font-size: 17px;
+  font-weight: 700;
+  color: #E8F0FF;
+  margin: 0 0 8px;
+}
+
+.mci-confirm-message {
+  font-size: 14px;
+  color: rgba(232, 240, 255, 0.6);
+  line-height: 1.5;
+  margin: 0 0 20px;
+}
+
+.mci-confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.mci-confirm-cancel-btn {
+  background: transparent;
+  border: 1px solid #1E3050;
+  border-radius: 10px;
+  padding: 9px 18px;
+  font-family: var(--mci-font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(232, 240, 255, 0.55);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+
+.mci-confirm-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(126, 184, 247, 0.25);
+}
+
+.mci-confirm-cancel-btn:focus-visible {
+  box-shadow: 0 0 0 2px #7EB8F7;
+}
+
+.mci-confirm-ok-btn {
+  background: #7EB8F7;
+  border: none;
+  border-radius: 10px;
+  padding: 9px 18px;
+  font-family: var(--mci-font-body);
+  font-size: 14px;
+  font-weight: 700;
+  color: #060A10;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+  outline: none;
+}
+
+.mci-confirm-ok-btn:hover {
+  opacity: 0.88;
+}
+
+.mci-confirm-ok-btn:focus-visible {
+  box-shadow: 0 0 0 2px #E8F0FF;
+}
+
+.mci-confirm-ok-btn--destructive {
+  background: #F87171;
+  color: #fff;
+}
+
+.mci-confirm-ok-btn--destructive:focus-visible {
+  box-shadow: 0 0 0 2px #F87171;
+}
+
+/* --------------------------------------------------------------------------
+   Reduced Motion
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .mci-live-dot--animated {
+    animation: none;
+  }
+
+  .mci-start-btn-spinner {
+    animation: none;
+  }
+
+  .mci-back-btn,
+  .mci-end-call-btn,
+  .mci-start-btn,
+  .mci-confirm-cancel-btn,
+  .mci-confirm-ok-btn {
+    transition: none;
+  }
+
+  .mci-start-btn:active {
+    transform: none;
+  }
+
+  .mci-confirm-overlay {
+    animation: none;
+  }
+
+  .mci-confirm-box {
+    animation: none;
+  }
+}
