@@ -98,7 +98,7 @@ export async function sendMessage(message, sessionId = null, options = {}, { sig
  * @param {Object} callbacks - { onChunk, onDone, onError }
  * @returns {{ abort: () => void }}
  */
-export function streamMessage(message, sessionId = null, { onChunk, onDone, onError } = {}) {
+export function streamMessage(message, sessionId = null, { onChunk, onDone, onError, onAction } = {}) {
   const controller = new AbortController();
 
   (async () => {
@@ -149,6 +149,12 @@ export function streamMessage(message, sessionId = null, { onChunk, onDone, onEr
             }
             if (data.done) {
               onDone?.(fullText, data.session_id);
+            }
+            if (data.tool_result) {
+              onAction?.({
+                tool: data.tool_result,
+                result: data.result || {},
+              });
             }
             if (data.error) {
               onError?.(data.error);

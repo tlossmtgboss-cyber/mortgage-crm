@@ -6,8 +6,10 @@ Tools providing compliance gate functions for outbound contact tools.
 validation, and composite outbound contact validation.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict, Any
+from zoneinfo import ZoneInfo
 
 from .base import (
     mortgage_tool,
@@ -16,34 +18,8 @@ from .base import (
     execute_single,
 )
 
+logger = logging.getLogger(__name__)
 
-# =============================================================================
-# Timezone offset map for calling window validation
-# =============================================================================
-
-# UTC offsets in hours for common US timezones (standard / daylight)
-# We use a simple lookup rather than requiring pytz
-_TIMEZONE_OFFSETS: Dict[str, float] = {
-    "America/New_York": -5,
-    "America/Chicago": -6,
-    "America/Denver": -7,
-    "America/Los_Angeles": -8,
-    "America/Phoenix": -7,
-    "America/Anchorage": -9,
-    "Pacific/Honolulu": -10,
-    "US/Eastern": -5,
-    "US/Central": -6,
-    "US/Mountain": -7,
-    "US/Pacific": -8,
-    "EST": -5,
-    "CST": -6,
-    "MST": -7,
-    "PST": -8,
-    "EDT": -4,
-    "CDT": -5,
-    "MDT": -6,
-    "PDT": -7,
-}
 
 # TCPA-compliant calling window (local time)
 CALLING_WINDOW_START = 8   # 8:00 AM
@@ -199,38 +175,48 @@ def check_tcpa_consent(
 @mortgage_tool(
     name="check_calling_window",
     description="Validate that current time is within TCPA-compliant calling hours (8 AM - 9 PM) "
-                "in the contact's local timezone. Returns error if outside the window.",
+                "in the RECIPIENT's local timezone. Resolves timezone from phone number area code "
+                "if not explicitly provided. Returns error if outside the window.",
     agent_roles=["voice_os", "notification_center", "lead_nurturer", "ai_receptionist", "smart_scheduler"],
     risk_level="LOW",
     parameters={
-        "phone": "Phone number (used for logging/context)",
-        "timezone": "IANA timezone string (default: America/New_York)",
+        "phone": "Recipient phone number (used for timezone resolution and logging)",
+        "timezone": "Optional IANA timezone string — if omitted, resolved from phone area code",
     },
 )
 def check_calling_window(
     phone: str,
     timezone: Optional[str] = None,
 ) -> ToolResult:
-    """Validate calling window for a phone number in the given timezone."""
+    """Validate calling window for a phone number in the recipient's timezone.
+
+    Resolves timezone from the phone number's area code when no explicit
+    timezone is provided. Uses proper ZoneInfo for DST-aware conversion.
+    """
     if not phone or not phone.strip():
         return ToolResult.error("Phone number is required")
 
-    tz_name = timezone or "America/New_York"
-    utc_offset = _TIMEZONE_OFFSETS.get(tz_name)
-
-    if utc_offset is None:
-        # Attempt to parse as a numeric offset like "-5" or "+5.5"
+    # Resolve timezone: explicit > area code inference > Eastern (most restrictive)
+    if timezone:
+        tz_name = timezone
+    else:
         try:
-            utc_offset = float(tz_name)
-        except (ValueError, TypeError):
-            return ToolResult.error(
-                f"Unrecognized timezone '{tz_name}'. Use an IANA name like 'America/New_York' "
-                f"or a numeric UTC offset like '-5'."
-            )
+            from telephony.compliance import resolve_recipient_timezone
+            tz_name = resolve_recipient_timezone(phone)
+        except ImportError:
+            tz_name = "America/New_York"
 
-    # Calculate local time from UTC
-    utc_now = datetime.now(timezone.utc)
-    local_now = utc_now + timedelta(hours=utc_offset)
+    # Use ZoneInfo for proper DST-aware conversion
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:
+        logger.warning(f"Invalid timezone '{tz_name}', falling back to America/New_York")
+        tz_name = "America/New_York"
+        tz = ZoneInfo(tz_name)
+
+    from datetime import timezone as _tz
+    utc_now = datetime.now(_tz.utc)
+    local_now = utc_now.astimezone(tz)
     local_hour = local_now.hour
     local_minute = local_now.minute
 
@@ -239,29 +225,30 @@ def check_calling_window(
     window_data = {
         "phone": phone.strip(),
         "timezone": tz_name,
-        "utc_offset_hours": utc_offset,
         "local_time": local_now.strftime("%I:%M %p"),
         "local_hour": local_hour,
         "local_minute": local_minute,
-        "window_start": f"{CALLING_WINDOW_START}:00 AM",
-        "window_end": f"{CALLING_WINDOW_END - 12}:00 PM",
+        "window_start": "8:00 AM",
+        "window_end": "9:00 PM",
         "within_window": within_window,
     }
 
     if within_window:
         return ToolResult.success(
             data=window_data,
-            message=f"CLEAR: Local time is {local_now.strftime('%I:%M %p')} {tz_name} -- within calling window",
+            message=f"CLEAR: Recipient local time is {local_now.strftime('%I:%M %p')} {tz_name} — within calling window",
         )
     else:
         return ToolResult.error(
             error=(
-                f"BLOCKED: Local time is {local_now.strftime('%I:%M %p')} {tz_name}. "
-                f"Outside TCPA calling window ({CALLING_WINDOW_START}:00 AM - {CALLING_WINDOW_END - 12}:00 PM)."
+                f"BLOCKED: It's {local_now.strftime('%I:%M %p')} in the recipient's "
+                f"timezone ({tz_name}). Outside TCPA calling window (8 AM - 9 PM). "
+                f"Want me to schedule it for tomorrow morning?"
             ),
             message=(
-                f"BLOCKED: Local time is {local_now.strftime('%I:%M %p')} {tz_name}. "
-                f"Outside TCPA calling window ({CALLING_WINDOW_START}:00 AM - {CALLING_WINDOW_END - 12}:00 PM)."
+                f"BLOCKED: It's {local_now.strftime('%I:%M %p')} in the recipient's "
+                f"timezone ({tz_name}). Outside TCPA calling window (8 AM - 9 PM). "
+                f"Want me to schedule it for tomorrow morning?"
             ),
         )
 
@@ -298,11 +285,21 @@ def validate_outbound_contact(
     if not phone or not phone.strip():
         return ToolResult.error("Phone number is required")
 
+    # Resolve timezone: explicit > area code inference > Eastern
+    if not timezone:
+        try:
+            from telephony.compliance import resolve_recipient_timezone
+            resolved_tz = resolve_recipient_timezone(phone)
+        except ImportError:
+            resolved_tz = "America/New_York"
+    else:
+        resolved_tz = timezone
+
     clearance = {
         "phone": phone.strip(),
         "channel": channel,
         "contact_email": contact_email,
-        "timezone": timezone or "America/New_York",
+        "timezone": resolved_tz,
         "checks": {},
     }
 
@@ -358,7 +355,7 @@ def validate_outbound_contact(
     # -----------------------------------------------------------------------
     channel_lower = channel.strip().lower()
     if channel_lower in ("call", "phone", "sms"):
-        window_result = check_calling_window(phone, timezone)
+        window_result = check_calling_window(phone, resolved_tz)
         if window_result.status.value == "error":
             clearance["checks"]["calling_window"] = {
                 "passed": False,

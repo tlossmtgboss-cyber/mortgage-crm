@@ -35,7 +35,11 @@ def _check_contact_hours(recipient_tz_name: str = None) -> tuple:
         local_hour = local_now.hour
 
         if local_hour < 8 or local_hour >= 21:
-            return False, f"TCPA: Outside contact hours (8am-9pm). Local time: {local_now.strftime('%I:%M %p %Z')}"
+            return False, (
+                f"I can't send that right now — it's {local_now.strftime('%I:%M %p')} "
+                f"in the recipient's timezone ({tz_name}), which is outside the "
+                f"allowed 8 AM - 9 PM window. Want me to schedule it for tomorrow morning?"
+            )
         return True, "OK"
     except Exception as e:
         # Unknown timezone -- fail closed to avoid TCPA violation
@@ -131,7 +135,15 @@ def check_sms_consent(phone: str, organization_id: int = None, db=None) -> tuple
             logger.warning("ChannelPreference model not available — allowing (transactional exemption)")
 
         # 3. TCPA: Check contact hours (8am-9pm recipient local time)
-        # Done AFTER lead lookup so we can use the lead's actual timezone
+        # Done AFTER lead lookup so we can use the lead's actual timezone.
+        # If no timezone from ChannelPreference, resolve from phone area code.
+        if not recipient_tz:
+            try:
+                from telephony.compliance import resolve_recipient_timezone
+                recipient_tz = resolve_recipient_timezone(phone)
+            except ImportError:
+                pass  # Will default to Eastern in _check_contact_hours
+
         contact_hours_ok, hours_reason = _check_contact_hours(recipient_tz)
         if not contact_hours_ok:
             return False, hours_reason

@@ -173,6 +173,8 @@ export default function AriaVoiceHome() {
   const [showToast, setShowToast] = useState(false);
   const [toastExiting, setToastExiting] = useState(false);
   const toastTimerRef = useRef(null);
+  const [actionToast, setActionToast] = useState(null);
+  const actionToastTimerRef = useRef(null);
 
   const streamRef = useRef(null);   // { abort } from streamMessage
   const ttsQueueRef = useRef(null); // TTSQueue instance
@@ -257,6 +259,27 @@ export default function AriaVoiceHome() {
           setTimeout(() => { setShowToast(false); setToastExiting(false); setResponseText(null); }, 250);
         }, 5000);
       },
+
+      onAction: (action) => {
+        const tool = (action.tool || '').toLowerCase();
+        const result = action.result || {};
+
+        let actionMessage = null;
+        if (tool.includes('sms') || tool.includes('send_notification') || tool.includes('text')) {
+          const name = result.recipient_name || result.borrower_name || '';
+          actionMessage = name ? `SMS sent to ${name}` : 'SMS sent';
+        } else if (tool.includes('email')) {
+          actionMessage = 'Email sent';
+        } else if (tool.includes('create_task')) {
+          actionMessage = 'Task created';
+        }
+
+        if (actionMessage) {
+          clearTimeout(actionToastTimerRef.current);
+          setActionToast(actionMessage);
+          actionToastTimerRef.current = setTimeout(() => setActionToast(null), 6000);
+        }
+      },
     });
   }, [sessionId]);
 
@@ -282,6 +305,7 @@ export default function AriaVoiceHome() {
   useEffect(() => {
     return () => {
       clearTimeout(toastTimerRef.current);
+      clearTimeout(actionToastTimerRef.current);
       streamRef.current?.abort();
       ttsQueueRef.current?.stop();
     };
@@ -387,6 +411,14 @@ export default function AriaVoiceHome() {
       <div className="avh-footer">
         <span className="avh-powered">Powered by Perennia AI</span>
       </div>
+
+      {/* Action confirmation toast — persistent green bar for SMS/email/task */}
+      {actionToast && (
+        <div className="avh-action-toast">
+          <span className="avh-action-toast-icon">{'\u2713'}</span>
+          <span className="avh-action-toast-text">{actionToast}</span>
+        </div>
+      )}
 
       {/* Bottom tab navigation */}
       <AriaTabNav variant="dark" activeTab="home" />

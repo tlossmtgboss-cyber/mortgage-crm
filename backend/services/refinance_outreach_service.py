@@ -177,14 +177,28 @@ class RefinanceOutreachService:
                 'error': 'No phone number on file',
             }
 
-        # Check call window
-        current_hour = datetime.now().hour
-        if not (OUTREACH_CALL_WINDOW_START <= current_hour < OUTREACH_CALL_WINDOW_END):
+        # Check call window in RECIPIENT's timezone (TCPA compliance)
+        try:
+            from telephony.compliance import resolve_recipient_timezone
+            from zoneinfo import ZoneInfo
+            recipient_tz_name = resolve_recipient_timezone(opportunity.client_phone)
+            recipient_tz = ZoneInfo(recipient_tz_name)
+            recipient_hour = datetime.now(timezone.utc).astimezone(recipient_tz).hour
+        except Exception:
+            # Fallback to server time if timezone resolution fails
+            recipient_hour = datetime.now().hour
+            recipient_tz_name = "server"
+
+        if not (OUTREACH_CALL_WINDOW_START <= recipient_hour < OUTREACH_CALL_WINDOW_END):
             return {
                 'success': False,
-                'error': f'Outside call window ({OUTREACH_CALL_WINDOW_START}:00-{OUTREACH_CALL_WINDOW_END}:00)',
+                'error': (
+                    f'Outside call window ({OUTREACH_CALL_WINDOW_START}:00-'
+                    f'{OUTREACH_CALL_WINDOW_END}:00 in recipient timezone {recipient_tz_name})'
+                ),
                 'call_window_start': OUTREACH_CALL_WINDOW_START,
                 'call_window_end': OUTREACH_CALL_WINDOW_END,
+                'recipient_timezone': recipient_tz_name,
             }
 
         # Build call context

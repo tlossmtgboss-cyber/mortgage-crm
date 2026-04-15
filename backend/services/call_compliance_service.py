@@ -442,24 +442,45 @@ class CallComplianceService:
 
     def _check_tcpa_time_restrictions(self, phone_number: str) -> Dict[str, Any]:
         """
-        Check TCPA time restrictions.
+        Check TCPA time restrictions in the RECIPIENT's timezone.
 
-        Calls cannot be made before 8am or after 9pm in the recipient's local time.
+        Calls cannot be made before 8am or after 9pm in the recipient's
+        local time. Timezone is resolved from the phone number's area code,
+        falling back to America/New_York (most restrictive) if unknown.
         """
-        # For now, assume we're compliant - in production, would need to:
-        # 1. Look up phone number area code to determine timezone
-        # 2. Convert current time to local time
-        # 3. Check if within allowed hours (8am-9pm)
+        try:
+            from telephony.compliance import resolve_recipient_timezone
+            from zoneinfo import ZoneInfo
 
-        # Simplified implementation
-        current_hour = datetime.now().hour
-        if current_hour < 8 or current_hour >= 21:
+            tz_name = resolve_recipient_timezone(phone_number)
+            tz = ZoneInfo(tz_name)
+            now_local = datetime.now(timezone.utc).astimezone(tz)
+
+            if now_local.hour < 8 or now_local.hour >= 21:
+                return {
+                    "allowed": False,
+                    "reason": (
+                        f"It's {now_local.strftime('%I:%M %p')} in the recipient's "
+                        f"timezone ({tz_name}). TCPA prohibits contact before "
+                        f"8 AM and after 9 PM local time."
+                    ),
+                    "recipient_timezone": tz_name,
+                    "recipient_local_time": now_local.strftime('%I:%M %p'),
+                }
+
+            return {
+                "allowed": True,
+                "reason": None,
+                "recipient_timezone": tz_name,
+                "recipient_local_time": now_local.strftime('%I:%M %p'),
+            }
+        except Exception as e:
+            logger.warning(f"Timezone resolution failed for {phone_number}: {e}")
+            # Fail-closed: block if we can't determine timezone
             return {
                 "allowed": False,
-                "reason": f"TCPA restriction: Cannot call between 9pm-8am local time"
+                "reason": f"TCPA restriction: Cannot verify recipient timezone ({e})"
             }
-
-        return {"allowed": True, "reason": None}
 
     # ========================================================================
     # VIOLATION TRACKING

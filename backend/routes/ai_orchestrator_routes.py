@@ -303,9 +303,14 @@ async def orchestrator_chat(
         if not session_id:
             session_id = str(uuid.uuid4())
 
-        # Load conversation history (scoped to current user for multi-tenant safety)
+        # Load conversation history with rolling summary for older turns.
+        # After 10 messages, older turns are compressed into a deterministic summary
+        # (no LLM call) so Aria retains context without blowing the context window.
         try:
-            conversation_history = ConvMemory.get_session_messages(db, session_id, user_id=current_user.id)
+            conversation_history = ConvMemory.get_session_messages_with_summary(
+                db, session_id, user_id=current_user.id,
+                max_recent=6, summary_threshold=10
+            )
         except Exception as e:
             logger.warning(f"Failed to load conversation history: {e}")
             conversation_history = []
@@ -382,9 +387,12 @@ async def orchestrator_chat_stream(
             from agents.service import create_ai_agent_service
             from conversation_memory_service import ConversationMemory as ConvMemory
 
-            # Load conversation history
+            # Load conversation history with rolling summary for older turns
             try:
-                conversation_history = ConvMemory.get_session_messages(db, session_id, user_id=current_user.id)
+                conversation_history = ConvMemory.get_session_messages_with_summary(
+                    db, session_id, user_id=current_user.id,
+                    max_recent=6, summary_threshold=10
+                )
             except Exception as e:
                 logger.warning(f"Failed to load conversation history in stream: {e}")
                 conversation_history = []

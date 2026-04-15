@@ -331,6 +331,38 @@ class GoogleTTSClient:
             yield audio
 
 
+def build_tts_client(provider: str = None, voice_id: str = None, voice_settings: dict = None):
+    """
+    Single factory for TTS clients. Both HTTP and WebSocket paths should call this.
+
+    Args:
+        provider: "google", "elevenlabs", or "openai". None = auto-detect best available.
+        voice_id: Voice identifier. None = use default for provider.
+        voice_settings: ElevenLabs voice settings dict. None = use defaults.
+
+    Returns:
+        TTS client instance (GoogleTTSClient, ElevenLabsTTSClient, or OpenAITTSClient)
+
+    Raises:
+        ValueError if no TTS provider is available.
+    """
+    if provider == "google" and GOOGLE_TTS_ENABLED:
+        return GoogleTTSClient(voice_name=voice_id or GOOGLE_TTS_VOICE)
+    elif provider == "elevenlabs" and ELEVENLABS_API_KEY:
+        return ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID, voice_settings=voice_settings)
+    elif provider == "openai" and OPENAI_API_KEY:
+        return OpenAITTSClient(voice=voice_id or "nova")
+    # Auto-detect: prefer Google, then ElevenLabs, then OpenAI
+    elif not provider:
+        if GOOGLE_TTS_ENABLED:
+            return GoogleTTSClient(voice_name=voice_id if voice_id and voice_id.startswith("en-US") else GOOGLE_TTS_VOICE)
+        elif ELEVENLABS_API_KEY:
+            return ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID, voice_settings=voice_settings)
+        elif OPENAI_API_KEY:
+            return OpenAITTSClient(voice=voice_id or "nova")
+    raise ValueError("No TTS provider configured")
+
+
 class AriaVoiceAgent:
     """Voice agent that processes user speech and generates responses"""
 
@@ -517,25 +549,14 @@ class MobileVoiceSession:
         """Initialize the voice session"""
         logger.info(f"[MobileVoiceSession] Starting session {self.session_id} for user {self.user_id}")
 
-        # Initialize TTS client - priority: Google (if enabled) > ElevenLabs > OpenAI
-        if GOOGLE_TTS_ENABLED:
-            try:
-                self.tts_client = GoogleTTSClient()
-                logger.info(f"[MobileVoiceSession] Using Google Cloud TTS (voice: {GOOGLE_TTS_VOICE})")
-            except Exception as e:
-                logger.warning(f"[MobileVoiceSession] Google TTS failed to init: {e}, falling back")
-                if ELEVENLABS_API_KEY:
-                    self.tts_client = ElevenLabsTTSClient()
-                    logger.info("[MobileVoiceSession] Fallback to ElevenLabs TTS")
-                else:
-                    self.tts_client = OpenAITTSClient()
-                    logger.info("[MobileVoiceSession] Fallback to OpenAI TTS")
-        elif ELEVENLABS_API_KEY:
-            self.tts_client = ElevenLabsTTSClient()
-            logger.info("[MobileVoiceSession] Using ElevenLabs TTS")
-        else:
-            self.tts_client = OpenAITTSClient()
-            logger.info("[MobileVoiceSession] Using OpenAI TTS (fallback)")
+        # Initialize TTS client via factory - priority: Google (if enabled) > ElevenLabs > OpenAI
+        try:
+            self.tts_client = build_tts_client()
+            provider_name = type(self.tts_client).__name__
+            logger.info(f"[MobileVoiceSession] Using {provider_name} for TTS")
+        except ValueError:
+            logger.error("[MobileVoiceSession] No TTS provider configured")
+            self.tts_client = None
 
         # NOTE: Deepgram STT is initialized lazily when start_listening is called
         # This prevents Deepgram timeout errors since the connection is only opened
@@ -976,28 +997,12 @@ async def synthesize_text(request: Request):
         raise HTTPException(400, "Text too long (max 3000 characters)")
 
     try:
-        # If provider is specified, use that provider with the voice_id
-        if provider == "google" and GOOGLE_TTS_ENABLED:
-            tts = GoogleTTSClient(voice_name=voice_id or GOOGLE_TTS_VOICE)
-            audio = await tts.synthesize(text)
-        elif provider == "elevenlabs" and ELEVENLABS_API_KEY:
-            tts = ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID, voice_settings=voice_settings)
-            audio = await tts.synthesize(text)
-        elif provider == "openai" and OPENAI_API_KEY:
-            tts = OpenAITTSClient(voice=voice_id or "nova")
-            audio = await tts.synthesize(text)
-        # Fallback to default priority if no provider specified
-        elif GOOGLE_TTS_ENABLED:
-            tts = GoogleTTSClient(voice_name=voice_id if voice_id and voice_id.startswith("en-US") else GOOGLE_TTS_VOICE)
-            audio = await tts.synthesize(text)
-        elif ELEVENLABS_API_KEY:
-            tts = ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID, voice_settings=voice_settings)
-            audio = await tts.synthesize(text)
-        elif OPENAI_API_KEY:
-            tts = OpenAITTSClient(voice=voice_id or "nova")
-            audio = await tts.synthesize(text)
-        else:
-            raise HTTPException(500, "No TTS provider configured")
+        tts = build_tts_client(provider=provider, voice_id=voice_id, voice_settings=voice_settings)
+    except ValueError:
+        raise HTTPException(500, "No TTS provider configured")
+
+    try:
+        audio = await tts.synthesize(text)
 
         logger.info(f"[TTS] Synthesized with provider={provider}, voice_id={voice_id}")
 

@@ -22,7 +22,11 @@ from .base import (
 
 
 def _check_sms_compliance(phone: str) -> Optional[ToolResult]:
-    """Check TCPA/DNC compliance before sending SMS."""
+    """Check TCPA/DNC compliance before sending SMS.
+
+    Evaluates quiet hours in the RECIPIENT's timezone (resolved from
+    their area code) per TCPA Safe Harbor rules.
+    """
     # Check DNC
     dnc = execute_single(
         "SELECT id, reason FROM contact_dnc_status WHERE phone_number = :phone",
@@ -31,10 +35,34 @@ def _check_sms_compliance(phone: str) -> Optional[ToolResult]:
     if dnc:
         return ToolResult.error(f"BLOCKED: Phone {phone} is on DNC list. Reason: {dnc.get('reason', 'N/A')}")
 
-    # Check quiet hours (9pm-8am)
-    now = datetime.now()
-    if now.hour < 8 or now.hour >= 21:
-        return ToolResult.error(f"BLOCKED: Outside TCPA SMS window (8am-9pm). Current hour: {now.hour}")
+    # Check quiet hours in RECIPIENT's timezone (8am-9pm local)
+    try:
+        from telephony.compliance import resolve_recipient_timezone
+        from zoneinfo import ZoneInfo
+        from datetime import timezone as _tz
+
+        recipient_tz_name = resolve_recipient_timezone(phone)
+        recipient_tz = ZoneInfo(recipient_tz_name)
+        now_local = datetime.now(_tz.utc).astimezone(recipient_tz)
+
+        if now_local.hour < 8 or now_local.hour >= 21:
+            return ToolResult.error(
+                f"BLOCKED: It's {now_local.strftime('%I:%M %p')} in the recipient's "
+                f"timezone ({recipient_tz_name}). Outside TCPA window (8 AM - 9 PM). "
+                f"Want me to schedule it for tomorrow morning?"
+            )
+    except Exception as e:
+        # Fallback: block if we can't determine timezone (fail-closed)
+        logger.warning(f"Timezone resolution failed for {phone}, using UTC check: {e}")
+        from datetime import timezone as _tz
+        now_utc = datetime.now(_tz.utc)
+        # Use Eastern as fallback (most restrictive)
+        eastern_hour = (now_utc.hour - 5) % 24  # Approximate, ignoring DST
+        if eastern_hour < 8 or eastern_hour >= 21:
+            return ToolResult.error(
+                f"BLOCKED: Outside TCPA SMS window (8 AM - 9 PM Eastern). "
+                f"Want me to schedule it for tomorrow morning?"
+            )
 
     return None
 

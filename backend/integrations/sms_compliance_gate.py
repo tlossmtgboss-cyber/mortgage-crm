@@ -86,14 +86,23 @@ def check_sms_compliance(
     if not consent:
         logger.info(f"No consent record for {phone} - allowing (transactional exemption)")
 
-    # 3. Quiet hours check
+    # 3. Quiet hours check — resolve timezone from lead record or area code
     if not bypass_quiet_hours:
-        tz_str = _get_lead_timezone(db, lead_id) or "America/New_York"
+        tz_str = _get_lead_timezone(db, lead_id)
+        if not tz_str:
+            # No lead timezone on file — infer from recipient phone area code
+            try:
+                from telephony.compliance import resolve_recipient_timezone
+                tz_str = resolve_recipient_timezone(to_phone)
+            except ImportError:
+                tz_str = "America/New_York"
         if _is_quiet_hours(tz_str):
             _log_compliance_check(db, phone, lead_id, user_id, "blocked:quiet_hours")
             return ComplianceResult(
                 False,
-                f"Quiet hours active for timezone {tz_str} (9 PM - 8 AM)",
+                f"It's outside calling hours in the recipient's timezone ({tz_str}). "
+                f"TCPA prohibits contact before 8 AM and after 9 PM local time. "
+                f"Want me to schedule it for tomorrow morning?",
                 "blocked",
             )
 

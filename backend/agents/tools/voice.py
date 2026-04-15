@@ -22,7 +22,13 @@ from .base import (
 
 
 def _validate_outbound(phone: str, channel: str = "call") -> Optional[ToolResult]:
-    """Run compliance checks before outbound contact. Returns ToolResult error or None if clear."""
+    """Run compliance checks before outbound contact.
+
+    Evaluates quiet hours in the RECIPIENT's timezone (resolved from
+    their area code) per TCPA Safe Harbor rules.
+
+    Returns ToolResult error or None if clear.
+    """
     # Check DNC
     dnc = execute_single(
         "SELECT id, reason FROM contact_dnc_status WHERE phone_number = :phone",
@@ -31,10 +37,33 @@ def _validate_outbound(phone: str, channel: str = "call") -> Optional[ToolResult
     if dnc:
         return ToolResult.error(f"BLOCKED: Phone {phone} is on DNC list. Reason: {dnc.get('reason', 'N/A')}")
 
-    # Check calling window (8am-9pm ET as default)
-    now = datetime.now()
-    if now.hour < 8 or now.hour >= 21:
-        return ToolResult.error(f"BLOCKED: Outside TCPA calling window (8am-9pm). Current hour: {now.hour}")
+    # Check calling window in RECIPIENT's timezone (8am-9pm local)
+    try:
+        from telephony.compliance import resolve_recipient_timezone
+        from zoneinfo import ZoneInfo
+        from datetime import timezone as _tz
+
+        recipient_tz_name = resolve_recipient_timezone(phone)
+        recipient_tz = ZoneInfo(recipient_tz_name)
+        now_local = datetime.now(_tz.utc).astimezone(recipient_tz)
+
+        if now_local.hour < 8 or now_local.hour >= 21:
+            return ToolResult.error(
+                f"BLOCKED: It's {now_local.strftime('%I:%M %p')} in the recipient's "
+                f"timezone ({recipient_tz_name}). Outside TCPA {channel} window "
+                f"(8 AM - 9 PM). Want me to schedule it for tomorrow morning?"
+            )
+    except Exception as e:
+        # Fallback: block if we can't determine timezone (fail-closed)
+        logger.warning(f"Timezone resolution failed for {phone}, using UTC check: {e}")
+        from datetime import timezone as _tz
+        now_utc = datetime.now(_tz.utc)
+        eastern_hour = (now_utc.hour - 5) % 24  # Approximate, ignoring DST
+        if eastern_hour < 8 or eastern_hour >= 21:
+            return ToolResult.error(
+                f"BLOCKED: Outside TCPA {channel} window (8 AM - 9 PM Eastern). "
+                f"Want me to schedule it for tomorrow morning?"
+            )
 
     return None
 

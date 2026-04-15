@@ -75,6 +75,115 @@ NEVER DO THESE IN VOICE MODE:
 """
 
 
+# =============================================================================
+# VOICE MODE TOOL RESULT SUMMARIZATION
+# =============================================================================
+
+def _summarize_tool_result_for_voice(tool_name: str, result: dict) -> str:
+    """Condense a tool result into a 1-2 sentence spoken summary for voice mode.
+
+    When voice_mode=True, the full JSON tool result (often 15+ fields) causes the
+    LLM to produce verbose responses despite instructions to be concise. This
+    function produces a brief natural-language summary that replaces the full result
+    in the LLM's context, while the frontend still receives the full result for
+    display and debugging.
+    """
+    if not result or not isinstance(result, dict):
+        return str(result) if result else "No results found."
+
+    # --- Error results: surface the message briefly ---
+    if result.get("error"):
+        err = result["error"]
+        if len(str(err)) > 120:
+            err = str(err)[:120] + "..."
+        return f"That didn't work: {err}"
+
+    # --- Pipeline metrics ---
+    if "total_loans" in result or "pipeline" in tool_name:
+        total = result.get("total_loans", result.get("count", 0))
+        stages = result.get("by_stage", result.get("stages", {}))
+        top_stage = max(stages, key=stages.get) if stages else None
+        summary = f"{total} loans in your pipeline."
+        if top_stage:
+            summary += f" Most are in {top_stage.lower().replace('_', ' ')}."
+        return summary
+
+    # --- Lead / loan / generic search results ---
+    items_key = None
+    for key in ("leads", "loans", "results"):
+        if isinstance(result.get(key), list):
+            items_key = key
+            break
+
+    if items_key is not None:
+        items = result[items_key]
+        count = result.get("count", result.get("total", len(items)))
+        entity = items_key
+        if count == 0:
+            return f"No {entity} found matching that."
+        if count == 1:
+            item = items[0]
+            name = item.get("borrower_name", item.get("name", item.get("first_name", "Unknown")))
+            return f"Found one: {name}."
+        # Summarize top 2-3 names
+        names = [
+            i.get("borrower_name", i.get("name", i.get("first_name", "")))
+            for i in items[:3]
+        ]
+        names_str = ", ".join(n for n in names if n)
+        more = f" and {count - 3} more" if count > 3 else ""
+        return f"Found {count} {entity} including {names_str}{more}."
+
+    # --- Task results ---
+    if "tasks" in result or "task" in tool_name:
+        tasks = result.get("tasks", [])
+        if isinstance(tasks, list):
+            count = len(tasks)
+            overdue = sum(1 for t in tasks if t.get("overdue") or t.get("is_overdue"))
+            if count == 0:
+                return "No pending tasks."
+            summary = f"{count} tasks pending."
+            if overdue:
+                summary += f" {overdue} overdue."
+            return summary
+
+    # --- SMS / notification send results ---
+    if result.get("success") and (
+        "sms" in tool_name or "notification" in tool_name or "send" in tool_name
+    ):
+        return "Sent successfully."
+
+    # --- Task creation ---
+    if result.get("success") and ("create" in tool_name or "task" in tool_name):
+        return "Done, task created."
+
+    # --- Email results ---
+    if result.get("success") and "email" in tool_name:
+        return "Email sent."
+
+    # --- Rate / market data ---
+    if "rate" in tool_name or "advisory" in tool_name:
+        advice = result.get("recommendation", result.get("advisory", result.get("message", "")))
+        if advice:
+            return str(advice)[:200]
+
+    # --- Generic: count / total fields ---
+    if "count" in result or "total" in result:
+        count = result.get("count", result.get("total"))
+        return f"Found {count} results."
+
+    # --- Generic: message field ---
+    if "message" in result:
+        msg = result["message"]
+        return str(msg)[:200]
+
+    # --- Fallback: truncate raw result ---
+    summary = str(result)
+    if len(summary) > 200:
+        summary = summary[:200] + "..."
+    return summary
+
+
 class AIAgentService:
     """
     Service class for the LangGraph AI Agent.
@@ -289,6 +398,9 @@ class AIAgentService:
                     if block.type == "tool_use"
                 ]
 
+                # Execute each tool, cache results, and yield full results to frontend
+                cached_tool_results: Dict[str, Any] = {}
+
                 for tool_use in tool_uses:
                     # Notify about tool call
                     yield {
@@ -298,30 +410,36 @@ class AIAgentService:
                         "input": tool_use.input
                     }
 
-                    # Execute the tool
+                    # Execute the tool (once — reuse cached result below)
                     tool_result = await self._execute_tool(
                         tool_use.name,
                         tool_use.input
                     )
+                    cached_tool_results[tool_use.id] = (tool_use.name, tool_result)
 
-                    # Yield tool result
+                    # Yield FULL tool result to frontend for display/debugging
                     yield {
                         "type": "tool_result",
                         "tool": tool_use.name,
                         "result": tool_result
                     }
 
-                # Continue conversation with tool results
-                tool_results_content = [
-                    {
+                # Build tool results for the LLM's next turn.
+                # In voice mode, summarize results so the LLM sees a concise
+                # 1-2 sentence summary instead of raw JSON with 15+ fields.
+                # This structurally prevents verbose spoken responses.
+                tool_results_content = []
+                for tool_use in tool_uses:
+                    tool_name, tool_result = cached_tool_results[tool_use.id]
+                    if voice_mode:
+                        content = _summarize_tool_result_for_voice(tool_name, tool_result)
+                    else:
+                        content = json.dumps(tool_result)
+                    tool_results_content.append({
                         "type": "tool_result",
                         "tool_use_id": tool_use.id,
-                        "content": json.dumps(
-                            await self._execute_tool(tool_use.name, tool_use.input)
-                        )
-                    }
-                    for tool_use in tool_uses
-                ]
+                        "content": content
+                    })
 
                 # Add assistant message and tool results to messages
                 messages.append({

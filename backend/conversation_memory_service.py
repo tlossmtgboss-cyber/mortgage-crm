@@ -329,6 +329,7 @@ class ConversationMemory:
                     FROM ai_conversation_memory
                     WHERE session_id = CAST(:session_id AS uuid)
                       AND user_id = :user_id
+                      AND role != 'summary'
                     ORDER BY message_index ASC
                 """), {"session_id": session_id, "user_id": user_id})
             else:
@@ -336,6 +337,7 @@ class ConversationMemory:
                     SELECT role, content, action_id, action_data, created_at
                     FROM ai_conversation_memory
                     WHERE session_id = CAST(:session_id AS uuid)
+                      AND role != 'summary'
                     ORDER BY message_index ASC
                 """), {"session_id": session_id})
 
@@ -350,3 +352,160 @@ class ConversationMemory:
         except Exception as e:
             logger.error(f"Error getting session messages: {e}")
             return []
+
+    @staticmethod
+    def get_session_messages_with_summary(
+        db: Session,
+        session_id: str,
+        user_id: int = None,
+        max_recent: int = 6,
+        summary_threshold: int = 10
+    ) -> List[Dict]:
+        """
+        Get conversation messages with a rolling summary for older turns.
+
+        When the conversation exceeds summary_threshold messages:
+        - Messages 1 through (total - max_recent) are compressed into a
+          deterministic 2-3 sentence summary (no LLM call, zero latency)
+        - The most recent max_recent messages are returned verbatim
+
+        Returns:
+            list: [{"role": "system", "content": "[CONVERSATION SUMMARY] ..."},
+                   ...recent messages...]
+        """
+        # Get all messages for this session
+        all_messages = ConversationMemory.get_session_messages(
+            db, session_id, user_id=user_id
+        )
+
+        if len(all_messages) <= summary_threshold:
+            return all_messages  # Not enough messages to warrant summarization
+
+        # Split into old (to summarize) and recent (to keep verbatim)
+        old_messages = all_messages[:-max_recent]
+        recent_messages = all_messages[-max_recent:]
+
+        # Check if we already have a cached summary for this session
+        cached_summary = ConversationMemory._get_cached_summary(db, session_id)
+        cached_msg_count = cached_summary.get('message_count', 0) if cached_summary else 0
+
+        if cached_summary and cached_msg_count == len(old_messages):
+            # Summary is still valid (no new messages to summarize)
+            summary_text = cached_summary['summary']
+        else:
+            # Generate new summary from old messages
+            summary_text = ConversationMemory._generate_summary(old_messages)
+            # Cache the summary (non-fatal on failure)
+            ConversationMemory._cache_summary(
+                db, session_id, summary_text, len(old_messages)
+            )
+
+        # Build the output: summary + recent messages
+        summary_message = {
+            "role": "system",
+            "content": (
+                f"[CONVERSATION SUMMARY - Earlier in this conversation:] "
+                f"{summary_text}"
+            ),
+        }
+        return [summary_message] + recent_messages
+
+    @staticmethod
+    def _generate_summary(messages: list) -> str:
+        """Generate a 2-3 sentence summary of conversation messages without an LLM call."""
+        if not messages:
+            return "No prior conversation."
+
+        # Extract key topics from user messages
+        user_messages = [m['content'] for m in messages if m.get('role') == 'user' and m.get('content')]
+        assistant_messages = [m['content'] for m in messages if m.get('role') == 'assistant' and m.get('content')]
+
+        # Build a deterministic summary by detecting topics
+        topics = []
+        for msg in user_messages:
+            msg_lower = msg.lower()
+            if any(w in msg_lower for w in ['pipeline', 'loan', 'processing', 'closing', 'underwriting']):
+                topics.append('pipeline/loans')
+            elif any(w in msg_lower for w in ['lead', 'prospect', 'client', 'borrower']):
+                topics.append('leads')
+            elif any(w in msg_lower for w in ['task', 'todo', 'reminder', 'follow up']):
+                topics.append('tasks')
+            elif any(w in msg_lower for w in ['sms', 'text', 'message', 'send']):
+                topics.append('messaging')
+            elif any(w in msg_lower for w in ['email', 'mail']):
+                topics.append('email')
+            elif any(w in msg_lower for w in ['call', 'phone', 'dial', 'voicemail']):
+                topics.append('calls')
+            elif any(w in msg_lower for w in ['schedule', 'calendar', 'appointment']):
+                topics.append('scheduling')
+            elif any(w in msg_lower for w in ['rate', 'market', 'pricing']):
+                topics.append('rates')
+            elif any(w in msg_lower for w in ['document', 'doc', 'upload', 'file']):
+                topics.append('documents')
+            elif any(w in msg_lower for w in ['compliance', 'regulation', 'audit']):
+                topics.append('compliance')
+
+        unique_topics = list(dict.fromkeys(topics))  # Preserve order, remove dupes
+
+        # Build summary
+        num_turns = len(user_messages)
+        topics_str = ', '.join(unique_topics[:4]) if unique_topics else 'general questions'
+
+        # Include the last user question from the old messages for continuity
+        last_user = user_messages[-1] if user_messages else ''
+        last_assistant = assistant_messages[-1][:150] if assistant_messages else ''
+
+        summary = f"The user has asked {num_turns} questions about {topics_str}."
+        if last_user:
+            summary += f" Most recently discussed: \"{last_user[:100]}\"."
+        if last_assistant:
+            summary += f" Aria's last response on that topic: \"{last_assistant}\"."
+
+        return summary
+
+    @staticmethod
+    def _get_cached_summary(db: Session, session_id: str) -> Optional[dict]:
+        """Retrieve cached conversation summary from database."""
+        try:
+            result = db.execute(text("""
+                SELECT content FROM ai_conversation_memory
+                WHERE session_id = CAST(:session_id AS uuid)
+                  AND role = 'summary'
+                ORDER BY created_at DESC LIMIT 1
+            """), {"session_id": session_id}).first()
+            if result:
+                return json.loads(result[0])
+        except Exception as e:
+            logger.debug(f"No cached summary found for session {session_id}: {e}")
+        return None
+
+    @staticmethod
+    def _cache_summary(db: Session, session_id: str, summary: str, message_count: int):
+        """Cache conversation summary in database.
+
+        Uses role='summary' rows in ai_conversation_memory. If the table
+        doesn't support this role value, caching silently fails and the
+        summary is regenerated on each request (still zero-LLM-cost).
+        """
+        try:
+            content = json.dumps({"summary": summary, "message_count": message_count})
+            # Delete old summary for this session
+            db.execute(text("""
+                DELETE FROM ai_conversation_memory
+                WHERE session_id = CAST(:session_id AS uuid)
+                  AND role = 'summary'
+            """), {"session_id": session_id})
+            # Insert new summary — use message_index -1 so it sorts before real messages
+            db.execute(text("""
+                INSERT INTO ai_conversation_memory
+                    (id, session_id, message_index, role, content, created_at)
+                VALUES
+                    (gen_random_uuid(), CAST(:session_id AS uuid), -1, 'summary', :content, NOW())
+            """), {"session_id": session_id, "content": content})
+            db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to cache conversation summary: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
