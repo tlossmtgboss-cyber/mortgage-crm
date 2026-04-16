@@ -61,25 +61,46 @@ export async function initialize() {
 // Safe to call anywhere — returns from memory cache after initialize().
 // Returns null if initialize() hasn't been called yet (app startup race).
 export function getToken() {
-  if (!_cache.initialized && Capacitor.isNativePlatform()) {
-    // Fallback during startup race — return from localStorage
-    // This should only happen if a request fires before initialize() completes
-    console.warn('[TokenStore] getToken() called before initialize() — using localStorage fallback');
-    return localStorage.getItem(TOKEN_KEY);
+  // Return from memory cache if available
+  if (_cache.access_token) return _cache.access_token;
+
+  // Cache miss — try localStorage as fallback.
+  // Covers: (1) initialize() hasn't run yet, (2) initialize() ran but
+  // Preferences was empty (token only existed in localStorage from old code),
+  // (3) token was written by setAuth/setItem after initialize() completed.
+  const lsToken = localStorage.getItem(TOKEN_KEY);
+  if (lsToken) {
+    _cache.access_token = lsToken;  // Populate cache for subsequent calls
+    return lsToken;
   }
-  return _cache.access_token;
+
+  return null;
 }
 
 export function getRefreshToken() {
-  return _cache.refresh_token;
+  if (_cache.refresh_token) return _cache.refresh_token;
+  const lsToken = localStorage.getItem(REFRESH_KEY);
+  if (lsToken) {
+    _cache.refresh_token = lsToken;
+    return lsToken;
+  }
+  return null;
 }
 
 export function getUserData() {
-  return _cache.user_data;
+  if (_cache.user_data) return _cache.user_data;
+  const raw = localStorage.getItem(USER_KEY);
+  if (raw) {
+    try {
+      _cache.user_data = JSON.parse(raw);
+      return _cache.user_data;
+    } catch { return null; }
+  }
+  return null;
 }
 
 export function isAuthenticated() {
-  return !!_cache.access_token;
+  return !!getToken();
 }
 
 // ── Async write ──────────────────────────────────────────────
