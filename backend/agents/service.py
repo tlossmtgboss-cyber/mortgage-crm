@@ -829,7 +829,11 @@ class AIAgentService:
                 logger.warning(f"Optimized prompt loading failed, using fallback: {e}")
 
         # Fallback to basic prompt
-        base_prompt = """You are Aria, the AI assistant for Perennia AI. You help loan officers manage their pipeline, communicate with borrowers, and execute actions.
+        from datetime import datetime as _dt, timezone as _tz
+        _now = _dt.now(_tz.utc).strftime("%A, %B %d, %Y at %I:%M %p UTC")
+        base_prompt = f"""You are Aria, the AI assistant for Perennia AI. You help loan officers manage their pipeline, communicate with borrowers, and execute actions.
+
+Today is {_now}.
 
 You are ACTION-ORIENTED. When the user asks you to do something (send email, create task, make call, send text), DO IT using your tools. Confirm what you did: "Done! I sent the email to john@example.com." Never just describe what the user could do - take the action.
 
