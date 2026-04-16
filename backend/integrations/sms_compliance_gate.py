@@ -135,7 +135,6 @@ def _check_opt_out(db: Session, phone: str, organization_id: Optional[int] = Non
     """
     try:
         if organization_id:
-            # Try tenant-scoped query first
             try:
                 row = db.execute(
                     text("""
@@ -148,22 +147,33 @@ def _check_opt_out(db: Session, phone: str, organization_id: Optional[int] = Non
                 ).fetchone()
                 return row is not None
             except Exception:
-                # Column may not exist yet — fall through to global check
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
+        try:
+            row = db.execute(
+                text("""
+                    SELECT id FROM sms_opt_outs
+                    WHERE phone_number = :phone AND active = TRUE
+                    LIMIT 1
+                """),
+                {"phone": phone},
+            ).fetchone()
+            return row is not None
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
                 pass
-        row = db.execute(
-            text("""
-                SELECT id FROM sms_opt_outs
-                WHERE phone_number = :phone AND active = TRUE
-                LIMIT 1
-            """),
-            {"phone": phone},
-        ).fetchone()
-        return row is not None
     except Exception as e:
         logger.warning(f"DNC check skipped (table may not exist): {e}")
-        # Table missing is not a DNC match — allow the message through.
-        # Actual opt-outs are still enforced once the table is created.
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return False
+    return False
 
 
 def record_opt_out(
@@ -267,12 +277,13 @@ def _check_consent(db: Session, phone: str, lead_id: Optional[int] = None) -> bo
         ).fetchone()
         if row is not None:
             return True
-        # No consent record found — return False so caller can decide
         return False
     except Exception as e:
-        logger.error(f"Consent check error: {e}")
-        # Table may not exist yet — allow with warning (transactional exemption)
-        logger.warning("Consent table may not exist - allowing (transactional exemption)")
+        logger.warning(f"Consent table may not exist - allowing (transactional exemption): {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return True
 
 
@@ -333,6 +344,10 @@ def _get_lead_timezone(db: Session, lead_id: Optional[int]) -> Optional[str]:
         ).fetchone()
         return row[0] if row and row[0] else None
     except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
         return None
 
 
@@ -406,11 +421,12 @@ def _log_compliance_check(
             """),
             {"phone": phone, "lead_id": lead_id, "user_id": user_id, "result": result},
         )
-        # Flush only — caller owns the transaction
         db.flush()
     except Exception:
-        # Non-fatal: don't block message if audit log fails
-        pass
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
