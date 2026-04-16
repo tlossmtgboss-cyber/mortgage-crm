@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './DocumentsNeeded.css';
+import { getToken } from '../../../utils/tokenStore';
 
 /**
  * DocumentsNeeded - Dynamic document tracking component
@@ -208,7 +209,7 @@ const DocumentsNeeded = ({ applicationData, workspaceId }) => {
   const syncDocumentsWithBackend = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       await fetch(`${API_URL}/api/workspaces/${workspaceId}/documents`, {
         method: 'POST',

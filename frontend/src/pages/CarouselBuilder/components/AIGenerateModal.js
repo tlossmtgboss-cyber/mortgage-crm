@@ -8,6 +8,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCarouselBuilder, PROJECT_TYPES } from '../CarouselBuilderContext';
 import { API_BASE_URL } from '../../../services/api';
+import { getToken } from '../../../utils/tokenStore';
 
 export default function AIGenerateModal({ open, onClose, onApply }) {
   const { currentProject, slides } = useCarouselBuilder();
@@ -36,7 +37,7 @@ export default function AIGenerateModal({ open, onClose, onApply }) {
 
     setLoadingCrm(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/carousels/${currentProject.id}/crm-data`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -62,7 +63,7 @@ export default function AIGenerateModal({ open, onClose, onApply }) {
     setGeneratedSlides([]);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/carousels/${currentProject.id}/generate`, {
         method: 'POST',
         headers: {
@@ -96,7 +97,7 @@ export default function AIGenerateModal({ open, onClose, onApply }) {
     if (generatedSlides.length === 0) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/carousels/${currentProject.id}/apply-generated`, {
         method: 'POST',
         headers: {

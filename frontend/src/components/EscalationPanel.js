@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './EscalationPanel.css';
+import { getToken } from '../utils/tokenStore';
 
 function EscalationPanel() {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -49,7 +50,7 @@ function EscalationPanel() {
       try {
         const response = await fetch(`${API_BASE_URL}/api/v1/leads/search?q=${encodeURIComponent(borrowerSearch)}&limit=10`, {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Authorization': `Bearer ${getToken()}`,
           },
         });
 
@@ -71,7 +72,7 @@ function EscalationPanel() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/team/members`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
 
@@ -137,7 +138,7 @@ function EscalationPanel() {
       const response = await fetch(`${API_BASE_URL}/api/v1/escalations`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: formData,
       });

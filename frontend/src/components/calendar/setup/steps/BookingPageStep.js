@@ -20,6 +20,7 @@ import api from '../../../../services/api';
 import { calendarSettingsAPI } from '../../../../services/api';
 import { toast } from '../../../../utils/toast';
 import './BookingPageStep.css';
+import { getUserData } from '../../../../utils/tokenStore';
 
 // ============================================================================
 // Constants
@@ -168,7 +169,7 @@ const BookingPageStep = ({ onStepComplete, onDirty, initialData }) => {
 
       // Populate LO name from localStorage user if not set from API
       try {
-        const userStr = localStorage.getItem('user');
+        const userStr = getUserData();
         if (userStr) {
           const user = JSON.parse(userStr);
           const fullName = [user.first_name, user.last_name].filter(Boolean).join(' ');

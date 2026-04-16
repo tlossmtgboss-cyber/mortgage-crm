@@ -17,6 +17,7 @@ import ResetPassword from '../pages/ResetPassword';
 import AdminOnboarding from '../pages/AdminOnboarding';
 import ApplicationSubmitted from '../pages/ApplicationSubmitted';
 import BuyerIntake from '../pages/BuyerIntake';
+import { clearTokens, getUserData } from '../utils/tokenStore';
 
 // Loading fallback component with spinner for Suspense boundaries
 function PageLoadingFallback() {
@@ -91,11 +92,11 @@ function PrivateRoute({ children }) {
 function RoleBasedRedirect() {
   let user = null;
   try {
-    const stored = localStorage.getItem('user');
+    const stored = getUserData();
     if (stored) user = JSON.parse(stored);
   } catch (e) {
     console.warn('Failed to parse stored user data, clearing corrupted entry');
-    localStorage.removeItem('user');
+    clearTokens().catch(() => {});
   }
   try {
     if (user) {

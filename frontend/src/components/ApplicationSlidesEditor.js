@@ -10,6 +10,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import './ApplicationSlidesEditor.css';
+import { getToken } from '../utils/tokenStore';
 
 // Default stages for Purchase application
 const DEFAULT_PURCHASE_STAGES = [
@@ -173,7 +174,7 @@ const ApplicationSlidesEditor = () => {
   const loadConfiguration = useCallback(async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Load purchase config
       const purchaseRes = await fetch(`${API_URL}/api/v1/settings/application-slides?app_type=purchase`, {
@@ -220,7 +221,7 @@ const ApplicationSlidesEditor = () => {
     setSaving(true);
     setSaveMessage(null);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       const response = await fetch(`${API_URL}/api/v1/settings/application-slides?app_type=${appType}`, {
         method: 'POST',

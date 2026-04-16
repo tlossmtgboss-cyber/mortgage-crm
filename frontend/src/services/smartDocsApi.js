@@ -4,6 +4,7 @@
  * Client-side API functions for the intelligent document collection system.
  */
 import { API_BASE_URL } from './api';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = `${API_BASE_URL}/api/v1/smart-docs`;
 
@@ -31,7 +32,7 @@ async function handleResponse(response) {
  * Get auth headers (assumes token in localStorage)
  */
 function getHeaders() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Authorization': token ? `Bearer ${token}` : '',
     'Content-Type': 'application/json',
@@ -123,7 +124,7 @@ export async function uploadDocument(file, loanId, borrowerId, requestId = null,
   if (requestId) formData.append('request_id', requestId);
   if (docType) formData.append('doc_type', docType);
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
   const response = await fetch(`${API_BASE}/upload`, {
     method: 'POST',
     headers: {

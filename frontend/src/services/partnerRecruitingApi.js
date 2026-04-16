@@ -1,3 +1,5 @@
+import { getToken } from '../utils/tokenStore';
+
 /**
  * Partner Recruiting API Service
  * API calls for Loan Officers to manage partner recruitment pipeline
@@ -6,7 +8,7 @@
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Content-Type': 'application/json',
     'Authorization': token ? `Bearer ${token}` : ''

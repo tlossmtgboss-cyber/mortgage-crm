@@ -22,6 +22,7 @@ import { getIncomeSummary } from '../services/docAnalyticsApi';
 import { API_BASE_URL } from '../services/api';
 import { toast } from '../utils/toast';
 import './SmartDocsIncome.css';
+import { getToken } from '../utils/tokenStore';
 
 // ---------------------------------------------------------------------------
 // Inline SVG icons
@@ -447,7 +448,7 @@ function SmartDocsIncome() {
     if (!loanId) return;
     setGenerating1084(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE_URL}/api/v1/income/form-1084/${loanId}/generate`,
         {

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './ProductionPredictor.css';
+import { getToken, getUserData } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -48,7 +49,7 @@ export function ProductionPredictorDashboard({ entityId: entityIdProp, entityTyp
   const entityId = useMemo(() => {
     if (entityIdProp) return entityIdProp;
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const user = JSON.parse(getUserData() || '{}');
       return user.id ? String(user.id) : null;
     } catch {
       return null;
@@ -64,7 +65,7 @@ export function ProductionPredictorDashboard({ entityId: entityIdProp, entityTyp
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const authHeaders = {
         'Content-Type': 'application/json',
         ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
@@ -756,7 +757,7 @@ export function ProductionPredictorWidget({ entityId, compact = false }) {
 
   const fetchSummary = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(
         `${API_BASE}/api/v1/production-predictor/summary/${entityId}?entity_type=lo`,
         {

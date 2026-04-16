@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import VideoRecorder from './video/VideoRecorder';
 import './EmailComposerModal.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 const APP_BASE = process.env.REACT_APP_BASE_URL || 'https://app.perenniaai.com';
@@ -140,7 +141,7 @@ function EmailComposerModal({ isOpen, onClose, recipient, entityType, entityData
   }, [isOpen]);
 
   const getToken = () => {
-    return localStorage.getItem('token');
+    return getToken();
   };
 
   const handleTemplateSelect = async (template) => {

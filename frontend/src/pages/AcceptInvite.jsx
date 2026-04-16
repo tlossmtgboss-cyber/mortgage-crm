@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import onboardingApi from '../services/onboardingApi';
 import { ROLES, PASSWORD_REQUIREMENTS } from '../constants/roles';
 import './AcceptInvite.css';
+import { setTokens } from '../utils/tokenStore';
 
 const AcceptInvite = () => {
   const { token } = useParams();
@@ -91,7 +92,7 @@ const AcceptInvite = () => {
 
       // Store auth token if provided
       if (response.access_token) {
-        localStorage.setItem('token', response.access_token);
+        await setTokens({ access_token: response.access_token });
       }
 
       // Navigate to onboarding wizard

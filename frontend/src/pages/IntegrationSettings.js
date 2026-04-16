@@ -8,6 +8,7 @@ import ElevenLabsSettings from '../components/integrations/ElevenLabsSettings';
 import RetellSettings from '../components/integrations/RetellSettings';
 import { API_BASE_URL } from '../services/api';
 import './IntegrationSettings.css';
+import { getToken } from '../utils/tokenStore';
 
 // Use centralized API URL from api.js (handles localhost vs production correctly)
 const API_URL = API_BASE_URL;
@@ -35,7 +36,7 @@ const IntegrationSettings = () => {
 
   const loadIntegrations = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetchIntegrations(async () => {
         const res = await fetch(`${API_URL}/api/v1/integration-settings`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -57,7 +58,7 @@ const IntegrationSettings = () => {
 
   const loadCategories = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/integration-settings/categories`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -72,7 +73,7 @@ const IntegrationSettings = () => {
 
   const loadIntegrationDetails = async (integrationId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/integration-settings/${integrationId}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -89,7 +90,7 @@ const IntegrationSettings = () => {
 
   const loadSyncHistory = async (integrationId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/integration-settings/${integrationId}/sync-history`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -104,7 +105,7 @@ const IntegrationSettings = () => {
 
   const handleConnect = async (integrationId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       const res = await fetch(`${API_URL}/api/v1/integration-settings/${integrationId}/connect`, {
         method: 'POST',
@@ -141,7 +142,7 @@ const IntegrationSettings = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/integration-settings/${integrationId}/disconnect`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -168,7 +169,7 @@ const IntegrationSettings = () => {
     if (!selectedIntegration) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/integration-settings/${selectedIntegration.id}/credentials`, {
         method: 'POST',
         headers: {
@@ -200,7 +201,7 @@ const IntegrationSettings = () => {
     if (!selectedIntegration) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await saveConfig(async () => {
         const res = await fetch(`${API_URL}/api/v1/integration-settings/${selectedIntegration.id}/config`, {
           method: 'PUT',
@@ -232,7 +233,7 @@ const IntegrationSettings = () => {
     if (!selectedIntegration) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/integration-settings/${selectedIntegration.id}/sync?sync_type=incremental`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -255,7 +256,7 @@ const IntegrationSettings = () => {
     if (!selectedIntegration) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/integration-settings/${selectedIntegration.id}/test`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }

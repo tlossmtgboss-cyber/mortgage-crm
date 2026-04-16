@@ -40,6 +40,7 @@ import LocationsLabelsSection from './calendar-settings/LocationsLabelsSection';
 import AdvancedSection from './calendar-settings/AdvancedSection';
 import AISchedulingSection from './calendar-settings/AISchedulingSection';
 import FollowUpCadenceSection from './calendar-settings/FollowUpCadenceSection';
+import { getToken } from '../utils/tokenStore';
 
 // ============================================================================
 // Component
@@ -189,7 +190,7 @@ function CalendarSettings() {
     setTestResult(null);
     setIsTesting(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/scheduler/settings/test`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

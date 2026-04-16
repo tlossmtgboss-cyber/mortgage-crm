@@ -13,6 +13,7 @@ import { formatPhoneNumber } from '../utils/phoneUtils';
 import AddressAutocomplete from '../components/AddressAutocomplete';
 import './Leads.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 function Leads() {
   const navigate = useNavigate();
@@ -242,7 +243,7 @@ function Leads() {
   // Create tasks for duplicates
   const handleCreateDuplicateTasks = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'

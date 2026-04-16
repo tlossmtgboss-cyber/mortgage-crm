@@ -6,6 +6,7 @@ import { getCurrentUser } from '../utils/auth';
 import ActionSidebar from '../components/ActionSidebar';
 import './AILandingPage.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 // Note: EmailDropZone wrapper removed - App.js already wraps with EmailDropZone globally
 
 function AILandingPage() {
@@ -162,7 +163,7 @@ function AILandingPage() {
   }, [projects]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) {
       navigate('/login');
       return;
@@ -1462,7 +1463,7 @@ function AILandingPage() {
   const showDailyView = async () => {
     try {
       const allTasks = [];
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Fetch workflow tasks (same as Tasks page) - these are the primary tasks
       try {
@@ -1717,7 +1718,7 @@ function AILandingPage() {
       // Fetch tasks
       const tasksResponse = await fetch(`${API_URL}/api/v1/tasks?limit=50`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         }
       });
@@ -1746,7 +1747,7 @@ function AILandingPage() {
       const emailResponse = await fetch(`${API_URL}/api/v1/ai/send-task-summary-email`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -1828,7 +1829,7 @@ function AILandingPage() {
         const response = await fetch(`${API_URL}/api/v1/tasks/${task.id}`, {
           method: 'PATCH',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Authorization': `Bearer ${getToken()}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ status: 'completed' })

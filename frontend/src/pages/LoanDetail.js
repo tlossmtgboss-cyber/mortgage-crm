@@ -29,6 +29,7 @@ import CurrencyInput from '../components/common/CurrencyInput';
 import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import AIActivityTab from '../components/ai/AIActivityTab';
 import './LeadDetail.css';
+import { getToken } from '../utils/tokenStore';
 
 // Mock loans data (same as Loans.js)
 const generateMockLoans = () => {
@@ -213,7 +214,7 @@ function LoanDetail() {
     if (!id) return;
     try {
       const apiUrl = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
-      const token = localStorage.getItem('token');
+      const token = getToken();
       // Try looking up by loan ID first
       let response = await fetch(`${apiUrl}/api/v1/purl-admin/workspaces/by-loan/${id}`, {
         headers: {
@@ -655,7 +656,7 @@ function LoanDetail() {
   // ==================== TEAM MEMBER FUNCTIONS ====================
   const loadTeamMembers = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/loans/${id}/team-members`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -754,7 +755,7 @@ function LoanDetail() {
 
     setTeamMemberLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const apiUrl = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
       if (editingTeamMember) {
@@ -812,7 +813,7 @@ function LoanDetail() {
 
   const handleDeleteTeamMember = async (memberId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const apiUrl = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
       const response = await fetch(`${apiUrl}/api/v1/loans/${id}/team-members/${memberId}`, {

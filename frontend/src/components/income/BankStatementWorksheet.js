@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './BankStatementWorksheet.css';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -47,7 +48,7 @@ export default function BankStatementWorksheet({ loanId, borrowerId, borrowerNam
   const [businessName, setBusinessName] = useState('');
   const [hasSeparateBusiness, setHasSeparateBusiness] = useState(false);
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   // Fetch existing worksheet for the loan
   const fetchWorksheet = useCallback(async () => {

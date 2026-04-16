@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './OnboardingWizard.css';
 import { toast } from '../utils/toast';
+import { getUserData } from '../utils/tokenStore';
 
 function OnboardingWizard() {
   const navigate = useNavigate();
@@ -29,7 +30,7 @@ function OnboardingWizard() {
 
   useEffect(() => {
     // Get user from localStorage
-    const userData = localStorage.getItem('user');
+    const userData = getUserData();
     if (userData) {
       setUser(JSON.parse(userData));
     }

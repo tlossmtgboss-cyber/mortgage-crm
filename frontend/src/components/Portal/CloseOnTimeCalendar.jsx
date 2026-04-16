@@ -10,6 +10,7 @@ import { useCloseCountdown, useCloseCalendar } from '../../hooks/usePortalData';
 import { closeOnTimeApi } from '../../services/portalApi';
 import './CloseOnTimeCalendar.css';
 import { toast } from '../../utils/toast';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || '';
 
@@ -62,7 +63,7 @@ export default function CloseOnTimeCalendar({
       setDownloadingCalendar(true);
 
       // Get auth token from localStorage
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       const response = await fetch(`${API_BASE_URL}/api/portal/loans/${loanId}/milestone-calendar.ics`, {
         method: 'GET',

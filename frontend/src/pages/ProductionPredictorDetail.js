@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import './ProductionPredictorDetail.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -154,7 +155,7 @@ export default function ProductionPredictorDetail() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { Authorization: `Bearer ${token}` };
 
       let loansData = [];

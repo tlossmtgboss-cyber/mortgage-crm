@@ -1,7 +1,8 @@
 import { API_BASE_URL } from './api';
+import { getToken } from '../utils/tokenStore';
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Content-Type': 'application/json',
     ...(token && { Authorization: `Bearer ${token}` }),

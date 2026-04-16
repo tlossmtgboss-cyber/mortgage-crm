@@ -8,6 +8,7 @@
 
 import React, { useState, useCallback, useMemo } from 'react';
 import './ContentEditor.css';
+import { getToken } from '../utils/tokenStore';
 
 // API base URL for image uploads
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -537,7 +538,7 @@ function ImageUpload({ fieldKey, fieldDef, value, onChange, disabled }) {
       const response = await fetch(`${API_BASE}/api/v1/microsites/my/assets/upload`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: formData,
       });

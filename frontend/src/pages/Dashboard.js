@@ -9,6 +9,7 @@ import DealAlerts from '../components/DealAlerts';
 import api from '../services/api';
 import './Dashboard.css';
 import MorningBriefingCard from '../components/dashboard/MorningBriefingCard';
+import { getUserData } from '../utils/tokenStore';
 
 function Dashboard() {
   const navigate = useNavigate();
@@ -26,7 +27,7 @@ function Dashboard() {
     // Check both userRole and localStorage for admin status
     const isAdmin = userRole === 'admin' || (() => {
       try {
-        const user = JSON.parse(localStorage.getItem('user') || '{}');
+        const user = JSON.parse(getUserData() || '{}');
         return user.role === 'admin' || user.permission_role === 'admin';
       } catch { return false; }
     })();
@@ -42,7 +43,7 @@ function Dashboard() {
   // Check if current user is demo user
   const isDemoUser = () => {
     try {
-      const userStr = localStorage.getItem('user');
+      const userStr = getUserData();
       if (userStr) {
         const user = JSON.parse(userStr);
         return user.email === 'admin@perenniaai.com';

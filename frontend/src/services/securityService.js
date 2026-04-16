@@ -6,6 +6,7 @@
  */
 
 import { API_BASE_URL } from './api';
+import { getToken } from '../utils/tokenStore';
 
 /**
  * Report device integrity check results to the backend.
@@ -20,7 +21,7 @@ import { API_BASE_URL } from './api';
  */
 export async function reportDeviceIntegrity(result) {
   try {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) return;
 
     await fetch(`${API_BASE_URL}/api/v1/security/device-integrity`, {
@@ -51,7 +52,7 @@ export async function reportDeviceIntegrity(result) {
  */
 export async function reportSecurityEvent(eventType, details = {}) {
   try {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) return;
 
     await fetch(`${API_BASE_URL}/api/v1/security/events`, {

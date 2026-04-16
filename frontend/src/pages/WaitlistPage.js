@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import WaitlistManager from '../components/calendar/WaitlistManager';
+import { getToken } from '../utils/tokenStore';
 
 /**
  * WaitlistPage - Standalone page wrapper for the WaitlistManager component.
@@ -12,7 +13,7 @@ import WaitlistManager from '../components/calendar/WaitlistManager';
 export default function WaitlistPage() {
   const [searchParams] = useSearchParams();
   const appointmentTypeId = searchParams.get('appointmentTypeId') || undefined;
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   return (
     <div style={{ maxWidth: 1000, margin: '0 auto', padding: '24px 16px' }}>

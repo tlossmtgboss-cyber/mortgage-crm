@@ -10,7 +10,7 @@ import { App } from '@capacitor/app';
 import { biometrics, isNative } from './nativeServices';
 import { authAPI, API_BASE_URL } from './api';
 import { getMDMSessionTimeout } from './mdmConfig';
-import { clearAllAuthTokens } from '../utils/storage';
+import { getToken, getRefreshToken, getUserData, setTokens, clearTokens } from '../utils/tokenStore';
 
 // ============================================================================
 // CONFIGURATION
@@ -172,10 +172,7 @@ function _forceLogout(reason) {
 
   // Clear auth state from ALL storage locations (localStorage + Capacitor Preferences).
   // clearAllAuthTokens is async but we fire-and-forget since we're navigating away.
-  localStorage.removeItem('token');
-  localStorage.removeItem('refresh_token');
-  localStorage.removeItem('user');
-  clearAllAuthTokens().catch(() => {});
+  clearTokens().catch(() => {});
 
   _notifyListeners();
 
@@ -278,7 +275,7 @@ function _detachActivityListeners() {
 export function initSession() {
   if (_initialized) return;
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
   if (!token) return;
 
   // Apply MDM-managed session timeout before starting timers
@@ -414,7 +411,7 @@ export async function unlockWithBiometrics() {
       _startInactivityTimer();
 
       // Schedule proactive token refresh for the current access token
-      const currentToken = localStorage.getItem('token');
+      const currentToken = getToken();
       if (currentToken) _scheduleTokenRefresh(currentToken);
 
       // Restart absolute timer with remaining time
@@ -461,13 +458,13 @@ export async function unlockWithPassword(password) {
 
   try {
     // Get stored email from user data
-    const userData = localStorage.getItem('user');
+    const userData = getUserData();
     if (!userData) {
       _forceLogout('no_user_data');
       return false;
     }
 
-    const user = JSON.parse(userData);
+    const user = typeof userData === 'string' ? JSON.parse(userData) : userData;
     const email = user.email;
 
     if (!email) {
@@ -479,11 +476,11 @@ export async function unlockWithPassword(password) {
     const response = await authAPI.login(email, password);
 
     if (response && response.access_token) {
-      // Store the new tokens
-      localStorage.setItem('token', response.access_token);
-      if (response.refresh_token) {
-        localStorage.setItem('refresh_token', response.refresh_token);
-      }
+      // Store the new tokens in tokenStore (memory cache + Keychain on native)
+      await setTokens({
+        access_token: response.access_token,
+        ...(response.refresh_token && { refresh_token: response.refresh_token }),
+      });
 
       _isLocked = false;
       _isWarning = false;
@@ -562,7 +559,7 @@ export function getSessionConfig() {
 
 async function _silentTokenRefresh() {
   try {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) return false;
 
     // Check token expiry client-side (no /auth/me endpoint exists)
@@ -576,7 +573,7 @@ async function _silentTokenRefresh() {
     }
 
     // Token expired or expiring soon — try to refresh
-    const refreshToken = localStorage.getItem('refresh_token');
+    const refreshToken = getRefreshToken();
     if (!refreshToken) return exp > now; // No refresh token — valid only if not expired
 
     const response = await fetch(`${API_BASE_URL}/api/v1/account/renew`, {
@@ -588,7 +585,7 @@ async function _silentTokenRefresh() {
     if (response.ok) {
       const data = await response.json();
       if (data.access_token) {
-        localStorage.setItem('token', data.access_token);
+        setTokens({ access_token: data.access_token }).catch(() => {});
       }
       return true;
     }
@@ -621,13 +618,11 @@ async function _reloginFromKeychain() {
 
     const response = await authAPI.login(credentials.username, credentials.password);
     if (response && response.access_token) {
-      localStorage.setItem('token', response.access_token);
-      if (response.refresh_token) {
-        localStorage.setItem('refresh_token', response.refresh_token);
-      }
-      if (response.user) {
-        localStorage.setItem('user', JSON.stringify(response.user));
-      }
+      await setTokens({
+        access_token: response.access_token,
+        ...(response.refresh_token && { refresh_token: response.refresh_token }),
+        ...(response.user && { user_data: response.user }),
+      });
       console.log('[SessionManager] Keychain re-login succeeded');
       return true;
     }
@@ -670,7 +665,7 @@ async function _proactiveTokenRefresh() {
   if (_isLocked) return;
 
   try {
-    const refreshToken = localStorage.getItem('refresh_token');
+    const refreshToken = getRefreshToken();
     if (!refreshToken) {
       console.log('[SessionManager] No refresh token — skipping proactive refresh');
       return;
@@ -685,7 +680,7 @@ async function _proactiveTokenRefresh() {
     if (response.ok) {
       const data = await response.json();
       if (data.access_token) {
-        localStorage.setItem('token', data.access_token);
+        setTokens({ access_token: data.access_token }).catch(() => {});
         _tokenRefreshRetries = 0;
         console.log('[SessionManager] Proactive token refresh succeeded');
         // Schedule next refresh based on new token's expiry

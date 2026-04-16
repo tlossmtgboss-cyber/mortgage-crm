@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import { APIError } from '../utils/errorHandling';
 import './LeadCaptureSettings.css';
+import { getToken } from '../utils/tokenStore';
 
 function LeadCaptureSettings() {
   const navigate = useNavigate();
@@ -42,7 +43,7 @@ function LeadCaptureSettings() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { 'Authorization': `Bearer ${token}` };
 
       const [settingsRes, statsRes, fieldsRes, usersRes] = await Promise.all([
@@ -196,7 +197,7 @@ function LeadCaptureSettings() {
   const handleTestScoring = async () => {
     setTestingScore(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/lead-capture-settings/test-scoring`, {
         method: 'POST',
         headers: {
@@ -258,7 +259,7 @@ function LeadCaptureSettings() {
     setSubmitting(true);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/lead-capture-settings`, {
         method: 'PUT',
         headers: {
@@ -304,7 +305,7 @@ function LeadCaptureSettings() {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/lead-capture-settings/reset-defaults`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }

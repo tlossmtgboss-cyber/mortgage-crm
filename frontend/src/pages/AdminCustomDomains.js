@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import './AdminCustomDomains.css';
+import { getToken } from '../utils/tokenStore';
 
 const AdminCustomDomains = () => {
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ const AdminCustomDomains = () => {
   const [newDomain, setNewDomain] = useState('');
   const [newDomainNotes, setNewDomainNotes] = useState('');
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   const fetchDomains = useCallback(async () => {
     try {

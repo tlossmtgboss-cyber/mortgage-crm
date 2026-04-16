@@ -1,5 +1,6 @@
 import React from 'react';
 import './ErrorBoundary.css';
+import { getToken } from '../utils/tokenStore';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -33,7 +34,7 @@ class ErrorBoundary extends React.Component {
 
     // Post to error reporting endpoint if available
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
         ? 'https://api.perenniaai.com'
         : 'http://localhost:8000';

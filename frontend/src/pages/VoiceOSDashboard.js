@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './VoiceOSDashboard.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 const VoiceOSDashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -90,7 +91,7 @@ const VoiceOSDashboard = () => {
         ? 'https://api.perenniaai.com'
         : 'http://localhost:8000';
 
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Fetch Voice OS config
       const configResponse = await fetch(`${API_BASE_URL}/api/v1/voice/voice-os/config`, {
@@ -166,7 +167,7 @@ const VoiceOSDashboard = () => {
         ? 'https://api.perenniaai.com'
         : 'http://localhost:8000';
 
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const voice = voiceOptions.find(v => v.id === voiceId);
 
       const response = await fetch(`${API_BASE_URL}/api/v1/voice/voice-os/test-voice`, {
@@ -213,7 +214,7 @@ const VoiceOSDashboard = () => {
         ? 'https://api.perenniaai.com'
         : 'http://localhost:8000';
 
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       const response = await fetch(`${API_BASE_URL}/api/v1/voice/voice-os/config`, {
         method: 'POST',

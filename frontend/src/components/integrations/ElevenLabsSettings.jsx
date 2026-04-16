@@ -12,6 +12,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../../services/api';
 import './ElevenLabsSettings.css';
+import { getToken } from '../../utils/tokenStore';
 
 const API_URL = API_BASE_URL;
 
@@ -51,7 +52,7 @@ const ElevenLabsSettings = () => {
   }, []);
 
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'

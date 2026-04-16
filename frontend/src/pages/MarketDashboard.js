@@ -4,6 +4,7 @@ import {
   AreaChart, Area
 } from 'recharts';
 import './MarketDashboard.css';
+import { getToken, getUserData } from '../utils/tokenStore';
 
 // Market Chat Component for team collaboration
 function MarketChat() {
@@ -15,7 +16,7 @@ function MarketChat() {
   const isInitialLoad = useRef(true);
 
   // Get current user from localStorage
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const currentUser = JSON.parse(getUserData() || '{}');
   const userName = currentUser.name || currentUser.email?.split('@')[0] || 'User';
 
   // Load messages on mount and set up polling
@@ -45,7 +46,7 @@ function MarketChat() {
 
   const loadMessages = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/market-chat/messages`,
         {
@@ -71,7 +72,7 @@ function MarketChat() {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/market-chat/messages`,
         {
@@ -174,7 +175,7 @@ function AIRateLockCommentary({ marketData }) {
     setChatLoading(true);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const API_URL = process.env.REACT_APP_API_URL || '';
 
       // Include current market data in the context
@@ -485,7 +486,7 @@ function AIRateLockCommentary({ marketData }) {
                       setChatMessages(prev => [...prev, { role: 'user', content: q.question }]);
                       setChatLoading(true);
                       // Trigger the API call
-                      const token = localStorage.getItem('token');
+                      const token = getToken();
                       const API_URL = process.env.REACT_APP_API_URL || '';
                       const marketContext = marketData ? `Current market data: 10Y Treasury: ${marketData.treasury10yr}%, 2Y Treasury: ${marketData.treasury2yr}%, MBS 6.0: ${marketData.mbs60 || 'N/A'}` : '';
 

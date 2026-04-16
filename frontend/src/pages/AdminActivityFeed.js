@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import './AdminActivityFeed.css';
+import { getToken } from '../utils/tokenStore';
 
 const AdminActivityFeed = () => {
   const navigate = useNavigate();
@@ -39,7 +40,7 @@ const AdminActivityFeed = () => {
   // Fetch activities
   const fetchActivities = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const params = new URLSearchParams({
         limit: 50,
         ...(filters.activity_type && { type: filters.activity_type }),
@@ -75,7 +76,7 @@ const AdminActivityFeed = () => {
   // Fetch loan officers for filter
   const fetchLoanOfficers = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/users?role=loan_officer`, {
         headers: {
           'Authorization': `Bearer ${token}`,

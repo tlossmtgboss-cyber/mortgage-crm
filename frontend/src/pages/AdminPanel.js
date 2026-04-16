@@ -4,6 +4,7 @@ import api from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import './AdminPanel.css';
 import { toast } from '../utils/toast';
+import { getUserData } from '../utils/tokenStore';
 
 /**
  * AdminPanel - Administrative Dashboard
@@ -23,7 +24,7 @@ const AdminPanel = () => {
   // Get user info from localStorage as fallback (in case PermissionContext has stale data)
   const getLocalStorageRole = () => {
     try {
-      const userStr = localStorage.getItem('user');
+      const userStr = getUserData();
       if (userStr) {
         const user = JSON.parse(userStr);
         return {
@@ -98,7 +99,7 @@ const AdminPanel = () => {
   // Get current user ID
   const _getCurrentUserId = () => {
     try {
-      const userStr = localStorage.getItem('user');
+      const userStr = getUserData();
       if (userStr) {
         const user = JSON.parse(userStr);
         return user.id;
@@ -595,7 +596,7 @@ const AdminPanel = () => {
     // Get localStorage debug info
     let userFromStorage = null;
     try {
-      userFromStorage = JSON.parse(localStorage.getItem('user') || 'null');
+      userFromStorage = JSON.parse(getUserData() || 'null');
     } catch (e) {
       userFromStorage = { error: 'Failed to parse user from localStorage' };
     }

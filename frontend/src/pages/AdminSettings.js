@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import './AdminSettings.css';
+import { getToken } from '../utils/tokenStore';
 
 const AdminSettings = () => {
   const navigate = useNavigate();
@@ -18,7 +19,7 @@ const AdminSettings = () => {
   const runJob = async (jobType) => {
     setRunning({ ...running, [jobType]: true });
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE_URL}/api/v1/admin/certification-jobs/${jobType}`,
         {

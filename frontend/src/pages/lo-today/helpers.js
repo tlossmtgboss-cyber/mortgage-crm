@@ -1,4 +1,5 @@
 import React from 'react';
+import { getUserData } from '../../utils/tokenStore';
 
 // =============================================================================
 // Helpers
@@ -55,7 +56,7 @@ export function isPast(isoString) {
 
 export function getUserName() {
   try {
-    const userData = localStorage.getItem('user');
+    const userData = getUserData();
     if (userData) {
       const user = JSON.parse(userData);
       return user.first_name || user.name || '';

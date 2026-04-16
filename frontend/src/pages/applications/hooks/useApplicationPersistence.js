@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useApplication } from '../contexts/ApplicationContext';
+import { getToken } from '../../../utils/tokenStore';
 
 const DEFAULT_DEBOUNCE_MS = 2000;
 const STORAGE_KEY_PREFIX = 'mortgage_application_';
@@ -107,7 +108,7 @@ export function useApplicationPersistence(options = {}) {
     if (!enableApiSave || !apiEndpoint) return true;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const sanitizedFormData = sanitizeFormData(formData);
 
       const response = await fetch(apiEndpoint, {

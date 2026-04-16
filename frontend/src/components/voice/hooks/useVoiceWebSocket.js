@@ -1,5 +1,6 @@
 // WebSocket hook for voice conversation with Aria
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { getToken } from '../../../utils/tokenStore';
 
 const useVoiceWebSocket = ({ onTranscript, onAudio, onStatusChange, onError, onSessionInfo }) => {
   const [status, setStatus] = useState('idle'); // idle, connecting, connected, listening, processing, speaking, error
@@ -35,7 +36,7 @@ const useVoiceWebSocket = ({ onTranscript, onAudio, onStatusChange, onError, onS
     updateStatus('connecting');
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
       const wsUrl = `${WS_BASE_URL}${WS_ENDPOINT}?token=${token}`;
 

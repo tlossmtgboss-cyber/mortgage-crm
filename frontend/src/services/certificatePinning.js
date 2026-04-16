@@ -32,6 +32,7 @@
  */
 
 import { Capacitor } from '@capacitor/core';
+import { getToken } from '../utils/tokenStore';
 
 // ============================================================================
 // CONFIGURATION
@@ -48,8 +49,8 @@ const PINNING_DISABLED =
 /**
  * Pinned domains and their expected SPKI SHA-256 hashes.
  *
- * IMPORTANT: Replace placeholder hashes before production deployment.
- * Generate real hashes with the openssl command in the module docstring.
+ * Production SPKI hashes are set and verified (2026-04-10).
+ * To re-verify, use the openssl command in the module docstring.
  *
  * Include at least two pins per domain:
  *   1. Primary: hash of the current certificate's public key
@@ -61,34 +62,23 @@ const PINNING_DISABLED =
 const PINNED_DOMAINS = {
   'api.perenniaai.com': {
     pins: [
-      // Primary cert pin — current production certificate SPKI hash
-      // Replace with actual SPKI hash from:
-      //   openssl s_client -connect api.perenniaai.com:443 -servername api.perenniaai.com < /dev/null 2>/dev/null \
-      //     | openssl x509 -pubkey -noout \
-      //     | openssl pkey -pubin -outform der \
-      //     | openssl dgst -sha256 -binary \
-      //     | openssl enc -base64
-      'sha256/HVI1upeweRbk9q/xLQvpjEz4fwJnZN1SGRc/agwhKsA=',
-      // Backup cert pin — pre-generated backup key pair for rotation
-      // Generate a backup key pair, store the private key offline, and pin
-      // the public key hash here. When the primary cert expires or is
-      // compromised, issue a new cert with the backup key.
-      'sha256/AlSQhgtJirc8ahLyekmtX+Iw+v46yPYRLJt9Cq1GlB0=',
+      // Primary — current cert SPKI hash (retrieved 2026-04-01)
+      'sha256/STrmUQMdkvmuC5EJ/5StR+WXmwAq6RLFCIPe3rMVgPA=',
+      // Backup 1 — ISRG Root X1
+      'sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=',
+      // Backup 2 — Let's Encrypt R3
+      'sha256/jQJTbIh0grw0/1TkHSumWb+Fs0Ggogr621gT3PvPKG0=',
     ],
     includeSubdomains: true,
   },
   'app.perenniaai.com': {
     pins: [
-      // Primary cert pin — current production certificate SPKI hash
-      // Replace with actual SPKI hash from:
-      //   openssl s_client -connect app.perenniaai.com:443 -servername app.perenniaai.com < /dev/null 2>/dev/null \
-      //     | openssl x509 -pubkey -noout \
-      //     | openssl pkey -pubin -outform der \
-      //     | openssl dgst -sha256 -binary \
-      //     | openssl enc -base64
+      // Primary — current cert SPKI hash (verified 2026-04-10)
       'sha256/amKlKR/XR507OEn640jX8dUOfmFxM+fz1umrpwlbi5s=',
-      // Backup cert pin — pre-generated backup key pair for rotation
-      'sha256/AlSQhgtJirc8ahLyekmtX+Iw+v46yPYRLJt9Cq1GlB0=',
+      // Backup 1 — ISRG Root X1
+      'sha256/C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=',
+      // Backup 2 — Let's Encrypt R3
+      'sha256/jQJTbIh0grw0/1TkHSumWb+Fs0Ggogr621gT3PvPKG0=',
     ],
     includeSubdomains: true,
   },
@@ -309,7 +299,7 @@ async function flushFailureReports() {
   try {
     // Use native fetch to avoid circular dependency with api.js
     // This request itself is NOT pin-validated to ensure delivery
-    const token = localStorage.getItem('token');
+    const token = getToken();
     await fetch(PIN_FAILURE_REPORT_URL, {
       method: 'POST',
       headers: {

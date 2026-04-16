@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import './DocumentUploadSettings.css';
+import { getToken } from '../utils/tokenStore';
 
 function DocumentUploadSettings() {
   const navigate = useNavigate();
@@ -33,7 +34,7 @@ function DocumentUploadSettings() {
   // Load settings and reference data
   const loadData = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { 'Authorization': `Bearer ${token}` };
 
       const [settingsRes, typesRes, categoriesRes, providersRes, statsRes] = await Promise.all([
@@ -192,7 +193,7 @@ function DocumentUploadSettings() {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/document-upload-settings`, {
         method: 'PUT',
         headers: {
@@ -236,7 +237,7 @@ function DocumentUploadSettings() {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/document-upload-settings/reset-defaults`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -264,7 +265,7 @@ function DocumentUploadSettings() {
     setClassificationResults(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/document-upload-settings/test-classification`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }

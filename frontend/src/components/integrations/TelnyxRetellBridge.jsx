@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../../services/api';
 import './TelnyxRetellBridge.css';
+import { getToken } from '../../utils/tokenStore';
 
 const TelnyxRetellBridge = () => {
   const [status, setStatus] = useState(null);
@@ -23,7 +24,7 @@ const TelnyxRetellBridge = () => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { Authorization: `Bearer ${token}` };
 
       // Load bridge status
@@ -74,7 +75,7 @@ const TelnyxRetellBridge = () => {
     setSuccess(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/v1/telnyx-retell/connect`, {
         method: 'POST',
         headers: {
@@ -109,7 +110,7 @@ const TelnyxRetellBridge = () => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(
         `${API_BASE_URL}/api/v1/telnyx-retell/disconnect/${encodeURIComponent(phoneNumber)}`,
         {
@@ -134,7 +135,7 @@ const TelnyxRetellBridge = () => {
 
   const handleGenerateTeXML = async (agentId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/v1/telnyx-retell/generate-texml`, {
         method: 'POST',
         headers: {

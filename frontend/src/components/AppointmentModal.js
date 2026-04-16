@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import './AppointmentModal.css';
 import { toast } from '../utils/toast';
 import { API_BASE_URL } from '../services/api';
+import { getToken } from '../utils/tokenStore';
 
 function AppointmentModal({ isOpen, onClose, lead, onAppointmentCreated }) {
   const [title, setTitle] = useState('');
@@ -36,7 +37,7 @@ function AppointmentModal({ isOpen, onClose, lead, onAppointmentCreated }) {
       const response = await fetch(`${API_BASE_URL}/api/v1/calendar/events`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

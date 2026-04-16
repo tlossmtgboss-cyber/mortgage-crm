@@ -13,6 +13,7 @@
 
 // Import the base API instance
 import api from './api';
+import { getToken } from '../utils/tokenStore';
 
 const BASE_PATH = '/api/v1/conversation-intelligence';
 
@@ -215,7 +216,7 @@ export const realTimeApi = {
    */
   createWebSocket: (sessionId) => {
     const url = realTimeApi.getWebSocketUrl(sessionId);
-    const token = localStorage.getItem('token');
+    const token = getToken();
     // Security: Token in URL is a browser WebSocket API limitation.
     // Backend should accept token via first message post-connection.
     const ws = new WebSocket(url);

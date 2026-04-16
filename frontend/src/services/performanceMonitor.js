@@ -11,6 +11,8 @@
  *   performanceMonitor.trackMetric('custom_timing', 42, { screen: 'Pipeline' });
  */
 
+import { getToken } from '../utils/tokenStore';
+
 // ---------------------------------------------------------------------------
 // Performance budgets — thresholds beyond which we log a warning.
 // ---------------------------------------------------------------------------
@@ -517,7 +519,7 @@ class PerformanceMonitor {
       console.log('[PerfMon] Flushing', payload.metrics.length, 'metrics');
     }
 
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = `Bearer ${token}`;
 

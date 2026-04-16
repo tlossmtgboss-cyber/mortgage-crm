@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import VerificationModal from './VerificationModal';
 import './Step1Registration.css';
 import { toast } from '../../../utils/toast';
+import { getToken } from '../../../utils/tokenStore';
 
 const Step1Registration = ({ data, onChange }) => {
   const [formData, setFormData] = useState({
@@ -132,7 +133,7 @@ const Step1Registration = ({ data, onChange }) => {
 
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch('https://api.perenniaai.com/api/v1/onboarding/step-1/send-email-verification', {
         method: 'POST',
         headers: {
@@ -168,7 +169,7 @@ const Step1Registration = ({ data, onChange }) => {
 
     setIsSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch('https://api.perenniaai.com/api/v1/onboarding/step-1/send-sms-verification', {
         method: 'POST',
         headers: {

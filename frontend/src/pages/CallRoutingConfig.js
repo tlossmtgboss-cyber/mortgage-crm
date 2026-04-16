@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import './CallRoutingConfig.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -16,7 +17,7 @@ function CallRoutingConfig() {
   const [error, setError] = useState(null);
 
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'

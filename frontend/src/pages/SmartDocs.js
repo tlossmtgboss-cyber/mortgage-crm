@@ -18,6 +18,7 @@ import AdminContracts from '../components/AdminContracts';
 import BatchReminderModal from '../components/smart-docs/BatchReminderModal';
 import './SmartDocs.css';
 import { toast } from '../utils/toast';
+import { getToken, getUserData } from '../utils/tokenStore';
 
 function SmartDocs() {
   const navigate = useNavigate();
@@ -57,7 +58,7 @@ function SmartDocs() {
       let loans = [];
 
       // Use the Smart Docs loans endpoint (shows all active loans without permission filtering)
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
       let response = await fetch(`${API_BASE_URL}/api/v1/smart-docs/loans`, { headers });
@@ -224,7 +225,7 @@ function SmartDocs() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/loans?status=funded&limit=${pagination.limit}&page=${pagination.page}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
       if (response.ok) {
@@ -434,7 +435,7 @@ function SmartDocs() {
   // Create tasks for all duplicates
   const handleCreateDuplicateTasks = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'
@@ -463,7 +464,7 @@ function SmartDocs() {
 
   // Platform admin sees contracts dashboard instead of loan documents
   const userEmail = (() => {
-    try { return JSON.parse(localStorage.getItem('user'))?.email; } catch { return null; }
+    try { return JSON.parse(getUserData())?.email; } catch { return null; }
   })();
   if (isPlatformAdmin || isMasterAdmin(userEmail)) {
     return <AdminContracts />;

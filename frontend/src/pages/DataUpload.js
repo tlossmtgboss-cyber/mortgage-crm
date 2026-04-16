@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import './DataUpload.css';
 import AutoDataImport from '../components/data-management/AutoDataImport';
+import { getToken } from '../utils/tokenStore';
 
 function DataUpload() {
   const navigate = useNavigate();
@@ -81,7 +82,7 @@ function DataUpload() {
       const response = await fetch(`${API_BASE_URL}/api/v1/data-import/analyze`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         },
         body: formData
       });
@@ -143,7 +144,7 @@ function DataUpload() {
       const response = await fetch(`${API_BASE_URL}/api/v1/data-import/execute`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         },
         body: formData
       });

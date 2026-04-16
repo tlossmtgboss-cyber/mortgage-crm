@@ -8,6 +8,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useCarouselBuilder } from '../CarouselBuilderContext';
 import { API_BASE_URL } from '../../../services/api';
+import { getToken } from '../../../utils/tokenStore';
 
 export default function ImageUploader({ onUpload, currentImage }) {
   const { currentProject } = useCarouselBuilder();
@@ -41,7 +42,7 @@ export default function ImageUploader({ onUpload, currentImage }) {
     setProgress(0);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Step 1: Get presigned upload URL
       setProgress(10);

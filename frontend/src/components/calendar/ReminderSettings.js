@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
@@ -52,7 +53,7 @@ function timingLabel(minutes) {
 }
 
 async function apiFetch(path, options = {}) {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {

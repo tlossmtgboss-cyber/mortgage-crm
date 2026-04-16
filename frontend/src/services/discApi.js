@@ -4,6 +4,7 @@
  */
 
 import React from 'react';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -11,7 +12,7 @@ const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
  * Get auth headers
  */
 function getHeaders() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Content-Type': 'application/json',
     ...(token && { 'Authorization': `Bearer ${token}` })

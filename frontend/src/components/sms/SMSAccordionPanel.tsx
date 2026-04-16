@@ -29,6 +29,7 @@
 import React, {
   useState, useRef, useEffect, useCallback, ReactNode
 } from 'react'
+import { getToken } from '../../utils/tokenStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -530,7 +531,7 @@ export default function SMSAccordionPanel({
 
   // ── Auth helper: read JWT from localStorage (same pattern as rest of app) ──
   function getAuthHeaders(): Record<string, string> {
-    const token = localStorage.getItem('token')
+    const token = getToken()
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (token) headers['Authorization'] = `Bearer ${token}`
     return headers
@@ -647,7 +648,7 @@ export default function SMSAccordionPanel({
   function connectWS() {
     // Build WS URL pointing to the API domain (not frontend domain)
     const phoneParam = encodeURIComponent(activePhone)
-    const token = localStorage.getItem('token') || ''
+    const token = getToken() || ''
     const apiWsBase = wsUrl || (() => {
       const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
       return isLocalhost ? 'ws://localhost:8000' : 'wss://api.perenniaai.com'
@@ -773,7 +774,7 @@ export default function SMSAccordionPanel({
     try {
       // Upload media files first → get public URLs for Telnyx
       const mediaUrls: string[] = []
-      const token = localStorage.getItem('token')
+      const token = getToken()
       for (const sf of staged) {
         if (sf.file) {
           const form = new FormData()

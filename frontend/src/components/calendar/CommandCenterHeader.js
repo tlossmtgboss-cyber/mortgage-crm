@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { schedulerAPI, tasksAPI, leadsAPI, loansAPI } from '../../services/api';
 import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
 import './CommandCenterHeader.css';
+import { getUserData } from '../../utils/tokenStore';
 
 // SLA targets in days — mirrors backend SLA_TARGETS
 const SLA_TARGETS_BY_STAGE = {
@@ -22,7 +23,7 @@ function getGreeting() {
 
 function getUserName() {
   try {
-    const d = localStorage.getItem('user');
+    const d = getUserData();
     if (d) {
       const u = JSON.parse(d);
       return u.first_name || u.name || '';

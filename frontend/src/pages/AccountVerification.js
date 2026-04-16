@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import './AccountVerification.css';
+import { setTokens } from '../utils/tokenStore';
 
 // API base URL
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -128,16 +129,16 @@ function AccountVerification() {
   };
 
   // Complete verification and go to dashboard
-  const handleComplete = () => {
+  const handleComplete = async () => {
     // Mark verification as complete
     if (userData.token) {
-      localStorage.setItem('token', userData.token);
-      localStorage.setItem('user', JSON.stringify({
+      await setTokens({ access_token: userData.token });
+      await setTokens({ user_data: {
         id: userId,
         email: email,
         full_name: userData.full_name,
         verified: true
-      }));
+      } });
     }
     navigate('/dashboard');
   };

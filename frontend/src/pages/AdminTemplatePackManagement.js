@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import './AdminTemplatePackManagement.css';
+import { getToken } from '../utils/tokenStore';
 
 const AdminTemplatePackManagement = () => {
   const navigate = useNavigate();
@@ -72,7 +73,7 @@ const AdminTemplatePackManagement = () => {
   const fetchTemplatePacks = useCallback(async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/perennia-docs/template-packs`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -166,7 +167,7 @@ const AdminTemplatePackManagement = () => {
   const handleSave = async () => {
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const url = isEditing
         ? `${API_BASE_URL}/api/v1/perennia-docs/template-packs/${selectedPack.id}`
         : `${API_BASE_URL}/api/v1/perennia-docs/template-packs`;
@@ -201,7 +202,7 @@ const AdminTemplatePackManagement = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE_URL}/api/v1/perennia-docs/template-packs/${packId}`,
         {

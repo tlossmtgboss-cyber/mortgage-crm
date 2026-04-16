@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import useFocusTrap from '../../hooks/useFocusTrap';
 import { normalizeUTCDate, getUserTimezone } from './calendarUtils';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
 async function apiFetch(path, options = {}) {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {

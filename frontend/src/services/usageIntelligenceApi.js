@@ -6,6 +6,7 @@
  */
 
 import { API_BASE_URL } from './api';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = API_BASE_URL;
 
@@ -15,7 +16,7 @@ const API_BASE = API_BASE_URL;
 export const getDashboardOverview = async () => {
   const response = await fetch(`${API_BASE}/api/v1/usage-intelligence/dashboard`, {
     headers: {
-      'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      'Authorization': `Bearer ${getToken()}`,
       'Content-Type': 'application/json'
     }
   });
@@ -35,7 +36,7 @@ export const getUserCosts = async (days = 30, limit = 50) => {
     `${API_BASE}/api/v1/usage-intelligence/users?days=${days}&limit=${limit}`,
     {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
       }
     }
@@ -56,7 +57,7 @@ export const getUserCostDetail = async (userId, days = 30) => {
     `${API_BASE}/api/v1/usage-intelligence/users/${userId}?days=${days}`,
     {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
       }
     }
@@ -77,7 +78,7 @@ export const getTeamCosts = async (days = 30) => {
     `${API_BASE}/api/v1/usage-intelligence/teams?days=${days}`,
     {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
       }
     }
@@ -98,7 +99,7 @@ export const getOrganizationCosts = async (days = 30) => {
     `${API_BASE}/api/v1/usage-intelligence/organization?days=${days}`,
     {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
       }
     }
@@ -119,7 +120,7 @@ export const getOrganizationTrend = async (days = 30) => {
     `${API_BASE}/api/v1/usage-intelligence/organization/trend?days=${days}`,
     {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
       }
     }
@@ -143,7 +144,7 @@ export const getProjections = async (scopeType = 'organization', scopeId = null,
 
   const response = await fetch(url, {
     headers: {
-      'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      'Authorization': `Bearer ${getToken()}`,
       'Content-Type': 'application/json'
     }
   });
@@ -163,7 +164,7 @@ export const getPricingRecommendation = async (targetMargin = 200, periodDays = 
     `${API_BASE}/api/v1/usage-intelligence/pricing-calculator?target_margin=${targetMargin}&period_days=${periodDays}`,
     {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
       }
     }
@@ -185,7 +186,7 @@ export const simulatePricing = async (basePrice, perUserPrice) => {
     {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
       }
     }
@@ -206,7 +207,7 @@ export const getAIModelCosts = async (days = 30) => {
     `${API_BASE}/api/v1/usage-intelligence/ai-models?days=${days}`,
     {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
       }
     }
@@ -227,7 +228,7 @@ export const getAIModelPricing = async () => {
     `${API_BASE}/api/v1/usage-intelligence/ai-models/pricing`,
     {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
       }
     }
@@ -251,7 +252,7 @@ export const getUsageAlerts = async (status = null, limit = 50) => {
 
   const response = await fetch(url, {
     headers: {
-      'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      'Authorization': `Bearer ${getToken()}`,
       'Content-Type': 'application/json'
     }
   });
@@ -272,7 +273,7 @@ export const acknowledgeAlert = async (alertId) => {
     {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
       }
     }
@@ -294,7 +295,7 @@ export const resolveAlert = async (alertId) => {
     {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        'Authorization': `Bearer ${getToken()}`,
         'Content-Type': 'application/json'
       }
     }

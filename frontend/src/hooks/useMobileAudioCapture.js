@@ -12,6 +12,7 @@
 
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { API_BASE_URL } from '../services/api';
+import { getToken } from '../utils/tokenStore';
 
 const SAMPLE_RATE = 16000;
 
@@ -57,7 +58,7 @@ const useMobileAudioCapture = ({ sessionId, onTranscript, enabled = true }) => {
   // Connect WebSocket to backend audio stream endpoint
   const connectWebSocket = useCallback((sid) => {
     return new Promise((resolve, reject) => {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const url = `${WS_BASE_URL}/api/v1/call-monitoring/sessions/${sid}/audio-stream`;
 
       setConnectionStatus('connecting');

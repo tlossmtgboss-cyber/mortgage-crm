@@ -1,6 +1,7 @@
 // Voice OS Agent Builder - Agent creation and editing wizard
 import React, { useState, useEffect } from 'react';
 import { toast } from '../../utils/toast';
+import { getToken } from '../../utils/tokenStore';
 
 
 
@@ -138,7 +139,7 @@ Guidelines:
         ? 'https://api.perenniaai.com'
         : 'http://localhost:8000';
 
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       const response = await fetch(`${API_BASE_URL}/api/v1/voice/agents`, {
         method: existingAgent?.name ? 'PUT' : 'POST',

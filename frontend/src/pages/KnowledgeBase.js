@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './KnowledgeBase.css';
+import { getToken } from '../utils/tokenStore';
 
 const CATEGORIES = [
   { value: 'loan_products', label: 'Loan Products' },
@@ -36,7 +37,7 @@ const KnowledgeBase = () => {
     priority: 5
   });
 
-  const getToken = () => localStorage.getItem('token');
+  const getToken = () => getToken();
 
   const showNotification = (message, type = 'success') => {
     setNotification({ message, type });

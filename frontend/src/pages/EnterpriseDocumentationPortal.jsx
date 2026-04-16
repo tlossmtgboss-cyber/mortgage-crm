@@ -11,6 +11,7 @@ import { usePermissions } from '../contexts/PermissionContext';
 import { API_BASE_URL } from '../services/api';
 import { toast } from '../utils/toast';
 import './EnterpriseDocumentationPortal.css';
+import { getToken } from '../utils/tokenStore';
 
 const DOCUMENTATION_CATEGORIES = [
   {
@@ -117,7 +118,7 @@ function EnterpriseDocumentationPortal() {
     setError(null);
     
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
       // Load documentation content
@@ -169,7 +170,7 @@ function EnterpriseDocumentationPortal() {
   // Track content view
   const trackContentView = useCallback(async (contentId, title) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
       
       await fetch(`${API_BASE_URL}/api/v1/enterprise-docs/analytics/view`, {
@@ -239,7 +240,7 @@ function EnterpriseDocumentationPortal() {
   // Handle feedback submission
   const handleFeedbackSubmit = useCallback(async (contentId, feedback) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = token ? { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' } : {};
       
       await fetch(`${API_BASE_URL}/api/v1/enterprise-docs/feedback`, {

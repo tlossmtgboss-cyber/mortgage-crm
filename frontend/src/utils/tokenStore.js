@@ -1,9 +1,9 @@
 import { Preferences } from '@capacitor/preferences';
 import { Capacitor } from '@capacitor/core';
 
-const TOKEN_KEY = 'access_token';
+const TOKEN_KEY = 'token';
 const REFRESH_KEY = 'refresh_token';
-const USER_KEY = 'user_data';
+const USER_KEY = 'user';
 
 // ── In-memory cache ──────────────────────────────────────────
 // Loaded once at app startup via initialize().

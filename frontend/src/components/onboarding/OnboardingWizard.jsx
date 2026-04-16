@@ -8,6 +8,7 @@ import Step4Training from './steps/Step4Training';
 import Step5Confirmation from './steps/Step5Confirmation';
 import './OnboardingWizard.css';
 import { toast } from '../../utils/toast';
+import { getToken } from '../../utils/tokenStore';
 
 const TOTAL_STEPS = 5;
 const API_BASE = 'https://api.perenniaai.com/api';
@@ -97,7 +98,7 @@ const OnboardingWizard = () => {
 
   const loadProgress = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_V1}/onboarding/resume`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -137,7 +138,7 @@ const OnboardingWizard = () => {
 
   const startOnboarding = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_V1}/onboarding/start`, {
         method: 'POST',
         headers: {
@@ -166,7 +167,7 @@ const OnboardingWizard = () => {
 
     try {
       setAutoSaveStatus('Saving...');
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       const response = await fetch(`${API_V1}/onboarding/auto-save`, {
         method: 'POST',
@@ -194,7 +195,7 @@ const OnboardingWizard = () => {
   const saveStep = async (data) => {
     try {
       setIsSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       const response = await fetch(`${API_V1}/onboarding/step-${currentStep}/save`, {
         method: 'POST',
@@ -226,7 +227,7 @@ const OnboardingWizard = () => {
 
   const completeStep = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       const response = await fetch(`${API_V1}/onboarding/step/${currentStep}/complete`, {
         method: 'POST',
@@ -291,7 +292,7 @@ const OnboardingWizard = () => {
   const handleOnboardingComplete = async () => {
     try {
       setIsSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Complete onboarding
       const response = await fetch(`${API_V1}/onboarding/complete`, {

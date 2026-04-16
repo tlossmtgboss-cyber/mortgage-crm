@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import { toast } from '../utils/toast';
 import './CommunicationPreferences.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -38,7 +39,7 @@ const CommunicationPreferences = () => {
 
   const loadSettings = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetchSettings(async () => {
         const res = await fetch(`${API_URL}/api/v1/communication-preferences`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -61,7 +62,7 @@ const CommunicationPreferences = () => {
 
   const loadTemplateVariables = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/communication-preferences/template-variables`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -76,7 +77,7 @@ const CommunicationPreferences = () => {
 
   const loadEventTypes = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/communication-preferences/event-types`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -91,7 +92,7 @@ const CommunicationPreferences = () => {
 
   const loadTriggerEvents = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/communication-preferences/trigger-events`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -106,7 +107,7 @@ const CommunicationPreferences = () => {
 
   const loadStatistics = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/communication-preferences/statistics`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -121,7 +122,7 @@ const CommunicationPreferences = () => {
 
   const handleSave = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await saveSettings(async () => {
         const res = await fetch(`${API_URL}/api/v1/communication-preferences`, {
           method: 'PUT',
@@ -225,7 +226,7 @@ const CommunicationPreferences = () => {
 
   const previewTemplate = async (type, id) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/communication-preferences/preview-template?template_type=${type}&template_id=${id}`, {
         method: 'POST',
         headers: {
@@ -251,7 +252,7 @@ const CommunicationPreferences = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/communication-preferences/test-send?channel=${channel}&template_id=${templateId}&recipient=${encodeURIComponent(testRecipient)}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }

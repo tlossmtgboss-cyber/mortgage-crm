@@ -4,6 +4,7 @@ import useVoiceWebSocket from './hooks/useVoiceWebSocket';
 import useAudioRecorder from './hooks/useAudioRecorder';
 import './VoiceConversation.css';
 import { toast } from '../../utils/toast';
+import { getToken } from '../../utils/tokenStore';
 
 const VoiceConversation = () => {
   // Section toggle
@@ -116,7 +117,7 @@ const VoiceConversation = () => {
     const loadVoices = async () => {
       setLoadingVoices(true);
       try {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         const response = await fetch(`${API_BASE_URL}/api/v1/mobile-voice/voices`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -136,7 +137,7 @@ const VoiceConversation = () => {
   useEffect(() => {
     const loadPreference = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         const response = await fetch(`${API_BASE_URL}/api/v1/mobile-voice/user-voice-preference`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -163,7 +164,7 @@ const VoiceConversation = () => {
     setPlayingVoice(voice.id);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const sampleText = "Hello! I'm Aria, your AI assistant. How can I help you today?";
 
       const response = await fetch(`${API_BASE_URL}/api/v1/mobile-voice/tts/synthesize`, {
@@ -200,7 +201,7 @@ const VoiceConversation = () => {
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/mobile-voice/user-voice-preference`, {
         method: 'PUT',
         headers: {

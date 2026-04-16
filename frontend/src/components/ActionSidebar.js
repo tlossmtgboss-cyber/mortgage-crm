@@ -7,6 +7,7 @@ import CallDetailPanel from './shared/CallDetailPanel';
 import { TASK_EVENTS, emitTaskCompleted, subscribeToTaskEvent } from '../utils/taskEvents';
 import './ActionSidebar.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -30,7 +31,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
   // Fetch workflow tasks (same source as Tasks page) for Tasks tab
   const fetchWorkflowTasks = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Fetch workflow tasks - SAME endpoint as Tasks page
       const workflowResponse = await fetch(`${API_BASE}/api/v1/workflow-config/all-workflow-tasks?days_ahead=14`, {
@@ -333,7 +334,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       if (typeof itemId === 'number' || (!itemIdStr.includes('-') && !isNaN(itemId))) {
         // Workflow task - update lead's last_contact to mark as complete
         if (item.lead_id) {
-          const token = localStorage.getItem('token');
+          const token = getToken();
           await fetch(`${API_BASE}/api/v1/leads/${item.lead_id}`, {
             method: 'PATCH',
             headers: {
@@ -354,7 +355,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       }
       // For follow-up items, update the lead's last_contact date
       else if (itemIdStr.startsWith('followup_lead_') && item.entity_id) {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         await fetch(`${API_BASE}/api/v1/leads/${item.entity_id}`, {
           method: 'PATCH',
           headers: {
@@ -399,7 +400,7 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
     setCallInProgress(true);
     try {
       // Call the Telnyx dialer API to initiate call (rings your phone, then dials the contact)
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/dialer/click-to-dial`, {
         method: 'POST',
         headers: {

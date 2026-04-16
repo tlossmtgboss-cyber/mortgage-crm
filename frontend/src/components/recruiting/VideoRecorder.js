@@ -1,5 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import './VideoRecorder.css';
+import { getToken } from '../../utils/tokenStore';
 
 const VideoRecorder = ({ candidateId, candidateName, onVideoSent, onClose }) => {
   const [isRecording, setIsRecording] = useState(false);
@@ -129,7 +130,7 @@ const VideoRecorder = ({ candidateId, candidateName, onVideoSent, onClose }) => 
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
       // Get upload URL

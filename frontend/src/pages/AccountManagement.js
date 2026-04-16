@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import './AccountManagement.css';
+import { getToken } from '../utils/tokenStore';
 
 // Utility functions
 const formatCurrency = (amount) => {
@@ -66,7 +67,7 @@ const formatDuration = (seconds) => {
 // API helper
 const getAuthHeaders = () => ({
   'Content-Type': 'application/json',
-  'Authorization': `Bearer ${localStorage.getItem('token')}`
+  'Authorization': `Bearer ${getToken()}`
 });
 
 // Helper to calculate KPIs from accounts

@@ -24,6 +24,7 @@ import SendNeedsListModal from '../components/smart-docs/SendNeedsListModal';
 import SendReminderModal from '../components/smart-docs/SendReminderModal';
 import './SmartDocsClientDetail.css';
 import { toast } from '../utils/toast';
+import { getToken, getUserData } from '../utils/tokenStore';
 
 function SmartDocsClientDetail() {
   const { loanId } = useParams();
@@ -91,7 +92,7 @@ function SmartDocsClientDetail() {
     let clientInfoFound = false;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
       // Fetch document requests from needs list - this uses PURL loan IDs
@@ -192,7 +193,7 @@ function SmartDocsClientDetail() {
   // Toggle reminders
   const handleToggleReminders = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -217,7 +218,7 @@ function SmartDocsClientDetail() {
     if (selectedDocs.size === 0) return;
     setActionLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       // Map selected request IDs to actual document IDs
       const documentIds = documents
         .filter(doc => selectedDocs.has(doc.id))
@@ -263,7 +264,7 @@ function SmartDocsClientDetail() {
     if (selectedDocs.size === 0) return;
     setActionLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       // Map selected request IDs to actual document IDs
       const documentIds = documents
         .filter(doc => selectedDocs.has(doc.id))
@@ -296,7 +297,7 @@ function SmartDocsClientDetail() {
   // Download individual document
   const handleDownloadSingle = async (doc) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/smart-docs/documents/${doc.id}/download`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -320,7 +321,7 @@ function SmartDocsClientDetail() {
   // Email individual document
   const handleEmailSingle = async (doc) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await fetch(`${API_BASE_URL}/api/v1/smart-docs/documents/${doc.id}/email`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -336,8 +337,8 @@ function SmartDocsClientDetail() {
     if (!window.confirm(`Approve this ${getDocTypeName(doc.doc_type)}?`)) return;
     setActionLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const token = getToken();
+      const user = JSON.parse(getUserData() || '{}');
       const reviewer = user.email || user.name || 'Unknown';
 
       // Get document ID from document object
@@ -373,8 +374,8 @@ function SmartDocsClientDetail() {
 
     setActionLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const token = getToken();
+      const user = JSON.parse(getUserData() || '{}');
       const reviewer = user.email || user.name || 'Unknown';
 
       const documentId = doc.document_id || doc.id;
@@ -416,8 +417,8 @@ function SmartDocsClientDetail() {
 
     setActionLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const token = getToken();
+      const user = JSON.parse(getUserData() || '{}');
       const reviewer = user.email || user.name || 'Unknown';
 
       const documentId = doc.document_id || doc.id;
@@ -451,8 +452,8 @@ function SmartDocsClientDetail() {
 
     setActionLoading(true);
     try {
-      const token = localStorage.getItem('token');
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const token = getToken();
+      const user = JSON.parse(getUserData() || '{}');
       const reviewer = user.email || user.name || 'Unknown';
 
       // Re-request uses the request_id, not document_id
@@ -502,7 +503,7 @@ function SmartDocsClientDetail() {
 
     setActionLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}/type`,
         {

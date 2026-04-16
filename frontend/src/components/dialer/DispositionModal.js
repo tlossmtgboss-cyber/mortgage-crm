@@ -6,6 +6,7 @@
 import React, { useState, useRef } from 'react';
 import { X, Mic, MicOff, Loader2 } from 'lucide-react';
 import axios from 'axios';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -169,7 +170,7 @@ const DispositionModal = ({
         },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
+            Authorization: `Bearer ${getToken()}`,
             'Content-Type': 'application/json'
           },
           params: sessionId ? { session_id: sessionId } : {}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './WorkflowUpcomingTasks.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -70,7 +71,7 @@ function WorkflowUpcomingTasks({ workflowKey, workflowName, workflowColor }) {
   const fetchUpcomingTasks = useCallback(async (getAllTasks = false) => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { 'Authorization': `Bearer ${token}` };
 
       // Fetch from appropriate endpoint

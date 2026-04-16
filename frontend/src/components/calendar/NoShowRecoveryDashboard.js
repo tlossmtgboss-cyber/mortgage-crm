@@ -9,6 +9,7 @@
  *   Step 4 (72 hours): Final outreach email
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -154,7 +155,7 @@ function NoShowRecoveryDashboard({ token }) {
   const [filter, setFilter] = useState('active'); // active, recovered, all
   const [actionLoading, setActionLoading] = useState(null);
 
-  const authToken = token || localStorage.getItem('token');
+  const authToken = token || getToken();
 
   const headers = useMemo(() => ({
     'Content-Type': 'application/json',

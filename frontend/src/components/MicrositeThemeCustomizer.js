@@ -12,6 +12,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { sanitizeHTML } from '../utils/sanitize';
 import './MicrositeThemeCustomizer.css';
+import { getToken } from '../utils/tokenStore';
 
 // API base URL
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -126,7 +127,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
   const fetchProfileData = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Fetch microsite profile (use /my-microsite endpoint)
       const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite`, {
@@ -282,7 +283,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/upload-image`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: formData
       });
@@ -328,7 +329,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/upload-image`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: formData
       });
@@ -384,7 +385,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
   const handleSaveAll = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Build content_json with all profile data
       const content_json = {
@@ -613,7 +614,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const url = editingPage
         ? `${API_BASE}/api/v1/microsites/my-microsite/pages/${editingPage.slug}`
         : `${API_BASE}/api/v1/microsites/my-microsite/pages`;
@@ -673,7 +674,7 @@ const MicrositeThemeCustomizer = ({ theme, currentConfig, onConfigChange, onSave
       const response = await fetch(`${API_BASE}/api/v1/microsites/my-microsite/pages/${page.slug}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         }
       });
 

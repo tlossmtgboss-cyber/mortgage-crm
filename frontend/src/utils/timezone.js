@@ -12,6 +12,7 @@
  */
 
 import { API_BASE_URL } from '../services/api';
+import { getToken } from '../utils/tokenStore';
 
 const TIMEZONE_STORAGE_KEY = 'schedulerTimezone';
 const TIMEZONE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -77,7 +78,7 @@ export async function refreshTimezoneCache() {
   }
 
   try {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) return getUserTimezone();
 
     const response = await fetch(`${API_BASE_URL}/api/v1/smart-scheduler-settings`, {

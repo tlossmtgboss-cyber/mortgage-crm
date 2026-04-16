@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './ConferenceRoomDashboard.css';
 import { toast } from '../../utils/toast';
+import { getToken } from '../../utils/tokenStore';
 
 const ConferenceRoomDashboard = () => {
   const [conferences, setConferences] = useState([]);
@@ -18,7 +19,7 @@ const ConferenceRoomDashboard = () => {
 
   const fetchConferences = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/conferences`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -78,7 +79,7 @@ const ConferenceRoomDashboard = () => {
     if (!window.confirm('Are you sure you want to end this conference?')) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/conferences/${conferenceId}/end`, {
         method: 'POST',
         headers: {
@@ -101,7 +102,7 @@ const ConferenceRoomDashboard = () => {
 
   const handleJoinConference = async (conference) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/conferences/${conference.id}/join`, {
         method: 'POST',
         headers: {
@@ -506,7 +507,7 @@ const CreateConferenceModal = ({ onClose, onCreated, apiBaseUrl }) => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${apiBaseUrl}/api/v1/conferences`, {
         method: 'POST',
         headers: {
@@ -630,7 +631,7 @@ const QuickJoinModal = ({ onClose, apiBaseUrl }) => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${apiBaseUrl}/api/v1/conferences/join-by-name`, {
         method: 'POST',
         headers: {

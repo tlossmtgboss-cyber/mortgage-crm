@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './CreditTab.css';
+import { getToken } from '../utils/tokenStore';
 
 /**
  * CreditTab Component
@@ -20,7 +21,7 @@ function CreditTab({ leadId, loanId, borrowerId, formData = {} }) {
 
   // Helper function for authenticated API calls
   const fetchWithAuth = async (endpoint, options = {}) => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const headers = {
       'Content-Type': 'application/json',
       ...(token && { 'Authorization': `Bearer ${token}` }),
@@ -106,7 +107,7 @@ function CreditTab({ leadId, loanId, borrowerId, formData = {} }) {
         formData.append('borrower_id', leadId);
       }
 
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const xhr = new XMLHttpRequest();
 
       xhr.upload.addEventListener('progress', (e) => {

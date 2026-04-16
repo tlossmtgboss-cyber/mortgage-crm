@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import TalkToAgent from './TalkToAgent';
+import { getToken } from '../../utils/tokenStore';
 
 const AgentStudio = ({ onAgentSelect, onEditAgent }) => {
   const [agents, setAgents] = useState([]);
@@ -33,7 +34,7 @@ const AgentStudio = ({ onAgentSelect, onEditAgent }) => {
     : 'http://localhost:8000';
 
   const getAuthHeaders = useCallback(() => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Authorization': `Bearer ${getToken()}`,
     'Content-Type': 'application/json'
   }), []);
 

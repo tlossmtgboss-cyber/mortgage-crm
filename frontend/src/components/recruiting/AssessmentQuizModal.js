@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getCurrentUserId } from '../../utils/auth';
 import './AssessmentQuizModal.css';
+import { getToken } from '../../utils/tokenStore';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -45,7 +46,7 @@ const AssessmentQuizModal = ({
     setIsLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_URL}/api/v1/recruiting/quiz/${disposition}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -99,7 +100,7 @@ const AssessmentQuizModal = ({
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const userId = getCurrentUserId() || 1;
 
       const submission = {

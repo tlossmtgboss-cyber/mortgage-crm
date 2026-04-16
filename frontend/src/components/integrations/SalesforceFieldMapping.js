@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from '../../utils/toast';
 import './SalesforceFieldMapping.css';
+import { getToken } from '../../utils/tokenStore';
 
 // Always use api.perenniaai.com for production API calls
 const API_URL = window.location.hostname.includes('perenniaai.com')
@@ -115,7 +116,7 @@ function SalesforceFieldMapping({ isConnected, onMappingSaved }) {
   const fetchMappings = useCallback(async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/integrations/salesforce/mappings`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -137,7 +138,7 @@ function SalesforceFieldMapping({ isConnected, onMappingSaved }) {
     if (!isConnected) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/integrations/salesforce/schema/objects`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -171,7 +172,7 @@ function SalesforceFieldMapping({ isConnected, onMappingSaved }) {
 
     try {
       setLoadingFields(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/integrations/salesforce/schema/objects/${objectName}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -206,7 +207,7 @@ function SalesforceFieldMapping({ isConnected, onMappingSaved }) {
 
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/integrations/salesforce/mappings`, {
         method: 'POST',
         headers: {

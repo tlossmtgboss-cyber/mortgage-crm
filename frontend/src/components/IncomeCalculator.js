@@ -3,6 +3,7 @@ import { incomeAPI } from '../services/api';
 import { INCOME_TYPES, PAY_FREQUENCIES, getIncomeType } from './income/incomeConfig';
 import { formatCurrency, formatCurrencyPrecise, formatTrend } from './income/incomeFormatters';
 import './IncomeCalculator.css';
+import { getToken } from '../utils/tokenStore';
 
 // Build a lookup map from INCOME_TYPES for backward compat with stream_type keys
 const INCOME_TYPE_INFO = {};
@@ -351,7 +352,7 @@ function IncomeCalculator({ loanId, borrowerId = 1, onIncomeCalculated }) {
     if (!loanId) return;
     setGeneratingPdf(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${process.env.REACT_APP_API_URL || ''}/api/v1/income/form-1084/${loanId}/generate`,
         {

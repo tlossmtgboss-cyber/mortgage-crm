@@ -1,3 +1,5 @@
+import { getToken } from '../../../utils/tokenStore';
+
 /**
  * Shared API utilities for LeadDetail sub-components.
  */
@@ -10,7 +12,7 @@ export function getApiBase() {
 }
 
 export function getAuthHeaders() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'

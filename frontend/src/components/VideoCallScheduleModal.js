@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './VideoCallScheduleModal.css';
+import { getToken } from '../utils/tokenStore';
 // v2.0 - Fixed "Failed to fetch" error - build 20251215-1140
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -85,7 +86,7 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
     try {
       const response = await fetch(`${API_BASE}/api/v1/team/members/${memberId}/work-hours`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
 
@@ -110,7 +111,7 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
       // Fetch all team members directly (more reliable)
       const allMembersResponse = await fetch(`${API_BASE}/api/v1/team/members`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
 
@@ -275,7 +276,7 @@ const VideoCallScheduleModal = ({ isOpen, onClose, borrower, onStartVideoCall })
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: JSON.stringify({
           room_name: `Call with ${borrowerName}`,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './PortalSelectorModal.css';
+import { getToken } from '../utils/tokenStore';
 
 /**
  * Portal Selector Modal
@@ -24,7 +25,7 @@ const PortalSelectorModal = ({ isOpen, onClose, loan }) => {
   const [selectedPartner, setSelectedPartner] = useState(null);
 
   const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',

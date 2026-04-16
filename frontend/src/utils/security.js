@@ -11,6 +11,7 @@
 
 import { getAuthHeaders as getBaseAuthHeaders } from './auth';
 import { API_BASE_URL } from '../services/api';
+import { clearTokens, getToken } from '../utils/tokenStore';
 
 // CSRF token handling
 let csrfToken = null;
@@ -118,7 +119,7 @@ export const secureFetch = async (url, options = {}) => {
  */
 export const isSessionAuthenticated = () => {
   // Check localStorage (current implementation)
-  const token = localStorage.getItem('token');
+  const token = getToken();
   if (token) return true;
 
   // Check for auth cookie presence (future implementation)
@@ -141,8 +142,7 @@ export const secureLogout = async () => {
   }
 
   // Clear localStorage (current implementation)
-  localStorage.removeItem('token');
-  localStorage.removeItem('user');
+  await clearTokens();
   localStorage.removeItem('impersonation');
 
   // Clear CSRF token

@@ -6,6 +6,7 @@ import RateMonitorWidget from '../components/RateMonitorWidget';
 import { getUserEffectiveRole } from '../config/roleConfig';
 import './Portfolio.css';
 import { toast } from '../utils/toast';
+import { getUserData } from '../utils/tokenStore';
 
 function Portfolio() {
   const navigate = useNavigate();
@@ -13,7 +14,7 @@ function Portfolio() {
   // Determine user's effective role to show/hide MUM Dashboard tab
   const userRole = useMemo(() => {
     try {
-      const userStr = localStorage.getItem('user');
+      const userStr = getUserData();
       if (userStr) {
         const user = JSON.parse(userStr);
         return getUserEffectiveRole(user.permission_role, user.role);

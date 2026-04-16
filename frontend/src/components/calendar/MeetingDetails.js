@@ -13,6 +13,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { getToken } from '../../utils/tokenStore';
 
 // Provider configuration
 const PROVIDER_CONFIG = {
@@ -118,7 +119,7 @@ const MeetingDetails = ({
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE}/api/v1/scheduler/appointments/${appointmentId}/meeting`,
         {
@@ -176,7 +177,7 @@ const MeetingDetails = ({
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE}/api/v1/scheduler/appointments/${appointmentId}/meeting`,
         {
@@ -210,7 +211,7 @@ const MeetingDetails = ({
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE}/api/v1/scheduler/appointments/${appointmentId}/meeting`,
         {

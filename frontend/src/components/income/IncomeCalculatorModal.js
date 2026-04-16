@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './IncomeCalculatorModal.css';
 import BankStatementWorksheet from './BankStatementWorksheet';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -137,7 +138,7 @@ export default function IncomeCalculatorModal({ isOpen, onClose, loanId, borrowe
   // Draggable modal hook
   const { position, isDragging, hasBeenDragged, handleMouseDown, modalRef, resetPosition } = useDraggable();
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   // Reset position when modal closes
   useEffect(() => {

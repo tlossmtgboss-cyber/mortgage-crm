@@ -14,6 +14,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
 import './QuoteLanguagePresets.css';
+import { getToken } from '../../utils/tokenStore';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
@@ -75,7 +76,7 @@ const QuoteLanguagePresets = () => {
   const [testResult, setTestResult] = useState(null);
 
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'

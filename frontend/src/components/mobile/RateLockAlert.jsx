@@ -26,11 +26,10 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../../services/api';
+import api, { API_BASE_URL } from '../../services/api';
 import './RateLockAlert.css';
 
 const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-const ALERTS_ENDPOINT = `${API_BASE_URL}/api/v1/rate-lock-intelligence/alerts`;
 
 // ============================================================================
 // Icons
@@ -76,14 +75,6 @@ function CloseIcon({ color = 'currentColor' }) {
 // ============================================================================
 // Helpers
 // ============================================================================
-
-function getAuthHeaders() {
-  const token = localStorage.getItem('token');
-  return {
-    Authorization: token ? `Bearer ${token}` : '',
-    'Content-Type': 'application/json',
-  };
-}
 
 function formatHours(hours) {
   if (hours == null) return '';
@@ -167,16 +158,7 @@ export default function RateLockAlert() {
   // --------------------------------------------------
   const fetchAlerts = useCallback(async () => {
     try {
-      const res = await fetch(ALERTS_ENDPOINT, { headers: getAuthHeaders() });
-      if (!res.ok) {
-        // Silently ignore auth failures -- user may not be logged in yet
-        if (res.status === 401 || res.status === 403) {
-          setAlerts([]);
-          return;
-        }
-        throw new Error(`HTTP ${res.status}`);
-      }
-      const data = await res.json();
+      const { data } = await api.get('/api/v1/rate-lock-intelligence/alerts');
 
       // Flatten expired + critical + warning into a single ordered list
       const all = [
@@ -187,6 +169,11 @@ export default function RateLockAlert() {
       setAlerts(all);
       setError(null);
     } catch (err) {
+      // Silently ignore auth failures or missing endpoint
+      if (err.response?.status === 401 || err.response?.status === 403 || err.response?.status === 404) {
+        setAlerts([]);
+        return;
+      }
       // Don't show error on first load -- endpoint may not exist yet
       if (!loading) {
         setError(err.message);

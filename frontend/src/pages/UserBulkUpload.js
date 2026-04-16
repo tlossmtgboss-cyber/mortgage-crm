@@ -4,6 +4,7 @@ import axios from 'axios';
 import { usePermissions } from '../contexts/PermissionContext';
 import { getAuthHeaders } from '../utils/auth';
 import './UserBulkUpload.css';
+import { getToken } from '../utils/tokenStore';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -98,7 +99,7 @@ function UserBulkUpload() {
         formData,
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Authorization': `Bearer ${getToken()}`,
             'Content-Type': 'multipart/form-data'
           }
         }
@@ -176,7 +177,7 @@ function UserBulkUpload() {
         formData,
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Authorization': `Bearer ${getToken()}`,
             'Content-Type': 'multipart/form-data'
           }
         }
@@ -210,7 +211,7 @@ function UserBulkUpload() {
         formData,
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Authorization': `Bearer ${getToken()}`,
             'Content-Type': 'multipart/form-data'
           },
           onUploadProgress: (progressEvent) => {

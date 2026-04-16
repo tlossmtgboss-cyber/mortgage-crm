@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './CertificationDueWidget.css';
+import { getToken } from '../utils/tokenStore';
 
 const CertificationDueWidget = () => {
   const [certifications, setCertifications] = useState([]);
@@ -14,7 +15,7 @@ const CertificationDueWidget = () => {
   const loadCertifications = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch('https://api.perenniaai.com/api/v1/certifications/due', {
         headers: {
           'Authorization': `Bearer ${token}`

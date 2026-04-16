@@ -15,6 +15,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { calendarSettingsAPI, API_BASE_URL } from '../../../../services/api';
 import { toast } from '../../../../utils/toast';
 import './IntegrationsStep.css';
+import { getToken } from '../../../../utils/tokenStore';
 
 // ============================================================================
 // Constants
@@ -505,7 +506,7 @@ const IntegrationsStep = ({ stepData = {}, onChange, allStepData }) => {
   const oauthPollRef = useRef(null);
 
   const handleCalendarConnect = useCallback(async (key) => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
 
     // Fetch the OAuth URL via authenticated API call to avoid exposing
     // the JWT in the URL query string.

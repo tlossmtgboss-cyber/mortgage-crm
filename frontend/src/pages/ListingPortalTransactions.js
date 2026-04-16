@@ -10,6 +10,7 @@ import {
 } from '../services/listingPortalApi';
 import { API_BASE_URL } from '../services/api';
 import './ListingPortalTransactions.css';
+import { getToken } from '../utils/tokenStore';
 
 const ListingPortalTransactions = () => {
   const navigate = useNavigate();
@@ -54,7 +55,7 @@ const ListingPortalTransactions = () => {
   const fetchLoans = async () => {
     try {
       setLoansLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/loans/?limit=100`, {
         headers: {
           'Authorization': `Bearer ${token}`,

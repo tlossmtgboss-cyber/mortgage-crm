@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
 import MicrositeThemeSelector from '../../components/MicrositeThemeSelector';
 import './MarketingSettings.css';
+import { getUserData } from '../../utils/tokenStore';
 
 function MicrositeSettings() {
   const navigate = useNavigate();
@@ -14,7 +15,7 @@ function MicrositeSettings() {
   useEffect(() => {
     // Load user profile from localStorage
     try {
-      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      const user = JSON.parse(getUserData() || '{}');
       setUserProfile(user);
     } catch (e) {
       console.error('Error loading user profile:', e);

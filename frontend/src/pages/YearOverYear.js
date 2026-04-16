@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './YearOverYear.css';
+import { getToken } from '../utils/tokenStore';
 
 function YearOverYear() {
   const navigate = useNavigate();
@@ -16,7 +17,7 @@ function YearOverYear() {
       setLoading(true);
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_URL = isProduction ? 'https://api.perenniaai.com' : (process.env.REACT_APP_API_URL || '');
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       const response = await fetch(`${API_URL}/api/v1/portfolio/yearly-stats`, {
         headers: { 'Authorization': `Bearer ${token}` }

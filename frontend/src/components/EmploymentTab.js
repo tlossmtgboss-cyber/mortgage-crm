@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { leadsAPI, API_BASE_URL } from '../services/api';
 import './EmploymentTab.css';
+import { getToken } from '../utils/tokenStore';
 
 const VERIFICATION_STATUSES = {
   'PENDING': { label: 'Pending Verification', color: '#6b7280', bgColor: '#f3f4f6' },
@@ -18,7 +19,7 @@ export default function EmploymentTab({ leadId, formData, onFieldChange, entityT
   const [lastPaystubUpdate, setLastPaystubUpdate] = useState(null);
   const [verificationLoading, setVerificationLoading] = useState(true);
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   // Fetch employment verification status and linked income source
   const fetchVerificationStatus = useCallback(async () => {
@@ -74,7 +75,7 @@ export default function EmploymentTab({ leadId, formData, onFieldChange, entityT
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${getToken()}`
           },
           body: JSON.stringify({
             job_title: formData.job_title,

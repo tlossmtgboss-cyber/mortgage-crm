@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import './SLASettings.css';
+import { getToken } from '../utils/tokenStore';
 
 const SLASettings = () => {
   const navigate = useNavigate();
@@ -55,7 +56,7 @@ const SLASettings = () => {
   const fetchDashboard = useCallback(async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -142,7 +143,7 @@ const SLASettings = () => {
 
   const runMigration = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/sla/migrate`, {
         method: 'POST',
         headers: {
@@ -164,7 +165,7 @@ const SLASettings = () => {
 
   const acknowledgeAlert = async (alertId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await fetch(`${API_BASE_URL}/api/v1/sla/alerts/${alertId}/acknowledge`, {
         method: 'POST',
         headers: {
@@ -181,7 +182,7 @@ const SLASettings = () => {
 
   const resolveAlert = async (alertId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await fetch(`${API_BASE_URL}/api/v1/sla/alerts/${alertId}/resolve`, {
         method: 'POST',
         headers: {
@@ -198,7 +199,7 @@ const SLASettings = () => {
 
   const saveMeasure = async (measureData) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const method = editingMeasure ? 'PUT' : 'POST';
       const url = editingMeasure
         ? `${API_BASE_URL}/api/v1/sla/measures/${editingMeasure.id}`
@@ -259,7 +260,7 @@ const SLASettings = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measureId}`, {
         method: 'PUT',
         headers: {
@@ -325,7 +326,7 @@ const SLASettings = () => {
 
   const toggleMeasureActive = async (measureId, newActiveState) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measureId}`, {
         method: 'PUT',
         headers: {
@@ -345,7 +346,7 @@ const SLASettings = () => {
       return;
     }
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/sla/measures/${measureId}`, {
         method: 'DELETE',
         headers: {
@@ -374,7 +375,7 @@ const SLASettings = () => {
   const sendReport = async (emailAddress, options = {}) => {
     try {
       setSendingReport(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/sla/reports/send-email`, {
         method: 'POST',
         headers: {
@@ -526,7 +527,7 @@ const SLASettings = () => {
 
     // Save the new order to the backend
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       // Update each measure with its new display_order
       for (let i = 0; i < newItems.length; i++) {
         const measure = newItems[i];
@@ -1999,7 +2000,7 @@ const DrillDownModal = ({ type, data, summary, runRates, alerts, bottlenecks, fo
   const fetchLoanData = async () => {
     setLoadingLoans(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       let url = `${API_BASE_URL}/api/v1/sla/milestones/drilldown?status=${type}`;
       if (selectedMilestoneType) {
         url += `&milestone_type=${selectedMilestoneType}`;

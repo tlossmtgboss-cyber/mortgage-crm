@@ -331,6 +331,7 @@ class ConversationMemory:
                       AND user_id = :user_id
                       AND role != 'summary'
                     ORDER BY message_index ASC
+                    LIMIT 50
                 """), {"session_id": session_id, "user_id": user_id})
             else:
                 result = db.execute(text("""
@@ -339,6 +340,7 @@ class ConversationMemory:
                     WHERE session_id = CAST(:session_id AS uuid)
                       AND role != 'summary'
                     ORDER BY message_index ASC
+                    LIMIT 50
                 """), {"session_id": session_id})
 
             return [{

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './PipelineEfficiency.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -28,7 +29,7 @@ function PipelineEfficiency() {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'

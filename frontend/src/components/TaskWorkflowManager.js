@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import './TaskWorkflowManager.css';
+import { getToken } from '../utils/tokenStore';
 
 function TaskWorkflowManager() {
   const navigate = useNavigate();
@@ -87,7 +88,7 @@ function TaskWorkflowManager() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/users`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       if (response.ok) {
@@ -110,7 +111,7 @@ function TaskWorkflowManager() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages/${stageKey}/team-members`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       if (response.ok) {
@@ -131,7 +132,7 @@ function TaskWorkflowManager() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       if (response.ok) {
@@ -231,7 +232,7 @@ function TaskWorkflowManager() {
       const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages/${stageKey}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

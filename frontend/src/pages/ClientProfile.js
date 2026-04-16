@@ -22,6 +22,7 @@ import SalesforceConnectionBadge from '../components/SalesforceConnectionBadge';
 import CallIntelligenceTab from '../components/call-intelligence/CallIntelligenceTab';
 import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import './LeadDetail.css';
+import { getToken } from '../utils/tokenStore';
 
 // Mock lead data generator (same as Leads.js)
 const generateMockLeads = () => {
@@ -281,7 +282,7 @@ function ClientProfile() {
     try {
       const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/v1/leads/${id}/circle-contacts`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       if (response.ok) {
@@ -320,7 +321,7 @@ function ClientProfile() {
       setMilestonesLoading(true);
       const response = await fetch(`${process.env.REACT_APP_API_URL || ''}/api/portal/loans/${id}/milestones`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       if (response.ok) {

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useMemo, useCall
 import { useImpersonation } from './ImpersonationContext';
 import { API_BASE_URL } from '../services/api';
 import { getUserEffectiveRole, mapRoleNameToEffective } from '../config/roleConfig';
+import { getToken, clearTokens } from '../utils/tokenStore';
 
 const PermissionContext = createContext();
 
@@ -216,7 +217,7 @@ export const PermissionProvider = ({ children }) => {
       setCurrentUserId(userId);
 
       // Fetch permissions from backend
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -243,8 +244,7 @@ export const PermissionProvider = ({ children }) => {
         if (response.status === 401) {
           const isLoginPage = window.location.pathname === '/login';
           if (!isLoginPage) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            clearTokens().catch(() => {});
             window.location.href = '/login';
           }
           return;
@@ -296,7 +296,7 @@ export const PermissionProvider = ({ children }) => {
   // Fetch user's assigned roles (multi-role system)
   const fetchUserRoles = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       if (!token) {
         return;
       }
@@ -312,8 +312,7 @@ export const PermissionProvider = ({ children }) => {
         if (response.status === 401) {
           const isLoginPage = window.location.pathname === '/login';
           if (!isLoginPage) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            clearTokens().catch(() => {});
             window.location.href = '/login';
           }
           return;
@@ -347,7 +346,7 @@ export const PermissionProvider = ({ children }) => {
   // Switch active role for UI view (multi-role system)
   const switchRole = useCallback(async (roleId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       if (!token) {
         throw new Error('No authentication token');
       }

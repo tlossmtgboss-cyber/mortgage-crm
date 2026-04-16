@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, Suspense, lazy } from 'react';
+import { getToken } from '../../utils/tokenStore';
 
 // API base URL
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -131,7 +132,7 @@ const MicrositePreview = () => {
 
   const fetchMicrositeData = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       if (!token) {
         setError('Please log in to preview your microsite');

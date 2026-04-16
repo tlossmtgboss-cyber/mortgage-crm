@@ -5,6 +5,7 @@ import { useLayoutFix } from '../hooks/useLayoutFix';
 import { sanitizeHTML } from '../utils/sanitize';
 import './ReconciliationCenter.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 function ReconciliationCenter() {
   const navigate = useNavigate();
@@ -178,7 +179,7 @@ function ReconciliationCenter() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/user-settings/email-processing`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       if (response.ok) {
@@ -210,7 +211,7 @@ function ReconciliationCenter() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       if (response.ok) {
@@ -269,7 +270,7 @@ function ReconciliationCenter() {
       const response = await fetch(`${API_BASE_URL}/api/v1/referral-partners`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(newReferralPartner)
@@ -297,7 +298,7 @@ function ReconciliationCenter() {
       setLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/pending`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -360,7 +361,7 @@ function ReconciliationCenter() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/completed?limit=50`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -419,7 +420,7 @@ function ReconciliationCenter() {
         setSyncStatus('Syncing emails...');
       }
 
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Check which email service is connected
       const gmailStatus = await fetch(`${API_BASE_URL}/api/v1/gmail/status`, {
@@ -527,7 +528,7 @@ function ReconciliationCenter() {
       // First check if there's a match
       const checkResponse = await fetch(`${API_BASE_URL}/api/v1/reconciliation/check-match/${itemId}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -593,7 +594,7 @@ function ReconciliationCenter() {
           const checkResponse = await fetch(`${API_BASE_URL}/api/v1/reconciliation/pre-approval-check/${itemId}`, {
             method: 'POST',
             headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
+              'Authorization': `Bearer ${getToken()}`,
               'Content-Type': 'application/json'
             }
           });
@@ -658,7 +659,7 @@ function ReconciliationCenter() {
       const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
@@ -768,7 +769,7 @@ function ReconciliationCenter() {
       const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -842,7 +843,7 @@ function ReconciliationCenter() {
       const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/reject`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -892,7 +893,7 @@ function ReconciliationCenter() {
       const response = await fetch(url, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -1115,7 +1116,7 @@ function ReconciliationCenter() {
         const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Authorization': `Bearer ${getToken()}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
@@ -1163,7 +1164,7 @@ function ReconciliationCenter() {
         const response = await fetch(`${API_BASE_URL}/api/v1/reconciliation/reject`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Authorization': `Bearer ${getToken()}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
@@ -1225,7 +1226,7 @@ function ReconciliationCenter() {
       fetch(`${API_BASE_URL}/api/v1/reconciliation/items/${itemId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       }).catch(err => console.error(`Delete failed for ${itemId}:`, err));
     }
@@ -1244,7 +1245,7 @@ function ReconciliationCenter() {
       fetch(`${API_BASE_URL}/api/v1/reconciliation/approve`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -1277,7 +1278,7 @@ function ReconciliationCenter() {
       fetch(`${API_BASE_URL}/api/v1/reconciliation/block-sender`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ sender_email: sender })
@@ -1288,7 +1289,7 @@ function ReconciliationCenter() {
       fetch(`${API_BASE_URL}/api/v1/reconciliation/reject`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

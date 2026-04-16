@@ -2,6 +2,7 @@ import React from 'react';
 import { useModules } from '../contexts/ModuleContext';
 import './UpgradeModal.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 /**
  * Modal that appears when user clicks on a locked feature
@@ -14,7 +15,7 @@ function UpgradeModal({ isOpen, onClose, module }) {
 
   const handleStartTrial = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${process.env.REACT_APP_API_URL || 'https://api.perenniaai.com'}/api/v1/modules/enable`,
         {

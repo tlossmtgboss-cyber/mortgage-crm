@@ -9,6 +9,7 @@ import WorkflowMilestonesTab from '../components/WorkflowMilestonesTab';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import './TeamMemberProfile.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 function TeamMemberProfile() {
   const { id } = useParams();
@@ -81,7 +82,7 @@ function TeamMemberProfile() {
       const response = await fetch(`${API_BASE_URL}/api/v1/users/${id}/photo`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         },
         body: photoFormData
       });

@@ -3,6 +3,7 @@ import ReactQuill from 'react-quill';
 import 'react-quill/dist/quill.snow.css';
 import { API_BASE_URL } from '../services/api';
 import './JobDescriptionSection.css';
+import { getToken } from '../utils/tokenStore';
 
 /**
  * Section A: Job Description
@@ -55,7 +56,7 @@ function JobDescriptionSection({ userId }) {
       setLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/v1/users/${userId}/job-description`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -114,7 +115,7 @@ function JobDescriptionSection({ userId }) {
       const response = await fetch(`${API_BASE_URL}/api/v1/users/${userId}/job-description`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ description })

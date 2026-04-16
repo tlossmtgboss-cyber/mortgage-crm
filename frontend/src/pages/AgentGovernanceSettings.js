@@ -17,6 +17,7 @@ import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import { API_BASE_URL } from '../services/api';
 import './AgentGovernanceSettings.css';
+import { getToken } from '../utils/tokenStore';
 
 // Model configurations with cost info
 const MODEL_OPTIONS = [
@@ -109,7 +110,7 @@ function AgentGovernanceSettings() {
 
   // API helper
   const apiRequest = async (url, options = {}) => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const response = await fetch(`${API_BASE_URL}${url}`, {
       ...options,
       headers: {

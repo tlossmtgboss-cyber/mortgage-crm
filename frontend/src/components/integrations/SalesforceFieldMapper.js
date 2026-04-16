@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { toast } from '../../utils/toast';
+import { getToken } from '../../utils/tokenStore';
 
 // Always use api.perenniaai.com for production API calls
 const API_URL = window.location.hostname.includes('perenniaai.com')
@@ -451,7 +452,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
   const fetchSchemaFields = useCallback(async () => {
     setLoadingSfFields(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 15000);
 
@@ -528,7 +529,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
   const refreshSchema = useCallback(async () => {
     setRefreshingSchema(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/integrations/salesforce/schema/discover`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -562,7 +563,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
     const fetchMappings = async () => {
       setLoadingMappings(true);
       try {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         const res = await fetch(`${API_URL}/api/integrations/salesforce/mappings`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -636,7 +637,7 @@ export default function SalesforceFieldMapper({ isConnected, onMappingSaved }) {
   const handleSaveAll = useCallback(async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/integrations/salesforce/mappings/save-all`, {
         method: 'POST',
         headers: {

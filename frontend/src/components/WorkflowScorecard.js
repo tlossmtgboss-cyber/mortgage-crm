@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './WorkflowScorecard.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -41,7 +42,7 @@ function WorkflowScorecard({ workflowKey, workflowName, workflowColor }) {
   const fetchScorecardData = useCallback(async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { 'Authorization': `Bearer ${token}` };
 
       // Fetch workflow scorecard data

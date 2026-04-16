@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './DocumentIntakeManager.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 function DocumentIntakeManager() {
   const [loading, setLoading] = useState(true);
@@ -21,10 +22,10 @@ function DocumentIntakeManager() {
     try {
       const [intakesRes, typesRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/v1/document-intake/pending`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${getToken()}` }
         }),
         fetch(`${API_BASE_URL}/api/v1/document-intake/doc-types`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${getToken()}` }
         })
       ]);
 
@@ -53,7 +54,7 @@ function DocumentIntakeManager() {
   const loadIntakeDetails = async (intakeId) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/document-intake/${intakeId}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${getToken()}` }
       });
 
       if (response.ok) {
@@ -78,10 +79,10 @@ function DocumentIntakeManager() {
     try {
       const [borrowersRes, loansRes] = await Promise.all([
         fetch(`${API_BASE_URL}/api/v1/leads?search=${encodeURIComponent(query)}&limit=5`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${getToken()}` }
         }),
         fetch(`${API_BASE_URL}/api/v1/loans?search=${encodeURIComponent(query)}&limit=5`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+          headers: { 'Authorization': `Bearer ${getToken()}` }
         })
       ]);
 
@@ -106,7 +107,7 @@ function DocumentIntakeManager() {
       const response = await fetch(`${API_BASE_URL}/api/v1/document-intake/attachments/${attachmentId}/classify`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(classification)
@@ -140,7 +141,7 @@ function DocumentIntakeManager() {
       const response = await fetch(`${API_BASE_URL}/api/v1/document-intake/attachments/${attachmentId}/discard`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ reason })
@@ -171,7 +172,7 @@ function DocumentIntakeManager() {
       const response = await fetch(`${API_BASE_URL}/api/v1/document-intake/${intakeId}/match`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ borrower_id: borrowerId, loan_id: loanId })
@@ -197,7 +198,7 @@ function DocumentIntakeManager() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/document-intake/tasks/${taskId}/complete`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        headers: { 'Authorization': `Bearer ${getToken()}` }
       });
 
       if (response.ok) {

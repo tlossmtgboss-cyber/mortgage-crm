@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { API_BASE_URL } from '../services/api';
+import { getToken } from '../utils/tokenStore';
 
 /**
  * Hook for checking page-level permissions
@@ -26,7 +27,7 @@ export const usePagePermissions = () => {
    * Get auth headers for API requests
    */
   const getHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const headers = {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'

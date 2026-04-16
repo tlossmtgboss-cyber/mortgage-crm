@@ -1,21 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'react-toastify';
 import './SmartDocsCadence.css';
+import { clearTokens, getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
 function getAuthHeaders() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Authorization': token ? `Bearer ${token}` : '',
     'Content-Type': 'application/json',
   };
 }
 
-function handleAuthError(response) {
+async function handleAuthError(response) {
   if (response.status === 401) {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    await clearTokens();
     window.location.href = '/login';
     return true;
   }

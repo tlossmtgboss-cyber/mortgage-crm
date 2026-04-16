@@ -2,6 +2,7 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { getCurrentUserId } from '../utils/auth';
 import './EstimateComparison.css';
 import { getCalendlySchedulingUrl } from '../services/schedulingService';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -162,7 +163,7 @@ function EstimateComparison() {
       fetch(`${API_BASE_URL}/api/v1/estimate-parser/compare/convert?comparison_id=${comparison.comparison_id}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       }).catch(err => console.error('Failed to track conversion:', err));
     }
@@ -192,7 +193,7 @@ function EstimateComparison() {
       const response = await fetch(`${API_BASE_URL}/api/v1/estimate-parser/critique`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -281,7 +282,7 @@ function EstimateComparison() {
       const response = await fetch(`${API_BASE_URL}/api/v1/estimate-parser/ask`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -380,7 +381,7 @@ function EstimateComparison() {
       const response = await fetch(`${API_BASE_URL}/api/v1/estimate-parser/parse`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         },
         body: formData
       });
@@ -470,7 +471,7 @@ function EstimateComparison() {
       const response = await fetch(`${API_BASE_URL}/api/v1/estimate-parser/compare`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -550,7 +551,7 @@ function EstimateComparison() {
         await fetch(`${API_BASE_URL}/api/v1/estimate-parser/compare/convert?comparison_id=${comparison.comparison_id}`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${getToken()}`
           }
         });
       } catch (err) {
@@ -570,7 +571,7 @@ function EstimateComparison() {
         `${API_BASE_URL}/api/v1/estimate-parser/compare/${comparison.comparison_id}/pdf`,
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${getToken()}`
           }
         }
       );

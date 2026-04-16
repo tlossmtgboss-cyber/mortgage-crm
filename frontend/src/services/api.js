@@ -4,6 +4,7 @@ import { ensureArray } from '../utils/arrayHelpers';
 import { getCSRFTokenFromCookie } from '../utils/security';
 import { pinnedAdapter } from '../utils/pinnedFetch';
 import { getItem, setItem, removeItem, STORAGE_KEYS, clearAllAuthTokens } from '../utils/storage';
+import { getToken, getRefreshToken, setTokens, clearTokens } from '../utils/tokenStore';
 
 // Detect native mobile app FIRST — Capacitor serves from localhost,
 // so we must check isNativePlatform() before the hostname check.
@@ -208,7 +209,7 @@ async function _attemptTokenRefresh() {
 
   _refreshPromise = (async () => {
     try {
-      const refreshToken = localStorage.getItem('refresh_token');
+      const refreshToken = getRefreshToken();
       if (!refreshToken) return false;
 
       const response = await fetch(`${API_BASE_URL}/api/v1/account/renew`, {
@@ -220,13 +221,10 @@ async function _attemptTokenRefresh() {
       if (response.ok) {
         const data = await response.json();
         if (data.access_token) {
-          localStorage.setItem('token', data.access_token);
-          // Also persist via async storage for native apps
-          setItem(STORAGE_KEYS.TOKEN, data.access_token).catch(() => {});
-          if (data.refresh_token) {
-            localStorage.setItem('refresh_token', data.refresh_token);
-            setItem(STORAGE_KEYS.REFRESH_TOKEN, data.refresh_token).catch(() => {});
-          }
+          setTokens({
+            access_token: data.access_token,
+            ...(data.refresh_token ? { refresh_token: data.refresh_token } : {}),
+          }).catch(() => {});
           console.log('[API] Token refresh succeeded');
           return true;
         }
@@ -371,17 +369,14 @@ api.interceptors.response.use(
 
         if (refreshed) {
           // Retry the original request with the new token
-          const newToken = localStorage.getItem('token');
+          const newToken = getToken();
           error.config._authRetry = true;
           error.config.headers.Authorization = `Bearer ${newToken}`;
           return api.request(error.config);
         }
 
         // Refresh failed — clear auth from ALL storage locations and redirect
-        localStorage.removeItem('token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user');
-        clearAllAuthTokens().catch(() => {});
+        clearTokens().catch(() => {});
         window.location.href = '/login';
       }
 
@@ -906,7 +901,7 @@ export const aiAPI = {
   // (tokens appear as they are generated), then falls back to the
   // non-streaming /langgraph-chat endpoint with simulated chunking.
   processCommandStream: async (message, onContent, onStatus, onDone, onError, documentContext = null) => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
 
     try {
       // Show initial status
@@ -3917,7 +3912,7 @@ export const callMonitoringAPI = {
   // Mobile Audio Stream WebSocket URL
   getAudioStreamUrl: (sessionId) => {
     const wsBase = API_BASE_URL.replace('https://', 'wss://').replace('http://', 'ws://');
-    const token = localStorage.getItem('token');
+    const token = getToken();
     // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
     return `${wsBase}/api/v1/call-monitoring/sessions/${sessionId}/audio-stream?token=${token}`;
   },

@@ -7,6 +7,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { X, Phone, PhoneOff, Loader2, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import axios from 'axios';
 import { useDialerWebSocket } from '../../hooks/useDialerWebSocket';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -112,7 +113,7 @@ const ClickToDialModal = ({
         },
         {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`,
+            Authorization: `Bearer ${getToken()}`,
             'Content-Type': 'application/json'
           }
         }

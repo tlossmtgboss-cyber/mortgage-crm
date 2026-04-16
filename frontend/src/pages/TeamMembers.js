@@ -5,6 +5,7 @@ import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import './Settings.css';
 import './Leads.css';
+import { getToken } from '../utils/tokenStore';
 
 function TeamMembers() {
   const navigate = useNavigate();
@@ -44,7 +45,7 @@ function TeamMembers() {
   const [addingRoleForMember, setAddingRoleForMember] = useState(null); // memberId currently showing add-role dropdown
 
   const getAuthHeaders = useCallback(() => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Authorization': `Bearer ${getToken()}`,
     'Content-Type': 'application/json',
   }), []);
 

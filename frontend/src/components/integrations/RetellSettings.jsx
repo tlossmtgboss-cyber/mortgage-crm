@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './RetellSettings.css';
 import TelnyxRetellBridge from './TelnyxRetellBridge';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -50,7 +51,7 @@ const RetellSettings = () => {
   });
 
   const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',

@@ -1,6 +1,7 @@
 // Call Analytics Dashboard - Comprehensive call performance analytics
 import React, { useState, useEffect, useCallback } from 'react';
 import './CallAnalyticsDashboard.css';
+import { getToken } from '../../utils/tokenStore';
 
 // Mock data for testing
 const MOCK_DATA = {
@@ -106,7 +107,7 @@ const CallAnalyticsDashboard = () => {
 
   // Get auth headers
   const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'

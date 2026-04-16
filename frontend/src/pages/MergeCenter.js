@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './MergeCenter.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 function MergeCenter() {
   const [duplicatePairs, setDuplicatePairs] = useState([]);
@@ -28,7 +29,7 @@ function MergeCenter() {
       setLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/v1/merge/duplicates`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -53,7 +54,7 @@ function MergeCenter() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/merge/completed`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -163,7 +164,7 @@ function MergeCenter() {
       const response = await fetch(`${API_BASE_URL}/api/v1/merge/execute`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -196,7 +197,7 @@ function MergeCenter() {
       const response = await fetch(`${API_BASE_URL}/api/v1/merge/dismiss`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -228,7 +229,7 @@ function MergeCenter() {
       const response = await fetch(`${API_BASE_URL}/api/v1/merge/feedback`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

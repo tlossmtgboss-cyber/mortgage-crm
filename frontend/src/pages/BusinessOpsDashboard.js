@@ -4,6 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer
 } from 'recharts';
 import './BusinessOpsDashboard.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -21,7 +22,7 @@ const BusinessOpsDashboard = () => {
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from '../utils/toast';
 import { API_BASE_URL } from '../services/api';
 import './WorkflowRoleAssignment.css';
+import { getToken } from '../utils/tokenStore';
 
 /**
  * WorkflowRoleAssignment Component
@@ -21,7 +22,7 @@ function WorkflowRoleAssignment({
   const [saving, setSaving] = useState({});
 
   const getAuthHeaders = useCallback(() => ({
-    'Authorization': `Bearer ${localStorage.getItem('token')}`,
+    'Authorization': `Bearer ${getToken()}`,
     'Content-Type': 'application/json',
   }), []);
 

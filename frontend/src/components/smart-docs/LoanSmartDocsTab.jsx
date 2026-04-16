@@ -12,6 +12,7 @@ import SmartDocumentUpload from './SmartDocumentUpload';
 import ESignModal from '../esign/ESignModal';
 import RequestDocumentModal from './RequestDocumentModal';
 import './LoanSmartDocsTab.css';
+import { getToken } from '../../utils/tokenStore';
 
 const STATUS_COLORS = {
   ACCEPTED: { bg: '#e6f4ea', color: '#1e7e34', label: 'Accepted' },
@@ -36,7 +37,7 @@ function LoanSmartDocsTab({ loanId, borrowerId, borrowerName, borrowerEmail, coB
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
 
       // Try needs-list endpoint first

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './PipelineProbability.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
@@ -9,7 +10,7 @@ const fetchWithAuth = async (endpoint, options = {}) => {
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: {
-      'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      'Authorization': `Bearer ${getToken()}`,
       'Content-Type': 'application/json',
       ...options.headers
     }

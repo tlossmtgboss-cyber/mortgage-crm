@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './CategoryTasksModal.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -49,7 +50,7 @@ function CategoryTasksModal({ isOpen, onClose, category, selectedRoleId, onTasks
 
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { 'Authorization': `Bearer ${token}` };
 
       // Fetch workflow configuration for this category
@@ -93,7 +94,7 @@ function CategoryTasksModal({ isOpen, onClose, category, selectedRoleId, onTasks
 
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE}/api/v1/workflow-config/workflows/${category.workflow_key}/days/${dayId}`,
         {
@@ -133,7 +134,7 @@ function CategoryTasksModal({ isOpen, onClose, category, selectedRoleId, onTasks
   const addTask = async (day) => {
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE}/api/v1/workflow-config/workflows/${category.workflow_key}/days/${day.id}`,
         {

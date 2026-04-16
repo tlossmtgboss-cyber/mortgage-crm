@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './ExperimentsDashboard.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -45,7 +46,7 @@ function ExperimentsDashboard() {
         `${API_BASE_URL}/api/v1/experiments?${params.toString()}`,
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${getToken()}`
           }
         }
       );
@@ -68,7 +69,7 @@ function ExperimentsDashboard() {
         `${API_BASE_URL}/api/v1/experiments/${experimentId}`,
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${getToken()}`
           }
         }
       );
@@ -93,7 +94,7 @@ function ExperimentsDashboard() {
         `${API_BASE_URL}/api/v1/experiments/${experimentId}/analyze`,
         {
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${getToken()}`
           }
         }
       );
@@ -124,7 +125,7 @@ function ExperimentsDashboard() {
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Authorization': `Bearer ${getToken()}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify(newExperiment)
@@ -152,7 +153,7 @@ function ExperimentsDashboard() {
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${getToken()}`
           }
         }
       );
@@ -176,7 +177,7 @@ function ExperimentsDashboard() {
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${getToken()}`
           }
         }
       );
@@ -200,7 +201,7 @@ function ExperimentsDashboard() {
         {
           method: 'DELETE',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${getToken()}`
           }
         }
       );

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from '../../utils/toast';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:8000'
@@ -28,7 +29,7 @@ const BillingSettings = () => {
   const [selectedTier, setSelectedTier] = useState(null);
 
   const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'

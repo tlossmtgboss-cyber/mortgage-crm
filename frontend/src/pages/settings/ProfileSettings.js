@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { formatPhoneNumber } from '../../utils/phoneUtils';
 import { API_BASE } from './shared/constants';
+import { getToken, getUserData, setTokens } from '../../utils/tokenStore';
 
 const ProfileSettings = ({ activeSection }) => {
   const [userProfile, setUserProfile] = useState({
@@ -31,7 +32,7 @@ const ProfileSettings = ({ activeSection }) => {
   const loadUserProfile = async () => {
     setLoadingProfile(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/users/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -68,7 +69,7 @@ const ProfileSettings = ({ activeSection }) => {
     setSavingProfile(true);
     setProfileMessage({ type: '', text: '' });
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const fullName = `${userProfile.first_name} ${userProfile.last_name}`.trim();
       const response = await fetch(`${API_BASE}/api/v1/users/me`, {
         method: 'PUT',
@@ -90,8 +91,8 @@ const ProfileSettings = ({ activeSection }) => {
       });
       if (response.ok) {
         setProfileMessage({ type: 'success', text: 'Profile updated successfully!' });
-        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-        localStorage.setItem('user', JSON.stringify({ ...storedUser, full_name: fullName }));
+        const storedUser = JSON.parse(getUserData() || '{}');
+        await setTokens({ user_data: { ...storedUser, full_name: fullName } });
       } else {
         const error = await response.json();
         setProfileMessage({ type: 'error', text: error.detail || 'Failed to update profile' });
@@ -116,7 +117,7 @@ const ProfileSettings = ({ activeSection }) => {
     setChangingPassword(true);
     setProfileMessage({ type: '', text: '' });
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/users/me/password`, {
         method: 'PUT',
         headers: {

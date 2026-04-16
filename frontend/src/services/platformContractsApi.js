@@ -5,6 +5,7 @@
  * and e-signed documents with CRM licensees.
  */
 import { API_BASE_URL } from './api';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = `${API_BASE_URL}/api/v1/platform-contracts`;
 
@@ -23,7 +24,7 @@ async function handleResponse(response) {
  * Get auth headers
  */
 function getHeaders() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Authorization': token ? `Bearer ${token}` : '',
     'Content-Type': 'application/json',
@@ -34,7 +35,7 @@ function getHeaders() {
  * Get auth headers for file upload (no Content-Type — browser sets multipart boundary)
  */
 function getUploadHeaders() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Authorization': token ? `Bearer ${token}` : '',
   };

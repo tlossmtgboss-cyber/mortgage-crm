@@ -5,6 +5,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getToken } from '../utils/tokenStore';
 
 // API Base URL
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -14,7 +15,7 @@ const API_BASE_URL = isProduction
 
 // Helper to get auth headers
 const getAuthHeaders = () => ({
-  'Authorization': `Bearer ${localStorage.getItem('token')}`,
+  'Authorization': `Bearer ${getToken()}`,
   'Content-Type': 'application/json',
 });
 

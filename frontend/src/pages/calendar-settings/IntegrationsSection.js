@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { API_BASE_URL } from '../../services/api';
 import { toast } from '../../utils/toast';
+import { getToken } from '../../utils/tokenStore';
 
 const MEETING_MODES = [
   { value: 'video', label: 'Video', icon: 'fa-video', description: 'Default to video conferencing' },
@@ -79,7 +80,7 @@ export default function IntegrationsSection({
     };
     if (urls[service]) {
       try {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         const resp = await fetch(urls[service], {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -104,7 +105,7 @@ export default function IntegrationsSection({
   };
 
   const handleConnectIntegration = async (service) => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
 
     // For Google and Outlook, fetch the OAuth URL via authenticated API call
     // to avoid exposing the JWT in the URL query string.

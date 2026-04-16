@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './EscalationModal.css';
+import { getToken } from '../utils/tokenStore';
 
 function EscalationModal({ isOpen, onClose, lead }) {
   const [teamMembers, setTeamMembers] = useState([]);
@@ -23,7 +24,7 @@ function EscalationModal({ isOpen, onClose, lead }) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/team/members`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
 
@@ -83,7 +84,7 @@ function EscalationModal({ isOpen, onClose, lead }) {
       const response = await fetch(`${API_BASE_URL}/api/v1/escalations`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: formData,
       });

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { toast } from '../../utils/toast';
 import { API_BASE_URL, LEAD_STAGES } from './shared/constants';
+import { getToken } from '../../utils/tokenStore';
 
 const IntegrationDetails = ({
   activeSection,
@@ -156,7 +157,7 @@ const IntegrationDetails = ({
                   setLoadingGmail(true);
                   try {
                     const response = await fetch(`${API_BASE_URL}/api/v1/gmail/sync?days_back=7&max_results=100`, {
-                      method: 'POST', headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                      method: 'POST', headers: { 'Authorization': `Bearer ${getToken()}` }
                     });
                     const data = await response.json();
                     if (response.ok) { toast.success(`Gmail sync complete! ${data.processed_count} emails processed.`); }

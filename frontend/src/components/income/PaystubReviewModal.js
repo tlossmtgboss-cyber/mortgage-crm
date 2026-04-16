@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './PaystubReviewModal.css';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -100,7 +101,7 @@ export default function PaystubReviewModal({
   const [selectedFields, setSelectedFields] = useState({});
   const [documentPreviewUrl, setDocumentPreviewUrl] = useState(null);
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   const formatValue = (value, type) => {
     if (value === null || value === undefined || value === '') return '-';

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { teamAPI } from '../services/api';
 import './UserProfile.css';
 import { toast } from '../utils/toast';
+import { getUserData, setTokens } from '../utils/tokenStore';
 
 function UserProfile() {
   const { userId, id } = useParams(); // Support both /team/:userId and legacy /user/:id routes
@@ -32,7 +33,7 @@ function UserProfile() {
 
   const handleViewAsUser = () => {
     // Store the original user context
-    const currentUser = localStorage.getItem('user');
+    const currentUser = getUserData();
     localStorage.setItem('originalUser', currentUser);
     localStorage.setItem('viewAsUserId', actualUserId);
 
@@ -42,11 +43,11 @@ function UserProfile() {
     window.location.reload(); // Reload to apply the context
   };
 
-  const handleExitViewAsUser = () => {
+  const handleExitViewAsUser = async () => {
     // Restore original user context
     const originalUser = localStorage.getItem('originalUser');
     if (originalUser) {
-      localStorage.setItem('user', originalUser);
+      await setTokens({ user_data: originalUser });
       localStorage.removeItem('originalUser');
       localStorage.removeItem('viewAsUserId');
       toast.info('Returning to your own view');

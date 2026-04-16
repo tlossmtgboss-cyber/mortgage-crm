@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './GlobalSearch.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
@@ -38,7 +39,7 @@ function GlobalSearch() {
 
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE}/api/v1/search/global?q=${encodeURIComponent(searchQuery)}&limit=15`,
         {

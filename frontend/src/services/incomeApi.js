@@ -16,6 +16,7 @@
  */
 
 import { API_BASE_URL } from './api';
+import { getToken } from '../utils/tokenStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -26,7 +27,7 @@ import { API_BASE_URL } from './api';
  * @returns {Record<string, string>}
  */
 function getAuthHeaders() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -38,7 +39,7 @@ function getAuthHeaders() {
  * @returns {Record<string, string>}
  */
 function getAuthHeadersRaw() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 

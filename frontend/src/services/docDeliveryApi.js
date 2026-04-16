@@ -6,6 +6,7 @@
  * Wraps 4 endpoints under /api/v1/smart-docs/delivery/*
  */
 import { API_BASE_URL } from './api';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = `${API_BASE_URL}/api/v1/smart-docs/delivery`;
 
@@ -33,7 +34,7 @@ async function handleResponse(response) {
  * Build standard auth + content-type headers.
  */
 function getHeaders() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Authorization': token ? `Bearer ${token}` : '',
     'Content-Type': 'application/json',

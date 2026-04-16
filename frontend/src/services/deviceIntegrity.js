@@ -19,6 +19,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { getToken } from '../utils/tokenStore';
 
 // ---------------------------------------------------------------------------
 // Native plugin bridge (only available on iOS/Android, no-ops on web)
@@ -311,7 +312,7 @@ export function isFeatureRestricted(featureName, integrityResult) {
  */
 async function reportIntegrityResult(result) {
   try {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) return;
 
     await fetch(INTEGRITY_POLICY.reportEndpoint, {

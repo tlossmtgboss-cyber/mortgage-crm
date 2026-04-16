@@ -15,6 +15,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { calendarSettingsAPI } from '../../../../services/api';
 import { toast } from '../../../../utils/toast';
 import './WelcomeStep.css';
+import { getUserData } from '../../../../utils/tokenStore';
 
 // ============================================================================
 // Constants
@@ -190,7 +191,7 @@ export default function WelcomeStep({ stepData = {}, onChange, allStepData, onNe
   // Current user from localStorage (same pattern as MarketDashboard, Settings)
   const currentUser = useMemo(() => {
     try {
-      return JSON.parse(localStorage.getItem('user') || '{}');
+      return JSON.parse(getUserData() || '{}');
     } catch {
       return {};
     }

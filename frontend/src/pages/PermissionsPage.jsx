@@ -13,6 +13,7 @@ import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import './PermissionsPage.css';
+import { getToken } from '../utils/tokenStore';
 
 // ============================================================================
 // CONFIGURATION - Lucide icon names for roles
@@ -92,7 +93,7 @@ const PermissionsPage = () => {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/page-permissions/roles`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -130,7 +131,7 @@ const PermissionsPage = () => {
   const savePermissions = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/page-permissions/role/${activeRole}`, {
         method: 'PUT',
         headers: {
@@ -167,7 +168,7 @@ const PermissionsPage = () => {
   const resetToDefaults = async () => {
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/page-permissions/role/${activeRole}/reset`, {
         method: 'POST',
         headers: {
@@ -242,7 +243,7 @@ const PermissionsPage = () => {
 
     setSaving(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE_URL}/api/v1/page-permissions/role/${activeRole}/copy-from/${copyFromRole}`,
         {

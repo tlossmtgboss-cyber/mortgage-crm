@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import { toast } from '../utils/toast';
 import './ClientPortalSettings.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -38,7 +39,7 @@ const ClientPortalSettings = () => {
 
   const loadSettings = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetchSettings(async () => {
         const res = await fetch(`${API_URL}/api/v1/client-portal-settings`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -61,7 +62,7 @@ const ClientPortalSettings = () => {
 
   const loadDefaultPages = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/client-portal-settings/default-pages`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -76,7 +77,7 @@ const ClientPortalSettings = () => {
 
   const loadTimezones = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/client-portal-settings/timezones`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -91,7 +92,7 @@ const ClientPortalSettings = () => {
 
   const loadStatistics = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_URL}/api/v1/client-portal-settings/statistics`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -106,7 +107,7 @@ const ClientPortalSettings = () => {
 
   const handleSave = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await saveSettings(async () => {
         const res = await fetch(`${API_URL}/api/v1/client-portal-settings`, {
           method: 'PUT',
@@ -204,7 +205,7 @@ const ClientPortalSettings = () => {
 
   const previewColors = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const params = new URLSearchParams({
         primary_color: settings.branding.primary_color,
         secondary_color: settings.branding.secondary_color,
@@ -232,7 +233,7 @@ const ClientPortalSettings = () => {
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const params = new URLSearchParams({ notification_type: testNotificationType });
       if (testNotificationType === 'email') {
         params.append('recipient_email', testRecipient);

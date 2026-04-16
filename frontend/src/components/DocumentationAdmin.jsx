@@ -9,6 +9,7 @@ import { API_BASE_URL } from '../services/api';
 import { usePermissions } from '../contexts/PermissionContext';
 import { toast } from '../utils/toast';
 import './DocumentationAdmin.css';
+import { getToken } from '../utils/tokenStore';
 
 function DocumentationAdmin() {
   const { isAdmin } = usePermissions();
@@ -50,7 +51,7 @@ function DocumentationAdmin() {
   // Load content list
   const loadContentList = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
       
       const response = await fetch(`${API_BASE_URL}/api/v1/enterprise-docs/admin/content`, { headers });
@@ -69,7 +70,7 @@ function DocumentationAdmin() {
   // Load statistics
   const loadStats = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
       
       const response = await fetch(`${API_BASE_URL}/api/v1/enterprise-docs/admin/stats`, { headers });
@@ -93,7 +94,7 @@ function DocumentationAdmin() {
   // Handle content creation/update
   const handleSaveContent = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -141,7 +142,7 @@ function DocumentationAdmin() {
   // Handle content publish/unpublish
   const handleTogglePublish = async (contentId, currentStatus) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { 'Authorization': `Bearer ${token}` };
       
       const action = currentStatus ? 'unpublish' : 'publish';

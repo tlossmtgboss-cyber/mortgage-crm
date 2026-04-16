@@ -2,18 +2,19 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import OnboardingWizard from '../components/OnboardingWizard';
 import './Onboarding.css';
+import { getUserData, setTokens } from '../utils/tokenStore';
 
 const Onboarding = () => {
   const navigate = useNavigate();
 
-  const handleOnboardingComplete = () => {
+  const handleOnboardingComplete = async () => {
     // Update localStorage to mark onboarding as completed
     try {
-      const userStr = localStorage.getItem('user');
+      const userStr = getUserData();
       if (userStr) {
         const user = JSON.parse(userStr);
         user.onboarding_completed = true;
-        localStorage.setItem('user', JSON.stringify(user));
+        await setTokens({ user_data: user });
       }
     } catch (error) {
       console.error('Error updating user data:', error);
@@ -23,14 +24,14 @@ const Onboarding = () => {
     navigate('/dashboard');
   };
 
-  const handleOnboardingSkip = () => {
+  const handleOnboardingSkip = async () => {
     // Mark as completed when skipped
     try {
-      const userStr = localStorage.getItem('user');
+      const userStr = getUserData();
       if (userStr) {
         const user = JSON.parse(userStr);
         user.onboarding_completed = true;
-        localStorage.setItem('user', JSON.stringify(user));
+        await setTokens({ user_data: user });
       }
     } catch (error) {
       console.error('Error updating user data:', error);

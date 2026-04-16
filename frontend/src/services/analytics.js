@@ -1,3 +1,5 @@
+import { getToken } from '../utils/tokenStore';
+
 /**
  * Analytics Service - Track user behavior and feature usage
  * Used for beta program metrics and product improvement
@@ -12,7 +14,7 @@ const ANALYTICS_ENDPOINT = '/api/v1/analytics/track';
  */
 export const trackEvent = async (eventName, properties = {}) => {
   try {
-    const token = localStorage.getItem('token');
+    const token = getToken();
 
     const eventData = {
       event: eventName,

@@ -4,6 +4,7 @@ import { sanitizeText } from '../utils/sanitize';
 import { getAuthHeaders } from '../utils/auth';
 import { toast } from '../utils/toast';
 import './MeetingRoom.css';
+import { getToken } from '../utils/tokenStore';
 
 // API Base URL
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -174,7 +175,7 @@ const MeetingRoom = () => {
         // First, get current user info from API if logged in
         let userId = null;
         let userName = 'Guest';
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (token) {
           try {
             // Get actual user ID from /users/me endpoint
@@ -266,7 +267,7 @@ const MeetingRoom = () => {
     const wsHost = isProduction
       ? 'api.perenniaai.com'
       : (process.env.REACT_APP_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000');
-    const token = localStorage.getItem('token') || '';
+    const token = getToken() || '';
     const wsUrl = `${wsProtocol}//${wsHost}/api/v1/meetings/ws/${roomCode}/${participantId}?name=${encodeURIComponent(displayName)}&token=${encodeURIComponent(token)}`;
 
     console.log('Connecting to signaling server:', wsUrl);
@@ -766,7 +767,7 @@ const MeetingRoom = () => {
     }
 
     // Notify backend of join (if authenticated)
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (token) {
       try {
         await fetch(`${API_BASE}/api/v1/meetings/rooms/${roomCode}/join`, {
@@ -1349,7 +1350,7 @@ const MeetingRoom = () => {
     setInviteSuccess(false);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const joinUrl = `${window.location.origin}/meeting/${roomCode}`;
 
       const response = await fetch(`${API_BASE}/api/v1/meetings/rooms/${meeting?.id}/invite`, {
@@ -1719,7 +1720,7 @@ const MeetingRoom = () => {
       URL.revokeObjectURL(screenRecordingUrl);
     }
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const formData = new FormData();
       formData.append('file', blob, `screen-recording-${Date.now()}.webm`);
       formData.append('meeting_id', meeting?.id || '');
@@ -1762,7 +1763,7 @@ const MeetingRoom = () => {
 
       // Log to conversation/activity if recipient name provided
       if (recipientName.trim()) {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         try {
           await fetch(`${API_BASE}/api/v1/activities/`, {
             method: 'POST',
@@ -1823,7 +1824,7 @@ const MeetingRoom = () => {
 
     setGeneratingEmailSummary(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/email-drafts/generate-call-summary`, {
         method: 'POST',
         headers: {

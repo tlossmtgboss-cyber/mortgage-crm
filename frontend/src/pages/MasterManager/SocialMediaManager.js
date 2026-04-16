@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../../contexts/PermissionContext';
 import './SocialMediaManager.css';
+import { getToken } from '../../utils/tokenStore';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -27,7 +28,7 @@ const SocialMediaManager = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   const fetchConnections = useCallback(async () => {
     try {

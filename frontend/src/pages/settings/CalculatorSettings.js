@@ -8,6 +8,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './CalculatorSettings.css';
+import { getToken } from '../../utils/tokenStore';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
@@ -25,7 +26,7 @@ function CalculatorSettings() {
   const [addingBuyerType, setAddingBuyerType] = useState(false);
   const [error, setError] = useState(null);
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   const apiFetch = useCallback(async (url, options = {}) => {
     const res = await fetch(`${API_URL}${url}`, {

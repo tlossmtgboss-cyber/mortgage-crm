@@ -16,7 +16,8 @@ import { Capacitor } from '@capacitor/core';
 import { PushNotifications } from '@capacitor/push-notifications';
 import { App } from '@capacitor/app';
 import { isNative } from '../services/nativeServices';
-import { API_BASE_URL } from '../services/api';
+import { axiosInstance } from '../services/api';
+import { isAuthenticated } from '../utils/tokenStore';
 import { getItem, setItem, removeItem } from '../utils/storage';
 import { parseDeepLink } from '../services/deepLinkRouter';
 
@@ -96,31 +97,19 @@ async function markPermissionDenied() {
  * @returns {Promise<boolean>} Whether the registration succeeded
  */
 async function registerTokenWithBackend(token, attempt = 0) {
-  const authToken = localStorage.getItem('token');
-  if (!authToken) {
+  if (!isAuthenticated()) {
     console.warn('Push: no auth token, skipping backend registration');
     return false;
   }
 
   try {
-    const response = await fetch(`${API_BASE_URL}/api/v1/push/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`,
-      },
-      body: JSON.stringify({
-        device_token: token,
-        platform: Capacitor.getPlatform(),
-      }),
+    await axiosInstance.post('/api/v1/push/register', {
+      device_token: token,
+      platform: Capacitor.getPlatform(),
     });
 
-    if (response.ok) {
-      console.log('Push: token registered with backend');
-      return true;
-    }
-
-    console.error('Push: backend registration failed, status', response.status);
+    console.log('Push: token registered with backend');
+    return true;
   } catch (err) {
     console.error('Push: backend registration error', err);
   }
@@ -152,26 +141,16 @@ export async function unregisterPushNotifications() {
     const token = await getStoredToken();
 
     // Tell backend to forget the token
-    if (token) {
-      const authToken = localStorage.getItem('token');
-      if (authToken) {
-        try {
-          await fetch(`${API_BASE_URL}/api/v1/push/unregister`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${authToken}`,
-            },
-            body: JSON.stringify({
-              device_token: token,
-              platform: Capacitor.getPlatform(),
-            }),
-          });
-          console.log('Push: token unregistered from backend');
-        } catch (err) {
-          // Best-effort; the server can also expire stale tokens
-          console.warn('Push: backend unregister failed', err);
-        }
+    if (token && isAuthenticated()) {
+      try {
+        await axiosInstance.post('/api/v1/push/unregister', {
+          device_token: token,
+          platform: Capacitor.getPlatform(),
+        });
+        console.log('Push: token unregistered from backend');
+      } catch (err) {
+        // Best-effort; the server can also expire stale tokens
+        console.warn('Push: backend unregister failed', err);
       }
     }
 
@@ -495,8 +474,7 @@ export function usePushNotifications() {
     window.addEventListener('authChange', handleAuthChange);
 
     // --- Auto-register if user is already logged in -----------------------
-    const token = localStorage.getItem('token');
-    if (token) {
+    if (isAuthenticated()) {
       // Hydrate stored token into state immediately
       (async () => {
         const stored = await getStoredToken();
@@ -519,8 +497,7 @@ export function usePushNotifications() {
   // Auto-register on mount when user is authenticated
   // -----------------------------------------------------------------------
   useEffect(() => {
-    const authToken = localStorage.getItem('token');
-    if (authToken && isNative && !isRegistered && !permissionDenied) {
+    if (isAuthenticated() && isNative && !isRegistered && !permissionDenied) {
       register();
     }
   }, [register, isRegistered, permissionDenied]);

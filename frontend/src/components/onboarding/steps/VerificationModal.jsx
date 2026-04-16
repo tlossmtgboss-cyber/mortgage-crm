@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './VerificationModal.css';
 import { toast } from '../../../utils/toast';
+import { getToken } from '../../../utils/tokenStore';
 
 const VerificationModal = ({ type, contact, onClose, onVerified }) => {
   const [code, setCode] = useState('');
@@ -50,7 +51,7 @@ const VerificationModal = ({ type, contact, onClose, onVerified }) => {
     setError('');
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const endpoint = type === 'email'
         ? '/api/v1/onboarding/step-1/verify-email'
         : '/api/v1/onboarding/step-1/verify-sms';
@@ -85,7 +86,7 @@ const VerificationModal = ({ type, contact, onClose, onVerified }) => {
 
   const handleResend = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const endpoint = type === 'email'
         ? '/api/v1/onboarding/step-1/send-email-verification'
         : '/api/v1/onboarding/step-1/send-sms-verification';

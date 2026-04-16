@@ -11,11 +11,12 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from '../../utils/toast';
+import { clearTokens, getToken } from '../../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
 function getAuthHeaders() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Authorization': token ? `Bearer ${token}` : '',
     'Content-Type': 'application/json',
@@ -71,8 +72,7 @@ export default function FollowUpCadenceSection() {
         { headers: getAuthHeaders() }
       );
       if (response.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
+        await clearTokens();
         window.location.href = '/login';
         return;
       }

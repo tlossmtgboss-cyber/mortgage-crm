@@ -7,6 +7,7 @@ import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { API_BASE_URL } from '../../services/api';
 import './AutoDataImport.css';
+import { getToken } from '../../utils/tokenStore';
 
 function AutoDataImport({ onImportComplete }) {
   const [uploading, setUploading] = useState(false);
@@ -37,7 +38,7 @@ function AutoDataImport({ onImportComplete }) {
       const response = await fetch(`${API_BASE_URL}/api/v1/auto-import`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         },
         body: formData,
       });

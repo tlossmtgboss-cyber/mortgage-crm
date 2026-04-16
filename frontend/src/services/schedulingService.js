@@ -1,3 +1,5 @@
+import { getToken } from '../utils/tokenStore';
+
 /**
  * DEPRECATED — Not imported by any active component.
  * Active scheduling uses api.js (schedulerAPI, calendarAPI).
@@ -20,7 +22,7 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.co
  * @returns {Promise<Object>} Available time slots
  */
 export async function getAvailability({ userId, startDate, endDate, provider = 'smart_scheduler' }) {
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   try {
     if (provider === 'calendly') {
@@ -88,7 +90,7 @@ export async function getAvailability({ userId, startDate, endDate, provider = '
  * @returns {Promise<Object>} Event type with scheduling URL
  */
 export async function getCalendlySchedulingUrl(userId) {
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   try {
     // First check if Calendly is connected
@@ -160,7 +162,7 @@ export async function bookAppointment({
   notes,
   provider = 'smart_scheduler'
 }) {
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   try {
     // For now, always use Smart Scheduler for booking
@@ -202,7 +204,7 @@ export async function bookAppointment({
  * @returns {Promise<Object>} Cancellation result
  */
 export async function cancelAppointment(appointmentId, reason, provider = 'smart_scheduler') {
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   try {
     let endpoint;
@@ -243,7 +245,7 @@ export async function cancelAppointment(appointmentId, reason, provider = 'smart
  * @returns {Promise<Object>} Appointments list
  */
 export async function getUpcomingAppointments({ daysAhead = 7, provider = 'smart_scheduler', userId }) {
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   try {
     let endpoint;
@@ -277,7 +279,7 @@ export async function getUpcomingAppointments({ daysAhead = 7, provider = 'smart
  * @returns {Promise<Object>} Provider status
  */
 export async function getSchedulingProvider(userId) {
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   try {
     // Check Calendly status first

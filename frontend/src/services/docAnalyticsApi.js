@@ -5,6 +5,7 @@
  * All 12 endpoints are under /api/v1/smart-docs/doc-analytics/*.
  */
 import { API_BASE_URL } from './api';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = `${API_BASE_URL}/api/v1/smart-docs`;
 
@@ -30,7 +31,7 @@ async function handleResponse(response) {
 }
 
 function getHeaders() {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Authorization': token ? `Bearer ${token}` : '',
     'Content-Type': 'application/json',

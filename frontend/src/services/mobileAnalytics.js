@@ -15,13 +15,13 @@ import { Capacitor } from '@capacitor/core';
 import { Network } from '@capacitor/network';
 import { Preferences } from '@capacitor/preferences';
 import { App } from '@capacitor/app';
-import { API_BASE_URL } from './api';
+import { axiosInstance } from './api';
+import { isAuthenticated } from '../utils/tokenStore';
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const ANALYTICS_ENDPOINT = `${API_BASE_URL}/api/v1/analytics/mobile`;
 const FLUSH_INTERVAL_MS = 30_000; // 30 seconds
 const MAX_BUFFER_SIZE = 200; // flush early if buffer gets large
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes of inactivity = new session
@@ -197,8 +197,7 @@ async function flush() {
   };
 
   try {
-    const token = localStorage.getItem('token');
-    if (!token) {
+    if (!isAuthenticated()) {
       // No auth token -- persist events for later
       await persistPendingEvents(events);
       return;
@@ -210,19 +209,7 @@ async function flush() {
       return;
     }
 
-    const response = await fetch(ANALYTICS_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      // Server rejected -- persist for retry
-      await persistPendingEvents(events);
-    }
+    await axiosInstance.post('/api/v1/analytics/mobile', payload);
   } catch (error) {
     // Network error -- persist for retry
     await persistPendingEvents(events);

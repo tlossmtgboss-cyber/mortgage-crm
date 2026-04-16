@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PipelineProbabilityWidget } from '../PipelineProbability';
 import './RoleDashboards.css';
+import { getToken } from '../../utils/tokenStore';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
@@ -9,7 +10,7 @@ const API_URL = process.env.REACT_APP_API_URL || '';
 const fetchWithAuth = async (endpoint) => {
   const response = await fetch(`${API_URL}${endpoint}`, {
     headers: {
-      'Authorization': `Bearer ${localStorage.getItem('token')}`,
+      'Authorization': `Bearer ${getToken()}`,
       'Content-Type': 'application/json'
     }
   });

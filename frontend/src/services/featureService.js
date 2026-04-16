@@ -1,3 +1,5 @@
+import { getToken } from '../utils/tokenStore';
+
 /**
  * Feature Service
  *
@@ -16,7 +18,7 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
  * Get authorization headers
  */
 const getHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Authorization': `Bearer ${token}`,
     'Content-Type': 'application/json'

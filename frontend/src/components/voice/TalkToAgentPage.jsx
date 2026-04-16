@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import TalkToAgent from './TalkToAgent';
 import './TalkToAgentPage.css';
+import { getToken } from '../../utils/tokenStore';
 
 const TalkToAgentPage = () => {
   const [agents, setAgents] = useState([]);
@@ -21,7 +22,7 @@ const TalkToAgentPage = () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/voice/agents`, {
         headers: {
           'Authorization': `Bearer ${token}`,

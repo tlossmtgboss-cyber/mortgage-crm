@@ -4,6 +4,7 @@ import { aiAPI, API_BASE_URL } from '../../services/api';
 import { sanitizeHTML } from '../../utils/sanitize';
 import './TaskDetailPanel.css';
 import { toast } from '../../utils/toast';
+import { getToken } from '../../utils/tokenStore';
 
 /**
  * Shared TaskDetailPanel Component
@@ -577,7 +578,7 @@ const TaskDetailPanel = ({
       const response = await fetch(`${API_BASE_URL}/api/v1/tasks/${taskId}/complete-sla`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

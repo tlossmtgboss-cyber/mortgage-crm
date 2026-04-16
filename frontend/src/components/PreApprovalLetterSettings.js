@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { emailSignatureAPI } from '../services/api';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
@@ -43,7 +44,7 @@ function PreApprovalLetterSettings() {
       setSignature(signatureData);
 
       // Load pre-approval letter settings
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/settings/pre-approval-letter`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -90,7 +91,7 @@ function PreApprovalLetterSettings() {
       setSaving(true);
       setError(null);
 
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/settings/pre-approval-letter`, {
         method: 'POST',
         headers: {

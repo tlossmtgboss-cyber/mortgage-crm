@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './DealAlerts.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -229,7 +230,7 @@ export function DealAlertsBell({ userId }) {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const params = new URLSearchParams();
       if (userId) params.append('user_id', userId);
 
@@ -250,7 +251,7 @@ export function DealAlertsBell({ userId }) {
   const fetchRecentAlerts = useCallback(async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE}/api/v1/deal-alerts/?status=active&limit=5`,
         { headers: { Authorization: `Bearer ${token}` } }
@@ -496,7 +497,7 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { Authorization: `Bearer ${token}` };
 
       // Fetch summary, alerts, and priority actions in parallel
@@ -530,7 +531,7 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
   const handleScanPipeline = async () => {
     setScanning(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/deal-alerts/scan`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -549,7 +550,7 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
 
   const handleAcknowledge = async (alertId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await fetch(`${API_BASE}/api/v1/deal-alerts/${alertId}/acknowledge`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
@@ -562,7 +563,7 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
 
   const handleResolve = async (alertId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await fetch(`${API_BASE}/api/v1/deal-alerts/${alertId}/resolve`, {
         method: 'POST',
         headers: {
@@ -579,7 +580,7 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
 
   const handleSnooze = async (alertId, hours) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await fetch(`${API_BASE}/api/v1/deal-alerts/${alertId}/snooze`, {
         method: 'POST',
         headers: {
@@ -598,7 +599,7 @@ export function DealAlertsDashboard({ userId, embedded = false }) {
     if (selectedAlerts.length === 0) return;
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await fetch(`${API_BASE}/api/v1/deal-alerts/bulk-acknowledge`, {
         method: 'POST',
         headers: {
@@ -818,7 +819,7 @@ export function DealAlertsWidget({ userId, onViewAll }) {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         const headers = { Authorization: `Bearer ${token}` };
 
         const [summaryRes, alertsRes] = await Promise.all([

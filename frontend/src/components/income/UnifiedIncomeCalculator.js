@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './UnifiedIncomeCalculator.css';
+import { getToken } from '../../utils/tokenStore';
 
 // Always use production API for deployed builds
 const API_BASE = window.location.hostname === 'localhost'
@@ -175,7 +176,7 @@ export default function UnifiedIncomeCalculator({ loanId, borrowerId, borrowerNa
     form1120Depreciation: '',
   });
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   // Fetch existing income sources from application
   const fetchExistingSources = useCallback(async () => {

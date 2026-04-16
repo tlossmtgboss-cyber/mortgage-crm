@@ -4,6 +4,7 @@
  */
 import React, { useState, useEffect, useCallback } from 'react';
 import { API_BASE_URL } from '../../services/api';
+import { getToken } from '../../utils/tokenStore';
 
 function WebhookHealthDashboard() {
   const [webhooks, setWebhooks] = useState([]);
@@ -12,7 +13,7 @@ function WebhookHealthDashboard() {
 
   const loadWebhooks = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_BASE_URL}/api/v1/scheduler/webhooks/health`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
@@ -32,7 +33,7 @@ function WebhookHealthDashboard() {
   const retryFailed = useCallback(async (deliveryId) => {
     setRetrying(deliveryId);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       await fetch(`${API_BASE_URL}/api/v1/scheduler/webhooks/deliveries/${deliveryId}/retry`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` },

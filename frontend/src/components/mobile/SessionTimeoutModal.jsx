@@ -11,6 +11,7 @@ import { biometrics, isNative, haptics } from '../../services/nativeServices';
 import { destroySession } from '../../services/sessionManager';
 import { clearAllAuthTokens } from '../../utils/storage';
 import './SessionTimeoutModal.css';
+import { clearTokens } from '../../utils/tokenStore';
 
 const MAX_ATTEMPTS = 3;
 
@@ -169,22 +170,18 @@ export default function SessionTimeoutModal() {
     extendSession();
   }, [extendSession]);
 
-  const handleForgotPassword = useCallback(() => {
+  const handleForgotPassword = useCallback(async () => {
     destroySession();
     // Clear auth from both localStorage and Capacitor Preferences
-    localStorage.removeItem('token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+    await clearTokens();
     clearAllAuthTokens().catch(() => {});
     window.location.href = '/login?forgot=1';
   }, []);
 
-  const handleFullLogout = useCallback(() => {
+  const handleFullLogout = useCallback(async () => {
     destroySession();
     // Clear auth from both localStorage and Capacitor Preferences
-    localStorage.removeItem('token');
-    localStorage.removeItem('refresh_token');
-    localStorage.removeItem('user');
+    await clearTokens();
     clearAllAuthTokens().catch(() => {});
     window.location.href = '/login';
   }, []);

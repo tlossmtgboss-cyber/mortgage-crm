@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './RecordingModal.css';
+import { getToken } from '../utils/tokenStore';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -36,7 +37,7 @@ function RecordingModal({ isOpen, onClose, lead }) {
       const response = await fetch(`${API_BASE_URL}/api/v1/recallai/start-recording`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

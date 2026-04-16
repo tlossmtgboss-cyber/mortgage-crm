@@ -12,6 +12,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { getAuthHeaders } from '../utils/auth';
 import { API_BASE_URL } from '../services/api';
+import { getToken, clearTokens } from '../utils/tokenStore';
 
 // Use the same API URL as the rest of the app (handles production vs dev)
 const API_BASE = API_BASE_URL;
@@ -57,8 +58,7 @@ export const ModuleProvider = ({ children }) => {
         if (response.status === 401) {
           const isLoginPage = window.location.pathname === '/login';
           if (!isLoginPage) {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            clearTokens().catch(() => {});
             window.location.href = '/login';
           }
           return;
@@ -134,7 +134,7 @@ export const ModuleProvider = ({ children }) => {
     }
 
     // Only fetch if user is logged in (token exists)
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (token) {
       fetchModules();
     } else {

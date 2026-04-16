@@ -19,6 +19,7 @@ import { useNavigate } from 'react-router-dom';
 import { usePermissions } from '../contexts/PermissionContext';
 import { isMasterAdmin, ROLE_DEFAULT_ROUTES } from '../config/roleConfig';
 import './RoleSwitcher.css';
+import { getUserData } from '../utils/tokenStore';
 
 // All available roles that master admin can preview
 const ALL_AVAILABLE_ROLES = [
@@ -53,7 +54,7 @@ const RoleSwitcher = () => {
   // Get user email to check if master admin
   const userEmail = useMemo(() => {
     try {
-      const userStr = localStorage.getItem('user');
+      const userStr = getUserData();
       if (userStr) {
         const user = JSON.parse(userStr);
         return user.email || null;

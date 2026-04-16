@@ -4,6 +4,7 @@ import { usePermissions } from '../contexts/PermissionContext';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import { toast } from '../utils/toast';
 import './CompanyBrandingSettings.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE_URL = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? 'http://localhost:8000'
@@ -34,7 +35,7 @@ const CompanyBrandingSettings = () => {
   const [socialMedia, setSocialMedia] = useState({});
 
   const getAuthHeaders = useCallback(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     return {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'

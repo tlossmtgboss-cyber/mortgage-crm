@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import './FeatureManagement.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -40,7 +41,7 @@ function FeatureManagement({ companyId = 1 }) {
   const fetchFeatures = useCallback(async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { 'Authorization': `Bearer ${token}` };
 
       // Fetch company feature access
@@ -75,7 +76,7 @@ function FeatureManagement({ companyId = 1 }) {
   const runSetup = async () => {
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE}/api/v1/features/migrate/full-setup`,
         {
@@ -102,7 +103,7 @@ function FeatureManagement({ companyId = 1 }) {
   const toggleFeatureAccess = async (featureKey, currentEnabled) => {
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `${API_BASE}/api/v1/features/company/${companyId}/access/${featureKey}`,
         {
@@ -139,7 +140,7 @@ function FeatureManagement({ companyId = 1 }) {
   const bulkEnableAll = async (category = null) => {
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       const featuresToEnable = features
         .filter(f => !f.access?.is_enabled)
@@ -185,7 +186,7 @@ function FeatureManagement({ companyId = 1 }) {
   const bulkDisableAll = async (category = null) => {
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       const featuresToDisable = features
         .filter(f => f.access?.is_enabled)

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api, { aiAPI, borrowerApplicationAPI } from '../services/api';
 import { toast } from '../utils/toast';
 import './SMSModal.css';
+import { getToken } from '../utils/tokenStore';
 
 const APP_BASE = process.env.REACT_APP_BASE_URL || 'https://app.perenniaai.com';
 
@@ -73,7 +74,7 @@ function SMSModal({ isOpen, onClose, lead }) {
     if (isOpen) {
       const fetchBookingLinks = async () => {
         try {
-          const token = localStorage.getItem('token');
+          const token = getToken();
           const response = await api.get('/api/v1/scheduler/booking-links');
           setBookingLinks(response.data?.booking_links || []);
         } catch (err) {

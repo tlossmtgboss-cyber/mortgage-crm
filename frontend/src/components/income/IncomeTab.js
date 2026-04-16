@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './IncomeTab.css';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -36,7 +37,7 @@ export default function IncomeTab({ borrowerId, loanId, onIncomeChange }) {
   const [selectedSource, setSelectedSource] = useState(null);
   const [error, setError] = useState(null);
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   const fetchIncomeSources = useCallback(async () => {
     if (!borrowerId || !loanId) return;

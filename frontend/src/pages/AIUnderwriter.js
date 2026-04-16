@@ -6,6 +6,7 @@ import GuidelineNotificationBadge from '../components/GuidelineNotificationBadge
 import EscalationPanel from '../components/EscalationPanel';
 import './AIUnderwriter.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 // View modes
 const VIEW_MODES = [
@@ -88,7 +89,7 @@ function AIUnderwriter() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/loans/search?q=${encodeURIComponent(loanSearchQuery)}&limit=10`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
       if (response.ok) {
@@ -108,7 +109,7 @@ function AIUnderwriter() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/ai-file-analysis/analyze/${loanId}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
       if (response.ok) {
@@ -128,7 +129,7 @@ function AIUnderwriter() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/ai-file-analysis/pipeline-readiness?limit=15`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
       if (response.ok) {
@@ -148,7 +149,7 @@ function AIUnderwriter() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/loans?limit=50&include_borrower=true`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
       if (response.ok) {
@@ -169,7 +170,7 @@ function AIUnderwriter() {
       // Fetch loan details with all related data
       const response = await fetch(`${API_BASE_URL}/api/v1/loans/${loanId}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
       if (response.ok) {
@@ -340,7 +341,7 @@ function AIUnderwriter() {
       const response = await fetch(`${API_BASE_URL}/api/v1/ai-underwriter/ask`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './MissionControl.css';
+import { getToken } from '../utils/tokenStore';
 
 function MissionControl() {
   const [health, setHealth] = useState(null);
@@ -24,7 +25,7 @@ function MissionControl() {
   }, [metricsView, selectedAgent]);
 
   const loadAllData = async () => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const headers = { 'Authorization': `Bearer ${token}` };
 
     try {

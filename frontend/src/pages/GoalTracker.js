@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './GoalTracker.css';
+import { getToken } from '../utils/tokenStore';
 
 function GoalTracker() {
   // User Input Fields (Yellow highlighted in Excel)
@@ -39,7 +40,7 @@ function GoalTracker() {
   const loadActualData = async () => {
     setLoadingActuals(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_URL = isProduction ? 'https://api.perenniaai.com' : (process.env.REACT_APP_API_URL || '');
 
@@ -165,7 +166,7 @@ function GoalTracker() {
       setLastSaved(now);
 
       // Also save goals to backend if user is logged in
-      const token = localStorage.getItem('token');
+      const token = getToken();
       if (token && calculated.annualOriginationUnitGoal) {
         try {
           const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';

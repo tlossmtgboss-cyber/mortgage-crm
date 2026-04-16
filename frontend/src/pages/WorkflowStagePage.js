@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import './WorkflowStagePage.css';
+import { getToken } from '../utils/tokenStore';
 
 // Status configurations for each stage
 const LEAD_STATUSES = {
@@ -241,7 +242,7 @@ function WorkflowStagePage() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages/${stage}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       if (response.ok) {
@@ -372,7 +373,7 @@ function WorkflowStagePage() {
       const response = await fetch(`${API_BASE_URL}/api/v1/workflow-stages/${stage}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ tasksByStatus })

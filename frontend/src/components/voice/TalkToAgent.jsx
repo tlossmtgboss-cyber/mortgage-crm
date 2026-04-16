@@ -1,5 +1,6 @@
 // Talk to Agent - Browser-based voice conversation with AI agents
 import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { getToken } from '../../utils/tokenStore';
 
 const TalkToAgent = ({ agent, isOpen, onClose }) => {
   const [status, setStatus] = useState('idle'); // idle, connecting, ready, listening, processing, speaking, error
@@ -108,7 +109,7 @@ const TalkToAgent = ({ agent, isOpen, onClose }) => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
       const wsUrl = `${API_BASE_URL}${WS_ENDPOINT}?token=${token}`;
 

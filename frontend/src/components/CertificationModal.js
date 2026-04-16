@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './CertificationModal.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 const CertificationModal = ({ certificationId, onClose, onComplete }) => {
   const [cert, setCert] = useState(null);
@@ -16,7 +17,7 @@ const CertificationModal = ({ certificationId, onClose, onComplete }) => {
   const loadCertification = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `https://api.perenniaai.com/api/v1/certifications/${certificationId}`,
         {
@@ -53,7 +54,7 @@ const CertificationModal = ({ certificationId, onClose, onComplete }) => {
   const handleCertify = async () => {
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `https://api.perenniaai.com/api/v1/certifications/${certificationId}/certify`,
         {
@@ -88,7 +89,7 @@ const CertificationModal = ({ certificationId, onClose, onComplete }) => {
 
     setSubmitting(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(
         `https://api.perenniaai.com/api/v1/certifications/${certificationId}/skip`,
         {

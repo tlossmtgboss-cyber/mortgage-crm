@@ -4,6 +4,7 @@ import { toast } from '../utils/toast';
 import { API_BASE_URL } from '../services/api';
 import SalesforceFieldMapper from '../components/integrations/SalesforceFieldMapper';
 import './SalesforceIntegrationPage.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_URL = API_BASE_URL;
 
@@ -39,7 +40,7 @@ function SalesforceIntegrationPage() {
   const [expandedFields, setExpandedFields] = useState([]);
   const [loadingFields, setLoadingFields] = useState(false);
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   // Check connection status on mount
   useEffect(() => {

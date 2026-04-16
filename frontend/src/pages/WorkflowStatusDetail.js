@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import './WorkflowStatusDetail.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_URL = process.env.REACT_APP_API_URL || '';
 
@@ -39,7 +40,7 @@ function WorkflowStatusDetail() {
       // Try to load from API first
       const response = await fetch(`${API_URL}/api/v1/workflow/status/${statusId}/detail`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         }
       });

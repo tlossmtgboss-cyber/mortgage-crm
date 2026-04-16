@@ -15,6 +15,7 @@
 import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { getAuthHeaders } from '../utils/auth';
 import { API_BASE_URL } from '../services/api';
+import { getToken } from '../utils/tokenStore';
 
 // ─── Defaults (match current Perennia AI branding so nothing changes for ────
 // orgs without a WhiteLabelConfig)
@@ -64,7 +65,7 @@ export const BrandingProvider = ({ children }) => {
 
   useEffect(() => {
     // Only fetch when a token is present (authenticated session)
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) {
       // Apply defaults so CSS vars are always defined
       applyCSSVars(DEFAULTS);

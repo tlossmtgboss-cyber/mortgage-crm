@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import { toast } from '../utils/toast';
 import './AppCompletionScoring.css';
+import { getToken } from '../utils/tokenStore';
 
 // Severity filter tabs
 const SEVERITY_TABS = [
@@ -31,7 +32,7 @@ function getScoreColor(score) {
 // Auth headers helper
 function authHeaders(json = false) {
   const headers = {
-    'Authorization': 'Bearer ' + localStorage.getItem('token'),
+    'Authorization': 'Bearer ' + getToken(),
   };
   if (json) {
     headers['Content-Type'] = 'application/json';

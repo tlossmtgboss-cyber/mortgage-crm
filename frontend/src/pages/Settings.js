@@ -22,6 +22,7 @@ import IntegrationSettings from './IntegrationSettings';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import './Settings.css';
 import { toast } from '../utils/toast';
+import { clearTokens, getToken, getUserData, setTokens } from '../utils/tokenStore';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -330,7 +331,7 @@ function Settings() {
   const { isAdmin, loading: permissionsLoading } = usePermissions();
 
   // Get current user from localStorage
-  const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+  const currentUser = JSON.parse(getUserData() || '{}');
 
   const [activeSection, setActiveSection] = useState('profile-info');
   const [expandedSections, setExpandedSections] = useState({
@@ -714,7 +715,7 @@ function Settings() {
     setLoadingAuditLogs(true);
     setAuditLogsError(null);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/admin/account-management/security-audit-log?limit=10`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -772,7 +773,7 @@ function Settings() {
   const loadUserProfile = async () => {
     setLoadingProfile(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/users/me`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -811,7 +812,7 @@ function Settings() {
     setSavingProfile(true);
     setProfileMessage({ type: '', text: '' });
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       // Combine first_name and last_name into full_name for the API
       const fullName = `${userProfile.first_name} ${userProfile.last_name}`.trim();
       const response = await fetch(`${API_BASE}/api/v1/users/me`, {
@@ -835,8 +836,8 @@ function Settings() {
       if (response.ok) {
         setProfileMessage({ type: 'success', text: 'Profile updated successfully!' });
         // Update localStorage user data
-        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-        localStorage.setItem('user', JSON.stringify({ ...storedUser, full_name: fullName }));
+        const storedUser = JSON.parse(getUserData() || '{}');
+        await setTokens({ user_data: { ...storedUser, full_name: fullName } });
       } else {
         const error = await response.json();
         setProfileMessage({ type: 'error', text: error.detail || 'Failed to update profile' });
@@ -862,7 +863,7 @@ function Settings() {
     setChangingPassword(true);
     setProfileMessage({ type: '', text: '' });
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/users/me/password`, {
         method: 'PUT',
         headers: {
@@ -975,7 +976,7 @@ function Settings() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/calendly/status?user_id=${currentUser?.id}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -1013,7 +1014,7 @@ function Settings() {
       // Get OAuth authorization URL from backend
       const response = await fetch(`${API_BASE_URL}/api/v1/calendly/connect?user_id=${currentUser?.id}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -1046,7 +1047,7 @@ function Settings() {
       const response = await fetch(`${API_BASE_URL}/api/v1/calendly/disconnect?user_id=${currentUser?.id}`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -1085,7 +1086,7 @@ function Settings() {
       const response = await fetch(`${API_BASE_URL}/api/v1/calendly/settings?user_id=${currentUser?.id}`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(updates)
@@ -1123,7 +1124,7 @@ function Settings() {
       console.log('[Calendly] Fetching event types...');
       const response = await fetch(`${API_BASE_URL}/api/v1/calendly/event-types?user_id=${currentUser?.id}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -1171,7 +1172,7 @@ function Settings() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/calendly/calendar-mappings`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       const data = await response.json();
@@ -1197,7 +1198,7 @@ function Settings() {
       const response = await fetch(`${API_BASE_URL}/api/v1/calendly/calendar-mappings`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -1227,7 +1228,7 @@ function Settings() {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/api-keys`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -1262,7 +1263,7 @@ function Settings() {
       const response = await fetch(`${API_BASE_URL}/api/v1/api-keys`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ name: newApiKeyName })
@@ -1290,7 +1291,7 @@ function Settings() {
       const response = await fetch(`${API_BASE_URL}/api/v1/api-keys/${keyId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -1318,7 +1319,7 @@ const API_BASE_URL = isProduction
       const response = await fetch(`${API_BASE_URL}/api/v1/migrations/add-external-message-id`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         }
       });
@@ -1341,7 +1342,7 @@ const API_BASE_URL = isProduction
       const response = await fetch(`${API_BASE_URL}/api/v1/create-sample-tasks`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         }
       });
@@ -1364,7 +1365,7 @@ const API_BASE_URL = isProduction
     setLoadingUsers(true);
     setUsersError(null);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/admin/users`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -1403,7 +1404,7 @@ const API_BASE_URL = isProduction
 
     setAddingUser(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const fullName = `${newUser.first_name} ${newUser.last_name}`.trim();
       const permissionRole = roleMapping[newUser.role] || 'sales';
 
@@ -1465,7 +1466,7 @@ const API_BASE_URL = isProduction
   };
 
   const handleSelectAll = () => {
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const currentUser = JSON.parse(getUserData() || '{}');
     const selectableUsers = users.filter(u => u.id !== currentUser.id).map(u => u.id);
 
     if (selectedUsers.length === selectableUsers.length) {
@@ -1489,7 +1490,7 @@ const API_BASE_URL = isProduction
 
     setDeletingUsers(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       let successCount = 0;
       let failCount = 0;
       const errors = [];
@@ -1540,7 +1541,7 @@ const API_BASE_URL = isProduction
             // Request timed out - check if user was actually deleted
             try {
               const checkResponse = await fetch(`${API_BASE_URL}/api/v1/admin/users`, {
-                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                headers: { 'Authorization': `Bearer ${getToken()}` }
               });
               if (checkResponse.ok) {
                 const usersData = await checkResponse.json();
@@ -1584,7 +1585,7 @@ const API_BASE_URL = isProduction
 
   const handleToggleActive = async (userId, currentStatus) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}`, {
         method: 'PATCH',
         headers: {
@@ -1607,7 +1608,7 @@ const API_BASE_URL = isProduction
 
   const handleToggleVerified = async (userId, currentStatus) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}`, {
         method: 'PATCH',
         headers: {
@@ -1630,7 +1631,7 @@ const API_BASE_URL = isProduction
 
   const handleUpdateRole = async (userId, newRole) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}`, {
         method: 'PATCH',
         headers: {
@@ -1653,7 +1654,7 @@ const API_BASE_URL = isProduction
   };
 
   const handleDeleteUser = async (userId) => {
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const currentUser = JSON.parse(getUserData() || '{}');
 
     if (currentUser.id === userId) {
       toast.error('You cannot delete your own account. Please contact another administrator.');
@@ -1661,7 +1662,7 @@ const API_BASE_URL = isProduction
     }
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       if (!token) {
         toast.error('You are not authenticated. Please log in again.');
@@ -1736,7 +1737,7 @@ const API_BASE_URL = isProduction
   const fetchItTickets = async () => {
     setLoadingTickets(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const statusParam = ticketStatusFilter !== 'all' ? `?status=${ticketStatusFilter}` : '';
       const response = await fetch(`${API_BASE_URL}/api/v1/it-helpdesk/tickets${statusParam}`, {
         headers: {
@@ -1767,7 +1768,7 @@ const API_BASE_URL = isProduction
 
     setSubmittingTicket(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/it-helpdesk/submit`, {
         method: 'POST',
         headers: {
@@ -1808,7 +1809,7 @@ const API_BASE_URL = isProduction
 
   const approveTicket = async (ticketId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/it-helpdesk/tickets/${ticketId}/approve`, {
         method: 'POST',
         headers: {
@@ -1830,7 +1831,7 @@ const API_BASE_URL = isProduction
 
   const resolveTicket = async (ticketId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/it-helpdesk/tickets/${ticketId}/resolve`, {
         method: 'POST',
         headers: {
@@ -2016,7 +2017,7 @@ const API_BASE_URL = isProduction
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/gmail/status`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -2044,7 +2045,7 @@ const API_BASE_URL = isProduction
       // Get auth URL from backend
       const response = await fetch(`${API_BASE_URL}/api/v1/gmail/auth-url`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -2161,7 +2162,7 @@ const API_BASE_URL = isProduction
       const response = await fetch(`${API_BASE_URL}/api/v1/gmail/disconnect`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -2189,7 +2190,7 @@ const API_BASE_URL = isProduction
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/status`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -2226,7 +2227,7 @@ const API_BASE_URL = isProduction
       const currentOrigin = window.location.origin;
       const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/auth-url?origin=${encodeURIComponent(currentOrigin)}`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -2349,7 +2350,7 @@ const API_BASE_URL = isProduction
       const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/disconnect`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -2381,7 +2382,7 @@ const API_BASE_URL = isProduction
       const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-now`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -2430,7 +2431,7 @@ const API_BASE_URL = isProduction
       const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/sync-calendar`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -2477,7 +2478,7 @@ const API_BASE_URL = isProduction
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/oauth-config`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       if (response.ok) {
@@ -2501,7 +2502,7 @@ const API_BASE_URL = isProduction
       const response = await fetch(`${API_BASE_URL}/api/v1/microsoft/oauth-config`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(microsoftOAuthConfig)
@@ -2538,7 +2539,7 @@ const API_BASE_URL = isProduction
     try {
       const response = await fetch(`${API_BASE}/api/v1/user-settings/email-processing`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
       if (response.ok) {
@@ -2556,7 +2557,7 @@ const API_BASE_URL = isProduction
       const response = await fetch(`${API_BASE}/api/v1/user-settings/email-processing`, {
         method: 'PUT',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(newSettings)
@@ -2631,10 +2632,9 @@ const API_BASE_URL = isProduction
     }
   }, [activeSection, ticketStatusFilter]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (window.confirm('Are you sure you want to log out?')) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
+      await clearTokens();
       navigate('/login');
     }
   };
@@ -3116,7 +3116,7 @@ const API_BASE_URL = isProduction
                         try {
                           const response = await fetch(`${API_BASE_URL}/api/v1/gmail/sync?days_back=7&max_results=100`, {
                             method: 'POST',
-                            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                            headers: { 'Authorization': `Bearer ${getToken()}` }
                           });
                           const data = await response.json();
                           if (response.ok) {
@@ -5919,7 +5919,7 @@ const API_BASE_URL = isProduction
                           <input
                             type="checkbox"
                             onChange={handleSelectAll}
-                            checked={selectedUsers.length > 0 && selectedUsers.length === users.filter(u => u.id !== JSON.parse(localStorage.getItem('user') || '{}').id).length}
+                            checked={selectedUsers.length > 0 && selectedUsers.length === users.filter(u => u.id !== JSON.parse(getUserData() || '{}').id).length}
                             style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                           />
                         </th>
@@ -5934,7 +5934,7 @@ const API_BASE_URL = isProduction
                     </thead>
                     <tbody>
                       {users.map((user) => {
-                        const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+                        const currentUser = JSON.parse(getUserData() || '{}');
                         const isCurrentUser = user.id === currentUser.id;
                         return (
                           <tr
@@ -6321,7 +6321,7 @@ const API_BASE_URL = isProduction
                       const response = await fetch(`${API_BASE_URL}/api/v1/admin/clear-sample-data`, {
                         method: 'POST',
                         headers: {
-                          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+                          'Authorization': `Bearer ${getToken()}`,
                           'Content-Type': 'application/json'
                         }
                       });

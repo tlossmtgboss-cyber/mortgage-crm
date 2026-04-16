@@ -10,6 +10,7 @@ import UpgradeModal from './UpgradeModal';
 import RoleSwitcher from './RoleSwitcher';
 import ThemeToggle from './ThemeToggle';
 import './Navigation.css';
+import { getUserData } from '../utils/tokenStore';
 
 /**
  * Navigation component with role-based menu items
@@ -79,7 +80,7 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
   // Get user email to check for master admin
   const userEmail = useMemo(() => {
     try {
-      const userStr = localStorage.getItem('user');
+      const userStr = getUserData();
       if (userStr) {
         const user = JSON.parse(userStr);
         return user.email || null;

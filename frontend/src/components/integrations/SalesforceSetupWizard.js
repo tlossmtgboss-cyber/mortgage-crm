@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from '../../utils/toast';
 import './SalesforceSetupWizard.css';
+import { getToken } from '../../utils/tokenStore';
 
 // Always use api.perenniaai.com for production API calls
 const API_URL = window.location.hostname.includes('perenniaai.com')
@@ -44,7 +45,7 @@ function SalesforceSetupWizard({ onComplete }) {
   const [connectionError, setConnectionError] = useState(false); // Track if Salesforce connection is broken
   const [includeAllFields, setIncludeAllFields] = useState(true); // Include all fields by default
 
-  const token = localStorage.getItem('token');
+  const token = getToken();
 
   // Check connection status on mount
   useEffect(() => {

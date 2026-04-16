@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import VideoRecorder from '../components/video/VideoRecorder';
 import './VideoOS.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
   ? 'https://api.perenniaai.com'
@@ -100,7 +101,7 @@ const VideoOS = () => {
   const loadVideoData = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Fetch video library
       const videosResponse = await fetch(`${API_BASE_URL}/api/v1/video-os/library`, {
@@ -195,7 +196,7 @@ const VideoOS = () => {
     setUploadProgress(0);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Step 1: Get presigned upload URL
       setUploadProgress(10);

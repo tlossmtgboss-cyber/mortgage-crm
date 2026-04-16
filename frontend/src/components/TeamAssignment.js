@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL } from '../services/api';
 import './TeamAssignment.css';
+import { getToken } from '../utils/tokenStore';
 
 function TeamAssignment({ leadId, onUpdate }) {
   const [teamMembers, setTeamMembers] = useState([]);
@@ -18,7 +19,7 @@ function TeamAssignment({ leadId, onUpdate }) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/team/members`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
 
@@ -37,7 +38,7 @@ function TeamAssignment({ leadId, onUpdate }) {
     try {
       const response = await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/team-assignments`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
 
@@ -71,7 +72,7 @@ function TeamAssignment({ leadId, onUpdate }) {
       await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/team-assignments/${assignmentId}`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
     } catch (error) {
@@ -98,7 +99,7 @@ function TeamAssignment({ leadId, onUpdate }) {
         const response = await fetch(`${API_BASE_URL}/api/v1/leads/${leadId}/team-assignments`, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Authorization': `Bearer ${getToken()}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({

@@ -3,6 +3,7 @@ import WorkflowConfigEditor from '../components/WorkflowConfigEditor';
 import WorkflowUpcomingTasks from '../components/WorkflowUpcomingTasks';
 import WorkflowScorecard from '../components/WorkflowScorecard';
 import './WorkflowDashboard.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -41,7 +42,7 @@ function WorkflowDashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { 'Authorization': `Bearer ${token}` };
 
       const dashRes = await fetch(`${API_BASE}/api/v1/workflow/dashboard/summary?organization_id=1`, { headers });
@@ -56,7 +57,7 @@ function WorkflowDashboard() {
 
   const fetchWorkflowDefinitions = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const res = await fetch(`${API_BASE}/api/v1/workflow/definitions`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });

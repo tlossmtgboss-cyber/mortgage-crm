@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import './UnifiedTaskSidebar.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -32,7 +33,7 @@ const UnifiedTaskSidebar = ({ isOpen, onClose, onTaskCountChange }) => {
       setLoading(true);
       const response = await fetch(`${API_BASE_URL}/api/v1/unified-tasks`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -171,7 +172,7 @@ Loan Officer`;
       await fetch(`${API_BASE_URL}/api/v1/unified-tasks/${taskToApprove.id}/approve`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -267,7 +268,7 @@ Loan Officer`;
       const response = await fetch(`${API_BASE_URL}/api/v1/ai/training/instruction`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
@@ -305,7 +306,7 @@ Loan Officer`;
       const response = await fetch(`${API_BASE_URL}/api/v1/ai/regenerate-message`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

@@ -15,7 +15,8 @@
  * so the service is safe to import and call from any environment.
  */
 
-import { API_BASE_URL } from './api';
+import { axiosInstance } from './api';
+import { isAuthenticated } from '../utils/tokenStore';
 
 // ============================================================================
 // Platform detection (safe even when Capacitor is not installed)
@@ -56,8 +57,7 @@ let _notificationCallbacks = [];
  * @returns {Promise<boolean>} Whether the registration succeeded
  */
 export async function registerDeviceToken(token) {
-  const authToken = localStorage.getItem('token');
-  if (!authToken) {
+  if (!isAuthenticated()) {
     console.warn('PushService: no auth token, skipping backend registration');
     return false;
   }
@@ -67,33 +67,22 @@ export async function registerDeviceToken(token) {
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/notifications/register-device`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          device_token: token,
-          platform: getPlatformName(),
-          // Include subscription details for web push
-          ...(typeof token === 'object' ? { subscription: token } : {}),
-        }),
+      const response = await axiosInstance.post('/api/v1/notifications/register-device', {
+        device_token: token,
+        platform: getPlatformName(),
+        // Include subscription details for web push
+        ...(typeof token === 'object' ? { subscription: token } : {}),
       });
 
-      if (response.ok) {
-        console.log('PushService: token registered with backend');
-        return true;
-      }
-
+      console.log('PushService: token registered with backend');
+      return true;
+    } catch (err) {
+      const status = err.response?.status;
       // 4xx errors (except 429) are not retriable
-      if (response.status >= 400 && response.status < 500 && response.status !== 429) {
-        console.error('PushService: backend rejected token, status', response.status);
+      if (status >= 400 && status < 500 && status !== 429) {
+        console.error('PushService: backend rejected token, status', status);
         return false;
       }
-
-      console.warn('PushService: backend registration failed, status', response.status);
-    } catch (err) {
       console.error('PushService: backend registration error', err);
     }
 
@@ -313,21 +302,15 @@ async function initializeWebPush() {
           // Try to subscribe. This requires a VAPID public key from the server.
           // If the server hasn't provided one, we fall back to basic web notifications.
           try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/notifications/vapid-key`, {
-              headers: {
-                Authorization: `Bearer ${localStorage.getItem('token')}`,
-              },
-            });
+            const response = await axiosInstance.get('/api/v1/notifications/vapid-key');
 
-            if (response.ok) {
-              const { vapid_public_key } = await response.json();
-              if (vapid_public_key) {
-                const applicationServerKey = urlBase64ToUint8Array(vapid_public_key);
-                subscription = await registration.pushManager.subscribe({
-                  userVisibleOnly: true,
-                  applicationServerKey,
-                });
-              }
+            const { vapid_public_key } = response.data;
+            if (vapid_public_key) {
+              const applicationServerKey = urlBase64ToUint8Array(vapid_public_key);
+              subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey,
+              });
             }
           } catch (err) {
             // VAPID key endpoint may not exist yet; fall back to basic notifications
@@ -375,8 +358,7 @@ export async function initializePushNotifications() {
   }
 
   // Must be authenticated
-  const authToken = localStorage.getItem('token');
-  if (!authToken) {
+  if (!isAuthenticated()) {
     console.log('PushService: not authenticated, skipping push init');
     return null;
   }
@@ -450,21 +432,12 @@ export async function getPermissionStatus() {
  * Unregisters the device token from the backend and removes listeners.
  */
 export async function teardownPushNotifications() {
-  const authToken = localStorage.getItem('token');
-
   // Tell backend to forget this device
-  if (_deviceToken && authToken) {
+  if (_deviceToken && isAuthenticated()) {
     try {
-      await fetch(`${API_BASE_URL}/api/v1/notifications/unregister-device`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify({
-          device_token: _deviceToken,
-          platform: getPlatformName(),
-        }),
+      await axiosInstance.post('/api/v1/notifications/unregister-device', {
+        device_token: _deviceToken,
+        platform: getPlatformName(),
       });
     } catch (err) {
       console.warn('PushService: backend unregister failed', err);

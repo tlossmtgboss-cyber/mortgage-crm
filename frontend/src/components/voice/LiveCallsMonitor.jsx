@@ -1,5 +1,6 @@
 // Voice OS Live Calls Monitor - Real-time call monitoring dashboard
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { getToken } from '../../utils/tokenStore';
 
 
 
@@ -32,7 +33,7 @@ const LiveCallsMonitor = ({
   // Fetch calls via REST API
   const fetchCalls = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const url = agentId
         ? `${API_BASE_URL}/api/v1/voice/calls/live?agent_id=${agentId}`
         : `${API_BASE_URL}/api/v1/voice/calls/live`;
@@ -88,7 +89,7 @@ const LiveCallsMonitor = ({
   // Connect to WebSocket for real-time updates
   const connectWebSocket = useCallback(() => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       // Security: Browser WebSocket API does not support Authorization headers; token in URL is the only option.
       const ws = new WebSocket(`${WS_BASE_URL}/api/v1/voice/calls/ws?token=${token}`);
 

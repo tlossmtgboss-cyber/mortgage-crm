@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import './FeatureSelection.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -30,7 +31,7 @@ function FeatureSelection({ companyId = 1, selectedFeatures = [], onFeaturesChan
   const fetchFeatures = useCallback(async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { 'Authorization': `Bearer ${token}` };
 
       const response = await fetch(

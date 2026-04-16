@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCarouselBuilder, PROJECT_TYPES, PLATFORM_DIMENSIONS } from '../CarouselBuilderContext';
 import { API_BASE_URL } from '../../../services/api';
+import { getToken } from '../../../utils/tokenStore';
 
 const TEMPLATE_CATEGORIES = [
   { value: 'all', label: 'All Templates' },
@@ -51,7 +52,7 @@ export default function TemplateBrowser({ open, onClose, onSelectTemplate }) {
   const fetchTemplates = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/carousels/templates`, {
         headers: {
           'Authorization': `Bearer ${token}`,

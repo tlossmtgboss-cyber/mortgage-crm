@@ -80,8 +80,8 @@
 }
 
 .quick-add-lead-close {
-  width: 32px;
-  height: 32px;
+  min-width: 44px;
+  min-height: 44px;
   border-radius: 50%;
   border: none;
   background: #f3f4f6;

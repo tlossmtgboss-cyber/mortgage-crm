@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import './OAuthCallback.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -69,7 +70,7 @@ function OAuthCallback() {
       }
 
       try {
-        const token = localStorage.getItem('token');
+        const token = getToken();
 
         // Determine the correct endpoint based on provider
         let endpoint;

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { onboardingAPI, teamAPI } from '../services/api';
 import './OnboardingWizard.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 const OnboardingWizard = ({ onComplete, onSkip }) => {
   const [currentStep, setCurrentStep] = useState(0); // Start at overview page
@@ -158,7 +159,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
         localStorage.setItem('onboardingProcessTree', JSON.stringify(processTreeData));
       }
 
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE_URL = isProduction ? 'https://api.perenniaai.com' : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
@@ -2403,7 +2404,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     // Handle Salesforce OAuth flow
     if (integration.id === 'salesforce') {
       try {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
         const API_BASE_URL = isProduction ? 'https://api.perenniaai.com' : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
@@ -2448,7 +2449,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
     // Handle Microsoft 365 OAuth flow
     else if (integration.id === 'outlook') {
       try {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
         const API_BASE_URL = isProduction ? 'https://api.perenniaai.com' : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
@@ -2498,7 +2499,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
 
   const checkSalesforceConnection = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE_URL = isProduction ? 'https://api.perenniaai.com' : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 
@@ -2526,7 +2527,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
 
   const checkMicrosoftConnection = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE_URL = isProduction ? 'https://api.perenniaai.com' : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
 

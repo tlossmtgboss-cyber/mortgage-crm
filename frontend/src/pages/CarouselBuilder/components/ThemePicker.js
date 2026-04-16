@@ -7,6 +7,7 @@
 import React, { useState, useEffect } from 'react';
 import { useCarouselBuilder } from '../CarouselBuilderContext';
 import { API_BASE_URL } from '../../../services/api';
+import { getToken } from '../../../utils/tokenStore';
 
 const THEME_CATEGORIES = [
   { value: 'all', label: 'All Themes' },
@@ -37,7 +38,7 @@ export default function ThemePicker({ open, onClose }) {
   const fetchThemes = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/carousels/themes`, {
         headers: {
           'Authorization': `Bearer ${token}`,

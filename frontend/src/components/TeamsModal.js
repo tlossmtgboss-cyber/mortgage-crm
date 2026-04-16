@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import './TeamsModal.css';
+import { getToken } from '../utils/tokenStore';
 
 // Use HTTPS Railway URL in production, localhost for development
 const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
@@ -62,7 +63,7 @@ function TeamsModal({ isOpen, onClose, lead }) {
       const response = await fetch(`${API_BASE_URL}/api/v1/teams/create-meeting`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({

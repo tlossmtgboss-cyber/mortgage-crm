@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import './ScheduleAppointmentModal.css';
 import useFocusTrap from '../hooks/useFocusTrap';
+import { getToken } from '../utils/tokenStore';
 // v4.0 - Server-side availability, focus trap, phone validation, improved UX 20260309
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -104,7 +105,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     try {
       const response = await fetch(`${API_BASE}/api/v1/team/members/${memberId}/work-hours`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
 
@@ -131,7 +132,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       // Fetch all team members directly (more reliable)
       const allMembersResponse = await fetch(`${API_BASE}/api/v1/team/members`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
 
@@ -189,7 +190,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
     try {
       const response = await fetch(`${API_BASE}/api/v1/scheduler/appointment-types`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
       });
       if (response.ok) {
@@ -289,7 +290,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
         },
         body: JSON.stringify({
           start_date: dateStr,
@@ -398,7 +399,7 @@ const ScheduleAppointmentModal = ({ isOpen, onClose, onSuccess, borrower }) => {
       // Use authenticated endpoint to ensure appointment is linked to current user
       const attendeeName = borrower.name || `${borrower.first_name || ''} ${borrower.last_name || ''}`.trim();
       const appointmentUrl = `${API_BASE}/api/v1/scheduler/appointments`;
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Determine if borrower is a lead or loan object and set IDs correctly
       // Leads have: id (lead id), no loan_number field

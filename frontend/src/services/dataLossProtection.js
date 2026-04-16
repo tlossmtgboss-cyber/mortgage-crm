@@ -11,6 +11,7 @@
  */
 
 import { Capacitor } from '@capacitor/core';
+import { getToken } from '../utils/tokenStore';
 
 // =============================================================================
 // CONTENT CLASSIFICATION LEVELS
@@ -380,7 +381,7 @@ export async function flushAuditLog() {
   const events = [..._accessLog];
 
   try {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const response = await fetch(
       `${_getApiBaseUrl()}/api/v1/security/dlp-audit`,
       {
@@ -594,7 +595,7 @@ function _injectDLPStyles() {
 
 function _getCurrentUserId() {
   try {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) return null;
     // Decode JWT payload (non-verified — for logging only)
     const payload = JSON.parse(atob(token.split('.')[1]));

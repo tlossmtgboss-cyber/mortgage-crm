@@ -10,6 +10,7 @@ import { TASK_EVENTS, emitTaskCompleted, subscribeToTaskEvent } from '../utils/t
 import { getAuthHeaders } from '../utils/auth';
 import './Tasks.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
@@ -435,7 +436,7 @@ function Tasks() {
       setLoading(true);
 
       // Fetch workflow tasks from all leads/loans
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const workflowResponse = await fetch(`${API_BASE_URL}/api/v1/workflow-config/all-workflow-tasks?days_ahead=14`, {
         headers: {
           'Authorization': `Bearer ${token}`

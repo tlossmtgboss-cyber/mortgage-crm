@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { getToken } from '../../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
@@ -17,7 +18,7 @@ const LOCATION_ICONS = {
 };
 
 async function apiFetch(path, options = {}) {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers: {

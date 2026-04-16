@@ -1,3 +1,5 @@
+import { getToken } from '../utils/tokenStore';
+
 /**
  * Master Manager API Service
  * API calls for capacity tracking, talent state, and recruiting
@@ -6,7 +8,7 @@
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Content-Type': 'application/json',
     'Authorization': token ? `Bearer ${token}` : ''

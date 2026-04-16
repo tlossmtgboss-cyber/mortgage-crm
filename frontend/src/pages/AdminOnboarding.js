@@ -21,6 +21,7 @@ import {
 } from '../services/onboardingApi';
 import { API_BASE_URL } from '../services/api';
 import './AdminOnboarding.css';
+import { getToken, setTokens } from '../utils/tokenStore';
 
 // Initialize Stripe only if key is available (prevents IntegrationError on empty key)
 const stripePromise = process.env.REACT_APP_STRIPE_PUBLISHABLE_KEY
@@ -301,9 +302,9 @@ function AdminOnboarding() {
 
       // Store the access token for subsequent API calls
       if (result.data?.access_token) {
-        localStorage.setItem('token', result.data.access_token);
+        await setTokens({ access_token: result.data.access_token });
       } else if (result.data?.token) {
-        localStorage.setItem('token', result.data.token);
+        await setTokens({ access_token: result.data.token });
       }
 
       setCurrentStep(1);
@@ -1222,7 +1223,7 @@ function PaymentStep({
                   disabled={!promoCode || processing}
                   onClick={async () => {
                     try {
-                      const token = localStorage.getItem('token');
+                      const token = getToken();
                       const resp = await fetch(`${API_BASE_URL}/api/v1/admin-onboarding/validate-promo`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },

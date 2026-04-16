@@ -14,6 +14,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './MicrositeWizard.css';
 import { toast } from '../../utils/toast';
+import { getToken } from '../../utils/tokenStore';
 
 // API base URL
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -150,7 +151,7 @@ const MicrositeWizard = () => {
 
   const loadExistingData = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       if (!token) {
         setLoading(false);
         return;
@@ -208,7 +209,7 @@ const MicrositeWizard = () => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Build the payload based on current data
       const payload = {
@@ -294,7 +295,7 @@ const MicrositeWizard = () => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // First save all data
       await saveStepData();
@@ -631,7 +632,7 @@ const StepProfile = ({ data, onUpdate }) => {
   const generateBioWithAI = async () => {
     setGeneratingBio(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/ai/generate-bio`, {
         method: 'POST',
         headers: {

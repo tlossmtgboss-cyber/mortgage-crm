@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './CommandCenter.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
@@ -14,7 +15,7 @@ function CommandCenter() {
 
   const fetchCommandCenter = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/command-center`, {
         headers: {
           'Authorization': `Bearer ${token}`,

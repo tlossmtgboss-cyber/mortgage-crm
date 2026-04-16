@@ -15,6 +15,7 @@ import ContentEditor from '../components/ContentEditor';
 import MicrositePageManager from '../components/MicrositePageManager';
 import { getAuthHeaders } from '../utils/auth';
 import './MicrositeEditor.css';
+import { getToken } from '../utils/tokenStore';
 
 // API base URL
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
@@ -328,7 +329,7 @@ const MicrositeEditor = () => {
       const response = await fetch(`${API_BASE}/api/v1/microsites/my/assets/upload`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         },
         body: formData
       });

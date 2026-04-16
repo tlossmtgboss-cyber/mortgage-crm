@@ -11,6 +11,7 @@
 import React, { useState, useEffect } from 'react';
 import { sanitizeHTML } from '../utils/sanitize';
 import './PreApprovalLetterModal.css';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -114,7 +115,7 @@ const PreApprovalLetterModal = ({
   };
 
   const notifyLoanOfficer = async () => {
-    const token = localStorage.getItem('token') || localStorage.getItem('partnerToken');
+    const token = getToken() || localStorage.getItem('partnerToken');
     const priceNum = parseFloat(purchasePrice.replace(/[,$]/g, ''));
 
     try {
@@ -143,7 +144,7 @@ const PreApprovalLetterModal = ({
     setLoading(true);
     setError(null);
 
-    const token = localStorage.getItem('token') || localStorage.getItem('partnerToken');
+    const token = getToken() || localStorage.getItem('partnerToken');
     const priceNum = includePurchasePrice ? parseFloat(purchasePrice.replace(/[,$]/g, '')) : null;
     const finalLoanAmount = calculatedLoanAmount || maxLoanAmount;
 
@@ -188,7 +189,7 @@ const PreApprovalLetterModal = ({
   const handleDownloadPDF = async () => {
     if (!letterData?.letter_id) return;
 
-    const token = localStorage.getItem('token') || localStorage.getItem('partnerToken');
+    const token = getToken() || localStorage.getItem('partnerToken');
 
     try {
       const response = await fetch(`${API_BASE}/api/v1/realtor-portal/letters/${letterData.letter_id}/pdf`, {
@@ -217,7 +218,7 @@ const PreApprovalLetterModal = ({
     if (!letterData?.letter_id) return;
 
     setEmailSending(true);
-    const token = localStorage.getItem('token') || localStorage.getItem('partnerToken');
+    const token = getToken() || localStorage.getItem('partnerToken');
 
     try {
       const response = await fetch(`${API_BASE}/api/v1/realtor-portal/letters/${letterData.letter_id}/email`, {

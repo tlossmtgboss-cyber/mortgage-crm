@@ -4,6 +4,7 @@ import { aiAPI, leadsAPI, loansAPI, tasksAPI, reconciliationAPI, outreachAPI, AP
 import { getCurrentUser } from '../../utils/auth';
 import { toast } from '../../utils/toast';
 import { parseResponseForActionItems, isExplicitTaskQuestion, shouldShowActionSidebar as checkShouldShowActionSidebar } from './messageParser';
+import { getToken } from '../../utils/tokenStore';
 
 export default function useAIChat() {
   const navigate = useNavigate();
@@ -68,7 +69,7 @@ export default function useAIChat() {
 
   // Initialize user
   useEffect(() => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     if (!token) {
       navigate('/login');
       return;
@@ -584,7 +585,7 @@ export default function useAIChat() {
   const showDailyView = async () => {
     try {
       const allTasks = [];
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Fetch workflow tasks
       try {
@@ -746,7 +747,7 @@ export default function useAIChat() {
       const API_URL = process.env.REACT_APP_API_URL || '';
       const tasksResponse = await fetch(`${API_URL}/api/v1/tasks?limit=50`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         }
       });
@@ -767,7 +768,7 @@ export default function useAIChat() {
       const emailResponse = await fetch(`${API_URL}/api/v1/ai/send-task-summary-email`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Authorization': `Bearer ${getToken()}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ timeframe, tasks: filteredTasks })
@@ -824,7 +825,7 @@ export default function useAIChat() {
         const response = await fetch(`${API_URL}/api/v1/tasks/${task.id}`, {
           method: 'PATCH',
           headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Authorization': `Bearer ${getToken()}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({ status: 'completed' })

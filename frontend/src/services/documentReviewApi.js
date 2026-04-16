@@ -1,3 +1,5 @@
+import { getToken } from '../utils/tokenStore';
+
 /**
  * Document Review API Service
  *
@@ -10,7 +12,7 @@ const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
  * Get auth headers for API requests
  */
 const getHeaders = () => {
-  const token = localStorage.getItem('token');
+  const token = getToken();
   return {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {}),

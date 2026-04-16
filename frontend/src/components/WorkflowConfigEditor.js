@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './WorkflowConfigEditor.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -96,7 +97,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   const fetchWorkflowConfig = useCallback(async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = { 'Authorization': `Bearer ${token}` };
 
       // Fetch roles AND assignments from shared team-roles API (single source of truth)
@@ -227,7 +228,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, {
         method: 'PUT',
         headers: {
@@ -259,7 +260,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       if (isDynamic && roleData?.id) {
         // For dynamic roles, use the role_responsibilities JSON field
@@ -330,7 +331,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
     try {
       setSaving(true);
       setSaveSuccess(false);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const headers = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -377,7 +378,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days`, {
         method: 'POST',
         headers: {
@@ -410,7 +411,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   const handleDeleteDay = async (dayId) => {
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -442,7 +443,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${editingDay.id}`, {
         method: 'PUT',
         headers: {
@@ -476,7 +477,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   const handleAssignUser = async (roleKey, userId, roleData = null) => {
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const authHeaders = {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -542,7 +543,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
   // Check day health
   const runHealthCheck = async (dayId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE}/api/v1/workflow-config/workflows/${workflowKey}/days/${dayId}/check-health`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}` }
@@ -643,7 +644,7 @@ function WorkflowConfigEditor({ workflowKey, workflowName, workflowColor, onClos
 
     try {
       setSaving(true);
-      const token = localStorage.getItem('token');
+      const token = getToken();
 
       // Update each day that has the deleted role's tasks
       for (const day of days) {

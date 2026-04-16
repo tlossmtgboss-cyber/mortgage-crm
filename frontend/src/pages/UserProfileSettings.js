@@ -9,6 +9,7 @@ import { getAuthHeaders } from '../utils/auth';
 import { useAsyncOperation, useFormSubmit, APIError } from '../utils/errorHandling';
 import { toast } from '../utils/toast';
 import './UserProfileSettings.css';
+import { getToken, getUserData, setTokens } from '../utils/tokenStore';
 
 const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
   ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
@@ -190,11 +191,11 @@ const UserProfileSettings = () => {
         setWarnings(response.warnings || []);
 
         // Update localStorage
-        const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-        localStorage.setItem('user', JSON.stringify({
+        const storedUser = JSON.parse(getUserData() || '{}');
+        await setTokens({ user_data: {
           ...storedUser,
           full_name: profileData.full_name
-        }));
+        } });
 
         toast.success('Profile saved successfully');
       }
@@ -386,7 +387,7 @@ const UserProfileSettings = () => {
       formData.append('photo', file);
 
       const response = await uploadPhoto(async () => {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         const res = await fetch(`${API_BASE}/api/v1/user-profile-settings/photo`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },

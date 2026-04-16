@@ -14,6 +14,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { partnersAPI, activitiesAPI } from '../services/api';
 import './PartnerDashboardPortal.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 // Activity type configuration
 const ACTIVITY_TYPE_CONFIG = {
@@ -182,7 +183,7 @@ export default function PartnerDashboardPortal() {
 
   const loadActivitiesForReferrals = async () => {
     try {
-      const jwtToken = localStorage.getItem('token');
+      const jwtToken = getToken();
       if (!jwtToken) return; // Only fetch if CRM user is logged in
 
       // Get activities for all referrals (limit to recent ones)

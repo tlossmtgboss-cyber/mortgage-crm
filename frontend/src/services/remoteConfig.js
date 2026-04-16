@@ -13,6 +13,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import { getJSON, setJSON } from '../utils/storage';
+import { getToken } from '../utils/tokenStore';
 
 // Use the same base URL logic as api.js
 const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -217,8 +218,7 @@ async function _fetchRemoteConfig() {
   const headers = { 'Content-Type': 'application/json' };
 
   // Include auth token if available (allows org-specific config)
-  const token =
-    (typeof localStorage !== 'undefined' && localStorage.getItem('token')) || null;
+  const token = getToken();
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }

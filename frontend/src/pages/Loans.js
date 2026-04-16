@@ -7,6 +7,7 @@ import { usePermissions } from '../contexts/PermissionContext';
 import { formatPhoneNumber } from '../utils/phoneUtils';
 import './Loans.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 // Map display names to API enum values (backend uses uppercase)
 const stageDisplayToApi = {
@@ -318,7 +319,7 @@ function Loans() {
   // Create tasks for duplicates
   const handleCreateDuplicateTasks = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'
@@ -441,7 +442,7 @@ function Loans() {
       let errorMessage = 'Failed to create loan';
 
       if (err.message === 'Network Error') {
-        const hasToken = !!localStorage.getItem('token');
+        const hasToken = !!getToken();
         errorMessage = `Cannot connect to server. Auth token present: ${hasToken}. Please try logging out and back in.`;
       } else if (err.response?.status === 401) {
         errorMessage = 'Your session has expired. Please log out and log back in.';

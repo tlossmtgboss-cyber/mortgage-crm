@@ -31,6 +31,7 @@ import { usePermissions } from '../../contexts/PermissionContext';
 import SMSAccordionPanel from '../../components/sms/SMSAccordionPanel';
 import './MasterManager.css';
 import './RecruitDetail.css';
+import { getToken } from '../../utils/tokenStore';
 
 // Dispositions that require quiz completion
 const QUIZ_REQUIRED_DISPOSITIONS = ['screening', 'phone_screen', 'interview', 'assessment', 'offer'];
@@ -247,7 +248,7 @@ const RecruitDetail = () => {
         }));
 
         // Create workflow tasks for the new disposition
-        const token = localStorage.getItem('token');
+        const token = getToken();
         const userId = getUserIdFromToken();
         const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -282,7 +283,7 @@ const RecruitDetail = () => {
 
   // Load users for escalation
   const loadEscalateUsers = async () => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
     try {
       const response = await fetch(`${API_URL}/api/v1/admin/users`, {
@@ -304,7 +305,7 @@ const RecruitDetail = () => {
       return;
     }
 
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
     try {
@@ -342,7 +343,7 @@ const RecruitDetail = () => {
     }
 
     setIsCallInProgress(true);
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const userId = getUserIdFromToken();
     const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -374,7 +375,7 @@ const RecruitDetail = () => {
 
   // Load call history
   const loadCallHistory = useCallback(async () => {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
     try {
@@ -392,7 +393,7 @@ const RecruitDetail = () => {
   const handleSaveCallNotes = async (note, outcome, callbackRequested, callbackDate) => {
     if (!activeCallId) return;
 
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const userId = getUserIdFromToken();
     const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 

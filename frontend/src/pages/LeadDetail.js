@@ -33,6 +33,7 @@ import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import AIActivityTab from '../components/ai/AIActivityTab';
 import './LeadDetail.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 // Mock lead data generator (same as Leads.js)
 const generateMockLeads = () => {
@@ -754,7 +755,7 @@ function LeadDetail() {
   // Load email drafts for this lead
   const loadEmailDrafts = async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'
@@ -781,7 +782,7 @@ function LeadDetail() {
     if (!id) return;
     setStageHistoryLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'
@@ -818,7 +819,7 @@ function LeadDetail() {
     if (!id) return;
     setSlaLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'
@@ -870,7 +871,7 @@ function LeadDetail() {
 
     setCcSearchLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'
@@ -925,7 +926,7 @@ function LeadDetail() {
 
     setDraftLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'
@@ -964,7 +965,7 @@ function LeadDetail() {
 
     setDraftLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'
@@ -1000,7 +1001,7 @@ function LeadDetail() {
 
     setDraftLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'
@@ -1082,7 +1083,7 @@ function LeadDetail() {
       // Use the new endpoint that handles stage-to-workflow mapping and day calculations
       const response = await fetch(`${API_BASE_URL}/api/v1/workflow-config/leads/${lead.id}/workflow-tasks`, {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${getToken()}`
         }
       });
 
@@ -1177,7 +1178,7 @@ function LeadDetail() {
     if (!id) return;
     setConditionsLoading(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'
@@ -1207,7 +1208,7 @@ function LeadDetail() {
 
     setAddingCondition(true);
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'
@@ -1249,7 +1250,7 @@ function LeadDetail() {
   // Update condition status
   const updateConditionStatus = async (conditionId, newStatus) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
       const API_BASE = isProduction
         ? 'https://api.perenniaai.com'

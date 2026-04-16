@@ -8,6 +8,7 @@
 import React, { useState, useCallback } from 'react';
 import VideoRecorder from './VideoRecorder';
 import './SendVideoModal.css';
+import { getToken } from '../../utils/tokenStore';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -35,7 +36,7 @@ const SendVideoModal = ({
 
   // Get auth token
   const getAuthToken = () => {
-    return localStorage.getItem('token');
+    return getToken();
   };
 
   // Upload video to S3 and save metadata

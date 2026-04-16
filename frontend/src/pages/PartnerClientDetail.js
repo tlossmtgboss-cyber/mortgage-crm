@@ -18,6 +18,7 @@ import PreApprovalLetterModal from '../components/PreApprovalLetterModal';
 import { activitiesAPI } from '../services/api';
 import './PartnerClientDetail.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 // API base URL
 const API_BASE = process.env.REACT_APP_API_URL || '';
@@ -224,7 +225,7 @@ const ActivityTimelineCard = ({ activities, stageHistory, chatMessages, clientId
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+            'Authorization': `Bearer ${getToken()}`
           },
           body: JSON.stringify({ content: noteText.trim() })
         }
@@ -528,7 +529,7 @@ export default function PartnerClientDetail() {
 
   const loadActivities = async () => {
     try {
-      const jwtToken = localStorage.getItem('token');
+      const jwtToken = getToken();
       if (!jwtToken) return;
       const data = await activitiesAPI.getAll({ lead_id: clientId });
       setActivities(data || []);
@@ -539,7 +540,7 @@ export default function PartnerClientDetail() {
 
   const loadStageHistory = async () => {
     try {
-      const jwtToken = localStorage.getItem('token');
+      const jwtToken = getToken();
       if (!jwtToken) return;
 
       const response = await fetch(
@@ -563,7 +564,7 @@ export default function PartnerClientDetail() {
 
   const loadChatMessages = async () => {
     try {
-      const jwtToken = localStorage.getItem('token');
+      const jwtToken = getToken();
       if (!jwtToken) return;
 
       const response = await fetch(
@@ -587,7 +588,7 @@ export default function PartnerClientDetail() {
 
   const loadSmartDocsData = async () => {
     try {
-      const jwtToken = localStorage.getItem('token');
+      const jwtToken = getToken();
       if (!jwtToken) return;
 
       const leadEmail = clientData?.client?.email;
@@ -686,7 +687,7 @@ export default function PartnerClientDetail() {
       setLoading(true);
       setError(null);
 
-      const jwtToken = localStorage.getItem('token');
+      const jwtToken = getToken();
       const partnerToken = localStorage.getItem('partnerToken') || new URLSearchParams(window.location.search).get('token');
 
       let response;

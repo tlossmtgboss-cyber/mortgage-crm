@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import './CallQueueDashboard.css';
 import { toast } from '../../utils/toast';
+import { getToken } from '../../utils/tokenStore';
 
 const CallQueueDashboard = () => {
   const [queues, setQueues] = useState([]);
@@ -18,7 +19,7 @@ const CallQueueDashboard = () => {
 
   const fetchQueues = useCallback(async () => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/queues`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -77,7 +78,7 @@ const CallQueueDashboard = () => {
 
   const handleTakeNextCall = async (queueId) => {
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${API_BASE_URL}/api/v1/queues/${queueId}/take-next`, {
         method: 'POST',
         headers: {
@@ -329,7 +330,7 @@ const CreateQueueModal = ({ onClose, onCreated, apiBaseUrl }) => {
     setError(null);
 
     try {
-      const token = localStorage.getItem('token');
+      const token = getToken();
       const response = await fetch(`${apiBaseUrl}/api/v1/queues`, {
         method: 'POST',
         headers: {

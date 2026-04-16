@@ -212,6 +212,7 @@ const MobileLeadsList = lazyRetry(() => import('./pages/MobileLeadsList'));
 const MobilePipelineView = lazyRetry(() => import('./pages/MobilePipelineView'));
 const MobileNotificationCenter = lazyRetry(() => import('./pages/MobileNotificationCenter'));
 import MobileErrorBoundary from './components/mobile/MobileErrorBoundary';
+import { getToken, getUserData } from './utils/tokenStore';
 const AriaVoiceHome = lazyRetry(() => import('./pages/aria-mobile/AriaVoiceHome'));
 const MobileCalendar = lazyRetry(() => import('./pages/aria-mobile/MobileCalendar'));
 const MobileTasks = lazyRetry(() => import('./pages/aria-mobile/MobileTasks'));
@@ -432,7 +433,7 @@ function PrivateRoute({ children }) {
 function RoleBasedRedirect() {
   // Get user data from localStorage to determine role
   try {
-    const userStr = localStorage.getItem('user');
+    const userStr = getUserData();
     if (userStr) {
       const user = JSON.parse(userStr);
       const permissionRole = user.permission_role || 'sales';
@@ -620,7 +621,7 @@ function App() {
       if (!isAuthenticated()) return;
 
       const headers = {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${getToken()}`
       };
 
       try {
