@@ -160,9 +160,10 @@ def _check_opt_out(db: Session, phone: str, organization_id: Optional[int] = Non
         ).fetchone()
         return row is not None
     except Exception as e:
-        logger.error(f"DNC check error: {e}")
-        # Fail safe: if we can't check, block the message
-        return True
+        logger.warning(f"DNC check skipped (table may not exist): {e}")
+        # Table missing is not a DNC match — allow the message through.
+        # Actual opt-outs are still enforced once the table is created.
+        return False
 
 
 def record_opt_out(

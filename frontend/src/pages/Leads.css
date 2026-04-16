@@ -227,6 +227,7 @@
   font-size: var(--font-xs);
   font-weight: var(--weight-semibold);
   line-height: var(--line-tight);
+  text-transform: uppercase;
 }
 
 .status-new {
