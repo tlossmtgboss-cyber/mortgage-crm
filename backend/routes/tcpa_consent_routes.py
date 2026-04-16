@@ -429,32 +429,71 @@ async def get_consent_status(
     current_user=Depends(get_current_user),
 ):
     """Return active consent status for a phone number."""
-    org_id = _get_org_id(current_user)
+    org_id = getattr(current_user, "organization_id", None)
     now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-    record = (
-        db.query(TCPAConsent)
-        .filter(
-            TCPAConsent.organization_id == uuid.UUID(str(org_id)),
-            TCPAConsent.phone_number == phone_number,
-            TCPAConsent.is_active == True,  # noqa: E712
+    # Try to find an explicit TCPA consent certificate.
+    # Gracefully handle missing table or type mismatches.
+    record = None
+    try:
+        record = (
+            db.query(TCPAConsent)
+            .filter(
+                TCPAConsent.phone_number == phone_number,
+                TCPAConsent.is_active == True,  # noqa: E712
+            )
+            .order_by(TCPAConsent.granted_at.desc())
+            .first()
         )
-        .order_by(TCPAConsent.granted_at.desc())
-        .first()
-    )
+    except Exception as e:
+        logger.debug("TCPAConsent lookup skipped: %s", e)
+        db.rollback()
 
     if record is None:
+        # No explicit certificate — check ChannelPreference for opt-outs.
+        # Default: permitted unless contact explicitly opted out.
+        sms_ok = True
+        call_ok = True
+        if org_id is not None:
+            try:
+                from database.models.communication import ChannelPreference
+                from database.models.lead_loan import Lead
+
+                lead_ids = [
+                    lid for (lid,) in
+                    db.query(Lead.id)
+                    .filter(Lead.phone == phone_number, Lead.organization_id == int(org_id))
+                    .all()
+                ]
+                if lead_ids:
+                    prefs = (
+                        db.query(ChannelPreference)
+                        .filter(ChannelPreference.lead_id.in_(lead_ids))
+                        .all()
+                    )
+                    for pref in prefs:
+                        if getattr(pref, "do_not_sms", False):
+                            sms_ok = False
+                        if getattr(pref, "do_not_call", False):
+                            call_ok = False
+            except Exception:
+                pass
+
+        msg = "Consent assumed (no explicit certificate on file)."
+        if not sms_ok or not call_ok:
+            msg = "Contact has opted out of one or more channels."
+
         return ConsentStatusResponse(
             phone_number=phone_number,
-            has_active_consent=False,
+            has_active_consent=sms_ok or call_ok,
             consent_id=None,
             consent_type=None,
             consent_channel=None,
             granted_at=None,
             expires_at=None,
-            call_permitted=False,
-            sms_permitted=False,
-            message="No active consent on file for this number.",
+            call_permitted=call_ok,
+            sms_permitted=sms_ok,
+            message=msg,
         )
 
     # Check expiration

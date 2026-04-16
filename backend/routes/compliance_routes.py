@@ -23,7 +23,6 @@ Endpoints:
     POST /api/v1/compliance/licenses/validate-assignment - Validate loan assignment
     GET  /api/v1/compliance/licenses/expiring       - Expiring licenses report
     POST /api/v1/compliance/tcpa/check             - Check TCPA consent
-    GET  /api/v1/compliance/tcpa/consent/{identifier} - Get consent status
     GET  /api/v1/compliance/trid/check/{loan_id}   - Full TRID compliance check
     POST /api/v1/compliance/trid/validate-closing   - Validate CD waiting period before closing
     GET  /api/v1/compliance/hmda/validate/{loan_id} - HMDA field completeness validation
@@ -346,89 +345,6 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
             result["checks"].append(lead_consent)
             if not lead_consent["passed"]:
                 result["can_contact"] = False
-
-        return result
-
-    @app.get(
-        "/api/v1/compliance/tcpa/consent/{identifier}",
-        tags=["Compliance"],
-    )
-    async def get_consent_status(
-        identifier: str,
-        db: Session = Depends(get_db),
-        current_user=Depends(get_current_user),
-    ):
-        """Get TCPA consent status for a contact.
-
-        Identifier can be an email address, phone number, or lead ID.
-        Returns all consent records and their current status.
-        """
-        from database.models.borrower import BorrowerProfile
-        from database.models.lead_loan import Lead
-
-        result = {
-            "identifier": identifier,
-            "consent_records": [],
-        }
-
-        # Check by email
-        if "@" in identifier:
-            profiles = db.query(BorrowerProfile).filter(
-                BorrowerProfile.email == identifier
-            ).all()
-            for p in profiles:
-                result["consent_records"].append({
-                    "source": "borrower_profile",
-                    "email": p.email,
-                    "communication_consent": p.communication_consent,
-                    "marketing_consent": p.marketing_consent,
-                    "consent_captured_at": p.consent_captured_at.isoformat() if p.consent_captured_at else None,
-                    "consent_given_to": p.consent_given_to,
-                    "consent_method": p.consent_method,
-                    "consent_revoked_at": p.consent_revoked_at.isoformat() if p.consent_revoked_at else None,
-                })
-
-        # Check by lead ID (numeric)
-        elif identifier.isdigit():
-            lead = db.query(Lead).filter(Lead.id == int(identifier)).first()
-            if lead:
-                result["consent_records"].append({
-                    "source": "lead",
-                    "lead_id": lead.id,
-                    "name": lead.name,
-                    "preferred_communication": lead.preferred_communication,
-                    "has_phone_opt_out": getattr(lead, "phone_opt_out", None),
-                    "has_dnc_flag": getattr(lead, "dnc_flag", None),
-                })
-
-        # Check by phone number
-        else:
-            # TENANT-001: Scope phone lookup to current user's organization
-            org_id = getattr(current_user, "organization_id", None)
-            phone_query = db.query(Lead).filter(Lead.phone == identifier)
-            if org_id:
-                phone_query = phone_query.filter(Lead.organization_id == org_id)
-            leads = phone_query.all()
-            for lead in leads:
-                result["consent_records"].append({
-                    "source": "lead",
-                    "lead_id": lead.id,
-                    "name": lead.name,
-                    "phone": lead.phone,
-                    "preferred_communication": lead.preferred_communication,
-                })
-
-            # Check DNC
-            try:
-                from telephony.compliance import ComplianceChecker
-                checker = ComplianceChecker(db)
-                is_dnc, reason = checker.check_dnc(identifier)
-                result["dnc_status"] = {
-                    "is_on_dnc": is_dnc,
-                    "reason": reason,
-                }
-            except Exception as e:
-                logger.error(f"Error checking DNC status: {e}")
 
         return result
 
