@@ -1752,6 +1752,16 @@ except Exception as e:
     logger.warning(f"Mobile voice routes not loaded: {e}")
 
 # ============================================================================
+# LIVEKIT VOICE ROUTES — LiveKit WebRTC token provisioning for Aria voice
+# ============================================================================
+try:
+    from routes.livekit_routes import router as livekit_router
+    app.include_router(livekit_router, tags=["LiveKit Voice"])
+    logger.info("LiveKit voice routes loaded")
+except Exception as e:
+    logger.warning(f"LiveKit voice routes not loaded: {e}")
+
+# ============================================================================
 # ARIA CHAT ROUTES — Conversational intelligence (WebSocket + REST)
 # ============================================================================
 try:
@@ -3254,6 +3264,20 @@ async def startup_event():
         logger.info("Certificate pin verification scheduled (background)")
     except Exception as e:
         logger.warning(f"Certificate pin verification skipped: {e}")
+
+    # Dedicated executor for LangGraph workflows — keeps them off the main event loop
+    from concurrent.futures import ThreadPoolExecutor
+    langgraph_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="langgraph")
+    app.state.langgraph_executor = langgraph_executor
+    logger.info("✅ LangGraph thread pool executor started (4 workers)")
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Shutdown handler — clean up resources."""
+    if hasattr(app.state, "langgraph_executor"):
+        app.state.langgraph_executor.shutdown(wait=False)
+        logger.info("LangGraph thread pool executor shut down")
 
 
 def _run_critical_schema_migrations():
