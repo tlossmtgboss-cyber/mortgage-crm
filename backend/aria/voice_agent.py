@@ -17,9 +17,7 @@ import os
 import json
 import logging
 import asyncio
-import threading
 from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
@@ -52,26 +50,6 @@ CARTESIA_VOICE_ID = os.getenv(
 CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-sonnet-4-20250514")
 TELNYX_TRUNK_ID = os.getenv("TELNYX_SIP_TRUNK_ID", "")
 
-
-# ─── Health Server (Railway worker health check) ────────────────────────────
-
-class _HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"healthy")
-
-    def log_message(self, *args):
-        pass  # suppress per-request logs
-
-
-def _start_health_server():
-    # Use HEALTH_PORT to avoid conflict with the main FastAPI app's PORT
-    port = int(os.environ.get("HEALTH_PORT", os.environ.get("PORT", 8081)))
-    httpd = HTTPServer(("0.0.0.0", port), _HealthHandler)
-    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
-    thread.start()
-    logger.info(f"[AriaVoice] Health server on port {port}")
 
 
 # ─── Turn Handling Configuration ─────────────────────────────────────────────
@@ -466,5 +444,4 @@ async def aria_voice_session(ctx: agents.JobContext):
 # ─── Entrypoint ──────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    _start_health_server()
     agents.cli.run_app(server)
