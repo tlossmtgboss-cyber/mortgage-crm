@@ -649,6 +649,9 @@ from .morning_briefing import MorningBriefing
 # Voice Workflow (async multi-step voice command state machine)
 from .voice_workflow import VoiceWorkflow, VoiceWorkflowState, VoiceWorkflowType
 
+# Voice Call Session (Aria in-app voice conversations — transcript, analytics, compliance)
+from .voice_call_session import VoiceCallSession
+
 # Demo Data (tracking seeded demo records for cleanup)
 from .demo_data import DemoDataRecord
 
@@ -754,6 +757,9 @@ from .agent_registry import (
     AgentRunLog,
     HarnessChangeProposal,
 )
+
+# TCPA Call Authorization (Aria voice agent outbound call audit trail)
+from .call_authorization import CallAuthorization
 
 
 __all__ = [
@@ -1568,4 +1574,9 @@ __all__ = [
     # =====================
     "RecoveryOptOut",
     "DataSubjectRequest",
+
+    # =====================
+    # TCPA Call Authorization (Aria)
+    # =====================
+    "CallAuthorization",
 ]
