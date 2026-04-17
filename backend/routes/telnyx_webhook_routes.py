@@ -63,6 +63,91 @@ def _validate_texml_request(request: Request):
 
 
 # =============================================================================
+# Inbound Call Routing — Telnyx → LiveKit SIP Bridge
+# =============================================================================
+
+async def _route_inbound_to_livekit(call_control_id: str, from_number: str, db: Session):
+    """Route an inbound call to Aria via LiveKit SIP bridge.
+
+    When an inbound call arrives on Telnyx, this function:
+    1. Looks up the caller in the CRM (Lead by phone)
+    2. Creates a LiveKit room with call metadata
+    3. Transfers the Telnyx call into the LiveKit room via SIP
+    """
+    import requests as http_requests
+
+    # Look up caller in CRM
+    from database.models.lead_loan import Lead
+    from integrations.sms_service import _to_e164
+
+    normalized = _to_e164(from_number) or from_number
+    lead = db.query(Lead).filter(Lead.phone == normalized).first()
+    if not lead:
+        lead = db.query(Lead).filter(Lead.phone == from_number).first()
+
+    # Routing decision
+    route = "aria"  # Default: Aria handles it
+    if lead and getattr(lead, "ai_score", 0) and lead.ai_score >= 80:
+        from database.models.core import User
+        if lead.owner_id:
+            lo = db.query(User).filter(User.id == lead.owner_id, User.is_active == True).first()
+            if lo and lo.phone:
+                # Hot lead + LO available = consider direct transfer
+                # For now, always route to Aria (direct_lo requires calendar check)
+                pass
+
+    if route == "aria":
+        # Create LiveKit room and bridge the Telnyx call into it
+        livekit_url = os.getenv("LIVEKIT_URL", "")
+        livekit_key = os.getenv("LIVEKIT_API_KEY", "")
+        livekit_secret = os.getenv("LIVEKIT_API_SECRET", "")
+
+        if not all([livekit_url, livekit_key, livekit_secret]):
+            logger.warning("LiveKit not configured — cannot route inbound call to Aria")
+            return
+
+        try:
+            from livekit import api as lk_api
+            import json as _json
+
+            lk = lk_api.LiveKitAPI(livekit_url, livekit_key, livekit_secret)
+
+            room_name = f"aria-inbound-{call_control_id[:12]}"
+            metadata = _json.dumps({
+                "trigger": "inbound_call",
+                "from_number": from_number,
+                "lead_id": lead.id if lead else None,
+                "borrower_name": (getattr(lead, "first_name", "") or getattr(lead, "name", "")) if lead else "",
+            })
+
+            await lk.room.create_room(
+                lk_api.CreateRoomRequest(name=room_name, metadata=metadata)
+            )
+
+            # Bridge Telnyx call into LiveKit room as SIP participant
+            sip_trunk_id = os.getenv("TELNYX_SIP_TRUNK_ID", "")
+            sip_domain = os.getenv("LIVEKIT_SIP_DOMAIN", "")
+
+            if sip_trunk_id and sip_domain:
+                # Use Telnyx Call Control to SIP REFER into LiveKit
+                telnyx_key = os.getenv("TELNYX_API_KEY", "")
+                http_requests.post(
+                    f"https://api.telnyx.com/v2/calls/{call_control_id}/actions/transfer",
+                    headers={
+                        "Authorization": f"Bearer {telnyx_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"to": f"sip:{room_name}@{sip_domain}"},
+                    timeout=10,
+                )
+                logger.info(f"Inbound call bridged to LiveKit room {room_name}")
+            else:
+                logger.warning("SIP trunk or domain not configured — cannot bridge call")
+        except Exception as e:
+            logger.error(f"Failed to route inbound call to LiveKit: {e}")
+
+
+# =============================================================================
 # Main Webhook Handler
 # =============================================================================
 
@@ -132,7 +217,23 @@ async def handle_telnyx_webhook(
 
     # Route to appropriate handler
     try:
-        if event_type == TelnyxEventType.CALL_MACHINE_DETECTION_ENDED:
+        if event_type == TelnyxEventType.CALL_INITIATED:
+            # Inbound calls → route to Aria via LiveKit SIP bridge
+            if hasattr(event, "direction") and event.direction == "incoming":
+                if event.from_number and event.call_control_id:
+                    try:
+                        await _route_inbound_to_livekit(event.call_control_id, event.from_number, db)
+                    except Exception as e:
+                        logger.error(f"Inbound routing failed: {e}")
+                if idem_key:
+                    try:
+                        mark_processed(db, idem_key, response_code=200)
+                    except Exception as e:
+                        logger.warning(f"Failed to mark webhook as processed: {e}")
+                return Response(status_code=200)
+            result = {"status": "acknowledged", "event_type": "call.initiated", "direction": "outgoing"}
+
+        elif event_type == TelnyxEventType.CALL_MACHINE_DETECTION_ENDED:
             result = await handle_amd_event(event, db)
 
         elif event_type == TelnyxEventType.CALL_ANSWERED:
