@@ -204,7 +204,7 @@ async function _retryWith429Backoff(config) {
 // ---------------------------------------------------------------------------
 let _refreshPromise = null;
 
-async function _attemptTokenRefresh() {
+export async function attemptTokenRefresh() {
   if (_refreshPromise) return _refreshPromise;
 
   _refreshPromise = (async () => {
@@ -365,7 +365,7 @@ api.interceptors.response.use(
 
       if (!isLoginPage && !isIntegrationEndpoint && !isRefreshRequest && !error.config._authRetry) {
         // Attempt silent token refresh before giving up
-        const refreshed = await _attemptTokenRefresh();
+        const refreshed = await attemptTokenRefresh();
 
         if (refreshed) {
           // Retry the original request with the new token
@@ -901,7 +901,7 @@ export const aiAPI = {
   // (tokens appear as they are generated), then falls back to the
   // non-streaming /langgraph-chat endpoint with simulated chunking.
   processCommandStream: async (message, onContent, onStatus, onDone, onError, documentContext = null) => {
-    const token = getToken();
+    let token = getToken();
 
     try {
       // Show initial status
@@ -914,7 +914,7 @@ export const aiAPI = {
 
       // --- Attempt true SSE streaming first ---
       try {
-        const sseResponse = await fetch(`${API_BASE_URL}/api/v1/ai/orchestrator-chat-stream`, {
+        let sseResponse = await fetch(`${API_BASE_URL}/api/v1/ai/orchestrator-chat-stream`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -922,6 +922,22 @@ export const aiAPI = {
           },
           body: JSON.stringify(body)
         });
+
+        // On 401, attempt a silent token refresh and retry once
+        if (sseResponse.status === 401) {
+          const refreshed = await attemptTokenRefresh();
+          if (refreshed) {
+            token = getToken();
+            sseResponse = await fetch(`${API_BASE_URL}/api/v1/ai/orchestrator-chat-stream`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+              },
+              body: JSON.stringify(body)
+            });
+          }
+        }
 
         if (sseResponse.ok && sseResponse.headers.get('content-type')?.includes('text/event-stream')) {
           // True SSE stream available — read tokens in real-time
@@ -982,7 +998,7 @@ export const aiAPI = {
       }
 
       // --- Fallback: non-streaming endpoint with simulated chunking ---
-      const response = await fetch(`${API_BASE_URL}/api/v1/ai/langgraph-chat`, {
+      let response = await fetch(`${API_BASE_URL}/api/v1/ai/langgraph-chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -990,6 +1006,22 @@ export const aiAPI = {
         },
         body: JSON.stringify(body)
       });
+
+      // On 401, attempt a silent token refresh and retry once
+      if (response.status === 401) {
+        const refreshed = await attemptTokenRefresh();
+        if (refreshed) {
+          token = getToken();
+          response = await fetch(`${API_BASE_URL}/api/v1/ai/langgraph-chat`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(body)
+          });
+        }
+      }
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);

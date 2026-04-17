@@ -11,7 +11,7 @@
  * - Caller lookup
  */
 
-import api from './api';
+import api, { attemptTokenRefresh } from './api';
 import { getToken } from '../utils/tokenStore';
 
 // =============================================================================
@@ -104,22 +104,34 @@ export function streamMessage(message, sessionId = null, { onChunk, onDone, onEr
 
   (async () => {
     try {
-      // Read token from in-memory cache (synchronous, no async Preferences lookup)
-      const token = getToken();
+      // Helper: build the SSE fetch request with current token
+      const doFetch = (authToken) =>
+        fetch(`${api.defaults.baseURL}/api/v1/ai/orchestrator-chat-stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(authToken && { Authorization: `Bearer ${authToken}` }),
+          },
+          body: JSON.stringify({
+            message,
+            voice_mode: true,
+            ...(sessionId && { session_id: sessionId }),
+          }),
+          signal: controller.signal,
+        });
 
-      const res = await fetch(`${api.defaults.baseURL}/api/v1/ai/orchestrator-chat-stream`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token && { Authorization: `Bearer ${token}` }),
-        },
-        body: JSON.stringify({
-          message,
-          voice_mode: true,
-          ...(sessionId && { session_id: sessionId }),
-        }),
-        signal: controller.signal,
-      });
+      // Read token from in-memory cache (synchronous, no async Preferences lookup)
+      let token = getToken();
+      let res = await doFetch(token);
+
+      // On 401, attempt a silent token refresh and retry once
+      if (res.status === 401) {
+        const refreshed = await attemptTokenRefresh();
+        if (refreshed) {
+          token = getToken();
+          res = await doFetch(token);
+        }
+      }
 
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
