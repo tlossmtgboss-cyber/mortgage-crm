@@ -92,6 +92,30 @@
   height: 6px;
   border-radius: 50%;
   background: var(--avh-accent);
+  transition: box-shadow 0.3s ease;
+}
+
+/* Active state — agents are listening */
+.avh-ci-button--active {
+  border-color: rgba(52, 211, 153, 0.5);
+  background: rgba(52, 211, 153, 0.15);
+  color: #34d399;
+}
+
+.avh-ci-icon-dot--active {
+  background: #34d399;
+  box-shadow: 0 0 6px 2px rgba(52, 211, 153, 0.6);
+  animation: avh-ci-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes avh-ci-pulse {
+  0%, 100% { box-shadow: 0 0 6px 2px rgba(52, 211, 153, 0.6); }
+  50% { box-shadow: 0 0 10px 4px rgba(52, 211, 153, 0.3); }
+}
+
+.avh-ci-button--starting {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 /* --------------------------------------------------------------------------
