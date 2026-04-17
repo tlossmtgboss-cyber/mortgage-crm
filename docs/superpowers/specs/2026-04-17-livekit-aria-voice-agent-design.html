@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LiveKit Aria Voice Agent — Design Specification</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent2: #3fb950;
+    --accent3: #d2a8ff;
+    --code-bg: #0d1117;
+    --table-stripe: #161b22;
+    --warn: #d29922;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+    padding: 0;
+  }
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 48px 32px 120px;
+  }
+  h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+  .meta {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 40px;
+    display: flex;
+    gap: 24px;
+  }
+  .meta span { display: inline-flex; align-items: center; gap: 6px; }
+  .badge {
+    background: rgba(88,166,255,0.15);
+    color: var(--accent);
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 56px 0 20px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    color: #fff;
+  }
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin: 36px 0 12px;
+    color: var(--accent3);
+  }
+  p { margin: 12px 0; }
+  strong { color: #fff; }
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 48px 0;
+  }
+  pre {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.6;
+    margin: 16px 0;
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', Menlo, monospace;
+  }
+  code {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 0.88em;
+    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', Menlo, monospace;
+  }
+  pre code { background: none; border: none; padding: 0; }
+  /* Syntax highlighting */
+  .kw { color: #ff7b72; }
+  .fn { color: #d2a8ff; }
+  .str { color: #a5d6ff; }
+  .cmt { color: #8b949e; font-style: italic; }
+  .num { color: #79c0ff; }
+  .op { color: #ff7b72; }
+  .type { color: #ffa657; }
+  .sql-kw { color: #ff7b72; font-weight: 600; }
+  .sql-type { color: #ffa657; }
+
+  ul, ol {
+    margin: 12px 0 12px 28px;
+  }
+  li { margin: 6px 0; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 0.9rem;
+  }
+  th {
+    background: var(--surface);
+    text-align: left;
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  td {
+    padding: 10px 16px;
+    border: 1px solid var(--border);
+  }
+  tr:nth-child(even) td { background: var(--table-stripe); }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: rgba(88,166,255,0.06);
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin: 20px 0;
+  }
+  .callout-warn {
+    border-left-color: var(--warn);
+    background: rgba(210,169,34,0.06);
+  }
+  .callout-green {
+    border-left-color: var(--accent2);
+    background: rgba(63,185,80,0.06);
+  }
+
+  .flow-diagram {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    margin: 16px 0;
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 0.85rem;
+    line-height: 1.8;
+    white-space: pre;
+    overflow-x: auto;
+  }
+
+  .toc {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px 32px;
+    margin: 32px 0;
+  }
+  .toc h4 {
+    color: var(--text-muted);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+  }
+  .toc ul { list-style: none; margin: 0; padding: 0; }
+  .toc li { margin: 6px 0; }
+  .toc a {
+    color: var(--accent);
+    text-decoration: none;
+    font-size: 0.95rem;
+  }
+  .toc a:hover { text-decoration: underline; }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+  .pill-keep { background: rgba(63,185,80,0.15); color: var(--accent2); }
+  .pill-replace { background: rgba(255,123,114,0.15); color: #ff7b72; }
+  .pill-never { background: rgba(255,123,114,0.15); color: #ff7b72; }
+  .pill-metric { background: rgba(210,169,34,0.15); color: var(--warn); }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 16px 0;
+  }
+  .grid-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .grid-card h4 {
+    font-size: 0.9rem;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .grid-card p {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    margin: 4px 0;
+  }
+
+  @media (max-width: 700px) {
+    .container { padding: 24px 16px 80px; }
+    h1 { font-size: 1.6rem; }
+    .grid-2 { grid-template-columns: 1fr; }
+    .meta { flex-direction: column; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>LiveKit Aria Voice Agent</h1>
+<div class="meta">
+  <span>2026-04-17</span>
+  <span><span class="badge">Draft</span></span>
+  <span>Timothy Loss + Claude</span>
+</div>
+
+<div class="toc">
+  <h4>Contents</h4>
+  <ul>
+    <li><a href="#overview">Overview</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#voice-turn">Voice Turn Architecture</a></li>
+    <li><a href="#stt-tts">STT / TTS Providers</a></li>
+    <li><a href="#telephony">Telephony &mdash; Telnyx Integration</a></li>
+    <li><a href="#outbound">Outbound Calls</a></li>
+    <li><a href="#voicemail">Voicemail Handling</a></li>
+    <li><a href="#tools">Agent Tool Architecture</a></li>
+    <li><a href="#deployment">Deployment</a></li>
+    <li><a href="#livekit-config">LiveKit Cloud Configuration</a></li>
+    <li><a href="#metrics">Key Metrics</a></li>
+    <li><a href="#out-of-scope">Out of Scope</a></li>
+  </ul>
+</div>
+
+<!-- ──────────────────── OVERVIEW ──────────────────── -->
+<h2 id="overview">Overview</h2>
+<p>Replace the current Vapi/Twilio voice stack with a native LiveKit-based voice AI agent (&ldquo;Aria&rdquo;) for Perennia AI mortgage CRM. Aria handles <strong>inbound calls</strong> (AI receptionist &mdash; qualify, book, route) and <strong>outbound calls</strong> (follow-ups, reminders, voicemail drops). The agent connects to the existing FastAPI backend for all CRM operations and mortgage tools.</p>
+
+<div class="callout">
+  <strong>Hard cut</strong> &mdash; Vapi is retired entirely, not run in parallel.
+</div>
+
+<!-- ──────────────────── ARCHITECTURE ──────────────────── -->
+<h2 id="architecture">Architecture</h2>
+
+<h3>Two-Service Model</h3>
+
+<div class="grid-2">
+  <div class="grid-card">
+    <h4>Service 1: LiveKit Agent Worker (Railway)</h4>
+    <p>Python process using livekit-agents SDK</p>
+    <p>Connects outbound to LiveKit Cloud</p>
+    <p>Runs Claude conversation loop (single streaming call per voice turn)</p>
+    <p>All CRM/tool access via HTTP to Service 2</p>
+    <p><strong>No direct DB access &mdash; hard boundary</strong></p>
+  </div>
+  <div class="grid-card">
+    <h4>Service 2: FastAPI Backend (Railway, existing)</h4>
+    <p>New <code>/internal/aria/*</code> endpoints for agent tool calls</p>
+    <p>Telnyx webhook handler for inbound call routing</p>
+    <p>LangGraph async workflows on dedicated thread pool</p>
+    <p>Existing 210+ mortgage tools exposed as internal API</p>
+  </div>
+</div>
+
+<h3>Codebase Layout</h3>
+<pre><code>backend/
+  agents/                    <span class="cmt"># Agent process ONLY &mdash; no DB imports</span>
+    aria_agent.py            <span class="cmt"># LiveKit agent entrypoint + health server</span>
+    aria_tools.py            <span class="cmt"># Tool definitions &mdash; all HTTP calls to /internal/*</span>
+    aria_prompts.py          <span class="cmt"># System prompts, voicemail templates</span>
+    aria_config.py           <span class="cmt"># Voice, AMD, guardrail configuration</span>
+
+  routes/
+    internal/                <span class="cmt"># Backend endpoints for agent tool calls</span>
+      aria_tool_routes.py    <span class="cmt"># Loan status, lead lookup, booking, etc.</span>
+      aria_workflow_routes.py <span class="cmt"># LangGraph workflow dispatch</span>
+      aria_call_routes.py    <span class="cmt"># Warm transfer, voicemail, call logging</span>
+    telnyx_call_routes.py    <span class="cmt"># Inbound/outbound call routing via Telnyx webhooks</span></code></pre>
+
+<div class="callout">
+  The agent process never imports from <code>db</code>, <code>database.models</code>, or <code>services</code> directly. Every data access goes through <code>/internal/</code> endpoints. This boundary enables migration to Fly.io by changing one environment variable (<code>INTERNAL_BACKEND_URL</code>).
+</div>
+
+<!-- ──────────────────── VOICE TURN ──────────────────── -->
+<h2 id="voice-turn">Voice Turn Architecture</h2>
+
+<h3>Why Not LangGraph for Voice Turns</h3>
+<p>The existing Aria LangGraph engine (<code>backend/aria/core/conversation_engine.py</code>) uses a phased model: UNDERSTANDING &rarr; SLOT_FILLING &rarr; CONFIRMING &rarr; EXECUTING &rarr; RESPONDING. Each phase transition is a potential LLM call. In text chat, 3 calls at 400ms = 1.2s (acceptable). In voice, that 1.2s kills the &lt;500ms latency target.</p>
+
+<h3>Hybrid Brain</h3>
+<div class="flow-diagram">Voice turn arrives (STT transcript)
+       &darr;
+LiveKit Agent &rarr; Claude (single streaming call)
+       |         Tools = extracted from existing 210+ tool registry
+       |
+       +&mdash; <strong>Simple turn</strong> (status check, rate question, doc status)
+       |         &rarr; Claude calls tool directly &rarr; responds in &lt;500ms
+       |
+       +&mdash; <strong>Complex workflow</strong> (full qualification, multi-step booking)
+                  &rarr; Claude calls trigger_workflow(workflow_id, params)
+                  &rarr; LangGraph runs async on dedicated FastAPI executor
+                  &rarr; Aria responds immediately: &ldquo;Got it, I&rsquo;m kicking
+                    that off now. You&rsquo;ll see it update in your pipeline.&rdquo;
+                  &rarr; LangGraph pushes result via websocket/notification</div>
+
+<h3>Turn Detection</h3>
+<p>The agent must use <strong>semantic turn detection</strong>, not silence-timeout. Silence-based detection produces false starts and interruptions on hesitant borrowers (common in mortgage calls where people pause to think about financial details).</p>
+
+<pre><code><span class="cmt"># Required in AgentSession config &mdash; not optional</span>
+turn_detection=<span class="fn">MultilingualModel</span>(),   <span class="cmt"># semantic, not silence-based</span>
+min_endpointing_delay=<span class="num">0.4</span>,            <span class="cmt"># 400ms &mdash; sweet spot for mortgage calls</span>
+max_endpointing_delay=<span class="num">6.0</span>,</code></pre>
+
+<p>This is the single setting that most separates natural-feeling voice from IVR-feeling voice.</p>
+
+<h3>What&rsquo;s Extracted from Existing Engine</h3>
+
+<p><span class="pill pill-keep">KEEP</span> &nbsp;as direct HTTP-callable tools:</p>
+<ul>
+  <li>All 210+ tool implementations (the actual business logic)</li>
+  <li>Intent definitions (used as Claude tool descriptions)</li>
+  <li>Slot schemas (used as Claude tool parameter types)</li>
+  <li>Task executor (called directly via <code>/internal/aria/trigger-workflow</code>)</li>
+</ul>
+
+<p><span class="pill pill-replace">REPLACE</span> &nbsp;for voice turns only:</p>
+<ul>
+  <li>LangGraph phase router (Claude&rsquo;s native tool-calling handles this)</li>
+  <li>Multi-phase LLM reasoning (single streaming Claude call instead)</li>
+  <li>Dialogue state machine (LiveKit AgentSession manages turn state)</li>
+</ul>
+
+<!-- ──────────────────── STT/TTS ──────────────────── -->
+<h2 id="stt-tts">STT / TTS Providers</h2>
+
+<table>
+  <tr><th>Role</th><th>Provider</th><th>Plugin</th><th>Model</th></tr>
+  <tr><td><strong>STT</strong></td><td>Deepgram</td><td><code>livekit-plugins-deepgram</code></td><td>nova-3</td></tr>
+  <tr><td><strong>TTS (voice turns)</strong></td><td>Cartesia (evaluate)</td><td><code>livekit-plugins-cartesia</code></td><td>Sonic-3</td></tr>
+  <tr><td><strong>TTS (voicemail)</strong></td><td>ElevenLabs (evaluate)</td><td><code>livekit-plugins-elevenlabs</code></td><td>&mdash;</td></tr>
+  <tr><td><strong>LLM (voice turns)</strong></td><td>Claude Sonnet</td><td><code>livekit-plugins-anthropic</code></td><td>claude-sonnet-4-20250514</td></tr>
+  <tr><td><strong>LLM (complex tools)</strong></td><td>Claude Opus</td><td><code>livekit-plugins-anthropic</code></td><td>claude-opus-4-20250514</td></tr>
+</table>
+
+<p>Decision criteria for TTS: first-byte latency, voice naturalness, cost per character. Default to Cartesia for voice turns (latency-critical), ElevenLabs for voicemail TTS (quality-critical).</p>
+
+<div class="callout callout-warn">
+  <strong>LLM model rationale:</strong> Voice turns use Sonnet because it hits the &lt;500ms latency target where Opus would not. Complex tools use Opus because they run async and latency is not the constraint &mdash; accuracy matters more. Do not downgrade voice turns to Haiku: the quality drop on nuanced mortgage conversations is significant.
+</div>
+
+<!-- ──────────────────── TELEPHONY ──────────────────── -->
+<h2 id="telephony">Telephony &mdash; Telnyx Integration</h2>
+
+<h3>Inbound Call Flow</h3>
+<div class="flow-diagram">Caller dials +18438838956 (Telnyx)
+       &darr;
+Telnyx webhook &rarr; POST /telnyx/inbound (FastAPI)
+       &darr;
+decide_route(borrower, payload)
+       |
+       +&mdash; <strong>&ldquo;aria&rdquo;</strong>       &rarr; Create LiveKit room, bridge Telnyx call as SIP participant
+       +&mdash; <strong>&ldquo;direct_lo&rdquo;</strong>  &rarr; Telnyx blind transfer to LO phone
+       +&mdash; <strong>&ldquo;voicemail&rdquo;</strong>  &rarr; Bridge to voicemail LiveKit room</div>
+
+<h3>Routing Logic</h3>
+<pre><code><span class="kw">async def</span> <span class="fn">decide_route</span>(borrower, payload) -&gt; <span class="type">str</span>:
+    <span class="kw">if not</span> borrower:
+        <span class="kw">return</span> <span class="str">"aria"</span>           <span class="cmt"># Unknown caller &mdash; Aria qualifies</span>
+
+    <span class="kw">if</span> borrower.qualification_status == <span class="str">"hot"</span>:
+        lo = <span class="kw">await</span> crm.get_assigned_lo(borrower.id)
+        <span class="kw">if await</span> calendar.is_lo_available(lo.id):
+            <span class="kw">return</span> <span class="str">"direct_lo"</span>  <span class="cmt"># Hot lead + LO available = skip Aria</span>
+
+    <span class="kw">if</span> <span class="fn">is_business_hours</span>():
+        <span class="kw">return</span> <span class="str">"aria"</span>
+
+    <span class="kw">return</span> <span class="str">"aria"</span>               <span class="cmt"># Default: always Aria outside business hours</span></code></pre>
+
+<h3>Warm Transfer</h3>
+<p>When Aria decides to hand off to an LO:</p>
+<ol>
+  <li>Aria tells borrower: <em>&ldquo;One moment while I get Sarah on the line&rdquo;</em></li>
+  <li>Backend adds LO as SIP participant to the same LiveKit room via Telnyx</li>
+  <li>LO&rsquo;s phone rings (2&ndash;4 second gap &mdash; Aria fills naturally)</li>
+  <li>LO picks up, can hear Aria finishing the handoff</li>
+  <li>Aria delivers verbal brief: <em>&ldquo;Sarah, I have Marcus on the line &mdash; he&rsquo;s looking at a $420k conventional purchase in Charleston, 720+ credit, ready to apply today.&rdquo;</em></li>
+  <li>LO speaks directly to borrower</li>
+  <li>Aria drops out of room, call continues LO &harr; borrower on Telnyx SIP</li>
+</ol>
+
+<div class="callout-green callout">
+  The warm transfer with live verbal brief is the feature that makes Aria feel like a premium concierge service rather than an IVR replacement. The LO gets a live brief, the borrower never repeats themselves.
+</div>
+
+<pre><code><span class="kw">@function_tool</span>
+<span class="kw">async def</span> <span class="fn">warm_transfer_to_lo</span>(
+    ctx: <span class="type">RunContext</span>,
+    reason: <span class="type">str</span>,   <span class="cmt"># ready_to_apply, complex_scenario, customer_request</span>
+    summary: <span class="type">str</span>,  <span class="cmt"># 2-sentence brief for the LO</span>
+) -&gt; <span class="type">str</span>:
+    borrower_id = ctx.room.metadata[<span class="str">"borrower_id"</span>]
+    lo = <span class="kw">await</span> crm.get_assigned_lo(borrower_id)
+
+    <span class="kw">await</span> livekit_client.create_sip_participant(
+        room_name=ctx.room.name,
+        sip_trunk_id=TELNYX_TRUNK_ID,
+        sip_call_to=<span class="str">f"sip:{lo.phone}@pstn.telnyx.com"</span>,
+        participant_identity=<span class="str">f"lo_{lo.id}"</span>,
+        participant_name=lo.full_name,
+    )
+
+    borrower = <span class="kw">await</span> <span class="fn">call_backend_tool</span>(
+        <span class="str">"/internal/aria/lead-info"</span>, {<span class="str">"lead_id"</span>: borrower_id}
+    )
+    <span class="kw">return</span> (
+        <span class="str">f"{lo.first_name}, I have {borrower['first_name']} on the line. "</span>
+        <span class="str">f"{summary} "</span>
+        <span class="str">f"I'll let you two take it from here."</span>
+    )</code></pre>
+
+<!-- ──────────────────── OUTBOUND ──────────────────── -->
+<h2 id="outbound">Outbound Calls</h2>
+
+<h3>Autonomy Model</h3>
+<div class="grid-2">
+  <div class="grid-card">
+    <h4>Phase B (Launch)</h4>
+    <p>LO approval required for every outbound call. Three-option push notification:</p>
+    <p style="font-family: monospace; font-size: 0.85rem; margin-top: 12px; padding: 12px; background: var(--bg); border-radius: 6px;">
+      Aria &rarr; Marcus Webb<br>
+      Rate lock expires tomorrow.<br>
+      <span style="color: var(--accent2);">[Call Now]</span> &nbsp;
+      <span style="color: var(--accent);">[Schedule 9am]</span> &nbsp;
+      <span style="color: var(--text-muted);">[Skip]</span>
+    </p>
+  </div>
+  <div class="grid-card">
+    <h4>Phase C (Graduated)</h4>
+    <p>Per-workflow auto-approve based on performance data. LO opts in per type, not globally. Non-negotiable guardrails enforced.</p>
+  </div>
+</div>
+
+<h3>Graduation Criteria (B &rarr; C)</h3>
+<p>Per workflow type, evaluated over rolling 30 days:</p>
+<table>
+  <tr><th>Workflow Type</th><th>Min Calls</th><th>LO Override Rate</th><th>Success Rate</th><th>Complaint Rate</th></tr>
+  <tr><td>appointment_reminder</td><td>50</td><td>&lt;5%</td><td>&gt;80%</td><td>0%</td></tr>
+  <tr><td>rate_lock_reminder</td><td>30</td><td>&lt;8%</td><td>&gt;75%</td><td>0%</td></tr>
+  <tr><td>document_chase</td><td>40</td><td>&lt;10%</td><td>&gt;70%</td><td>0%</td></tr>
+</table>
+
+<p><span class="pill pill-never">NEVER GRADUATE</span> &nbsp;(always require LO approval):</p>
+<ul>
+  <li>rate_renegotiation</li>
+  <li>first_touch_outreach</li>
+  <li>complaint_followup</li>
+  <li>legal_or_escalation</li>
+</ul>
+
+<h3>Autonomous Call Guardrails (Phase C)</h3>
+<p>Non-negotiable rules &mdash; cannot be toggled off:</p>
+<pre><code>AUTONOMOUS_CALL_GUARDRAILS = {
+    <span class="str">"calling_hours"</span>:          <span class="str">"08:00-20:00 local borrower time"</span>,
+    <span class="str">"days_allowed"</span>:           [<span class="str">"Mon"</span>, <span class="str">"Tue"</span>, <span class="str">"Wed"</span>, <span class="str">"Thu"</span>, <span class="str">"Fri"</span>, <span class="str">"Sat"</span>],
+    <span class="str">"no_call_days"</span>:           <span class="str">"Federal holidays + state-specific"</span>,
+    <span class="str">"max_calls_per_lead_day"</span>: <span class="num">1</span>,
+    <span class="str">"max_calls_per_lead_week"</span>: <span class="num">3</span>,
+    <span class="str">"max_attempts_no_answer"</span>: <span class="num">3</span>,
+    <span class="str">"cooling_off_after_dnc"</span>:  <span class="str">"permanent"</span>,
+
+    <span class="str">"permitted_intents"</span>: [
+        <span class="str">"appointment_reminder"</span>, <span class="str">"document_chase"</span>,
+        <span class="str">"rate_lock_expiry_warning"</span>, <span class="str">"closing_date_reminder"</span>,
+        <span class="str">"post_close_satisfaction"</span>,
+    ],
+    <span class="str">"never_autonomous"</span>: [
+        <span class="str">"first_touch"</span>, <span class="str">"rate_renegotiation"</span>,
+        <span class="str">"price_objection_handling"</span>, <span class="str">"complaint_resolution"</span>,
+        <span class="str">"legal_reference_in_file"</span>,
+    ],
+    <span class="str">"immediate_lo_alert"</span>: [
+        <span class="str">"borrower_mentions_lawyer"</span>, <span class="str">"borrower_mentions_complaint"</span>,
+        <span class="str">"borrower_expresses_distress"</span>, <span class="str">"dnc_request"</span>,
+        <span class="str">"three_consecutive_no_answers"</span>,
+        <span class="str">"call_duration_under_15_seconds"</span>,
+    ],
+}</code></pre>
+
+<h3>TCPA Authorization Chain</h3>
+<p>Every call &mdash; manual, approved, or autonomous &mdash; gets an audit record:</p>
+<pre><code><span class="sql-kw">CREATE TABLE</span> call_authorizations (
+    id                      <span class="sql-type">UUID</span> <span class="sql-kw">PRIMARY KEY DEFAULT</span> gen_random_uuid(),
+    borrower_id             <span class="sql-type">INTEGER</span> <span class="sql-kw">NOT NULL REFERENCES</span> leads(id),
+    call_id                 <span class="sql-type">UUID</span>,
+    authorization_type      <span class="sql-type">TEXT</span> <span class="sql-kw">NOT NULL</span>,
+    authorized_by           <span class="sql-type">INTEGER</span> <span class="sql-kw">REFERENCES</span> users(id),
+    rule_id                 <span class="sql-type">TEXT</span>,
+    borrower_consent_source <span class="sql-type">TEXT</span>,
+    borrower_consent_date   <span class="sql-type">TIMESTAMPTZ</span>,
+    created_at              <span class="sql-type">TIMESTAMPTZ</span> <span class="sql-kw">DEFAULT</span> now()
+);</code></pre>
+
+<!-- ──────────────────── VOICEMAIL ──────────────────── -->
+<h2 id="voicemail">Voicemail Handling</h2>
+
+<h3>AMD Confidence Bands</h3>
+<p>Telnyx AMD returns a confidence score, not a binary. Three-way branch:</p>
+<table>
+  <tr><th>Confidence</th><th>Action</th></tr>
+  <tr><td>result=human</td><td>Route to Aria agent (live pickup)</td></tr>
+  <tr><td>result=machine, confidence &ge; 0.92</td><td>Drop full TTS voicemail</td></tr>
+  <tr><td>result=machine, confidence &ge; 0.75</td><td>Drop short TTS voicemail (max 18s)</td></tr>
+  <tr><td>confidence &lt; 0.75 or unknown</td><td>No voicemail &mdash; mark no-answer, schedule retry</td></tr>
+</table>
+
+<div class="callout callout-warn">
+  Phone must ring before AMD fires &mdash; no ringless voicemail (RVM). RVMs are in active TCPA litigation and banned in several states.
+</div>
+
+<h3>Voicemail Message Structure</h3>
+<p>Every voicemail does four things in under 25 seconds:</p>
+<ol>
+  <li>State who you are</li>
+  <li>Give one specific reason to call back</li>
+  <li>Tell them exactly how to reach you</li>
+  <li>Get off the phone</li>
+</ol>
+
+<pre><code>VOICEMAIL_TEMPLATES = {
+    <span class="str">"appointment_reminder"</span>: (
+        <span class="str">"Hi {first_name}, this is Aria from Perennia. "</span>
+        <span class="str">"Quick reminder &mdash; you have a call with {lo_name} tomorrow at {time}. "</span>
+        <span class="str">"If you need to reschedule, just reply to the text I'm sending you now. "</span>
+        <span class="str">"Talk soon."</span>
+    ),
+    <span class="str">"rate_lock_expiry"</span>: (
+        <span class="str">"Hi {first_name}, Aria from Perennia. "</span>
+        <span class="str">"Your rate lock on the {loan_amount} {loan_type} expires {expiry_day}. "</span>
+        <span class="str">"{lo_name} has a couple of options to discuss &mdash; "</span>
+        <span class="str">"call us back at {company_phone} or just reply to my text. Thanks."</span>
+    ),
+    <span class="str">"document_chase"</span>: (
+        <span class="str">"Hi {first_name}, Aria from Perennia. "</span>
+        <span class="str">"The one thing holding up your file right now is {top_missing_doc}. "</span>
+        <span class="str">"You can upload it at the link I'm texting you &mdash; takes two minutes. "</span>
+        <span class="str">"Any questions, reply to that text. Thanks."</span>
+    ),
+    <span class="str">"post_close"</span>: (
+        <span class="str">"Hi {first_name}, Aria from Perennia &mdash; just calling to say congratulations "</span>
+        <span class="str">"on closing! {lo_name} wanted to check in and make sure everything's "</span>
+        <span class="str">"going smoothly. Give us a call at {company_phone}. Enjoy the new home."</span>
+    ),
+}
+
+MAX_VOICEMAIL_SECONDS = <span class="num">28</span>  <span class="cmt"># Telnyx cuts at 30s &mdash; 2s buffer</span></code></pre>
+
+<h3>Paired SMS (Non-Optional)</h3>
+<div class="callout callout-green">
+  Every voicemail drop simultaneously sends an SMS matching the voicemail content. Without paired SMS, callback rates are under 8%. With it, 25&ndash;35%.
+</div>
+
+<!-- ──────────────────── TOOLS ──────────────────── -->
+<h2 id="tools">Agent Tool Architecture</h2>
+
+<h3>Circuit Breaker</h3>
+<p>All agent tool calls go through a retry-with-timeout wrapper. <strong>3-second timeout</strong>. Fail fast, degrade gracefully, keep the conversation moving.</p>
+
+<pre><code>BACKEND_URL = os.environ[<span class="str">"INTERNAL_BACKEND_URL"</span>]
+
+<span class="kw">@retry</span>(stop=stop_after_attempt(<span class="num">2</span>), wait=wait_exponential(multiplier=<span class="num">0.1</span>, min=<span class="num">0.1</span>, max=<span class="num">0.3</span>))
+<span class="kw">async def</span> <span class="fn">call_backend_tool</span>(endpoint: <span class="type">str</span>, payload: <span class="type">dict</span>) -&gt; <span class="type">dict</span>:
+    <span class="kw">async with</span> httpx.AsyncClient(timeout=<span class="num">3.0</span>) <span class="kw">as</span> client:
+        resp = <span class="kw">await</span> client.post(<span class="str">f"{BACKEND_URL}{endpoint}"</span>, json=payload)
+        resp.raise_for_status()
+        <span class="kw">return</span> resp.json()</code></pre>
+
+<h3>Graceful Degradation</h3>
+<p>Every tool wraps the circuit breaker with a spoken fallback:</p>
+<pre><code><span class="kw">@function_tool</span>
+<span class="kw">async def</span> <span class="fn">get_loan_status</span>(ctx: <span class="type">RunContext</span>) -&gt; <span class="type">str</span>:
+    <span class="kw">try</span>:
+        result = <span class="kw">await</span> <span class="fn">call_backend_tool</span>(
+            <span class="str">"/internal/aria/loan-status"</span>,
+            {<span class="str">"borrower_id"</span>: ctx.room.metadata[<span class="str">"borrower_id"</span>]}
+        )
+        <span class="kw">return</span> result[<span class="str">"spoken_summary"</span>]
+    <span class="kw">except</span> <span class="type">Exception</span>:
+        <span class="kw">return</span> (
+            <span class="str">"I'm having a little trouble pulling that up right now. "</span>
+            <span class="str">"Let me have your loan officer send you an update directly &mdash; "</span>
+            <span class="str">"I'll flag it for them."</span>
+        )</code></pre>
+
+<h3>LangGraph Workflow Isolation</h3>
+<p>LangGraph workflows run on a dedicated thread pool executor (4 workers) to avoid competing with HTTP request workers.</p>
+
+<!-- ──────────────────── DEPLOYMENT ──────────────────── -->
+<h2 id="deployment">Deployment</h2>
+
+<h3>Railway Configuration</h3>
+
+<div class="grid-2">
+  <div class="grid-card">
+    <h4>aria-agent-worker (new)</h4>
+    <p>Python process running <code>livekit-agents</code> SDK</p>
+    <p>Health check endpoint on PORT (default 8081)</p>
+    <p>Env: <code>LIVEKIT_URL</code>, <code>LIVEKIT_API_KEY</code>, <code>LIVEKIT_API_SECRET</code>, <code>INTERNAL_BACKEND_URL</code>, <code>ANTHROPIC_API_KEY</code>, <code>DEEPGRAM_API_KEY</code>, <code>CARTESIA_API_KEY</code></p>
+  </div>
+  <div class="grid-card">
+    <h4>perennia-api (existing)</h4>
+    <p>New <code>/internal/aria/*</code> endpoints added</p>
+    <p>LangGraph executor added to lifespan</p>
+    <p><code>INTERNAL_BACKEND_URL=http://perennia-api.railway.internal</code></p>
+  </div>
+</div>
+
+<h3>Migration Trigger Criteria</h3>
+
+<div class="grid-2">
+  <div class="grid-card" style="border-color: var(--accent2);">
+    <h4 style="color: var(--accent2);">Stay on Railway</h4>
+    <p>Agent restarts &lt; 2x per week</p>
+    <p>No dropped sessions during business hours</p>
+    <p>Tool call latency to FastAPI &lt; 50ms</p>
+    <p>Concurrent sessions &lt; 20</p>
+  </div>
+  <div class="grid-card" style="border-color: var(--warn);">
+    <h4 style="color: var(--warn);">Migrate to Fly.io</h4>
+    <p>Agent crashes correlate with high concurrency</p>
+    <p>Railway memory limits hit (Silero VAD ~150MB)</p>
+    <p>Need multiple worker replicas with session affinity</p>
+    <p>Concurrent sessions consistently &gt; 50</p>
+  </div>
+</div>
+
+<!-- ──────────────────── LIVEKIT CONFIG ──────────────────── -->
+<h2 id="livekit-config">LiveKit Cloud Configuration</h2>
+
+<p>All credentials stored as environment variables on the agent worker service &mdash; never hardcoded.</p>
+
+<table>
+  <tr><th>Setting</th><th>Environment Variable</th></tr>
+  <tr><td>Project</td><td><code>aria</code></td></tr>
+  <tr><td>WebSocket URL</td><td><code>LIVEKIT_URL</code></td></tr>
+  <tr><td>API Key</td><td><code>LIVEKIT_API_KEY</code></td></tr>
+  <tr><td>API Secret</td><td><code>LIVEKIT_API_SECRET</code></td></tr>
+  <tr><td>SIP Domain</td><td>Derived from project name: <code>{project}.sip.livekit.cloud</code></td></tr>
+</table>
+
+<p>Telnyx SIP trunk configured in LiveKit Cloud to accept inbound from Telnyx and place outbound via Telnyx PSTN.</p>
+
+<!-- ──────────────────── METRICS ──────────────────── -->
+<h2 id="metrics">Key Metrics</h2>
+
+<table>
+  <tr><th>Metric</th><th>Target</th></tr>
+  <tr><td>Voice turn latency (STT &rarr; response audio start)</td><td><span class="pill pill-metric">&lt;500ms</span></td></tr>
+  <tr><td>Tool call round-trip (agent &rarr; FastAPI &rarr; agent)</td><td><span class="pill pill-metric">&lt;50ms</span></td></tr>
+  <tr><td>Warm transfer handoff time</td><td><span class="pill pill-metric">&lt;5 seconds</span></td></tr>
+  <tr><td>Voicemail drop success rate (AMD &ge; 0.92)</td><td><span class="pill pill-metric">&gt;95%</span></td></tr>
+  <tr><td>Outbound call approval latency</td><td><span class="pill pill-metric">&lt;10 seconds</span></td></tr>
+</table>
+
+<!-- ──────────────────── OUT OF SCOPE ──────────────────── -->
+<h2 id="out-of-scope">Out of Scope</h2>
+<ul>
+  <li>Multi-language support (English only at launch)</li>
+  <li>Video calls via LiveKit (audio only)</li>
+  <li>Custom wake word / always-listening mode</li>
+  <li>Local STT/TTS (cloud providers only)</li>
+  <li>Agent-to-agent calls (Aria talks to one party at a time)</li>
+</ul>
+
+</div>
+</body>
+</html>

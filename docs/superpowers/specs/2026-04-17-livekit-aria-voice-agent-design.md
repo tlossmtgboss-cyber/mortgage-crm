@@ -80,6 +80,19 @@ LiveKit Agent -> Claude (single streaming call)
                   -> LangGraph pushes result via websocket/notification
 ```
 
+### Turn Detection
+
+The agent must use semantic turn detection, not silence-timeout. Silence-based detection produces false starts and interruptions on hesitant borrowers (common in mortgage calls where people pause to think about financial details).
+
+```python
+# Required in AgentSession config — not optional
+turn_detection=MultilingualModel(),   # semantic, not silence-based
+min_endpointing_delay=0.4,            # 400ms — sweet spot for mortgage calls
+max_endpointing_delay=6.0,
+```
+
+This is the single setting that most separates natural-feeling voice from IVR-feeling voice.
+
 ### What's Extracted from Existing Engine
 
 **KEEP (as direct HTTP-callable tools):**
@@ -99,7 +112,7 @@ LiveKit Agent -> Claude (single streaming call)
 
 - **STT**: Deepgram (existing account, proven accuracy)
   - Plugin: `livekit-plugins-deepgram`
-  - Model: `nova-2` (best latency/accuracy tradeoff)
+  - Model: `nova-3` (current generation, largest accuracy gain on telephony audio)
 
 - **TTS**: Evaluate Cartesia vs ElevenLabs during build
   - Cartesia: `livekit-plugins-cartesia`, Sonic-3 model, ultra-low latency
@@ -108,8 +121,9 @@ LiveKit Agent -> Claude (single streaming call)
   - Default to Cartesia for voice turns (latency-critical), ElevenLabs for voicemail TTS (quality-critical)
 
 - **LLM**: Claude via `livekit-plugins-anthropic`
-  - Model: `claude-sonnet-4-20250514` for voice turns (speed)
-  - Model: `claude-opus-4-20250514` for complex tool orchestration (accuracy)
+  - Model: `claude-sonnet-4-20250514` for voice turns — hits the <500ms latency target where Opus would not
+  - Model: `claude-opus-4-20250514` for complex tool orchestration — runs async so latency is not the constraint, accuracy matters more
+  - Do not downgrade voice turns to Haiku: the quality drop on nuanced mortgage conversations is significant
 
 ---
 
@@ -492,10 +506,15 @@ restartPolicyType = "always"
 
 ## LiveKit Cloud Configuration
 
-- **Project**: aria
-- **URL**: wss://aria-7q60gwyk.livekit.cloud
-- **API Key**: APIABrLiXu2bChS
-- **SIP Domain**: aria-7q60gwyk.sip.livekit.cloud
+All credentials stored as environment variables on the agent worker service — never hardcoded.
+
+| Setting | Environment Variable |
+|---|---|
+| Project | `aria` |
+| WebSocket URL | `LIVEKIT_URL` |
+| API Key | `LIVEKIT_API_KEY` |
+| API Secret | `LIVEKIT_API_SECRET` |
+| SIP Domain | Derived from project name: `{project}.sip.livekit.cloud` |
 
 ### SIP Trunk Setup
 
