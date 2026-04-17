@@ -66,7 +66,8 @@ class _HealthHandler(BaseHTTPRequestHandler):
 
 
 def _start_health_server():
-    port = int(os.environ.get("PORT", 8081))
+    # Use HEALTH_PORT to avoid conflict with the main FastAPI app's PORT
+    port = int(os.environ.get("HEALTH_PORT", os.environ.get("PORT", 8081)))
     httpd = HTTPServer(("0.0.0.0", port), _HealthHandler)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()
@@ -358,12 +359,24 @@ class AriaVoiceAgent(Agent):
             f"I'll let you two take it from here."
         )
 
+    # Tools the voice agent is allowed to invoke via the generic executor.
+    # All destructive, compliance, or admin tools are excluded.
+    _CRM_TOOL_ALLOWLIST = frozenset({
+        "search_pipeline", "get_pipeline_summary", "search_leads",
+        "get_lead_details", "get_loan_status", "get_loan_details",
+        "get_tasks", "get_upcoming_appointments", "get_rate_alerts",
+        "get_contact_info", "get_loan_conditions", "get_document_status",
+        "get_sla_status", "calculate_income",
+    })
+
     @function_tool()
     async def run_crm_tool(
         self, context: RunContext, tool_name: str, parameters: str = "{}"
     ):
-        """Run any CRM tool by name with JSON parameters.
+        """Run a read-only CRM tool by name with JSON parameters.
         Fallback for tools without a specific wrapper."""
+        if tool_name not in self._CRM_TOOL_ALLOWLIST:
+            return json.dumps({"error": f"Tool '{tool_name}' is not available via voice. Use a specific command instead."})
         try:
             params = json.loads(parameters)
         except json.JSONDecodeError:

@@ -1,152 +1,69 @@
 /**
  * AriaVoiceHome — Primary voice assistant interface for Perennia AI mobile.
  *
- * Full-screen dark layout with animated mic orb, speech recognition via
- * useAriaVoice, streaming AI responses via SSE, and sentence-chunked
- * TTS playback so Aria starts speaking within ~2s instead of waiting
- * for the full response.
+ * Dual-mode voice agent:
+ *   1. LiveKit (primary): WebRTC real-time voice via LiveKit Cloud.
+ *      STT (Deepgram Nova-3), LLM (Claude), TTS (Cartesia Sonic 3) all
+ *      run server-side. Frontend just sends/receives audio. ~300-500ms latency.
+ *   2. SSE fallback: If LiveKit isn't configured, falls back to the original
+ *      Web Speech API + SSE streaming + ElevenLabs TTS pipeline.
+ *
+ * The LiveKit agent worker (aria/voice_agent.py) auto-joins the room when
+ * a user connects. The frontend gets a token from POST /api/v1/livekit/token.
  */
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAriaVoice } from '../../hooks/useAriaVoice';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
-import { streamMessage } from '../../services/mobileAriaApi';
 import api from '../../services/api';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
 import { OfflineIndicator } from '../../components/mobile/OfflineIndicator';
 import CallIntelligenceSlidePanel from '../../components/aria/CallIntelligenceSlidePanel';
 import './AriaVoiceHome.css';
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+// LiveKit + SSE imports — resolved dynamically to allow graceful fallback.
+// Module-level variables are set once by the init effect and remain stable
+// for the lifetime of the page. This avoids require() in ESM context.
+let LiveKitRoom, RoomAudioRenderer, useVoiceAssistant, BarVisualizer, useRoomContext;
+let _lkLoadAttempted = false;
+let _lkLoadPromise = null;
 
-function getOrCreateSessionId() {
-  const STORAGE_KEY = 'aria-voice-session-id';
-  const EXPIRY_KEY = 'aria-voice-session-expiry';
-  const SESSION_TTL_MS = 30 * 60 * 1000; // 30 minutes
-
-  try {
-    const existing = sessionStorage.getItem(STORAGE_KEY);
-    const expiry = sessionStorage.getItem(EXPIRY_KEY);
-    if (existing && expiry && Date.now() < Number(expiry)) {
-      sessionStorage.setItem(EXPIRY_KEY, String(Date.now() + SESSION_TTL_MS));
-      return existing;
-    }
-  } catch { /* sessionStorage unavailable */ }
-
-  const id = 'aria-voice-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
-  try {
-    sessionStorage.setItem(STORAGE_KEY, id);
-    sessionStorage.setItem(EXPIRY_KEY, String(Date.now() + SESSION_TTL_MS));
-  } catch { /* sessionStorage unavailable */ }
-  return id;
+function _loadLiveKit() {
+  if (_lkLoadPromise) return _lkLoadPromise;
+  _lkLoadPromise = import('@livekit/components-react')
+    .then((mod) => {
+      LiveKitRoom = mod.LiveKitRoom;
+      RoomAudioRenderer = mod.RoomAudioRenderer;
+      useVoiceAssistant = mod.useVoiceAssistant;
+      BarVisualizer = mod.BarVisualizer;
+      useRoomContext = mod.useRoomContext;
+      return import('@livekit/components-styles');
+    })
+    .then(() => {
+      _lkLoadAttempted = true;
+      return true;
+    })
+    .catch(() => {
+      _lkLoadAttempted = true;
+      return false;
+    });
+  return _lkLoadPromise;
 }
 
-// ---------------------------------------------------------------------------
-// Sentence splitter — splits streaming text into speakable chunks
-// Handles abbreviations, decimal numbers, and ellipsis without false splits
-// ---------------------------------------------------------------------------
+// SSE fallback imports (lazy — only loaded if LiveKit unavailable).
+// Resolved once via a shared promise; the component reads from state.
+let _sseModules = null;
+let _sseLoadPromise = null;
 
-const ABBREVIATIONS = /(?:Mr|Mrs|Ms|Dr|Jr|Sr|St|vs|etc|e\.g|i\.e)\./gi;
-
-function extractSentences(buffer) {
-  // Protect abbreviations by replacing dots with placeholder
-  let safe = buffer.replace(ABBREVIATIONS, (m) => m.replace(/\./g, '\x00'));
-  // Protect decimal numbers (3.5, $1,500.00)
-  safe = safe.replace(/(\d)\.(\d)/g, '$1\x00$2');
-  // Protect ellipsis
-  safe = safe.replace(/\.\.\./g, '\x00\x00\x00');
-  // Split on sentence boundaries
-  const parts = safe.split(/(?<=[.!?])\s+|(?<=\n)/);
-  if (parts.length <= 1) return { sentences: [], leftover: buffer };
-  const leftover = parts.pop();
-  // Restore dots
-  const sentences = parts.filter(Boolean).map((s) => s.replace(/\x00/g, '.'));
-  return { sentences, leftover: leftover.replace(/\x00/g, '.') };
-}
-
-// ---------------------------------------------------------------------------
-// TTS Queue — plays sentences back-to-back via ElevenLabs
-// ---------------------------------------------------------------------------
-
-class TTSQueue {
-  constructor() {
-    this._queue = [];
-    this._playing = false;
-    this._aborted = false;
-    this._currentAudio = null;
-    this._onAllDone = null;
-  }
-
-  enqueue(text) {
-    if (this._aborted || !text.trim()) return;
-    this._queue.push(text);
-    if (!this._playing) this._playNext();
-  }
-
-  async _playNext() {
-    if (this._aborted || this._queue.length === 0) {
-      this._playing = false;
-      this._onAllDone?.();
-      return;
-    }
-
-    this._playing = true;
-    // Batch up to 2 sentences for smoother playback and fewer API calls
-    const batch = this._queue.splice(0, Math.min(2, this._queue.length));
-    const text = batch.join(' ');
-
-    try {
-      const res = await api.post('/api/v1/mobile-voice/tts/synthesize', {
-        text,
-        voice_settings: {
-          stability: 0.45,
-          similarity_boost: 0.78,
-          style: 0.35,
-          use_speaker_boost: true
-        }
-      });
-      if (this._aborted) return;
-
-      const b64 = res.data?.audio;
-      if (!b64 || b64.length < 100) throw new Error('Empty audio');
-
-      const binary = atob(b64);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const blob = new Blob([bytes], { type: 'audio/mpeg' });
-      const url = URL.createObjectURL(blob);
-
-      await new Promise((resolve) => {
-        const audio = new Audio(url);
-        this._currentAudio = audio;
-        audio.onended = () => { URL.revokeObjectURL(url); this._currentAudio = null; resolve(); };
-        audio.onerror = () => { URL.revokeObjectURL(url); this._currentAudio = null; resolve(); };
-        audio.play().catch(resolve);
-      });
-    } catch (err) {
-      if (this._aborted) return;
-      // Instead of browser SpeechSynthesis fallback, just skip audio for this chunk
-      // The text is already visible in the response toast
-      console.warn('[TTSQueue] TTS failed, text visible in response toast:', err.message);
-    }
-
-    if (!this._aborted) this._playNext();
-  }
-
-  stop() {
-    this._aborted = true;
-    this._queue = [];
-    if (this._currentAudio) {
-      this._currentAudio.pause();
-      this._currentAudio.currentTime = 0;
-      this._currentAudio = null;
-    }
-  }
-
-  onAllDone(fn) { this._onAllDone = fn; }
+function _loadSSEModules() {
+  if (_sseLoadPromise) return _sseLoadPromise;
+  _sseLoadPromise = Promise.all([
+    import('../../hooks/useAriaVoice'),
+    import('../../services/mobileAriaApi'),
+  ]).then(([voiceMod, apiMod]) => {
+    _sseModules = { useAriaVoice: voiceMod.useAriaVoice, streamMessage: apiMod.streamMessage };
+    return _sseModules;
+  }).catch(() => null);
+  return _sseLoadPromise;
 }
 
 // ---------------------------------------------------------------------------
@@ -164,14 +81,234 @@ function MicIcon() {
   );
 }
 
+function DisconnectIcon() {
+  return (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="1" y1="1" x2="23" y2="23" />
+      <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6" />
+      <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2c0 .76-.13 1.49-.36 2.18" />
+      <line x1="12" y1="19" x2="12" y2="23" />
+      <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+}
+
 // ---------------------------------------------------------------------------
-// Component
+// LiveKit Voice Agent UI — renders inside LiveKitRoom context
+// ---------------------------------------------------------------------------
+
+function LiveKitVoiceUI({ onDisconnect, ciPanelOpen, setCiPanelOpen }) {
+  const voiceAssistant = useVoiceAssistant();
+  const room = useRoomContext();
+
+  // Map LiveKit agent state to our UI states
+  const agentState = voiceAssistant?.state || 'idle';
+
+  // voiceAssistant.state can be: 'idle' | 'listening' | 'thinking' | 'speaking'
+  const voiceState = (() => {
+    switch (agentState) {
+      case 'listening': return 'listening';
+      case 'thinking': return 'processing';
+      case 'speaking': return 'speaking';
+      default: return 'connected';
+    }
+  })();
+
+  const orbContainerClass = [
+    'avh-orb-container',
+    voiceState !== 'connected' ? `avh-orb-container--${voiceState}` : 'avh-orb-container--connected',
+  ].filter(Boolean).join(' ');
+
+  const tapLabelText = (() => {
+    switch (voiceState) {
+      case 'listening': return 'Listening...';
+      case 'processing': return 'Thinking...';
+      case 'speaking': return 'Aria is speaking';
+      case 'connected': return 'Tap to disconnect';
+      default: return 'Connected';
+    }
+  })();
+
+  const handleOrbTap = useCallback(() => {
+    // Tapping while connected disconnects
+    if (onDisconnect) onDisconnect();
+  }, [onDisconnect]);
+
+  return (
+    <>
+      {/* LiveKit handles audio rendering via WebRTC */}
+      <RoomAudioRenderer />
+
+      {/* Center content */}
+      <div className="avh-center">
+        <h1 className="avh-title">Aria</h1>
+        <p className="avh-subtitle">
+          {voiceState === 'connected' ? 'Voice Connected' : 'Your AI Voice Assistant'}
+        </p>
+
+        {/* Mic orb — shows agent state via animations */}
+        <div className={orbContainerClass}>
+          <div className="avh-ring avh-ring--outer" />
+          <div className="avh-ring avh-ring--mid" />
+          <button
+            className="avh-ring avh-ring--inner"
+            onClick={handleOrbTap}
+            aria-label="Disconnect voice session"
+            type="button"
+          >
+            <span className="avh-mic-icon">
+              {voiceState === 'connected' ? <DisconnectIcon /> : <MicIcon />}
+            </span>
+          </button>
+        </div>
+
+        {/* LiveKit audio visualizer */}
+        {voiceState === 'speaking' && BarVisualizer && (
+          <div className="avh-livekit-visualizer">
+            <BarVisualizer
+              state={agentState}
+              barCount={5}
+              trackRef={voiceAssistant?.audioTrack}
+            />
+          </div>
+        )}
+
+        <span className="avh-tap-label">{tapLabelText}</span>
+
+        {/* Connection indicator */}
+        <div className="avh-connection-badge">
+          <span className="avh-connection-dot" />
+          <span className="avh-connection-text">LiveKit WebRTC</span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// SSE Fallback helpers (only loaded when LiveKit unavailable)
+// ---------------------------------------------------------------------------
+
+const ABBREVIATIONS = /(?:Mr|Mrs|Ms|Dr|Jr|Sr|St|vs|etc|e\.g|i\.e)\./gi;
+
+function extractSentences(buffer) {
+  let safe = buffer.replace(ABBREVIATIONS, (m) => m.replace(/\./g, '\x00'));
+  safe = safe.replace(/(\d)\.(\d)/g, '$1\x00$2');
+  safe = safe.replace(/\.\.\./g, '\x00\x00\x00');
+  const parts = safe.split(/(?<=[.!?])\s+|(?<=\n)/);
+  if (parts.length <= 1) return { sentences: [], leftover: buffer };
+  const leftover = parts.pop();
+  const sentences = parts.filter(Boolean).map((s) => s.replace(/\x00/g, '.'));
+  return { sentences, leftover: leftover.replace(/\x00/g, '.') };
+}
+
+class TTSQueue {
+  constructor() {
+    this._queue = [];
+    this._playing = false;
+    this._aborted = false;
+    this._currentAudio = null;
+    this._currentBlobUrl = null;
+    this._onAllDone = null;
+  }
+
+  enqueue(text) {
+    if (this._aborted || !text.trim()) return;
+    this._queue.push(text);
+    if (!this._playing) this._playNext();
+  }
+
+  async _playNext() {
+    if (this._aborted || this._queue.length === 0) {
+      this._playing = false;
+      this._onAllDone?.();
+      return;
+    }
+    this._playing = true;
+    const batch = this._queue.splice(0, Math.min(2, this._queue.length));
+    const text = batch.join(' ');
+    try {
+      const res = await api.post('/api/v1/mobile-voice/tts/synthesize', {
+        text,
+        voice_settings: { stability: 0.45, similarity_boost: 0.78, style: 0.35, use_speaker_boost: true }
+      });
+      if (this._aborted) return;
+      const b64 = res.data?.audio;
+      if (!b64 || b64.length < 100) throw new Error('Empty audio');
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: 'audio/mpeg' });
+      const url = URL.createObjectURL(blob);
+      this._currentBlobUrl = url;
+      await new Promise((resolve) => {
+        const audio = new Audio(url);
+        this._currentAudio = audio;
+        const cleanup = () => { URL.revokeObjectURL(url); this._currentAudio = null; this._currentBlobUrl = null; };
+        audio.onended = () => { cleanup(); resolve(); };
+        audio.onerror = () => { cleanup(); resolve(); };
+        audio.play().catch(() => { cleanup(); resolve(); });
+      });
+    } catch (err) {
+      if (this._aborted) return;
+      console.warn('[TTSQueue] TTS failed:', err.message);
+    }
+    if (!this._aborted) this._playNext();
+  }
+
+  stop() {
+    this._aborted = true;
+    this._queue = [];
+    if (this._currentAudio) {
+      this._currentAudio.pause();
+      this._currentAudio.currentTime = 0;
+      this._currentAudio = null;
+    }
+    if (this._currentBlobUrl) {
+      URL.revokeObjectURL(this._currentBlobUrl);
+      this._currentBlobUrl = null;
+    }
+  }
+
+  onAllDone(fn) { this._onAllDone = fn; }
+}
+
+function getOrCreateSessionId() {
+  const STORAGE_KEY = 'aria-voice-session-id';
+  const EXPIRY_KEY = 'aria-voice-session-expiry';
+  const SESSION_TTL_MS = 30 * 60 * 1000;
+  try {
+    const existing = sessionStorage.getItem(STORAGE_KEY);
+    const expiry = sessionStorage.getItem(EXPIRY_KEY);
+    if (existing && expiry && Date.now() < Number(expiry)) {
+      sessionStorage.setItem(EXPIRY_KEY, String(Date.now() + SESSION_TTL_MS));
+      return existing;
+    }
+  } catch { /* sessionStorage unavailable */ }
+  const id = 'aria-voice-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+  try {
+    sessionStorage.setItem(STORAGE_KEY, id);
+    sessionStorage.setItem(EXPIRY_KEY, String(Date.now() + SESSION_TTL_MS));
+  } catch { /* sessionStorage unavailable */ }
+  return id;
+}
+
+// ---------------------------------------------------------------------------
+// Main Component
 // ---------------------------------------------------------------------------
 
 export default function AriaVoiceHome() {
-  const navigate = useNavigate();
+  const { isOnline } = useNetworkStatus();
 
-  // Voice state: 'idle' | 'listening' | 'processing' | 'speaking'
+  // LiveKit state
+  const [lkToken, setLkToken] = useState(null);
+  const [lkUrl, setLkUrl] = useState(null);
+  const [lkConnecting, setLkConnecting] = useState(false);
+  const [lkConnected, setLkConnected] = useState(false);
+  const [lkAvailable, setLkAvailable] = useState(null); // null = checking, true/false
+  const [lkError, setLkError] = useState(null);
+
+  // SSE fallback state
   const [voiceState, setVoiceState] = useState('idle');
   const [sessionId] = useState(() => getOrCreateSessionId());
   const [responseText, setResponseText] = useState(null);
@@ -180,106 +317,124 @@ export default function AriaVoiceHome() {
   const toastTimerRef = useRef(null);
   const [actionToast, setActionToast] = useState(null);
   const actionToastTimerRef = useRef(null);
-
-  const streamRef = useRef(null);   // { abort } from streamMessage
-  const ttsQueueRef = useRef(null); // TTSQueue instance
-  const bufferRef = useRef('');     // streaming text buffer for sentence splitting
+  const streamRef = useRef(null);
+  const ttsQueueRef = useRef(null);
+  const transcriptRef = useRef([]);
+  const sessionStartRef = useRef(null);
 
   // Call Intelligence slide panel
   const [ciPanelOpen, setCiPanelOpen] = useState(false);
 
-  // ---- Network status ----
-  const { isOnline } = useNetworkStatus();
-
-  // Abort active voice flow if network drops mid-session
+  // ---- Check LiveKit availability on mount ----
   useEffect(() => {
-    if (!isOnline && voiceState !== 'idle') {
-      streamRef.current?.abort();
-      ttsQueueRef.current?.stop();
-      setVoiceState('idle');
-      setResponseText('Connection lost. Please try again when you are back online.');
-      setShowToast(true);
-      clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = setTimeout(() => {
-        setToastExiting(true);
-        setTimeout(() => {
-          setShowToast(false);
-          setToastExiting(false);
-          setResponseText(null);
-        }, 250);
-      }, 5000);
+    let cancelled = false;
+    async function init() {
+      const lkLoaded = await _loadLiveKit();
+      if (cancelled) return;
+      if (!lkLoaded || !LiveKitRoom) {
+        setLkAvailable(false);
+        return;
+      }
+      try {
+        const res = await api.get('/api/v1/livekit/health', { timeout: 5000 });
+        if (cancelled) return;
+        setLkAvailable(res.data?.configured === true);
+        if (res.data?.url) setLkUrl(res.data.url);
+      } catch {
+        if (!cancelled) setLkAvailable(false);
+      }
     }
-  }, [isOnline, voiceState]);
+    init();
+    return () => { cancelled = true; };
+  }, []);
 
-  // ---- Voice hook ----
+  // ---- Load SSE modules lazily if LiveKit not available ----
+  const [sseMods, setSseMods] = useState(_sseModules);
+  useEffect(() => {
+    if (lkAvailable === false && !sseMods) {
+      _loadSSEModules().then((mods) => { if (mods) setSseMods(mods); });
+    }
+  }, [lkAvailable, sseMods]);
+
+  // ---- LiveKit: fetch token and connect ----
+  const lkConnectingRef = useRef(false);
+  const connectLiveKit = useCallback(async () => {
+    if (lkConnectingRef.current || lkConnected) return;
+    lkConnectingRef.current = true;
+    setLkConnecting(true);
+    setLkError(null);
+
+    try {
+      const res = await api.post('/api/v1/livekit/token');
+      setLkToken(res.data.token);
+      setLkUrl(res.data.url);
+      setLkConnected(true);
+    } catch (err) {
+      console.error('[AriaVoiceHome] LiveKit token fetch failed:', err);
+      setLkError('Failed to connect to voice service');
+      setLkConnected(false);
+    } finally {
+      lkConnectingRef.current = false;
+      setLkConnecting(false);
+    }
+  }, [lkConnected]);
+
+  const disconnectLiveKit = useCallback(() => {
+    setLkConnected(false);
+    setLkToken(null);
+    setLkUrl(null);
+  }, []);
+
+  // ---- SSE fallback handlers ----
+  const saveSession = useCallback(() => {
+    if (transcriptRef.current.length < 2) return;
+    const transcript = [...transcriptRef.current];
+    api.post('/api/v1/mobile-voice/sessions/save', {
+      session_id: sessionId,
+      transcript,
+      started_at: sessionStartRef.current,
+      voice_mode: 'sse',
+    }).catch((err) => console.warn('[AriaVoiceHome] Failed to save session:', err));
+  }, [sessionId]);
+
   const handleFinalTranscript = useCallback((text) => {
-    if (!text || !text.trim()) return;
+    if (!text || !text.trim() || !sseMods?.streamMessage) return;
+    if (!sessionStartRef.current) sessionStartRef.current = new Date().toISOString();
+    transcriptRef.current.push({ role: 'user', content: text, timestamp: new Date().toISOString() });
 
     setVoiceState('processing');
     setResponseText(null);
     setToastExiting(false);
     setShowToast(false);
-    bufferRef.current = '';
 
-    // Stop any previous stream/TTS
     streamRef.current?.abort();
     ttsQueueRef.current?.stop();
 
     const queue = new TTSQueue();
     ttsQueueRef.current = queue;
-
-    // When all queued audio finishes playing, dismiss toast
     queue.onAllDone(() => {
       setVoiceState('idle');
       setToastExiting(true);
-      setTimeout(() => {
-        setShowToast(false);
-        setToastExiting(false);
-        setResponseText(null);
-      }, 250);
+      setTimeout(() => { setShowToast(false); setToastExiting(false); setResponseText(null); }, 250);
     });
 
     let firstChunk = true;
-
-    streamRef.current = streamMessage(text, sessionId, {
+    streamRef.current = sseMods.streamMessage(text, sessionId, {
       onChunk: (_chunk, fullText) => {
-        // Show toast and switch to speaking on first content
-        if (firstChunk) {
-          firstChunk = false;
-          setVoiceState('speaking');
-          setShowToast(true);
-        }
+        if (firstChunk) { firstChunk = false; setVoiceState('speaking'); setShowToast(true); }
         setResponseText(fullText);
-
-        // Buffer text, extract complete sentences, enqueue for TTS
-        bufferRef.current = fullText;
-
-        // Find sentences in the full accumulated text that we haven't spoken yet
-        const { sentences, leftover } = extractSentences(fullText);
-        // Queue any new complete sentences
-        // We track what's already been queued by the queue length + what's playing
-        // Simpler: re-extract from fullText each time, only queue new ones
-        // Use a separate counter
+        const { sentences } = extractSentences(fullText);
         const alreadyQueued = queue._sentenceCount || 0;
-        for (let i = alreadyQueued; i < sentences.length; i++) {
-          queue.enqueue(sentences[i]);
-        }
+        for (let i = alreadyQueued; i < sentences.length; i++) queue.enqueue(sentences[i]);
         queue._sentenceCount = sentences.length;
       },
-
       onDone: (fullText) => {
         setResponseText(fullText);
-        // Flush any remaining text that didn't end with punctuation
+        if (fullText) transcriptRef.current.push({ role: 'assistant', content: fullText, timestamp: new Date().toISOString() });
         const { leftover } = extractSentences(fullText);
-        if (leftover && leftover.trim()) {
-          queue.enqueue(leftover);
-        }
-        // If nothing was queued at all (very short response), queue the whole thing
-        if (!queue._sentenceCount && fullText.trim()) {
-          queue.enqueue(fullText);
-        }
+        if (leftover?.trim()) queue.enqueue(leftover);
+        if (!queue._sentenceCount && fullText?.trim()) queue.enqueue(fullText);
       },
-
       onError: (errMsg) => {
         setResponseText(errMsg || 'Sorry, something went wrong. Try again.');
         setShowToast(true);
@@ -290,47 +445,53 @@ export default function AriaVoiceHome() {
           setTimeout(() => { setShowToast(false); setToastExiting(false); setResponseText(null); }, 250);
         }, 5000);
       },
-
       onAction: (action) => {
         const tool = (action.tool || '').toLowerCase();
         const result = action.result || {};
-
-        let actionMessage = null;
+        let msg = null;
         if (tool.includes('sms') || tool.includes('send_notification') || tool.includes('text')) {
           const name = result.recipient_name || result.borrower_name || '';
-          actionMessage = name ? `SMS sent to ${name}` : 'SMS sent';
-        } else if (tool.includes('email')) {
-          actionMessage = 'Email sent';
-        } else if (tool.includes('create_task')) {
-          actionMessage = 'Task created';
-        }
-
-        if (actionMessage) {
+          msg = name ? `SMS sent to ${name}` : 'SMS sent';
+        } else if (tool.includes('email')) msg = 'Email sent';
+        else if (tool.includes('create_task')) msg = 'Task created';
+        if (msg) {
           clearTimeout(actionToastTimerRef.current);
-          setActionToast(actionMessage);
+          setActionToast(msg);
           actionToastTimerRef.current = setTimeout(() => setActionToast(null), 6000);
         }
       },
     });
-  }, [sessionId]);
+  }, [sessionId, sseMods]);
 
-  const {
-    isRecording,
-    transcript,
-    error: voiceError,
-    toggleRecording,
-  } = useAriaVoice({
-    onFinalTranscript: handleFinalTranscript,
-  });
+  // SSE voice hook — only active when NOT using LiveKit
+  // Static fallback avoids new object creation each render
+  const SSE_VOICE_NOOP = useRef({ isRecording: false, transcript: '', error: null, toggleRecording: () => {} }).current;
+  const sseVoice = (lkAvailable === false && sseMods?.useAriaVoice)
+    ? sseMods.useAriaVoice({ onFinalTranscript: handleFinalTranscript })
+    : SSE_VOICE_NOOP;
 
-  // Sync recording state to voiceState
+  // Sync SSE recording state
   useEffect(() => {
-    if (isRecording && voiceState === 'idle') {
-      setVoiceState('listening');
-    } else if (!isRecording && voiceState === 'listening') {
-      setVoiceState((prev) => (prev === 'listening' ? 'idle' : prev));
+    if (lkAvailable !== false) return;
+    if (sseVoice.isRecording && voiceState === 'idle') setVoiceState('listening');
+    else if (!sseVoice.isRecording && voiceState === 'listening') setVoiceState((prev) => prev === 'listening' ? 'idle' : prev);
+  }, [sseVoice.isRecording, voiceState, lkAvailable]);
+
+  // Abort SSE on network loss
+  useEffect(() => {
+    if (!isOnline && voiceState !== 'idle') {
+      streamRef.current?.abort();
+      ttsQueueRef.current?.stop();
+      setVoiceState('idle');
+      setResponseText('Connection lost.');
+      setShowToast(true);
+      clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => {
+        setToastExiting(true);
+        setTimeout(() => { setShowToast(false); setToastExiting(false); setResponseText(null); }, 250);
+      }, 5000);
     }
-  }, [isRecording, voiceState]);
+  }, [isOnline, voiceState]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -339,11 +500,22 @@ export default function AriaVoiceHome() {
       clearTimeout(actionToastTimerRef.current);
       streamRef.current?.abort();
       ttsQueueRef.current?.stop();
+      if (transcriptRef.current.length >= 2) saveSession();
     };
-  }, []);
+  }, [saveSession]);
 
-  // ---- Handlers ----
+  // ---- Mic tap handler ----
   const handleMicTap = useCallback(() => {
+    // LiveKit mode
+    if (lkAvailable) {
+      if (lkConnected) {
+        disconnectLiveKit();
+      } else {
+        connectLiveKit();
+      }
+      return;
+    }
+    // SSE mode
     if (voiceState === 'processing') return;
     if (voiceState === 'speaking') {
       streamRef.current?.abort();
@@ -351,22 +523,23 @@ export default function AriaVoiceHome() {
       setVoiceState('idle');
       return;
     }
-    toggleRecording();
-  }, [voiceState, toggleRecording]);
+    sseVoice.toggleRecording();
+  }, [lkAvailable, lkConnected, connectLiveKit, disconnectLiveKit, voiceState, sseVoice]);
 
-  const handleCallIntelligence = useCallback(() => {
-    setCiPanelOpen(true);
-  }, []);
-
-  // ---- Orb CSS class ----
+  // ---- Orb class ----
+  const currentVoiceState = lkConnected ? 'connected' : voiceState;
   const orbContainerClass = [
     'avh-orb-container',
-    voiceState !== 'idle' ? `avh-orb-container--${voiceState}` : '',
+    currentVoiceState !== 'idle' ? `avh-orb-container--${currentVoiceState}` : '',
   ].filter(Boolean).join(' ');
 
-  // ---- Tap label text ----
+  // ---- Tap label ----
   const tapLabelText = (() => {
-    if (voiceError && voiceState === 'idle') return voiceError;
+    if (lkConnecting) return 'Connecting...';
+    if (lkError) return lkError;
+    if (lkConnected) return 'Voice session active';
+    if (lkAvailable === null) return 'Checking voice service...';
+    if (sseVoice.error && voiceState === 'idle') return sseVoice.error;
     switch (voiceState) {
       case 'listening': return 'Listening...';
       case 'processing': return 'Thinking...';
@@ -375,18 +548,17 @@ export default function AriaVoiceHome() {
     }
   })();
 
-  return (
+  // ---- Render ----
+  const innerContent = (
     <div className="aria-voice-home">
       <OfflineIndicator />
-
-      {/* Safe-area top padding */}
       <div className="avh-status-bar" />
 
-      {/* Top bar with Call Intelligence button */}
+      {/* Top bar */}
       <div className="avh-top-bar">
         <button
           className={`avh-ci-button ${ciPanelOpen ? 'avh-ci-button--active' : ''}`}
-          onClick={handleCallIntelligence}
+          onClick={() => setCiPanelOpen(true)}
           type="button"
           aria-label={ciPanelOpen ? 'Call Intelligence active' : 'Open Call Intelligence'}
         >
@@ -395,66 +567,74 @@ export default function AriaVoiceHome() {
           </span>
           {ciPanelOpen ? 'CI Active' : 'Call Intelligence'}
         </button>
-      </div>
 
-      {/* Call Intelligence slide-up panel */}
-      {ciPanelOpen && (
-        <CallIntelligenceSlidePanel
-          onClose={() => setCiPanelOpen(false)}
-        />
-      )}
-
-      {/* Center content */}
-      <div className="avh-center">
-        {/* Live transcript overlay — visible during listening and briefly during processing */}
-        {(voiceState === 'listening' || voiceState === 'processing') && transcript && (
-          <div className={`avh-transcript-overlay ${voiceState === 'processing' ? 'avh-transcript-overlay--processing' : ''}`}>
-            <p className="avh-transcript-text">
-              {voiceState === 'listening' && <span className="avh-listening-dot" />}
-              {transcript}
-            </p>
-          </div>
+        {/* LiveKit indicator */}
+        {lkAvailable && (
+          <span className={`avh-lk-badge ${lkConnected ? 'avh-lk-badge--active' : ''}`}>
+            {lkConnected ? 'LIVE' : 'WebRTC'}
+          </span>
         )}
-
-        <h1 className="avh-title">Aria</h1>
-        <p className="avh-subtitle">Your AI Voice Assistant</p>
-
-        {/* Mic orb */}
-        <div className={orbContainerClass}>
-          <div className="avh-ring avh-ring--outer" />
-          <div className="avh-ring avh-ring--mid" />
-          <button
-            className="avh-ring avh-ring--inner"
-            onClick={handleMicTap}
-            aria-label={voiceState === 'listening' ? 'Stop listening' : 'Start voice input'}
-            aria-pressed={voiceState === 'listening'}
-            aria-busy={voiceState === 'processing'}
-            type="button"
-          >
-            <span className="avh-mic-icon">
-              <MicIcon />
-            </span>
-          </button>
-        </div>
-
-        <span className="avh-tap-label">{tapLabelText}</span>
       </div>
 
-      {/* Response toast — shows streaming text as it arrives */}
-      {showToast && responseText && (
-        <div className={`avh-response-toast ${toastExiting ? 'avh-response-toast--exiting' : ''}`}>
-          <div className="avh-response-toast-inner">
-            {responseText}
-          </div>
-        </div>
+      {ciPanelOpen && (
+        <CallIntelligenceSlidePanel onClose={() => setCiPanelOpen(false)} />
       )}
 
-      {/* Footer */}
+      {/* LiveKit mode — connected UI (guard must match LiveKitRoom wrapper at bottom) */}
+      {lkConnected && LiveKitRoom && lkToken && lkUrl ? (
+        <LiveKitVoiceUI
+          onDisconnect={disconnectLiveKit}
+          ciPanelOpen={ciPanelOpen}
+          setCiPanelOpen={setCiPanelOpen}
+        />
+      ) : (
+        <>
+          {/* SSE mode or idle */}
+          <div className="avh-center">
+            {(voiceState === 'listening' || voiceState === 'processing') && sseVoice.transcript && (
+              <div className={`avh-transcript-overlay ${voiceState === 'processing' ? 'avh-transcript-overlay--processing' : ''}`}>
+                <p className="avh-transcript-text">
+                  {voiceState === 'listening' && <span className="avh-listening-dot" />}
+                  {sseVoice.transcript}
+                </p>
+              </div>
+            )}
+
+            <h1 className="avh-title">Aria</h1>
+            <p className="avh-subtitle">Your AI Voice Assistant</p>
+
+            <div className={orbContainerClass}>
+              <div className="avh-ring avh-ring--outer" />
+              <div className="avh-ring avh-ring--mid" />
+              <button
+                className="avh-ring avh-ring--inner"
+                onClick={handleMicTap}
+                aria-label={voiceState === 'listening' ? 'Stop listening' : 'Start voice input'}
+                aria-pressed={voiceState === 'listening'}
+                aria-busy={voiceState === 'processing' || lkConnecting}
+                type="button"
+              >
+                <span className="avh-mic-icon">
+                  <MicIcon />
+                </span>
+              </button>
+            </div>
+
+            <span className="avh-tap-label">{tapLabelText}</span>
+          </div>
+
+          {showToast && responseText && (
+            <div className={`avh-response-toast ${toastExiting ? 'avh-response-toast--exiting' : ''}`}>
+              <div className="avh-response-toast-inner">{responseText}</div>
+            </div>
+          )}
+        </>
+      )}
+
       <div className="avh-footer">
         <span className="avh-powered">Powered by Perennia AI</span>
       </div>
 
-      {/* Action confirmation toast — persistent green bar for SMS/email/task */}
       {actionToast && (
         <div className="avh-action-toast">
           <span className="avh-action-toast-icon">{'\u2713'}</span>
@@ -462,8 +642,30 @@ export default function AriaVoiceHome() {
         </div>
       )}
 
-      {/* Bottom tab navigation */}
       <AriaTabNav variant="dark" activeTab="home" />
     </div>
   );
+
+  // Wrap in LiveKitRoom when connected
+  if (lkConnected && LiveKitRoom && lkToken && lkUrl) {
+    return (
+      <LiveKitRoom
+        serverUrl={lkUrl}
+        token={lkToken}
+        connect={true}
+        audio={true}
+        video={false}
+        onDisconnected={disconnectLiveKit}
+        onError={(err) => {
+          console.error('[LiveKit] Room error:', err);
+          setLkError('Voice connection lost');
+          disconnectLiveKit();
+        }}
+      >
+        {innerContent}
+      </LiveKitRoom>
+    );
+  }
+
+  return innerContent;
 }

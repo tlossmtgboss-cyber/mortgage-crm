@@ -214,6 +214,7 @@ const MobileNotificationCenter = lazyRetry(() => import('./pages/MobileNotificat
 import MobileErrorBoundary from './components/mobile/MobileErrorBoundary';
 import { getToken, getUserData } from './utils/tokenStore';
 const AriaVoiceHome = lazyRetry(() => import('./pages/aria-mobile/AriaVoiceHome'));
+const AriaVoiceHistory = lazyRetry(() => import('./pages/aria-mobile/AriaVoiceHistory'));
 const MobileCalendar = lazyRetry(() => import('./pages/aria-mobile/MobileCalendar'));
 const MobileTasks = lazyRetry(() => import('./pages/aria-mobile/MobileTasks'));
 const MobileAppointmentDetail = lazyRetry(() => import('./pages/aria-mobile/MobileAppointmentDetail'));
@@ -774,6 +775,7 @@ function App() {
           <Route path="/aria/notifications" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileNotificationCenter /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           {/* Aria Mobile Redesign — voice-first 5-screen app */}
           <Route path="/aria-voice" element={<MobileErrorBoundary><PrivateRoute><LazyPage><AriaVoiceHome /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
+          <Route path="/aria-history" element={<MobileErrorBoundary><PrivateRoute><LazyPage><AriaVoiceHistory /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           <Route path="/mobile-calendar" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileCalendar /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           <Route path="/mobile-tasks" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileTasks /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           <Route path="/mobile-appointment/:id" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileAppointmentDetail /></LazyPage></PrivateRoute></MobileErrorBoundary>} />

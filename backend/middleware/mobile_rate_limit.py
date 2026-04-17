@@ -105,6 +105,12 @@ MOBILE_RATE_LIMITS = {
 
     # Audit events (batch)
     "/api/v1/audit/mobile-events": {"requests": 5, "window": 60},
+
+    # LiveKit token provisioning (expensive — limit to prevent abuse)
+    "/api/v1/livekit/token": {"requests": 10, "window": 60},
+
+    # Voice session save (infrequent — one per voice session)
+    "/api/v1/mobile-voice/sessions/save": {"requests": 10, "window": 60},
 }
 
 # Default limits applied to any mobile request that does not match a specific path.

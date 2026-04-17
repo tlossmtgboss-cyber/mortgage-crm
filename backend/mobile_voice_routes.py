@@ -5,6 +5,7 @@ Uses Deepgram for streaming STT and ElevenLabs for streaming TTS
 """
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, HTTPException, Request
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 import logging
@@ -370,13 +371,15 @@ class AriaVoiceAgent:
         self.user_id = user_id
         self.conversation_history = []
         self.session_id = str(uuid.uuid4())
+        self.tools_executed = []  # Track tool calls for session persistence
 
     async def process_user_message(self, transcript: str, db: Session) -> str:
         """Process user message and generate AI response using AI orchestrator with full tool access"""
-        # Add to conversation history
+        # Add to conversation history with timestamp
         self.conversation_history.append({
             "role": "user",
-            "content": transcript
+            "content": transcript,
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
         import traceback
@@ -505,7 +508,8 @@ Note: I'm currently unable to access the CRM system. Please let the user know th
         # Add assistant response to history
         self.conversation_history.append({
             "role": "assistant",
-            "content": response
+            "content": response,
+            "timestamp": datetime.now(timezone.utc).isoformat()
         })
 
         # Truncate for voice - keep responses under 200 characters for faster TTS
@@ -526,9 +530,10 @@ Note: I'm currently unable to access the CRM system. Please let the user know th
 class MobileVoiceSession:
     """Manages a mobile voice conversation session"""
 
-    def __init__(self, websocket: WebSocket, user_id: str, db: Session):
+    def __init__(self, websocket: WebSocket, user_id: str, user_obj, db: Session):
         self.websocket = websocket
         self.user_id = user_id
+        self.user_obj = user_obj  # SQLAlchemy User model for persistence
         self.db = db
         self.session_id = str(uuid.uuid4())
         self.is_active = True
@@ -545,6 +550,7 @@ class MobileVoiceSession:
         self.silence_timer = None
         self.last_message_time = time.monotonic()
         self._idle_check_task: Optional[asyncio.Task] = None
+        self._session_started_at = datetime.now(timezone.utc)
 
     async def start(self):
         """Initialize the voice session"""
@@ -691,7 +697,12 @@ class MobileVoiceSession:
                     })
                     return
 
-                audio_bytes = base64.b64decode(audio_data)
+                try:
+                    audio_bytes = base64.b64decode(audio_data)
+                except Exception:
+                    logger.warning("[MobileVoiceSession] Invalid base64 audio data")
+                    await self._send_event("error", {"message": "Invalid audio data"})
+                    return
 
                 if len(audio_bytes) > MAX_AUDIO_CHUNK_BYTES:
                     logger.warning(
@@ -763,7 +774,7 @@ class MobileVoiceSession:
             logger.error(f"[MobileVoiceSession] Error sending event: {e}")
 
     async def close(self):
-        """Close the voice session"""
+        """Close the voice session and persist call data"""
         self.is_active = False
 
         if self._idle_check_task and not self._idle_check_task.done():
@@ -772,7 +783,69 @@ class MobileVoiceSession:
         if self.stt_client:
             await self.stt_client.close()
 
+        # Persist call session to database
+        await self._persist_session()
+
         logger.info(f"[MobileVoiceSession] Session {self.session_id} closed")
+
+    async def _persist_session(self):
+        """Save call session data to voice_call_sessions table."""
+        try:
+            from database.models.voice_call_session import VoiceCallSession
+
+            ended_at = datetime.now(timezone.utc)
+            started_at = self.voice_agent.conversation_history[0].get("timestamp") if self.voice_agent.conversation_history else ended_at
+            if isinstance(started_at, str):
+                started_at = datetime.fromisoformat(started_at)
+
+            # Calculate duration
+            duration = int((ended_at - (self._session_started_at or ended_at)).total_seconds())
+
+            # Determine outcome based on tool usage
+            tools = self.voice_agent.tools_executed
+            if tools:
+                outcome = "action_taken"
+            elif len(self.voice_agent.conversation_history) > 2:
+                outcome = "info_provided"
+            elif len(self.voice_agent.conversation_history) <= 2:
+                outcome = "abandoned"
+            else:
+                outcome = "completed"
+
+            # Determine TTS provider name
+            tts_provider_name = None
+            if self.tts_client:
+                tts_provider_name = type(self.tts_client).__name__.replace("TTSClient", "").replace("Client", "").lower()
+
+            session_record = VoiceCallSession(
+                session_uuid=self.session_id,
+                organization_id=getattr(self.user_obj, "organization_id", None),
+                user_id=getattr(self.user_obj, "id", 0),
+                direction="inbound",
+                status="completed" if len(self.voice_agent.conversation_history) > 1 else "abandoned",
+                voice_mode="websocket",
+                started_at=self._session_started_at or ended_at,
+                ended_at=ended_at,
+                duration_seconds=max(duration, 0),
+                tools_executed=tools if tools else None,
+                tool_count=len(tools),
+                transcript=self.voice_agent.conversation_history or None,
+                message_count=len(self.voice_agent.conversation_history),
+                stt_provider="deepgram" if DEEPGRAM_API_KEY else "web_speech_api",
+                tts_provider=tts_provider_name,
+                tts_voice_id=getattr(self.tts_client, "voice_id", None) if self.tts_client else None,
+                outcome=outcome,
+            )
+            self.db.add(session_record)
+            self.db.commit()
+            logger.info(f"[MobileVoiceSession] Persisted session {self.session_id} ({duration}s, {len(self.voice_agent.conversation_history)} messages)")
+
+        except Exception as e:
+            logger.error(f"[MobileVoiceSession] Failed to persist session: {e}")
+            try:
+                self.db.rollback()
+            except Exception:
+                pass
 
 
 # =============================================================================
@@ -885,7 +958,7 @@ async def mobile_voice_websocket(
                 return
 
         # Create voice session
-        session = MobileVoiceSession(websocket, user_id, db)
+        session = MobileVoiceSession(websocket, user_id, auth_user, db)
         await session.start()
 
         # Main message loop
@@ -1077,6 +1150,7 @@ async def get_user_voice_preference(
     db: Session = Depends(get_db)
 ):
     """Get user's saved voice preference for voice assistant conversations"""
+    from sqlalchemy import text
     try:
         # Check user_settings table for tts_voice and tts_provider
         result = db.execute(
@@ -1104,18 +1178,24 @@ async def get_user_voice_preference(
         }
 
 
+class VoicePreferenceRequest(BaseModel):
+    voice_id: str
+    provider: str
+
+
 @router.put("/user-voice-preference")
 async def save_user_voice_preference(
-    request: dict,
+    request: VoicePreferenceRequest,
     current_user: "User" = Depends(get_current_user_lazy),
     db: Session = Depends(get_db)
 ):
     """Save user's voice preference for voice assistant conversations"""
-    voice_id = request.get("voice_id")
-    provider = request.get("provider")
+    from sqlalchemy import text
+    voice_id = request.voice_id
+    provider = request.provider
 
     if not voice_id or not provider:
-        raise HTTPException(400, "voice_id and provider are required")
+        raise HTTPException(status_code=400, detail="voice_id and provider are required")
 
     # Validate provider
     valid_providers = ["google", "elevenlabs", "openai"]
@@ -1159,3 +1239,353 @@ async def save_user_voice_preference(
         db.rollback()
         logger.error(f"[VoicePreference] Error saving preference: {e}")
         raise HTTPException(500, "Failed to save voice preference")
+
+
+# =============================================================================
+# Voice Call History & Analytics Endpoints
+# =============================================================================
+
+@router.get("/calls")
+async def list_voice_calls(
+    limit: int = 20,
+    offset: int = 0,
+    status: Optional[str] = None,
+    current_user: "User" = Depends(get_current_user_lazy),
+    db: Session = Depends(get_db),
+):
+    """List the authenticated user's voice conversation history."""
+    from sqlalchemy import text as sa_text
+
+    where_clauses = ["user_id = :user_id"]
+    params: Dict[str, Any] = {"user_id": current_user.id, "lim": min(max(limit, 1), 100), "off": max(offset, 0)}
+
+    if status:
+        where_clauses.append("status = :status")
+        params["status"] = status
+
+    where = " AND ".join(where_clauses)
+
+    rows = db.execute(
+        sa_text(f"""
+            SELECT id, session_uuid, status, voice_mode,
+                   started_at, ended_at, duration_seconds,
+                   summary, sentiment, outcome,
+                   tool_count, message_count,
+                   stt_provider, tts_provider
+            FROM voice_call_sessions
+            WHERE {where}
+            ORDER BY started_at DESC
+            LIMIT :lim OFFSET :off
+        """),
+        params,
+    ).fetchall()
+
+    total = db.execute(
+        sa_text(f"SELECT COUNT(*) FROM voice_call_sessions WHERE {where}"),
+        params,
+    ).scalar() or 0
+
+    calls = []
+    for r in rows:
+        calls.append({
+            "id": r[0],
+            "session_uuid": r[1],
+            "status": r[2],
+            "voice_mode": r[3],
+            "started_at": r[4].isoformat() if r[4] else None,
+            "ended_at": r[5].isoformat() if r[5] else None,
+            "duration_seconds": r[6],
+            "summary": r[7],
+            "sentiment": r[8],
+            "outcome": r[9],
+            "tool_count": r[10],
+            "message_count": r[11],
+            "stt_provider": r[12],
+            "tts_provider": r[13],
+        })
+
+    return {"calls": calls, "total": total, "limit": limit, "offset": offset}
+
+
+@router.get("/calls/{session_uuid}")
+async def get_voice_call_detail(
+    session_uuid: str,
+    current_user: "User" = Depends(get_current_user_lazy),
+    db: Session = Depends(get_db),
+):
+    """Get full details of a voice call session including transcript."""
+    from sqlalchemy import text as sa_text
+
+    row = db.execute(
+        sa_text("""
+            SELECT id, session_uuid, organization_id, user_id,
+                   direction, status, voice_mode,
+                   started_at, ended_at, duration_seconds,
+                   summary, sentiment, outcome,
+                   tools_executed, tool_count,
+                   transcript, message_count,
+                   stt_provider, tts_provider, tts_voice_id,
+                   lead_id, loan_id, error_message, created_at
+            FROM voice_call_sessions
+            WHERE session_uuid = :uuid AND user_id = :uid
+        """),
+        {"uuid": session_uuid, "uid": current_user.id},
+    ).fetchone()
+
+    if not row:
+        raise HTTPException(404, "Voice call session not found")
+
+    return {
+        "id": row[0],
+        "session_uuid": row[1],
+        "organization_id": row[2],
+        "user_id": row[3],
+        "direction": row[4],
+        "status": row[5],
+        "voice_mode": row[6],
+        "started_at": row[7].isoformat() if row[7] else None,
+        "ended_at": row[8].isoformat() if row[8] else None,
+        "duration_seconds": row[9],
+        "summary": row[10],
+        "sentiment": row[11],
+        "outcome": row[12],
+        "tools_executed": row[13],
+        "tool_count": row[14],
+        "transcript": row[15],
+        "message_count": row[16],
+        "stt_provider": row[17],
+        "tts_provider": row[18],
+        "tts_voice_id": row[19],
+        "lead_id": row[20],
+        "loan_id": row[21],
+        "error_message": row[22],
+        "created_at": row[23].isoformat() if row[23] else None,
+    }
+
+
+@router.get("/analytics")
+async def get_voice_analytics(
+    days: int = 30,
+    current_user: "User" = Depends(get_current_user_lazy),
+    db: Session = Depends(get_db),
+):
+    """Voice usage analytics and KPIs for the authenticated user."""
+    from sqlalchemy import text as sa_text
+
+    params = {"user_id": current_user.id, "days": days}
+
+    stats = db.execute(
+        sa_text("""
+            SELECT
+                COUNT(*) AS total_calls,
+                COUNT(*) FILTER (WHERE status = 'completed') AS completed_calls,
+                COUNT(*) FILTER (WHERE status = 'abandoned') AS abandoned_calls,
+                COALESCE(AVG(duration_seconds) FILTER (WHERE status = 'completed'), 0) AS avg_duration,
+                COALESCE(SUM(tool_count), 0) AS total_tools_executed,
+                COALESCE(AVG(message_count) FILTER (WHERE status = 'completed'), 0) AS avg_messages,
+                COUNT(*) FILTER (WHERE sentiment = 'positive') AS positive_count,
+                COUNT(*) FILTER (WHERE sentiment = 'negative') AS negative_count,
+                COUNT(*) FILTER (WHERE sentiment = 'neutral') AS neutral_count,
+                COUNT(*) FILTER (WHERE outcome = 'action_taken') AS action_taken_count,
+                COUNT(*) FILTER (WHERE outcome = 'info_provided') AS info_provided_count,
+                COUNT(*) FILTER (WHERE outcome = 'escalated') AS escalated_count
+            FROM voice_call_sessions
+            WHERE user_id = :user_id
+              AND started_at >= NOW() - MAKE_INTERVAL(days => :days)
+        """),
+        params,
+    ).fetchone()
+
+    # Daily volume for chart
+    daily = db.execute(
+        sa_text("""
+            SELECT DATE(started_at) AS day, COUNT(*) AS count
+            FROM voice_call_sessions
+            WHERE user_id = :user_id
+              AND started_at >= NOW() - MAKE_INTERVAL(days => :days)
+            GROUP BY DATE(started_at)
+            ORDER BY day
+        """),
+        params,
+    ).fetchall()
+
+    return {
+        "period_days": days,
+        "total_calls": stats[0] or 0,
+        "completed_calls": stats[1] or 0,
+        "abandoned_calls": stats[2] or 0,
+        "avg_duration_seconds": round(float(stats[3] or 0), 1),
+        "total_tools_executed": int(stats[4] or 0),
+        "avg_messages_per_call": round(float(stats[5] or 0), 1),
+        "sentiment": {
+            "positive": stats[6] or 0,
+            "negative": stats[7] or 0,
+            "neutral": stats[8] or 0,
+        },
+        "outcomes": {
+            "action_taken": stats[9] or 0,
+            "info_provided": stats[10] or 0,
+            "escalated": stats[11] or 0,
+        },
+        "daily_volume": [
+            {"date": str(row[0]), "count": row[1]} for row in daily
+        ],
+    }
+
+
+# =============================================================================
+# SSE Voice Session Persistence (for AriaVoiceHome which uses SSE, not WebSocket)
+# =============================================================================
+
+async def _generate_call_summary(transcript: list) -> dict:
+    """Generate AI summary, sentiment, and outcome from a voice transcript."""
+    if not transcript or len(transcript) < 2:
+        return {"summary": None, "sentiment": None, "outcome": "abandoned"}
+
+    try:
+        from anthropic import AsyncAnthropic
+
+        client = AsyncAnthropic()
+
+        convo_text = "\n".join(
+            f"{'User' if m.get('role') == 'user' else 'Aria'}: {m.get('content', '')}"
+            for m in transcript
+            if m.get("content")
+        )
+
+        response = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            messages=[{
+                "role": "user",
+                "content": f"""Summarize this voice conversation between a mortgage loan officer (User) and their AI assistant (Aria) in 1-2 sentences. Also classify the sentiment and outcome.
+
+Conversation:
+{convo_text[:2000]}
+
+Respond in this exact JSON format:
+{{"summary": "...", "sentiment": "positive|neutral|negative|mixed", "outcome": "action_taken|info_provided|escalated|abandoned|completed"}}"""
+            }],
+        )
+
+        text = response.content[0].text
+        # Find the JSON object — handle nested braces in values
+        brace_start = text.find('{')
+        if brace_start >= 0:
+            depth = 0
+            for i in range(brace_start, len(text)):
+                if text[i] == '{':
+                    depth += 1
+                elif text[i] == '}':
+                    depth -= 1
+                    if depth == 0:
+                        try:
+                            return json.loads(text[brace_start:i + 1])
+                        except json.JSONDecodeError:
+                            break
+    except Exception as e:
+        logger.error(f"[CallSummary] Error generating summary: {e}")
+
+    return {"summary": None, "sentiment": None, "outcome": "completed"}
+
+
+@router.post("/sessions/save")
+async def save_voice_session(
+    request: Request,
+    current_user: "User" = Depends(get_current_user_lazy),
+    db: Session = Depends(get_db),
+):
+    """
+    Persist a voice conversation session from the SSE-based AriaVoiceHome.
+
+    Called by the frontend when a voice conversation ends. Accepts the
+    conversation transcript and metadata, generates an AI summary, and
+    saves to voice_call_sessions.
+
+    Body:
+        {
+            "session_id": "aria-voice-...",
+            "transcript": [{"role": "user"|"assistant", "content": "..."}],
+            "started_at": "2026-04-15T12:00:00Z",  // optional
+            "voice_mode": "sse"                      // optional
+        }
+    """
+    data = await request.json()
+    transcript = data.get("transcript", [])
+    session_uuid = data.get("session_id") or str(uuid.uuid4())
+    voice_mode = data.get("voice_mode", "sse")
+
+    if not transcript:
+        raise HTTPException(400, "transcript is required")
+
+    # Check for duplicate session
+    from sqlalchemy import text as sa_text
+    existing = db.execute(
+        sa_text("SELECT id FROM voice_call_sessions WHERE session_uuid = :uuid"),
+        {"uuid": session_uuid},
+    ).fetchone()
+    if existing:
+        return {"success": True, "message": "Session already saved", "session_uuid": session_uuid}
+
+    # Generate AI summary
+    summary_data = await _generate_call_summary(transcript)
+
+    # Parse started_at from request or first transcript entry
+    started_at = None
+    raw_start = data.get("started_at")
+    if raw_start:
+        try:
+            started_at = datetime.fromisoformat(raw_start.replace("Z", "+00:00"))
+        except (ValueError, AttributeError):
+            pass
+    if not started_at:
+        started_at = datetime.now(timezone.utc)
+
+    ended_at = datetime.now(timezone.utc)
+    duration = int((ended_at - started_at).total_seconds())
+
+    # Determine TTS provider from status endpoint logic
+    tts_provider = None
+    if GOOGLE_TTS_ENABLED:
+        tts_provider = "google"
+    elif ELEVENLABS_API_KEY:
+        tts_provider = "elevenlabs"
+    elif OPENAI_API_KEY:
+        tts_provider = "openai"
+
+    from database.models.voice_call_session import VoiceCallSession
+
+    record = VoiceCallSession(
+        session_uuid=session_uuid,
+        organization_id=getattr(current_user, "organization_id", None),
+        user_id=current_user.id,
+        direction="inbound",
+        status="completed" if len(transcript) > 1 else "abandoned",
+        voice_mode=voice_mode,
+        started_at=started_at,
+        ended_at=ended_at,
+        duration_seconds=max(duration, 0),
+        summary=summary_data.get("summary"),
+        sentiment=summary_data.get("sentiment"),
+        outcome=summary_data.get("outcome"),
+        transcript=transcript,
+        message_count=len(transcript),
+        stt_provider="web_speech_api",
+        tts_provider=tts_provider,
+        tts_voice_id=ELEVENLABS_VOICE_ID if tts_provider == "elevenlabs" else None,
+    )
+    db.add(record)
+    db.commit()
+
+    logger.info(
+        f"[VoiceSession] Saved SSE session {session_uuid} "
+        f"({duration}s, {len(transcript)} msgs, sentiment={summary_data.get('sentiment')})"
+    )
+
+    return {
+        "success": True,
+        "session_uuid": session_uuid,
+        "summary": summary_data.get("summary"),
+        "sentiment": summary_data.get("sentiment"),
+        "outcome": summary_data.get("outcome"),
+    }

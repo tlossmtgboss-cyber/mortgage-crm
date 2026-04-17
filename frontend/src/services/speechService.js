@@ -102,6 +102,13 @@ async function startNativeListening({ language, partialResults, onPartialResult,
     }
   });
 
+  // Listen for recognition ending (iOS terminates after ~60s of continuous listening)
+  await plugin.addListener('listeningState', (data) => {
+    if (data.status === 'stopped') {
+      onEnd?.();
+    }
+  });
+
   // Start recognition
   try {
     await plugin.start({

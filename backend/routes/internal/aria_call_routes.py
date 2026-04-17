@@ -19,15 +19,19 @@ logger = logging.getLogger("aria.internal.calls")
 
 router = APIRouter(prefix="/internal/aria", tags=["Aria Internal Calls"])
 
-INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 TELNYX_API_KEY = os.environ.get("TELNYX_API_KEY", "")
 TELNYX_PHONE_NUMBER = os.environ.get("TELNYX_PHONE_NUMBER", "")
 TELNYX_CONNECTION_ID = os.environ.get("TELNYX_CONNECTION_ID", "")
 
 
 def _verify_internal_key(request: Request):
+    """Verify X-Internal-API-Key header. Reads env at request time so
+    tests can set it after module import.
+    Uses constant-time comparison to prevent timing side-channel attacks."""
+    import hmac
+    expected = os.environ.get("INTERNAL_API_KEY", "")
     key = request.headers.get("X-Internal-API-Key", "")
-    if not INTERNAL_API_KEY or key != INTERNAL_API_KEY:
+    if not expected or not hmac.compare_digest(key, expected):
         raise HTTPException(status_code=403, detail="Invalid internal API key")
 
 
@@ -77,7 +81,7 @@ async def initiate_outbound_call(
     if not normalized:
         return {"success": False, "error": f"Invalid phone: {req.to_phone}"}
 
-    # Record TCPA authorization
+    # Record TCPA authorization — compliance-critical, commit before placing call
     try:
         from database.models.call_authorization import CallAuthorization
         auth_record = CallAuthorization(
@@ -87,41 +91,47 @@ async def initiate_outbound_call(
             rule_id=req.rule_id,
         )
         db.add(auth_record)
-        db.flush()
+        db.commit()
     except Exception as e:
+        db.rollback()
         logger.error(f"Failed to record call authorization: {e}")
+        return {"success": False, "error": "TCPA authorization record failed — call blocked for compliance"}
 
-    # Place call via Telnyx Call Control API
+    # Place call via Telnyx Call Control API (async to avoid blocking event loop)
     from agents.aria_config import OUTBOUND_CALL_CONFIG
-    import requests
+    import httpx
+
+    telnyx_key = os.environ.get("TELNYX_API_KEY", "") or TELNYX_API_KEY
+    telnyx_phone = os.environ.get("TELNYX_PHONE_NUMBER", "") or TELNYX_PHONE_NUMBER
+    telnyx_conn = os.environ.get("TELNYX_CONNECTION_ID", "") or TELNYX_CONNECTION_ID
 
     try:
         payload = {
             "to": normalized,
-            "from": TELNYX_PHONE_NUMBER,
-            "connection_id": TELNYX_CONNECTION_ID,
+            "from": telnyx_phone,
+            "connection_id": telnyx_conn,
             "answering_machine_detection": OUTBOUND_CALL_CONFIG["answering_machine_detection"],
             "answering_machine_detection_config": OUTBOUND_CALL_CONFIG["answering_machine_detection_config"],
             "timeout_secs": OUTBOUND_CALL_CONFIG["timeout_secs"],
             "webhook_url": f"{os.getenv('API_URL', 'https://api.perenniaai.com')}/api/v1/telnyx/webhook",
         }
 
-        resp = requests.post(
-            "https://api.telnyx.com/v2/calls",
-            headers={
-                "Authorization": f"Bearer {TELNYX_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=10,
-        )
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                "https://api.telnyx.com/v2/calls",
+                headers={
+                    "Authorization": f"Bearer {telnyx_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
 
         if resp.status_code in (200, 201):
             data = resp.json()
             call_control_id = data.get("data", {}).get("call_control_id")
             return {"success": True, "call_control_id": call_control_id}
         else:
-            logger.error(f"Telnyx call initiation failed: {resp.status_code} {resp.text[:200]}")
+            logger.error(f"Telnyx call initiation failed: HTTP {resp.status_code}")
             return {"success": False, "error": "Failed to initiate call"}
     except Exception as e:
         logger.error(f"Outbound call error: {e}")
@@ -177,21 +187,21 @@ async def voicemail_drop(
     if not message:
         return {"success": False, "error": f"Unknown voicemail template: {req.intent}"}
 
-    # Send paired SMS (non-blocking)
+    # Send paired SMS — await directly so DB session stays alive
+    sms_sent = False
     try:
         from integrations.sms_service import SMSClient
         sms_client = SMSClient(db)
         phone = req.template_context.get("phone", "")
         if phone:
-            asyncio.create_task(
-                sms_client.send_sms(
-                    to_phone=phone,
-                    message=message,
-                    lead_id=req.lead_id,
-                    bypass_compliance=False,
-                )
+            await sms_client.send_sms(
+                to_phone=phone,
+                message=message,
+                lead_id=req.lead_id,
+                bypass_compliance=False,
             )
+            sms_sent = True
     except Exception as e:
         logger.warning(f"Paired SMS failed: {e}")
 
-    return {"success": True, "voicemail_text": message}
+    return {"success": True, "voicemail_text": message, "sms_sent": sms_sent}

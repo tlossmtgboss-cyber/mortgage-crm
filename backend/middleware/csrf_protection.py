@@ -62,6 +62,8 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/invite",  # Public invite acceptance (no auth context)
         "/api/integrations",  # New integration routes
         "/api/v1/ai",  # AI chat/orchestrator — uses JWT Bearer auth via raw fetch() for SSE streaming
+        "/api/v1/livekit",  # LiveKit token provisioning — uses JWT Bearer auth, no session context
+        "/api/v1/mobile-voice",  # Mobile voice endpoints — uses JWT Bearer auth
         "/api/v1/app",  # Mobile app compatibility/health (unauthenticated, pre-login)
         "/health",
         "/api/health",

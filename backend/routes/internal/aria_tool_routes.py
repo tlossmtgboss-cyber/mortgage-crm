@@ -21,10 +21,12 @@ router = APIRouter(prefix="/internal/aria", tags=["Aria Internal"])
 
 def _verify_internal_key(request: Request):
     """Verify X-Internal-API-Key header matches the INTERNAL_API_KEY env var.
-    Reads env at request time so tests can set it after module import."""
+    Reads env at request time so tests can set it after module import.
+    Uses constant-time comparison to prevent timing side-channel attacks."""
+    import hmac
     expected = os.environ.get("INTERNAL_API_KEY", "")
     key = request.headers.get("X-Internal-API-Key", "")
-    if not expected or key != expected:
+    if not expected or not hmac.compare_digest(key, expected):
         raise HTTPException(status_code=403, detail="Invalid internal API key")
 
 
@@ -34,17 +36,26 @@ class LeadLookupRequest(BaseModel):
     phone: Optional[str] = None
     email: Optional[str] = None
     lead_id: Optional[int] = None
+    organization_id: Optional[int] = None
 
 class ToolExecuteRequest(BaseModel):
     tool_name: str
     params: Dict[str, Any] = {}
+    organization_id: Optional[int] = None
 
 class LeadInfoRequest(BaseModel):
     lead_id: int
+    organization_id: Optional[int] = None
 
 class LoanStatusRequest(BaseModel):
     borrower_id: Optional[int] = None
     loan_id: Optional[int] = None
+    organization_id: Optional[int] = None
+
+class LOInfoRequest(BaseModel):
+    lead_id: Optional[int] = None
+    user_id: Optional[int] = None
+    organization_id: Optional[int] = None
 
 
 # ─── Endpoints ──────────────────────────────────────────────────────────────
@@ -59,16 +70,20 @@ async def lead_lookup(
     from database.models.lead_loan import Lead
 
     lead = None
+    base_q = db.query(Lead)
+    if req.organization_id:
+        base_q = base_q.filter(Lead.organization_id == req.organization_id)
+
     if req.lead_id:
-        lead = db.query(Lead).filter(Lead.id == req.lead_id).first()
+        lead = base_q.filter(Lead.id == req.lead_id).first()
     elif req.phone:
         from integrations.sms_service import _to_e164
         normalized = _to_e164(req.phone) or req.phone
-        lead = db.query(Lead).filter(Lead.phone == normalized).first()
+        lead = base_q.filter(Lead.phone == normalized).first()
         if not lead:
-            lead = db.query(Lead).filter(Lead.phone == req.phone).first()
+            lead = base_q.filter(Lead.phone == req.phone).first()
     elif req.email:
-        lead = db.query(Lead).filter(Lead.email == req.email).first()
+        lead = base_q.filter(Lead.email == req.email).first()
 
     if not lead:
         return {"lead": None}
@@ -99,7 +114,10 @@ async def lead_info(
 ):
     _verify_internal_key(request)
     from database.models.lead_loan import Lead
-    lead = db.query(Lead).filter(Lead.id == req.lead_id).first()
+    q = db.query(Lead).filter(Lead.id == req.lead_id)
+    if req.organization_id:
+        q = q.filter(Lead.organization_id == req.organization_id)
+    lead = q.first()
     if not lead:
         return {"error": f"Lead {req.lead_id} not found"}
     return {
@@ -123,9 +141,15 @@ async def loan_status(
 
     loan = None
     if req.loan_id:
-        loan = db.query(Loan).filter(Loan.id == req.loan_id).first()
+        q = db.query(Loan).filter(Loan.id == req.loan_id)
+        if req.organization_id:
+            q = q.filter(Loan.organization_id == req.organization_id)
+        loan = q.first()
     elif req.borrower_id:
-        lead = db.query(Lead).filter(Lead.id == req.borrower_id).first()
+        q = db.query(Lead).filter(Lead.id == req.borrower_id)
+        if req.organization_id:
+            q = q.filter(Lead.organization_id == req.organization_id)
+        lead = q.first()
         if lead:
             loan = db.query(Loan).filter(Loan.lead_id == lead.id).order_by(Loan.created_at.desc()).first()
 
@@ -167,8 +191,18 @@ async def execute_tool(
 
     try:
         import asyncio
+        import inspect
+
+        # Validate params against tool function signature to prevent injection
+        sig = inspect.signature(tool_def.func)
+        allowed_params = set(sig.parameters.keys())
+        unknown = set(req.params.keys()) - allowed_params
+        if unknown:
+            return {"error": f"Unknown parameters for '{req.tool_name}': {', '.join(sorted(unknown))}"}
+
+        safe_params = {k: v for k, v in req.params.items() if k in allowed_params}
         loop = asyncio.get_event_loop()
-        result = await loop.run_in_executor(None, lambda: tool_def.func(**req.params))
+        result = await loop.run_in_executor(None, lambda: tool_def.func(**safe_params))
         if hasattr(result, "to_dict"):
             return {"result": result.to_dict()}
         return {"result": result}
@@ -179,18 +213,23 @@ async def execute_tool(
 
 @router.post("/lo-info")
 async def lo_info(
+    req: LOInfoRequest,
     request: Request,
     db: Session = Depends(get_db),
-    lead_id: int = None,
-    user_id: int = None,
 ):
     """Get the assigned LO for a lead, or info about a specific user."""
     _verify_internal_key(request)
     from database.models.core import User
     from database.models.lead_loan import Lead
 
+    lead_id = req.lead_id
+    user_id = req.user_id
+
     if lead_id:
-        lead = db.query(Lead).filter(Lead.id == lead_id).first()
+        q = db.query(Lead).filter(Lead.id == lead_id)
+        if req.organization_id:
+            q = q.filter(Lead.organization_id == req.organization_id)
+        lead = q.first()
         if not lead or not lead.owner_id:
             return {"error": "No LO assigned to this lead"}
         user_id = lead.owner_id

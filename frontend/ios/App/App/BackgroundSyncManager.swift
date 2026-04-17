@@ -95,11 +95,64 @@ struct CarPlayContact: Codable, Identifiable {
 
 // MARK: - Cache Keys
 
+// MARK: - Voice Call Summary (for Background Cache)
+
+struct VoiceCallSummary: Codable, Identifiable {
+    let id: String
+    let sessionUUID: String
+    let status: String
+    let startedAt: Date?
+    let duration: Double?
+    let summary: String?
+    let sentiment: String?
+    let outcome: String?
+    let toolCount: Int
+    let messageCount: Int
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case sessionUUID = "session_uuid"
+        case status
+        case startedAt = "started_at"
+        case duration = "duration_seconds"
+        case summary
+        case sentiment
+        case outcome
+        case toolCount = "tool_count"
+        case messageCount = "message_count"
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        // id may come as Int or String
+        if let intId = try? c.decode(Int.self, forKey: .id) {
+            id = String(intId)
+        } else if let strId = try? c.decode(String.self, forKey: .id) {
+            id = strId
+        } else {
+            // Fall back to session_uuid as id
+            id = try c.decode(String.self, forKey: .sessionUUID)
+        }
+        sessionUUID = try c.decode(String.self, forKey: .sessionUUID)
+        status = try c.decodeIfPresent(String.self, forKey: .status) ?? "unknown"
+        startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt)
+        duration = try c.decodeIfPresent(Double.self, forKey: .duration)
+        summary = try c.decodeIfPresent(String.self, forKey: .summary)
+        sentiment = try c.decodeIfPresent(String.self, forKey: .sentiment)
+        outcome = try c.decodeIfPresent(String.self, forKey: .outcome)
+        toolCount = try c.decodeIfPresent(Int.self, forKey: .toolCount) ?? 0
+        messageCount = try c.decodeIfPresent(Int.self, forKey: .messageCount) ?? 0
+    }
+}
+
+// MARK: - Cache Keys
+
 private enum CacheKey {
     static let dashboard = "carplay_dashboard_cache"
     static let tasks = "carplay_tasks_cache"
     static let contacts = "carplay_contacts_cache"
     static let rateAlerts = "carplay_rate_alerts_cache"
+    static let voiceCalls = "carplay_voice_calls_cache"
     static let lastSync = "carplay_last_sync"
     static let authToken = "carplay_auth_token"
 }
@@ -159,7 +212,12 @@ final class BackgroundSyncManager {
 
     /// Minimum interval between syncs to avoid excessive API calls.
     /// Increases on 429 rate-limit responses and resets on successful syncs.
-    private var minimumSyncInterval: TimeInterval = 300
+    /// Thread-safe via syncQueue, same as isSyncing.
+    private var _minimumSyncInterval: TimeInterval = 300
+    private var minimumSyncInterval: TimeInterval {
+        get { syncQueue.sync { _minimumSyncInterval } }
+        set { syncQueue.sync { _minimumSyncInterval = newValue } }
+    }
 
     /// Whether a sync is currently in progress (atomic via syncQueue).
     private var _isSyncing = false
@@ -229,7 +287,11 @@ final class BackgroundSyncManager {
                 task.setTaskCompleted(success: false)
                 return
             }
-            self.handleScheduledBackgroundTask(task as! BGAppRefreshTask)
+            guard let refreshTask = task as? BGAppRefreshTask else {
+                task.setTaskCompleted(success: false)
+                return
+            }
+            self.handleScheduledBackgroundTask(refreshTask)
         }
         logger.info("Registered background task: \(self.bgTaskIdentifier)")
     }
@@ -259,20 +321,29 @@ final class BackgroundSyncManager {
     /// Perform a background fetch cycle. Called by AppDelegate's background fetch handler.
     ///
     /// - Returns: The fetch result indicating whether new data was available.
+    /// Atomically check-and-set isSyncing to prevent TOCTOU races.
+    /// Returns true if the caller acquired the lock, false if already syncing.
+    private func acquireSyncLock() -> Bool {
+        syncQueue.sync {
+            if _isSyncing { return false }
+            _isSyncing = true
+            return true
+        }
+    }
+
     func performBackgroundFetch() async -> UIBackgroundFetchResult {
         logger.info("Starting background fetch")
 
-        guard !isSyncing else {
+        guard acquireSyncLock() else {
             logger.info("Sync already in progress, skipping")
             return .noData
         }
 
         guard shouldSync() else {
+            isSyncing = false
             logger.info("Skipping sync, last sync was too recent")
             return .noData
         }
-
-        isSyncing = true
         defer { isSyncing = false }
 
         do {
@@ -300,17 +371,16 @@ final class BackgroundSyncManager {
     /// Trigger an immediate sync, e.g. when CarPlay connects.
     /// Respects the minimum sync interval unless `force` is true.
     func syncNow(force: Bool = false) async {
-        guard !isSyncing else {
+        guard acquireSyncLock() else {
             logger.info("Sync already in progress, ignoring syncNow request")
             return
         }
 
         guard force || shouldSync() else {
+            isSyncing = false
             logger.info("Recent sync exists, skipping on-demand sync")
             return
         }
-
-        isSyncing = true
         defer { isSyncing = false }
 
         do {
@@ -391,6 +461,15 @@ final class BackgroundSyncManager {
         )
     }
 
+    /// Retrieve cached voice call history for offline access.
+    func getCachedVoiceCalls() -> [VoiceCallSummary]? {
+        return EncryptedCacheService.shared.retrieve(
+            key: CacheKey.voiceCalls,
+            type: [VoiceCallSummary].self,
+            maxAge: 3600
+        )
+    }
+
     /// Timestamp of the last successful sync.
     func lastSyncTime() -> Date? {
         let interval = UserDefaults.standard.double(forKey: CacheKey.lastSync)
@@ -405,6 +484,7 @@ final class BackgroundSyncManager {
             EncryptedCacheService.shared.delete(key: CacheKey.tasks)
             EncryptedCacheService.shared.delete(key: CacheKey.contacts)
             EncryptedCacheService.shared.delete(key: CacheKey.rateAlerts)
+            EncryptedCacheService.shared.delete(key: CacheKey.voiceCalls)
             UserDefaults.standard.removeObject(forKey: CacheKey.lastSync)
         }
         KeychainService.shared.authToken = nil
@@ -457,6 +537,17 @@ final class BackgroundSyncManager {
             logger.info("Dashboard cache refreshed")
         } catch {
             logger.error("Failed to refresh dashboard cache: \(error.localizedDescription)")
+        }
+    }
+
+    /// Invalidate and re-fetch only the voice calls cache.
+    func refreshVoiceCalls() async {
+        do {
+            let calls = try await fetchVoiceCalls()
+            cacheData(voiceCalls: calls)
+            logger.info("Voice calls cache refreshed, count=\(calls.count)")
+        } catch {
+            logger.error("Failed to refresh voice calls cache: \(error.localizedDescription)")
         }
     }
 
@@ -589,6 +680,7 @@ final class BackgroundSyncManager {
         async let tasksResult = fetchTasks()
         async let contactsResult = fetchContacts()
         async let rateAlertsResult = fetchRateAlerts()
+        async let voiceCallsResult = fetchVoiceCalls()
 
         // Await all results, collecting any that succeed
         var hasNewData = false
@@ -632,6 +724,17 @@ final class BackgroundSyncManager {
             }
         } catch {
             logger.error("Rate alerts fetch failed: \(error.localizedDescription)")
+        }
+
+        do {
+            let voiceCalls = try await voiceCallsResult
+            let previousCalls = getCachedVoiceCalls()
+            cacheData(voiceCalls: voiceCalls)
+            if previousCalls?.count != voiceCalls.count {
+                hasNewData = true
+            }
+        } catch {
+            logger.error("Voice calls fetch failed: \(error.localizedDescription)")
         }
 
         // Update last sync timestamp
@@ -705,6 +808,23 @@ final class BackgroundSyncManager {
         }
         let wrapper = try snakeCaseDecoder.decode(AlertsWrapper.self, from: data)
         return wrapper.alerts
+    }
+
+    private func fetchVoiceCalls() async throws -> [VoiceCallSummary] {
+        let data = try await apiRequest(path: "/api/v1/mobile-voice/calls", queryItems: [
+            URLQueryItem(name: "limit", value: "20")
+        ])
+
+        // The endpoint returns { "calls": [...], "total": N }
+        struct VoiceCallsWrapper: Codable {
+            let calls: [VoiceCallSummary]
+        }
+        if let wrapper = try? decoder.decode(VoiceCallsWrapper.self, from: data) {
+            return wrapper.calls
+        }
+
+        // Fall back to direct array
+        return try decoder.decode([VoiceCallSummary].self, from: data)
     }
 
     // MARK: - Private: API Request
@@ -788,7 +908,8 @@ final class BackgroundSyncManager {
     private func cacheData(dashboard: CPDashboardData? = nil,
                            tasks: [CPTaskItem]? = nil,
                            contacts: [CarPlayContact]? = nil,
-                           rateAlerts: [CPRateAlert]? = nil) {
+                           rateAlerts: [CPRateAlert]? = nil,
+                           voiceCalls: [VoiceCallSummary]? = nil) {
         if let dashboard = dashboard {
             EncryptedCacheService.shared.store(key: CacheKey.dashboard, value: dashboard)
         }
@@ -800,6 +921,9 @@ final class BackgroundSyncManager {
         }
         if let rateAlerts = rateAlerts {
             EncryptedCacheService.shared.store(key: CacheKey.rateAlerts, value: rateAlerts)
+        }
+        if let voiceCalls = voiceCalls {
+            EncryptedCacheService.shared.store(key: CacheKey.voiceCalls, value: voiceCalls)
         }
     }
 

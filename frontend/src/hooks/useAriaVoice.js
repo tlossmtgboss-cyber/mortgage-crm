@@ -42,6 +42,12 @@ export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-U
   const doStart = useCallback(async () => {
     if (!isSupported) return;
 
+    // Stop any previous controller before starting a new one to prevent leaks
+    if (controllerRef.current) {
+      try { await controllerRef.current.stop(); } catch { /* already stopped */ }
+      controllerRef.current = null;
+    }
+
     try {
       const controller = await startListening({
         language,

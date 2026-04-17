@@ -12,6 +12,7 @@
  */
 
 import api from './api';
+import { getToken } from '../utils/tokenStore';
 
 // =============================================================================
 // FEEDBACK
@@ -103,9 +104,8 @@ export function streamMessage(message, sessionId = null, { onChunk, onDone, onEr
 
   (async () => {
     try {
-      // Build auth header — read token the same way the axios instance does
-      const { getItem, STORAGE_KEYS } = await import('../utils/storage');
-      const token = await getItem(STORAGE_KEYS.AUTH_TOKEN);
+      // Read token from in-memory cache (synchronous, no async Preferences lookup)
+      const token = getToken();
 
       const res = await fetch(`${api.defaults.baseURL}/api/v1/ai/orchestrator-chat-stream`, {
         method: 'POST',
@@ -131,6 +131,32 @@ export function streamMessage(message, sessionId = null, { onChunk, onDone, onEr
       let fullText = '';
       let buffer = '';
 
+      let streamDoneFired = false;
+
+      const processLine = (line) => {
+        if (!line.startsWith('data: ')) return;
+        try {
+          const data = JSON.parse(line.slice(6));
+          if (data.content) {
+            fullText += data.content;
+            onChunk?.(data.content, fullText);
+          }
+          if (data.done) {
+            streamDoneFired = true;
+            onDone?.(fullText, data.session_id);
+          }
+          if (data.tool_result) {
+            onAction?.({
+              tool: data.tool_result,
+              result: data.result || {},
+            });
+          }
+          if (data.error) {
+            onError?.(data.error);
+          }
+        } catch { /* skip malformed SSE lines */ }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -139,32 +165,14 @@ export function streamMessage(message, sessionId = null, { onChunk, onDone, onEr
         const lines = buffer.split('\n');
         buffer = lines.pop(); // keep incomplete line in buffer
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          try {
-            const data = JSON.parse(line.slice(6));
-            if (data.content) {
-              fullText += data.content;
-              onChunk?.(data.content, fullText);
-            }
-            if (data.done) {
-              onDone?.(fullText, data.session_id);
-            }
-            if (data.tool_result) {
-              onAction?.({
-                tool: data.tool_result,
-                result: data.result || {},
-              });
-            }
-            if (data.error) {
-              onError?.(data.error);
-            }
-          } catch { /* skip malformed SSE lines */ }
-        }
+        for (const line of lines) processLine(line);
       }
 
+      // Process any remaining data left in buffer after stream ends
+      if (buffer.trim()) processLine(buffer);
+
       // If stream ended without a 'done' event, fire onDone anyway
-      if (fullText) {
+      if (!streamDoneFired && fullText) {
         onDone?.(fullText, sessionId);
       }
     } catch (err) {

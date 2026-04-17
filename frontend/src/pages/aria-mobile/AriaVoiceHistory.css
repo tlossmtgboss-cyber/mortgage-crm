@@ -1,0 +1,266 @@
+/* AriaVoiceHistory — Voice conversation history */
+
+.avh-history {
+  min-height: 100vh;
+  background: #060A10;
+  color: #E8F0FF;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 80px; /* tab nav clearance */
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Header */
+.avh-history-header {
+  padding: calc(env(safe-area-inset-top, 20px) + 16px) 20px 12px;
+}
+
+.avh-history-title {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: #E8F0FF;
+}
+
+/* Stats row */
+.avh-history-stats {
+  display: flex;
+  gap: 12px;
+}
+
+.avh-stat {
+  flex: 1;
+  background: #0D1520;
+  border: 1px solid #1E3050;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.avh-stat-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 18px;
+  font-weight: 500;
+  color: #7EB8F7;
+}
+
+.avh-stat-label {
+  font-size: 11px;
+  color: #5A7AAA;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+}
+
+/* Call list */
+.avh-history-list {
+  flex: 1;
+  padding: 0 16px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.avh-history-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: #5A7AAA;
+  font-size: 15px;
+}
+
+.avh-history-empty-sub {
+  font-size: 13px;
+  margin-top: 8px;
+  color: #3A5A7A;
+}
+
+.avh-retry-btn {
+  margin-top: 16px;
+  padding: 8px 24px;
+  background: transparent;
+  border: 1px solid #7EB8F7;
+  border-radius: 8px;
+  color: #7EB8F7;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.avh-retry-btn:active {
+  background: rgba(126, 184, 247, 0.1);
+}
+
+/* Call card */
+.avh-call-card {
+  display: block;
+  width: 100%;
+  background: #0D1520;
+  border: 1px solid #1E3050;
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.avh-call-card:active,
+.avh-call-card--selected {
+  border-color: #7EB8F7;
+  background: #111D2E;
+}
+
+.avh-call-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.avh-call-time {
+  font-size: 13px;
+  color: #5A7AAA;
+}
+
+.avh-call-duration {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: #7EB8F7;
+}
+
+.avh-call-summary {
+  font-size: 14px;
+  line-height: 1.4;
+  color: #C8D8F0;
+  margin: 0 0 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.avh-call-meta {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.avh-call-pill {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(126, 184, 247, 0.1);
+  color: #5A7AAA;
+  text-transform: capitalize;
+}
+
+.avh-call-pill--outcome {
+  background: rgba(74, 222, 128, 0.1);
+  color: #4ADE80;
+}
+
+.avh-call-pill--tools {
+  background: rgba(167, 139, 250, 0.1);
+  color: #A78BFA;
+}
+
+.avh-call-pill--msgs {
+  background: rgba(126, 184, 247, 0.06);
+  color: #3A5A7A;
+}
+
+/* Detail panel (expanded) */
+.avh-call-detail {
+  background: #0A1018;
+  border: 1px solid #1E3050;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  margin-top: -8px;
+  margin-bottom: 8px;
+  padding: 12px 16px 16px;
+  animation: avh-slide-down 0.2s ease-out;
+}
+
+@keyframes avh-slide-down {
+  from { opacity: 0; max-height: 0; }
+  to { opacity: 1; max-height: 600px; }
+}
+
+.avh-call-detail-loading {
+  text-align: center;
+  color: #5A7AAA;
+  font-size: 13px;
+  padding: 16px 0;
+}
+
+/* Transcript */
+.avh-transcript {
+  max-height: 400px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.avh-msg {
+  margin-bottom: 10px;
+}
+
+.avh-msg-role {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+  display: block;
+}
+
+.avh-msg--user .avh-msg-role {
+  color: #7EB8F7;
+}
+
+.avh-msg--assistant .avh-msg-role {
+  color: #A78BFA;
+}
+
+.avh-msg-text {
+  font-size: 14px;
+  line-height: 1.45;
+  color: #C8D8F0;
+  margin: 0;
+}
+
+.avh-msg--user .avh-msg-text {
+  color: #E8F0FF;
+}
+
+/* Tools section */
+.avh-tools-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #1E3050;
+}
+
+.avh-tools-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #A78BFA;
+  margin: 0 0 8px;
+}
+
+.avh-tool-item {
+  padding: 6px 10px;
+  background: rgba(167, 139, 250, 0.08);
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+
+.avh-tool-name {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: #A78BFA;
+}

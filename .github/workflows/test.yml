@@ -259,7 +259,7 @@ jobs:
           cache-dependency-path: ./frontend/package-lock.json
       - name: Install dependencies
         working-directory: ./frontend
-        run: npm install --legacy-peer-deps
+        run: npm install
       - name: Run frontend tests
         working-directory: ./frontend
         run: npx vitest run --passWithNoTests
@@ -290,7 +290,7 @@ jobs:
         run: pip install flake8 black isort
       - name: Install Node dependencies
         working-directory: ./frontend
-        run: npm install --legacy-peer-deps
+        run: npm install
       - name: Run Python linting
         working-directory: ./backend
         run: |
@@ -361,7 +361,7 @@ jobs:
           cache-dependency-path: ./frontend/package-lock.json
       - name: Install dependencies
         working-directory: ./frontend
-        run: npm install --legacy-peer-deps
+        run: npm install
       - name: Build frontend
         working-directory: ./frontend
         run: npm run build

@@ -29,7 +29,7 @@ GRACEFUL_FALLBACK = (
 @retry(
     stop=stop_after_attempt(2),
     wait=wait_exponential(multiplier=0.1, min=0.1, max=0.3),
-    retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.ConnectError)),
+    retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.ConnectError, httpx.TimeoutException)),
 )
 async def call_backend_tool(endpoint: str, payload: Dict[str, Any]) -> Dict[str, Any]:
     """Call a backend internal API endpoint with circuit-breaker retry logic."""

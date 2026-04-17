@@ -508,7 +508,7 @@
   border-radius: 12px;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  z-index: 100;
+  z-index: 110;
   animation: avh-action-toast-in 0.3s ease-out;
 }
 
@@ -587,4 +587,109 @@
     animation: none;
     opacity: 0.4;
   }
+
+  .avh-livekit-visualizer {
+    display: none;
+  }
+
+  .avh-lk-badge--active {
+    animation: none;
+  }
+
+  .avh-orb-container--connected .avh-ring--outer {
+    animation: none;
+  }
+}
+
+/* ============================================================================
+   LiveKit-specific styles
+   ============================================================================ */
+
+/* LiveKit badge in top bar */
+.avh-lk-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--avh-text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.avh-lk-badge--active {
+  color: #4ADE80;
+  background: rgba(74, 222, 128, 0.12);
+  border-color: rgba(74, 222, 128, 0.3);
+  animation: avh-lk-pulse 2s ease-in-out infinite;
+}
+
+@keyframes avh-lk-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Connection badge below orb */
+.avh-connection-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.15);
+}
+
+.avh-connection-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4ADE80;
+  box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+}
+
+.avh-connection-text {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: rgba(74, 222, 128, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* LiveKit audio visualizer container */
+.avh-livekit-visualizer {
+  width: 200px;
+  height: 40px;
+  margin: 16px auto 0;
+  opacity: 0.8;
+}
+
+.avh-livekit-visualizer [data-lk-bar-visualizer] {
+  --lk-bar-color: var(--avh-accent);
+}
+
+/* Connected orb state — steady glow */
+.avh-orb-container--connected .avh-ring--outer {
+  border-color: rgba(74, 222, 128, 0.15);
+  animation: avh-connected-glow 3s ease-in-out infinite;
+}
+
+.avh-orb-container--connected .avh-ring--mid {
+  border-color: rgba(74, 222, 128, 0.2);
+}
+
+.avh-orb-container--connected .avh-ring--inner {
+  background: radial-gradient(circle at 40% 38%, rgba(74, 222, 128, 0.25) 0%, rgba(74, 222, 128, 0.1) 100%);
+  border-color: rgba(74, 222, 128, 0.35);
+  box-shadow: 0 0 20px rgba(74, 222, 128, 0.15);
+}
+
+@keyframes avh-connected-glow {
+  0%, 100% { border-color: rgba(74, 222, 128, 0.12); transform: scale(1); }
+  50% { border-color: rgba(74, 222, 128, 0.22); transform: scale(1.02); }
 }

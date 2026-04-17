@@ -14,6 +14,11 @@ const TABS = [
     label: 'Home',
   },
   {
+    key: 'history',
+    path: '/aria-history',
+    label: 'History',
+  },
+  {
     key: 'calendar',
     path: '/mobile-calendar',
     label: 'Calendar',
@@ -39,6 +44,13 @@ const TabIcons = {
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V10.5z" />
       <path d="M9 21V14h6v7" />
+    </svg>
+  ),
+  history: (color) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <polyline points="12 7 12 12 15 15" />
+      <path d="M3 12a9 9 0 0 1 9-9" />
     </svg>
   ),
   calendar: (color) => (

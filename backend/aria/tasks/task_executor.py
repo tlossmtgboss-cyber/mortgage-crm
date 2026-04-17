@@ -9,8 +9,9 @@ Each handler is an async function that receives the collected slots
 and returns a result dict describing what was done.
 """
 
+import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict
 from uuid import uuid4
 
@@ -78,12 +79,30 @@ class TaskExecutor:
             custom_note=slots.get("custom_note"),
         )
 
+        delivery_channel = (slots.get("delivery_channel") or "email").lower().strip()
+
+        if delivery_channel == "sms":
+            return await self._deliver_preapproval_via_sms(
+                slots, borrower, loan, lo, doc_result, user_id, org_id,
+            )
+
+        return await self._deliver_preapproval_via_email(
+            slots, borrower, loan, lo, doc_result, user_id,
+        )
+
+    async def _deliver_preapproval_via_email(
+        self, slots, borrower, loan, lo, doc_result, user_id,
+    ) -> Dict:
+        contact = await self.crm.resolve_contact(slots["recipient"], lo.get("organization_id", ""))
+        recipient_email = contact.get("email") or slots["recipient"]
+        recipient_name = contact.get("name", "")
+
         sent = await self.comms.send_email(
-            to_email=slots["recipient_email"],
-            to_name=slots.get("recipient_name", ""),
+            to_email=recipient_email,
+            to_name=recipient_name,
             from_user=lo,
             subject=f"Pre-Approval Letter — {borrower['full_name']}",
-            body=self._preapproval_email_body(borrower, slots, lo),
+            body=self._preapproval_email_body(borrower, slots, lo, recipient_name),
             attachments=[{
                 "filename": f"PreApproval_{borrower['last_name']}_{slots['approval_amount']}.pdf",
                 "content":  doc_result["pdf_bytes"],
@@ -93,16 +112,17 @@ class TaskExecutor:
 
         await self.pipe.add_note(
             loan_id=loan["id"], user_id=user_id,
-            note=f"Pre-approval letter sent to {slots['recipient_email']} "
-                 f"for ${slots['approval_amount']:,.0f}. "
+            note=f"Pre-approval letter emailed to {recipient_email} "
+                 f"for ${float(slots['approval_amount']):,.0f}. "
                  f"Email message ID: {sent['message_id']}",
             note_type="document_sent",
         )
 
         return {
             "action": "pre_approval_letter_sent",
+            "channel": "email",
             "borrower_name": borrower["full_name"],
-            "recipient_email": slots["recipient_email"],
+            "recipient": recipient_email,
             "amount": slots["approval_amount"],
             "sent_at": datetime.now(timezone.utc).isoformat(),
             "message_id": sent["message_id"],
@@ -110,8 +130,79 @@ class TaskExecutor:
             "document_id": doc_result["document_id"],
         }
 
-    def _preapproval_email_body(self, borrower, slots, lo) -> str:
-        name = slots.get("recipient_name") or "Agent"
+    async def _deliver_preapproval_via_sms(
+        self, slots, borrower, loan, lo, doc_result, user_id, org_id,
+    ) -> Dict:
+        contact = await self.crm.resolve_contact(slots["recipient"], org_id)
+        recipient_phone = contact.get("phone")
+        recipient_name = contact.get("name", slots["recipient"])
+
+        if not recipient_phone:
+            raise ValueError(
+                f"Could not find a phone number for '{slots['recipient']}'. "
+                f"Please provide a phone number or check the contact name."
+            )
+
+        portal_link = f"https://app.perenniaai.com/portal/documents/{doc_result['document_id']}"
+        amount_fmt = f"${float(slots['approval_amount']):,.0f}"
+        expiry_days = int(slots.get("expiry_days", 30))
+
+        expiry_date = (date.today() + timedelta(days=expiry_days)).strftime("%B %d, %Y")
+
+        sms_message = (
+            f"Great news! The pre-approval letter for {borrower['full_name']} "
+            f"({amount_fmt}) is ready. Valid through {expiry_date}. "
+            f"Download here: {portal_link} "
+            f"— {lo.get('full_name', '')} | {lo.get('phone', '')}. "
+            f"Reply STOP to opt out."
+        )
+
+        # TCPA/DNC compliance check before sending SMS
+        from services.sms_compliance import check_sms_consent
+        can_send, reason = await asyncio.to_thread(
+            check_sms_consent, recipient_phone, organization_id=org_id,
+        )
+        if not can_send:
+            logger.warning(f"SMS blocked for {recipient_phone}: {reason}")
+            return {
+                "action": "pre_approval_letter_blocked",
+                "channel": "sms",
+                "borrower_name": borrower["full_name"],
+                "recipient": recipient_name,
+                "recipient_phone": recipient_phone,
+                "error": f"SMS blocked: {reason}",
+            }
+
+        sent = await self.comms.send_sms(
+            to_phone=recipient_phone,
+            from_user=lo,
+            message=sms_message,
+            org_id=org_id,
+        )
+
+        await self.pipe.add_note(
+            loan_id=loan["id"], user_id=user_id,
+            note=f"Pre-approval letter SMS sent to {recipient_name} at {recipient_phone} "
+                 f"for {amount_fmt}. Download link: {portal_link}",
+            note_type="document_sent",
+        )
+
+        return {
+            "action": "pre_approval_letter_sent",
+            "channel": "sms",
+            "borrower_name": borrower["full_name"],
+            "recipient": recipient_name,
+            "recipient_phone": recipient_phone,
+            "amount": slots["approval_amount"],
+            "sent_at": datetime.now(timezone.utc).isoformat(),
+            "message_id": sent.get("message_id", ""),
+            "loan_id": loan["id"],
+            "document_id": doc_result["document_id"],
+            "portal_link": portal_link,
+        }
+
+    def _preapproval_email_body(self, borrower, slots, lo, recipient_name=None) -> str:
+        name = recipient_name or "Agent"
         return (
             f"Hi {name},\n\n"
             f"Please find attached the pre-approval letter for {borrower['full_name']}.\n\n"
@@ -191,6 +282,20 @@ class TaskExecutor:
     async def _send_sms(self, slots, user_id, org_id) -> Dict:
         contact = await self.crm.resolve_contact(slots["recipient"], org_id)
         lo      = await self.crm.get_user(user_id)
+
+        # TCPA/DNC compliance check before sending SMS
+        from services.sms_compliance import check_sms_consent
+        can_send, reason = await asyncio.to_thread(
+            check_sms_consent, contact["phone"], organization_id=org_id,
+        )
+        if not can_send:
+            logger.warning(f"SMS blocked for {contact['phone']}: {reason}")
+            return {
+                "action": "sms_blocked",
+                "to": contact["name"],
+                "phone": contact["phone"],
+                "error": f"SMS blocked: {reason}",
+            }
 
         result = await self.comms.send_sms(
             to_phone=contact["phone"], from_user=lo,

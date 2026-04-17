@@ -140,13 +140,21 @@ async def nlu_node(state: AriaState) -> AriaState:
     last_message = state["messages"][-1].content
     registry = IntentRegistry.get()
 
+    intent_specs = {
+        i.name: {
+            "slots": {s.name: s.extraction_hint or s.description for s in i.required_slots + i.optional_slots}
+        }
+        for i in registry.intents
+    }
+
     extraction_prompt = f"""Analyze this user message and extract:
 1. The primary intent (what they want to accomplish)
-2. Any entities/slots already provided in the message
+2. Any entities/slots already provided in the message — use EXACT slot names from the spec
 
 User message: "{last_message}"
 
-Available intents: {json.dumps([i.name for i in registry.intents], indent=2)}
+Intent specs (intent name → slot names and hints):
+{json.dumps(intent_specs, indent=2)}
 
 Respond ONLY with valid JSON in this exact format:
 {{

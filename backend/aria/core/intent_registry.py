@@ -67,7 +67,7 @@ def _build_intents() -> List[Intent]:
 
         Intent(
             name="send_preapproval_letter",
-            description="Generate and send a mortgage pre-approval letter to a realtor or borrower",
+            description="Generate and send a mortgage pre-approval letter to a realtor or borrower via email or SMS",
             category="documents",
             trigger_phrases=[
                 "send a pre-approval letter",
@@ -76,14 +76,21 @@ def _build_intents() -> List[Intent]:
                 "generate pre-approval",
                 "prequal letter",
                 "pre-qual for",
+                "text a pre-approval letter",
+                "send pre-approval via sms",
+                "send preapproval via text",
+                "sms pre-approval",
+                "text the pre-approval to",
             ],
             required_slots=[
                 SlotSpec("borrower_id",      "Which borrower this letter is for",                  "borrower",  extraction_hint="borrower name or loan number"),
-                SlotSpec("recipient_email",  "Email address of the realtor or recipient",           "email",     extraction_hint="email address, may also have recipient name"),
+                SlotSpec("recipient",        "Who to send the letter to — name, email, or phone",  "contact",   extraction_hint="recipient name, email address, or phone number"),
                 SlotSpec("approval_amount",  "Dollar amount to show on the letter",                 "number",    extraction_hint="dollar amount, may say 'full amount' or specific figure"),
             ],
             optional_slots=[
-                SlotSpec("recipient_name",   "Name of the realtor or recipient",                    "text",    required=False),
+                SlotSpec("delivery_channel", "How to deliver: email or sms",                        "choice",  required=False, default="email",
+                         choices=["email", "sms"],
+                         extraction_hint="'via sms', 'via text', 'text it', 'by text' = sms. 'via email', 'email it' = email. Default: email"),
                 SlotSpec("property_address", "Property address if specific property is involved",   "text",    required=False),
                 SlotSpec("expiry_days",      "How many days until the letter expires (default 30)", "number",  required=False, default=30),
                 SlotSpec("custom_note",      "Any custom note to include",                          "text",    required=False),
