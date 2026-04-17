@@ -296,6 +296,15 @@ def register_telephony_routes(app, get_db, get_current_user, get_current_user_fl
     except Exception as e:
         logger.warning(f"Could not load Call Monitoring routes: {e}")
 
+    # Include Recording Consent Gate routes
+    try:
+        from routes.recording_consent_routes import router as consent_router, set_dependencies as set_consent_deps
+        set_consent_deps(get_current_user)
+        app.include_router(consent_router, tags=["Call Intelligence Consent"])
+        logger.info("Recording Consent routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load Recording Consent routes: {e}")
+
     # Include Call Recording routes (mobile app call recording + AI summary)
     try:
         from api.routes.call_recording import router as call_recording_router
@@ -324,5 +333,29 @@ def register_telephony_routes(app, get_db, get_current_user, get_current_user_fl
         logger.info("Phase 5 Premium Features routes loaded")
     except Exception as e:
         logger.warning(f"Phase 5 routes not loaded: {e}")
+
+    # Include Aria Internal Tool routes (agent-to-backend tool calls)
+    try:
+        from routes.internal.aria_tool_routes import router as aria_tool_router
+        app.include_router(aria_tool_router, tags=["Aria Internal"])
+        logger.info("Aria Internal Tool routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load Aria Internal Tool routes: {e}")
+
+    # Include Aria Internal Call routes
+    try:
+        from routes.internal.aria_call_routes import router as aria_call_router
+        app.include_router(aria_call_router, tags=["Aria Internal Calls"])
+        logger.info("Aria Internal Call routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load Aria Internal Call routes: {e}")
+
+    # Include Aria Internal Workflow routes
+    try:
+        from routes.internal.aria_workflow_routes import router as aria_workflow_router
+        app.include_router(aria_workflow_router, tags=["Aria Internal Workflows"])
+        logger.info("Aria Internal Workflow routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load Aria Internal Workflow routes: {e}")
 
     logger.info("Telephony & Voice route group loaded")
