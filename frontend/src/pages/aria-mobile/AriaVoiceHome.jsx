@@ -12,9 +12,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAriaVoice } from '../../hooks/useAriaVoice';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { streamMessage } from '../../services/mobileAriaApi';
-import api, { callMonitoringAPI } from '../../services/api';
+import api from '../../services/api';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
 import { OfflineIndicator } from '../../components/mobile/OfflineIndicator';
+import CallIntelligenceSlidePanel from '../../components/aria/CallIntelligenceSlidePanel';
 import './AriaVoiceHome.css';
 
 // ---------------------------------------------------------------------------
@@ -184,19 +185,11 @@ export default function AriaVoiceHome() {
   const ttsQueueRef = useRef(null); // TTSQueue instance
   const bufferRef = useRef('');     // streaming text buffer for sentence splitting
 
-  // Call Intelligence state
-  const [ciActive, setCiActive] = useState(false);
-  const [ciSessionId, setCiSessionId] = useState(null);
-  const [ciStarting, setCiStarting] = useState(false);
-  const ciPollingRef = useRef(null);
+  // Call Intelligence slide panel
+  const [ciPanelOpen, setCiPanelOpen] = useState(false);
 
   // ---- Network status ----
   const { isOnline } = useNetworkStatus();
-
-  // Cleanup CI polling on unmount
-  useEffect(() => {
-    return () => clearInterval(ciPollingRef.current);
-  }, []);
 
   // Abort active voice flow if network drops mid-session
   useEffect(() => {
@@ -361,56 +354,9 @@ export default function AriaVoiceHome() {
     toggleRecording();
   }, [voiceState, toggleRecording]);
 
-  const handleCallIntelligence = useCallback(async () => {
-    if (ciStarting) return;
-
-    if (ciActive && ciSessionId) {
-      // Stop: end session + cleanup
-      try {
-        await callMonitoringAPI.updateSession(ciSessionId, { status: 'completed' });
-      } catch (e) {
-        console.warn('[CI] Failed to end session:', e);
-      }
-      clearInterval(ciPollingRef.current);
-      setCiActive(false);
-      setCiSessionId(null);
-      setActionToast('Call Intelligence deactivated');
-      clearTimeout(actionToastTimerRef.current);
-      actionToastTimerRef.current = setTimeout(() => setActionToast(null), 3000);
-      return;
-    }
-
-    // Start: create session + activate agents
-    setCiStarting(true);
-    try {
-      const session = await callMonitoringAPI.createSession({
-        capture_mode: 'call_intelligence',
-        metadata: {
-          source: 'mobile_app',
-          started_at: new Date().toISOString(),
-          auto_detect_client: true,
-          realtime_processing: true,
-        },
-      });
-      const sid = session.id || session.session_id;
-      setCiSessionId(sid);
-      setCiActive(true);
-      setActionToast('Call Intelligence active — 4 AI agents listening');
-      clearTimeout(actionToastTimerRef.current);
-      actionToastTimerRef.current = setTimeout(() => setActionToast(null), 4000);
-    } catch (e) {
-      console.error('[CI] Failed to start session:', e);
-      setResponseText('Could not activate Call Intelligence. Please try again.');
-      setShowToast(true);
-      clearTimeout(toastTimerRef.current);
-      toastTimerRef.current = setTimeout(() => {
-        setToastExiting(true);
-        setTimeout(() => { setShowToast(false); setToastExiting(false); setResponseText(null); }, 400);
-      }, 4000);
-    } finally {
-      setCiStarting(false);
-    }
-  }, [ciActive, ciSessionId, ciStarting]);
+  const handleCallIntelligence = useCallback(() => {
+    setCiPanelOpen(true);
+  }, []);
 
   // ---- Orb CSS class ----
   const orbContainerClass = [
@@ -439,19 +385,24 @@ export default function AriaVoiceHome() {
       {/* Top bar with Call Intelligence button */}
       <div className="avh-top-bar">
         <button
-          className={`avh-ci-button ${ciActive ? 'avh-ci-button--active' : ''} ${ciStarting ? 'avh-ci-button--starting' : ''}`}
+          className={`avh-ci-button ${ciPanelOpen ? 'avh-ci-button--active' : ''}`}
           onClick={handleCallIntelligence}
-          disabled={ciStarting}
           type="button"
-          aria-label={ciActive ? 'Deactivate Call Intelligence' : 'Activate Call Intelligence'}
-          aria-pressed={ciActive}
+          aria-label={ciPanelOpen ? 'Call Intelligence active' : 'Open Call Intelligence'}
         >
           <span className="avh-ci-icon">
-            <span className={`avh-ci-icon-dot ${ciActive ? 'avh-ci-icon-dot--active' : ''}`} />
+            <span className={`avh-ci-icon-dot ${ciPanelOpen ? 'avh-ci-icon-dot--active' : ''}`} />
           </span>
-          {ciStarting ? 'Activating...' : ciActive ? 'CI Active' : 'Call Intelligence'}
+          {ciPanelOpen ? 'CI Active' : 'Call Intelligence'}
         </button>
       </div>
+
+      {/* Call Intelligence slide-up panel */}
+      {ciPanelOpen && (
+        <CallIntelligenceSlidePanel
+          onClose={() => setCiPanelOpen(false)}
+        />
+      )}
 
       {/* Center content */}
       <div className="avh-center">
