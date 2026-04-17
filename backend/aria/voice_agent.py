@@ -1,0 +1,457 @@
+"""
+Perennia AI — Aria LiveKit Voice Agent Worker
+
+Two session types (determined by room metadata):
+  - WebRTC (browser/mobile) — LO assistant mode
+  - SIP (Telnyx telephony) — inbound receptionist / outbound follow-up
+
+All CRM data access goes through HTTP calls to /internal/aria/* endpoints.
+This process NEVER imports from db, database.models, or services directly.
+
+Run:
+  python -m aria.voice_agent dev     # development
+  python -m aria.voice_agent start   # production
+"""
+
+import os
+import json
+import logging
+import asyncio
+import threading
+from datetime import datetime, timezone
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from typing import Any, Dict, Optional
+
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from livekit import agents, api as livekit_api
+from livekit.agents import (
+    Agent,
+    AgentSession,
+    RunContext,
+    function_tool,
+    AgentServer,
+    TurnHandlingOptions,
+)
+from livekit.plugins import cartesia, deepgram
+from livekit.plugins.anthropic import LLM as AnthropicLLM
+
+from agents.aria_backend_client import call_backend_tool_safe
+from agents.aria_prompts import get_prompt
+
+logger = logging.getLogger("aria.voice_agent")
+
+# ─── Configuration ───────────────────────────────────────────────────────────
+
+CARTESIA_VOICE_ID = os.getenv(
+    "ARIA_CARTESIA_VOICE_ID",
+    "a0e99841-438c-4a64-b679-ae501e7d6091",  # Jacqueline
+)
+CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-sonnet-4-20250514")
+TELNYX_TRUNK_ID = os.getenv("TELNYX_SIP_TRUNK_ID", "")
+
+
+# ─── Health Server (Railway worker health check) ────────────────────────────
+
+class _HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b"healthy")
+
+    def log_message(self, *args):
+        pass  # suppress per-request logs
+
+
+def _start_health_server():
+    port = int(os.environ.get("PORT", 8081))
+    httpd = HTTPServer(("0.0.0.0", port), _HealthHandler)
+    thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+    thread.start()
+    logger.info(f"[AriaVoice] Health server on port {port}")
+
+
+# ─── Turn Handling Configuration ─────────────────────────────────────────────
+# Dynamic endpointing adapts silence thresholds based on conversation cadence.
+# min_delay 0.4s avoids cutting off mid-thought; max_delay 6.0s handles
+# mortgage-specific pauses (looking up numbers, reading documents).
+
+TURN_HANDLING: TurnHandlingOptions = {
+    "endpointing": {
+        "mode": "dynamic",
+        "min_delay": 0.4,
+        "max_delay": 6.0,
+    },
+}
+
+
+# ─── Aria Agent ──────────────────────────────────────────────────────────────
+
+class AriaVoiceAgent(Agent):
+    """Aria — Perennia AI's real-time voice assistant."""
+
+    def __init__(self, mode: str = "lo_assistant", context: dict = None) -> None:
+        prompt = get_prompt(mode, context or {})
+        super().__init__(instructions=prompt)
+        self._mode = mode
+        self._session_data: Dict[str, Any] = {
+            "mode": mode,
+            "tools_executed": [],
+            "started_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    async def on_enter(self) -> None:
+        greetings = {
+            "lo_assistant": (
+                "Greet the loan officer briefly. "
+                "Say something like 'Hey, Aria here. What can I help you with?'"
+            ),
+            "inbound_receptionist": (
+                "Greet the caller warmly. "
+                "Say 'Thanks for calling Perennia, this is Aria. "
+                "How can I help you today?'"
+            ),
+            "outbound_followup": (
+                "Introduce yourself briefly using the context in your instructions."
+            ),
+        }
+        await self.session.generate_reply(
+            instructions=greetings.get(self._mode, greetings["lo_assistant"])
+        )
+
+    # ─── CRM Tools (all via HTTP backend) ─────────────────────────────
+
+    @function_tool()
+    async def search_pipeline(self, context: RunContext, query: str):
+        """Search the loan pipeline by borrower name, loan number, or stage."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "search_pipeline", "params": {"query": query}},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def get_pipeline_summary(self, context: RunContext):
+        """Get a summary of the current loan pipeline — total loans, by stage, SLA alerts."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "get_pipeline_summary", "params": {}},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def search_leads(self, context: RunContext, query: str):
+        """Search for leads by name, email, or phone number."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "search_leads", "params": {"query": query}},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def get_lead_details(self, context: RunContext, lead_id: int):
+        """Get full details for a specific lead by ID."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "get_lead_details", "params": {"lead_id": lead_id}},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def get_loan_status(self, context: RunContext, lead_id: int):
+        """Check the current loan status for a borrower."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/loan-status",
+            {"borrower_id": lead_id},
+        )
+        if result.get("spoken_summary"):
+            return result["spoken_summary"]
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def send_sms(
+        self,
+        context: RunContext,
+        recipient_name: str,
+        phone_number: str,
+        message: str,
+    ):
+        """Send an SMS text message to a contact."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "send_sms_message", "params": {
+                "recipient_name": recipient_name,
+                "phone_number": phone_number,
+                "message": message,
+            }},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "send_sms",
+            "recipient": recipient_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def create_task(
+        self,
+        context: RunContext,
+        title: str,
+        description: str = "",
+        due_date: str = "",
+        priority: str = "medium",
+    ):
+        """Create a task or follow-up item."""
+        params = {"title": title, "description": description, "priority": priority}
+        if due_date:
+            params["due_date"] = due_date
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "create_task", "params": params},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "create_task",
+            "title": title,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def get_sla_alerts(self, context: RunContext):
+        """Get current SLA alerts and overdue items."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "get_sla_alerts", "params": {}},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def check_rates(self, context: RunContext, loan_type: str = "conventional"):
+        """Check current mortgage rates."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "get_current_rates", "params": {"loan_type": loan_type}},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def schedule_appointment(
+        self,
+        context: RunContext,
+        title: str,
+        date: str,
+        time: str,
+        duration_minutes: int = 30,
+        attendee_name: str = "",
+        attendee_email: str = "",
+    ):
+        """Schedule a new appointment."""
+        params = {
+            "title": title,
+            "date": date,
+            "time": time,
+            "duration_minutes": duration_minutes,
+        }
+        if attendee_name:
+            params["attendee_name"] = attendee_name
+        if attendee_email:
+            params["attendee_email"] = attendee_email
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "schedule_appointment", "params": params},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "schedule_appointment",
+            "title": title,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def get_daily_briefing(self, context: RunContext):
+        """Get a morning briefing with today's tasks, appointments, pipeline updates, and alerts."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "get_daily_briefing", "params": {}},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def look_up_caller(self, context: RunContext, phone_number: str):
+        """Look up a caller by phone number in the CRM. Use this when receiving an inbound call."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/lead-lookup",
+            {"phone": phone_number},
+        )
+        lead = result.get("lead")
+        if not lead:
+            return "I don't have this caller in the system yet — they're a new prospect."
+        return json.dumps(lead, default=str)
+
+    @function_tool()
+    async def warm_transfer_to_lo(self, context: RunContext, reason: str, summary: str):
+        """Transfer the caller to their assigned loan officer with a verbal brief.
+        Use when the caller needs to speak with their LO directly.
+        Reason: ready_to_apply, complex_scenario, or customer_request."""
+        room_name = None
+        if context.session and context.session.room:
+            room_name = context.session.room.name
+
+        if not room_name:
+            return "I can't transfer right now — no active call room."
+
+        metadata = {}
+        if context.session and context.session.room:
+            try:
+                metadata = json.loads(context.session.room.metadata or "{}")
+            except (json.JSONDecodeError, AttributeError):
+                pass
+
+        lead_id = metadata.get("lead_id") or metadata.get("borrower_id")
+        if not lead_id:
+            return (
+                "I don't know which borrower this is — "
+                "I can't look up their loan officer without an ID."
+            )
+
+        lo = await call_backend_tool_safe(
+            "/internal/aria/lo-info", {"lead_id": lead_id}
+        )
+        if lo.get("error"):
+            return f"I couldn't find an assigned loan officer: {lo['error']}"
+
+        borrower = await call_backend_tool_safe(
+            "/internal/aria/lead-info", {"lead_id": lead_id}
+        )
+
+        # Add LO as SIP participant to the current LiveKit room
+        if TELNYX_TRUNK_ID and lo.get("phone"):
+            try:
+                from livekit.protocol.sip import CreateSIPParticipantRequest
+
+                lk_api = livekit_api.LiveKitAPI()
+                await lk_api.sip.create_sip_participant(
+                    CreateSIPParticipantRequest(
+                        sip_trunk_id=TELNYX_TRUNK_ID,
+                        sip_call_to=lo["phone"],
+                        room_name=room_name,
+                        participant_identity=f"lo_{lo['id']}",
+                        participant_name=lo.get("full_name", "Loan Officer"),
+                    )
+                )
+            except Exception as e:
+                logger.error(f"SIP transfer failed: {e}")
+                return (
+                    f"I wasn't able to connect the call — the transfer failed. "
+                    f"{lo.get('full_name', 'Your loan officer')} can be reached at "
+                    f"{lo.get('phone', 'their direct number')}."
+                )
+
+        borrower_name = borrower.get("first_name", "the caller")
+        lo_name = lo.get("first_name", "")
+
+        return (
+            f"{lo_name}, I have {borrower_name} on the line. "
+            f"{summary} "
+            f"I'll let you two take it from here."
+        )
+
+    @function_tool()
+    async def run_crm_tool(
+        self, context: RunContext, tool_name: str, parameters: str = "{}"
+    ):
+        """Run any CRM tool by name with JSON parameters.
+        Fallback for tools without a specific wrapper."""
+        try:
+            params = json.loads(parameters)
+        except json.JSONDecodeError:
+            return json.dumps({"error": "Invalid JSON parameters"})
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": tool_name, "params": params},
+        )
+        return json.dumps(result, default=str)
+
+
+# ─── Agent Server ────────────────────────────────────────────────────────────
+
+server = AgentServer()
+
+
+def _build_session(mode: str = "lo_assistant", context: dict = None) -> tuple:
+    """Build AgentSession + AriaVoiceAgent for a given mode.
+
+    Returns (session, agent) tuple. The caller starts the session via
+    ``await session.start(room=..., agent=...)``.
+    """
+    session = AgentSession(
+        stt=deepgram.STT(model="nova-3", language="en"),
+        llm=AnthropicLLM(model=CLAUDE_MODEL),
+        tts=cartesia.TTS(model="sonic-3", voice=CARTESIA_VOICE_ID),
+        turn_handling=TURN_HANDLING,
+    )
+    agent = AriaVoiceAgent(mode=mode, context=context)
+    return session, agent
+
+
+@server.rtc_session(agent_name="aria-voice")
+async def aria_voice_session(ctx: agents.JobContext):
+    """Unified session handler for both WebRTC and SIP calls.
+
+    The session mode is determined by room metadata:
+      - {"trigger": "inbound_call"}  -> inbound receptionist
+      - {"trigger": "outbound_call"} -> outbound follow-up
+      - anything else                -> LO assistant (WebRTC default)
+
+    LiveKit AgentServer supports only one rtc_session, so telephony
+    (SIP) and WebRTC sessions share this handler and branch on metadata.
+    """
+    logger.info(f"[AriaVoice] Session started: room={ctx.room.name}")
+
+    # Parse room metadata to determine session type
+    metadata = {}
+    try:
+        metadata = json.loads(ctx.room.metadata or "{}")
+    except (json.JSONDecodeError, AttributeError):
+        pass
+
+    trigger = metadata.get("trigger", "")
+
+    if trigger == "inbound_call":
+        mode = "inbound_receptionist"
+        context = {
+            "first_name": metadata.get("borrower_name", ""),
+            "lo_name": metadata.get("lo_name", ""),
+        }
+        logger.info(
+            f"[AriaVoice] Inbound receptionist mode: "
+            f"from={metadata.get('from_number', 'unknown')}"
+        )
+    elif trigger == "outbound_call":
+        mode = "outbound_followup"
+        context = {
+            "first_name": metadata.get("borrower_name", ""),
+            "lo_name": metadata.get("lo_name", ""),
+            "call_purpose": metadata.get("call_purpose", ""),
+            "call_context": metadata.get("call_context", ""),
+        }
+        logger.info(
+            f"[AriaVoice] Outbound follow-up mode: "
+            f"lead={metadata.get('lead_id', 'unknown')}"
+        )
+    else:
+        mode = "lo_assistant"
+        context = {}
+        logger.info("[AriaVoice] LO assistant mode (WebRTC)")
+
+    session, agent = _build_session(mode, context)
+    await session.start(room=ctx.room, agent=agent)
+
+
+# ─── Entrypoint ──────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    _start_health_server()
+    agents.cli.run_app(server)
