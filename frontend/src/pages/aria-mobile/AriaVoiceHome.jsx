@@ -14,6 +14,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
+import { useAriaVoice } from '../../hooks/useAriaVoice';
 import api from '../../services/api';
 import AriaTabNav from '../../components/mobile/AriaTabNav';
 import { OfflineIndicator } from '../../components/mobile/OfflineIndicator';
@@ -49,20 +50,17 @@ function _loadLiveKit() {
   return _lkLoadPromise;
 }
 
-// SSE fallback imports (lazy — only loaded if LiveKit unavailable).
-// Resolved once via a shared promise; the component reads from state.
+// SSE fallback: streamMessage loaded lazily (only if LiveKit unavailable).
 let _sseModules = null;
 let _sseLoadPromise = null;
 
 function _loadSSEModules() {
   if (_sseLoadPromise) return _sseLoadPromise;
-  _sseLoadPromise = Promise.all([
-    import('../../hooks/useAriaVoice'),
-    import('../../services/mobileAriaApi'),
-  ]).then(([voiceMod, apiMod]) => {
-    _sseModules = { useAriaVoice: voiceMod.useAriaVoice, streamMessage: apiMod.streamMessage };
-    return _sseModules;
-  }).catch(() => null);
+  _sseLoadPromise = import('../../services/mobileAriaApi')
+    .then((apiMod) => {
+      _sseModules = { streamMessage: apiMod.streamMessage };
+      return _sseModules;
+    }).catch(() => null);
   return _sseLoadPromise;
 }
 
@@ -463,12 +461,9 @@ export default function AriaVoiceHome() {
     });
   }, [sessionId, sseMods]);
 
-  // SSE voice hook — only active when NOT using LiveKit
-  // Static fallback avoids new object creation each render
-  const SSE_VOICE_NOOP = useRef({ isRecording: false, transcript: '', error: null, toggleRecording: () => {} }).current;
-  const sseVoice = (lkAvailable === false && sseMods?.useAriaVoice)
-    ? sseMods.useAriaVoice({ onFinalTranscript: handleFinalTranscript })
-    : SSE_VOICE_NOOP;
+  // SSE voice hook — always called unconditionally (Rules of Hooks).
+  // Output is ignored when LiveKit is active.
+  const sseVoice = useAriaVoice({ onFinalTranscript: handleFinalTranscript });
 
   // Sync SSE recording state
   useEffect(() => {
