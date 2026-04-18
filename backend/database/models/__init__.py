@@ -764,6 +764,9 @@ from .call_authorization import CallAuthorization
 # SMS Compliance (opt-outs, consent, audit log — TCPA gate backing tables)
 from .sms_compliance import SMSOptOut, SMSConsent, SMSComplianceLog
 
+# SMS AI Auto-Response (task queue, patterns, confidence, audit)
+from .sms_task import SMSTask, SMSResponsePattern, SMSAIConfidence, SMSAIAuditLog
+
 
 __all__ = [
     # =====================
@@ -1589,4 +1592,12 @@ __all__ = [
     "SMSOptOut",
     "SMSConsent",
     "SMSComplianceLog",
+
+    # =====================
+    # SMS AI Auto-Response
+    # =====================
+    "SMSTask",
+    "SMSResponsePattern",
+    "SMSAIConfidence",
+    "SMSAIAuditLog",
 ]

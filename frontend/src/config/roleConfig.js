@@ -59,6 +59,12 @@ export const NAVIGATION_ITEMS = {
     badgeClass: 'urgent',
     module: 'base'
   },
+  smsTasks: {
+    path: '/sms-tasks',
+    label: 'SMS Tasks',
+    matchPaths: ['/sms-tasks'],
+    module: 'base'
+  },
   reconciliation: {
     path: '/reconciliation',
     label: 'Reconciliation',
@@ -357,6 +363,7 @@ export const ROLE_NAVIGATION = {
     'rateMonitor',          // Rate Monitor for refinance opportunities
     'closedLoans',          // Closed loans access
     'tasks',
+    'smsTasks',
     'reconciliation',
     'smartDocs',
     'marketing',            // Marketing page (includes Voice & Call Center, Video OS)
@@ -390,6 +397,7 @@ export const ROLE_NAVIGATION = {
     'portfolio',
     'rateMonitor',          // Rate Monitor for refinance opportunities
     'tasks',
+    'smsTasks',
     'reconciliation',
     'smartDocs',
     'marketing',            // Marketing page (includes Voice & Call Center, Video OS)
@@ -417,6 +425,7 @@ export const ROLE_NAVIGATION = {
     'portfolio',
     'rateMonitor',          // Rate Monitor for refinance opportunities
     'tasks',
+    'smsTasks',
     'reconciliation',
     'smartDocs',
     'marketing',            // Marketing page includes Voice & Call Center tools
@@ -438,6 +447,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedClients',  // Portfolio with "Closed Clients" label
     'tasks',
+    'smsTasks',
     'reconciliation',
     'smartDocs',
     'calendar',
@@ -452,6 +462,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedClients',  // Portfolio with "Closed Clients" label
     'tasks',
+    'smsTasks',
     'reconciliation',
     'smartDocs',
     'calendar',
@@ -464,6 +475,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedLoans',  // Portfolio with "Closed Loans" label
     'tasks',
+    'smsTasks',
     'reconciliation',
     'smartDocs',
     'calendar',
@@ -476,6 +488,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedLoans',
     'tasks',
+    'smsTasks',
     'reconciliation',
     'smartDocs',
     'calendar',
@@ -488,6 +501,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedLoans',
     'tasks',
+    'smsTasks',
     'reconciliation',
     'smartDocs',
     'calendar',
@@ -502,6 +516,7 @@ export const ROLE_NAVIGATION = {
     'activeLoans',
     'closedLoans',
     'tasks',
+    'smsTasks',
     'reconciliation',
     'smartDocs',
     'marketing',
@@ -519,6 +534,7 @@ export const ROLE_NAVIGATION = {
   executive: [
     'dashboard',
     'tasks',
+    'smsTasks',
     'reconciliation',
     'calendar',
     'briefing',         // Morning Briefing page
@@ -892,6 +908,13 @@ export const MASTER_ADMIN_NAVIGATION = [
     path: '/tasks',
     badgeKey: 'urgentTasks',
     badgeClass: 'urgent',
+    isStandalone: true
+  },
+  {
+    key: 'smsTasks',
+    label: 'SMS Tasks',
+    path: '/sms-tasks',
+    matchPaths: ['/sms-tasks'],
     isStandalone: true
   },
   {

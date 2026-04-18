@@ -2731,6 +2731,14 @@ try:
 except Exception as e:
     logger.warning(f"SMS compliance routes skipped: {e}")
 
+# --- SMS AI Task routes (auto-response task queue) ---
+try:
+    from routes.sms_task_routes import router as sms_task_router
+    app.include_router(sms_task_router, tags=["SMS Tasks"])
+    logger.info("SMS task routes loaded")
+except Exception as e:
+    logger.warning(f"SMS task routes skipped: {e}")
+
 # --- Lead Routing (round-robin, rules-based lead distribution) ---
 try:
     from routes.lead_routing_routes import router as lead_routing_router
@@ -3026,6 +3034,18 @@ async def startup_event():
         _run_delivery_tracking()
     except Exception as e:
         logger.warning(f"SMS delivery tracking migration: {e}")
+
+    try:
+        from migrations.add_sms_ai_conversations import run_migration as _run_sms_ai_conv
+        _run_sms_ai_conv()
+    except Exception as e:
+        logger.warning(f"SMS AI conversations migration: {e}")
+
+    try:
+        from migrations.add_sms_task_tables import run_migration as _run_sms_task
+        _run_sms_task(engine)
+    except Exception as e:
+        logger.warning(f"SMS task tables migration: {e}")
 
     try:
         from migrations.add_voicemail_sms_followup_columns import run_migration as _run_vm_followup

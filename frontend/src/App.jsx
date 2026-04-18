@@ -130,6 +130,7 @@ const MumClientDetail = lazyRetry(() => import('./pages/MumClientDetail'));
 const YearOverYear = lazyRetry(() => import('./pages/YearOverYear'));
 const RateMonitor = lazyRetry(() => import('./pages/RateMonitor'));
 const Tasks = lazyRetry(() => import('./pages/Tasks'));
+const SMSTasks = lazyRetry(() => import('./pages/SMSTasks'));
 const Calendar = lazyRetry(() => import('./pages/Calendar'));
 const CalendarSettings = lazyRetry(() => import('./pages/CalendarSettings'));
 const CalendarSetupWizard = lazyRetry(() => import('./components/calendar/setup/CalendarSetupWizard'));
@@ -1699,6 +1700,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><Tasks /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/sms-tasks"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><SMSTasks /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

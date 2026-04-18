@@ -225,6 +225,26 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
             db.rollback()
             logger.error(f"Failed to commit inbound message: {commit_err}")
 
+        # Create SMS task for follow-up (non-blocking)
+        try:
+            from services.sms_auto_responder import handle_inbound_sms
+            task_result = handle_inbound_sms(
+                db=db,
+                phone_number=from_phone,
+                message_text=body,
+                telnyx_message_id=record.get("id", ""),
+                organization_id=None,  # Will be resolved inside the service
+                contact_name=None,  # Will be resolved from lead lookup
+            )
+            logger.info(
+                "SMS task created: id=%s auto=%s confidence=%.0f",
+                task_result.get("task_id"),
+                task_result.get("auto_responded"),
+                task_result.get("ai_confidence", 0),
+            )
+        except Exception as task_err:
+            logger.warning("SMS task creation failed (non-blocking): %s", task_err)
+
         # Push to WebSocket clients watching this phone number
         try:
             import asyncio
