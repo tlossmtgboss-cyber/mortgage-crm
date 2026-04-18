@@ -338,7 +338,7 @@ function SmartDocsClientDetail() {
     setActionLoading(true);
     try {
       const token = getToken();
-      const user = JSON.parse(getUserData() || '{}');
+      const user = getUserData() || {};
       const reviewer = user.email || user.name || 'Unknown';
 
       // Get document ID from document object
@@ -375,7 +375,7 @@ function SmartDocsClientDetail() {
     setActionLoading(true);
     try {
       const token = getToken();
-      const user = JSON.parse(getUserData() || '{}');
+      const user = getUserData() || {};
       const reviewer = user.email || user.name || 'Unknown';
 
       const documentId = doc.document_id || doc.id;
@@ -418,7 +418,7 @@ function SmartDocsClientDetail() {
     setActionLoading(true);
     try {
       const token = getToken();
-      const user = JSON.parse(getUserData() || '{}');
+      const user = getUserData() || {};
       const reviewer = user.email || user.name || 'Unknown';
 
       const documentId = doc.document_id || doc.id;
@@ -453,7 +453,7 @@ function SmartDocsClientDetail() {
     setActionLoading(true);
     try {
       const token = getToken();
-      const user = JSON.parse(getUserData() || '{}');
+      const user = getUserData() || {};
       const reviewer = user.email || user.name || 'Unknown';
 
       // Re-request uses the request_id, not document_id

@@ -49,7 +49,7 @@ export function ProductionPredictorDashboard({ entityId: entityIdProp, entityTyp
   const entityId = useMemo(() => {
     if (entityIdProp) return entityIdProp;
     try {
-      const user = JSON.parse(getUserData() || '{}');
+      const user = getUserData() || {};
       return user.id ? String(user.id) : null;
     } catch {
       return null;

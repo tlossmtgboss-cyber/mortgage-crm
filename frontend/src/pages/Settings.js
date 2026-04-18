@@ -331,7 +331,7 @@ function Settings() {
   const { isAdmin, loading: permissionsLoading } = usePermissions();
 
   // Get current user from localStorage
-  const currentUser = JSON.parse(getUserData() || '{}');
+  const currentUser = getUserData() || {};
 
   const [activeSection, setActiveSection] = useState('profile-info');
   const [expandedSections, setExpandedSections] = useState({
@@ -836,7 +836,7 @@ function Settings() {
       if (response.ok) {
         setProfileMessage({ type: 'success', text: 'Profile updated successfully!' });
         // Update localStorage user data
-        const storedUser = JSON.parse(getUserData() || '{}');
+        const storedUser = (getUserData() || {});
         await setTokens({ user_data: { ...storedUser, full_name: fullName } });
       } else {
         const error = await response.json();
@@ -1466,7 +1466,7 @@ const API_BASE_URL = isProduction
   };
 
   const handleSelectAll = () => {
-    const currentUser = JSON.parse(getUserData() || '{}');
+    const currentUser = (getUserData() || {});
     const selectableUsers = users.filter(u => u.id !== currentUser.id).map(u => u.id);
 
     if (selectedUsers.length === selectableUsers.length) {
@@ -1654,7 +1654,7 @@ const API_BASE_URL = isProduction
   };
 
   const handleDeleteUser = async (userId) => {
-    const currentUser = JSON.parse(getUserData() || '{}');
+    const currentUser = (getUserData() || {});
 
     if (currentUser.id === userId) {
       toast.error('You cannot delete your own account. Please contact another administrator.');
@@ -5919,7 +5919,7 @@ const API_BASE_URL = isProduction
                           <input
                             type="checkbox"
                             onChange={handleSelectAll}
-                            checked={selectedUsers.length > 0 && selectedUsers.length === users.filter(u => u.id !== JSON.parse(getUserData() || '{}').id).length}
+                            checked={selectedUsers.length > 0 && selectedUsers.length === users.filter(u => u.id !== (getUserData() || {}).id).length}
                             style={{ width: '18px', height: '18px', cursor: 'pointer' }}
                           />
                         </th>
@@ -5934,7 +5934,7 @@ const API_BASE_URL = isProduction
                     </thead>
                     <tbody>
                       {users.map((user) => {
-                        const currentUser = JSON.parse(getUserData() || '{}');
+                        const currentUser = (getUserData() || {});
                         const isCurrentUser = user.id === currentUser.id;
                         return (
                           <tr

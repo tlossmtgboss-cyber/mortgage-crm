@@ -91,7 +91,7 @@ const ProfileSettings = ({ activeSection }) => {
       });
       if (response.ok) {
         setProfileMessage({ type: 'success', text: 'Profile updated successfully!' });
-        const storedUser = JSON.parse(getUserData() || '{}');
+        const storedUser = getUserData() || {};
         await setTokens({ user_data: { ...storedUser, full_name: fullName } });
       } else {
         const error = await response.json();

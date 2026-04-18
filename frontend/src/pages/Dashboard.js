@@ -27,7 +27,7 @@ function Dashboard() {
     // Check both userRole and localStorage for admin status
     const isAdmin = userRole === 'admin' || (() => {
       try {
-        const user = JSON.parse(getUserData() || '{}');
+        const user = getUserData() || {};
         return user.role === 'admin' || user.permission_role === 'admin';
       } catch { return false; }
     })();

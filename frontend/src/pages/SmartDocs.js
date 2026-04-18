@@ -464,7 +464,7 @@ function SmartDocs() {
 
   // Platform admin sees contracts dashboard instead of loan documents
   const userEmail = (() => {
-    try { return JSON.parse(getUserData())?.email; } catch { return null; }
+    try { return getUserData()?.email; } catch { return null; }
   })();
   if (isPlatformAdmin || isMasterAdmin(userEmail)) {
     return <AdminContracts />;

@@ -191,7 +191,7 @@ const UserProfileSettings = () => {
         setWarnings(response.warnings || []);
 
         // Update localStorage
-        const storedUser = JSON.parse(getUserData() || '{}');
+        const storedUser = getUserData() || {};
         await setTokens({ user_data: {
           ...storedUser,
           full_name: profileData.full_name

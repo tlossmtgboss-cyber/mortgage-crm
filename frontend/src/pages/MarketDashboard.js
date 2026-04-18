@@ -16,7 +16,7 @@ function MarketChat() {
   const isInitialLoad = useRef(true);
 
   // Get current user from localStorage
-  const currentUser = JSON.parse(getUserData() || '{}');
+  const currentUser = getUserData() || {};
   const userName = currentUser.name || currentUser.email?.split('@')[0] || 'User';
 
   // Load messages on mount and set up polling

@@ -596,7 +596,7 @@ const AdminPanel = () => {
     // Get localStorage debug info
     let userFromStorage = null;
     try {
-      userFromStorage = JSON.parse(getUserData() || 'null');
+      userFromStorage = getUserData() || null;
     } catch (e) {
       userFromStorage = { error: 'Failed to parse user from localStorage' };
     }

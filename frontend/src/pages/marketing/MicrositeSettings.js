@@ -15,7 +15,7 @@ function MicrositeSettings() {
   useEffect(() => {
     // Load user profile from localStorage
     try {
-      const user = JSON.parse(getUserData() || '{}');
+      const user = getUserData() || {};
       setUserProfile(user);
     } catch (e) {
       console.error('Error loading user profile:', e);
