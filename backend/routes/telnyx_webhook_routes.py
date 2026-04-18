@@ -63,89 +63,166 @@ def _validate_texml_request(request: Request):
 
 
 # =============================================================================
-# Inbound Call Routing — Telnyx → LiveKit via SIP transfer
+# Inbound Call Routing — Telnyx answer + LiveKit outbound SIP + Telnyx bridge
 # =============================================================================
+
+# Pending bridge: maps a room_name to the inbound call_control_id waiting to be bridged.
+# When LiveKit's outbound SIP call arrives back at our Telnyx number, we bridge the
+# two legs so the caller stays on their original call.
+_pending_bridges: dict[str, dict] = {}
+
+ARIA_DID = "+18438838956"
+
+
+def _telnyx_headers():
+    key = os.getenv("TELNYX_API_KEY", "")
+    return {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+
+
+def _telnyx_action(call_control_id: str, action: str, body: dict | None = None):
+    """Fire a Telnyx Call Control action (synchronous)."""
+    import requests as http_requests
+    url = f"https://api.telnyx.com/v2/calls/{call_control_id}/actions/{action}"
+    resp = http_requests.post(url, headers=_telnyx_headers(), json=body or {}, timeout=10)
+    return resp
+
 
 async def _route_inbound_to_livekit(
     call_control_id: str, from_number: str, to_number: str, db: Session,
 ):
-    """Route an inbound call to Aria via SIP transfer to LiveKit Cloud.
+    """Route an inbound call to Aria via LiveKit outbound SIP + Telnyx bridge.
 
-    Flow: Answer → Transfer to LiveKit SIP endpoint → LiveKit dispatch rule
-    creates room → Aria agent auto-joins and greets caller.
+    LiveKit Cloud inbound SIP trunking returns "No trunk found" for this project,
+    so we use the proven outbound SIP path with a Telnyx bridge for seamless UX:
 
-    Critical: LiveKit Cloud SIP endpoint is <subdomain>.sip.livekit.cloud
-    (NOT the WebSocket domain <subdomain>.livekit.cloud).
+    1. Answer the inbound call (caller hears brief silence)
+    2. Create a LiveKit room with inbound metadata
+    3. LiveKit calls our OWN number via outbound SIP trunk → Telnyx
+    4. That creates a second inbound call to our number (detected by _pending_bridges)
+    5. We answer the second call and bridge it with the original caller's call
+    6. Aria agent auto-joins the LiveKit room and talks to the caller
     """
-    import requests as http_requests
+    from livekit import api as livekit_api
 
     telnyx_key = os.getenv("TELNYX_API_KEY", "")
+    lk_url = os.getenv("LIVEKIT_URL", "")
+    lk_key = os.getenv("LIVEKIT_API_KEY", "")
+    lk_secret = os.getenv("LIVEKIT_API_SECRET", "")
+    outbound_trunk = os.getenv("LIVEKIT_SIP_OUTBOUND_TRUNK_ID", "ST_nif29TasyWjm")
+
     if not telnyx_key:
         logger.error("[AriaInbound] TELNYX_API_KEY not set")
         return
+    if not all([lk_url, lk_key, lk_secret]):
+        logger.error("[AriaInbound] LiveKit credentials not set")
+        return
 
-    lk_sip_domain = os.getenv("LIVEKIT_SIP_DOMAIN", "")
-    if not lk_sip_domain:
-        lk_url = os.getenv("LIVEKIT_URL", "")
-        if lk_url:
-            host = lk_url.replace("wss://", "").replace("https://", "").rstrip("/")
-            lk_sip_domain = f"{host.split('.')[0]}.sip.livekit.cloud"
-        else:
-            logger.error("[AriaInbound] LIVEKIT_SIP_DOMAIN and LIVEKIT_URL not set")
-            return
-
-    if ".sip." not in lk_sip_domain:
-        lk_sip_domain = lk_sip_domain.replace(".livekit.cloud", ".sip.livekit.cloud")
-
-    logger.warning(
-        f"[AriaInbound] Routing {from_number} → SIP transfer to {lk_sip_domain}"
-    )
-
-    headers = {
-        "Authorization": f"Bearer {telnyx_key}",
-        "Content-Type": "application/json",
-    }
-    base_url = f"https://api.telnyx.com/v2/calls/{call_control_id}/actions"
+    logger.warning(f"[AriaInbound] Routing {from_number} via bridge approach")
 
     # Step 1: Answer the inbound call
     try:
-        answer_resp = http_requests.post(
-            f"{base_url}/answer", headers=headers, json={}, timeout=10,
-        )
-        logger.warning(f"[AriaInbound] Answer: {answer_resp.status_code}")
-        if answer_resp.status_code >= 400:
-            logger.error(f"[AriaInbound] Answer failed: {answer_resp.text[:300]}")
+        resp = _telnyx_action(call_control_id, "answer")
+        logger.warning(f"[AriaInbound] Answer: {resp.status_code}")
+        if resp.status_code >= 400:
+            logger.error(f"[AriaInbound] Answer failed: {resp.text[:300]}")
             return
     except Exception as e:
         logger.error(f"[AriaInbound] Answer failed: {e}", exc_info=True)
         return
 
-    # Step 2: SIP transfer to LiveKit Cloud
-    # The number in the SIP URI must match a number on the LiveKit inbound trunk.
-    # LiveKit dispatch rule creates a room with prefix "aria-inbound-" and
-    # dispatches the "aria-voice" agent.
-    # CRITICAL: Pass the original caller's number as "from" so the SIP INVITE
-    # has From: <caller> and To: <our DID>. If both From and To are our DID,
-    # LiveKit rejects as self-referential (404).
-    dial_number = to_number or "+18438838956"
-    sip_uri = f"sip:{dial_number}@{lk_sip_domain};transport=tcp"
+    # Step 2: Create LiveKit room
+    import hashlib, time as _time
+    room_suffix = hashlib.md5(f"{from_number}-{_time.time()}".encode()).hexdigest()[:8]
+    room_name = f"aria-inbound-{room_suffix}"
 
     try:
-        transfer_resp = http_requests.post(
-            f"{base_url}/transfer",
-            headers=headers,
-            json={
-                "to": sip_uri,
-                "from": from_number,
-            },
-            timeout=10,
+        lk = livekit_api.LiveKitAPI(url=lk_url, api_key=lk_key, api_secret=lk_secret)
+
+        room_metadata = json.dumps({
+            "trigger": "inbound_call",
+            "from_number": from_number,
+            "to_number": to_number,
+            "telnyx_call_control_id": call_control_id,
+        })
+        await lk.room.create_room(livekit_api.CreateRoomRequest(
+            name=room_name, metadata=room_metadata,
+        ))
+        logger.warning(f"[AriaInbound] Room created: {room_name}")
+
+        # Step 3: Register pending bridge BEFORE LiveKit calls us back
+        _pending_bridges[room_name] = {
+            "caller_ccid": call_control_id,
+            "from_number": from_number,
+            "created": _time.time(),
+        }
+
+        # Step 4: LiveKit calls our OWN number via outbound SIP trunk.
+        # This creates a second Telnyx call leg that we'll bridge with the caller.
+        sip_req = livekit_api.CreateSIPParticipantRequest(
+            sip_trunk_id=outbound_trunk,
+            sip_call_to=ARIA_DID,
+            room_name=room_name,
+            participant_identity=f"caller-{from_number}",
+            participant_name=f"Caller {from_number}",
         )
+        sip_result = await lk.sip.create_sip_participant(sip_req)
         logger.warning(
-            f"[AriaInbound] Transfer to {sip_uri} from={from_number}: "
-            f"{transfer_resp.status_code} {transfer_resp.text[:200]}"
+            f"[AriaInbound] LiveKit calling {ARIA_DID} for bridge, "
+            f"room={room_name} sip_call={sip_result.sip_call_id}"
         )
+        await lk.aclose()
+
     except Exception as e:
-        logger.error(f"[AriaInbound] Transfer failed: {e}", exc_info=True)
+        logger.error(f"[AriaInbound] Bridge setup failed: {e}", exc_info=True)
+        _pending_bridges.pop(room_name, None)
+
+
+def _try_bridge_livekit_callback(call_control_id: str, from_number: str) -> bool:
+    """Check if an incoming call is a LiveKit callback needing a bridge.
+
+    Returns True if this call was handled (bridged), False if it's a normal call.
+    """
+    import time as _time
+
+    # Clean up stale entries (older than 30 seconds)
+    stale = [k for k, v in _pending_bridges.items() if _time.time() - v["created"] > 30]
+    for k in stale:
+        _pending_bridges.pop(k, None)
+
+    if not _pending_bridges:
+        return False
+
+    # LiveKit calls our number from our own number via the outbound trunk.
+    # The From will be our DID since that's what the outbound trunk uses.
+    if from_number != ARIA_DID:
+        return False
+
+    # Find the oldest pending bridge
+    oldest_key = min(_pending_bridges, key=lambda k: _pending_bridges[k]["created"])
+    bridge_info = _pending_bridges.pop(oldest_key)
+    caller_ccid = bridge_info["caller_ccid"]
+
+    logger.warning(
+        f"[AriaBridge] LiveKit callback detected — bridging "
+        f"caller={bridge_info['from_number']} room={oldest_key}"
+    )
+
+    # Answer this LiveKit callback leg
+    try:
+        resp = _telnyx_action(call_control_id, "answer")
+        logger.warning(f"[AriaBridge] Answer LiveKit leg: {resp.status_code}")
+    except Exception as e:
+        logger.error(f"[AriaBridge] Answer LiveKit leg failed: {e}")
+        return True
+
+    # Bridge the original caller leg with the LiveKit leg
+    try:
+        resp = _telnyx_action(caller_ccid, "bridge", {"call_control_id": call_control_id})
+        logger.warning(f"[AriaBridge] Bridge: {resp.status_code} {resp.text[:200]}")
+    except Exception as e:
+        logger.error(f"[AriaBridge] Bridge failed: {e}")
+
+    return True
 
 
 # =============================================================================
@@ -235,9 +312,17 @@ async def handle_telnyx_webhook(
     # Route to appropriate handler
     try:
         if event_type == TelnyxEventType.CALL_INITIATED:
-            # Inbound calls → route to Aria via LiveKit SIP bridge
+            # Inbound calls → route to Aria via LiveKit outbound SIP + bridge
             if hasattr(event, "direction") and event.direction in ("incoming", "inbound"):
+                # Check if this is a LiveKit callback that needs bridging
+                is_bridge = False
                 if event.from_number and event.call_control_id:
+                    is_bridge = _try_bridge_livekit_callback(
+                        event.call_control_id, event.from_number,
+                    )
+
+                # If not a bridge callback, it's a real inbound call — route to LiveKit
+                if not is_bridge and event.from_number and event.call_control_id:
                     try:
                         await _route_inbound_to_livekit(
                             event.call_control_id, event.from_number,
@@ -245,6 +330,7 @@ async def handle_telnyx_webhook(
                         )
                     except Exception as e:
                         logger.error(f"Inbound routing failed: {e}")
+
                 if idem_key:
                     try:
                         mark_processed(db, idem_key, response_code=200)
@@ -728,6 +814,193 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             return {"status": "received", "handler": "ai_reengagement"}
     except Exception as e:
         logger.error(f"AI re-engagement intercept error (falling through): {e}")
+
+    # ======================================================================
+    # Aria SMS AI Conversation Intercept
+    # Check if this SMS belongs to an active Aria-initiated conversation
+    # (e.g., scheduling via voice command). Generates AI reply via Claude
+    # and sends it back via Telnyx.
+    # ======================================================================
+    try:
+        _aria_conv = db.execute(sa_text("""
+            SELECT id, organization_id, current_stage, context_data
+            FROM sms_ai_conversations
+            WHERE phone_number = :phone AND status = 'active'
+            ORDER BY last_message_at DESC NULLS LAST
+            LIMIT 1
+        """), {"phone": normalized_from}).fetchone()
+
+        if _aria_conv:
+            _aria_conv_id = _aria_conv[0]
+            _aria_org_id = _aria_conv[1]
+            _aria_stage = _aria_conv[2]
+            _aria_context = _aria_conv[3] or {}
+            logger.info(
+                "aria_sms_intercept: matched conversation_id=%s, phone=...%s, stage=%s",
+                _aria_conv_id, normalized_from[-4:], _aria_stage,
+            )
+
+            # Store inbound message in conversation
+            import uuid as _uuid_mod
+            _inbound_msg_id = str(_uuid_mod.uuid4())
+            try:
+                db.execute(sa_text("""
+                    INSERT INTO sms_ai_conversation_messages
+                    (id, conversation_id, direction, content, ai_generated, created_at)
+                    VALUES (:id, :conv_id, 'inbound', :content, false, NOW())
+                """), {
+                    "id": _inbound_msg_id,
+                    "conv_id": _aria_conv_id,
+                    "content": message_body,
+                })
+            except Exception:
+                pass
+
+            # Fetch conversation history for context
+            _history_rows = db.execute(sa_text("""
+                SELECT direction, content FROM sms_ai_conversation_messages
+                WHERE conversation_id = :conv_id
+                ORDER BY created_at ASC
+            """), {"conv_id": _aria_conv_id}).fetchall()
+
+            _messages = []
+            for row in _history_rows:
+                role = "user" if row[0] == "inbound" else "assistant"
+                _messages.append({"role": role, "content": row[1]})
+            # Add current message if not already in history
+            if not _messages or _messages[-1].get("content") != message_body:
+                _messages.append({"role": "user", "content": message_body})
+
+            # Generate AI reply via Claude
+            _reply_text = None
+            try:
+                import anthropic as _anthropic
+                _client = _anthropic.Anthropic(timeout=15.0)
+
+                borrower_name = _aria_context.get("borrower_name", "there")
+                lo_name = _aria_context.get("lo_name", "your loan officer")
+                appt_type = _aria_context.get("appointment_type", "consultation")
+
+                _system = (
+                    f"You are Aria, an AI assistant for {lo_name} at Perennia AI, "
+                    f"a mortgage lending company. You are texting {borrower_name} "
+                    f"to schedule a {appt_type}.\n\n"
+                    "RULES:\n"
+                    "- Keep responses under 160 characters (1 SMS segment)\n"
+                    "- Be warm and professional\n"
+                    "- When the borrower confirms a time, acknowledge it and confirm the appointment\n"
+                    "- If they suggest a different time, accommodate it\n"
+                    "- Do NOT quote rates, fees, or loan terms\n"
+                    "- If they say stop or opt out, respect it immediately\n"
+                    f"- Current stage: {_aria_stage}"
+                )
+
+                _resp = _client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=200,
+                    system=_system,
+                    messages=_messages,
+                )
+                if _resp.content:
+                    _reply_text = _resp.content[0].text.strip()
+            except Exception as e:
+                logger.error("aria_sms_intercept: Claude response generation failed: %s", e)
+
+            if _reply_text:
+                # Store outbound message
+                try:
+                    db.execute(sa_text("""
+                        INSERT INTO sms_ai_conversation_messages
+                        (id, conversation_id, direction, content, ai_generated, created_at)
+                        VALUES (:id, :conv_id, 'outbound', :content, true, NOW())
+                    """), {
+                        "id": str(_uuid_mod.uuid4()),
+                        "conv_id": _aria_conv_id,
+                        "content": _reply_text,
+                    })
+                except Exception:
+                    pass
+
+                # Update conversation state
+                try:
+                    db.execute(sa_text("""
+                        UPDATE sms_ai_conversations
+                        SET last_message_at = NOW(),
+                            message_count = COALESCE(message_count, 0) + 2,
+                            current_stage = CASE
+                                WHEN current_stage = 'scheduling' THEN 'confirming'
+                                ELSE current_stage
+                            END
+                        WHERE id = :conv_id
+                    """), {"conv_id": _aria_conv_id})
+                except Exception:
+                    pass
+
+                # Send reply via Telnyx
+                try:
+                    import requests as _req
+                    _telnyx_key = os.environ.get("TELNYX_API_KEY", "")
+                    _telnyx_from = os.environ.get(
+                        "TELNYX_FROM_NUMBER",
+                        os.environ.get("TELNYX_PHONE_NUMBER", "+18438838956"),
+                    )
+                    _telnyx_profile = os.environ.get(
+                        "TELNYX_MESSAGING_PROFILE_ID",
+                        "40019bed-2fa1-4407-a0c6-fe4c6b222c93",
+                    )
+                    if _telnyx_key:
+                        _send_resp = _req.post(
+                            "https://api.telnyx.com/v2/messages",
+                            headers={
+                                "Authorization": f"Bearer {_telnyx_key}",
+                                "Content-Type": "application/json",
+                            },
+                            json={
+                                "from": _telnyx_from,
+                                "to": normalized_from,
+                                "text": _reply_text,
+                                "messaging_profile_id": _telnyx_profile,
+                            },
+                            timeout=10,
+                        )
+                        logger.info(
+                            "aria_sms_intercept: reply sent, status=%d, to=...%s, text='%s'",
+                            _send_resp.status_code, normalized_from[-4:], _reply_text[:50],
+                        )
+                    else:
+                        logger.error("aria_sms_intercept: TELNYX_API_KEY not set")
+                except Exception as e:
+                    logger.error("aria_sms_intercept: send reply failed: %s", e)
+
+            # Store inbound for audit trail
+            try:
+                db.execute(sa_text("""
+                    INSERT INTO sms_messages (
+                        direction, from_number, to_number, body,
+                        provider, provider_message_id, status, created_at
+                    ) VALUES (
+                        'inbound', :from_number, :to_number, :body,
+                        'telnyx', :message_id, 'received', NOW()
+                    )
+                """), {
+                    "from_number": from_number,
+                    "to_number": to_number,
+                    "body": message_body,
+                    "message_id": event.message_id,
+                })
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.error("aria_sms_intercept: audit SMS store failed: %s", e)
+
+            return {
+                "status": "received",
+                "handler": "aria_sms_conversation",
+                "conversation_id": str(_aria_conv_id),
+                "reply_sent": bool(_reply_text),
+            }
+    except Exception as e:
+        logger.error(f"Aria SMS conversation intercept error (falling through): {e}")
 
     # ======================================================================
     # ACO (Application Completion Orchestrator) Intercept
