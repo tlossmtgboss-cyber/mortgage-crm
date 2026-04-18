@@ -23,7 +23,7 @@ from fastapi import (
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from pydantic import BaseModel
+from pydantic import BaseModel, validator
 
 from database import get_db
 
@@ -70,12 +70,18 @@ def _get_user_id(user) -> Optional[int]:
 # ─── Pydantic models ─────────────────────────────────────────────────────────
 
 class SendSMSRequest(BaseModel):
-    contactId: str
+    contactId: Optional[str] = ""
     to: str
     message: str
     mediaUrls: list[str] = []
     pageType: str = "client"
     borrowerType: str = "primary"
+
+    @validator("contactId", pre=True, always=True)
+    def coerce_contact_id(cls, v):
+        if v is None:
+            return ""
+        return str(v)
 
 
 class SMSMessageResponse(BaseModel):
