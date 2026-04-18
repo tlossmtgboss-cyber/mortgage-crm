@@ -74,15 +74,8 @@ async def _route_inbound_to_livekit(
 ):
     """Route an inbound call to Aria via LiveKit outbound SIP callback.
 
-    LiveKit Cloud inbound SIP returns "No trunk found" and Telnyx blocks
-    self-calls, so we use the only working path:
-
-    1. Answer the inbound call
-    2. Tell the caller they'll get an immediate callback
-    3. Create a LiveKit room with inbound metadata
-    4. LiveKit calls the CALLER's number via outbound SIP trunk
-    5. Hang up the original inbound call
-    6. Caller's phone rings with callback from Aria
+    Flow: answer → TTS greeting → hang up → wait for phone to free → callback via LiveKit.
+    The caller's phone must be free (not on-call) before LiveKit dials back.
     """
     import requests as http_requests
     from livekit import api as livekit_api
@@ -125,7 +118,7 @@ async def _route_inbound_to_livekit(
             f"{base_url}/speak",
             headers=headers,
             json={
-                "payload": "Hi, this is Aria from Perennia. I'll call you right back in just a moment.",
+                "payload": "Hi, this is Aria from Perennia. I'll call you right back in just a moment. Goodbye!",
                 "voice": "female",
                 "language": "en-US",
             },
@@ -134,7 +127,18 @@ async def _route_inbound_to_livekit(
     except Exception as e:
         logger.warning(f"[AriaInbound] Speak failed (non-critical): {e}")
 
-    # Step 3: Create LiveKit room and call the caller back
+    # Step 3: Wait for TTS to finish, then hang up BEFORE placing callback
+    await asyncio.sleep(5)
+    try:
+        http_requests.post(f"{base_url}/hangup", headers=headers, json={}, timeout=10)
+        logger.warning("[AriaInbound] Original call hung up")
+    except Exception as e:
+        logger.warning(f"[AriaInbound] Hangup failed: {e}")
+
+    # Step 4: Brief pause so caller's phone becomes available for callback
+    await asyncio.sleep(2)
+
+    # Step 5: Create LiveKit room and call the caller back
     import hashlib, time as _time
     room_suffix = hashlib.md5(f"{from_number}-{_time.time()}".encode()).hexdigest()[:8]
     room_name = f"aria-inbound-{room_suffix}"
@@ -152,7 +156,7 @@ async def _route_inbound_to_livekit(
         ))
         logger.warning(f"[AriaInbound] Room created: {room_name}")
 
-        # Step 4: LiveKit calls the caller via outbound SIP
+        # Step 6: LiveKit calls the caller via outbound SIP
         sip_req = livekit_api.CreateSIPParticipantRequest(
             sip_trunk_id=outbound_trunk,
             sip_call_to=from_number,
@@ -169,14 +173,6 @@ async def _route_inbound_to_livekit(
 
     except Exception as e:
         logger.error(f"[AriaInbound] Callback setup failed: {e}", exc_info=True)
-
-    # Step 5: Hang up the original inbound call after TTS plays
-    await asyncio.sleep(4)
-    try:
-        http_requests.post(f"{base_url}/hangup", headers=headers, json={}, timeout=10)
-        logger.warning("[AriaInbound] Original call hung up — callback in progress")
-    except Exception as e:
-        logger.warning(f"[AriaInbound] Hangup failed (non-critical): {e}")
 
 
 # =============================================================================
@@ -648,6 +644,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     normalized_to, normalized_to[-4:],
                 )
         except Exception as e:
+            db.rollback()
             logger.warning("voice_scheduling_intercept: org lookup failed, proceeding without tenant filter: %s", e)
 
         vw_service = VoiceSchedulingWorkflowService(db)
@@ -690,11 +687,11 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 try:
                     db.execute(sa_text("""
                         INSERT INTO sms_messages (
-                            direction, from_number, to_number, body,
-                            provider, provider_message_id, status, created_at
+                            direction, from_number, to_number, message,
+                            provider_message_id, status, created_at
                         ) VALUES (
                             'inbound', :from_number, :to_number, :body,
-                            'telnyx', :message_id, 'received', NOW()
+                            :message_id, 'received', NOW()
                         )
                     """), {
                         "from_number": from_number,
@@ -719,6 +716,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 normalized_from[-4:],
             )
     except Exception as e:
+        db.rollback()
         logger.exception(
             "voice_scheduling_intercept: error (falling through to next handler), "
             "workflow_id=%s, from=...%s",
@@ -740,11 +738,11 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             try:
                 db.execute(sa_text("""
                     INSERT INTO sms_messages (
-                        direction, from_number, to_number, body,
-                        provider, provider_message_id, status, created_at
+                        direction, from_number, to_number, message,
+                        provider_message_id, status, created_at
                     ) VALUES (
                         'inbound', :from_number, :to_number, :body,
-                        'telnyx', :message_id, 'received', NOW()
+                        :message_id, 'received', NOW()
                     )
                 """), {
                     "from_number": from_number,
@@ -758,6 +756,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 logger.error(f"Failed to store intercepted SMS: {e}")
             return {"status": "received", "handler": "ai_reengagement"}
     except Exception as e:
+        db.rollback()
         logger.error(f"AI re-engagement intercept error (falling through): {e}")
 
     # ======================================================================
@@ -919,11 +918,11 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             try:
                 db.execute(sa_text("""
                     INSERT INTO sms_messages (
-                        direction, from_number, to_number, body,
-                        provider, provider_message_id, status, created_at
+                        direction, from_number, to_number, message,
+                        provider_message_id, status, created_at
                     ) VALUES (
                         'inbound', :from_number, :to_number, :body,
-                        'telnyx', :message_id, 'received', NOW()
+                        :message_id, 'received', NOW()
                     )
                 """), {
                     "from_number": from_number,
@@ -943,6 +942,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 "reply_sent": bool(_reply_text),
             }
     except Exception as e:
+        db.rollback()
         logger.error(f"Aria SMS conversation intercept error (falling through): {e}")
 
     # ======================================================================
@@ -964,11 +964,11 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             try:
                 db.execute(sa_text("""
                     INSERT INTO sms_messages (
-                        direction, from_number, to_number, body,
-                        provider, provider_message_id, status, created_at
+                        direction, from_number, to_number, message,
+                        provider_message_id, status, created_at
                     ) VALUES (
                         'inbound', :from_number, :to_number, :body,
-                        'telnyx', :message_id, 'received', NOW()
+                        :message_id, 'received', NOW()
                     )
                 """), {
                     "from_number": from_number,
@@ -988,6 +988,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     except ImportError:
         pass  # ACO module not available
     except Exception as e:
+        db.rollback()
         logger.error(f"ACO intercept error (falling through): {e}")
 
     # ======================================================================
@@ -1047,11 +1048,11 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 try:
                     db.execute(sa_text("""
                         INSERT INTO sms_messages (
-                            direction, from_number, to_number, body,
-                            provider, provider_message_id, status, created_at
+                            direction, from_number, to_number, message,
+                            provider_message_id, status, created_at
                         ) VALUES (
                             'inbound', :from_number, :to_number, :body,
-                            'telnyx', :message_id, 'received', NOW()
+                            :message_id, 'received', NOW()
                         )
                     """), {
                         "from_number": from_number,
@@ -1070,17 +1071,18 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     except ImportError:
         pass  # Voice scheduling workflow module not available
     except Exception as e:
+        db.rollback()
         logger.error(f"Voice scheduling workflow intercept error (falling through): {e}")
 
     # Store inbound SMS in sms_messages table
     try:
         db.execute(sa_text("""
             INSERT INTO sms_messages (
-                direction, from_number, to_number, body,
-                provider, provider_message_id, status, created_at
+                direction, from_number, to_number, message,
+                provider_message_id, status, created_at
             ) VALUES (
                 'inbound', :from_number, :to_number, :body,
-                'telnyx', :message_id, 'received', NOW()
+                :message_id, 'received', NOW()
             )
         """), {
             "from_number": from_number,
