@@ -153,22 +153,20 @@ class AriaVoiceAgent(Agent):
     async def send_sms(
         self,
         context: RunContext,
-        recipient_name: str,
         phone_number: str,
         message: str,
     ):
-        """Send an SMS text message to a contact."""
+        """Send an SMS text message to a phone number."""
         result = await call_backend_tool_safe(
             "/internal/aria/tool/execute",
             {"tool_name": "send_sms_message", "params": {
-                "recipient_name": recipient_name,
-                "phone_number": phone_number,
+                "to_phone": phone_number,
                 "message": message,
             }},
         )
         self._session_data["tools_executed"].append({
             "tool": "send_sms",
-            "recipient": recipient_name,
+            "phone": phone_number,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
         return json.dumps(result, default=str)
@@ -219,31 +217,33 @@ class AriaVoiceAgent(Agent):
     async def schedule_appointment(
         self,
         context: RunContext,
-        title: str,
-        date: str,
-        time: str,
+        contact_id: str = "",
+        datetime_str: str = "",
         duration_minutes: int = 30,
-        attendee_name: str = "",
-        attendee_email: str = "",
+        appointment_type: str = "consultation",
+        title: str = "",
+        notes: str = "",
     ):
-        """Schedule a new appointment."""
+        """Schedule a new appointment on the calendar. Use contact_id if known, or provide details in notes."""
         params = {
-            "title": title,
-            "date": date,
-            "time": time,
             "duration_minutes": duration_minutes,
+            "appointment_type": appointment_type,
         }
-        if attendee_name:
-            params["attendee_name"] = attendee_name
-        if attendee_email:
-            params["attendee_email"] = attendee_email
+        if contact_id:
+            params["contact_id"] = contact_id
+        if datetime_str:
+            params["datetime_str"] = datetime_str
+        if title:
+            params["title"] = title
+        if notes:
+            params["notes"] = notes
         result = await call_backend_tool_safe(
             "/internal/aria/tool/execute",
-            {"tool_name": "schedule_appointment", "params": params},
+            {"tool_name": "book_appointment", "params": params},
         )
         self._session_data["tools_executed"].append({
             "tool": "schedule_appointment",
-            "title": title,
+            "title": title or appointment_type,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
         return json.dumps(result, default=str)
@@ -256,6 +256,83 @@ class AriaVoiceAgent(Agent):
             {"tool_name": "get_daily_briefing", "params": {}},
         )
         return json.dumps(result, default=str)
+
+    # ─── SMS Conversation Tools ──────────────────────────────────────
+
+    @function_tool()
+    async def get_sms_conversation(self, context: RunContext, phone_number: str):
+        """Get the SMS conversation history with a phone number. Shows recent messages back and forth."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "get_sms_conversation_history", "params": {
+                "phone_number": phone_number,
+            }},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def start_scheduling_conversation(
+        self,
+        context: RunContext,
+        phone_number: str,
+        borrower_name: str,
+        proposed_times: str = "",
+        appointment_type: str = "consultation",
+    ):
+        """Start an SMS conversation with a borrower to schedule an appointment.
+        Sends an initial text asking for their availability. They'll text back to confirm."""
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "start_scheduling_sms", "params": {
+                "to_phone": phone_number,
+                "borrower_name": borrower_name,
+                "proposed_times": proposed_times,
+                "appointment_type": appointment_type,
+            }},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "start_scheduling_sms",
+            "borrower": borrower_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    # ─── Document Generation Tools ───────────────────────────────────
+
+    @function_tool()
+    async def generate_pre_approval_letter(
+        self,
+        context: RunContext,
+        lead_id: str,
+        approval_amount: str,
+        loan_type: str = "Conventional",
+        property_address: str = "",
+        recipient_email: str = "",
+    ):
+        """Generate and email a pre-approval letter for a borrower.
+        Requires the lead ID and approval amount. The letter is emailed as a PDF."""
+        params = {
+            "lead_id": lead_id,
+            "approval_amount": approval_amount,
+            "loan_type": loan_type,
+        }
+        if property_address:
+            params["property_address"] = property_address
+        if recipient_email:
+            params["recipient_email"] = recipient_email
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "generate_pre_approval_letter", "params": params},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "generate_pre_approval_letter",
+            "lead_id": lead_id,
+            "amount": approval_amount,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    # ─── Existing Tools (Inbound/Transfer) ───────────────────────────
 
     @function_tool()
     async def look_up_caller(self, context: RunContext, phone_number: str):
