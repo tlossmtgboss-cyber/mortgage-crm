@@ -3034,6 +3034,12 @@ async def startup_event():
         logger.warning(f"Voicemail SMS followup columns migration: {e}")
 
     try:
+        from migrations.add_media_s3_keys_columns import run_migration as _run_media_s3_keys
+        _run_media_s3_keys()
+    except Exception as e:
+        logger.warning(f"Media S3 keys columns migration: {e}")
+
+    try:
         from migrations.add_device_tokens_table import run_migration as _run_device_tokens
         _run_device_tokens()
     except Exception as e:

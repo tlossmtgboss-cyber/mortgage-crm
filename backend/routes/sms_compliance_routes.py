@@ -9,6 +9,7 @@ Handles inbound SMS webhooks from Telnyx to process:
 Maintains a per-org SMS consent/opt-out table for TCPA compliance.
 """
 
+import json
 import os
 import logging
 from datetime import datetime, timezone
@@ -22,6 +23,7 @@ from sqlalchemy import text
 import httpx
 
 from db import get_db
+from middleware.webhook_verification import require_telnyx_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -204,14 +206,19 @@ def _resolve_org(db: Session, to_number: str) -> Optional[int]:
 # ---------------------------------------------------------------------------
 
 @router.post("/inbound-webhook")
-async def sms_inbound_webhook(request: Request, db: Session = Depends(get_db)):
+async def sms_inbound_webhook(
+    request: Request,
+    raw_body: bytes = Depends(require_telnyx_webhook),
+    db: Session = Depends(get_db),
+):
     """
     Telnyx inbound SMS webhook handler.
 
     Processes STOP/HELP/START keywords for A2P 10DLC compliance.
     Non-keyword messages are logged but not processed here.
+    Webhook signature is verified by require_telnyx_webhook dependency.
     """
-    payload = await request.json()
+    payload = json.loads(raw_body)
     event_data = payload.get("data", {})
     event_type = event_data.get("event_type", "")
 
