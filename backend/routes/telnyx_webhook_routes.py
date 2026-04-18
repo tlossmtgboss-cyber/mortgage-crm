@@ -63,33 +63,43 @@ def _validate_texml_request(request: Request):
 
 
 # =============================================================================
-# Inbound Call Routing — Telnyx → LiveKit SIP Bridge
+# Inbound Call Routing — Telnyx → LiveKit via SIP transfer
 # =============================================================================
 
 async def _route_inbound_to_livekit(
     call_control_id: str, from_number: str, to_number: str, db: Session,
 ):
-    """Route an inbound call to Aria via LiveKit SIP bridge.
+    """Route an inbound call to Aria via SIP transfer to LiveKit Cloud.
 
-    Flow:
-    1. Answer the call (Telnyx Call Control requires answer before transfer)
-    2. Transfer to LiveKit SIP domain using the DID as the SIP user
-       (LiveKit trunk matches on the dialed number, not an alias)
-    3. LiveKit dispatch rule creates room + Aria agent auto-joins
+    Flow: Answer → Transfer to LiveKit SIP endpoint → LiveKit dispatch rule
+    creates room → Aria agent auto-joins and greets caller.
+
+    Critical: LiveKit Cloud SIP endpoint is <subdomain>.sip.livekit.cloud
+    (NOT the WebSocket domain <subdomain>.livekit.cloud).
     """
     import requests as http_requests
 
     telnyx_key = os.getenv("TELNYX_API_KEY", "")
     if not telnyx_key:
-        logger.error("[AriaInbound] TELNYX_API_KEY not set — cannot route inbound call")
+        logger.error("[AriaInbound] TELNYX_API_KEY not set")
         return
 
-    sip_domain = os.getenv("LIVEKIT_SIP_DOMAIN", "")
-    if not sip_domain:
-        logger.error("[AriaInbound] LIVEKIT_SIP_DOMAIN not set — cannot route to LiveKit")
-        return
+    lk_sip_domain = os.getenv("LIVEKIT_SIP_DOMAIN", "")
+    if not lk_sip_domain:
+        lk_url = os.getenv("LIVEKIT_URL", "")
+        if lk_url:
+            host = lk_url.replace("wss://", "").replace("https://", "").rstrip("/")
+            lk_sip_domain = f"{host.split('.')[0]}.sip.livekit.cloud"
+        else:
+            logger.error("[AriaInbound] LIVEKIT_SIP_DOMAIN and LIVEKIT_URL not set")
+            return
 
-    logger.warning(f"[AriaInbound] Routing call {call_control_id[:30]} from {from_number}")
+    if ".sip." not in lk_sip_domain:
+        lk_sip_domain = lk_sip_domain.replace(".livekit.cloud", ".sip.livekit.cloud")
+
+    logger.warning(
+        f"[AriaInbound] Routing {from_number} → SIP transfer to {lk_sip_domain}"
+    )
 
     headers = {
         "Authorization": f"Bearer {telnyx_key}",
@@ -97,28 +107,25 @@ async def _route_inbound_to_livekit(
     }
     base_url = f"https://api.telnyx.com/v2/calls/{call_control_id}/actions"
 
-    # Step 1: Answer the call (Telnyx queues commands in order)
+    # Step 1: Answer the inbound call
     try:
         answer_resp = http_requests.post(
-            f"{base_url}/answer",
-            headers=headers,
-            json={},
-            timeout=10,
+            f"{base_url}/answer", headers=headers, json={}, timeout=10,
         )
-        logger.warning(
-            f"[AriaInbound] Answer: {answer_resp.status_code} "
-            f"{answer_resp.text[:200]}"
-        )
+        logger.warning(f"[AriaInbound] Answer: {answer_resp.status_code}")
+        if answer_resp.status_code >= 400:
+            logger.error(f"[AriaInbound] Answer failed: {answer_resp.text[:300]}")
+            return
     except Exception as e:
         logger.error(f"[AriaInbound] Answer failed: {e}", exc_info=True)
         return
 
-    # Step 2: Transfer to LiveKit SIP
-    # Use the DID (to_number) as SIP user — LiveKit trunk matches on this number
-    # Strip '+' from SIP user — some SIP stacks URL-encode it as %2B causing mismatch
-    sip_user = (to_number or "+18438838956").lstrip("+")
-    sip_uri = f"sip:{sip_user}@{sip_domain}"
-    logger.warning(f"[AriaInbound] Transferring to {sip_uri}")
+    # Step 2: SIP transfer to LiveKit Cloud
+    # The number in the SIP URI must match a number on the LiveKit inbound trunk.
+    # LiveKit dispatch rule (SDR_wkAxnz6ip5Xd) creates a room with prefix
+    # "aria-inbound-" and dispatches the "aria-voice" agent.
+    dial_number = to_number or "+18438838956"
+    sip_uri = f"sip:{dial_number}@{lk_sip_domain};transport=tcp"
 
     try:
         transfer_resp = http_requests.post(
@@ -128,14 +135,9 @@ async def _route_inbound_to_livekit(
             timeout=10,
         )
         logger.warning(
-            f"[AriaInbound] Transfer: {transfer_resp.status_code} "
+            f"[AriaInbound] Transfer to {sip_uri}: {transfer_resp.status_code} "
             f"{transfer_resp.text[:200]}"
         )
-        if transfer_resp.status_code >= 400:
-            logger.error(
-                f"[AriaInbound] Transfer FAILED: {transfer_resp.status_code} "
-                f"{transfer_resp.text[:500]}"
-            )
     except Exception as e:
         logger.error(f"[AriaInbound] Transfer failed: {e}", exc_info=True)
 
