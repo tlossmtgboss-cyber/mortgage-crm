@@ -25,13 +25,10 @@ def _get_fernet():
         )
     master_key = os.environ.get("SMS_ENCRYPTION_KEY")
     if not master_key:
-        # Auto-generate a key and warn operator to set it permanently
-        logger.warning(
-            "SMS_ENCRYPTION_KEY not set. Generating ephemeral key - "
-            "credentials will not survive restarts. Set SMS_ENCRYPTION_KEY env var."
+        raise ValueError(
+            "SMS_ENCRYPTION_KEY environment variable is required. "
+            "Generate one with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'"
         )
-        master_key = Fernet.generate_key().decode()
-        os.environ["SMS_ENCRYPTION_KEY"] = master_key
 
     key_bytes = master_key.encode() if isinstance(master_key, str) else master_key
     # Key must be 32 url-safe base64 encoded bytes

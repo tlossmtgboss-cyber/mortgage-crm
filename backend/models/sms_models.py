@@ -1,10 +1,22 @@
+# DEPRECATED: The canonical definitions of SMSOptOut, SMSConsent, and
+# SMSComplianceLog now live in database/models/sms_compliance.py.
+# This file is kept for backward compatibility only.
+#
+# For authoritative SMS consent decisions, use:
+#   from services.sms_consent_resolver import resolve_consent
+# Do NOT query individual consent tables directly for send/block decisions.
+
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, ForeignKey, Index, func
 from database import Base
 
 
 class SMSOptOut(Base):
-    """Opt-out records for TCPA compliance. Checked before every outbound SMS."""
+    """Opt-out records for TCPA compliance. Checked before every outbound SMS.
+
+    DEPRECATED: Canonical definition is in database/models/sms_compliance.py.
+    For consent decisions, use services.sms_consent_resolver.resolve_consent().
+    """
     __tablename__ = "sms_opt_outs"
     id = Column(Integer, primary_key=True, index=True)
     phone_number = Column(String(20), unique=True, index=True, nullable=False)
@@ -17,7 +29,11 @@ class SMSOptOut(Base):
 
 
 class SMSConsent(Base):
-    """Written consent records for outbound SMS (TCPA)."""
+    """Written consent records for outbound SMS (TCPA).
+
+    DEPRECATED: Canonical definition is in database/models/sms_compliance.py.
+    For consent decisions, use services.sms_consent_resolver.resolve_consent().
+    """
     __tablename__ = "sms_consent"
     id = Column(Integer, primary_key=True, index=True)
     phone_number = Column(String(20), unique=True, index=True, nullable=False)

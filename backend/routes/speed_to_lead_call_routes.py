@@ -639,46 +639,31 @@ async def _send_sms_fallback(
     lead_id: int,
     organization_id: Optional[int],
 ) -> Dict[str, Any]:
-    """Send an SMS when a call cannot be placed (quiet hours, no phone, etc.)."""
-    import httpx
+    """Send an SMS when a call cannot be placed (quiet hours, no phone, etc.).
 
-    telnyx_key = os.getenv("TELNYX_API_KEY", "")
-    from_number = os.getenv("TELNYX_FROM_NUMBER", "")
-    profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
-
-    if not telnyx_key or not from_number:
-        return {"success": False, "error": "Telnyx SMS not configured"}
-
+    Routes through the centralized SMS chokepoint for compliance enforcement.
+    """
     body = (
         f"Hi {lead_name or 'there'}! Thanks for your interest in mortgage options. "
-        f"A loan officer will be reaching out shortly to discuss how we can help. "
-        f"Reply STOP to opt out."
+        f"A loan officer will be reaching out shortly to discuss how we can help."
     )
 
-    payload: Dict[str, Any] = {
-        "to": phone_e164,
-        "from": from_number,
-        "text": body,
-    }
-    if profile_id:
-        payload["messaging_profile_id"] = profile_id
-
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                "https://api.telnyx.com/v2/messages",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {telnyx_key}",
-                    "Content-Type": "application/json",
-                },
-            )
+        from telephony.sms import send_sms_verified_async
 
-        if resp.status_code < 400:
+        result = await send_sms_verified_async(
+            to=phone_e164,
+            text=body,
+            lead_id=lead_id,
+            organization_id=organization_id,
+        )
+
+        if result.get("status") == "sent":
             return {"success": True, "channel": "sms"}
         else:
-            logger.error(f"SMS fallback failed {resp.status_code}: {resp.text[:200]}")
-            return {"success": False, "error": f"SMS send {resp.status_code}"}
+            reason = result.get("reason", "unknown")
+            logger.error(f"SMS fallback blocked: {reason}")
+            return {"success": False, "error": reason}
 
     except Exception as e:
         logger.exception(f"SMS fallback error: {e}")

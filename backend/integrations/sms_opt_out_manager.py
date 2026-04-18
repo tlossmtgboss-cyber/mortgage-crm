@@ -4,6 +4,7 @@ persist opt-out lists, validate before every send.
 """
 import re
 import logging
+import threading
 from typing import Optional, Dict, Any, List, Set
 from datetime import datetime, timezone
 
@@ -22,6 +23,11 @@ OPT_IN_KEYWORDS: Set[str] = {
 # HELP keyword response
 HELP_KEYWORDS: Set[str] = {"help", "info"}
 
+# Word-boundary patterns for accurate keyword extraction (prevents "STOPNOW" matching "STOP")
+OPT_OUT_PATTERN = re.compile(r'\b(stop|stopall|unsubscribe|cancel|end|quit|revoke)\b', re.IGNORECASE)
+OPT_IN_PATTERN = re.compile(r'\b(start|yes|unstop|subscribe)\b', re.IGNORECASE)
+HELP_PATTERN = re.compile(r'\b(help|info)\b', re.IGNORECASE)
+
 
 class SMSOptOutManager:
     """Manage TCPA-compliant opt-out/opt-in lifecycle for SMS."""
@@ -31,16 +37,18 @@ class SMSOptOutManager:
         # In-memory store: phone_number -> opt-out record
         # In production this syncs with the DB
         self._opted_out: Dict[str, Dict[str, Any]] = {}
+        self._cache_lock = threading.Lock()
 
     # ── Core checks ──────────────────────────────────────────────────────────
     def is_opted_out(self, phone: str, tenant_id: Optional[str] = None) -> bool:
         """Return True if the phone number has opted out."""
         normalized = self._normalize_phone(phone)
 
-        # Check in-memory cache
+        # Check in-memory cache (thread-safe)
         key = f"{tenant_id}:{normalized}" if tenant_id else normalized
-        if key in self._opted_out:
-            return True
+        with self._cache_lock:
+            if key in self._opted_out:
+                return True
 
         # Check DB if available
         if self.db:
@@ -51,7 +59,8 @@ class SMSOptOutManager:
                     SMSOptOut.active == True,
                 ).first()
                 if record:
-                    self._opted_out[key] = {"phone": normalized, "opted_out_at": record.opted_out_at}
+                    with self._cache_lock:
+                        self._opted_out[key] = {"phone": normalized, "opted_out_at": record.opted_out_at}
                     return True
             except ImportError:
                 # Fallback: raw SQL if ORM model not importable
@@ -62,7 +71,8 @@ class SMSOptOutManager:
                         {"phone": normalized},
                     ).fetchone()
                     if row:
-                        self._opted_out[key] = {"phone": normalized, "opted_out_at": datetime.now(timezone.utc).isoformat()}
+                        with self._cache_lock:
+                            self._opted_out[key] = {"phone": normalized, "opted_out_at": datetime.now(timezone.utc).isoformat()}
                         return True
                 except Exception as e2:
                     logger.debug(f"DB opt-out check skipped: {e2}")
@@ -81,7 +91,8 @@ class SMSOptOutManager:
             "opted_out_at": datetime.now(timezone.utc).isoformat(),
             "tenant_id": tenant_id,
         }
-        self._opted_out[key] = record
+        with self._cache_lock:
+            self._opted_out[key] = record
         logger.info(f"Opt-out recorded: {normalized} (reason: {reason})")
 
         # Persist to DB
@@ -109,7 +120,8 @@ class SMSOptOutManager:
         """Re-subscribe a previously opted-out number."""
         normalized = self._normalize_phone(phone)
         key = f"{tenant_id}:{normalized}" if tenant_id else normalized
-        removed = self._opted_out.pop(key, None)
+        with self._cache_lock:
+            removed = self._opted_out.pop(key, None)
 
         # Update DB
         if self.db:
@@ -172,9 +184,24 @@ class SMSOptOutManager:
         return result
 
     def _extract_keyword(self, message_body: str) -> str:
-        """Extract the first meaningful keyword from a message."""
-        cleaned = re.sub(r"[^a-zA-Z]", "", message_body.strip()).lower()
-        return cleaned
+        """Extract the first matching opt-out/opt-in/help keyword from a message.
+
+        Uses word-boundary matching so that e.g. 'STOPNOW' or 'STOPPED'
+        do NOT falsely match the 'stop' keyword.
+        """
+        text = message_body.strip()
+        if not text:
+            return ""
+
+        # Check patterns in priority order: opt-out > opt-in > help
+        for pattern in (OPT_OUT_PATTERN, OPT_IN_PATTERN, HELP_PATTERN):
+            match = pattern.search(text)
+            if match:
+                return match.group(1).lower()
+
+        # No recognized keyword — return first word stripped of non-alpha chars
+        first_word = text.split()[0] if text else ""
+        return re.sub(r"[^a-zA-Z]", "", first_word).lower()
 
     # ── Bulk operations ─────────────────────────────────────────────────────────
     def bulk_opt_out(self, phones: List[str], reason: str = "bulk_import", tenant_id: Optional[str] = None) -> int:
@@ -189,19 +216,21 @@ class SMSOptOutManager:
 
     def get_opted_out_count(self, tenant_id: Optional[str] = None) -> int:
         """Return the count of opted-out numbers."""
-        if tenant_id:
-            return sum(1 for k in self._opted_out if k.startswith(f"{tenant_id}:"))
-        return len(self._opted_out)
+        with self._cache_lock:
+            if tenant_id:
+                return sum(1 for k in self._opted_out if k.startswith(f"{tenant_id}:"))
+            return len(self._opted_out)
 
     def export_opted_out(self, tenant_id: Optional[str] = None) -> List[str]:
         """Export all opted-out phone numbers."""
-        if tenant_id:
-            prefix = f"{tenant_id}:"
-            return [
-                v["phone"] for k, v in self._opted_out.items()
-                if k.startswith(prefix)
-            ]
-        return [v["phone"] for v in self._opted_out.values()]
+        with self._cache_lock:
+            if tenant_id:
+                prefix = f"{tenant_id}:"
+                return [
+                    v["phone"] for k, v in self._opted_out.items()
+                    if k.startswith(prefix)
+                ]
+            return [v["phone"] for v in self._opted_out.values()]
 
     # ── Normalization ────────────────────────────────────────────────────────────
     def _normalize_phone(self, phone: str) -> str:

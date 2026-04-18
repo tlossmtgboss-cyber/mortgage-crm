@@ -368,6 +368,23 @@ async def execute_ai_function(
             elif len(phone_digits) == 11 and phone_digits.startswith('1'):
                 recipient_phone = f"+{phone_digits}"
 
+            # TCPA/DNC compliance check before sending
+            try:
+                from integrations.sms_compliance_gate import check_sms_compliance
+                compliance = check_sms_compliance(
+                    db=db,
+                    to_phone=recipient_phone,
+                    message_body=message_text,
+                    lead_id=lead_id,
+                    user_id=current_user.id,
+                )
+                if not compliance.allowed:
+                    logger.warning(f"SMS blocked by compliance gate: {compliance.reason}")
+                    return {"success": False, "error": f"SMS blocked: {compliance.reason}"}
+            except ImportError:
+                logger.error("sms_compliance_gate not available — blocking SMS send as precaution")
+                return {"success": False, "error": "SMS compliance module unavailable"}
+
             # Send the SMS via Telnyx
             telnyx_key = os.getenv("TELNYX_API_KEY")
             telnyx_phone = os.getenv("TELNYX_PHONE_NUMBER")

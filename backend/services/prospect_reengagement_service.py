@@ -690,9 +690,9 @@ Classify intent and generate response:"""
             "lo_id": conv_data["lo_user_id"],
         })
 
-        # Send required confirmation
+        # Send required confirmation (skip compliance — TCPA *requires* this message)
         confirmation = "You've been unsubscribed from text messages. Reply START to re-subscribe."
-        _send_sms_sync(phone, confirmation, conv_data["telnyx_from_number"])
+        _send_sms_sync(phone, confirmation, conv_data["telnyx_from_number"], skip_compliance=True)
 
         # Transition state
         self._transition_state(conv_id, "opt_out", f"Opted out: {message_body[:100]}")
@@ -995,43 +995,35 @@ def _check_tcpa_hours(phone: str) -> tuple:
         return True, ""
 
 
-def _send_sms_sync(to_number: str, message: str, from_number: str) -> Optional[str]:
-    """Send SMS using the Telnyx HTTP API (synchronous wrapper)."""
+def _send_sms_sync(
+    to_number: str,
+    message: str,
+    from_number: str,
+    skip_compliance: bool = False,
+) -> Optional[str]:
+    """Send SMS via the centralized Telnyx chokepoint.
+
+    The chokepoint handles compliance gate + STOP footer.
+    *skip_compliance* is forwarded as bypass_compliance for legally
+    required messages (opt-out confirmations).
+    """
     try:
-        import requests
+        from telephony.sms import send_sms_verified
 
-        api_key = os.getenv("TELNYX_API_KEY", "")
-        messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
-
-        if not api_key:
-            logger.error("TELNYX_API_KEY not set — cannot send SMS")
-            return None
-
-        payload = {
-            "from": from_number,
-            "to": to_number,
-            "text": message,
-        }
-        if messaging_profile_id:
-            payload["messaging_profile_id"] = messaging_profile_id
-
-        response = requests.post(
-            "https://api.telnyx.com/v2/messages",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=10,
+        result = send_sms_verified(
+            to=to_number,
+            from_=from_number,
+            text=message,
+            bypass_compliance=skip_compliance,
         )
 
-        if response.status_code in (200, 201, 202):
-            data = response.json()
-            message_id = data.get("data", {}).get("id", "")
+        if result.get("status") == "sent":
+            message_id = result.get("id", "")
             logger.info(f"AI re-engagement SMS sent to {to_number}. ID: {message_id}")
             return message_id
         else:
-            logger.error(f"AI re-engagement SMS failed: HTTP {response.status_code} — {response.text[:300]}")
+            reason = result.get("reason", "unknown")
+            logger.warning(f"AI re-engagement SMS blocked for ...{to_number[-4:]}: {reason}")
             return None
 
     except Exception as e:

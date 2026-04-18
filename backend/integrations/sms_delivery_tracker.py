@@ -33,18 +33,28 @@ def record_message_sent(
     user_id: Optional[int] = None,
     queue_id: Optional[int] = None,
     segments: int = 1,
+    consent_record_id: Optional[int] = None,
+    consent_verified_at: Optional[datetime] = None,
+    consent_method: Optional[str] = None,
 ) -> int:
-    """Record a newly sent SMS message. Returns tracking record ID."""
+    """Record a newly sent SMS message with TCPA consent proof. Returns tracking record ID.
+
+    consent_record_id: FK to sms_consent.id that authorized this send.
+    consent_verified_at: Timestamp when consent was verified before transmission.
+    consent_method: How consent was obtained (web_form, sms_keyword, verbal, etc.).
+    """
     try:
         result = db.execute(
             text("""
                 INSERT INTO sms_delivery_log
                   (telnyx_message_id, to_phone, from_phone, message_body,
                    lead_id, user_id, queue_id, status, segments,
+                   consent_record_id, consent_verified_at, consent_method,
                    sent_at, created_at)
                 VALUES
                   (:msg_id, :to_phone, :from_phone, :body,
                    :lead_id, :user_id, :queue_id, 'queued', :segments,
+                   :consent_record_id, :consent_verified_at, :consent_method,
                    NOW(), NOW())
                 ON CONFLICT (telnyx_message_id) DO UPDATE SET
                   status = 'queued', updated_at = NOW()
@@ -59,6 +69,9 @@ def record_message_sent(
                 "user_id": user_id,
                 "queue_id": queue_id,
                 "segments": segments,
+                "consent_record_id": consent_record_id,
+                "consent_verified_at": consent_verified_at,
+                "consent_method": consent_method,
             },
         )
         db.flush()

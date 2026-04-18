@@ -39,6 +39,7 @@ class ReferralPartner(Base):
     company = Column(String)
     type = Column(String)
     phone = Column(String)
+    phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     email = Column(String)
     referrals_in = Column(Integer, default=0)
     referrals_out = Column(Integer, default=0)
@@ -79,6 +80,7 @@ class LoanTeamMember(Base):
     role = Column(String, nullable=False)  # e.g., 'Realtor', 'Title Agent', 'Insurance Agent', 'Attorney', etc.
     email = Column(String)
     phone = Column(String)
+    phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     company = Column(String)
     license_number = Column(String)
     notes = Column(Text)
@@ -105,6 +107,7 @@ class MUMClient(Base):
     client_name = Column("client_name", String, nullable=False)
     email = Column(String)
     phone = Column(String)
+    phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     loan_number = Column(String, unique=True, index=True)
     original_close_date = Column(DateTime, nullable=False)
     close_date = Column(DateTime)  # Alias for original_close_date

@@ -34,10 +34,16 @@ def enqueue_sms(
     user_id: Optional[int] = None,
     template_id: Optional[int] = None,
     priority: int = 5,  # 1=highest, 10=lowest
+    consent_record_id: Optional[int] = None,
+    consent_verified_at=None,
+    consent_method: Optional[str] = None,
 ) -> int:
     """
     Add an SMS to the retry queue. Returns the queue record ID.
     Initial status is 'pending'.
+
+    consent_record_id/consent_verified_at/consent_method: TCPA consent proof
+    from the compliance gate, persisted alongside the queued message for audit.
     """
     try:
         result = db.execute(
@@ -45,10 +51,12 @@ def enqueue_sms(
                 INSERT INTO sms_queue
                   (to_phone, from_phone, message_body, lead_id, user_id,
                    template_id, priority, status, retry_count,
+                   consent_record_id, consent_verified_at, consent_method,
                    next_attempt_at, created_at)
                 VALUES
                   (:to_phone, :from_phone, :body, :lead_id, :user_id,
                    :template_id, :priority, 'pending', 0,
+                   :consent_record_id, :consent_verified_at, :consent_method,
                    NOW(), NOW())
                 RETURNING id
             """),
@@ -60,6 +68,9 @@ def enqueue_sms(
                 "user_id": user_id,
                 "template_id": template_id,
                 "priority": priority,
+                "consent_record_id": consent_record_id,
+                "consent_verified_at": consent_verified_at,
+                "consent_method": consent_method,
             },
         )
         db.commit()

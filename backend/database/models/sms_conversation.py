@@ -18,6 +18,7 @@ class SMSAIConversation(Base):
 
     id = Column(String, primary_key=True, default=_uuid)
     phone_number = Column(String, nullable=False)
+    phone_number_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     lead_id = Column(String, ForeignKey("leads.id"), nullable=True)
     organization_id = Column(String, nullable=False)
     status = Column(String, default="active")  # active, paused, closed, converted

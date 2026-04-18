@@ -140,8 +140,9 @@ def handle_webhook(
 
 def _handle_inbound_message(db: Session, payload: dict) -> dict:
     """
-    Handle inbound SMS messages.
+    Handle inbound SMS/MMS messages.
     Auto-processes STOP/START/HELP keywords.
+    Downloads and persists MMS media attachments to S3.
     """
     try:
         record = payload.get("data", {}).get("payload", {})
@@ -149,11 +150,48 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
         from_phone = from_info.get("phone_number", "")
         body = record.get("text", "").strip()
 
-        if not from_phone or not body:
+        if not from_phone and not body:
             return {"status": "ignored", "reason": "missing from_phone or body"}
 
+        # ── MMS media handling ───────────────────────────────────────────
+        # Telnyx message.received payloads include a "media" array for MMS:
+        #   [{"url": "https://...", "content_type": "image/jpeg", ...}, ...]
+        # These URLs are temporary — download and persist to S3 immediately.
+        media_items = record.get("media", []) or []
+        s3_keys = []
+        media_urls = []
+        if media_items:
+            try:
+                from utils.media_storage import get_media_storage
+                storage = get_media_storage()
+                for idx, item in enumerate(media_items):
+                    media_url = item.get("url", "")
+                    content_type = item.get("content_type", "application/octet-stream")
+                    if not media_url:
+                        continue
+                    media_urls.append(media_url)
+                    # Build a sensible filename from content type
+                    import mimetypes as _mt
+                    ext = _mt.guess_extension(content_type) or ".bin"
+                    filename = f"inbound_{idx}{ext}"
+                    s3_key = storage.store_from_url(media_url, filename)
+                    if s3_key:
+                        s3_keys.append(s3_key)
+                    else:
+                        logger.warning("Failed to persist MMS media %d to S3", idx)
+            except Exception as media_err:
+                logger.error(f"MMS media persistence error: {media_err}")
+
+        # Allow MMS-only messages (no body text, only media)
+        if not from_phone:
+            return {"status": "ignored", "reason": "missing from_phone"}
+
         # Check for opt-out/opt-in keywords
-        is_keyword, response_msg = handle_inbound_keyword(db, from_phone, body)
+        if body:
+            is_keyword, response_msg = handle_inbound_keyword(db, from_phone, body)
+        else:
+            is_keyword = False
+            response_msg = ""
 
         if is_keyword:
             # Commit the opt-out/opt-in DB changes (compliance gate only flushes)
@@ -178,8 +216,9 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
 
         # Store inbound message for conversation threading
         _store_inbound_message(db, from_phone, body, record)
-        # Also store in panel messages table for the two-way SMS panel
-        _store_panel_inbound(db, from_phone, body, record.get("id", ""))
+        # Also store in panel messages table for the two-way SMS panel (with S3 keys)
+        _store_panel_inbound(db, from_phone, body, record.get("id", ""),
+                             media_urls=media_urls, media_s3_keys=s3_keys)
         try:
             db.commit()
         except Exception as commit_err:
@@ -202,6 +241,8 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
             "status": "processed",
             "action": "inbound_stored",
             "from": from_phone,
+            "media_count": len(media_items),
+            "media_persisted": len(s3_keys),
         }
     except Exception as e:
         logger.error(f"Inbound message handler error: {e}")
@@ -252,16 +293,34 @@ def _store_inbound_message(db: Session, from_phone: str, body: str, record: dict
         logger.error(f"Failed to store inbound message: {e}")
 
 
-def _store_panel_inbound(db: Session, from_phone: str, body: str, telnyx_msg_id: str):
-    """Store inbound message in the sms_panel_messages table for the two-way panel."""
+def _store_panel_inbound(
+    db: Session,
+    from_phone: str,
+    body: str,
+    telnyx_msg_id: str,
+    media_urls: list = None,
+    media_s3_keys: list = None,
+):
+    """Store inbound message in the sms_panel_messages table for the two-way panel.
+
+    Includes MMS media URLs and their persisted S3 keys so the panel can
+    display attachments even after Telnyx's temporary URLs expire.
+    """
     try:
+        import json
         import uuid
         from sqlalchemy import text as _text
+
+        media_urls_json = json.dumps(media_urls) if media_urls else "[]"
+        s3_keys_json = json.dumps(media_s3_keys) if media_s3_keys else "[]"
+
         db.execute(
             _text("""
                 INSERT INTO sms_panel_messages
-                  (id, phone, direction, body, sender_name, status, telnyx_message_id, created_at)
-                VALUES (:id, :phone, 'inbound', :body, 'Customer', 'delivered', :msg_id, NOW())
+                  (id, phone, direction, body, sender_name, status,
+                   telnyx_message_id, media_urls, media_s3_keys, created_at)
+                VALUES (:id, :phone, 'inbound', :body, 'Customer', 'delivered',
+                        :msg_id, :media_urls::jsonb, :s3_keys::jsonb, NOW())
                 ON CONFLICT (id) DO NOTHING
             """),
             {
@@ -269,6 +328,8 @@ def _store_panel_inbound(db: Session, from_phone: str, body: str, telnyx_msg_id:
                 "phone": from_phone,
                 "body": body[:2000],
                 "msg_id": telnyx_msg_id,
+                "media_urls": media_urls_json,
+                "s3_keys": s3_keys_json,
             },
         )
         db.flush()
@@ -277,31 +338,18 @@ def _store_panel_inbound(db: Session, from_phone: str, body: str, telnyx_msg_id:
 
 
 def _send_auto_response(to_phone: str, message: str):
-    """Send auto-response to keyword via Telnyx REST API (fire-and-forget).
+    """Send auto-response to keyword via the centralized SMS chokepoint.
 
-    Uses direct HTTP POST instead of setting telnyx.api_key globally
-    to avoid race conditions in multi-worker deployments.
+    Auto-responses (STOP/START confirmations) bypass the compliance gate
+    because they are legally required replies.
     """
     try:
-        import requests
-        api_key = os.environ.get("TELNYX_API_KEY")
-        from_phone = os.environ.get("TELNYX_PHONE_NUMBER")
-        profile_id = os.environ.get("TELNYX_MESSAGING_PROFILE_ID", "")
-        if not api_key or not from_phone:
-            return
-        requests.post(
-            "https://api.telnyx.com/v2/messages",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "from": from_phone,
-                "to": to_phone,
-                "text": message,
-                "messaging_profile_id": profile_id,
-            },
-            timeout=10,
+        from telephony.sms import send_sms_verified
+
+        send_sms_verified(
+            to=to_phone,
+            text=message,
+            bypass_compliance=True,  # Keyword auto-responses are legally required
         )
     except Exception as e:
         logger.error(f"Auto-response send failed: {e}")

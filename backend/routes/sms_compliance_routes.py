@@ -25,6 +25,13 @@ from db import get_db
 
 logger = logging.getLogger(__name__)
 
+
+def _get_current_user():
+    """Lazy import to avoid circular dependency."""
+    from auth.dependencies import get_current_user_flexible
+    return get_current_user_flexible
+
+
 router = APIRouter(prefix="/api/v1/sms", tags=["SMS Compliance"])
 
 # ---------------------------------------------------------------------------
@@ -61,32 +68,26 @@ START_REPLY = (
 # ---------------------------------------------------------------------------
 
 async def _send_sms(to: str, from_: str, body: str, messaging_profile_id: str = ""):
-    """Send an SMS reply via Telnyx."""
-    telnyx_key = os.getenv("TELNYX_API_KEY", "")
-    profile_id = messaging_profile_id or os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
+    """Send an SMS reply via the centralized Telnyx chokepoint.
 
-    payload = {
-        "to": to,
-        "from": from_,
-        "text": body,
-    }
-    if profile_id:
-        payload["messaging_profile_id"] = profile_id
-
+    These are compliance-route auto-responses (STOP/START confirmations),
+    so we bypass the compliance gate — the recipient just opted out/in and
+    the confirmation is legally required.
+    """
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                "https://api.telnyx.com/v2/messages",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {telnyx_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-        if resp.status_code >= 400:
-            logger.error("Telnyx SMS send failed %s: %s", resp.status_code, resp.text[:300])
-        else:
+        from telephony.sms import send_sms_verified_async
+
+        result = await send_sms_verified_async(
+            to=to,
+            from_=from_,
+            text=body,
+            messaging_profile_id=messaging_profile_id or None,
+            bypass_compliance=True,  # Opt-out confirmations are legally required
+        )
+        if result.get("status") == "sent":
             logger.info("SMS reply sent to ***%s", to[-4:] if to else "?")
+        else:
+            logger.error("SMS reply failed for ***%s: %s", to[-4:] if to else "?", result.get("reason", "unknown"))
     except Exception as e:
         logger.exception("Failed to send SMS reply to %s: %s", to[-4:] if to else "?", e)
 
@@ -293,7 +294,7 @@ async def check_opt_out_status(body: OptOutCheckRequest, db: Session = Depends(g
 async def list_opt_outs(
     limit: int = 100,
     db: Session = Depends(get_db),
-    current_user=Depends(lambda: None),
+    current_user=Depends(_get_current_user()),
 ):
     """List opted-out phone numbers for the current org."""
     org_id = getattr(current_user, "organization_id", None) if current_user else None

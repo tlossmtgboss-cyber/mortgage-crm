@@ -121,6 +121,7 @@ def ensure_sms_intelligence_tables_exist():
                     media_count INTEGER DEFAULT 0,
                     media_urls JSONB,
                     media_types JSONB,
+                    media_s3_keys JSONB DEFAULT '[]'::jsonb,
 
                     -- Timestamps
                     sent_at TIMESTAMP WITH TIME ZONE,
@@ -169,6 +170,12 @@ def ensure_sms_intelligence_tables_exist():
                 CREATE INDEX IF NOT EXISTS idx_sms_queue_direction ON sms_intelligence_queue(direction);
                 CREATE INDEX IF NOT EXISTS idx_sms_queue_user_id ON sms_intelligence_queue(user_id);
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_sms_queue_provider_msg ON sms_intelligence_queue(sms_provider, provider_message_id);
+            """))
+
+            # Add media_s3_keys column if table pre-exists without it
+            conn.execute(text("""
+                ALTER TABLE sms_intelligence_queue
+                ADD COLUMN IF NOT EXISTS media_s3_keys JSONB DEFAULT '[]'::jsonb
             """))
 
             # 2. SMS Conversation Log - AI summaries linked to borrower profiles
@@ -648,16 +655,21 @@ async def _validate_telnyx_signature(request: Request) -> bool:
     """Validate Telnyx webhook signature using centralized verifier.
 
     Delegates to ``middleware.webhook_verification.WebhookVerifier.verify_telnyx``.
-    Returns True on success, False on failure (for callers that use boolean checks
-    rather than letting the HTTPException propagate).
+    Returns True ONLY on successful verification, False on any failure.
+
+    SECURITY: This function is fail-closed. Any exception (missing module,
+    unexpected error, invalid signature) returns False, which the caller MUST
+    treat as "reject" by raising HTTPException(401).
     """
     try:
         from middleware.webhook_verification import WebhookVerifier
         await WebhookVerifier.verify_telnyx(request)
-        return True
+        return True  # Signature verified successfully
     except HTTPException:
+        # WebhookVerifier raised 401/503 — signature invalid or verification unavailable
         return False
     except Exception as e:
+        # Fail closed: any unexpected error means we cannot trust the request
         logger.error("Telnyx signature validation error: %s", e)
         return False
 
@@ -1655,7 +1667,7 @@ async def telephony_sms_webhook(
     db: Session = Depends(get_db)
 ):
     """Webhook endpoint for incoming SMS with Telnyx signature validation"""
-    # Issue 3 FIX: Validate Telnyx webhook signature
+    # SECURITY: Fail-closed webhook validation — reject unless signature is positively verified
     if not await _validate_telnyx_signature(request):
         logger.warning("Rejected SMS webhook: invalid Telnyx signature")
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
@@ -1679,15 +1691,34 @@ async def telephony_sms_webhook(
             if media_type:
                 media_types.append(media_type)
 
-        # Insert into queue
+        # Persist MMS media to S3 (Telnyx URLs are temporary)
+        media_s3_keys = []
+        if media_urls:
+            try:
+                from utils.media_storage import get_media_storage
+                import mimetypes as _mt
+                storage = get_media_storage()
+                for idx, murl in enumerate(media_urls):
+                    ct = media_types[idx] if idx < len(media_types) else ""
+                    ext = _mt.guess_extension(ct) or ".bin"
+                    fname = f"intel_inbound_{idx}{ext}"
+                    s3_key = storage.store_from_url(murl, fname)
+                    if s3_key:
+                        media_s3_keys.append(s3_key)
+            except Exception as media_err:
+                logger.warning(f"MMS media S3 persistence failed: {media_err}")
+
+        # Insert into queue (with S3 keys for persisted media)
         result = db.execute(text("""
             INSERT INTO sms_intelligence_queue (
                 sms_provider, provider_message_id, from_phone, to_phone,
-                direction, message_body, has_media, media_count, media_urls, media_types,
+                direction, message_body, has_media, media_count,
+                media_urls, media_types, media_s3_keys,
                 received_at, status
             ) VALUES (
                 'telnyx', :message_sid, :from_phone, :to_phone,
-                'inbound', :body, :has_media, :media_count, :media_urls, :media_types,
+                'inbound', :body, :has_media, :media_count,
+                :media_urls, :media_types, :media_s3_keys,
                 CURRENT_TIMESTAMP, 'pending'
             )
             ON CONFLICT (sms_provider, provider_message_id) DO NOTHING
@@ -1700,7 +1731,8 @@ async def telephony_sms_webhook(
             "has_media": num_media > 0,
             "media_count": num_media,
             "media_urls": json.dumps(media_urls) if media_urls else None,
-            "media_types": json.dumps(media_types) if media_types else None
+            "media_types": json.dumps(media_types) if media_types else None,
+            "media_s3_keys": json.dumps(media_s3_keys) if media_s3_keys else "[]",
         })
 
         new_id = result.fetchone()

@@ -49,12 +49,19 @@ class BorrowerProfile(Base):
     raw_profile = Column(JSON)
 
     # Consent tracking (basic)
+    # DEPRECATED: BorrowerProfile consent fields are ONE of 6+ overlapping consent
+    # sources. For authoritative SMS consent decisions, use:
+    #   from services.sms_consent_resolver import resolve_consent
+    # Do NOT query these columns directly for send/block decisions.
+    # Canonical consent tables: sms_consent, tcpa_consents, sms_opt_outs.
     communication_consent = Column(Boolean, default=True)
     marketing_consent = Column(Boolean, default=False)
     consent_captured_at = Column(DateTime)
     consent_ip_address = Column(EncryptedString)  # PII: IP address
 
     # Granular consent tracking (FCC Jan 2025 one-to-one consent rule)
+    # DEPRECATED for send/block decisions — see sms_consent_resolver.py.
+    # These fields are still written to for audit/evidence retention.
     consent_given_to = Column(String(255))       # Company or user name consent was given to
     consent_method = Column(String(50))           # 'web_form', 'verbal', 'written', 'sms_optin'
     consent_text = Column(Text)                   # Exact disclosure language agreed to

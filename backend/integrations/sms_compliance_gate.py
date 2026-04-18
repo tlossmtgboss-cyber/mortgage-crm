@@ -4,7 +4,7 @@
 
 import re
 import logging
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from typing import Optional, Tuple
 from zoneinfo import ZoneInfo
 
@@ -34,13 +34,28 @@ HELP_KEYWORDS = {"HELP", "INFO"}
 # Result dataclass
 # ---------------------------------------------------------------------------
 class ComplianceResult:
-    def __init__(self, allowed: bool, reason: str = "", risk_level: str = "low"):
+    def __init__(
+        self,
+        allowed: bool,
+        reason: str = "",
+        risk_level: str = "low",
+        consent_record_id: Optional[int] = None,
+        consent_verified_at: Optional[datetime] = None,
+        consent_method: Optional[str] = None,
+    ):
         self.allowed = allowed
         self.reason = reason
         self.risk_level = risk_level  # low | medium | high | blocked
+        # TCPA consent proof — links outbound SMS to the consent that authorized it
+        self.consent_record_id = consent_record_id
+        self.consent_verified_at = consent_verified_at
+        self.consent_method = consent_method  # web_form, sms_keyword, verbal, imported, etc.
 
     def __repr__(self):
-        return f"ComplianceResult(allowed={self.allowed}, reason={self.reason!r}, risk={self.risk_level})"
+        return (
+            f"ComplianceResult(allowed={self.allowed}, reason={self.reason!r}, "
+            f"risk={self.risk_level}, consent_id={self.consent_record_id})"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -55,6 +70,7 @@ def check_sms_compliance(
     user_id: Optional[int] = None,
     organization_id: Optional[int] = None,
     bypass_quiet_hours: bool = False,
+    urgent: bool = False,
 ) -> ComplianceResult:
     """
     Run all compliance checks before sending an SMS.
@@ -64,29 +80,69 @@ def check_sms_compliance(
     - DNC/opt-out match -> BLOCK
     - DNC check error -> BLOCK (fail-closed for TCPA)
     - No consent record -> ALLOW with warning (transactional SMS exemption)
+    - Per-recipient frequency cap -> BLOCK (unless urgent=True)
     - Outside quiet hours -> BLOCK
     - Forbidden content -> BLOCK
     - Message > 1600 chars -> BLOCK
+
+    Set urgent=True to bypass frequency caps (e.g. opt-out confirmations,
+    legally required transactional messages). DNC/opt-out checks are never
+    bypassed.
     """
     phone = _normalize_phone(to_phone)
     if not phone:
         _log_compliance_check(db, phone or to_phone, lead_id, user_id, "blocked:invalid_phone")
         return ComplianceResult(False, "Invalid phone number format", "blocked")
 
-    # 1. Check opt-out / DNC status (tenant-scoped)
-    dnc = _check_opt_out(db, phone, organization_id=organization_id)
-    if dnc:
-        _log_compliance_check(db, phone, lead_id, user_id, "blocked:dnc_opt_out")
-        return ComplianceResult(False, f"Phone {phone} is on DNC/opt-out list", "blocked")
+    # 1-2. Unified consent resolution (replaces separate DNC + consent checks).
+    # The resolver checks ALL consent sources in strict priority order:
+    #   sms_opt_outs > internal_dnc > contact_dnc_status > channel_prefs > consent records
+    # See services/sms_consent_resolver.py for the full priority chain.
+    from services.sms_consent_resolver import resolve_consent as _resolve_consent
 
-    # 2. Check consent record
-    # If no consent table or no record found, allow with warning (transactional exemption)
-    # This aligns with services/sms_compliance.py behavior
-    consent = _check_consent(db, phone, lead_id)
-    if not consent:
-        logger.info(f"No consent record for {phone} - allowing (transactional exemption)")
+    consent_resolution = _resolve_consent(phone, organization_id=organization_id, db=db)
 
-    # 3. Quiet hours check — resolve timezone from lead record or area code
+    if not consent_resolution.allowed:
+        check_label = (
+            "blocked:dnc_opt_out"
+            if "opt" in consent_resolution.source or "dnc" in consent_resolution.source
+            else "blocked:no_consent"
+        )
+        _log_compliance_check(db, phone, lead_id, user_id, check_label)
+        return ComplianceResult(
+            False,
+            consent_resolution.reason,
+            "blocked",
+        )
+
+    # Consent passed -- build consent_info dict for downstream audit linkage
+    consent_info = {
+        "id": consent_resolution.record_id,
+        "consent_source": consent_resolution.consent_method or consent_resolution.source,
+        "consented_at": consent_resolution.consented_at,
+    }
+
+    # 3. Per-recipient frequency cap (after consent, before send)
+    if urgent:
+        logger.info(
+            "Frequency cap BYPASSED (urgent=True) for %s (user_id=%s, lead_id=%s)",
+            phone[-4:] if phone else "????",
+            user_id,
+            lead_id,
+        )
+    else:
+        from integrations.sms_rate_limiter import check_recipient_frequency
+
+        freq = check_recipient_frequency(phone, organization_id=organization_id, db=db)
+        if not freq["allowed"]:
+            _log_compliance_check(db, phone, lead_id, user_id, "blocked:frequency_cap_exceeded")
+            return ComplianceResult(
+                False,
+                f"Frequency cap exceeded: {freq['reason']}",
+                "blocked",
+            )
+
+    # 4. Quiet hours check — resolve timezone from lead record or area code
     if not bypass_quiet_hours:
         tz_str = _get_lead_timezone(db, lead_id)
         if not tz_str:
@@ -106,28 +162,47 @@ def check_sms_compliance(
                 "blocked",
             )
 
-    # 4. Message content scan
+    # 5. Message content scan
     content_issue = _scan_message_content(message_body)
     if content_issue:
         _log_compliance_check(db, phone, lead_id, user_id, "blocked:content_violation")
         return ComplianceResult(False, f"Message content violation: {content_issue}", "high")
 
-    # 5. Message length check (CTIA: 160 chars per segment, max 1600)
+    # 6. Message length check (CTIA: 160 chars per segment, max 1600)
     if len(message_body) > 1600:
         _log_compliance_check(db, phone, lead_id, user_id, "blocked:message_too_long")
         return ComplianceResult(False, "Message exceeds maximum allowed length (1600 chars)", "high")
 
-    # 6. Log compliance check for audit trail (non-blocking, no commit)
-    _log_compliance_check(db, phone, lead_id, user_id, "passed")
+    # 7. Log compliance check for audit trail (with consent proof, non-blocking, no commit)
+    _log_compliance_check(
+        db, phone, lead_id, user_id, "passed",
+        consent_record_id=consent_info.get("id"),
+        consent_method=consent_info.get("consent_source"),
+    )
 
-    return ComplianceResult(True, "All compliance checks passed", "low")
+    # Attach consent proof to result so callers can persist the linkage
+    verified_at = datetime.now(timezone.utc)
+    return ComplianceResult(
+        True,
+        "All compliance checks passed",
+        "low",
+        consent_record_id=consent_info.get("id"),
+        consent_verified_at=verified_at,
+        consent_method=consent_info.get("consent_source"),
+    )
 
 
 # ---------------------------------------------------------------------------
 # Opt-out / DNC helpers
+# DEPRECATED: _check_opt_out and _check_consent are no longer called by
+# check_sms_compliance(). The unified resolver (services.sms_consent_resolver)
+# handles all consent/DNC lookups. These functions are kept for backward
+# compatibility in case external code calls them directly.
 # ---------------------------------------------------------------------------
 def _check_opt_out(db: Session, phone: str, organization_id: Optional[int] = None) -> bool:
     """Return True if phone is on DNC or has sent STOP.
+
+    DEPRECATED: Use services.sms_consent_resolver.resolve_consent() instead.
 
     Checks the sms_opt_outs table. When organization_id is provided,
     scopes the check to that tenant to prevent cross-tenant leakage.
@@ -258,33 +333,47 @@ def record_opt_in(
 
 # ---------------------------------------------------------------------------
 # Consent helpers
+# DEPRECATED: _check_consent only checks the sms_consent table. The unified
+# resolver (services.sms_consent_resolver) checks ALL 6+ consent sources.
 # ---------------------------------------------------------------------------
-def _check_consent(db: Session, phone: str, lead_id: Optional[int] = None) -> bool:
-    """Return True if valid consent exists for this phone number.
+def _check_consent(db: Session, phone: str, lead_id: Optional[int] = None) -> Optional[dict]:
+    """Look up consent record for this phone number.
 
-    If the consent table doesn't exist or the query fails, returns True
-    with a warning (transactional SMS exemption). The caller decides
-    whether missing consent should block the message.
+    DEPRECATED: Use services.sms_consent_resolver.resolve_consent() instead.
+    This function only checks the sms_consent table and misses consent records
+    in tcpa_consents, smart_docs_consent_records, channel_preferences, and
+    borrower_profiles.
+
+    Returns a dict with consent details if valid consent exists:
+        {"id": int, "consent_source": str, "consented_at": datetime}
+
+    Returns None if no consent record found (transactional exemption applies).
+    Returns {"id": None, "consent_source": "transactional_exemption"} if
+    the consent table doesn't exist (graceful fallback).
     """
     try:
         row = db.execute(
             text("""
-                SELECT id FROM sms_consent
+                SELECT id, consent_source, consented_at FROM sms_consent
                 WHERE phone_number = :phone AND consent_given = TRUE
                 LIMIT 1
             """),
             {"phone": phone},
         ).fetchone()
         if row is not None:
-            return True
-        return False
+            return {
+                "id": row[0],
+                "consent_source": row[1],
+                "consented_at": row[2],
+            }
+        return None
     except Exception as e:
         logger.warning(f"Consent table may not exist - allowing (transactional exemption): {e}")
         try:
             db.rollback()
         except Exception:
             pass
-        return True
+        return {"id": None, "consent_source": "transactional_exemption", "consented_at": None}
 
 
 def record_consent(
@@ -410,16 +499,32 @@ def _log_compliance_check(
     lead_id: Optional[int],
     user_id: Optional[int],
     result: str,
+    consent_record_id: Optional[int] = None,
+    consent_method: Optional[str] = None,
 ):
-    """Write compliance check audit record. Non-blocking, no commit."""
+    """Write compliance check audit record. Non-blocking, no commit.
+
+    When the check passes, consent_record_id and consent_method are
+    included so the audit log captures which consent record authorized
+    the send at the moment of verification.
+    """
     try:
         db.execute(
             text("""
                 INSERT INTO sms_compliance_log
-                  (phone_number, lead_id, user_id, check_result, checked_at)
-                VALUES (:phone, :lead_id, :user_id, :result, NOW())
+                  (phone_number, lead_id, user_id, check_result,
+                   consent_record_id, consent_method, checked_at)
+                VALUES (:phone, :lead_id, :user_id, :result,
+                        :consent_record_id, :consent_method, NOW())
             """),
-            {"phone": phone, "lead_id": lead_id, "user_id": user_id, "result": result},
+            {
+                "phone": phone,
+                "lead_id": lead_id,
+                "user_id": user_id,
+                "result": result,
+                "consent_record_id": consent_record_id,
+                "consent_method": consent_method,
+            },
         )
         db.flush()
     except Exception:

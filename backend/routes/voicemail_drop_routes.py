@@ -671,6 +671,102 @@ async def send_voicemail_via_vapi(
 
 
 # =============================================================================
+# SMS Follow-up After Voicemail Drop
+# =============================================================================
+
+async def _send_followup_sms(
+    *,
+    voicemail_drop_id: int,
+    phone_number: str,
+    contact_name: str,
+    lo_name: str,
+    lo_phone: str,
+    user_id: int,
+    lead_id: Optional[int],
+    organization_id: Optional[int],
+):
+    """
+    Send a follow-up SMS after a voicemail drop.
+
+    Best-effort: failures are logged but never propagated to the caller.
+    Uses its own DB session so the parent request is not affected.
+    Compliance gate (DNC, quiet hours, opt-out) runs via send_sms_verified_async.
+    """
+    from db import SessionLocal
+
+    db = SessionLocal()
+    try:
+        from telephony.sms import send_sms_verified_async
+
+        # Build a concise, professional follow-up message
+        if contact_name and contact_name.strip():
+            greeting = f"Hi {contact_name.strip().split()[0]}"
+        else:
+            greeting = "Hi"
+
+        if lo_phone:
+            cta = f"Feel free to call me back at {lo_phone} or reply to this text."
+        else:
+            cta = "Feel free to reply to this text or call me back."
+
+        sms_text = (
+            f"{greeting}, I just left you a voicemail regarding your mortgage. "
+            f"{cta} — {lo_name}"
+        )
+
+        result = await send_sms_verified_async(
+            to=phone_number,
+            text=sms_text,
+            user_id=user_id,
+            lead_id=lead_id,
+            organization_id=organization_id,
+            db=db,
+            bypass_compliance=False,
+        )
+
+        VoicemailDrop = get_voicemail_drop_model()
+        drop = db.query(VoicemailDrop).filter(VoicemailDrop.id == voicemail_drop_id).first()
+        if drop:
+            if result.get("status") == "sent":
+                drop.followup_sms_sent = True
+                drop.followup_sms_id = result.get("id")
+                logger.info(
+                    "SMS follow-up sent for voicemail drop %s (msg_id=%s)",
+                    voicemail_drop_id,
+                    result.get("id"),
+                )
+            else:
+                drop.followup_sms_sent = False
+                drop.followup_sms_blocked_reason = result.get("reason", "unknown")[:500]
+                logger.info(
+                    "SMS follow-up blocked for voicemail drop %s: %s",
+                    voicemail_drop_id,
+                    result.get("reason"),
+                )
+            db.commit()
+
+    except Exception as e:
+        logger.error(
+            "SMS follow-up failed for voicemail drop %s: %s",
+            voicemail_drop_id,
+            e,
+            exc_info=True,
+        )
+        # Best-effort: update the drop record if possible
+        try:
+            VoicemailDrop = get_voicemail_drop_model()
+            drop = db.query(VoicemailDrop).filter(VoicemailDrop.id == voicemail_drop_id).first()
+            if drop:
+                drop.followup_sms_sent = False
+                drop.followup_sms_blocked_reason = f"Error: {str(e)[:480]}"
+                db.commit()
+        except Exception:
+            pass
+    finally:
+        db.close()
+
+
+# =============================================================================
 # API Endpoints
 # =============================================================================
 
@@ -690,7 +786,8 @@ async def create_voicemail_drop(
         "message": "Your closing documents are ready",
         "lead_id": 123,  // optional
         "loan_id": 456,  // optional
-        "template_id": 1  // optional
+        "template_id": 1,  // optional
+        "send_followup_sms": true  // optional, default true — send SMS after VM drop
     }
     """
     VoicemailDrop = get_voicemail_drop_model()
@@ -705,6 +802,7 @@ async def create_voicemail_drop(
         lead_id = data.get("lead_id")
         loan_id = data.get("loan_id")
         template_id = data.get("template_id")
+        send_followup_sms = data.get("send_followup_sms", True)
 
         if not phone_number:
             raise HTTPException(status_code=400, detail="Phone number is required")
@@ -855,6 +953,39 @@ async def create_voicemail_drop(
                 "message": "Voicemail is being delivered"
             }
 
+        # Helper to fire SMS follow-up as a background task (best-effort)
+        async def _maybe_send_followup_sms(result_dict: dict) -> dict:
+            """If SMS follow-up is enabled, fire it as a background task
+            and annotate the response dict. Never fails the voicemail drop."""
+            if not send_followup_sms:
+                result_dict["followup_sms"] = "disabled"
+                return result_dict
+
+            try:
+                lo_phone = getattr(current_user, 'phone', '') or ''
+                lo_name = current_user.full_name or "Your Loan Officer"
+                asyncio.ensure_future(_safe_background_task_vm(
+                    _send_followup_sms,
+                    task_name=f"sms_followup_drop_{voicemail_drop.id}",
+                    voicemail_drop_id=voicemail_drop.id,
+                    phone_number=phone_number,
+                    contact_name=recipient_name,
+                    lo_name=lo_name,
+                    lo_phone=lo_phone,
+                    user_id=current_user.id,
+                    lead_id=lead_id,
+                    organization_id=org_id,
+                ))
+                result_dict["followup_sms"] = "queued"
+            except Exception as sms_err:
+                logger.error(
+                    "Failed to queue SMS follow-up for drop %s: %s",
+                    voicemail_drop.id,
+                    sms_err,
+                )
+                result_dict["followup_sms"] = "error"
+            return result_dict
+
         try:
             if delivery_method == "ringless":
                 try:
@@ -886,7 +1017,7 @@ async def create_voicemail_drop(
                     db.commit()
                     logger.info(f"RVM drop {voicemail_drop.id} submitted to {rvm_result.get('provider')}")
 
-                    return {
+                    response = {
                         "success": True,
                         "voicemail_drop_id": voicemail_drop.id,
                         "rvm_session_id": rvm_result.get("session_id"),
@@ -894,6 +1025,7 @@ async def create_voicemail_drop(
                         "status": "sending",
                         "message": "Ringless voicemail submitted for delivery"
                     }
+                    return await _maybe_send_followup_sms(response)
                 except Exception as rvm_err:
                     # Ringless failed — fall back to Vapi AI call
                     logger.warning(
@@ -913,9 +1045,11 @@ async def create_voicemail_drop(
                     db.commit()
                     voicemail_drop.delivery_method = "vapi_ai"
                     db.commit()
-                    return await _deliver_via_vapi()
+                    vapi_response = await _deliver_via_vapi()
+                    return await _maybe_send_followup_sms(vapi_response)
             else:
-                return await _deliver_via_vapi()
+                vapi_response = await _deliver_via_vapi()
+                return await _maybe_send_followup_sms(vapi_response)
 
         except Exception as e:
             voicemail_drop.status = 'failed'
@@ -1213,7 +1347,9 @@ async def get_voicemail_history(
                     "call_duration": vm.call_duration,
                     "call_cost": float(vm.call_cost) if vm.call_cost else None,
                     "callback_received": vm.callback_received,
-                    "error_message": vm.error_message
+                    "error_message": vm.error_message,
+                    "followup_sms_sent": getattr(vm, "followup_sms_sent", None),
+                    "followup_sms_blocked_reason": getattr(vm, "followup_sms_blocked_reason", None),
                 }
                 for vm in voicemails
             ]
@@ -1289,6 +1425,17 @@ async def get_voicemail_analytics(
         # Callback rate
         callback_rate = (callbacks / delivered * 100) if delivered > 0 else 0
 
+        # SMS follow-up metrics
+        sms_followup_sent = db.query(func.count(VoicemailDrop.id)).filter(
+            *base_filters, VoicemailDrop.followup_sms_sent == True
+        ).scalar() or 0
+
+        sms_followup_blocked = db.query(func.count(VoicemailDrop.id)).filter(
+            *base_filters,
+            VoicemailDrop.followup_sms_sent == False,
+            VoicemailDrop.followup_sms_blocked_reason != None,
+        ).scalar() or 0
+
         return {
             "success": True,
             "analytics": {
@@ -1300,6 +1447,8 @@ async def get_voicemail_analytics(
                 "callback_rate": round(callback_rate, 2),
                 "total_cost": round(total_cost, 2),
                 "average_duration_seconds": avg_duration,
+                "sms_followup_sent": sms_followup_sent,
+                "sms_followup_blocked": sms_followup_blocked,
                 "period": {
                     "start": start_date,
                     "end": end_date

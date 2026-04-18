@@ -44,6 +44,12 @@ class SMSClient:
 
         # Load credentials: prefer DB-stored (per-user), fall back to env vars
         config = get_active_telnyx_config(db, user_id=user_id) if db else {}
+        # Clean session after credential lookup (sms_credentials table may not exist)
+        if db:
+            try:
+                db.rollback()
+            except Exception:
+                pass
         self._api_key = config.get("api_key") or os.getenv("TELNYX_API_KEY", "")
         self.from_number = config.get("phone_number") or os.getenv("TELNYX_PHONE_NUMBER", "")
         self.profile_id = config.get("messaging_profile_id") or os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
@@ -51,7 +57,10 @@ class SMSClient:
         if self._api_key and self.from_number:
             self.enabled = True
         else:
-            logger.warning("SMS Client initialized without full credentials")
+            logger.warning(
+                "SMS Client not configured: api_key=%s from=%s",
+                bool(self._api_key), self.from_number or "(empty)",
+            )
 
     async def send_sms(
         self,
@@ -80,6 +89,18 @@ class SMSClient:
         user_id = user_id or self.user_id
 
         # 1. Compliance Gate (TCPA/DNC/Quiet Hours) — tenant-scoped
+        # Consent proof fields — populated by the compliance gate when consent passes
+        consent_record_id = None
+        consent_verified_at = None
+        consent_method = None
+
+        if bypass_compliance:
+            logger.warning(
+                "SMS compliance BYPASSED for %s by user %s (lead_id=%s)",
+                normalized_phone[-4:] if normalized_phone else "????",
+                user_id,
+                lead_id,
+            )
         if not bypass_compliance and self.db:
             compliance = check_sms_compliance(
                 self.db, normalized_phone, message,
@@ -88,6 +109,10 @@ class SMSClient:
             )
             if not compliance.allowed:
                 return {"success": False, "error": f"Compliance Block: {compliance.reason}"}
+            # Capture consent proof from the compliance gate result
+            consent_record_id = compliance.consent_record_id
+            consent_verified_at = compliance.consent_verified_at
+            consent_method = compliance.consent_method
 
         # Recover session if compliance queries left it dirty (missing tables)
         if self.db:
@@ -107,50 +132,48 @@ class SMSClient:
             job_id = schedule_sms(self.db, normalized_phone, message, schedule_at, lead_id)
             return {"success": True, "status": "scheduled", "job_id": job_id}
 
-        # 4. Actual Transmission (via Telnyx)
+        # 4. Actual Transmission via centralized SMS chokepoint
+        #    Compliance already checked above, so bypass in the chokepoint
+        #    to avoid double-checking (the chokepoint still appends STOP footer).
         try:
-            import requests
-            payload = {
-                "from": self.from_number,
-                "to": normalized_phone,
-                "text": message,
-                "messaging_profile_id": self.profile_id,
-            }
-            # MMS: include media URLs for Telnyx to fetch and attach
-            if media_urls:
-                payload["media_urls"] = media_urls
+            from telephony.sms import send_sms_verified
 
-            response = requests.post(
-                "https://api.telnyx.com/v2/messages",
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-                timeout=10
+            result = send_sms_verified(
+                to=normalized_phone,
+                from_=self.from_number,
+                text=message,
+                messaging_profile_id=self.profile_id or None,
+                media_urls=media_urls,
+                api_key=self._api_key,
+                bypass_compliance=True,  # Already checked above in step 1
+                user_id=user_id,
+                lead_id=lead_id,
+                organization_id=organization_id,
             )
 
-            if response.status_code in (200, 201, 202):
-                data = response.json()
-                msg_id = data.get("data", {}).get("id")
+            if result.get("status") == "sent":
+                msg_id = result.get("id")
 
-                # 5. Delivery Tracking & Rate limit recording
+                # 5. Delivery Tracking & Rate limit recording (with TCPA consent proof)
                 if self.db:
                     record_message_sent(
                         self.db, msg_id, to_phone, self.from_number,
                         message, lead_id=lead_id, user_id=user_id,
+                        consent_record_id=consent_record_id,
+                        consent_verified_at=consent_verified_at,
+                        consent_method=consent_method,
                     )
                     record_send_attempt(self.db, to_phone, user_id=user_id, lead_id=lead_id)
 
                 return {"success": True, "message_id": msg_id}
             else:
-                # Sanitize error — don't leak Telnyx response details to caller
-                logger.error(f"Telnyx send failed ({response.status_code}): {response.text[:200]}")
-                return {"success": False, "error": "SMS delivery failed"}
+                reason = result.get("reason", "SMS delivery failed")
+                logger.error(f"SMS send blocked/failed: {reason}")
+                return {"success": False, "error": reason}
 
         except Exception as e:
-            logger.error(f"Transmission error: {e}")
-            return {"success": False, "error": "SMS transmission error"}
+            logger.error(f"Transmission error to {normalized_phone}: {e}", exc_info=True)
+            return {"success": False, "error": f"SMS transmission error: {e}"}
 
     async def send_templated_sms(
         self,

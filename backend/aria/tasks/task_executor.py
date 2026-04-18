@@ -281,9 +281,20 @@ class TaskExecutor:
 
     async def _send_sms(self, slots, user_id, org_id) -> Dict:
         contact = await self.crm.resolve_contact(slots["recipient"], org_id)
-        lo      = await self.crm.get_user(user_id)
+        if not contact:
+            return {
+                "action": "sms_blocked",
+                "error": f"Could not find a contact named '{slots['recipient']}'.",
+            }
+        if not contact.get("phone"):
+            return {
+                "action": "sms_blocked",
+                "to": contact.get("name", slots["recipient"]),
+                "error": f"No phone number on file for {contact.get('name', slots['recipient'])}.",
+            }
 
-        # TCPA/DNC compliance check before sending SMS
+        lo = await self.crm.get_user(user_id)
+
         from services.sms_compliance import check_sms_consent
         can_send, reason = await asyncio.to_thread(
             check_sms_consent, contact["phone"], organization_id=org_id,

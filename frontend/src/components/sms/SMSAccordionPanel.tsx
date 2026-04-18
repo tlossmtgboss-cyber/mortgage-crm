@@ -29,6 +29,7 @@
 import React, {
   useState, useRef, useEffect, useCallback, ReactNode
 } from 'react'
+import { toast } from 'react-toastify'
 import { getToken } from '../../utils/tokenStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -808,13 +809,19 @@ export default function SMSAccordionPanel({
         }),
       })
 
-      if (!res.ok) throw new Error('Send failed')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }))
+        throw new Error(err.detail || err.error || 'Send failed')
+      }
 
       // Update optimistic → delivered
       setMessages(prev =>
         prev.map(m => m.id === optimisticId ? { ...m, status: 'delivered' } : m)
       )
-    } catch {
+    } catch (err: any) {
+      const msg = err?.message || 'Send failed'
+      toast.error(`SMS failed: ${msg}`)
+      console.error('[SMS] Send error:', msg)
       setMessages(prev =>
         prev.map(m => m.id === optimisticId ? { ...m, status: 'failed' } : m)
       )

@@ -80,34 +80,32 @@ def check_sms_consent(phone: str, organization_id: int = None, db=None) -> tuple
             return False, f"Consent check error: {e}"
 
     try:
-        # 1. DNC check using existing ComplianceChecker
-        try:
-            from telephony.compliance import ComplianceChecker
-            checker = ComplianceChecker(db)
-            is_dnc, dnc_reason = checker.check_dnc(phone)
-            if is_dnc:
-                logger.warning(f"SMS blocked - DNC: {phone}")
-                return False, f"DNC: {dnc_reason}"
-        except ImportError:
-            logger.debug("telephony.compliance not available, skipping DNC check")
-        except Exception as dnc_err:
-            # CF-6: Fail-closed -- block SMS when DNC check errors (TCPA compliance)
-            logger.error(f"DNC check failed, blocking SMS for safety: {dnc_err}")
-            return False, f"DNC check unavailable: {dnc_err}"
+        # 1-2. Unified consent resolution (replaces separate DNC + ChannelPreference checks).
+        # The resolver checks ALL consent sources in strict priority order:
+        #   sms_opt_outs > internal_dnc > contact_dnc_status > channel_prefs > consent records
+        # See services/sms_consent_resolver.py for the full priority chain.
+        from services.sms_consent_resolver import resolve_consent
 
-        # 2. ChannelPreference check (scoped by organization_id)
+        consent_resolution = resolve_consent(phone, organization_id=organization_id, db=db)
+
+        if not consent_resolution.allowed:
+            logger.warning(
+                "SMS blocked by consent resolver: %s (source=%s)",
+                consent_resolution.reason, consent_resolution.source,
+            )
+            return False, consent_resolution.reason
+
+        # 3. TCPA: Check contact hours (8am-9pm recipient local time)
+        # Resolve timezone from lead's channel_preferences or phone area code.
         recipient_tz = None
         try:
             from database.models.communication import ChannelPreference
             from database.models.lead_loan import Lead
 
-            # Normalize phone to last 10 digits for matching
             digits = ''.join(c for c in phone if c.isdigit())
             if len(digits) == 11 and digits.startswith('1'):
                 digits = digits[1:]
 
-            # Scope lead lookup by organization_id to prevent cross-tenant leakage
-            lead = None
             if len(digits) >= 10:
                 lead_query = db.query(Lead).filter(
                     Lead.phone.ilike(f"%{digits[-10:]}")
@@ -116,27 +114,15 @@ def check_sms_consent(phone: str, organization_id: int = None, db=None) -> tuple
                     lead_query = lead_query.filter(Lead.organization_id == organization_id)
                 lead = lead_query.first()
 
-            if lead:
-                # Get timezone from channel_preferences (not leads table)
-                pref = db.query(ChannelPreference).filter(
-                    ChannelPreference.lead_id == lead.id
-                ).first()
-                if pref:
-                    recipient_tz = getattr(pref, 'timezone', None)
-                    if getattr(pref, 'do_not_sms', False):
-                        logger.warning(f"SMS blocked - do_not_sms flag: {phone}")
-                        return False, "Contact has opted out of SMS"
-                    if hasattr(pref, 'sms_consent') and pref.sms_consent is False:
-                        logger.warning(f"SMS blocked - no sms_consent: {phone}")
-                        return False, "No SMS consent on file"
-        except ImportError:
-            # Model not available — allow with warning (transactional exemption)
-            # Consistent with sms_compliance_gate.py behavior
-            logger.warning("ChannelPreference model not available — allowing (transactional exemption)")
+                if lead:
+                    pref = db.query(ChannelPreference).filter(
+                        ChannelPreference.lead_id == lead.id
+                    ).first()
+                    if pref:
+                        recipient_tz = getattr(pref, 'timezone', None)
+        except Exception:
+            pass  # Timezone lookup is best-effort
 
-        # 3. TCPA: Check contact hours (8am-9pm recipient local time)
-        # Done AFTER lead lookup so we can use the lead's actual timezone.
-        # If no timezone from ChannelPreference, resolve from phone area code.
         if not recipient_tz:
             try:
                 from telephony.compliance import resolve_recipient_timezone

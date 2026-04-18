@@ -761,6 +761,9 @@ from .agent_registry import (
 # TCPA Call Authorization (Aria voice agent outbound call audit trail)
 from .call_authorization import CallAuthorization
 
+# SMS Compliance (opt-outs, consent, audit log — TCPA gate backing tables)
+from .sms_compliance import SMSOptOut, SMSConsent, SMSComplianceLog
+
 
 __all__ = [
     # =====================
@@ -1579,4 +1582,11 @@ __all__ = [
     # TCPA Call Authorization (Aria)
     # =====================
     "CallAuthorization",
+
+    # =====================
+    # SMS Compliance (TCPA Gate)
+    # =====================
+    "SMSOptOut",
+    "SMSConsent",
+    "SMSComplianceLog",
 ]

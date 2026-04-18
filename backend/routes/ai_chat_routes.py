@@ -216,6 +216,35 @@ When scheduling appointments, confirm the time first via SMS before creating the
                         tool_result = None
 
                         if function_name == "send_sms":
+                            # TCPA/DNC compliance check before sending
+                            try:
+                                from integrations.sms_compliance_gate import check_sms_compliance
+                                compliance = check_sms_compliance(
+                                    db=db,
+                                    to_phone=function_args["to_number"],
+                                    message_body=function_args["message"],
+                                    lead_id=lead_id,
+                                    user_id=current_user.id,
+                                )
+                                if not compliance.allowed:
+                                    logger.warning(f"SMS blocked by compliance gate: {compliance.reason}")
+                                    tool_result = {"success": False, "error": f"SMS blocked: {compliance.reason}"}
+                                    messages.append({
+                                        "role": "tool",
+                                        "tool_call_id": tool_call.id,
+                                        "content": json.dumps(tool_result)
+                                    })
+                                    continue
+                            except ImportError:
+                                logger.error("sms_compliance_gate not available — blocking SMS send as precaution")
+                                tool_result = {"success": False, "error": "SMS compliance module unavailable"}
+                                messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": tool_call.id,
+                                    "content": json.dumps(tool_result)
+                                })
+                                continue
+
                             # Send SMS using configured provider (Telnyx)
                             try:
                                 if not sms_client.enabled:

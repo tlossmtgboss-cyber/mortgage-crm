@@ -80,11 +80,8 @@ logger = logging.getLogger(__name__)
 _APP_URL = os.getenv("APP_URL", "https://app.perenniaai.com")
 
 TELNYX_API_KEY = os.getenv("TELNYX_API_KEY", "")
-TELNYX_FROM_NUMBER = os.getenv("TELNYX_FROM_NUMBER", "+18438838956")
-TELNYX_MESSAGING_PROFILE_ID = os.getenv(
-    "TELNYX_MESSAGING_PROFILE_ID",
-    "40019bed-2fa1-4407-a0c6-fe4c6b222c93",
-)
+TELNYX_FROM_NUMBER = os.getenv("TELNYX_FROM_NUMBER", "")
+TELNYX_MESSAGING_PROFILE_ID = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
 
 # Delay between messages in the intro sequence (seconds).  Short pause so
 # messages arrive in order without overwhelming the recipient.
@@ -407,8 +404,8 @@ class _TelnyxSMSMixin:
         messaging_profile = TELNYX_MESSAGING_PROFILE_ID
 
         if not telnyx_api_key or not telnyx_from:
-            logger.warning("Telnyx not configured; SMS to %s suppressed", to_number)
-            return {"message_id": None, "status": "failed", "error": "SMS service not configured"}
+            logger.error("SMS send failed: TELNYX_API_KEY or TELNYX_FROM_NUMBER not configured")
+            return {"message_id": None, "status": "failed", "error": "SMS not configured"}
 
         def _blocking_send() -> Dict[str, Any]:
             from telephony.sms import send_sms as telnyx_send_sms

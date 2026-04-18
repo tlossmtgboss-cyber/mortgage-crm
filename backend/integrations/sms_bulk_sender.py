@@ -78,7 +78,7 @@ def send_campaign(
             logger.info(f"Bulk SMS rate limited {phone}: {rate_reason}")
             continue
 
-        # Queue the message
+        # Queue the message (with TCPA consent proof from compliance gate)
         queue_id = enqueue_sms(
             db, phone, rendered_body,
             from_phone=from_phone,
@@ -86,6 +86,9 @@ def send_campaign(
             user_id=user_id,
             template_id=template_id,
             priority=7,  # Bulk = lower priority than 1:1 messages
+            consent_record_id=compliance.consent_record_id,
+            consent_verified_at=compliance.consent_verified_at,
+            consent_method=compliance.consent_method,
         )
 
         if queue_id:

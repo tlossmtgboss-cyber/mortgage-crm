@@ -100,23 +100,17 @@ class WebhookLeadPayload(BaseModel):
 # ---------------------------------------------------------------------------
 
 async def _send_sms(to: str, from_: str, body: str):
-    """Send SMS via Telnyx."""
-    telnyx_key = os.getenv("TELNYX_API_KEY", "")
-    profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
-
-    payload = {"to": to, "from": from_, "text": body}
-    if profile_id:
-        payload["messaging_profile_id"] = profile_id
-
+    """Send SMS via the centralized Telnyx chokepoint (with compliance)."""
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                "https://api.telnyx.com/v2/messages",
-                json=payload,
-                headers={"Authorization": f"Bearer {telnyx_key}", "Content-Type": "application/json"},
-            )
-        if resp.status_code >= 400:
-            logger.error("SMS send failed %s: %s", resp.status_code, resp.text[:200])
+        from telephony.sms import send_sms_verified_async
+
+        result = await send_sms_verified_async(
+            to=to,
+            from_=from_,
+            text=body,
+        )
+        if result.get("status") not in ("sent",):
+            logger.error("SMS send blocked/failed for ...%s: %s", to[-4:] if to else "?", result.get("reason", ""))
     except Exception as e:
         logger.exception("SMS send error: %s", e)
 

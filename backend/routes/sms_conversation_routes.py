@@ -177,6 +177,7 @@ def _ensure_tables(db: Session):
                 sender_role TEXT,
                 status TEXT DEFAULT 'sent',
                 media_urls JSONB DEFAULT '[]'::jsonb,
+                media_s3_keys JSONB DEFAULT '[]'::jsonb,
                 page_type TEXT DEFAULT 'client',
                 borrower_type TEXT DEFAULT 'primary',
                 telnyx_message_id TEXT,
@@ -192,10 +193,11 @@ def _ensure_tables(db: Session):
         db.execute(text("""
             CREATE INDEX IF NOT EXISTS ix_sms_panel_org ON sms_panel_messages (organization_id)
         """))
-        # Add organization_id and sender_user_id columns if table pre-exists without them
+        # Add organization_id, sender_user_id, and media_s3_keys columns if table pre-exists without them
         for col, col_type in [
             ("organization_id", "INTEGER"),
             ("sender_user_id", "INTEGER"),
+            ("media_s3_keys", "JSONB DEFAULT '[]'::jsonb"),
         ]:
             db.execute(text(f"""
                 ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS {col} {col_type}
@@ -300,7 +302,7 @@ async def get_conversation(
     try:
         rows = db.execute(text(f"""
             SELECT id, direction, body, sender_name, sender_role, status,
-                   media_urls, created_at, telnyx_message_id
+                   media_urls, created_at, telnyx_message_id, media_s3_keys
             FROM sms_panel_messages
             WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '')
                   LIKE :pattern
@@ -310,7 +312,28 @@ async def get_conversation(
             LIMIT :lim
         """), params).fetchall()
 
+        # Resolve S3 keys to presigned URLs for media display
+        _media_storage = None
+        try:
+            from utils.media_storage import get_media_storage
+            _media_storage = get_media_storage()
+        except Exception:
+            pass
+
         for r in rows:
+            # Prefer S3 presigned URLs over original (possibly expired) Telnyx URLs
+            resolved_urls = []
+            s3_keys = r[9] if len(r) > 9 and r[9] else []
+            original_urls = r[6] if r[6] else []
+
+            if s3_keys and _media_storage and _media_storage.is_available:
+                for key in s3_keys:
+                    presigned = _media_storage.get_media_url(key)
+                    if presigned:
+                        resolved_urls.append(presigned)
+            if not resolved_urls:
+                resolved_urls = original_urls
+
             messages.append({
                 "id": r[0],
                 "direction": r[1],
@@ -319,7 +342,7 @@ async def get_conversation(
                 "senderRole": r[4],
                 "timestamp": r[7].isoformat() if r[7] else datetime.now(timezone.utc).isoformat(),
                 "status": r[5] or "delivered",
-                "mediaUrls": r[6] if r[6] else [],
+                "mediaUrls": resolved_urls,
                 "_telnyx_id": r[8],  # for dedup
             })
     except Exception as e:
@@ -469,9 +492,9 @@ async def upload_media(
 ):
     """
     Upload a media file for MMS sending.
-    Stores locally and returns a public URL that Telnyx can fetch.
-    Note: Railway filesystem is ephemeral — files persist only until next deploy,
-    which is fine for MMS (Telnyx fetches immediately on send).
+    Stores in S3 for persistence (Railway filesystem is ephemeral).
+    Returns a presigned S3 URL that Telnyx can fetch, or falls back to
+    local storage if S3 is not configured.
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
@@ -480,7 +503,28 @@ async def upload_media(
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="File exceeds 5MB MMS limit")
 
-    # Save to local uploads directory
+    org_id = _get_org_id(current_user)
+    content_type = file.content_type or "application/octet-stream"
+
+    # Try S3 first (persistent storage)
+    from utils.media_storage import get_media_storage
+    storage = get_media_storage()
+
+    if storage.is_available:
+        s3_key = storage.upload_media(contents, file.filename, content_type, org_id=org_id)
+        if s3_key:
+            # Return a presigned URL with 1-hour expiry (Telnyx fetches immediately)
+            presigned_url = storage.get_media_url(s3_key, expires_in=3600)
+            return {
+                "url": presigned_url,
+                "s3_key": s3_key,
+                "filename": file.filename,
+                "size": len(contents),
+                "storage": "s3",
+            }
+        logger.warning("S3 upload failed, falling back to local storage")
+
+    # Fallback: local filesystem (ephemeral on Railway)
     upload_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "sms")
     os.makedirs(upload_dir, exist_ok=True)
 
@@ -494,7 +538,7 @@ async def upload_media(
     api_domain = os.getenv("API_DOMAIN", "api.perenniaai.com")
     url = f"https://{api_domain}/uploads/sms/{safe_name}"
 
-    return {"url": url, "filename": file.filename, "size": len(contents)}
+    return {"url": url, "filename": file.filename, "size": len(contents), "storage": "local"}
 
 
 # ─── WebSocket /ws/sms/{phone} ───────────────────────────────────────────────

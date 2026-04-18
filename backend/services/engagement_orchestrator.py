@@ -519,60 +519,30 @@ async def _dispatch_sms(
     ctx: Dict[str, Any],
     trigger_event: str,
 ) -> Dict[str, Any]:
-    """Dispatch an SMS via Telnyx. Message content varies by trigger."""
-    import httpx
-
+    """Dispatch an SMS via the centralized Telnyx chokepoint (with compliance)."""
     phone = ctx.get("phone", "")
-    first_name = ctx.get("first_name") or ctx.get("name") or "there"
 
     # Build message body based on trigger
     body = _build_sms_body(ctx, trigger_event)
 
-    # Send via Telnyx
-    telnyx_key = os.getenv("TELNYX_API_KEY", "")
-    from_number = os.getenv("TELNYX_FROM_NUMBER", "")
-    profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
-
-    if not telnyx_key or not from_number:
-        return {"success": False, "error": "Telnyx SMS not configured"}
-
-    # Normalize phone to E.164
-    digits = "".join(c for c in phone if c.isdigit())
-    if len(digits) == 10:
-        phone_e164 = f"+1{digits}"
-    elif len(digits) == 11 and digits.startswith("1"):
-        phone_e164 = f"+{digits}"
-    else:
-        phone_e164 = f"+{digits}" if digits else None
-
-    if not phone_e164:
-        return {"success": False, "error": "invalid phone number"}
-
-    payload: Dict[str, Any] = {
-        "to": phone_e164,
-        "from": from_number,
-        "text": body,
-    }
-    if profile_id:
-        payload["messaging_profile_id"] = profile_id
-
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                "https://api.telnyx.com/v2/messages",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {telnyx_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-        if resp.status_code < 400:
+        from telephony.sms import send_sms_verified_async
+
+        result = await send_sms_verified_async(
+            to=phone,
+            text=body,
+            db=db,
+            lead_id=ctx.get("lead_id"),
+            organization_id=ctx.get("organization_id"),
+        )
+        if result.get("status") == "sent":
             return {"success": True, "channel": "sms", "message_preview": body[:80]}
         else:
-            logger.error("SMS dispatch failed %s: %s", resp.status_code, resp.text[:200])
-            return {"success": False, "error": f"SMS API {resp.status_code}"}
+            reason = result.get("reason", "unknown")
+            logger.warning("SMS dispatch blocked for lead %s: %s", ctx.get("lead_id"), reason)
+            return {"success": False, "error": reason}
     except Exception as e:
-        logger.exception("SMS dispatch error for lead %s", ctx["lead_id"])
+        logger.exception("SMS dispatch error for lead %s", ctx.get("lead_id"))
         return {"success": False, "error": str(e)}
 
 

@@ -470,26 +470,91 @@ async def handle_call_hangup(event: TelnyxCallEvent, db: Session):
 # =============================================================================
 
 async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
-    """Handle SMS delivery status update"""
+    """Handle SMS delivery status update.
+
+    Updates delivery status in both:
+    - sms_messages (general SMS log)
+    - bulk_sms_sends (bulk campaign message tracking)
+
+    When a bulk campaign message is delivered/failed, also increments the
+    campaign-level delivered_count or failed_count counter.
+    """
     message_id = event.message_id
     status = event.status
+    is_terminal = status in ("delivered", "sent", "failed", "sending_failed", "delivery_failed")
 
     logger.info(f"SMS status update: {message_id} -> {status}")
 
-    # Update SMS status in database if we're tracking it
+    # Normalize Telnyx status values to our internal statuses
+    # Telnyx sends: queued, sending, sent, delivered, sending_failed, delivery_failed, etc.
+    normalized_status = status
+    if status in ("sending_failed", "delivery_failed", "delivery_unconfirmed"):
+        normalized_status = "failed"
+
+    # 1. Update sms_messages table (general SMS log)
     try:
-        db.execute(sa_text("""
+        update_fields = "delivery_status = :status"
+        params = {"status": normalized_status, "message_id": message_id}
+        if normalized_status == "delivered":
+            update_fields += ", delivered_at = NOW()"
+        db.execute(sa_text(f"""
             UPDATE sms_messages
-            SET delivery_status = :status,
-                updated_at = NOW()
+            SET {update_fields}
             WHERE provider_message_id = :message_id
-        """), {"status": status, "message_id": message_id})
+        """), params)
         db.commit()
     except Exception as e:
         db.rollback()
-        logger.debug(f"SMS message not found in tracking table: {e}")
+        logger.debug(f"sms_messages update skipped (no match): {e}")
 
-    return {"status": "acknowledged", "message_id": message_id}
+    # 2. Update bulk_sms_sends table (bulk campaign message tracking)
+    campaign_id = None
+    try:
+        update_fields = "status = :status"
+        params = {"status": normalized_status, "message_id": message_id}
+        if normalized_status == "delivered":
+            update_fields += ", delivered_at = NOW()"
+
+        result = db.execute(sa_text(f"""
+            UPDATE bulk_sms_sends
+            SET {update_fields}
+            WHERE telnyx_message_id = :message_id
+            RETURNING campaign_id
+        """), params)
+        row = result.fetchone()
+        if row:
+            campaign_id = row[0]
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.debug(f"bulk_sms_sends update skipped (no match or table missing): {e}")
+
+    # 3. Increment campaign-level counters for terminal statuses
+    if campaign_id and is_terminal:
+        try:
+            if normalized_status == "delivered":
+                counter_col = "delivered_count"
+            elif normalized_status == "failed":
+                counter_col = "failed_count"
+            else:
+                counter_col = None
+
+            if counter_col:
+                db.execute(sa_text(f"""
+                    UPDATE bulk_sms_campaigns
+                    SET {counter_col} = COALESCE({counter_col}, 0) + 1,
+                        updated_at = NOW()
+                    WHERE id = :campaign_id
+                """), {"campaign_id": campaign_id})
+                db.commit()
+                logger.info(
+                    f"Campaign {campaign_id}: incremented {counter_col} via delivery webhook"
+                )
+        except Exception as e:
+            db.rollback()
+            logger.warning(f"Failed to increment campaign counter: {e}")
+
+    return {"status": "acknowledged", "message_id": message_id, "delivery_status": normalized_status}
 
 
 def _normalize_phone(phone: str) -> str:

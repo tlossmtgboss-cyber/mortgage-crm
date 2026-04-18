@@ -917,6 +917,10 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
                 "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS rvm_session_id VARCHAR(255)",
                 "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS rvm_provider VARCHAR(50)",
                 "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS rvm_dispo_code VARCHAR(50)",
+                # SMS follow-up tracking columns
+                "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS followup_sms_sent BOOLEAN DEFAULT FALSE",
+                "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS followup_sms_id VARCHAR(255)",
+                "ALTER TABLE voicemail_drops ADD COLUMN IF NOT EXISTS followup_sms_blocked_reason VARCHAR(500)",
                 # Lead SLA milestone column
                 "ALTER TABLE leads ADD COLUMN IF NOT EXISTS initial_consultation_date TIMESTAMP",
                 # Multi-tenant column for API keys

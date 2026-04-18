@@ -1,8 +1,10 @@
 # backend/integrations/sms_rate_limiter.py
-# DB-backed rate limiting for SMS sends (per-user, per-lead, global)
+# DB-backed rate limiting for SMS sends (per-user, per-lead, per-recipient, global)
 # Prevents carrier filtering and TCPA overages
 
 import logging
+import os
+import re
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
 
@@ -23,6 +25,12 @@ LIMITS = {
     "global_minute": (60, 100),          # Global: 100 SMS/min across all users
     "global_hour": (3600, 2000),         # Global: 2000 SMS/hr across all users
 }
+
+# ---------------------------------------------------------------------------
+# Per-recipient frequency caps (env-configurable)
+# ---------------------------------------------------------------------------
+SMS_MAX_PER_DAY = int(os.getenv("SMS_MAX_PER_DAY", "3"))
+SMS_MAX_PER_WEEK = int(os.getenv("SMS_MAX_PER_WEEK", "10"))
 
 
 def check_rate_limit(
@@ -112,8 +120,112 @@ def get_current_rates(db: Session, user_id: Optional[int] = None) -> dict:
     return result
 
 
-def cleanup_old_rate_records(db: Session, hours: int = 48):
-    """Remove rate limit records older than specified hours (run periodically)."""
+def check_recipient_frequency(
+    phone_number: str,
+    organization_id: Optional[str] = None,
+    db: Optional[Session] = None,
+) -> dict:
+    """
+    Check per-recipient frequency caps to prevent spamming a single contact.
+
+    Queries sms_rate_limit_log for recent sends to this phone number.
+    Returns a dict with:
+        allowed (bool), reason (str), sent_today (int), sent_this_week (int)
+
+    Limits are configurable via SMS_MAX_PER_DAY / SMS_MAX_PER_WEEK env vars.
+    """
+    result = {
+        "allowed": True,
+        "reason": "Recipient frequency check passed",
+        "sent_today": 0,
+        "sent_this_week": 0,
+    }
+
+    if not db or not phone_number:
+        return result
+
+    # Normalize phone for consistent matching
+    normalized = _normalize_phone_for_lookup(phone_number)
+    if not normalized:
+        return result
+
+    try:
+        # Count messages sent to this phone today (last 24h)
+        row_day = db.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM sms_rate_limit_log
+                WHERE to_phone = :phone
+                  AND sent_at >= NOW() - INTERVAL '24 hours'
+            """),
+            {"phone": normalized},
+        ).fetchone()
+        sent_today = row_day[0] if row_day else 0
+
+        # Count messages sent to this phone this week (last 7 days)
+        row_week = db.execute(
+            text("""
+                SELECT COUNT(*)
+                FROM sms_rate_limit_log
+                WHERE to_phone = :phone
+                  AND sent_at >= NOW() - INTERVAL '7 days'
+            """),
+            {"phone": normalized},
+        ).fetchone()
+        sent_this_week = row_week[0] if row_week else 0
+
+        result["sent_today"] = sent_today
+        result["sent_this_week"] = sent_this_week
+
+        if sent_today >= SMS_MAX_PER_DAY:
+            result["allowed"] = False
+            result["reason"] = (
+                f"Daily frequency cap exceeded: {sent_today} messages sent today "
+                f"(max {SMS_MAX_PER_DAY}/day per recipient)"
+            )
+            return result
+
+        if sent_this_week >= SMS_MAX_PER_WEEK:
+            result["allowed"] = False
+            result["reason"] = (
+                f"Weekly frequency cap exceeded: {sent_this_week} messages sent this week "
+                f"(max {SMS_MAX_PER_WEEK}/week per recipient)"
+            )
+            return result
+
+    except Exception as e:
+        # Fail open — don't block sends if the rate limit table is unavailable
+        logger.warning(f"Recipient frequency check failed (allowing send): {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    return result
+
+
+def _normalize_phone_for_lookup(phone: str) -> Optional[str]:
+    """Normalize phone to E.164 for consistent rate-limit lookups."""
+    if not phone:
+        return None
+    digits = re.sub(r"[^\d]", "", phone)
+    if len(digits) == 10:
+        return f"+1{digits}"
+    if len(digits) == 11 and digits.startswith("1"):
+        return f"+{digits}"
+    if phone.startswith("+") and len(digits) >= 10:
+        return f"+{digits}"
+    # Return as-is if already formatted — the rate_limit_log stores whatever was passed
+    return phone
+
+
+def cleanup_old_rate_records(db: Session, hours: int = 192):
+    """Remove rate limit records older than specified hours (run periodically).
+
+    Default 192h (8 days) to preserve the 7-day window needed for weekly
+    frequency caps.  Callers may pass a shorter value if per-recipient
+    frequency capping is not in use.
+    """
     try:
         db.execute(
             text(
@@ -130,18 +242,22 @@ def cleanup_old_rate_records(db: Session, hours: int = 48):
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+VALID_COLUMNS = {"lead_id": "lead_id", "user_id": "user_id"}
+
+
 def _count_recent(
     db: Session, column: str, value: int, window_seconds: int
 ) -> int:
     """Count messages for a specific lead_id or user_id within a time window."""
-    if column not in ("lead_id", "user_id"):
+    if column not in VALID_COLUMNS:
         return 0
+    safe_column = VALID_COLUMNS[column]
     try:
         row = db.execute(
             text(f"""
                 SELECT COUNT(*)
                 FROM sms_rate_limit_log
-                WHERE {column} = :value
+                WHERE {safe_column} = :value
                   AND sent_at >= NOW() - make_interval(secs => :window)
             """),
             {"value": value, "window": window_seconds},

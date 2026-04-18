@@ -243,34 +243,27 @@ class SMSRetryService:
         message: str,
         messaging_profile_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Actually send SMS via Telnyx. Raises on failure."""
-        import httpx
-        import os
+        """Send SMS via the centralized async Telnyx chokepoint.
 
-        api_key = self._api_key or os.getenv("TELNYX_API_KEY")
-        if not api_key:
-            raise ValueError("TELNYX_API_KEY not configured")
+        Raises on failure (caller handles retry logic).
+        Compliance is bypassed here because the retry service is called
+        by higher-level code that has already verified compliance.
+        """
+        from telephony.sms import send_sms_verified_async
 
-        payload = {
-            "from": from_phone,
-            "to": to_phone,
-            "text": message,
-        }
-        if messaging_profile_id:
-            payload["messaging_profile_id"] = messaging_profile_id
+        result = await send_sms_verified_async(
+            to=to_phone,
+            from_=from_phone,
+            text=message,
+            messaging_profile_id=messaging_profile_id,
+            api_key=self._api_key,
+            bypass_compliance=True,  # Caller (Aria/workflow) owns compliance
+        )
 
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            resp = await client.post(
-                "https://api.telnyx.com/v2/messages",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return {"message_id": data.get("data", {}).get("id")}
+        if result.get("status") == "sent":
+            return {"message_id": result.get("id")}
+        else:
+            raise RuntimeError(result.get("reason", "SMS send failed"))
 
     # -----------------------------------------------------------------
     # Dead letter queue access

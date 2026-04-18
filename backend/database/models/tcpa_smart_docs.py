@@ -37,6 +37,12 @@ class SmartDocsConsentRecord(Base):
     """
     Per-phone, per-channel consent record for the Smart Docs follow-up system.
 
+    DEPRECATION NOTE: This is ONE of 6+ overlapping consent sources. For
+    authoritative SMS consent decisions, use:
+        from services.sms_consent_resolver import resolve_consent
+    The resolver checks this table along with sms_consent, tcpa_consents,
+    sms_opt_outs, channel_preferences, and borrower_profiles.
+
     Every SMS or call sent by followup_automation_service MUST have a
     corresponding active consent record.  Revocations take effect immediately
     (revoked_at IS NOT NULL => consent no longer valid).
@@ -56,6 +62,7 @@ class SmartDocsConsentRecord(Base):
     borrower_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
 
     phone = Column(String(20), nullable=False, index=True)
+    phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     channel = Column(String(10), nullable=False)  # "sms", "call", "both"
     consent_given = Column(Boolean, nullable=False, default=True)
 
@@ -106,6 +113,7 @@ class InternalDNCEntry(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
 
     phone = Column(String(20), nullable=False, index=True)
+    phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     reason = Column(String(200), nullable=True)
 
     added_by_user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -143,6 +151,7 @@ class OutreachLog(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
 
     phone = Column(String(20), nullable=False, index=True)
+    phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     channel = Column(String(10), nullable=False)  # "sms", "call"
     campaign_id = Column(Integer, nullable=True)
 

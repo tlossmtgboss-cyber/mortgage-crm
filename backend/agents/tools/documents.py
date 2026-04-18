@@ -3,9 +3,12 @@ Perennia AI - Document Tracking Tools
 Tools for the Document Tracker agent to manage loan documentation.
 """
 
+import logging
 from datetime import datetime, date, timedelta
 from typing import Optional, List, Dict, Any
 from decimal import Decimal
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool, ToolResult, ToolError,
@@ -484,6 +487,77 @@ def send_document_reminder(
     if not docs_to_request:
         return ToolResult.no_data("No documents to request")
 
+    # TCPA/DNC compliance check before sending SMS
+    sms_blocked_reason = None
+    if reminder_type in ("sms", "both"):
+        borrower_phone = loan.get("borrower_phone")
+        if borrower_phone:
+            from .notifications import _check_sms_compliance
+            compliance_error = _check_sms_compliance(borrower_phone)
+            if compliance_error:
+                sms_blocked_reason = compliance_error.message
+                logger.warning(f"SMS skipped for document reminder on loan {loan_id} (compliance): {sms_blocked_reason}")
+                if reminder_type == "sms":
+                    return ToolResult.error(f"Cannot send SMS reminder: {sms_blocked_reason}")
+                # Downgrade "both" to "email" only
+                reminder_type = "email"
+        else:
+            # No phone on file — if SMS-only, fail; if both, downgrade to email
+            if reminder_type == "sms":
+                return ToolResult.error("No borrower phone number on file for SMS reminder")
+            reminder_type = "email"
+
+    # --- Actually send the SMS if reminder_type is "sms" or "both" ---
+    sms_result = None
+    if reminder_type in ("sms", "both"):
+        borrower_phone = loan.get("borrower_phone")
+        borrower_name = f"{loan.get('borrower_first_name', '')} {loan.get('borrower_last_name', '')}".strip()
+        lo_name = loan.get("lo_name", "your loan officer")
+        doc_names = [d["document"] for d in docs_to_request]
+
+        # Compose SMS body
+        if custom_message:
+            sms_body = custom_message
+        else:
+            doc_list_str = ", ".join(doc_names[:5])
+            if len(doc_names) > 5:
+                doc_list_str += f" (+{len(doc_names) - 5} more)"
+            sms_body = (
+                f"Hi {borrower_name}, this is a reminder from {lo_name}. "
+                f"We still need the following documents for your loan: {doc_list_str}. "
+                f"Please upload or reply to this message with any questions."
+            )
+
+        try:
+            from telephony.sms import send_sms_verified
+
+            sms_result = send_sms_verified(
+                to=borrower_phone,
+                text=sms_body,
+                bypass_compliance=True,  # compliance already checked above
+            )
+
+            if sms_result.get("status") == "blocked":
+                blocked_reason = sms_result.get("reason", "Unknown")
+                logger.warning(
+                    "SMS send blocked for loan %s: %s", loan_id, blocked_reason
+                )
+                if reminder_type == "sms":
+                    return ToolResult.error(
+                        f"SMS reminder blocked: {blocked_reason}"
+                    )
+                # "both" — downgrade to email-only, continue
+                reminder_type = "email"
+                sms_result = None
+
+        except Exception as e:
+            logger.exception("SMS send failed for document reminder on loan %s", loan_id)
+            if reminder_type == "sms":
+                return ToolResult.error(f"SMS send failed: {e}")
+            # "both" — downgrade to email-only, continue
+            reminder_type = "email"
+            sms_result = None
+
     # Create reminder record
     from sqlalchemy import text
     with get_db() as db:
@@ -501,6 +575,8 @@ def send_document_reminder(
         })
         reminder_id = result.fetchone()[0]
 
+    doc_names_requested = [d["document"] for d in docs_to_request]
+
     data = {
         "reminder_id": reminder_id,
         "loan_id": loan_id,
@@ -515,11 +591,14 @@ def send_document_reminder(
             "phone": loan["lo_phone"],
         },
         "reminder_type": reminder_type,
-        "documents_requested": [d["document"] for d in docs_to_request],
+        "documents_requested": doc_names_requested,
         "document_details": docs_to_request,
         "status": "sent",
         "sent_at": datetime.now().isoformat(),
     }
+
+    if sms_result:
+        data["sms_message_id"] = sms_result.get("id")
 
     return ToolResult.success(
         data=data,

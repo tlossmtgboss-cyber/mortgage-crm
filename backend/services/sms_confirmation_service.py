@@ -496,38 +496,34 @@ class SMSConfirmationService:
     async def _send_via_http(
         self, to_number: str, message: str
     ) -> Dict[str, Any]:
-        """Fallback: send SMS via Telnyx HTTP API (no SDK dependency)."""
+        """Fallback: send SMS via the centralized async chokepoint.
+
+        Bypasses compliance because the caller (_send_sms_to_number)
+        already ran the TCPA consent check.
+        """
         try:
-            import httpx
+            from telephony.sms import send_sms_verified_async
 
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                payload = {
-                    "from": self.from_number,
-                    "to": to_number,
-                    "text": message,
-                    "messaging_profile_id": self.messaging_profile_id,
-                }
-                response = await client.post(
-                    "https://api.telnyx.com/v2/messages",
-                    headers={
-                        "Authorization": f"Bearer {self.api_key}",
-                        "Content-Type": "application/json",
-                    },
-                    json=payload,
-                )
+            result = await send_sms_verified_async(
+                to=to_number,
+                from_=self.from_number,
+                text=message,
+                messaging_profile_id=self.messaging_profile_id or None,
+                api_key=self.api_key,
+                bypass_compliance=True,  # Already checked by caller
+            )
 
-                if response.status_code in (200, 201, 202):
-                    data = response.json()
-                    msg_id = data.get("data", {}).get("id", "unknown")
-                    logger.info(f"SMS sent via HTTP to {to_number}, message_id: {msg_id}")
-                    return {"sent": True, "message_id": str(msg_id), "error": None}
-                else:
-                    error = response.text[:500]
-                    logger.error(f"SMS HTTP send failed: {response.status_code} - {error}")
-                    return {"sent": False, "message_id": None, "error": f"HTTP {response.status_code}"}
+            if result.get("status") == "sent":
+                msg_id = result.get("id", "unknown")
+                logger.info(f"SMS sent via chokepoint to {to_number}, message_id: {msg_id}")
+                return {"sent": True, "message_id": str(msg_id), "error": None}
+            else:
+                reason = result.get("reason", "unknown")
+                logger.error(f"SMS send failed: {reason}")
+                return {"sent": False, "message_id": None, "error": reason}
 
         except Exception as e:
-            logger.error(f"SMS HTTP send error to {to_number}: {e}")
+            logger.error(f"SMS send error to {to_number}: {e}")
             return {"sent": False, "message_id": None, "error": str(e)}
 
 

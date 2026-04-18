@@ -69,8 +69,15 @@ STATE_TIMEZONE_MAP = {
     "WI": "America/Chicago", "WY": "America/Denver", "DC": "America/New_York",
 }
 
-# In-memory campaign cancellation flags (campaign_id -> True means cancelled)
+# In-memory campaign cancellation flags (campaign_id -> True means cancelled).
+# Kept as a fast-path cache; the DB status column is the authoritative source
+# so cancellation survives server restarts.
 _cancelled_campaigns: Dict[str, bool] = {}
+
+# How often (in messages) to check the DB for cancellation during execution.
+# The in-memory dict is checked on every iteration; the DB is only hit every
+# N messages to avoid excessive queries during large campaigns.
+_CANCEL_CHECK_INTERVAL = 50
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -359,33 +366,25 @@ def _increment_campaign_counter(db: Session, campaign_id: str, column: str):
 # ---------------------------------------------------------------------------
 
 async def _send_sms_telnyx(to: str, body: str) -> Optional[str]:
-    """Send a single SMS via Telnyx. Returns the Telnyx message_id on success."""
-    api_key = TELNYX_API_KEY
-    if not api_key:
-        logger.error("TELNYX_API_KEY not configured")
-        return None
+    """Send a single SMS via the centralized Telnyx chokepoint.
 
-    payload = {
-        "to": to,
-        "from": TELNYX_FROM_NUMBER,
-        "text": body,
-        "messaging_profile_id": TELNYX_MESSAGING_PROFILE_ID,
-    }
+    Returns the Telnyx message_id on success, None on failure/block.
+    Note: bulk campaign sends already run compliance in the caller loop,
+    but the chokepoint provides defense-in-depth.
+    """
     try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            resp = await client.post(
-                "https://api.telnyx.com/v2/messages",
-                json=payload,
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-            )
-        if resp.status_code >= 400:
-            logger.error("Telnyx send failed %s: %s", resp.status_code, resp.text[:300])
-            return None
-        data = resp.json()
-        return data.get("data", {}).get("id")
+        from telephony.sms import send_sms_verified_async
+
+        result = await send_sms_verified_async(
+            to=to,
+            from_=TELNYX_FROM_NUMBER,
+            text=body,
+            messaging_profile_id=TELNYX_MESSAGING_PROFILE_ID,
+        )
+        if result.get("status") == "sent":
+            return result.get("id")
+        logger.warning("Bulk SMS to ...%s blocked/failed: %s", to[-4:] if to else "?", result.get("reason", ""))
+        return None
     except Exception as e:
         logger.exception("Telnyx SMS send error: %s", e)
         return None
@@ -435,11 +434,26 @@ async def _execute_campaign(campaign_id: str, org_id: int, user_id: int):
     dnc_skipped_count = 0
     quiet_hours_skipped = 0
 
+    messages_processed = 0
     for row in leads:
-        # Check cancellation
+        # Check cancellation — fast path via in-memory cache
         if _cancelled_campaigns.get(campaign_id):
-            logger.info("Campaign %s cancelled, stopping after %d/%d", campaign_id, sent_count, total)
+            logger.info("Campaign %s cancelled (in-memory), stopping after %d/%d", campaign_id, sent_count, total)
             break
+
+        # Check cancellation — persistent DB check every N messages
+        # so cancellation survives server restarts / deploys
+        if messages_processed > 0 and messages_processed % _CANCEL_CHECK_INTERVAL == 0:
+            with get_db_with_tenant(org_id) as db:
+                cancel_row = db.execute(
+                    text("SELECT status FROM bulk_sms_campaigns WHERE id = :cid"),
+                    {"cid": campaign_id},
+                ).fetchone()
+                if cancel_row and cancel_row.status == "cancelled":
+                    _cancelled_campaigns[campaign_id] = True  # update cache
+                    logger.info("Campaign %s cancelled (DB), stopping after %d/%d", campaign_id, sent_count, total)
+                    break
+        messages_processed += 1
 
         lead = dict(zip(columns, row))
         phone_raw = lead.get("phone", "")
@@ -510,8 +524,17 @@ async def _execute_campaign(campaign_id: str, org_id: int, user_id: int):
         # 6. Rate limit: 1 msg/sec for 10DLC compliance
         await asyncio.sleep(1.0)
 
-    # Finalize campaign
-    final_status = "cancelled" if _cancelled_campaigns.get(campaign_id) else "completed"
+    # Finalize campaign — check both in-memory flag and DB for cancellation
+    was_cancelled = _cancelled_campaigns.get(campaign_id)
+    if not was_cancelled:
+        with get_db_with_tenant(org_id) as db:
+            status_row = db.execute(
+                text("SELECT status FROM bulk_sms_campaigns WHERE id = :cid"),
+                {"cid": campaign_id},
+            ).fetchone()
+            if status_row and status_row.status == "cancelled":
+                was_cancelled = True
+    final_status = "cancelled" if was_cancelled else "completed"
     with get_db_with_tenant(org_id) as db:
         # Write final stats definitively (incremental counters may have raced)
         try:
@@ -678,7 +701,7 @@ async def get_campaign_status(
             SELECT
                 id, name, status, message_template,
                 estimated_recipients, total_recipients,
-                sent_count, failed_count, opted_out_count,
+                sent_count, delivered_count, failed_count, opted_out_count,
                 dnc_skipped_count, quiet_hours_skipped,
                 scheduled_at, created_at, completed_at,
                 user_id
@@ -699,6 +722,7 @@ async def get_campaign_status(
         "estimated_recipients": row.estimated_recipients,
         "total_recipients": row.total_recipients or 0,
         "sent": row.sent_count or 0,
+        "delivered": row.delivered_count or 0,
         "failed": row.failed_count or 0,
         "opted_out_skipped": row.opted_out_count or 0,
         "dnc_skipped": row.dnc_skipped_count or 0,
@@ -725,7 +749,7 @@ async def list_campaigns(
         text("""
             SELECT
                 id, name, status,
-                estimated_recipients, sent_count, failed_count,
+                estimated_recipients, sent_count, delivered_count, failed_count,
                 opted_out_count, dnc_skipped_count,
                 scheduled_at, created_at, completed_at
             FROM bulk_sms_campaigns
@@ -749,6 +773,7 @@ async def list_campaigns(
             "status": r.status,
             "estimated_recipients": r.estimated_recipients,
             "sent": r.sent_count or 0,
+            "delivered": r.delivered_count or 0,
             "failed": r.failed_count or 0,
             "opted_out_skipped": r.opted_out_count or 0,
             "dnc_skipped": r.dnc_skipped_count or 0,
@@ -790,13 +815,13 @@ async def cancel_campaign(
             detail=f"Campaign is already {row.status} and cannot be cancelled",
         )
 
-    # Set the cancellation flag so the background loop stops
+    # Set the cancellation flag so the background loop stops (fast path)
     _cancelled_campaigns[campaign_id] = True
 
-    # If the campaign was only scheduled (not yet running), mark it directly
-    if row.status in ("pending", "scheduled"):
-        _update_campaign_status(db, campaign_id, "cancelled")
-    # If sending, the background loop will pick up the flag and finalize
+    # Always persist cancellation to the DB so it survives server restarts.
+    # For "sending" campaigns, the execution loop will detect this on its
+    # next DB check interval and stop gracefully.
+    _update_campaign_status(db, campaign_id, "cancelled")
 
     return {
         "campaign_id": campaign_id,
@@ -829,6 +854,7 @@ def _ensure_tables(db: Session):
                 estimated_recipients INTEGER DEFAULT 0,
                 total_recipients INTEGER DEFAULT 0,
                 sent_count INTEGER DEFAULT 0,
+                delivered_count INTEGER DEFAULT 0,
                 failed_count INTEGER DEFAULT 0,
                 opted_out_count INTEGER DEFAULT 0,
                 dnc_skipped_count INTEGER DEFAULT 0,
@@ -865,6 +891,10 @@ def _ensure_tables(db: Session):
         db.execute(text("""
             CREATE INDEX IF NOT EXISTS ix_bulk_sms_sends_campaign
             ON bulk_sms_sends (campaign_id)
+        """))
+        db.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_bulk_sms_sends_telnyx_msg
+            ON bulk_sms_sends (telnyx_message_id)
         """))
         db.commit()
         logger.info("Bulk SMS campaign tables verified")

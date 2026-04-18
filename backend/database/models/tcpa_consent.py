@@ -44,6 +44,14 @@ from db import Base
 
 
 class TCPAConsent(Base):
+    """FCC 1:1 consent certificate storage.
+
+    DEPRECATION NOTE: This is ONE of 6+ overlapping consent sources. For
+    authoritative SMS consent decisions, use:
+        from services.sms_consent_resolver import resolve_consent
+    The resolver checks this table along with sms_consent, sms_opt_outs,
+    smart_docs_consent_records, channel_preferences, and borrower_profiles.
+    """
     __tablename__ = "tcpa_consents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -60,6 +68,7 @@ class TCPAConsent(Base):
         nullable=False,
     )  # "lead", "borrower", "referral_partner"
     phone_number = Column(String(20), nullable=False, index=True)
+    phone_number_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
 
     # ------------------------------------------------------------------
     # Consent details

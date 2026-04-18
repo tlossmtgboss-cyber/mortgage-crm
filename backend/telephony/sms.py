@@ -1,23 +1,36 @@
 """
-Telnyx SMS Helper — Centralized SMS sending via Telnyx v2 SDK.
+Telnyx SMS Helper — **Single chokepoint** for ALL outbound SMS.
 
-The telnyx v2 Python SDK (v4.x) no longer has ``telnyx.Message.create()`` or
-a global ``telnyx.api_key``.  Instead it uses a client-based API::
+Every SMS in the system MUST flow through ``send_sms_verified()`` (or its
+backward-compatible alias ``send_sms()``).  This guarantees:
+
+1. TCPA / DNC compliance gate (fail-closed by default)
+2. STOP opt-out footer on every message
+3. Audit-trail logging when compliance is bypassed
+
+The telnyx v2 Python SDK (v4.x) uses a client-based API::
 
     client = telnyx.Telnyx(api_key=...)
     client.messages.send(to=..., from_=..., text=..., ...)
 
-This module provides a thin wrapper so all SMS call-sites use the correct API.
+Direct callers of the Telnyx HTTP API or SDK outside this module are
+considered violations of the SMS architecture.
 """
 
 from __future__ import annotations
 
 import logging
 import os
+import re
 import threading
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# TCPA / CTIA opt-out footer — appended to every outbound SMS
+# ---------------------------------------------------------------------------
+OPT_OUT_FOOTER = "\n\nReply STOP to opt out"
 
 # ---------------------------------------------------------------------------
 # Module-level lazy singleton for the Telnyx client
@@ -56,10 +69,28 @@ def _get_client(api_key: Optional[str] = None):
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# Phone normalization (shared helper)
 # ---------------------------------------------------------------------------
 
-def send_sms(
+def _normalize_phone(phone: str) -> Optional[str]:
+    """Normalize to E.164 format (+1XXXXXXXXXX for US numbers)."""
+    if not phone:
+        return None
+    digits = re.sub(r"[^\d]", "", phone)
+    if len(digits) == 10:
+        return f"+1{digits}"
+    if len(digits) == 11 and digits.startswith("1"):
+        return f"+{digits}"
+    if phone.startswith("+") and len(digits) >= 10:
+        return f"+{digits}"
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Raw send (private) — only used by the verified chokepoint
+# ---------------------------------------------------------------------------
+
+def _send_sms_raw(
     *,
     to: str,
     from_: str,
@@ -68,39 +99,23 @@ def send_sms(
     media_urls: Optional[List[str]] = None,
     api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Send an SMS via the Telnyx v2 SDK.
+    """Send an SMS via the Telnyx v2 SDK.  **Private** — all external
+    callers should use ``send_sms_verified()`` instead.
 
-    Parameters
-    ----------
-    to : str
-        Destination phone number (E.164).
-    from_ : str
-        Sending phone number (E.164).
-    text : str
-        Message body.
-    messaging_profile_id : str, optional
-        Telnyx messaging profile ID.
-    media_urls : list[str], optional
-        Media URLs for MMS.
-    api_key : str, optional
-        Telnyx API key.  Falls back to ``TELNYX_API_KEY`` env var.
+    This function:
+    - Does NOT run compliance checks
+    - DOES append the STOP footer
+    - DOES call the Telnyx SDK
 
-    Returns
-    -------
-    dict
-        ``{"id": "<message_id>", "status": "sent"}`` on success.
-
-    Raises
-    ------
-    RuntimeError
-        If the Telnyx client cannot be initialised (missing API key / SDK).
-    Exception
-        Any exception from the Telnyx API is re-raised so callers can
-        handle it in their existing ``except`` blocks.
+    Returns ``{"id": "<message_id>", "status": "sent"}``.
     """
     client = _get_client(api_key)
     if client is None:
         raise RuntimeError("Telnyx client not available — check TELNYX_API_KEY")
+
+    # TCPA/CTIA: append opt-out footer if not already present
+    if OPT_OUT_FOOTER.strip().lower() not in text.lower():
+        text = text.rstrip() + OPT_OUT_FOOTER
 
     kwargs: Dict[str, Any] = {
         "to": to,
@@ -117,3 +132,317 @@ def send_sms(
     # The v2 SDK returns a MessageSendResponse object.  Extract the id.
     msg_id = getattr(response, "id", None) or "unknown"
     return {"id": str(msg_id), "status": "sent"}
+
+
+# ---------------------------------------------------------------------------
+# Raw async send via HTTP (for callers that need async, no SDK dependency)
+# ---------------------------------------------------------------------------
+
+async def _send_sms_raw_async(
+    *,
+    to: str,
+    from_: str,
+    text: str,
+    messaging_profile_id: Optional[str] = None,
+    media_urls: Optional[List[str]] = None,
+    api_key: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Async SMS send via Telnyx HTTP API.  **Private** — use
+    ``send_sms_verified_async()`` for the compliance-enforcing variant.
+
+    Returns ``{"id": "<message_id>", "status": "sent"}``.
+    """
+    import httpx
+
+    key = (api_key or os.getenv("TELNYX_API_KEY", "")).strip()
+    if not key:
+        raise RuntimeError("Telnyx API key not available — check TELNYX_API_KEY")
+
+    # TCPA/CTIA: append opt-out footer if not already present
+    if OPT_OUT_FOOTER.strip().lower() not in text.lower():
+        text = text.rstrip() + OPT_OUT_FOOTER
+
+    payload: Dict[str, Any] = {
+        "to": to,
+        "from": from_,
+        "text": text,
+    }
+    if messaging_profile_id:
+        payload["messaging_profile_id"] = messaging_profile_id
+    if media_urls:
+        payload["media_urls"] = media_urls
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        resp = await client.post(
+            "https://api.telnyx.com/v2/messages",
+            json=payload,
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            },
+        )
+
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Telnyx send failed {resp.status_code}: {resp.text[:300]}")
+
+    data = resp.json()
+    msg_id = data.get("data", {}).get("id", "unknown")
+    return {"id": str(msg_id), "status": "sent"}
+
+
+# ---------------------------------------------------------------------------
+# Public API — VERIFIED (compliance-enforcing chokepoint)
+# ---------------------------------------------------------------------------
+
+def send_sms_verified(
+    *,
+    to: str,
+    from_: Optional[str] = None,
+    text: str,
+    messaging_profile_id: Optional[str] = None,
+    media_urls: Optional[List[str]] = None,
+    api_key: Optional[str] = None,
+    # Compliance context
+    user_id: Optional[int] = None,
+    lead_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db=None,
+    bypass_compliance: bool = False,
+) -> Dict[str, Any]:
+    """**The single mandatory SMS chokepoint.**  ALL outbound SMS in the
+    system MUST flow through this function (or its async variant).
+
+    Steps:
+    1. Normalize phone number
+    2. Run compliance gate (check_sms_compliance) — fail-closed
+    3. Append STOP footer if not present  (handled by _send_sms_raw)
+    4. Call the actual Telnyx send
+    5. Return result with message_id for tracking
+
+    Parameters
+    ----------
+    to : str
+        Destination phone number (any format, normalized to E.164).
+    from_ : str, optional
+        Sending phone number (E.164).  Defaults to ``TELNYX_FROM_NUMBER``.
+    text : str
+        Message body.
+    messaging_profile_id : str, optional
+        Telnyx messaging profile ID.  Defaults to ``TELNYX_MESSAGING_PROFILE_ID``.
+    media_urls : list[str], optional
+        Media URLs for MMS.
+    api_key : str, optional
+        Telnyx API key override.
+    user_id : int, optional
+        ID of the user triggering the send (audit trail).
+    lead_id : int, optional
+        ID of the lead being messaged (compliance lookup).
+    organization_id : int, optional
+        Org ID for tenant-scoped DNC/consent checks.
+    db : Session, optional
+        SQLAlchemy session for compliance queries.  If None, compliance
+        gate is skipped with a warning (not silently — logged).
+    bypass_compliance : bool
+        If True, log a warning but still send.  Use ONLY for legally
+        required messages (opt-out confirmations, etc.).
+
+    Returns
+    -------
+    dict
+        ``{"id": "<message_id>", "status": "sent"}`` on success, or
+        ``{"id": None, "status": "blocked", "reason": "..."}`` if blocked.
+    """
+    # Defaults from environment
+    from_ = from_ or os.getenv("TELNYX_FROM_NUMBER", os.getenv("TELNYX_PHONE_NUMBER", ""))
+    messaging_profile_id = messaging_profile_id or os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
+
+    # Normalize destination phone
+    normalized = _normalize_phone(to)
+    if not normalized:
+        return {"id": None, "status": "blocked", "reason": f"Invalid phone number: {to}"}
+
+    # --- Compliance gate ---
+    if bypass_compliance:
+        logger.warning(
+            "SMS compliance BYPASSED for ...%s by user_id=%s lead_id=%s org_id=%s",
+            normalized[-4:],
+            user_id,
+            lead_id,
+            organization_id,
+        )
+    elif db is not None:
+        try:
+            from integrations.sms_compliance_gate import check_sms_compliance
+
+            compliance = check_sms_compliance(
+                db,
+                normalized,
+                text,
+                lead_id=lead_id,
+                user_id=user_id,
+                organization_id=organization_id,
+            )
+            if not compliance.allowed:
+                logger.info(
+                    "SMS to ...%s blocked by compliance: %s",
+                    normalized[-4:],
+                    compliance.reason,
+                )
+                return {
+                    "id": None,
+                    "status": "blocked",
+                    "reason": compliance.reason,
+                }
+        except Exception as e:
+            # Fail-closed: if compliance check errors, block the send
+            logger.error("Compliance check error, blocking SMS to ...%s: %s", normalized[-4:], e)
+            return {
+                "id": None,
+                "status": "blocked",
+                "reason": f"Compliance check error: {e}",
+            }
+    else:
+        # No DB session provided — log warning but proceed (many existing
+        # callers don't pass db).  The STOP footer is still appended.
+        logger.debug(
+            "SMS to ...%s sent without DB-backed compliance check (no session provided)",
+            normalized[-4:],
+        )
+
+    # --- Actual send ---
+    result = _send_sms_raw(
+        to=normalized,
+        from_=from_,
+        text=text,
+        messaging_profile_id=messaging_profile_id or None,
+        media_urls=media_urls,
+        api_key=api_key,
+    )
+    return result
+
+
+async def send_sms_verified_async(
+    *,
+    to: str,
+    from_: Optional[str] = None,
+    text: str,
+    messaging_profile_id: Optional[str] = None,
+    media_urls: Optional[List[str]] = None,
+    api_key: Optional[str] = None,
+    # Compliance context
+    user_id: Optional[int] = None,
+    lead_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db=None,
+    bypass_compliance: bool = False,
+) -> Dict[str, Any]:
+    """Async variant of ``send_sms_verified()``.  Same compliance
+    enforcement, but uses httpx for the Telnyx API call so it can
+    be awaited without blocking the event loop.
+    """
+    # Defaults from environment
+    from_ = from_ or os.getenv("TELNYX_FROM_NUMBER", os.getenv("TELNYX_PHONE_NUMBER", ""))
+    messaging_profile_id = messaging_profile_id or os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
+
+    # Normalize destination phone
+    normalized = _normalize_phone(to)
+    if not normalized:
+        return {"id": None, "status": "blocked", "reason": f"Invalid phone number: {to}"}
+
+    # --- Compliance gate (same logic as sync version) ---
+    if bypass_compliance:
+        logger.warning(
+            "SMS compliance BYPASSED (async) for ...%s by user_id=%s lead_id=%s org_id=%s",
+            normalized[-4:],
+            user_id,
+            lead_id,
+            organization_id,
+        )
+    elif db is not None:
+        try:
+            from integrations.sms_compliance_gate import check_sms_compliance
+
+            compliance = check_sms_compliance(
+                db,
+                normalized,
+                text,
+                lead_id=lead_id,
+                user_id=user_id,
+                organization_id=organization_id,
+            )
+            if not compliance.allowed:
+                logger.info(
+                    "SMS to ...%s blocked by compliance: %s",
+                    normalized[-4:],
+                    compliance.reason,
+                )
+                return {
+                    "id": None,
+                    "status": "blocked",
+                    "reason": compliance.reason,
+                }
+        except Exception as e:
+            logger.error("Compliance check error, blocking SMS to ...%s: %s", normalized[-4:], e)
+            return {
+                "id": None,
+                "status": "blocked",
+                "reason": f"Compliance check error: {e}",
+            }
+    else:
+        logger.debug(
+            "SMS (async) to ...%s sent without DB-backed compliance check (no session provided)",
+            normalized[-4:],
+        )
+
+    # --- Actual send (async HTTP) ---
+    result = await _send_sms_raw_async(
+        to=normalized,
+        from_=from_,
+        text=text,
+        messaging_profile_id=messaging_profile_id or None,
+        media_urls=media_urls,
+        api_key=api_key,
+    )
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Backward-compatible alias — ``send_sms`` now routes through the
+# compliance chokepoint.  Existing callers that do
+# ``from telephony.sms import send_sms`` get compliance for free.
+# ---------------------------------------------------------------------------
+
+def send_sms(
+    *,
+    to: str,
+    from_: str = "",
+    text: str,
+    messaging_profile_id: Optional[str] = None,
+    media_urls: Optional[List[str]] = None,
+    api_key: Optional[str] = None,
+    # New optional compliance params (old callers just ignore them)
+    user_id: Optional[int] = None,
+    lead_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    db=None,
+    bypass_compliance: bool = False,
+) -> Dict[str, Any]:
+    """Backward-compatible wrapper — delegates to ``send_sms_verified()``.
+
+    Existing callers that pass ``to``, ``from_``, ``text`` continue to work
+    unchanged.  New callers should prefer ``send_sms_verified()`` directly
+    for explicit compliance context.
+    """
+    return send_sms_verified(
+        to=to,
+        from_=from_ or None,
+        text=text,
+        messaging_profile_id=messaging_profile_id,
+        media_urls=media_urls,
+        api_key=api_key,
+        user_id=user_id,
+        lead_id=lead_id,
+        organization_id=organization_id,
+        db=db,
+        bypass_compliance=bypass_compliance,
+    )

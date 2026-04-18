@@ -556,10 +556,10 @@ class StageChecklistService:
         if len(new_docs) > 5:
             doc_summary += f" (+{len(new_docs) - 5} more)"
 
-        # SMS
+        # SMS (via centralized chokepoint with compliance)
         if phone:
             try:
-                from telephony.sms import send_sms as telnyx_send_sms
+                from telephony.sms import send_sms_verified
 
                 message = (
                     f"Hi {name}, your loan has moved to {new_stage}. "
@@ -570,18 +570,28 @@ class StageChecklistService:
                 if len(message) > 1600:
                     message = message[:1597] + "..."
 
-                telnyx_send_sms(
+                result = send_sms_verified(
                     to=phone,
                     from_=TELNYX_FROM_NUMBER,
                     text=message,
                     messaging_profile_id=TELNYX_MESSAGING_PROFILE,
+                    db=self.db,
+                    lead_id=getattr(loan, "lead_id", None),
+                    organization_id=getattr(loan, "organization_id", None),
                 )
-                any_sent = True
-                logger.info(
-                    "Stage-change SMS sent to %s for loan=%s",
-                    phone[-4:],
-                    loan.id,
-                )
+                if result.get("status") == "sent":
+                    any_sent = True
+                    logger.info(
+                        "Stage-change SMS sent to %s for loan=%s",
+                        phone[-4:],
+                        loan.id,
+                    )
+                else:
+                    logger.warning(
+                        "Stage-change SMS blocked for loan=%s: %s",
+                        loan.id,
+                        result.get("reason", "unknown"),
+                    )
             except Exception as e:
                 logger.error("SMS notification failed for loan=%s: %s", loan.id, e)
 

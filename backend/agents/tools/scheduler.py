@@ -5,9 +5,12 @@ Tools for the Smart Scheduler Agent handling appointments and calendar managemen
 12 tools for scheduling, availability, reminders, calendar optimization, and analytics.
 """
 
+import logging
 from datetime import datetime, timedelta, date
 from typing import Optional, List, Dict, Any
 from sqlalchemy import text
+
+logger = logging.getLogger(__name__)
 
 from .base import (
     mortgage_tool,
@@ -562,7 +565,9 @@ def send_appointment_reminder(
     appointment = execute_single("""
         SELECT a.id, a.title, a.start_time, a.appointment_type,
                a.contact_id, a.contact_email, a.contact_phone,
-               l.first_name, l.email as lead_email, l.phone as lead_phone
+               a.assigned_to,
+               l.first_name, l.email as lead_email, l.phone as lead_phone,
+               l.organization_id as lead_org_id
         FROM appointments a
         LEFT JOIN leads l ON a.contact_id = l.id::text
         WHERE a.id = :id OR a.appointment_id = :id
@@ -582,11 +587,64 @@ def send_appointment_reminder(
 
     default_message = f"Hi {contact_name}, this is a reminder about your appointment: {appointment.get('title')} on {time_display}."
 
+    reminder_message = custom_message or default_message
+
     sent_to = {}
+    sms_error = None
     if channel in ["email", "both"] and contact_email:
         sent_to["email"] = contact_email
     if channel in ["sms", "both"] and contact_phone:
-        sent_to["sms"] = contact_phone
+        # TCPA/DNC compliance check before sending SMS
+        from .notifications import _check_sms_compliance
+        compliance_error = _check_sms_compliance(contact_phone)
+        if compliance_error:
+            logger.warning(f"SMS skipped for appointment reminder {appointment_id} (compliance): {compliance_error.message}")
+            sms_error = compliance_error.message
+        else:
+            # Actually send the SMS via the mandatory chokepoint
+            try:
+                from telephony.sms import send_sms_verified
+
+                # Extract context IDs for audit trail
+                lead_id = None
+                try:
+                    lead_id = int(appointment.get("contact_id")) if appointment.get("contact_id") else None
+                except (ValueError, TypeError):
+                    pass
+                user_id = appointment.get("assigned_to")
+                organization_id = appointment.get("lead_org_id")
+
+                sms_result = send_sms_verified(
+                    to=contact_phone,
+                    text=reminder_message,
+                    user_id=user_id,
+                    lead_id=lead_id,
+                    organization_id=organization_id,
+                    bypass_compliance=True,  # Already checked above
+                )
+
+                if sms_result.get("status") == "blocked":
+                    reason = sms_result.get("reason", "Unknown")
+                    logger.warning(
+                        "SMS blocked for appointment reminder %s: %s",
+                        appointment_id, reason,
+                    )
+                    sms_error = f"SMS blocked: {reason}"
+                elif sms_result.get("id"):
+                    sent_to["sms"] = contact_phone
+                    logger.info(
+                        "SMS reminder sent for appointment %s to ...%s (msg_id=%s)",
+                        appointment_id, contact_phone[-4:], sms_result["id"],
+                    )
+                else:
+                    sms_error = "SMS send returned no message ID"
+                    logger.warning(
+                        "SMS send for appointment %s returned unexpected result: %s",
+                        appointment_id, sms_result,
+                    )
+            except Exception as e:
+                logger.exception("Failed to send SMS reminder for appointment %s: %s", appointment_id, e)
+                sms_error = f"SMS send failed: {e}"
 
     data = {
         "appointment_id": appointment_id,
@@ -594,10 +652,12 @@ def send_appointment_reminder(
         "appointment_time": time_display,
         "channel": channel,
         "sent_to": sent_to,
-        "message": custom_message or default_message,
+        "message": reminder_message,
         "sent_at": datetime.now().isoformat(),
         "status": "sent" if sent_to else "no_contact_info",
     }
+    if sms_error:
+        data["sms_error"] = sms_error
 
     return ToolResult.success(
         data=data,

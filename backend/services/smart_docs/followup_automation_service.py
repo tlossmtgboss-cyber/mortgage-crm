@@ -1234,25 +1234,21 @@ class FollowupAutomationService:
         rendered = self._render_template(template_slug, variables)
         message_body = rendered["body"]
 
-        # Send via Telnyx
+        # Send via centralized SMS chokepoint (with compliance)
         try:
-            from telephony.sms import send_sms as telnyx_send_sms
-            telnyx_api_key = os.getenv("TELNYX_API_KEY", "")
-            telnyx_from = os.getenv("TELNYX_FROM_NUMBER", "")
-            messaging_profile = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
+            from telephony.sms import send_sms_verified
 
-            if not telnyx_api_key or not telnyx_from:
-                logger.warning("Telnyx not configured, SMS not sent for campaign %d", campaign_id)
-                return {"status": "failed", "error": "SMS service not configured"}
-
-            telnyx_send_sms(
+            result = send_sms_verified(
                 to=borrower_phone,
-                from_=telnyx_from,
                 text=message_body,
-                messaging_profile_id=messaging_profile or None,
-                api_key=telnyx_api_key,
+                db=self.db,
             )
-            status = "sent"
+            if result.get("status") == "sent":
+                status = "sent"
+            else:
+                reason = result.get("reason", "blocked")
+                logger.warning("SMS blocked for campaign %d: %s", campaign_id, reason)
+                return {"status": "blocked", "error": reason, "body": message_body}
         except Exception as e:
             logger.exception("SMS send failed for campaign %d", campaign_id)
             return {"status": "failed", "error": str(e), "body": message_body}
