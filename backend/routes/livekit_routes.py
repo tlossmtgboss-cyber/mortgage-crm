@@ -151,5 +151,6 @@ async def livekit_health():
     configured = bool(LIVEKIT_API_KEY and LIVEKIT_API_SECRET and LIVEKIT_URL)
     return {
         "configured": configured,
+        "url": LIVEKIT_URL if configured else None,
         "agent_name": AGENT_NAME,
     }
