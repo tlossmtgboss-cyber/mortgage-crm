@@ -18,7 +18,7 @@ from typing import Optional
 
 from fastapi import (
     APIRouter, WebSocket, WebSocketDisconnect,
-    Depends, HTTPException, UploadFile, File, Form,
+    Depends, HTTPException, Request, UploadFile, File, Form,
 )
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
@@ -39,15 +39,14 @@ _security = HTTPBearer(auto_error=False)
 
 async def _require_auth(
     credentials: HTTPAuthorizationCredentials = Depends(_security),
+    request: Request = None,
     db: Session = Depends(get_db),
 ):
     """Authenticate the request and return the current user."""
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
     from auth.dependencies import get_current_user_flexible
-    user = await get_current_user_flexible(
-        token=credentials.credentials, request=None, db=db,
-    )
+    user = await get_current_user_flexible(request, db)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid token")
     return user
