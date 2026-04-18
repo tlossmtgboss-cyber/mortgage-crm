@@ -219,7 +219,7 @@ async def handle_telnyx_webhook(
     try:
         if event_type == TelnyxEventType.CALL_INITIATED:
             # Inbound calls → route to Aria via LiveKit SIP bridge
-            if hasattr(event, "direction") and event.direction == "incoming":
+            if hasattr(event, "direction") and event.direction == "inbound":
                 if event.from_number and event.call_control_id:
                     try:
                         await _route_inbound_to_livekit(event.call_control_id, event.from_number, db)
