@@ -98,6 +98,7 @@ pydantic==2.12.4
 pydantic_core==2.41.5
 Pygments==2.19.2
 PyJWT==2.10.1
+PyNaCl==1.6.2
 types-protobuf==7.34.1.20260408
 pyparsing==3.2.5
 pypdf==6.6.2
