@@ -207,6 +207,11 @@ def _ensure_tables(db: Session):
             db.execute(text(f"""
                 ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS {col} {col_type}
             """))
+        # Clean up rows where sender_name was set to a numeric ID
+        db.execute(text("""
+            UPDATE sms_panel_messages SET sender_name = ''
+            WHERE sender_name ~ '^[0-9]+$'
+        """))
         db.commit()
     except Exception as e:
         db.rollback()
@@ -221,6 +226,28 @@ def _check_tables(db: Session):
     if not _tables_checked:
         _ensure_tables(db)
         _tables_checked = True
+
+
+def _resolve_contact_name(db: Session, phone: str, org_id: Optional[int]) -> str:
+    """Look up the contact/lead name from their phone number."""
+    digits = "".join(c for c in phone if c.isdigit())[-10:]
+    if not digits:
+        return ""
+    pattern = f"%{digits}"
+    try:
+        row = db.execute(text("""
+            SELECT first_name, last_name FROM leads
+            WHERE REPLACE(REPLACE(REPLACE(COALESCE(phone, ''), '+', ''), '-', ''), ' ', '') LIKE :pattern
+            AND (:org_id IS NULL OR organization_id = :org_id)
+            LIMIT 1
+        """), {"pattern": pattern, "org_id": org_id}).fetchone()
+        if row:
+            name = f"{row[0] or ''} {row[1] or ''}".strip()
+            if name:
+                return name
+    except Exception:
+        pass
+    return ""
 
 
 # ─── GET /conversations/{phone} ──────────────────────────────────────────────
@@ -243,6 +270,9 @@ async def get_conversation(
     org_id = _get_org_id(current_user)
     normalized = _normalize_phone(phone)
     like_pattern = f"%{normalized[-10:]}"  # match last 10 digits
+
+    # Resolve contact name from phone number for display
+    contact_display_name = _resolve_contact_name(db, normalized, org_id)
 
     # Build optional cursor filter
     before_filter = ""
@@ -339,11 +369,17 @@ async def get_conversation(
             if not resolved_urls:
                 resolved_urls = original_urls
 
+            raw_sender = r[3] or ""
+            if r[1] == "inbound":
+                sender_display = contact_display_name or ("Customer" if (not raw_sender or raw_sender.isdigit()) else raw_sender)
+            else:
+                sender_display = raw_sender if (raw_sender and not raw_sender.isdigit()) else "System"
+
             messages.append({
                 "id": r[0],
                 "direction": r[1],
                 "body": r[2] or "",
-                "senderName": r[3] or ("System" if r[1] == "outbound" else "Customer"),
+                "senderName": sender_display,
                 "senderRole": r[4],
                 "timestamp": r[7].isoformat() if r[7] else datetime.now(timezone.utc).isoformat(),
                 "status": r[5] or "delivered",
@@ -589,7 +625,7 @@ async def sms_websocket(websocket: WebSocket, phone: str):
 
 async def notify_inbound_sms(
     phone: str, body: str, telnyx_message_id: str = "",
-    org_id: Optional[int] = None,
+    org_id: Optional[int] = None, contact_name: str = "",
 ):
     """
     Called from Telnyx webhook handler to push inbound messages to the panel.
@@ -600,7 +636,7 @@ async def notify_inbound_sms(
         "id": telnyx_message_id or str(uuid.uuid4()),
         "direction": "inbound",
         "body": body,
-        "senderName": "Customer",
+        "senderName": contact_name or "Customer",
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "status": "delivered",
         "mediaUrls": [],
