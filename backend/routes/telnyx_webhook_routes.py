@@ -63,45 +63,28 @@ def _validate_texml_request(request: Request):
 
 
 # =============================================================================
-# Inbound Call Routing — Telnyx answer + LiveKit outbound SIP + Telnyx bridge
+# Inbound Call Routing — Telnyx answer + LiveKit outbound SIP callback
 # =============================================================================
 
-# Pending bridge: maps a room_name to the inbound call_control_id waiting to be bridged.
-# When LiveKit's outbound SIP call arrives back at our Telnyx number, we bridge the
-# two legs so the caller stays on their original call.
-_pending_bridges: dict[str, dict] = {}
-
 ARIA_DID = "+18438838956"
-
-
-def _telnyx_headers():
-    key = os.getenv("TELNYX_API_KEY", "")
-    return {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
-
-
-def _telnyx_action(call_control_id: str, action: str, body: dict | None = None):
-    """Fire a Telnyx Call Control action (synchronous)."""
-    import requests as http_requests
-    url = f"https://api.telnyx.com/v2/calls/{call_control_id}/actions/{action}"
-    resp = http_requests.post(url, headers=_telnyx_headers(), json=body or {}, timeout=10)
-    return resp
 
 
 async def _route_inbound_to_livekit(
     call_control_id: str, from_number: str, to_number: str, db: Session,
 ):
-    """Route an inbound call to Aria via LiveKit outbound SIP + Telnyx bridge.
+    """Route an inbound call to Aria via LiveKit outbound SIP callback.
 
-    LiveKit Cloud inbound SIP trunking returns "No trunk found" for this project,
-    so we use the proven outbound SIP path with a Telnyx bridge for seamless UX:
+    LiveKit Cloud inbound SIP returns "No trunk found" and Telnyx blocks
+    self-calls, so we use the only working path:
 
-    1. Answer the inbound call (caller hears brief silence)
-    2. Create a LiveKit room with inbound metadata
-    3. LiveKit calls our OWN number via outbound SIP trunk → Telnyx
-    4. That creates a second inbound call to our number (detected by _pending_bridges)
-    5. We answer the second call and bridge it with the original caller's call
-    6. Aria agent auto-joins the LiveKit room and talks to the caller
+    1. Answer the inbound call
+    2. Tell the caller they'll get an immediate callback
+    3. Create a LiveKit room with inbound metadata
+    4. LiveKit calls the CALLER's number via outbound SIP trunk
+    5. Hang up the original inbound call
+    6. Caller's phone rings with callback from Aria
     """
+    import requests as http_requests
     from livekit import api as livekit_api
 
     telnyx_key = os.getenv("TELNYX_API_KEY", "")
@@ -117,11 +100,17 @@ async def _route_inbound_to_livekit(
         logger.error("[AriaInbound] LiveKit credentials not set")
         return
 
-    logger.warning(f"[AriaInbound] Routing {from_number} via bridge approach")
+    logger.warning(f"[AriaInbound] Routing {from_number} via callback approach")
+
+    headers = {
+        "Authorization": f"Bearer {telnyx_key}",
+        "Content-Type": "application/json",
+    }
+    base_url = f"https://api.telnyx.com/v2/calls/{call_control_id}/actions"
 
     # Step 1: Answer the inbound call
     try:
-        resp = _telnyx_action(call_control_id, "answer")
+        resp = http_requests.post(f"{base_url}/answer", headers=headers, json={}, timeout=10)
         logger.warning(f"[AriaInbound] Answer: {resp.status_code}")
         if resp.status_code >= 400:
             logger.error(f"[AriaInbound] Answer failed: {resp.text[:300]}")
@@ -130,7 +119,22 @@ async def _route_inbound_to_livekit(
         logger.error(f"[AriaInbound] Answer failed: {e}", exc_info=True)
         return
 
-    # Step 2: Create LiveKit room
+    # Step 2: Tell caller they'll get a callback
+    try:
+        http_requests.post(
+            f"{base_url}/speak",
+            headers=headers,
+            json={
+                "payload": "Hi, this is Aria from Perennia. I'll call you right back in just a moment.",
+                "voice": "female",
+                "language": "en-US",
+            },
+            timeout=10,
+        )
+    except Exception as e:
+        logger.warning(f"[AriaInbound] Speak failed (non-critical): {e}")
+
+    # Step 3: Create LiveKit room and call the caller back
     import hashlib, time as _time
     room_suffix = hashlib.md5(f"{from_number}-{_time.time()}".encode()).hexdigest()[:8]
     room_name = f"aria-inbound-{room_suffix}"
@@ -142,87 +146,37 @@ async def _route_inbound_to_livekit(
             "trigger": "inbound_call",
             "from_number": from_number,
             "to_number": to_number,
-            "telnyx_call_control_id": call_control_id,
         })
         await lk.room.create_room(livekit_api.CreateRoomRequest(
             name=room_name, metadata=room_metadata,
         ))
         logger.warning(f"[AriaInbound] Room created: {room_name}")
 
-        # Step 3: Register pending bridge BEFORE LiveKit calls us back
-        _pending_bridges[room_name] = {
-            "caller_ccid": call_control_id,
-            "from_number": from_number,
-            "created": _time.time(),
-        }
-
-        # Step 4: LiveKit calls our OWN number via outbound SIP trunk.
-        # This creates a second Telnyx call leg that we'll bridge with the caller.
+        # Step 4: LiveKit calls the caller via outbound SIP
         sip_req = livekit_api.CreateSIPParticipantRequest(
             sip_trunk_id=outbound_trunk,
-            sip_call_to=ARIA_DID,
+            sip_call_to=from_number,
             room_name=room_name,
             participant_identity=f"caller-{from_number}",
             participant_name=f"Caller {from_number}",
         )
         sip_result = await lk.sip.create_sip_participant(sip_req)
         logger.warning(
-            f"[AriaInbound] LiveKit calling {ARIA_DID} for bridge, "
+            f"[AriaInbound] LiveKit calling {from_number}, "
             f"room={room_name} sip_call={sip_result.sip_call_id}"
         )
         await lk.aclose()
 
     except Exception as e:
-        logger.error(f"[AriaInbound] Bridge setup failed: {e}", exc_info=True)
-        _pending_bridges.pop(room_name, None)
+        logger.error(f"[AriaInbound] Callback setup failed: {e}", exc_info=True)
 
-
-def _try_bridge_livekit_callback(call_control_id: str, from_number: str) -> bool:
-    """Check if an incoming call is a LiveKit callback needing a bridge.
-
-    Returns True if this call was handled (bridged), False if it's a normal call.
-    """
-    import time as _time
-
-    # Clean up stale entries (older than 30 seconds)
-    stale = [k for k, v in _pending_bridges.items() if _time.time() - v["created"] > 30]
-    for k in stale:
-        _pending_bridges.pop(k, None)
-
-    if not _pending_bridges:
-        return False
-
-    # LiveKit calls our number from our own number via the outbound trunk.
-    # The From will be our DID since that's what the outbound trunk uses.
-    if from_number != ARIA_DID:
-        return False
-
-    # Find the oldest pending bridge
-    oldest_key = min(_pending_bridges, key=lambda k: _pending_bridges[k]["created"])
-    bridge_info = _pending_bridges.pop(oldest_key)
-    caller_ccid = bridge_info["caller_ccid"]
-
-    logger.warning(
-        f"[AriaBridge] LiveKit callback detected — bridging "
-        f"caller={bridge_info['from_number']} room={oldest_key}"
-    )
-
-    # Answer this LiveKit callback leg
+    # Step 5: Hang up the original inbound call after TTS plays
+    await asyncio.sleep(4)
     try:
-        resp = _telnyx_action(call_control_id, "answer")
-        logger.warning(f"[AriaBridge] Answer LiveKit leg: {resp.status_code}")
+        http_requests.post(f"{base_url}/hangup", headers=headers, json={}, timeout=10)
+        logger.warning("[AriaInbound] Original call hung up — callback in progress")
     except Exception as e:
-        logger.error(f"[AriaBridge] Answer LiveKit leg failed: {e}")
-        return True
-
-    # Bridge the original caller leg with the LiveKit leg
-    try:
-        resp = _telnyx_action(caller_ccid, "bridge", {"call_control_id": call_control_id})
-        logger.warning(f"[AriaBridge] Bridge: {resp.status_code} {resp.text[:200]}")
-    except Exception as e:
-        logger.error(f"[AriaBridge] Bridge failed: {e}")
-
-    return True
+        logger.warning(f"[AriaInbound] Hangup failed (non-critical): {e}")
 
 
 # =============================================================================
@@ -312,17 +266,9 @@ async def handle_telnyx_webhook(
     # Route to appropriate handler
     try:
         if event_type == TelnyxEventType.CALL_INITIATED:
-            # Inbound calls → route to Aria via LiveKit outbound SIP + bridge
+            # Inbound calls → route to Aria via LiveKit outbound SIP callback
             if hasattr(event, "direction") and event.direction in ("incoming", "inbound"):
-                # Check if this is a LiveKit callback that needs bridging
-                is_bridge = False
                 if event.from_number and event.call_control_id:
-                    is_bridge = _try_bridge_livekit_callback(
-                        event.call_control_id, event.from_number,
-                    )
-
-                # If not a bridge callback, it's a real inbound call — route to LiveKit
-                if not is_bridge and event.from_number and event.call_control_id:
                     try:
                         await _route_inbound_to_livekit(
                             event.call_control_id, event.from_number,
@@ -330,7 +276,6 @@ async def handle_telnyx_webhook(
                         )
                     except Exception as e:
                         logger.error(f"Inbound routing failed: {e}")
-
                 if idem_key:
                     try:
                         mark_processed(db, idem_key, response_code=200)
@@ -853,8 +798,9 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     "conv_id": _aria_conv_id,
                     "content": message_body,
                 })
+                db.commit()
             except Exception:
-                pass
+                db.rollback()
 
             # Fetch conversation history for context
             _history_rows = db.execute(sa_text("""
@@ -907,7 +853,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 logger.error("aria_sms_intercept: Claude response generation failed: %s", e)
 
             if _reply_text:
-                # Store outbound message
+                # Store outbound message and update conversation state
                 try:
                     db.execute(sa_text("""
                         INSERT INTO sms_ai_conversation_messages
@@ -918,11 +864,6 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                         "conv_id": _aria_conv_id,
                         "content": _reply_text,
                     })
-                except Exception:
-                    pass
-
-                # Update conversation state
-                try:
                     db.execute(sa_text("""
                         UPDATE sms_ai_conversations
                         SET last_message_at = NOW(),
@@ -933,8 +874,10 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                             END
                         WHERE id = :conv_id
                     """), {"conv_id": _aria_conv_id})
-                except Exception:
-                    pass
+                    db.commit()
+                except Exception as e:
+                    db.rollback()
+                    logger.error("aria_sms_intercept: store reply/update state failed: %s", e)
 
                 # Send reply via Telnyx
                 try:
