@@ -115,7 +115,8 @@ async def _route_inbound_to_livekit(
 
     # Step 2: Transfer to LiveKit SIP
     # Use the DID (to_number) as SIP user — LiveKit trunk matches on this number
-    sip_user = to_number or "+18438838956"
+    # Strip '+' from SIP user — some SIP stacks URL-encode it as %2B causing mismatch
+    sip_user = (to_number or "+18438838956").lstrip("+")
     sip_uri = f"sip:{sip_user}@{sip_domain}"
     logger.warning(f"[AriaInbound] Transferring to {sip_uri}")
 
