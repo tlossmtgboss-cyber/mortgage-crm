@@ -286,9 +286,7 @@ def send_sms_verified(
                 "reason": f"Compliance check error: {e}",
             }
     else:
-        # No DB session provided — log warning but proceed (many existing
-        # callers don't pass db).  The STOP footer is still appended.
-        logger.debug(
+        logger.warning(
             "SMS to ...%s sent without DB-backed compliance check (no session provided)",
             normalized[-4:],
         )
@@ -373,7 +371,7 @@ async def send_sms_verified_async(
                 "reason": f"Compliance check error: {e}",
             }
     else:
-        logger.debug(
+        logger.warning(
             "SMS (async) to ...%s sent without DB-backed compliance check (no session provided)",
             normalized[-4:],
         )

@@ -30,7 +30,7 @@ FORBIDDEN_PATTERNS = [
 
 PII_PATTERNS = [
     (r'\b\d{3}-\d{2}-\d{4}\b', "SSN pattern detected"),
-    (r'\b\d{9}\b', "Possible SSN (9 consecutive digits)"),
+    (r'\b\d{3}[- ]\d{2}[- ]\d{4}\b', "Possible SSN (formatted 9-digit pattern)"),
     (r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b', "Credit card number pattern"),
     (r'\b(?:password|passwd|pwd)\s*[:=]\s*\S+', "Password in message"),
     (r'\baccount\s*#?\s*:?\s*\d{6,}\b', "Account number pattern"),

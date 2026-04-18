@@ -593,12 +593,12 @@ def resolve_consent(
         )
 
     except Exception as e:
-        logger.error("Consent resolution failed for %s: %s", phone_number, e)
-        # Fail-open for transactional SMS, but log prominently
+        logger.error("Consent resolution failed for %s: %s", phone_number, e, exc_info=True)
+        # Fail-CLOSED for TCPA safety — block SMS when consent state is unknown
         return ConsentResolution(
-            allowed=True,
+            allowed=False,
             source="error_fallback",
-            reason=f"Consent resolution error (fail-open): {e}",
+            reason=f"Consent resolution error (fail-closed for TCPA safety): {e}",
         )
     finally:
         if owns_session and db:

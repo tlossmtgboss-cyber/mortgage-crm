@@ -130,7 +130,7 @@ def get_current_rates(db: Session, user_id: Optional[int] = None) -> dict:
 
 def check_recipient_frequency(
     phone_number: str,
-    organization_id: Optional[str] = None,
+    organization_id: Optional[int] = None,
     db: Optional[Session] = None,
 ) -> dict:
     """
@@ -157,28 +157,34 @@ def check_recipient_frequency(
     if not normalized:
         return result
 
+    org_filter = ""
+    params = {"phone": normalized}
+    if organization_id:
+        org_filter = "AND organization_id = :org_id"
+        params["org_id"] = organization_id
+
     try:
-        # Count messages sent to this phone today (last 24h)
         row_day = db.execute(
-            text("""
+            text(f"""
                 SELECT COUNT(*)
                 FROM sms_rate_limit_log
                 WHERE to_phone = :phone
+                  {org_filter}
                   AND sent_at >= NOW() - INTERVAL '24 hours'
             """),
-            {"phone": normalized},
+            params,
         ).fetchone()
         sent_today = row_day[0] if row_day else 0
 
-        # Count messages sent to this phone this week (last 7 days)
         row_week = db.execute(
-            text("""
+            text(f"""
                 SELECT COUNT(*)
                 FROM sms_rate_limit_log
                 WHERE to_phone = :phone
+                  {org_filter}
                   AND sent_at >= NOW() - INTERVAL '7 days'
             """),
-            {"phone": normalized},
+            params,
         ).fetchone()
         sent_this_week = row_week[0] if row_week else 0
 
@@ -202,12 +208,14 @@ def check_recipient_frequency(
             return result
 
     except Exception as e:
-        # Fail open — don't block sends if the rate limit table is unavailable
-        logger.warning(f"Recipient frequency check failed (allowing send): {e}")
+        # Fail-closed for TCPA safety — block if rate limit state is unknown
+        logger.error(f"Recipient frequency check failed (blocking send): {e}")
         try:
             db.rollback()
         except Exception:
             pass
+        result["allowed"] = False
+        result["reason"] = f"Rate limit check error (fail-closed): {e}"
 
     return result
 

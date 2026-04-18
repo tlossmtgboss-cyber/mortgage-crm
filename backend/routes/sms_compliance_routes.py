@@ -280,8 +280,17 @@ class OptOutCheckRequest(BaseModel):
 
 
 @router.post("/check-opt-out")
-async def check_opt_out_status(body: OptOutCheckRequest, db: Session = Depends(get_db)):
+async def check_opt_out_status(
+    body: OptOutCheckRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(_get_current_user()),
+):
     """Check if a phone number has opted out of SMS."""
+    user_org = getattr(current_user, "organization_id", None) if current_user else None
+    if not current_user or not user_org:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    if body.organization_id != user_org:
+        raise HTTPException(status_code=403, detail="Cannot check opt-out for another organization")
     opted = is_opted_out(db, body.phone, body.organization_id)
     return {"phone": body.phone, "opted_out": opted}
 

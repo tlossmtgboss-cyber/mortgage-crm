@@ -95,7 +95,7 @@ class SMSOptOutManager:
         }
         with self._cache_lock:
             self._opted_out[key] = record
-        logger.info(f"Opt-out recorded: {normalized} (reason: {reason})")
+        logger.info(f"Opt-out recorded: ...{normalized[-4:] if normalized else '????'} (reason: {reason})")
 
         # Persist to DB
         if self.db:
@@ -142,7 +142,7 @@ class SMSOptOutManager:
                 logger.error(f"Failed to update opt-in in DB: {e}")
 
         if removed:
-            logger.info(f"Opt-in (re-subscribe): {normalized}")
+            logger.info(f"Opt-in (re-subscribe): ...{normalized[-4:] if normalized else '????'}")
             return True
         return False
 
@@ -213,7 +213,7 @@ class SMSOptOutManager:
             if not self.is_opted_out(phone, tenant_id):
                 self.opt_out(phone, reason=reason, tenant_id=tenant_id)
                 count += 1
-        logger.info(f"Bulk opt-out: {count}/{len(phones)} numbers added")
+        logger.info(f"Bulk opt-out: {count}/{len(phones)} numbers processed")
         return count
 
     def get_opted_out_count(self, tenant_id: Optional[str] = None) -> int:

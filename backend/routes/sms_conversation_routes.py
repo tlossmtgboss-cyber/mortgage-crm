@@ -306,7 +306,7 @@ async def get_conversation(
             FROM sms_panel_messages
             WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '')
                   LIKE :pattern
-              AND (organization_id = :org_id OR organization_id IS NULL)
+              AND organization_id = :org_id
             {before_filter_panel}
             ORDER BY created_at DESC
             LIMIT :lim
