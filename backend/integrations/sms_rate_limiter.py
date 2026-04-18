@@ -4,6 +4,7 @@
 
 import logging
 import os
+import random
 import re
 from datetime import datetime, timedelta
 from typing import Optional, Tuple
@@ -75,6 +76,13 @@ def check_rate_limit(
     global_count_hr = _count_global_recent(db, 3600)
     if global_count_hr >= LIMITS["global_hour"][1]:
         return False, f"Global rate limit: {global_count_hr} messages in last hour"
+
+    # Probabilistic cleanup — ~1% of calls trigger old record purge
+    if random.random() < 0.01:
+        try:
+            cleanup_old_rate_records(db, days_to_keep=7)
+        except Exception:
+            pass  # Non-critical cleanup failure
 
     return True, "Rate limit check passed"
 
@@ -219,23 +227,30 @@ def _normalize_phone_for_lookup(phone: str) -> Optional[str]:
     return phone
 
 
-def cleanup_old_rate_records(db: Session, hours: int = 192):
-    """Remove rate limit records older than specified hours (run periodically).
+def cleanup_old_rate_records(db: Session, days_to_keep: int = 7):
+    """Remove rate limit records older than specified days.
 
-    Default 192h (8 days) to preserve the 7-day window needed for weekly
-    frequency caps.  Callers may pass a shorter value if per-recipient
-    frequency capping is not in use.
+    Default 7 days preserves the window needed for weekly frequency caps.
+    Deletes in bounded batches (10,000 rows) to avoid long-running queries.
+    Flushes but does NOT commit — caller controls the transaction.
     """
     try:
-        db.execute(
-            text(
-                "DELETE FROM sms_rate_limit_log WHERE sent_at < NOW() - INTERVAL '1 hour' * :hours"
-            ),
-            {"hours": hours},
+        result = db.execute(
+            text("""
+                DELETE FROM sms_rate_limit_log
+                WHERE ctid IN (
+                    SELECT ctid FROM sms_rate_limit_log
+                    WHERE sent_at < NOW() - INTERVAL '1 day' * :days
+                    LIMIT 10000
+                )
+            """),
+            {"days": days_to_keep},
         )
-        db.commit()
+        db.flush()
+        deleted = result.rowcount
+        if deleted > 0:
+            logger.info(f"Rate limit cleanup: deleted {deleted} records older than {days_to_keep} days")
     except Exception as e:
-        db.rollback()
         logger.error(f"Rate limit cleanup failed: {e}")
 
 

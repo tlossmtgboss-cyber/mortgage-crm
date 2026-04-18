@@ -317,6 +317,11 @@ class SMSCampaignManager:
 
         return self.get_campaign_stats(campaign_id)
 
+    # Per-recipient send timeout (seconds)
+    SEND_TIMEOUT = 30.0
+    # Max time for an entire batch (seconds)
+    BATCH_TIMEOUT = 300.0
+
     async def _process_batch(
         self, campaign: SMSCampaign, batch: List[Dict], batch_num: int
     ) -> None:
@@ -326,8 +331,36 @@ class SMSCampaignManager:
             f"for campaign {campaign.campaign_id}"
         )
 
-        tasks = [self._send_to_recipient(campaign, recipient) for recipient in batch]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        async def _send_with_timeout(recipient: Dict) -> None:
+            try:
+                return await asyncio.wait_for(
+                    self._send_to_recipient(campaign, recipient),
+                    timeout=self.SEND_TIMEOUT,
+                )
+            except asyncio.TimeoutError:
+                phone = recipient.get("phone") or recipient.get("to", "unknown")
+                logger.error(
+                    f"SMS send timeout ({self.SEND_TIMEOUT}s) for recipient {phone} "
+                    f"in campaign {campaign.campaign_id}"
+                )
+                campaign.stats["failed"] += 1
+                campaign.errors.append(f"Send timeout ({self.SEND_TIMEOUT}s) for {phone}")
+
+        tasks = [_send_with_timeout(recipient) for recipient in batch]
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=self.BATCH_TIMEOUT,
+            )
+        except asyncio.TimeoutError:
+            logger.error(
+                f"Batch {batch_num + 1} timed out ({self.BATCH_TIMEOUT}s) "
+                f"for campaign {campaign.campaign_id}"
+            )
+            campaign.errors.append(
+                f"Batch {batch_num + 1} timed out after {self.BATCH_TIMEOUT}s"
+            )
+            return
 
         for result in results:
             if isinstance(result, Exception):

@@ -173,6 +173,11 @@ class SMSMessage(Base):
     error_message = Column(Text)
     ai_generated = Column(Boolean, default=False)
     meta_data = Column(JSON)
+    consent_record_id = Column(Integer, ForeignKey("sms_consent.id", ondelete="SET NULL"), nullable=True)
+    consent_verified_at = Column(DateTime, nullable=True)
+    consent_method = Column(String(50), nullable=True)
+    delivery_status = Column(String(30), default="queued")
+    delivered_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
@@ -411,6 +416,11 @@ class VoicemailDrop(Base):
     callback_received = Column(Boolean, default=False)
     callback_at = Column(DateTime)
     callback_notes = Column(Text)
+
+    # SMS Follow-up
+    followup_sms_sent = Column(Boolean, default=False)
+    followup_sms_id = Column(String(255))
+    followup_sms_blocked_reason = Column(String(500))
 
     # Errors
     error_code = Column(String(50))

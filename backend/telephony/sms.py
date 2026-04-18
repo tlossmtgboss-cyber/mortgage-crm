@@ -25,6 +25,8 @@ import re
 import threading
 from typing import Any, Dict, List, Optional
 
+from telephony.phone_utils import normalize_phone as _normalize_phone
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -66,24 +68,6 @@ def _get_client(api_key: Optional[str] = None):
         except Exception:
             logger.exception("Failed to initialise Telnyx client")
             return None
-
-
-# ---------------------------------------------------------------------------
-# Phone normalization (shared helper)
-# ---------------------------------------------------------------------------
-
-def _normalize_phone(phone: str) -> Optional[str]:
-    """Normalize to E.164 format (+1XXXXXXXXXX for US numbers)."""
-    if not phone:
-        return None
-    digits = re.sub(r"[^\d]", "", phone)
-    if len(digits) == 10:
-        return f"+1{digits}"
-    if len(digits) == 11 and digits.startswith("1"):
-        return f"+{digits}"
-    if phone.startswith("+") and len(digits) >= 10:
-        return f"+{digits}"
-    return None
 
 
 # ---------------------------------------------------------------------------

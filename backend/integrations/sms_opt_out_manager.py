@@ -8,6 +8,8 @@ import threading
 from typing import Optional, Dict, Any, List, Set
 from datetime import datetime, timezone
 
+from telephony.phone_utils import normalize_phone as _normalize_phone_canonical
+
 logger = logging.getLogger(__name__)
 
 # Keywords that trigger opt-out (TCPA §227.900-227.908)
@@ -235,14 +237,7 @@ class SMSOptOutManager:
     # ── Normalization ────────────────────────────────────────────────────────────
     def _normalize_phone(self, phone: str) -> str:
         """Normalize to E.164 format for consistent storage."""
-        digits = re.sub(r"\D", "", phone)
-        if len(digits) == 10:
-            return f"+1{digits}"
-        if len(digits) == 11 and digits.startswith("1"):
-            return f"+{digits}"
-        if len(digits) >= 10:
-            return f"+{digits}"
-        return phone
+        return _normalize_phone_canonical(phone) or phone
 
 
 # ── Factory (no singleton — avoids stale DB session) ──────────────────────────

@@ -22,6 +22,7 @@ class JobStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    PERMANENTLY_FAILED = "permanently_failed"
     CANCELLED = "cancelled"
 
 
@@ -59,6 +60,10 @@ class SMSScheduler:
     # Quiet hours: do not send between 9 PM and 8 AM local time
     QUIET_HOUR_START = 21  # 9 PM
     QUIET_HOUR_END = 8     # 8 AM
+
+    # Retry configuration
+    MAX_RETRIES = 3
+    RETRY_BACKOFF_SECONDS = (60, 300, 900)  # 1 min, 5 min, 15 min
 
     def __init__(self, sms_service=None, db=None, organization_id: Optional[int] = None):
         self.sms_service = sms_service
@@ -129,6 +134,7 @@ class SMSScheduler:
                 session.add(record)
             else:
                 record.status = job.status.value
+                record.scheduled_for = job.send_at
                 record.job_config = config
                 record.result = result_data
                 record.executed_at = job.sent_at
@@ -228,6 +234,11 @@ class SMSScheduler:
         # Enforce quiet hours - push to next allowed window
         send_at_utc = self._enforce_quiet_hours(send_at_utc, timezone)
 
+        # Store timezone in metadata so retries can enforce quiet hours
+        job_metadata = dict(metadata) if metadata else {}
+        if "timezone" not in job_metadata:
+            job_metadata["timezone"] = timezone
+
         job = ScheduledSMSJob(
             to=to,
             body=body,
@@ -235,7 +246,7 @@ class SMSScheduler:
             tenant_id=tenant_id,
             template_key=template_key,
             variables=variables,
-            metadata=metadata,
+            metadata=job_metadata,
         )
         self._jobs[job.job_id] = job
         self._persist_job(job)
@@ -336,7 +347,7 @@ class SMSScheduler:
             await self._execute_job(job)
 
     async def _execute_job(self, job: ScheduledSMSJob) -> None:
-        """Execute a scheduled SMS job."""
+        """Execute a scheduled SMS job with retry on failure."""
         job.status = JobStatus.RUNNING
         job.attempts += 1
 
@@ -359,9 +370,27 @@ class SMSScheduler:
                 job.sent_at = datetime.now(timezone.utc)
                 logger.debug(f"[DRY RUN] Job {job.job_id} to {job.to}: {job.body[:40]}...")
         except Exception as e:
-            job.status = JobStatus.FAILED
             job.error = str(e)
-            logger.error(f"Scheduled SMS job {job.job_id} failed: {e}")
+            if job.attempts < self.MAX_RETRIES:
+                # Schedule retry with exponential backoff
+                backoff = self.RETRY_BACKOFF_SECONDS[job.attempts - 1]
+                retry_at = datetime.now(timezone.utc) + timedelta(seconds=backoff)
+
+                # Respect quiet hours — push retry past quiet window if needed
+                tz_str = job.metadata.get("timezone", "UTC") if job.metadata else "UTC"
+                retry_at = self._enforce_quiet_hours(retry_at, tz_str)
+
+                job.status = JobStatus.PENDING
+                job.send_at = retry_at
+                logger.warning(
+                    f"SMS job {job.job_id} failed (attempt {job.attempts}/{self.MAX_RETRIES}), "
+                    f"retrying in {backoff}s at {retry_at} UTC: {e}"
+                )
+            else:
+                job.status = JobStatus.PERMANENTLY_FAILED
+                logger.error(
+                    f"SMS job {job.job_id} permanently failed after {job.attempts} attempts: {e}"
+                )
 
         # Persist final state after execution
         self._persist_job(job)

@@ -82,6 +82,49 @@ class SMSRetryService:
             )
 
     # -----------------------------------------------------------------
+    # Compliance re-check at retry time
+    # -----------------------------------------------------------------
+
+    def _recheck_compliance(
+        self,
+        to_phone: str,
+        message: str,
+        organization_id: Optional[int],
+        log_extra: dict,
+    ) -> Optional[str]:
+        """Re-verify SMS compliance before a retry attempt.
+
+        Returns the block reason string if blocked, None if allowed.
+        Uses a fresh DB session so opt-outs recorded after queue time
+        are picked up.
+        """
+        try:
+            from db import SessionLocal
+            from integrations.sms_compliance_gate import check_sms_compliance
+
+            db = SessionLocal()
+            try:
+                compliance = check_sms_compliance(
+                    db, to_phone, message,
+                    organization_id=organization_id,
+                )
+                if not compliance.allowed:
+                    logger.info(
+                        "Retry SMS to ...%s blocked at send time: %s",
+                        log_extra.get("to_phone_last4", "????"),
+                        compliance.reason,
+                    )
+                    return compliance.reason
+                return None
+            finally:
+                db.close()
+        except Exception as e:
+            # Compliance check failed — fail-closed for TCPA safety
+            reason = f"Compliance re-check error: {e}"
+            logger.error(reason, extra=log_extra)
+            return reason
+
+    # -----------------------------------------------------------------
     # Core send with retry
     # -----------------------------------------------------------------
 
@@ -127,6 +170,21 @@ class SMSRetryService:
         last_error = None
 
         for attempt in range(1, self.MAX_RETRIES + 1):
+            # Re-verify compliance before retry attempts (consent may have
+            # changed since the caller's original check or since the last
+            # attempt).  On attempt 1 the caller just checked; on attempt 2+
+            # there has been a delay where an opt-out could have arrived.
+            if attempt > 1:
+                blocked_reason = self._recheck_compliance(
+                    to_phone, message, organization_id, log_extra
+                )
+                if blocked_reason:
+                    return {
+                        "status": "compliance_blocked",
+                        "attempt": attempt,
+                        "error": blocked_reason,
+                    }
+
             try:
                 result = await self._send_sms(
                     to_phone=to_phone,

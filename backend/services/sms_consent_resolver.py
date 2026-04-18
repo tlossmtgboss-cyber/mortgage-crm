@@ -40,6 +40,9 @@ from typing import Optional
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from telephony.phone_utils import normalize_phone as _normalize_phone
+from telephony.phone_utils import digits_only as _digits_only
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,34 +69,6 @@ class ConsentResolution:
             f"ConsentResolution(allowed={self.allowed}, source={self.source!r}, "
             f"reason={self.reason!r}, record_id={self.record_id})"
         )
-
-
-# ---------------------------------------------------------------------------
-# Phone normalization (local copy to avoid circular imports)
-# ---------------------------------------------------------------------------
-
-def _normalize_phone(phone: str) -> Optional[str]:
-    """Normalize to E.164 format (+1XXXXXXXXXX for US numbers)."""
-    if not phone:
-        return None
-    import re
-    digits = re.sub(r"[^\d]", "", phone)
-    if len(digits) == 10:
-        return f"+1{digits}"
-    if len(digits) == 11 and digits.startswith("1"):
-        return f"+{digits}"
-    if phone.startswith("+") and len(digits) >= 10:
-        return f"+{digits}"
-    return None
-
-
-def _digits_only(phone: str) -> str:
-    """Return only digits from a phone number, stripping country code for matching."""
-    import re
-    digits = re.sub(r"[^\d]", "", phone)
-    if len(digits) == 11 and digits.startswith("1"):
-        return digits[1:]
-    return digits
 
 
 # ---------------------------------------------------------------------------

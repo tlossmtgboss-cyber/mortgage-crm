@@ -16,19 +16,7 @@ from .sms_key_vault import get_active_telnyx_config
 from .sms_delivery_tracker import record_message_sent
 from .sms_template_engine import render_builtin
 
-
-def _to_e164(phone: str) -> Optional[str]:
-    """Normalize any phone format to E.164 (+1XXXXXXXXXX)."""
-    if not phone:
-        return None
-    digits = re.sub(r"[^\d]", "", phone)
-    if len(digits) == 10:
-        return f"+1{digits}"
-    if len(digits) == 11 and digits.startswith("1"):
-        return f"+{digits}"
-    if phone.startswith("+") and len(digits) >= 10:
-        return f"+{digits}"
-    return None
+from telephony.phone_utils import normalize_phone as _to_e164
 
 logger = logging.getLogger(__name__)
 

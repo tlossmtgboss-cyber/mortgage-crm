@@ -197,6 +197,103 @@ def get_pending_messages(db: Session, limit: int = 50) -> List[dict]:
         return []
 
 
+def mark_compliance_blocked(db: Session, queue_id: int, reason: str):
+    """Mark a queued message as blocked by compliance re-check at send time."""
+    try:
+        db.execute(
+            text("""
+                UPDATE sms_queue
+                SET status = 'compliance_blocked',
+                    last_error = :reason,
+                    failed_at = NOW()
+                WHERE id = :id
+            """),
+            {"reason": reason[:500], "id": queue_id},
+        )
+        db.commit()
+        logger.info(f"SMS {queue_id} blocked at send time: {reason}")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to mark SMS {queue_id} as compliance_blocked: {e}")
+
+
+def process_pending_queue(db: Session, limit: int = 50) -> dict:
+    """
+    Process pending SMS queue entries: re-verify compliance at send time,
+    then send via the Telnyx chokepoint.
+
+    This closes the compliance timing gap where a recipient may opt out
+    between queue time and actual send time.
+
+    Returns dict with processing stats.
+    """
+    from integrations.sms_compliance_gate import check_sms_compliance
+
+    stats = {"processed": 0, "sent": 0, "blocked": 0, "failed": 0}
+    messages = get_pending_messages(db, limit=limit)
+
+    for msg in messages:
+        stats["processed"] += 1
+        queue_id = msg["id"]
+        phone = msg["to_phone"]
+        lead_id = msg.get("lead_id")
+        user_id = msg.get("user_id")
+
+        # Re-verify compliance at send time (consent may have changed since queue time)
+        try:
+            compliance = check_sms_compliance(
+                db, phone, msg["message_body"],
+                lead_id=lead_id, user_id=user_id,
+            )
+        except Exception as e:
+            # Compliance check itself failed -- fail-closed for TCPA safety
+            logger.error(f"Compliance re-check error for SMS {queue_id}: {e}")
+            mark_compliance_blocked(db, queue_id, f"Compliance check error: {e}")
+            stats["blocked"] += 1
+            continue
+
+        if not compliance.allowed:
+            logger.info(
+                f"Queued SMS {queue_id} to ...{phone[-4:] if phone else '????'} "
+                f"blocked at send time: {compliance.reason}"
+            )
+            mark_compliance_blocked(db, queue_id, compliance.reason)
+            stats["blocked"] += 1
+            continue
+
+        # Compliance passed -- send via Telnyx chokepoint
+        try:
+            from telephony.sms import send_sms_verified
+
+            result = send_sms_verified(
+                to=phone,
+                from_=msg.get("from_phone"),
+                text=msg["message_body"],
+                user_id=user_id,
+                lead_id=lead_id,
+                db=db,
+                bypass_compliance=True,  # Already re-checked above
+            )
+            if result.get("status") == "sent":
+                mark_sent(db, queue_id, result.get("id", ""))
+                stats["sent"] += 1
+            else:
+                mark_failed(db, queue_id, result.get("reason", "Send failed"))
+                stats["failed"] += 1
+        except Exception as e:
+            mark_failed(db, queue_id, str(e))
+            stats["failed"] += 1
+
+    if stats["processed"]:
+        logger.info(
+            f"Queue processing complete: {stats['processed']} processed, "
+            f"{stats['sent']} sent, {stats['blocked']} compliance-blocked, "
+            f"{stats['failed']} failed"
+        )
+
+    return stats
+
+
 def get_dead_letter_messages(db: Session, limit: int = 100) -> List[dict]:
     """Return messages that exhausted all retries."""
     try:

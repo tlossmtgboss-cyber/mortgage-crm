@@ -242,8 +242,8 @@ async def merge_qualification_data(
         sms_conv = (
             db.query(SMSAIConversation)
             .filter(
-                SMSAIConversation.lead_id == str(lead_id),
-                SMSAIConversation.organization_id == str(organization_id),
+                SMSAIConversation.lead_id == lead_id,
+                SMSAIConversation.organization_id == organization_id,
             )
             .order_by(desc(SMSAIConversation.last_message_at))
             .first()
@@ -517,8 +517,8 @@ def _get_sms_context(db: Session, lead_id: int, organization_id: int) -> Optiona
         conv = (
             db.query(SMSAIConversation)
             .filter(
-                SMSAIConversation.lead_id == str(lead_id),
-                SMSAIConversation.organization_id == str(organization_id),
+                SMSAIConversation.lead_id == lead_id,
+                SMSAIConversation.organization_id == organization_id,
             )
             .order_by(desc(SMSAIConversation.last_message_at))
             .first()

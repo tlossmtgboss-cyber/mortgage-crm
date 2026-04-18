@@ -11,6 +11,8 @@ from zoneinfo import ZoneInfo
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
+from telephony.phone_utils import normalize_phone as _normalize_phone
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -25,6 +27,15 @@ FORBIDDEN_PATTERNS = [
 ]
 # Note: "guaranteed" and "100%" are intentionally NOT forbidden — they are
 # standard mortgage language (e.g. "rate guaranteed for 60 days", "100% VA financing").
+
+PII_PATTERNS = [
+    (r'\b\d{3}-\d{2}-\d{4}\b', "SSN pattern detected"),
+    (r'\b\d{9}\b', "Possible SSN (9 consecutive digits)"),
+    (r'\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b', "Credit card number pattern"),
+    (r'\b(?:password|passwd|pwd)\s*[:=]\s*\S+', "Password in message"),
+    (r'\baccount\s*#?\s*:?\s*\d{6,}\b', "Account number pattern"),
+    (r'\brouting\s*#?\s*:?\s*\d{9}\b', "Routing number pattern"),
+]
 
 OPT_OUT_KEYWORDS = {"STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"}
 OPT_IN_KEYWORDS = {"START", "UNSTOP", "YES"}
@@ -274,10 +285,10 @@ def record_opt_out(
             {"phone": phone, "keyword": keyword.upper(), "lead_id": lead_id, "org_id": organization_id},
         )
         db.flush()
-        logger.info(f"Opt-out recorded for {phone} via keyword {keyword}")
+        logger.info(f"Opt-out recorded for ...{phone[-4:] if phone else '????'} via keyword {keyword}")
         return True
     except Exception as e:
-        logger.error(f"Failed to record opt-out for {phone}: {e}")
+        logger.error(f"Failed to record opt-out for ...{phone[-4:] if phone else '????'}: {e}")
         return False
 
 
@@ -324,10 +335,10 @@ def record_opt_in(
             {"phone": phone, "lead_id": lead_id},
         )
         db.flush()
-        logger.info(f"Opt-in recorded for {phone} via keyword {keyword}")
+        logger.info(f"Opt-in recorded for ...{phone[-4:] if phone else '????'} via keyword {keyword}")
         return True
     except Exception as e:
-        logger.error(f"Failed to record opt-in for {phone}: {e}")
+        logger.error(f"Failed to record opt-in for ...{phone[-4:] if phone else '????'}: {e}")
         return False
 
 
@@ -398,7 +409,7 @@ def record_consent(
         )
         db.flush()
     except Exception as e:
-        logger.error(f"Failed to record consent for {phone}: {e}")
+        logger.error(f"Failed to record consent for ...{phone[-4:] if phone else '????'}: {e}")
 
 
 # ---------------------------------------------------------------------------
@@ -444,11 +455,14 @@ def _get_lead_timezone(db: Session, lead_id: Optional[int]) -> Optional[str]:
 # Content scanning
 # ---------------------------------------------------------------------------
 def _scan_message_content(body: str) -> Optional[str]:
-    """Scan message for spam/regulatory violations. Returns issue string or None."""
+    """Scan message for spam/regulatory violations and PII. Returns issue string or None."""
     lower_body = body.lower()
     for pattern in FORBIDDEN_PATTERNS:
         if re.search(pattern, lower_body):
             return f"Matched forbidden pattern: {pattern}"
+    for pattern, label in PII_PATTERNS:
+        if re.search(pattern, body):
+            return f"PII detected: {label}"
     return None
 
 
@@ -534,18 +548,3 @@ def _log_compliance_check(
             pass
 
 
-# ---------------------------------------------------------------------------
-# Phone normalization
-# ---------------------------------------------------------------------------
-def _normalize_phone(phone: str) -> Optional[str]:
-    """Normalize to E.164 format (+1XXXXXXXXXX for US numbers)."""
-    if not phone:
-        return None
-    digits = re.sub(r"[^\d]", "", phone)
-    if len(digits) == 10:
-        return f"+1{digits}"
-    if len(digits) == 11 and digits.startswith("1"):
-        return f"+{digits}"
-    if phone.startswith("+") and len(digits) >= 10:
-        return f"+{digits}"
-    return None

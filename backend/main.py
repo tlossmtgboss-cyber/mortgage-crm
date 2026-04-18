@@ -3010,6 +3010,30 @@ async def startup_event():
         logger.warning(f"SMS persistence tables migration: {e}")
 
     try:
+        from migrations.add_sms_compliance_tables import run_migration as _run_sms_compliance
+        _run_sms_compliance()
+    except Exception as e:
+        logger.warning(f"SMS compliance tables migration: {e}")
+
+    try:
+        from migrations.add_sms_consent_proof_columns import run_migration as _run_consent_proof
+        _run_consent_proof()
+    except Exception as e:
+        logger.warning(f"SMS consent proof columns migration: {e}")
+
+    try:
+        from migrations.add_sms_delivery_tracking import run_migration as _run_delivery_tracking
+        _run_delivery_tracking()
+    except Exception as e:
+        logger.warning(f"SMS delivery tracking migration: {e}")
+
+    try:
+        from migrations.add_voicemail_sms_followup_columns import run_migration as _run_vm_followup
+        _run_vm_followup()
+    except Exception as e:
+        logger.warning(f"Voicemail SMS followup columns migration: {e}")
+
+    try:
         from migrations.add_device_tokens_table import run_migration as _run_device_tokens
         _run_device_tokens()
     except Exception as e:

@@ -268,8 +268,8 @@ def _get_recent_sms(
 
         rows = db.execute(text(f"""
             SELECT scm.direction, scm.content, scm.created_at
-            FROM sms_conversation_messages scm
-            JOIN sms_conversations sc ON sc.id = scm.conversation_id
+            FROM sms_ai_conversation_messages scm
+            JOIN sms_ai_conversations sc ON sc.id = scm.conversation_id
             WHERE sc.phone_number LIKE :phone_pattern
             {org_clause}
             ORDER BY scm.created_at DESC

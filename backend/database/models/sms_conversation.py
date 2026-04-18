@@ -10,16 +10,16 @@ def _uuid():
 
 
 class SMSAIConversation(Base):
-    __tablename__ = "sms_conversations"
+    __tablename__ = "sms_ai_conversations"
     __table_args__ = (
-        Index("ix_sms_conv_phone_org", "phone_number", "organization_id"),
+        Index("ix_sms_ai_conv_phone_org", "phone_number", "organization_id"),
         {"extend_existing": True},
     )
 
     id = Column(String, primary_key=True, default=_uuid)
     phone_number = Column(String, nullable=False)
-    lead_id = Column(String, ForeignKey("leads.id"), nullable=True)
-    organization_id = Column(String, nullable=False)
+    lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False)
     status = Column(String, default="active")  # active, paused, closed, converted
     current_stage = Column(String, default="greeting")  # greeting, qualifying, scheduling, nurture, objection_handling
     context_data = Column(JSON, default=dict)  # accumulated qualification data
@@ -30,10 +30,10 @@ class SMSAIConversation(Base):
 
 
 class SMSAIConversationMessage(Base):
-    __tablename__ = "sms_conversation_messages"
+    __tablename__ = "sms_ai_conversation_messages"
 
     id = Column(String, primary_key=True, default=_uuid)
-    conversation_id = Column(String, ForeignKey("sms_conversations.id"), nullable=False, index=True)
+    conversation_id = Column(String, ForeignKey("sms_ai_conversations.id"), nullable=False, index=True)
     direction = Column(String, nullable=False)  # inbound, outbound
     content = Column(Text, nullable=False)
     intent = Column(String, nullable=True)
