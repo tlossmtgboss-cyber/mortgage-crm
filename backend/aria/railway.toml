@@ -2,6 +2,4 @@
 # Configuration for the aria-agent-worker Railway service
 [deploy]
 startCommand = "python -m aria.voice_agent start"
-healthcheckPath = "/"
-healthcheckTimeout = 30
 restartPolicyType = "always"

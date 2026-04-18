@@ -21,9 +21,4 @@ RUN pip install --no-cache-dir \
 
 COPY . .
 
-EXPOSE 8081
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
-    CMD curl -f http://localhost:${PORT:-8081}/health || exit 1
-
 ENTRYPOINT ["python", "-m", "aria.voice_agent", "start"]
