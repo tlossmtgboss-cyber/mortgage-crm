@@ -31,10 +31,8 @@ class LiveTransfer(Base):
     # Call legs
     call_control_id = Column(String(255), nullable=False, index=True)
     caller_phone = Column(String(20))
-    caller_phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     lo_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     lo_phone = Column(String(20))
-    lo_phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
 
     # Whisper

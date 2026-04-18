@@ -68,7 +68,6 @@ class TCPAConsent(Base):
         nullable=False,
     )  # "lead", "borrower", "referral_partner"
     phone_number = Column(String(20), nullable=False, index=True)
-    phone_number_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
 
     # ------------------------------------------------------------------
     # Consent details

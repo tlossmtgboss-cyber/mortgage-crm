@@ -13,9 +13,7 @@ class SMSDeadLetter(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     workflow_id = Column(Integer, ForeignKey("voice_workflows.id", ondelete="SET NULL"), nullable=True, index=True)
     to_phone = Column(String(20), nullable=False)
-    to_phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     from_phone = Column(String(20), nullable=False)
-    from_phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     message = Column(Text, nullable=False)
     last_error = Column(Text, nullable=True)
     attempts = Column(Integer, default=3)

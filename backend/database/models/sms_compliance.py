@@ -38,7 +38,6 @@ class SMSOptOut(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     phone_number = Column(String(20), unique=True, nullable=False, index=True)
-    phone_number_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     opt_out_keyword = Column(String(20), default="STOP")
     lead_id = Column(
         Integer,
@@ -85,7 +84,6 @@ class SMSConsent(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     phone_number = Column(String(20), unique=True, nullable=False, index=True)
-    phone_number_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     lead_id = Column(
         Integer,
         ForeignKey("leads.id", ondelete="SET NULL"),
@@ -119,7 +117,6 @@ class SMSComplianceLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     phone_number = Column(String(20), nullable=False, index=True)
-    phone_number_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     lead_id = Column(Integer, nullable=True)
     user_id = Column(Integer, nullable=True)
     check_result = Column(String(50), nullable=False)

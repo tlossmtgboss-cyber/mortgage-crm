@@ -173,13 +173,6 @@ class SMSMessage(Base):
     error_message = Column(Text)
     ai_generated = Column(Boolean, default=False)
     meta_data = Column(JSON)
-    # TCPA consent proof — links this message to the consent record that authorized it
-    consent_record_id = Column(Integer, ForeignKey("sms_consent.id", ondelete="SET NULL"), nullable=True)
-    consent_verified_at = Column(DateTime, nullable=True)  # When consent was verified before send
-    consent_method = Column(String(50), nullable=True)  # web_form, sms_keyword, verbal, imported, etc.
-    # Delivery tracking — updated by Telnyx delivery webhooks (message.sent / message.finalized)
-    delivery_status = Column(String(30), default="queued")  # queued, sent, delivered, failed
-    delivered_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     # Relationships
@@ -200,7 +193,6 @@ class SMSConversation(Base):
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), index=True)  # Multi-tenant isolation
     phone_number = Column(String, nullable=False, index=True)  # NOTE: Not encrypted — indexed for lookups.
-    phone_number_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone for privacy-preserving lookups
     user_id = Column(Integer, ForeignKey("users.id"))  # The LO managing this conversation
     lead_id = Column(Integer, ForeignKey("leads.id"))
     loan_id = Column(Integer, ForeignKey("loans.id"))
@@ -419,11 +411,6 @@ class VoicemailDrop(Base):
     callback_received = Column(Boolean, default=False)
     callback_at = Column(DateTime)
     callback_notes = Column(Text)
-
-    # SMS follow-up
-    followup_sms_sent = Column(Boolean, default=False)
-    followup_sms_id = Column(String(255))          # Telnyx message ID
-    followup_sms_blocked_reason = Column(String(500))  # If SMS was blocked by compliance
 
     # Errors
     error_code = Column(String(50))

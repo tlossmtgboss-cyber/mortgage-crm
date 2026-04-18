@@ -43,7 +43,6 @@ class VerifiedCallerId(Base):
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     phone_number = Column(String, unique=True, nullable=False)
-    phone_number_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     friendly_name = Column(String)
     verification_status = Column(String, default="pending")  # pending, verified, failed
     provider_sid = Column(String)
@@ -87,7 +86,6 @@ class DialerSessionTask(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     session_id = Column(Integer, ForeignKey("dialer_sessions.id"), nullable=False)
     contact_phone = Column(String, nullable=False)
-    contact_phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     contact_name = Column(String)
     contact_context = Column(String)
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
@@ -119,7 +117,6 @@ class CallLog(Base):
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)  # Multi-tenant isolation
     agent_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     contact_phone = Column(String, nullable=False)
-    contact_phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     contact_name = Column(String)
     lead_id = Column(Integer, ForeignKey("leads.id"), nullable=True)
     loan_id = Column(Integer, ForeignKey("loans.id"), nullable=True)
@@ -158,7 +155,6 @@ class ActiveCall(Base):
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     contact_phone = Column(String, nullable=False)
-    contact_phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     agent_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     call_sid = Column(String)
     locked_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -174,7 +170,6 @@ class ContactDNCStatus(Base):
     id = Column(Integer, primary_key=True, index=True)
     organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
     phone_number = Column(String, nullable=False, index=True)
-    phone_number_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     reason = Column(String)
     added_by_id = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

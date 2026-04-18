@@ -60,7 +60,6 @@ class AIProspectConversation(Base):
 
     # Phone numbers for SMS routing
     lead_phone = Column(String(20), nullable=False, index=True)
-    lead_phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     telnyx_from_number = Column(String(20), nullable=False)
 
     # State machine

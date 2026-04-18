@@ -51,7 +51,6 @@ class VoiceWorkflow(Base):
     # Contact info
     contact_name = Column(String(255))
     contact_phone = Column(String(20), index=True)  # For matching inbound SMS
-    contact_phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone
     contact_email = Column(String(255))
     lead_id = Column(Integer, ForeignKey('leads.id'), nullable=True)
 

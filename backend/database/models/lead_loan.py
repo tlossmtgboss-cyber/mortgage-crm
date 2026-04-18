@@ -76,7 +76,6 @@ class Lead(Base):
     last_name = Column(String)  # NOTE: Not encrypted — used with name index for search.
     email = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups. Consider adding email_hash column.
     phone = Column(String, index=True)  # NOTE: Not encrypted — indexed for lookups.
-    phone_hash = Column(String(64), index=True)  # SHA-256 of normalized E.164 phone for privacy-preserving lookups
 
     # Co-applicant
     co_applicant_name = Column(EncryptedString)  # PII: name
