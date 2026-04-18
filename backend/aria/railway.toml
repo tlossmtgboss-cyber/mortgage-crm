@@ -2,7 +2,7 @@
 # Configuration for the aria-agent-worker Railway service
 [build]
 builder = "DOCKERFILE"
-dockerfilePath = "aria/Dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "python -m voice_agent start"
