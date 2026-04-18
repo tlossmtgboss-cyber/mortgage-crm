@@ -1,5 +1,9 @@
 # backend/aria/railway.toml
 # Configuration for the aria-agent-worker Railway service
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "aria/Dockerfile"
+
 [deploy]
 startCommand = "python -m voice_agent start"
 restartPolicyType = "always"
