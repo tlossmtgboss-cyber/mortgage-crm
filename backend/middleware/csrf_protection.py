@@ -51,6 +51,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/webhook",
         "/api/v1/webhooks",
         "/api/v1/voicemail/webhook",  # RVM provider delivery callbacks
+        "/api/v1/telnyx",  # Telnyx Call Control webhooks — signed with Ed25519
         "/api/v1/zapier",
         "/api/v1/borrower",  # Borrower portal uses JWT auth
         "/api/v1/csrf-token",  # Token endpoint itself
