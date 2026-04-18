@@ -127,7 +127,7 @@ async def _route_inbound_to_livekit(
     except Exception as e:
         logger.warning(f"[AriaInbound] Speak failed: {e}")
 
-    # Step 3: While TTS plays, create LiveKit room + outbound SIP call
+    # Step 3: Create LiveKit room and dispatch agent BEFORE dialing caller
     import hashlib, time as _time
     room_suffix = hashlib.md5(f"{from_number}-{_time.time()}".encode()).hexdigest()[:8]
     room_name = f"aria-inbound-{room_suffix}"
@@ -140,11 +140,27 @@ async def _route_inbound_to_livekit(
             "from_number": from_number,
             "to_number": to_number,
         })
+
+        # 3a: Create room
         await lk.room.create_room(livekit_api.CreateRoomRequest(
             name=room_name, metadata=room_metadata,
         ))
         logger.warning(f"[AriaInbound] Room created: {room_name}")
 
+        # 3b: Explicitly dispatch agent so it joins before the caller
+        await lk.agent_dispatch.create_dispatch(
+            livekit_api.CreateAgentDispatchRequest(
+                agent_name="aria-voice",
+                room=room_name,
+                metadata=room_metadata,
+            )
+        )
+        logger.warning(f"[AriaInbound] Agent dispatched to {room_name}")
+
+        # 3c: Give agent time to connect before dialing the caller
+        await asyncio.sleep(3)
+
+        # 3d: Now dial the caller via outbound SIP
         sip_req = livekit_api.CreateSIPParticipantRequest(
             sip_trunk_id=outbound_trunk,
             sip_call_to=from_number,
@@ -163,7 +179,7 @@ async def _route_inbound_to_livekit(
         logger.error(f"[AriaInbound] Callback setup failed: {e}", exc_info=True)
 
     # Step 4: Wait for TTS, then hang up so caller's phone is free for callback
-    await asyncio.sleep(5)
+    await asyncio.sleep(3)
     try:
         http_requests.post(f"{base_url}/hangup", headers=headers, json={}, timeout=10)
         logger.warning("[AriaInbound] Original call hung up — callback in progress")

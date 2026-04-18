@@ -21,4 +21,4 @@ RUN pip install --no-cache-dir \
 
 COPY . .
 
-ENTRYPOINT ["python", "-m", "voice_agent", "start"]
+ENTRYPOINT ["python", "voice_agent.py", "start"]
