@@ -201,7 +201,7 @@ async def _handle_confirm(db: Session, phone: str) -> JSONResponse:
         f"is confirmed. See you then!"
     )
 
-    logger.info(f"Appointment {appointment.id} confirmed via SMS from {phone}")
+    logger.info(f"Appointment {appointment.id} confirmed via SMS from ...{phone[-4:] if phone else '????'}")
     return JSONResponse(content={"status": "confirmed", "appointment_id": appointment.id})
 
 
@@ -256,7 +256,7 @@ async def _handle_cancel(db: Session, phone: str) -> JSONResponse:
         f"has been cancelled. Contact us if you'd like to reschedule."
     )
 
-    logger.info(f"Appointment {appointment.id} cancelled via SMS from {phone}")
+    logger.info(f"Appointment {appointment.id} cancelled via SMS from ...{phone[-4:] if phone else '????'}")
     return JSONResponse(content={"status": "cancelled", "appointment_id": appointment.id})
 
 

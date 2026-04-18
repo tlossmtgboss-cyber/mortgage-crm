@@ -68,14 +68,14 @@ def send_campaign(
         )
         if not compliance.allowed:
             stats["skipped_compliance"] += 1
-            logger.info(f"Bulk SMS skipped {phone}: {compliance.reason}")
+            logger.info(f"Bulk SMS skipped ...{phone[-4:] if phone else '????'}: {compliance.reason}")
             continue
 
         # Rate limit check
         rate_ok, rate_reason = check_rate_limit(db, phone, user_id=user_id, lead_id=lead_id)
         if not rate_ok:
             stats["skipped_rate_limit"] += 1
-            logger.info(f"Bulk SMS rate limited {phone}: {rate_reason}")
+            logger.info(f"Bulk SMS rate limited ...{phone[-4:] if phone else '????'}: {rate_reason}")
             continue
 
         # Queue the message (with TCPA consent proof from compliance gate)

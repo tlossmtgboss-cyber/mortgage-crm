@@ -464,5 +464,5 @@ def schedule_sms(db, to_phone: str, message: str, schedule_at=None, lead_id=None
         )
         return job.job_id if job else None
     except Exception as e:
-        logger.error(f"Failed to schedule SMS to {to_phone}: {e}")
+        logger.error(f"Failed to schedule SMS to ...{to_phone[-4:] if to_phone else '????'}: {e}")
         return None

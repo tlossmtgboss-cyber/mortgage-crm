@@ -300,7 +300,7 @@ class TaskExecutor:
             check_sms_consent, contact["phone"], organization_id=org_id,
         )
         if not can_send:
-            logger.warning(f"SMS blocked for {contact['phone']}: {reason}")
+            logger.warning(f"SMS blocked for ...{contact['phone'][-4:] if contact.get('phone') else '????'}: {reason}")
             return {
                 "action": "sms_blocked",
                 "to": contact["name"],

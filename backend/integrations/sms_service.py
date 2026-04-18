@@ -160,7 +160,7 @@ class SMSClient:
                 return {"success": False, "error": reason}
 
         except Exception as e:
-            logger.error(f"Transmission error to {normalized_phone}: {e}", exc_info=True)
+            logger.error(f"Transmission error to ...{normalized_phone[-4:] if normalized_phone else '????'}: {e}", exc_info=True)
             return {"success": False, "error": f"SMS transmission error: {e}"}
 
     async def send_templated_sms(

@@ -170,20 +170,18 @@ class SMSRetryService:
         last_error = None
 
         for attempt in range(1, self.MAX_RETRIES + 1):
-            # Re-verify compliance before retry attempts (consent may have
-            # changed since the caller's original check or since the last
-            # attempt).  On attempt 1 the caller just checked; on attempt 2+
-            # there has been a delay where an opt-out could have arrived.
-            if attempt > 1:
-                blocked_reason = self._recheck_compliance(
-                    to_phone, message, organization_id, log_extra
-                )
-                if blocked_reason:
-                    return {
-                        "status": "compliance_blocked",
-                        "attempt": attempt,
-                        "error": blocked_reason,
-                    }
+            # Verify compliance before every attempt. Some callers (e.g. Aria)
+            # don't check compliance themselves, so attempt 1 is not safe to
+            # skip. On retries the delay also means consent could have changed.
+            blocked_reason = self._recheck_compliance(
+                to_phone, message, organization_id, log_extra
+            )
+            if blocked_reason:
+                return {
+                    "status": "compliance_blocked",
+                    "attempt": attempt,
+                    "error": blocked_reason,
+                }
 
             try:
                 result = await self._send_sms(

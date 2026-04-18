@@ -386,10 +386,10 @@ class SMSCampaignManager:
                 )
                 if not check.get("allowed", True):
                     campaign.stats["compliance_blocked"] += 1
-                    logger.debug(f"Compliance blocked: {phone} - {check.get('reason')}")
+                    logger.debug(f"Compliance blocked: ...{phone[-4:] if phone else '????'} - {check.get('reason')}")
                     return
             except Exception as e:
-                logger.warning(f"Compliance check error for {phone}: {e}")
+                logger.warning(f"Compliance check error for ...{phone[-4:] if phone else '????'}: {e}")
 
         # Render message with recipient-specific variables
         merged_vars = {**campaign.variables, **recipient}
@@ -400,7 +400,7 @@ class SMSCampaignManager:
                 body = merged_vars.get("message", "")
         except Exception as e:
             campaign.stats["failed"] += 1
-            logger.error(f"Template render error for {phone}: {e}")
+            logger.error(f"Template render error for ...{phone[-4:] if phone else '????'}: {e}")
             return
 
         # Send via SMS service
@@ -417,11 +417,11 @@ class SMSCampaignManager:
                     campaign.stats["failed"] += 1
             except Exception as e:
                 campaign.stats["failed"] += 1
-                logger.error(f"SMS send error for {phone}: {e}")
+                logger.error(f"SMS send error for ...{phone[-4:] if phone else '????'}: {e}")
         else:
             # Dry-run mode
             campaign.stats["sent"] += 1
-            logger.debug(f"[DRY RUN] Would send to {phone}: {body[:50]}...")
+            logger.debug(f"[DRY RUN] Would send to ...{phone[-4:] if phone else '????'}: {body[:50]}...")
 
     # ── Campaign management ──────────────────────────────────────────────────
     def pause_campaign(self, campaign_id: str) -> bool:

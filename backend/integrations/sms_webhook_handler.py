@@ -206,7 +206,7 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
             if committed:
                 _send_auto_response(from_phone, response_msg)
             else:
-                logger.error(f"Skipping auto-response — keyword action not persisted for {from_phone}")
+                logger.error(f"Skipping auto-response — keyword action not persisted for ...{from_phone[-4:] if from_phone else '????'}")
             return {
                 "status": "processed" if committed else "error",
                 "action": "keyword_handled" if committed else "commit_failed",

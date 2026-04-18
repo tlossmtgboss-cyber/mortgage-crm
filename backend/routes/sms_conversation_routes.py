@@ -390,6 +390,10 @@ async def send_sms(
     if not req.to or not req.message.strip():
         raise HTTPException(status_code=400, detail="Phone number and message are required")
 
+    from telephony.phone_utils import normalize_phone
+    if not normalize_phone(req.to):
+        raise HTTPException(status_code=400, detail=f"Invalid phone number format: {req.to}")
+
     # Use existing SMSClient for compliance + sending
     try:
         from integrations.sms_service import SMSClient

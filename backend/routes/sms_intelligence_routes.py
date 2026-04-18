@@ -824,8 +824,8 @@ Respond with this exact JSON structure:
     )
 
 
-async def match_sms_to_entity(phone_number: str, db: Session, user_id: int) -> Dict[str, Any]:
-    """Try to match a phone number to a borrower/loan/lead"""
+async def match_sms_to_entity(phone_number: str, db: Session, user_id: int, organization_id: Optional[int] = None) -> Dict[str, Any]:
+    """Try to match a phone number to a borrower/loan/lead (tenant-isolated)."""
     normalized = normalize_phone(phone_number)
 
     # Check known_client_phones first
@@ -846,14 +846,19 @@ async def match_sms_to_entity(phone_number: str, db: Session, user_id: int) -> D
             "client_name": result[3]
         }
 
+    org_filter = "AND organization_id = :org_id" if organization_id else ""
+    params = {"phone": normalized}
+    if organization_id:
+        params["org_id"] = organization_id
+
     # Check loans table by borrower phone
     try:
-        result = db.execute(text("""
+        result = db.execute(text(f"""
             SELECT id, borrower_name, loan_number
             FROM loans
-            WHERE borrower_phone = :phone
+            WHERE borrower_phone = :phone {org_filter}
             LIMIT 1
-        """), {"phone": normalized}).fetchone()
+        """), params).fetchone()
 
         if result:
             return {
@@ -869,12 +874,12 @@ async def match_sms_to_entity(phone_number: str, db: Session, user_id: int) -> D
 
     # Check leads table
     try:
-        result = db.execute(text("""
+        result = db.execute(text(f"""
             SELECT id, name
             FROM leads
-            WHERE phone = :phone
+            WHERE phone = :phone {org_filter}
             LIMIT 1
-        """), {"phone": normalized}).fetchone()
+        """), params).fetchone()
 
         if result:
             return {

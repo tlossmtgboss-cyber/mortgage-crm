@@ -76,7 +76,7 @@ def enqueue_sms(
         db.commit()
         row = result.fetchone()
         queue_id = row[0] if row else 0
-        logger.info(f"SMS enqueued id={queue_id} to={to_phone}")
+        logger.info(f"SMS enqueued id={queue_id} to=...{to_phone[-4:] if to_phone else '????'}")
         return queue_id
     except Exception as e:
         db.rollback()
@@ -168,7 +168,8 @@ def get_pending_messages(db: Session, limit: int = 50) -> List[dict]:
         rows = db.execute(
             text("""
                 SELECT id, to_phone, from_phone, message_body, lead_id,
-                       user_id, template_id, retry_count, priority
+                       user_id, template_id, retry_count, priority,
+                       organization_id
                 FROM sms_queue
                 WHERE status = 'pending'
                   AND next_attempt_at <= NOW()
@@ -190,6 +191,7 @@ def get_pending_messages(db: Session, limit: int = 50) -> List[dict]:
                 "template_id": row[6],
                 "retry_count": row[7],
                 "priority": row[8],
+                "organization_id": row[9] if len(row) > 9 else None,
             })
         return messages
     except Exception as e:
@@ -238,12 +240,14 @@ def process_pending_queue(db: Session, limit: int = 50) -> dict:
         phone = msg["to_phone"]
         lead_id = msg.get("lead_id")
         user_id = msg.get("user_id")
+        organization_id = msg.get("organization_id")
 
         # Re-verify compliance at send time (consent may have changed since queue time)
         try:
             compliance = check_sms_compliance(
                 db, phone, msg["message_body"],
                 lead_id=lead_id, user_id=user_id,
+                organization_id=organization_id,
             )
         except Exception as e:
             # Compliance check itself failed -- fail-closed for TCPA safety
@@ -271,6 +275,7 @@ def process_pending_queue(db: Session, limit: int = 50) -> dict:
                 text=msg["message_body"],
                 user_id=user_id,
                 lead_id=lead_id,
+                organization_id=organization_id,
                 db=db,
                 bypass_compliance=True,  # Already re-checked above
             )
