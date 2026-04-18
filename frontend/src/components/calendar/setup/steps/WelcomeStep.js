@@ -191,7 +191,7 @@ export default function WelcomeStep({ stepData = {}, onChange, allStepData, onNe
   // Current user from localStorage (same pattern as MarketDashboard, Settings)
   const currentUser = useMemo(() => {
     try {
-      return \(getUserData() || {}\);
+      return (getUserData() || {});
     } catch {
       return {};
     }
