@@ -122,8 +122,11 @@ async def _route_inbound_to_livekit(
 
     # Step 2: SIP transfer to LiveKit Cloud
     # The number in the SIP URI must match a number on the LiveKit inbound trunk.
-    # LiveKit dispatch rule (SDR_wkAxnz6ip5Xd) creates a room with prefix
-    # "aria-inbound-" and dispatches the "aria-voice" agent.
+    # LiveKit dispatch rule creates a room with prefix "aria-inbound-" and
+    # dispatches the "aria-voice" agent.
+    # CRITICAL: Pass the original caller's number as "from" so the SIP INVITE
+    # has From: <caller> and To: <our DID>. If both From and To are our DID,
+    # LiveKit rejects as self-referential (404).
     dial_number = to_number or "+18438838956"
     sip_uri = f"sip:{dial_number}@{lk_sip_domain};transport=tcp"
 
@@ -131,12 +134,15 @@ async def _route_inbound_to_livekit(
         transfer_resp = http_requests.post(
             f"{base_url}/transfer",
             headers=headers,
-            json={"to": sip_uri},
+            json={
+                "to": sip_uri,
+                "from": from_number,
+            },
             timeout=10,
         )
         logger.warning(
-            f"[AriaInbound] Transfer to {sip_uri}: {transfer_resp.status_code} "
-            f"{transfer_resp.text[:200]}"
+            f"[AriaInbound] Transfer to {sip_uri} from={from_number}: "
+            f"{transfer_resp.status_code} {transfer_resp.text[:200]}"
         )
     except Exception as e:
         logger.error(f"[AriaInbound] Transfer failed: {e}", exc_info=True)
