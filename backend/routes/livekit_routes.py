@@ -19,7 +19,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from database import get_db
-from livekit.api import AccessToken, VideoGrants
+from livekit.api import AccessToken, VideoGrants, RoomAgentDispatch, RoomConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +126,16 @@ async def create_voice_token(
             "agent": AGENT_NAME,
         }
         token.with_metadata(json.dumps(metadata))
+
+        # Dispatch the aria-voice agent into the room when this participant connects
+        token.with_room_config(
+            RoomConfiguration(
+                agents=[RoomAgentDispatch(
+                    agent_name=AGENT_NAME,
+                    metadata=json.dumps(metadata),
+                )]
+            )
+        )
 
         jwt_token = token.to_jwt()
 
