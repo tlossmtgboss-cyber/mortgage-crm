@@ -162,13 +162,19 @@ async def handle_telnyx_webhook(
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
     # Early log before any DB operations — guaranteed to appear
-    _raw_event_type = payload.get("data", {}).get("event_type", "unknown")
-    _raw_direction = payload.get("data", {}).get("payload", {}).get("direction", "n/a")
-    _raw_from = payload.get("data", {}).get("payload", {}).get("from", "n/a")
-    _raw_ccid = payload.get("data", {}).get("payload", {}).get("call_control_id", "n/a")
+    _raw_data = payload.get("data", {})
+    _raw_payload = _raw_data.get("payload", {})
+    _raw_event_type = _raw_data.get("event_type", "unknown")
+    _raw_direction = _raw_payload.get("direction", "n/a")
+    _raw_from = _raw_payload.get("from", "n/a")
+    _raw_to = _raw_payload.get("to", "n/a")
+    _raw_ccid = _raw_payload.get("call_control_id", "n/a")
+    _raw_hangup = _raw_payload.get("hangup_cause", "")
+    _raw_sip = _raw_payload.get("sip_hangup_cause", "")
     logger.warning(
         f"[WEBHOOK-ENTRY] type={_raw_event_type} dir={_raw_direction} "
-        f"from={_raw_from} ccid={str(_raw_ccid)[:25]}"
+        f"from={_raw_from} to={_raw_to} ccid={str(_raw_ccid)[:25]}"
+        + (f" hangup={_raw_hangup} sip={_raw_sip}" if _raw_hangup else "")
     )
 
     # Webhook idempotency — use WebhookIdempotencyRecord (database-backed)
