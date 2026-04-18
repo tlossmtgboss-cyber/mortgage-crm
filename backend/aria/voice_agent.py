@@ -47,7 +47,7 @@ CARTESIA_VOICE_ID = os.getenv(
     "ARIA_CARTESIA_VOICE_ID",
     "a0e99841-438c-4a64-b679-ae501e7d6091",  # Jacqueline
 )
-CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-sonnet-4-20250514")
+CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-opus-4-5-20250414")
 TELNYX_TRUNK_ID = os.getenv("TELNYX_SIP_TRUNK_ID", "")
 
 
