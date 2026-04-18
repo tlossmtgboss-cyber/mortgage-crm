@@ -811,7 +811,10 @@ export default function SMSAccordionPanel({
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: `HTTP ${res.status}` }))
-        throw new Error(err.detail || err.error || 'Send failed')
+        const detail = Array.isArray(err.detail)
+          ? err.detail.map((e: any) => e.msg || e.message || JSON.stringify(e)).join('; ')
+          : (err.detail || err.error || 'Send failed')
+        throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
       }
 
       // Update optimistic → delivered

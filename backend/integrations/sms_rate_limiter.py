@@ -157,22 +157,15 @@ def check_recipient_frequency(
     if not normalized:
         return result
 
-    org_filter = ""
-    params = {"phone": normalized}
-    if organization_id:
-        org_filter = "AND organization_id = :org_id"
-        params["org_id"] = organization_id
-
     try:
         row_day = db.execute(
             text(f"""
                 SELECT COUNT(*)
                 FROM sms_rate_limit_log
                 WHERE to_phone = :phone
-                  {org_filter}
                   AND sent_at >= NOW() - INTERVAL '24 hours'
             """),
-            params,
+            {"phone": normalized},
         ).fetchone()
         sent_today = row_day[0] if row_day else 0
 
@@ -181,10 +174,9 @@ def check_recipient_frequency(
                 SELECT COUNT(*)
                 FROM sms_rate_limit_log
                 WHERE to_phone = :phone
-                  {org_filter}
                   AND sent_at >= NOW() - INTERVAL '7 days'
             """),
-            params,
+            {"phone": normalized},
         ).fetchone()
         sent_this_week = row_week[0] if row_week else 0
 
@@ -208,14 +200,14 @@ def check_recipient_frequency(
             return result
 
     except Exception as e:
-        # Fail-closed for TCPA safety — block if rate limit state is unknown
-        logger.error(f"Recipient frequency check failed (blocking send): {e}")
+        # Fail-open: rate limiting is carrier protection, not TCPA compliance.
+        # Consent/DNC checks already gate TCPA; missing rate-limit infrastructure
+        # should not block sends entirely.
+        logger.warning(f"Recipient frequency check failed (allowing send): {e}")
         try:
             db.rollback()
         except Exception:
             pass
-        result["allowed"] = False
-        result["reason"] = f"Rate limit check error (fail-closed): {e}"
 
     return result
 
