@@ -391,15 +391,14 @@ def _build_session(mode: str = "lo_assistant", context: dict = None) -> tuple:
 async def aria_voice_session(ctx: agents.JobContext):
     """Unified session handler for both WebRTC and SIP calls.
 
-    The session mode is determined by room metadata:
-      - {"trigger": "inbound_call"}  -> inbound receptionist
-      - {"trigger": "outbound_call"} -> outbound follow-up
-      - anything else                -> LO assistant (WebRTC default)
-
-    LiveKit AgentServer supports only one rtc_session, so telephony
-    (SIP) and WebRTC sessions share this handler and branch on metadata.
+    Mode detection (in priority order):
+      1. Room metadata {"trigger": "inbound_call"}  -> inbound receptionist
+      2. Room metadata {"trigger": "outbound_call"} -> outbound follow-up
+      3. Room name starting with "aria-inbound"     -> inbound receptionist (SIP dispatch)
+      4. Anything else                              -> LO assistant (WebRTC)
     """
-    logger.info(f"[AriaVoice] Session started: room={ctx.room.name}")
+    room_name = ctx.room.name
+    logger.info(f"[AriaVoice] Session started: room={room_name}")
 
     # Parse room metadata to determine session type
     metadata = {}
@@ -409,6 +408,12 @@ async def aria_voice_session(ctx: agents.JobContext):
         pass
 
     trigger = metadata.get("trigger", "")
+
+    # Detect inbound SIP calls from room name when metadata isn't set
+    # (LiveKit dispatch rule creates rooms named "aria-inbound_<caller>_<random>")
+    if not trigger and room_name.startswith("aria-inbound"):
+        trigger = "inbound_call"
+        logger.info(f"[AriaVoice] Detected inbound SIP call from room name: {room_name}")
 
     if trigger == "inbound_call":
         mode = "inbound_receptionist"
