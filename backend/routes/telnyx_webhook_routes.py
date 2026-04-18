@@ -70,12 +70,12 @@ async def _route_inbound_to_livekit(call_control_id: str, from_number: str, db: 
     """Route an inbound call to Aria via LiveKit SIP bridge.
 
     Flow:
-    1. Answer the call (Telnyx Call Control requires this before transfer)
-    2. Transfer the call to LiveKit SIP domain
-    3. LiveKit dispatch rule creates room + Aria agent auto-joins
+    1. Transfer the unanswered call to LiveKit SIP domain (acts as redirect)
+    2. LiveKit dispatch rule creates room + Aria agent auto-joins
 
     Room pre-creation is NOT needed — the LiveKit dispatch rule handles it.
     The voice agent detects inbound mode from room name prefix "aria-inbound".
+    Telnyx transfer on an unanswered call performs a blind redirect.
     """
     import requests as http_requests
 
@@ -91,26 +91,7 @@ async def _route_inbound_to_livekit(call_control_id: str, from_number: str, db: 
 
     logger.info(f"[AriaInbound] Routing call {call_control_id} from {from_number}")
 
-    # Step 1: Answer the call
-    try:
-        answer_resp = http_requests.post(
-            f"https://api.telnyx.com/v2/calls/{call_control_id}/actions/answer",
-            headers={
-                "Authorization": f"Bearer {telnyx_key}",
-                "Content-Type": "application/json",
-            },
-            json={},
-            timeout=10,
-        )
-        logger.info(f"[AriaInbound] Answer response: {answer_resp.status_code}")
-        if answer_resp.status_code >= 400:
-            logger.error(f"[AriaInbound] Answer failed: {answer_resp.text[:300]}")
-            return
-    except Exception as e:
-        logger.error(f"[AriaInbound] Failed to answer call: {e}")
-        return
-
-    # Step 2: Transfer to LiveKit SIP (dispatch rule creates room automatically)
+    # Transfer to LiveKit SIP (dispatch rule creates room automatically)
     sip_uri = f"sip:aria-inbound@{sip_domain}"
     logger.info(f"[AriaInbound] Transferring to {sip_uri}")
 
