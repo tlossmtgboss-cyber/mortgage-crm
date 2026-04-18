@@ -353,14 +353,14 @@ def build_tts_client(provider: str = None, voice_id: str = None, voice_settings:
         return ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID, voice_settings=voice_settings)
     elif provider == "openai" and OPENAI_API_KEY:
         return OpenAITTSClient(voice=voice_id or "nova")
-    # Auto-detect: prefer Google, then ElevenLabs, then OpenAI
+    # Auto-detect: prefer Google, then OpenAI, then ElevenLabs
     elif not provider:
         if GOOGLE_TTS_ENABLED:
             return GoogleTTSClient(voice_name=voice_id if voice_id and voice_id.startswith("en-US") else GOOGLE_TTS_VOICE)
-        elif ELEVENLABS_API_KEY:
-            return ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID, voice_settings=voice_settings)
         elif OPENAI_API_KEY:
             return OpenAITTSClient(voice=voice_id or "nova")
+        elif ELEVENLABS_API_KEY:
+            return ElevenLabsTTSClient(voice_id=voice_id or ELEVENLABS_VOICE_ID, voice_settings=voice_settings)
     raise ValueError("No TTS provider configured")
 
 
