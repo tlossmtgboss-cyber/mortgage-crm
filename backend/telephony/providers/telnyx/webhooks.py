@@ -83,7 +83,7 @@ class TelnyxCallEvent:
     call_session_id: str
     from_number: str
     to_number: str
-    direction: str  # "inbound" or "outbound"
+    direction: str  # "incoming" or "outgoing" (Call Control uses these values)
     state: str
 
     @classmethod
