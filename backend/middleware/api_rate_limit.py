@@ -106,6 +106,13 @@ EXEMPT_PATHS = frozenset({
     "/api/v1/csrf-token",
 })
 
+# Auth endpoints have their own dedicated rate limiting (mobile_rate_limit.py)
+EXEMPT_PREFIXES_AUTH = (
+    "/api/v1/account/start",
+    "/api/v1/auth/login",
+    "/token",
+)
+
 # Exempt prefixes — webhooks and public endpoints are rate-limited elsewhere
 EXEMPT_PREFIXES = (
     "/api/v1/webhook/",
@@ -384,6 +391,10 @@ class APIRateLimitMiddleware(BaseHTTPMiddleware):
 
         # Skip exempt prefixes
         if any(path.startswith(prefix) for prefix in EXEMPT_PREFIXES):
+            return await call_next(request)
+
+        # Auth endpoints have dedicated rate limiting elsewhere
+        if any(path.startswith(prefix) for prefix in EXEMPT_PREFIXES_AUTH):
             return await call_next(request)
 
         # Skip OPTIONS (CORS preflight)
