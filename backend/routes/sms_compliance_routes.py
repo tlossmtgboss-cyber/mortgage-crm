@@ -99,81 +99,63 @@ async def _send_sms(to: str, from_: str, body: str, messaging_profile_id: str = 
 # ---------------------------------------------------------------------------
 
 def _opt_out(db: Session, phone: str, org_id: Optional[int], keyword: str):
-    """Record an SMS opt-out (STOP). Upsert into sms_consent table."""
+    """Record an SMS opt-out (STOP). Upserts into sms_opt_outs table."""
     try:
-        existing = db.execute(text("""
-            SELECT id FROM sms_consent WHERE phone = :phone AND organization_id = :org_id
-        """), {"phone": phone, "org_id": org_id}).fetchone()
-
         now = datetime.now(timezone.utc)
-
-        if existing:
-            db.execute(text("""
-                UPDATE sms_consent SET
-                    opted_out = TRUE, opted_out_at = :now,
-                    opted_out_keyword = :kw, updated_at = :now
-                WHERE id = :id
-            """), {"now": now, "kw": keyword, "id": existing.id})
-        else:
-            db.execute(text("""
-                INSERT INTO sms_consent (phone, organization_id, opted_out, opted_out_at,
-                    opted_out_keyword, created_at, updated_at)
-                VALUES (:phone, :org_id, TRUE, :now, :kw, :now, :now)
-            """), {"phone": phone, "org_id": org_id, "now": now, "kw": keyword})
-
+        db.execute(text("""
+            INSERT INTO sms_opt_outs (phone_number, opt_out_keyword, organization_id,
+                active, opted_out_at)
+            VALUES (:phone, :kw, :org_id, TRUE, :now)
+            ON CONFLICT (phone_number) DO UPDATE SET
+                active = TRUE, opted_out_at = EXCLUDED.opted_out_at,
+                opt_out_keyword = EXCLUDED.opt_out_keyword,
+                organization_id = COALESCE(EXCLUDED.organization_id, sms_opt_outs.organization_id)
+        """), {"phone": phone, "kw": keyword, "org_id": org_id, "now": now})
         db.commit()
         logger.info("SMS opt-out recorded: ***%s keyword=%s org=%s", phone[-4:], keyword, org_id)
-
     except Exception as e:
         logger.exception("Failed to record opt-out for ***%s: %s", phone[-4:], e)
         db.rollback()
 
-    # Also add to DNC list if the table exists
-    try:
-        db.execute(text("""
-            INSERT INTO dnc_numbers (phone_number, organization_id, source, added_at)
-            VALUES (:phone, :org_id, :source, :now)
-            ON CONFLICT (phone_number, organization_id) DO UPDATE SET
-                source = EXCLUDED.source, added_at = EXCLUDED.added_at
-        """), {"phone": phone, "org_id": org_id, "source": f"sms_stop_{keyword}", "now": datetime.now(timezone.utc)})
-        db.commit()
-    except Exception:
-        db.rollback()
-
 
 def _opt_in(db: Session, phone: str, org_id: Optional[int], keyword: str):
-    """Record an SMS opt-in (START). Remove opt-out flag."""
+    """Record an SMS opt-in (START). Deactivate opt-out flag."""
     try:
         now = datetime.now(timezone.utc)
-        db.execute(text("""
-            UPDATE sms_consent SET
-                opted_out = FALSE, opted_in_at = :now,
-                opted_in_keyword = :kw, updated_at = :now
-            WHERE phone = :phone AND organization_id = :org_id
-        """), {"now": now, "kw": keyword, "phone": phone, "org_id": org_id})
+        if org_id:
+            db.execute(text("""
+                UPDATE sms_opt_outs SET active = FALSE, opted_in_at = :now
+                WHERE phone_number = :phone
+                  AND (organization_id = :org_id OR organization_id IS NULL)
+            """), {"now": now, "phone": phone, "org_id": org_id})
+        else:
+            db.execute(text("""
+                UPDATE sms_opt_outs SET active = FALSE, opted_in_at = :now
+                WHERE phone_number = :phone
+            """), {"now": now, "phone": phone})
         db.commit()
         logger.info("SMS opt-in recorded: ***%s keyword=%s org=%s", phone[-4:], keyword, org_id)
     except Exception as e:
         logger.exception("Failed to record opt-in for ***%s: %s", phone[-4:], e)
         db.rollback()
 
-    # Remove from DNC list
-    try:
-        db.execute(text("""
-            DELETE FROM dnc_numbers WHERE phone_number = :phone AND organization_id = :org_id
-        """), {"phone": phone, "org_id": org_id})
-        db.commit()
-    except Exception:
-        db.rollback()
-
 
 def is_opted_out(db: Session, phone: str, org_id: Optional[int]) -> bool:
     """Check if a phone number has opted out of SMS for this org."""
-    row = db.execute(text("""
-        SELECT opted_out FROM sms_consent
-        WHERE phone = :phone AND organization_id = :org_id
-    """), {"phone": phone, "org_id": org_id}).fetchone()
-    return bool(row and row.opted_out)
+    if org_id:
+        row = db.execute(text("""
+            SELECT id FROM sms_opt_outs
+            WHERE phone_number = :phone AND active = TRUE
+              AND (organization_id = :org_id OR organization_id IS NULL)
+            LIMIT 1
+        """), {"phone": phone, "org_id": org_id}).fetchone()
+    else:
+        row = db.execute(text("""
+            SELECT id FROM sms_opt_outs
+            WHERE phone_number = :phone AND active = TRUE
+            LIMIT 1
+        """), {"phone": phone}).fetchone()
+    return row is not None
 
 
 # ---------------------------------------------------------------------------
@@ -318,9 +300,9 @@ async def list_opt_outs(
         raise HTTPException(status_code=401, detail="Auth required")
 
     rows = db.execute(text("""
-        SELECT phone, opted_out_at, opted_out_keyword
-        FROM sms_consent
-        WHERE organization_id = :org_id AND opted_out = TRUE
+        SELECT phone_number, opted_out_at, opt_out_keyword
+        FROM sms_opt_outs
+        WHERE organization_id = :org_id AND active = TRUE
         ORDER BY opted_out_at DESC
         LIMIT :lim
     """), {"org_id": org_id, "lim": limit}).fetchall()
@@ -328,9 +310,9 @@ async def list_opt_outs(
     return {
         "opt_outs": [
             {
-                "phone": r.phone,
-                "opted_out_at": r.opted_out_at.isoformat() if r.opted_out_at else None,
-                "keyword": r.opted_out_keyword,
+                "phone": r[0],
+                "opted_out_at": r[1].isoformat() if r[1] else None,
+                "keyword": r[2],
             }
             for r in rows
         ],
