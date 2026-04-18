@@ -318,12 +318,12 @@ function Navigation({ onToggleAssistant, onToggleCoach, assistantOpen, coachOpen
 
           {/* Brand logo / name — driven by per-org WhiteLabelConfig */}
           {logoUrl ? (
-            <Link to="/" className="nav-brand" title={brandName}>
+            <Link to="/aria-voice" className="nav-brand" title="Aria">
               <img src={logoUrl} alt={brandName} className="nav-brand-logo" />
             </Link>
           ) : (
-            <Link to="/" className="nav-brand nav-brand-text" title={brandName}>
-              {brandName}
+            <Link to="/aria-voice" className="nav-brand nav-brand-text" title="Aria">
+              Aria
             </Link>
           )}
 
