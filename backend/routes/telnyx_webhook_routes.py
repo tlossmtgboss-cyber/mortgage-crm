@@ -63,20 +63,19 @@ def _validate_texml_request(request: Request):
 
 
 # =============================================================================
-# Inbound Call Routing — Telnyx answer + SIP transfer to LiveKit
+# Inbound Call Routing — Telnyx answer + LiveKit outbound SIP callback
 # =============================================================================
 
 ARIA_DID = "+18438838956"
-LIVEKIT_SIP_DOMAIN = os.getenv("LIVEKIT_SIP_DOMAIN", "aria-7q60gwyk.sip.livekit.cloud")
 
 
 async def _route_inbound_to_livekit(
     call_control_id: str, from_number: str, to_number: str, db: Session,
 ):
-    """Route an inbound call to Aria — caller stays on the line.
+    """Route an inbound call to Aria via callback.
 
-    Primary: SIP transfer to LiveKit (seamless, no callback).
-    Fallback: Create LiveKit room + outbound SIP callback if transfer fails.
+    Answer → hold message → hang up → LiveKit calls caller back.
+    LiveKit Cloud inbound SIP is broken (404), so callback is the only path.
     """
     import requests as http_requests
     from livekit import api as livekit_api
@@ -113,42 +112,13 @@ async def _route_inbound_to_livekit(
         logger.error(f"[AriaInbound] Answer failed: {e}", exc_info=True)
         return
 
-    # Step 2: Try SIP transfer to LiveKit (keeps caller on the line)
-    sip_uri = f"sip:{to_number}@{LIVEKIT_SIP_DOMAIN}"
-    transfer_ok = False
-    try:
-        transfer_resp = http_requests.post(
-            f"{base_url}/transfer",
-            headers=headers,
-            json={
-                "to": sip_uri,
-                "from": from_number,
-            },
-            timeout=10,
-        )
-        logger.warning(
-            f"[AriaInbound] SIP transfer to {sip_uri}: {transfer_resp.status_code} "
-            f"{transfer_resp.text[:200]}"
-        )
-        if transfer_resp.status_code < 400:
-            transfer_ok = True
-    except Exception as e:
-        logger.warning(f"[AriaInbound] SIP transfer failed: {e}")
-
-    if transfer_ok:
-        logger.warning("[AriaInbound] SIP transfer accepted — caller connected to LiveKit")
-        return
-
-    # ─── Fallback: outbound SIP callback ─────────────────────────────────
-    logger.warning("[AriaInbound] SIP transfer failed, falling back to callback")
-
-    # Brief hold message while we set up the callback
+    # Step 2: Tell caller what's happening
     try:
         http_requests.post(
             f"{base_url}/speak",
             headers=headers,
             json={
-                "payload": "Thanks for calling Perennia. One moment while I connect you with Aria.",
+                "payload": "Thanks for calling Perennia. Aria will be right with you — please stay on the line.",
                 "voice": "female",
                 "language": "en-US",
             },
@@ -157,7 +127,7 @@ async def _route_inbound_to_livekit(
     except Exception as e:
         logger.warning(f"[AriaInbound] Speak failed: {e}")
 
-    # Create LiveKit room and outbound SIP call
+    # Step 3: While TTS plays, create LiveKit room + outbound SIP call
     import hashlib, time as _time
     room_suffix = hashlib.md5(f"{from_number}-{_time.time()}".encode()).hexdigest()[:8]
     room_name = f"aria-inbound-{room_suffix}"
@@ -192,7 +162,7 @@ async def _route_inbound_to_livekit(
     except Exception as e:
         logger.error(f"[AriaInbound] Callback setup failed: {e}", exc_info=True)
 
-    # Hang up original call after brief delay for TTS to play
+    # Step 4: Wait for TTS, then hang up so caller's phone is free for callback
     await asyncio.sleep(5)
     try:
         http_requests.post(f"{base_url}/hangup", headers=headers, json={}, timeout=10)
