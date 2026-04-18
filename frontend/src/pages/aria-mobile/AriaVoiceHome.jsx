@@ -249,7 +249,18 @@ class TTSQueue {
       });
     } catch (err) {
       if (this._aborted) return;
-      console.warn('[TTSQueue] TTS failed:', err.message);
+      console.warn('[TTSQueue] TTS API failed, falling back to browser speech:', err.message);
+      // Fallback: use browser's built-in speech synthesis
+      if (window.speechSynthesis) {
+        await new Promise((resolve) => {
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          utterance.onend = resolve;
+          utterance.onerror = resolve;
+          window.speechSynthesis.speak(utterance);
+        });
+      }
     }
     if (!this._aborted) this._playNext();
   }
