@@ -70,12 +70,9 @@ async def _route_inbound_to_livekit(call_control_id: str, from_number: str, db: 
     """Route an inbound call to Aria via LiveKit SIP bridge.
 
     Flow:
-    1. Transfer the unanswered call to LiveKit SIP domain (acts as redirect)
-    2. LiveKit dispatch rule creates room + Aria agent auto-joins
-
-    Room pre-creation is NOT needed — the LiveKit dispatch rule handles it.
-    The voice agent detects inbound mode from room name prefix "aria-inbound".
-    Telnyx transfer on an unanswered call performs a blind redirect.
+    1. Answer the call (Telnyx Call Control requires answer before transfer)
+    2. Transfer to LiveKit SIP domain
+    3. LiveKit dispatch rule creates room + Aria agent auto-joins
     """
     import requests as http_requests
 
@@ -89,19 +86,38 @@ async def _route_inbound_to_livekit(call_control_id: str, from_number: str, db: 
         logger.error("[AriaInbound] LIVEKIT_SIP_DOMAIN not set — cannot route to LiveKit")
         return
 
-    logger.info(f"[AriaInbound] Routing call {call_control_id} from {from_number}")
+    logger.info(f"[AriaInbound] Routing call {call_control_id[:30]} from {from_number}")
 
-    # Transfer to LiveKit SIP (dispatch rule creates room automatically)
+    headers = {
+        "Authorization": f"Bearer {telnyx_key}",
+        "Content-Type": "application/json",
+    }
+    base_url = f"https://api.telnyx.com/v2/calls/{call_control_id}/actions"
+
+    # Step 1: Answer the call (Telnyx queues commands in order)
+    try:
+        answer_resp = http_requests.post(
+            f"{base_url}/answer",
+            headers=headers,
+            json={},
+            timeout=10,
+        )
+        logger.info(
+            f"[AriaInbound] Answer response: {answer_resp.status_code} "
+            f"{answer_resp.text[:200]}"
+        )
+    except Exception as e:
+        logger.error(f"[AriaInbound] Answer failed: {e}", exc_info=True)
+        return
+
+    # Step 2: Transfer to LiveKit SIP (dispatch rule creates room automatically)
     sip_uri = f"sip:aria-inbound@{sip_domain}"
     logger.info(f"[AriaInbound] Transferring to {sip_uri}")
 
     try:
         transfer_resp = http_requests.post(
-            f"https://api.telnyx.com/v2/calls/{call_control_id}/actions/transfer",
-            headers={
-                "Authorization": f"Bearer {telnyx_key}",
-                "Content-Type": "application/json",
-            },
+            f"{base_url}/transfer",
+            headers=headers,
             json={"to": sip_uri},
             timeout=10,
         )
@@ -109,6 +125,11 @@ async def _route_inbound_to_livekit(call_control_id: str, from_number: str, db: 
             f"[AriaInbound] Transfer response: {transfer_resp.status_code} "
             f"{transfer_resp.text[:200]}"
         )
+        if transfer_resp.status_code >= 400:
+            logger.error(
+                f"[AriaInbound] Transfer FAILED with {transfer_resp.status_code}: "
+                f"{transfer_resp.text[:500]}"
+            )
     except Exception as e:
         logger.error(f"[AriaInbound] Transfer failed: {e}", exc_info=True)
 
@@ -134,6 +155,16 @@ async def handle_telnyx_webhook(
     except Exception as e:
         logger.error(f"Failed to parse Telnyx webhook: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
+
+    # Early log before any DB operations — guaranteed to appear
+    _raw_event_type = payload.get("data", {}).get("event_type", "unknown")
+    _raw_direction = payload.get("data", {}).get("payload", {}).get("direction", "n/a")
+    _raw_from = payload.get("data", {}).get("payload", {}).get("from", "n/a")
+    _raw_ccid = payload.get("data", {}).get("payload", {}).get("call_control_id", "n/a")
+    logger.warning(
+        f"[WEBHOOK-ENTRY] type={_raw_event_type} dir={_raw_direction} "
+        f"from={_raw_from} ccid={str(_raw_ccid)[:25]}"
+    )
 
     # Webhook idempotency — use WebhookIdempotencyRecord (database-backed)
     # instead of Activity.content.contains() which was unreliable and slow
@@ -381,23 +412,17 @@ async def handle_call_answered(event: TelnyxCallEvent, db: Session):
 
     logger.info(f"Call answered: {call_control_id}")
 
-    # Fetch call record to verify org_id context
-    call_record = db.execute(sa_text("""
-        SELECT id, organization_id FROM amd_outbound_calls
-        WHERE call_sid = :call_id
-    """), {"call_id": call_control_id}).fetchone()
-
-    if call_record and call_record[1]:
-        org_id = call_record[1]
-        logger.info(f"Call answered for org_id={org_id}")
-
-    # Update call status
-    db.execute(sa_text("""
-        UPDATE amd_outbound_calls
-        SET status = 'answered'
-        WHERE call_sid = :call_id
-    """), {"call_id": call_control_id})
-    db.commit()
+    # Update call status (amd_outbound_calls only has id, call_sid, status columns)
+    try:
+        db.execute(sa_text("""
+            UPDATE amd_outbound_calls
+            SET status = 'answered'
+            WHERE call_sid = :call_id
+        """), {"call_id": call_control_id})
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.debug(f"amd_outbound_calls update skipped: {e}")
 
     return {"status": "acknowledged", "call_id": call_control_id}
 
@@ -409,24 +434,17 @@ async def handle_call_hangup(event: TelnyxCallEvent, db: Session):
 
     logger.info(f"Call hangup: {call_control_id}, cause: {hangup_cause}")
 
-    # Fetch call record to verify org_id context
-    call_record = db.execute(sa_text("""
-        SELECT id, organization_id FROM amd_outbound_calls
-        WHERE call_sid = :call_id
-    """), {"call_id": call_control_id}).fetchone()
-
-    if call_record and call_record[1]:
-        org_id = call_record[1]
-        logger.info(f"Call hangup for org_id={org_id}")
-
-    # Update call status
-    db.execute(sa_text("""
-        UPDATE amd_outbound_calls
-        SET status = 'completed',
-            call_ended_at = NOW()
-        WHERE call_sid = :call_id
-    """), {"call_id": call_control_id})
-    db.commit()
+    # Update call status (amd_outbound_calls only has id, call_sid, status columns)
+    try:
+        db.execute(sa_text("""
+            UPDATE amd_outbound_calls
+            SET status = 'completed'
+            WHERE call_sid = :call_id
+        """), {"call_id": call_control_id})
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.debug(f"amd_outbound_calls update skipped: {e}")
 
     return {"status": "acknowledged", "call_id": call_control_id, "cause": hangup_cause}
 
