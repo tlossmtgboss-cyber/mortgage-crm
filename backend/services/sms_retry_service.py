@@ -189,6 +189,7 @@ class SMSRetryService:
                     from_phone=from_phone,
                     message=message,
                     messaging_profile_id=messaging_profile_id,
+                    organization_id=organization_id,
                 )
 
                 self._record_success()
@@ -298,12 +299,13 @@ class SMSRetryService:
         from_phone: str,
         message: str,
         messaging_profile_id: Optional[str] = None,
+        organization_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Send SMS via the centralized async Telnyx chokepoint.
 
         Raises on failure (caller handles retry logic).
-        Compliance is bypassed here because the retry service is called
-        by higher-level code that has already verified compliance.
+        Compliance is bypassed here because _recheck_compliance() already
+        verified consent before this call.
         """
         from telephony.sms import send_sms_verified_async
 
@@ -313,7 +315,8 @@ class SMSRetryService:
             text=message,
             messaging_profile_id=messaging_profile_id,
             api_key=self._api_key,
-            bypass_compliance=True,  # Caller (Aria/workflow) owns compliance
+            organization_id=organization_id,
+            bypass_compliance=True,
         )
 
         if result.get("status") == "sent":

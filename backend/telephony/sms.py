@@ -286,10 +286,40 @@ def send_sms_verified(
                 "reason": f"Compliance check error: {e}",
             }
     else:
-        logger.warning(
-            "SMS to ...%s sent without DB-backed compliance check (no session provided)",
-            normalized[-4:],
-        )
+        # No DB session provided — create a temporary one for compliance
+        try:
+            from db import SessionLocal
+            _temp_db = SessionLocal()
+            try:
+                from integrations.sms_compliance_gate import check_sms_compliance
+
+                compliance = check_sms_compliance(
+                    _temp_db, normalized, text,
+                    lead_id=lead_id, user_id=user_id,
+                    organization_id=organization_id,
+                )
+                if not compliance.allowed:
+                    logger.info(
+                        "SMS to ...%s blocked by compliance (temp session): %s",
+                        normalized[-4:], compliance.reason,
+                    )
+                    return {
+                        "id": None,
+                        "status": "blocked",
+                        "reason": compliance.reason,
+                    }
+            finally:
+                _temp_db.close()
+        except Exception as e:
+            logger.error(
+                "Compliance check error (temp session), blocking SMS to ...%s: %s",
+                normalized[-4:], e,
+            )
+            return {
+                "id": None,
+                "status": "blocked",
+                "reason": f"Compliance check error: {e}",
+            }
 
     # --- Actual send ---
     result = _send_sms_raw(
@@ -371,10 +401,39 @@ async def send_sms_verified_async(
                 "reason": f"Compliance check error: {e}",
             }
     else:
-        logger.warning(
-            "SMS (async) to ...%s sent without DB-backed compliance check (no session provided)",
-            normalized[-4:],
-        )
+        try:
+            from db import SessionLocal
+            _temp_db = SessionLocal()
+            try:
+                from integrations.sms_compliance_gate import check_sms_compliance
+
+                compliance = check_sms_compliance(
+                    _temp_db, normalized, text,
+                    lead_id=lead_id, user_id=user_id,
+                    organization_id=organization_id,
+                )
+                if not compliance.allowed:
+                    logger.info(
+                        "SMS (async) to ...%s blocked by compliance (temp session): %s",
+                        normalized[-4:], compliance.reason,
+                    )
+                    return {
+                        "id": None,
+                        "status": "blocked",
+                        "reason": compliance.reason,
+                    }
+            finally:
+                _temp_db.close()
+        except Exception as e:
+            logger.error(
+                "Compliance check error (temp session, async), blocking SMS to ...%s: %s",
+                normalized[-4:], e,
+            )
+            return {
+                "id": None,
+                "status": "blocked",
+                "reason": f"Compliance check error: {e}",
+            }
 
     # --- Actual send (async HTTP) ---
     result = await _send_sms_raw_async(
