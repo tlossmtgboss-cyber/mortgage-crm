@@ -15,7 +15,7 @@
  * so the service is safe to import and call from any environment.
  */
 
-import { axiosInstance } from './api';
+import api from './api';
 import { isAuthenticated } from '../utils/tokenStore';
 
 // ============================================================================
@@ -67,7 +67,7 @@ export async function registerDeviceToken(token) {
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const response = await axiosInstance.post('/api/v1/notifications/register-device', {
+      const response = await api.post('/api/v1/notifications/register-device', {
         device_token: token,
         platform: getPlatformName(),
         // Include subscription details for web push
@@ -302,7 +302,7 @@ async function initializeWebPush() {
           // Try to subscribe. This requires a VAPID public key from the server.
           // If the server hasn't provided one, we fall back to basic web notifications.
           try {
-            const response = await axiosInstance.get('/api/v1/notifications/vapid-key');
+            const response = await api.get('/api/v1/notifications/vapid-key');
 
             const { vapid_public_key } = response.data;
             if (vapid_public_key) {
@@ -435,7 +435,7 @@ export async function teardownPushNotifications() {
   // Tell backend to forget this device
   if (_deviceToken && isAuthenticated()) {
     try {
-      await axiosInstance.post('/api/v1/notifications/unregister-device', {
+      await api.post('/api/v1/notifications/unregister-device', {
         device_token: _deviceToken,
         platform: getPlatformName(),
       });

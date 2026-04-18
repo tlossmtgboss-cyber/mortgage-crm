@@ -9,7 +9,7 @@
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
-import useCallIntelligenceSession from './useCallIntelligenceSession';
+import { useCallIntelligenceSession } from './useCallIntelligenceSession';
 
 const useAriaCallIntelligence = ({ onArtifactsReady, onSessionStarted, onSessionEnded } = {}) => {
   const [isStarting, setIsStarting] = useState(false);

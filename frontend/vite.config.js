@@ -25,6 +25,8 @@ export default defineConfig({
     sourcemap: true,
     // Rollup options for chunking
     rollupOptions: {
+      // Native-only Capacitor plugins — not available in web builds
+      external: ['@capgo/capacitor-ssl-pinning'],
       output: {
         manualChunks: {
           vendor: ['react', 'react-dom', 'react-router-dom'],
