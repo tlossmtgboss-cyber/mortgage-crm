@@ -1173,6 +1173,35 @@ function LeadDetail() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, id]);
 
+  // Load SMS Archive when tab is selected
+  useEffect(() => {
+    if (archiveSubTab !== 'sms' || !lead?.phone) return;
+    const fetchSmsArchive = async () => {
+      setArchiveLoading(true);
+      try {
+        const token = getToken();
+        const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+        const API_BASE = isProduction
+          ? 'https://api.perenniaai.com'
+          : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+        const phone = encodeURIComponent(lead.phone);
+        const res = await fetch(`${API_BASE}/api/v1/sms/conversations/${phone}?limit=100`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setSmsArchive(data.messages || data || []);
+        }
+      } catch (err) {
+        console.error('Error loading SMS archive:', err);
+      } finally {
+        setArchiveLoading(false);
+      }
+    };
+    fetchSmsArchive();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archiveSubTab, lead?.phone]);
+
   // Load conditions for the lead
   const loadConditions = async () => {
     if (!id) return;
@@ -3871,11 +3900,12 @@ function LeadDetail() {
                         className={`archive-item sms-item ${sms.direction || 'outbound'}`}
                       >
                         <div className="sms-bubble">
+                          {sms.senderName && <div className="sms-sender" style={{ fontSize: '11px', fontWeight: 600, marginBottom: 2, opacity: 0.7 }}>{sms.senderName}</div>}
                           <div className="sms-message">{sms.message || sms.body}</div>
                           <div className="sms-meta">
                             <span className="sms-status">{sms.status || 'sent'}</span>
                             <span className="sms-time">
-                              {new Date(sms.sent_at || sms.created_at).toLocaleString()}
+                              {new Date(sms.timestamp || sms.sent_at || sms.created_at).toLocaleString()}
                             </span>
                           </div>
                         </div>
