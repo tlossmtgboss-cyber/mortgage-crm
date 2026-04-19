@@ -164,6 +164,7 @@
 <p><strong>Human-in-the-loop staging burden.</strong> All memory writes below auto-commit confidence go to a staging queue for human review. This is the correct v1 posture for a mortgage platform (false positives in memory are compliance-grade problems), but it creates ongoing operational cost. The staging UI and review workflow are ship requirements, not nice-to-haves.</p>
 </li>
 </ul>
+<p><strong>Not in this spec:</strong> Phase B (Guideline RAG), LangGraph agent memory for the 22 CRM agents, Pinecone integration, cross-borrower analytics, and rate/pricing engine live data feeds. All are either out of scope or architecturally accounted for (shared retrieval service) without being implemented.</p>
 <hr />
 <h2 id="table-of-contents">Table of Contents</h2>
 <ol>
@@ -660,10 +661,10 @@
 - <code>fact_key = "contact_method"</code> → "prefers text" supersedes "prefers email"
 - <code>fact_key = "best_call_time"</code> → "after 5pm" supersedes "mornings"</p>
 <p><strong>Episodic facts</strong> use <code>(topic, text)</code> with semantic dedup. Before committing, compute cosine similarity against existing facts with the same <code>topic</code> for the same <code>borrower_id</code>. If similarity &gt; 0.92:
-- If the new fact has <strong>higher confidence</strong> → supersede the old fact
-- If the new fact has <strong>lower confidence but same meaning</strong> (confirmation) → refresh <code>last_verified_at</code> on the existing fact, do not drop the new observation
-- If the new fact <strong>contradicts</strong> the existing fact → keep both, flag for human review</p>
-<p>The confirmation path is critical: a borrower restating "my credit score is 740" in a later call should refresh the existing fact's <code>last_verified_at</code>, not be silently dropped as a duplicate. This is what keeps the freshness signal accurate.</p>
+- If the new fact has <strong>higher confidence</strong> → supersede the old fact (new row, old row gets <code>superseded_by</code>)
+- If the new fact has <strong>lower confidence but same meaning</strong> (confirmation) → update <code>last_verified_at</code> on the existing row and write a <code>confirmation</code> event to <code>memory_audit_events</code> with the new transcript span. <strong>Do not insert a new row in <code>agent_memories</code></strong> — the observation is preserved in the audit event, not as a duplicate fact.
+- If the new fact <strong>contradicts</strong> the existing fact → keep both (insert new row), flag for human review via staging</p>
+<p>The confirmation path is critical: a borrower restating "my credit score is 740" in a later call should refresh the existing fact's <code>last_verified_at</code>, not be silently dropped as a duplicate. This is what keeps the freshness signal accurate. The audit event preserves the confirmation observation (source call, transcript span) without creating a row that conflicts with the <code>uq_mem_episodic_active</code> unique index.</p>
 <h3 id="supersession">Supersession</h3>
 <p>When a fact is superseded:
 - <code>superseded_by</code> column on the old row points to the new fact's ID
@@ -768,8 +769,15 @@
   - <code>POST /admin/memory-staging/{id}/reject</code> → body: <code>{"reason": "..."}</code>, set terminal status
   - <code>PATCH /admin/memory-staging/{id}</code> → body: <code>{"fact_text": "...", "topic": "..."}</code>, edit before approve
   - All endpoints require <code>get_current_user</code> with admin role check + tenant scoping</p>
-<h3 id="idempotency">Idempotency</h3>
-<p>Dedup key: <code>(borrower_id, fact_key, source_call_id)</code> for preferences, <code>(borrower_id, topic, content_hash, source_call_id)</code> for episodic facts. Re-processing the same call transcript produces no duplicate writes.</p>
+<h3 id="identity-keys-vs-idempotency">Identity keys vs. idempotency</h3>
+<p>Two distinct invariants, enforced separately:</p>
+<p><strong>Identity key</strong> (for upsert/supersession semantics — "is this the same fact?"):
+- Preferences: <code>(borrower_id, fact_key)</code> — cross-call upsert. "Prefers text" from call 5 supersedes "prefers email" from call 2.
+- Episodic facts: <code>(borrower_id, content_hash)</code> — semantic dedup via cosine similarity within same topic.</p>
+<p><strong>Idempotency key</strong> (for replay safety — "did we already process this call?"):
+- Enforced by the consolidation worker checking <code>memory_audit_events</code> for an existing <code>extraction</code> event with the same <code>source_call_id</code> before processing. If found, skip.
+- NOT enforced via unique indexes that include <code>source_call_id</code> — that conflates "same fact" with "same extraction run," which breaks cross-call preference supersession (call 5 and call 2 have different <code>source_call_id</code> values, so the dedup key would treat both preferences as distinct rather than superseding).</p>
+<p>Re-processing the same call transcript produces no duplicate writes because the worker checks the audit log first, not because the identity key includes the call ID.</p>
 <h3 id="trigger">Trigger</h3>
 <p>Consolidation is triggered by the voice agent's <code>on_exit</code> handler via:</p>
 <div class="highlight"><pre><span></span><code>POST /internal/aria/consolidate
@@ -874,16 +882,14 @@
 <span class="w">    </span><span class="n">content_hash</span><span class="w">    </span><span class="nb">VARCHAR</span><span class="p">(</span><span class="mi">32</span><span class="p">)</span><span class="w">          </span><span class="c1">-- SHA-256 prefix of fact_text for episodic dedup</span>
 <span class="p">);</span>
 
-<span class="c1">-- Preference dedup: one PENDING fact_key per borrower per call.</span>
-<span class="c1">-- Scoped to pending_review so that corrections (edit → re-stage) and</span>
-<span class="c1">-- re-processing after approval/rejection are not blocked.</span>
+<span class="c1">-- Staging dedup: prevents the same extraction run from inserting duplicates.</span>
+<span class="c1">-- source_call_id is included here (unlike agent_memories) because staging</span>
+<span class="c1">-- is scoped to a single extraction run. Cross-call supersession happens</span>
+<span class="c1">-- at commit time against agent_memories, not in staging.</span>
 <span class="k">CREATE</span><span class="w"> </span><span class="k">UNIQUE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="n">uq_staging_pref</span>
 <span class="w">    </span><span class="k">ON</span><span class="w"> </span><span class="n">memory_staging</span><span class="w"> </span><span class="p">(</span><span class="n">borrower_id</span><span class="p">,</span><span class="w"> </span><span class="n">fact_key</span><span class="p">,</span><span class="w"> </span><span class="n">source_call_id</span><span class="p">)</span>
 <span class="w">    </span><span class="k">WHERE</span><span class="w"> </span><span class="n">fact_key</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;pending_review&#39;</span><span class="p">;</span>
 
-<span class="c1">-- Episodic dedup: one PENDING content_hash per borrower per call.</span>
-<span class="c1">-- Same status scoping — terminal rows (approved/rejected) don&#39;t block</span>
-<span class="c1">-- subsequent staging entries.</span>
 <span class="k">CREATE</span><span class="w"> </span><span class="k">UNIQUE</span><span class="w"> </span><span class="k">INDEX</span><span class="w"> </span><span class="k">IF</span><span class="w"> </span><span class="k">NOT</span><span class="w"> </span><span class="k">EXISTS</span><span class="w"> </span><span class="n">uq_staging_episodic</span>
 <span class="w">    </span><span class="k">ON</span><span class="w"> </span><span class="n">memory_staging</span><span class="w"> </span><span class="p">(</span><span class="n">borrower_id</span><span class="p">,</span><span class="w"> </span><span class="n">content_hash</span><span class="p">,</span><span class="w"> </span><span class="n">source_call_id</span><span class="p">)</span>
 <span class="w">    </span><span class="k">WHERE</span><span class="w"> </span><span class="n">fact_key</span><span class="w"> </span><span class="k">IS</span><span class="w"> </span><span class="k">NULL</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="n">status</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;pending_review&#39;</span><span class="p">;</span>
@@ -1307,6 +1313,14 @@
 <td>Staging UI API endpoints (list, approve, reject, edit)</td>
 </tr>
 <tr>
+<td><code>frontend/src/pages/MemoryStaging.js</code></td>
+<td>Admin page: staging queue table, approve/reject/edit actions, shadow tab</td>
+</tr>
+<tr>
+<td><code>frontend/src/pages/MemoryStaging.css</code></td>
+<td>Styles for staging page</td>
+</tr>
+<tr>
 <td><code>migrations/add_memory_columns.py</code></td>
 <td>Migration: new columns on agent_memories, new tables</td>
 </tr>
@@ -1343,5 +1357,28 @@
 <li><strong>Pinecone stub</strong> (<code>integrations/pinecone_service.py</code>) — not needed; pgvector is sufficient for v1 scale</li>
 <li><strong>LangGraph agent memory</strong> — separate concern; the 22 CRM agents have their own memory via the orchestrator, which is distinct from Aria's borrower memory</li>
 </ul>
+<hr />
+<h2 id="appendix-b-deferred-decisions">Appendix B: Deferred Decisions</h2>
+<p>These items are out of scope for Phase A implementation but must be resolved before production graduation. Tracked here so they don't get forgotten.</p>
+<h3 id="b1-auto-commit-pause-runbook">B.1 Auto-commit pause runbook</h3>
+<p>Section 10 specifies that auto-commit pauses if post-graduation precision drops below 90% on a rolling 7-day window. What's not specified:</p>
+<ul>
+<li><strong>Who responds.</strong> The alert should target the org admin who owns the memory configuration, not a generic ops channel.</li>
+<li><strong>Backlog management.</strong> While auto-commit is paused, all new extractions route to the staging queue. If the pause lasts more than 48 hours, the queue depth will exceed what a single reviewer can process. Define a backlog threshold (e.g., &gt;500 pending items) that escalates to a platform-level incident.</li>
+<li><strong>Re-enablement criteria.</strong> After root-cause analysis, re-run the shadow evaluator on the items that triggered the pause. If precision recovers to &gt;=95% on the reviewed batch, re-enable auto-commit. Require manual flag flip (same as initial graduation).</li>
+<li><strong>State machine.</strong> Three states: <code>shadow</code> → <code>graduated</code> → <code>paused</code> → <code>graduated</code>. No auto-transitions out of <code>paused</code>.</li>
+</ul>
+<p><strong>Resolve before:</strong> Shadow mode graduation.</p>
+<h3 id="b2-retrieval-query-audit-log-redaction">B.2 Retrieval query audit-log redaction</h3>
+<p><code>memory_audit_events.query_text</code> stores retrieval queries unredacted. These queries may contain PII or sensitive content from the borrower's current utterance — including content that would be excluded if it appeared in extraction output (e.g., medical conditions mentioned mid-call that route to the recall query).</p>
+<p><strong>Posture to decide:</strong> Either (a) apply the same exclusion-list redaction to <code>query_text</code> before logging, replacing excluded content with <code>[REDACTED]</code> and storing the original in an encrypted auxiliary column accessible only for incident investigation; or (b) set a shorter retention policy on retrieval audit events (30 days vs. 1 year for extraction audit events).</p>
+<p><strong>Resolve before:</strong> Phase A ships to production.</p>
+<h3 id="b3-false-negative-detection-failure-mode">B.3 False-negative detection failure mode</h3>
+<p>The false-negative LLM judge pass runs in parallel with extraction. If it fails or times out:</p>
+<ul>
+<li><strong>Posture:</strong> Best-effort. Extraction is the critical path. If the judge pass fails, log <code>event_type = 'false_negative_check_failed'</code> to <code>memory_audit_events</code> and continue. The <code>recall_false_negative_rate</code> metric will have gaps but memory writes are not blocked.</li>
+<li><strong>Cost:</strong> Two LLM calls per transcript (extraction + judge). At Haiku pricing (~$0.001/call), this adds ~$0.002 per call. At 1,000 calls/day, ~$60/month. Acceptable for the signal it provides. If cost becomes a concern, run the judge pass on a 20% sample rather than every call.</li>
+</ul>
+<p><strong>Resolve before:</strong> Consolidation worker implementation (can be decided during implementation plan).</p>
 </body>
 </html>
