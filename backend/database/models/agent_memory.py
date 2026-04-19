@@ -30,10 +30,16 @@ from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column, Integer, String, DateTime, Text, Float,
-    ForeignKey, Index, JSON,
-    Enum as SAEnum,
+    ForeignKey, Index, JSON, Boolean,
+    Enum as SAEnum, UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
+
+try:
+    from pgvector.sqlalchemy import Vector
+except ImportError:
+    Vector = None
 
 from db import Base
 
@@ -125,6 +131,12 @@ class AgentMemory(Base):
         Index("ix_agent_mem_type", "memory_type"),
         Index("ix_agent_mem_key", "key"),
         Index("ix_agent_mem_expires", "expires_at"),
+        Index("ix_agent_mem_borrower", "borrower_id"),
+        Index("ix_agent_mem_topic", "topic"),
+        Index("ix_agent_mem_fact_key", "fact_key"),
+        Index("ix_agent_mem_verified", "last_verified_at"),
+        Index("ix_agent_mem_superseded", "superseded_by"),
+        Index("ix_agent_mem_hash", "content_hash"),
         {"extend_existing": True},
     )
 
@@ -177,6 +189,19 @@ class AgentMemory(Base):
         onupdate=lambda: datetime.now(timezone.utc),
     )
     expires_at = Column(DateTime, nullable=True)  # NULL = never expires
+
+    # ─── Aria Memory Extensions (Phase A) ────────────────────────
+    borrower_id = Column(Integer, ForeignKey("leads.id", ondelete="CASCADE"), nullable=True, index=True)
+    embedding = Column(Vector(1536) if Vector is not None else Text, nullable=True)
+    topic = Column(String(100), nullable=True)
+    source_call_id = Column(String(255), nullable=True)
+    transcript_span = Column(Text, nullable=True)
+    last_verified_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=True)
+    superseded_by = Column(Integer, ForeignKey("agent_memories.id", ondelete="SET NULL"), nullable=True)
+    fact_key = Column(String(255), nullable=True)
+    embedding_model = Column(String(100), default="text-embedding-3-small", nullable=True)
+    embedding_version = Column(String(50), nullable=True)
+    content_hash = Column(String(32), nullable=True)
 
     # Relationship back to conversation
     conversation = relationship("AgentConversation", back_populates="memories")

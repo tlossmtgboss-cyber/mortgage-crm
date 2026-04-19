@@ -686,6 +686,15 @@ from .learning_example import LearningExample, LearningPattern, PromptOptimizati
 # Agent Memory (conversation memory, context, facts)
 from .agent_memory import AgentConversation, AgentMemory, AgentContext
 
+# Memory Staging (Aria consolidation pipeline review queue)
+from .memory_staging import MemoryStaging
+
+# Memory Audit Events (unified memory operations audit log)
+from .memory_audit import MemoryAuditEvent
+
+# Memory Topic Config & Exclusion Rules (Aria memory configuration)
+from .memory_topic_config import MemoryTopicConfig, MemoryExclusionRule
+
 # Webhook Idempotency (duplicate callback prevention for Vapi/Telnyx/Stripe)
 from .webhook_idempotency import WebhookIdempotencyRecord
 
@@ -1503,6 +1512,14 @@ __all__ = [
     "AgentConversation",
     "AgentMemory",
     "AgentContext",
+
+    # =====================
+    # Memory Staging & Audit
+    # =====================
+    "MemoryStaging",
+    "MemoryAuditEvent",
+    "MemoryTopicConfig",
+    "MemoryExclusionRule",
 
     # =====================
     # Webhook Idempotency
