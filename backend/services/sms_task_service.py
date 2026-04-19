@@ -62,6 +62,9 @@ def create_sms_task(
     category: Optional[str] = None,
     priority: str = "normal",
 ) -> dict:
+    from services.sms_phone_utils import normalize_phone
+    phone_number = normalize_phone(phone_number)
+
     try:
         resolved_priority = _detect_priority(inbound_message, priority if priority != "normal" else None)
         now = datetime.now(timezone.utc)
@@ -399,6 +402,9 @@ def assign_task_to_user(
     phone_number: str,
     organization_id: int,
 ) -> Optional[int]:
+    from services.sms_phone_utils import normalize_phone
+    phone_number = normalize_phone(phone_number)
+
     try:
         lead_row = db.execute(
             text("""

@@ -111,25 +111,38 @@ def record_outcome(
     col = f"{outcome}_count"  # accepted_count | edited_count | rejected_count
 
     try:
-        db.execute(
+        now = datetime.now(timezone.utc)
+        init_score = calculate_confidence_score(
+            int(outcome == "accepted"),
+            int(outcome == "edited"),
+            int(outcome == "rejected"),
+            1,
+        )
+
+        row = db.execute(
             text("""
-                INSERT INTO sms_ai_confidence
-                    (organization_id, user_id, category,
-                     accepted_count, edited_count, rejected_count,
-                     total_recommendations, confidence_score,
-                     auto_respond_enabled, auto_respond_threshold,
-                     created_at, updated_at)
-                VALUES
-                    (:org_id, :user_id, :category,
-                     :init_accepted, :init_edited, :init_rejected,
-                     1, :init_score,
-                     false, :default_threshold,
-                     :now, :now)
-                ON CONFLICT (organization_id, COALESCE(user_id, 0), category)
-                DO UPDATE SET
-                    {col} = sms_ai_confidence.{col} + 1,
-                    total_recommendations = sms_ai_confidence.total_recommendations + 1,
-                    updated_at = :now
+                WITH upserted AS (
+                    INSERT INTO sms_ai_confidence
+                        (organization_id, user_id, category,
+                         accepted_count, edited_count, rejected_count,
+                         total_recommendations, confidence_score,
+                         auto_respond_enabled, auto_respond_threshold,
+                         created_at, updated_at)
+                    VALUES
+                        (:org_id, :user_id, :category,
+                         :init_accepted, :init_edited, :init_rejected,
+                         1, :init_score,
+                         false, :default_threshold,
+                         :now, :now)
+                    ON CONFLICT (organization_id, COALESCE(user_id, 0), category)
+                    DO UPDATE SET
+                        {col} = sms_ai_confidence.{col} + 1,
+                        total_recommendations = sms_ai_confidence.total_recommendations + 1,
+                        updated_at = :now
+                    RETURNING accepted_count, edited_count, rejected_count, total_recommendations
+                )
+                SELECT accepted_count, edited_count, rejected_count, total_recommendations
+                FROM upserted
             """.format(col=col)),
             {
                 "org_id": organization_id,
@@ -138,28 +151,10 @@ def record_outcome(
                 "init_accepted": 1 if outcome == "accepted" else 0,
                 "init_edited": 1 if outcome == "edited" else 0,
                 "init_rejected": 1 if outcome == "rejected" else 0,
-                "init_score": calculate_confidence_score(
-                    int(outcome == "accepted"),
-                    int(outcome == "edited"),
-                    int(outcome == "rejected"),
-                    1,
-                ),
+                "init_score": init_score,
                 "default_threshold": _DEFAULT_THRESHOLD,
-                "now": datetime.now(timezone.utc),
+                "now": now,
             },
-        )
-
-        # Fetch updated counters and recalculate
-        row = db.execute(
-            text("""
-                SELECT accepted_count, edited_count, rejected_count,
-                       total_recommendations
-                FROM sms_ai_confidence
-                WHERE organization_id = :org_id
-                  AND COALESCE(user_id, 0) = COALESCE(:user_id, 0)
-                  AND category = :category
-            """),
-            {"org_id": organization_id, "user_id": user_id, "category": category},
         ).mappings().fetchone()
 
         if row:
@@ -179,7 +174,7 @@ def record_outcome(
                 """),
                 {
                     "score": new_score,
-                    "now": datetime.now(timezone.utc),
+                    "now": now,
                     "org_id": organization_id,
                     "user_id": user_id,
                     "category": category,

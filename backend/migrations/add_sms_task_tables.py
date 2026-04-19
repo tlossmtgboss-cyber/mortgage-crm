@@ -159,6 +159,21 @@ def run_migration(engine):
             else:
                 logger.warning(f"Could not create sms_response_patterns index: {e}")
 
+        # GIN index for JSONB keyword overlap queries
+        try:
+            conn.execute(text(
+                "CREATE INDEX IF NOT EXISTS ix_sms_response_patterns_keywords_gin "
+                "ON sms_response_patterns USING GIN (message_keywords)"
+            ))
+            conn.commit()
+            logger.info("  Created GIN index ix_sms_response_patterns_keywords_gin")
+        except Exception as e:
+            error_str = str(e).lower()
+            if "already exists" in error_str:
+                pass
+            else:
+                logger.warning(f"Could not create GIN index on message_keywords: {e}")
+
         # -------------------------------------------------------------------
         # 3. sms_ai_confidence — per-category confidence tracking
         # -------------------------------------------------------------------

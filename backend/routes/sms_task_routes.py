@@ -239,7 +239,6 @@ async def dismiss_task(
     org_id = _require_org(current_user)
     try:
         from services.sms_task_service import dismiss_task as _dismiss
-        from services.sms_confidence_engine import record_outcome
 
         task = _dismiss(
             db,
@@ -247,8 +246,6 @@ async def dismiss_task(
             organization_id=org_id,
             user_id=current_user.id,
         )
-        category = task.get("category", "general")
-        record_outcome(db, org_id, current_user.id, category, "rejected")
         db.commit()
         return {"status": "dismissed"}
     except ValueError as e:

@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
-MODEL_VERSION = "claude-sonnet-4-20250514"
+MODEL_VERSION = os.getenv("SMS_AI_MODEL_VERSION", "claude-sonnet-4-20250514")
 
 SYSTEM_PROMPT = (
     "You are Aria, an AI assistant for a mortgage loan officer. "
@@ -368,6 +368,9 @@ Generate a new, improved SMS reply incorporating the feedback. No quotes, no exp
 
 
 def _build_context_prompt(db: Session, phone_number: str, lead_id: Optional[int], organization_id: int) -> str:
+    from services.sms_phone_utils import normalize_phone
+    phone_number = normalize_phone(phone_number)
+
     parts = []
 
     lead_row = None
