@@ -17,7 +17,8 @@ RUN pip install --no-cache-dir \
     'livekit-agents~=1.5' \
     'livekit-plugins-deepgram~=1.5' \
     'livekit-plugins-anthropic~=1.5' \
-    'livekit-plugins-cartesia~=1.5'
+    'livekit-plugins-cartesia~=1.5' \
+    'livekit-plugins-silero~=1.5'
 
 COPY . .
 

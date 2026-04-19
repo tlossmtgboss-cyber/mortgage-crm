@@ -47,21 +47,27 @@ CARTESIA_VOICE_ID = os.getenv(
     "ARIA_CARTESIA_VOICE_ID",
     "a0e99841-438c-4a64-b679-ae501e7d6091",  # Jacqueline
 )
-CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-opus-4-5-20250414")
+CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-sonnet-4-5-20250414")
 TELNYX_TRUNK_ID = os.getenv("TELNYX_SIP_TRUNK_ID", "")
 
 
 
-# ─── Turn Handling Configuration ─────────────────────────────────────────────
-# Dynamic endpointing adapts silence thresholds based on conversation cadence.
-# min_delay 0.4s avoids cutting off mid-thought; max_delay 6.0s handles
-# mortgage-specific pauses (looking up numbers, reading documents).
-
 TURN_HANDLING: TurnHandlingOptions = {
     "endpointing": {
         "mode": "dynamic",
-        "min_delay": 0.4,
-        "max_delay": 6.0,
+        "min_delay": 0.5,
+        "max_delay": 2.0,
+    },
+    "interruption": {
+        "enabled": True,
+        "mode": "adaptive",
+        "min_duration": 0.5,
+        "min_words": 1,
+        "resume_false_interruption": True,
+    },
+    "preemptive_generation": {
+        "enabled": True,
+        "preemptive_tts": True,
     },
 }
 
@@ -528,16 +534,33 @@ server = AgentServer()
 
 
 def _build_session(mode: str = "lo_assistant", context: dict = None) -> tuple:
-    """Build AgentSession + AriaVoiceAgent for a given mode.
+    """Build AgentSession + AriaVoiceAgent for a given mode."""
+    is_telephony = mode in ("inbound_receptionist", "outbound_followup")
 
-    Returns (session, agent) tuple. The caller starts the session via
-    ``await session.start(room=..., agent=...)``.
-    """
+    stt = deepgram.STT(
+        model="nova-3",
+        language="en",
+        smart_format=True,
+        punctuate=True,
+        filler_words=True,
+        no_delay=True,
+        endpointing=25 if is_telephony else 50,
+    )
+
+    tts = cartesia.TTS(
+        model="sonic-3",
+        voice=CARTESIA_VOICE_ID,
+        speed="normal",
+        emotion=["positivity:high", "curiosity"],
+    )
+
     session = AgentSession(
-        stt=deepgram.STT(model="nova-3", language="en"),
+        stt=stt,
         llm=AnthropicLLM(model=CLAUDE_MODEL),
-        tts=cartesia.TTS(model="sonic-3", voice=CARTESIA_VOICE_ID),
+        tts=tts,
         turn_handling=TURN_HANDLING,
+        tts_text_transforms=["filter_markdown", "filter_emoji"],
+        min_consecutive_speech_delay=0.15,
     )
     agent = AriaVoiceAgent(mode=mode, context=context)
     return session, agent
