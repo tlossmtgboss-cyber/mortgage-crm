@@ -262,7 +262,7 @@ When scheduling appointments, confirm the time first via SMS before creating the
                                         tool_result = {"success": False, "error": f"SMS send failed — check {sms_client.provider} logs"}
                                         logger.error(f"SMS send returned None for to={to_num}")
                                     else:
-                                        # Log SMS to database
+                                        # Log to SMSMessage table
                                         try:
                                             sms_record = SMSMessage(
                                                 user_id=current_user.id,
@@ -278,7 +278,36 @@ When scheduling appointments, confirm the time first via SMS before creating the
                                             db.add(sms_record)
                                             db.commit()
                                         except Exception as db_err:
-                                            logger.warning(f"Failed to log SMS to DB: {db_err}")
+                                            logger.warning(f"Failed to log SMS to sms_messages: {db_err}")
+                                            db.rollback()
+
+                                        # Also write to sms_panel_messages for Archive tab visibility
+                                        try:
+                                            import uuid as _uuid
+                                            sender_name = f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}".strip() or "AI Agent"
+                                            db.execute(text("""
+                                                INSERT INTO sms_panel_messages
+                                                    (id, phone, contact_id, organization_id, direction, body,
+                                                     sender_name, sender_user_id, status,
+                                                     media_urls, telnyx_message_id, created_at)
+                                                VALUES
+                                                    (:id, :phone, :contact_id, :org_id, 'outbound', :body,
+                                                     :sender_name, :sender_user_id, 'sent',
+                                                     '[]'::jsonb, :telnyx_id, NOW())
+                                                ON CONFLICT (id) DO NOTHING
+                                            """), {
+                                                "id": message_sid or str(_uuid.uuid4()),
+                                                "phone": to_num,
+                                                "contact_id": str(lead_id or ""),
+                                                "org_id": current_user.organization_id,
+                                                "body": sms_body,
+                                                "sender_name": sender_name,
+                                                "sender_user_id": current_user.id,
+                                                "telnyx_id": message_sid,
+                                            })
+                                            db.commit()
+                                        except Exception as panel_err:
+                                            logger.warning(f"Failed to log SMS to sms_panel_messages: {panel_err}")
                                             db.rollback()
 
                                         tool_result = {
@@ -372,6 +401,9 @@ When scheduling appointments, confirm the time first via SMS before creating the
             # Get final response
             final_message = messages[-1].content if hasattr(messages[-1], 'content') else "Task completed"
 
+            # Determine if any meaningful action was taken
+            any_action_succeeded = len(activity_log) > 0
+
             # Reconcile with workflow SLA system — mark matching
             # workflow_task_instances as completed and cancel siblings
             # to prevent duplicate outreach and keep SLA tracking accurate.
@@ -393,14 +425,16 @@ When scheduling appointments, confirm the time first via SMS before creating the
                 except Exception as e:
                     logger.warning(f"Workflow reconciliation failed (non-blocking): {e}")
 
-            # Update Mission Control with success
+            outcome = "success" if any_action_succeeded else "no_action"
+
+            # Update Mission Control
             if action_id and update_ai_action_outcome:
                 try:
                     await update_ai_action_outcome(
                         db=db,
                         action_id=action_id,
-                        outcome="success",
-                        impact_score=0.9,
+                        outcome=outcome,
+                        impact_score=0.9 if any_action_succeeded else 0.1,
                         metadata={
                             "activity_log": activity_log,
                             "tools_used": len(activity_log),
@@ -412,8 +446,8 @@ When scheduling appointments, confirm the time first via SMS before creating the
                     logger.warning(f"Error updating AI action outcome on success: {e}")
 
             return {
-                "success": True,
-                "message": "Autonomous task executed successfully",
+                "success": any_action_succeeded,
+                "message": "Autonomous task executed successfully" if any_action_succeeded else "AI agent could not complete the requested action",
                 "activity_log": activity_log,
                 "final_response": final_message,
                 "workflow_reconciliation": reconciliation_results if reconciliation_results else None,

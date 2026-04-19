@@ -253,17 +253,23 @@ function SMSModal({ isOpen, onClose, lead }) {
         setAiActivity(response.data.activity_log);
       }
 
-      setAiComplete(true);
-      setResult({
-        status: 'success',
-        message: 'AI Agent completed the task successfully!',
-        details: response.data
-      });
-
-      // Close modal after 3 seconds
-      setTimeout(() => {
-        onClose();
-      }, 3000);
+      if (response.data.success) {
+        setAiComplete(true);
+        setResult({
+          status: 'success',
+          message: response.data.final_response || 'AI Agent completed the task successfully!',
+          details: response.data
+        });
+        setTimeout(() => {
+          onClose();
+        }, 3000);
+      } else {
+        setResult({
+          status: 'error',
+          message: response.data.final_response || response.data.message || 'AI Agent could not complete the requested action.',
+          details: response.data
+        });
+      }
     } catch (error) {
       const errorMsg = error.response?.data?.detail || error.message || 'AI Agent failed to complete the task';
       setResult({

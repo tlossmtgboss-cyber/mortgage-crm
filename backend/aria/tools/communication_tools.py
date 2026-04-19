@@ -97,9 +97,8 @@ class CommunicationTools:
         duration_minutes: int = 30,
         topic: str = "",
     ) -> Dict:
-        """Schedule a call by creating a calendar event and task."""
+        """Schedule a call by creating a task and notifying the contact via SMS."""
         try:
-            # Create a task for the call as a reliable fallback
             from aria.tools.pipeline_tools import PipelineTools
             pipe = PipelineTools()
 
@@ -112,13 +111,37 @@ class CommunicationTools:
                 org_id=str(lo.get("organization_id", "")),
             )
 
+            sms_sent = False
+            contact_phone = with_contact.get("phone")
+            if contact_phone:
+                try:
+                    lo_name = lo.get("full_name", "your loan officer")
+                    contact_name = with_contact.get("name", "")
+                    sms_body = (
+                        f"Hi {contact_name}, {lo_name} would like to schedule a call"
+                        + (f" on {date} at {time}" if date and time else "")
+                        + (f" regarding {topic}" if topic else "")
+                        + ". Please let me know if that works for you!"
+                        + f" — {lo_name}"
+                    )
+                    await self.send_sms(
+                        to_phone=contact_phone,
+                        from_user=lo,
+                        message=sms_body,
+                        org_id=str(lo.get("organization_id", "")),
+                    )
+                    sms_sent = True
+                except Exception as sms_err:
+                    logger.warning(f"Could not send scheduling SMS to {contact_phone}: {sms_err}")
+
             return {
                 "datetime": f"{date} {time}",
                 "duration_minutes": duration_minutes,
                 "with": with_contact["name"],
                 "task_id": task.get("id"),
                 "calendar_link": None,
-                "note": "Calendar invite not yet integrated. Task created as reminder.",
+                "sms_sent": sms_sent,
+                "note": "SMS sent to coordinate timing." if sms_sent else "Task created but could not reach contact via SMS.",
             }
         except Exception as e:
             logger.error(f"Aria schedule call failed: {e}", exc_info=True)

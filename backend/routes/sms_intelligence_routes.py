@@ -2023,56 +2023,94 @@ async def send_sms(
 
         message_sid = send_result.get("message_id")
 
-        # Log to queue as outbound
-        result = db.execute(text("""
-            INSERT INTO sms_intelligence_queue (
-                sms_provider, provider_message_id, from_phone, to_phone,
-                direction, message_body, sent_at, status,
-                matched_loan_id, matched_lead_id, matched_borrower_id,
-                disposition, user_id
-            ) VALUES (
-                'telnyx', :message_sid, :from_phone, :to_phone,
-                'outbound', :message, CURRENT_TIMESTAMP, 'sent',
-                :loan_id, :lead_id, :contact_id,
-                'processed', :user_id
-            )
-            RETURNING id
-        """), {
-            "message_sid": message_sid,
-            "from_phone": sms_client.from_number,
-            "to_phone": normalized_phone,
-            "message": message,
-            "loan_id": request.loan_id,
-            "lead_id": request.lead_id,
-            "contact_id": request.contact_id,
-            "user_id": current_user.id,
-        })
+        # Write to sms_panel_messages so the SMS Archive tab can find it
+        import uuid as _uuid
+        from datetime import datetime as _dt
+        panel_msg_id = message_sid or str(_uuid.uuid4())
+        sender_name = f"{getattr(current_user, 'first_name', '') or ''} {getattr(current_user, 'last_name', '') or ''}".strip() or "System"
+        try:
+            db.execute(text("""
+                INSERT INTO sms_panel_messages
+                    (id, phone, contact_id, organization_id, direction, body,
+                     sender_name, sender_user_id, status,
+                     media_urls, telnyx_message_id, created_at)
+                VALUES
+                    (:id, :phone, :contact_id, :org_id, 'outbound', :body,
+                     :sender_name, :sender_user_id, 'sent',
+                     '[]'::jsonb, :telnyx_id, NOW())
+                ON CONFLICT (id) DO NOTHING
+            """), {
+                "id": panel_msg_id,
+                "phone": normalized_phone,
+                "contact_id": str(request.contact_id or request.lead_id or ""),
+                "org_id": current_user.organization_id,
+                "body": message,
+                "sender_name": sender_name,
+                "sender_user_id": current_user.id,
+                "telnyx_id": message_sid,
+            })
+            db.commit()
+        except Exception as panel_err:
+            logger.warning(f"Failed to write sms_panel_messages (non-blocking): {panel_err}")
+            db.rollback()
 
-        sms_queue_id = result.fetchone()[0]
+        # Log to intelligence queue (best-effort — don't lose the send record)
+        sms_queue_id = None
+        try:
+            result = db.execute(text("""
+                INSERT INTO sms_intelligence_queue (
+                    sms_provider, provider_message_id, from_phone, to_phone,
+                    direction, message_body, sent_at, status,
+                    matched_loan_id, matched_lead_id, matched_borrower_id,
+                    disposition, user_id
+                ) VALUES (
+                    'telnyx', :message_sid, :from_phone, :to_phone,
+                    'outbound', :message, CURRENT_TIMESTAMP, 'sent',
+                    :loan_id, :lead_id, :contact_id,
+                    'processed', :user_id
+                )
+                RETURNING id
+            """), {
+                "message_sid": message_sid,
+                "from_phone": sms_client.from_number,
+                "to_phone": normalized_phone,
+                "message": message,
+                "loan_id": request.loan_id,
+                "lead_id": request.lead_id,
+                "contact_id": request.contact_id,
+                "user_id": current_user.id,
+            })
+            sms_queue_id = result.fetchone()[0]
+        except Exception as q_err:
+            logger.warning(f"Failed to write sms_intelligence_queue (non-blocking): {q_err}")
+            db.rollback()
 
-        # Log to conversation
-        db.execute(text("""
-            INSERT INTO sms_conversation_log (
-                borrower_id, loan_id, lead_id, sms_queue_id,
-                phone_number, direction, message_body, message_date,
-                summary, intent, created_by, user_id
-            ) VALUES (
-                :contact_id, :loan_id, :lead_id, :sms_queue_id,
-                :phone, 'outbound', :message, CURRENT_TIMESTAMP,
-                :summary, 'outreach', 'user', :user_id
-            )
-        """), {
-            "contact_id": request.contact_id,
-            "loan_id": request.loan_id,
-            "lead_id": request.lead_id,
-            "sms_queue_id": sms_queue_id,
-            "phone": normalized_phone,
-            "message": message,
-            "summary": f"Outbound SMS" + (f" using template '{template_name}'" if template_name else ""),
-            "user_id": current_user.id,
-        })
-
-        db.commit()
+        # Log to conversation (best-effort)
+        try:
+            db.execute(text("""
+                INSERT INTO sms_conversation_log (
+                    borrower_id, loan_id, lead_id, sms_queue_id,
+                    phone_number, direction, message_body, message_date,
+                    summary, intent, created_by, user_id
+                ) VALUES (
+                    :contact_id, :loan_id, :lead_id, :sms_queue_id,
+                    :phone, 'outbound', :message, CURRENT_TIMESTAMP,
+                    :summary, 'outreach', 'user', :user_id
+                )
+            """), {
+                "contact_id": request.contact_id,
+                "loan_id": request.loan_id,
+                "lead_id": request.lead_id,
+                "sms_queue_id": sms_queue_id,
+                "phone": normalized_phone,
+                "message": message,
+                "summary": f"Outbound SMS" + (f" using template '{template_name}'" if template_name else ""),
+                "user_id": current_user.id,
+            })
+            db.commit()
+        except Exception as conv_err:
+            logger.warning(f"Failed to write sms_conversation_log (non-blocking): {conv_err}")
+            db.rollback()
 
         return {
             "success": True,
