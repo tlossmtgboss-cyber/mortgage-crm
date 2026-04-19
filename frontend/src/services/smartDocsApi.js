@@ -14,8 +14,17 @@ const API_BASE = `${API_BASE_URL}/api/v1/smart-docs`;
 async function handleResponse(response) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
+    const detail = error.detail;
+    let message;
+    if (Array.isArray(detail)) {
+      message = detail.map(d => d.msg || JSON.stringify(d)).join('; ');
+    } else if (typeof detail === 'object' && detail !== null) {
+      message = detail.msg || JSON.stringify(detail);
+    } else {
+      message = detail;
+    }
     if (response.status === 403) {
-      throw new Error(error.detail || 'Access denied. You do not have permission for this action.');
+      throw new Error(message || 'Access denied. You do not have permission for this action.');
     }
     if (response.status === 401) {
       throw new Error('Session expired. Please log in again.');
@@ -23,7 +32,7 @@ async function handleResponse(response) {
     if (response.status === 429) {
       throw new Error('Too many requests. Please wait a moment and try again.');
     }
-    throw new Error(error.detail || `Request failed (${response.status})`);
+    throw new Error(message || `Request failed (${response.status})`);
   }
   return response.json();
 }
@@ -69,8 +78,9 @@ export async function getNeedsList(loanId) {
  * Add a custom document request
  */
 export async function addCustomRequest(loanId, borrowerId, data) {
+  const params = borrowerId ? `?borrower_id=${borrowerId}` : '';
   const response = await fetch(
-    `${API_BASE}/needs-list/${loanId}/custom-request?borrower_id=${borrowerId}`,
+    `${API_BASE}/needs-list/${loanId}/custom-request${params}`,
     {
       method: 'POST',
       headers: getHeaders(),

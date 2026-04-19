@@ -99,6 +99,11 @@ from . import refinance
 # Analytics Tools
 from . import historical
 
+# Aria Voice Tools (SMS, Documents, Outreach)
+from . import sms_tools
+from . import document_tools
+from . import outreach_tools
+
 
 # =============================================================================
 # Agent Configuration
@@ -387,6 +392,14 @@ REFINANCE_TOOLS = [
     "batch_update_refi_scores",
 ]
 
+# Outreach & Campaign Tools
+OUTREACH_TOOLS = [
+    "find_clients_for_outreach",
+    "send_bulk_sms_outreach",
+    "send_mortgage_review_outreach",
+    "send_calendar_invite_email",
+]
+
 # Analytics Tools
 HISTORICAL_TOOLS = [
     "get_performance_by_period",
@@ -427,6 +440,8 @@ ALL_TOOLS = {
     # Valuation & Refinance
     "home_valuation": HOME_VALUATION_TOOLS,
     "refinance": REFINANCE_TOOLS,
+    # Outreach & Campaigns
+    "outreach": OUTREACH_TOOLS,
     # Analytics
     "historical": HISTORICAL_TOOLS,
 }
@@ -480,8 +495,8 @@ AGENT_CONFIGS = {
     },
     # Communication Agents
     "voice_os": {
-        "description": "Manages phone calls, voicemail, transcription, and call analytics",
-        "tools": VOICE_TOOLS,
+        "description": "Manages phone calls, voicemail, SMS outreach, campaigns, and call analytics",
+        "tools": VOICE_TOOLS + OUTREACH_TOOLS,
         "category": "communication",
     },
     "uvip": {
@@ -680,6 +695,9 @@ __all__ = [
     "home_valuation",
     "refinance",
 
+    # Outreach Modules
+    "outreach_tools",
+
     # Analytics Modules
     "historical",
 
@@ -719,6 +737,9 @@ __all__ = [
     # Valuation & Refinance Tool Lists
     "HOME_VALUATION_TOOLS",
     "REFINANCE_TOOLS",
+
+    # Outreach Tool Lists
+    "OUTREACH_TOOLS",
 
     # Analytics Tool Lists
     "HISTORICAL_TOOLS",

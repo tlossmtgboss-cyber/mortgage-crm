@@ -9,7 +9,7 @@
  * - LOE template support per document
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { addCustomRequest, uploadDocument } from '../../services/smartDocsApi';
 import { esignApi } from '../../services/esignApi';
 import './RequestDocumentModal.css';
@@ -44,14 +44,19 @@ const SIGNER_OPTIONS = [
   { value: 'both', label: 'Both Borrower & Co-Borrower' },
 ];
 
-const ESIGN_FIELD_DEFAULTS = {
-  includeSignature: true,
-  includeExplanation: true,
-  includeDateStamp: true,
-  explanationPrompt: '',
+const ESIGN_FIELD_CONFIG = {
+  signature: { label: 'Signature', color: '#1a73e8', w: 144, h: 36, icon: '\u270D' },
+  date_signed: { label: 'Date', color: '#00897b', w: 86, h: 22, icon: '\uD83D\uDCC5' },
+  text: { label: 'Text', color: '#6d4c41', w: 144, h: 22, icon: '\u270E' },
+  initial: { label: 'Initial', color: '#7c4dff', w: 58, h: 29, icon: 'AB' },
+  checkbox: { label: 'Checkbox', color: '#f4511e', w: 17, h: 17, icon: '\u2611' },
 };
 
+const PDF_PAGE_WIDTH = 612;
+const PDF_PAGE_HEIGHT = 792;
+
 let _docIdCounter = 0;
+let _fieldIdCounter = 0;
 function createEmptyDoc() {
   _docIdCounter += 1;
   return {
@@ -61,11 +66,10 @@ function createEmptyDoc() {
     instructions: '',
     requireEsign: false,
     loeTemplate: 'custom',
-    // E-sign fields
     esignFile: null,
     esignFileName: '',
     esignSigner: 'borrower',
-    esignFields: { ...ESIGN_FIELD_DEFAULTS },
+    esignPlacedFields: [],
   };
 }
 
@@ -133,8 +137,23 @@ function RequestDocumentModal({
     ));
   }, [activeIndex]);
 
-  // E-sign file upload ref
+  // E-sign state
+  const [activeFieldTool, setActiveFieldTool] = useState(null);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState(null);
+  const [draggingFieldId, setDraggingFieldId] = useState(null);
+
   const fileInputRef = useRef(null);
+  const pdfContainerRef = useRef(null);
+
+  // Create/revoke blob URL when esignFile changes
+  useEffect(() => {
+    if (activeDoc?.esignFile) {
+      const url = URL.createObjectURL(activeDoc.esignFile);
+      setPdfBlobUrl(url);
+      return () => URL.revokeObjectURL(url);
+    }
+    setPdfBlobUrl(null);
+  }, [activeDoc?.esignFile]);
 
   // [SEC-001] Validate PDF magic bytes + MIME + extension
   const validatePdfFile = useCallback((file) => {
@@ -175,16 +194,94 @@ function RequestDocumentModal({
 
   const handleRemoveEsignFile = useCallback(() => {
     setDocuments(prev => prev.map((doc, i) =>
-      i === activeIndex ? { ...doc, esignFile: null, esignFileName: '' } : doc
+      i === activeIndex ? { ...doc, esignFile: null, esignFileName: '', esignPlacedFields: [] } : doc
+    ));
+    setActiveFieldTool(null);
+  }, [activeIndex]);
+
+  // Place a new field on the PDF at click position
+  const handlePlaceField = useCallback((e) => {
+    if (!activeFieldTool) return;
+    const container = pdfContainerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const xPct = (e.clientX - rect.left) / rect.width;
+    const yPct = (e.clientY - rect.top) / rect.height;
+
+    const config = ESIGN_FIELD_CONFIG[activeFieldTool];
+    const x = Math.max(0, Math.min(PDF_PAGE_WIDTH - config.w, xPct * PDF_PAGE_WIDTH - config.w / 2));
+    const y = Math.max(0, Math.min(PDF_PAGE_HEIGHT - config.h, PDF_PAGE_HEIGHT - yPct * PDF_PAGE_HEIGHT - config.h / 2));
+
+    _fieldIdCounter += 1;
+    const newField = {
+      id: `field-${_fieldIdCounter}-${Date.now()}`,
+      type: activeFieldTool,
+      page: 1,
+      x, y,
+      w: config.w,
+      h: config.h,
+      recipientIndex: 0,
+    };
+
+    setDocuments(prev => prev.map((doc, i) =>
+      i === activeIndex
+        ? { ...doc, esignPlacedFields: [...doc.esignPlacedFields, newField] }
+        : doc
+    ));
+  }, [activeFieldTool, activeIndex]);
+
+  const handleRemoveField = useCallback((fieldId) => {
+    setDocuments(prev => prev.map((doc, i) =>
+      i === activeIndex
+        ? { ...doc, esignPlacedFields: doc.esignPlacedFields.filter(f => f.id !== fieldId) }
+        : doc
     ));
   }, [activeIndex]);
 
-  const handleEsignFieldToggle = useCallback((field, value) => {
-    setDocuments(prev => prev.map((doc, i) =>
-      i === activeIndex
-        ? { ...doc, esignFields: { ...doc.esignFields, [field]: value } }
-        : doc
-    ));
+  const handleFieldMouseDown = useCallback((e, fieldId) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setDraggingFieldId(fieldId);
+
+    const container = pdfContainerRef.current;
+    if (!container) return;
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const rect = container.getBoundingClientRect();
+
+    const handleMouseMove = (moveE) => {
+      const dx = (moveE.clientX - startX) / rect.width * PDF_PAGE_WIDTH;
+      const dy = (moveE.clientY - startY) / rect.height * PDF_PAGE_HEIGHT;
+
+      setDocuments(prev => prev.map((doc, i) => {
+        if (i !== activeIndex) return doc;
+        const field = doc.esignPlacedFields.find(f => f.id === fieldId);
+        if (!field) return doc;
+        return {
+          ...doc,
+          esignPlacedFields: doc.esignPlacedFields.map(f =>
+            f.id === fieldId
+              ? {
+                  ...f,
+                  x: Math.max(0, Math.min(PDF_PAGE_WIDTH - f.w, field.x + dx)),
+                  y: Math.max(0, Math.min(PDF_PAGE_HEIGHT - f.h, field.y - dy)),
+                }
+              : f
+          ),
+        };
+      }));
+    };
+
+    const handleMouseUp = () => {
+      setDraggingFieldId(null);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
   }, [activeIndex]);
 
   const handleFileDrop = useCallback(async (e) => {
@@ -231,10 +328,15 @@ function RequestDocumentModal({
       return;
     }
 
-    // [FUNC-004] Fix: validate e-sign docs have files uploaded
     const esignWithoutFile = documents.filter(d => d.requireEsign && !d.esignFile);
     if (esignWithoutFile.length > 0) {
       setError('Please upload a PDF for all documents requiring e-signature.');
+      return;
+    }
+
+    const esignWithoutFields = documents.filter(d => d.requireEsign && d.esignFile && d.esignPlacedFields.length === 0);
+    if (esignWithoutFields.length > 0) {
+      setError('Please place at least one field (signature, date, etc.) on each e-sign document.');
       return;
     }
 
@@ -306,59 +408,17 @@ function RequestDocumentModal({
             });
           }
 
-          // 2c: Build fields list using backend field names
-          // [FUNC-001/003] Use type/page/x/y/w/h/recipient_index (not field_type/page_number/x_position/signer_email)
-          const fieldsPayload = [];
-          const baseY = 500; // PDF points from bottom
-
-          // [SEC-003] Sanitize explanation prompt
-          const sanitizedPrompt = (doc.esignFields.explanationPrompt || 'Please provide your explanation')
-            .replace(/[<>"'&]/g, '')
-            .slice(0, 500);
-
-          for (let s = 0; s < recipientsPayload.length; s++) {
-            const yOffset = s * 160;
-
-            if (doc.esignFields.includeExplanation) {
-              fieldsPayload.push({
-                type: 'text',
-                page: 1,
-                x: 72,
-                y: baseY - yOffset + 100,
-                w: 400,
-                h: 60,
-                recipient_index: s,
-                required: true,
-                placeholder: sanitizedPrompt,
-              });
-            }
-            if (doc.esignFields.includeSignature) {
-              fieldsPayload.push({
-                type: 'signature',
-                page: 1,
-                x: 72,
-                y: baseY - yOffset,
-                w: 200,
-                h: 50,
-                recipient_index: s,
-                required: true,
-              });
-            }
-            if (doc.esignFields.includeDateStamp) {
-              fieldsPayload.push({
-                type: 'date_signed',
-                page: 1,
-                x: 300,
-                y: baseY - yOffset,
-                w: 120,
-                h: 30,
-                recipient_index: s,
-                required: true,
-              });
-            }
-          }
-
-          // [PERF-001] Single createEnvelope call with recipients + fields (batch)
+          // Build fields from user-placed positions
+          const fieldsPayload = doc.esignPlacedFields.map(f => ({
+            type: f.type,
+            page: f.page,
+            x: Math.round(f.x),
+            y: Math.round(f.y),
+            w: Math.round(f.w),
+            h: Math.round(f.h),
+            recipient_index: f.recipientIndex || 0,
+            required: true,
+          }));
           const envelopeData = {
             title: `${doc.title.trim()} - E-Signature`,
             document_storage_key: storageKey,
@@ -415,6 +475,8 @@ function RequestDocumentModal({
     setSubmitResults(null);
     setSubmitting(false);
     setSubmitProgress({ done: 0, total: 0 });
+    setActiveFieldTool(null);
+    setPdfBlobUrl(null);
     onClose();
   };
 
@@ -585,27 +647,9 @@ function RequestDocumentModal({
                     <div className="esign-config-header">E-Signature Setup</div>
 
                     {/* Upload Document */}
-                    <div className="form-section">
-                      <label>Upload Document for Signing</label>
-                      {activeDoc.esignFile ? (
-                        <div className="esign-file-attached">
-                          <span className="file-icon">&#128196;</span>
-                          <div className="file-info">
-                            <span className="file-name">{activeDoc.esignFileName}</span>
-                            <span className="file-size">
-                              {(activeDoc.esignFile.size / 1024).toFixed(0)} KB
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            className="file-remove-btn"
-                            onClick={handleRemoveEsignFile}
-                            title="Remove file"
-                          >
-                            &times;
-                          </button>
-                        </div>
-                      ) : (
+                    {!activeDoc.esignFile ? (
+                      <div className="form-section">
+                        <label>Upload Document for Signing</label>
                         <div
                           className="esign-dropzone"
                           onClick={() => fileInputRef.current?.click()}
@@ -619,88 +663,144 @@ function RequestDocumentModal({
                           </span>
                           <span className="dropzone-hint">PDF only, max 25 MB</span>
                         </div>
-                      )}
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept=".pdf,application/pdf"
-                        style={{ display: 'none' }}
-                        onChange={handleEsignFileSelect}
-                      />
-                    </div>
-
-                    {/* Signer Selection */}
-                    <div className="form-section">
-                      <label>Who Needs to Sign?</label>
-                      <select
-                        value={activeDoc.esignSigner}
-                        onChange={(e) => updateActiveDoc('esignSigner', e.target.value)}
-                        className="form-select"
-                      >
-                        {SIGNER_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                            {opt.value === 'borrower' && borrowerName ? ` (${borrowerName})` : ''}
-                            {opt.value === 'co_borrower' && coBorrowerName ? ` (${coBorrowerName})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Field Placement Options */}
-                    <div className="form-section">
-                      <label>Fields to Place on Document</label>
-                      <div className="esign-fields-config">
-                        <label className="esign-field-toggle">
-                          <input
-                            type="checkbox"
-                            checked={activeDoc.esignFields.includeSignature}
-                            onChange={(e) => handleEsignFieldToggle('includeSignature', e.target.checked)}
-                          />
-                          <span className="field-toggle-label">
-                            <span className="field-toggle-icon" style={{ color: '#1a73e8' }}>&#9997;</span>
-                            Signature
-                          </span>
-                        </label>
-
-                        <label className="esign-field-toggle">
-                          <input
-                            type="checkbox"
-                            checked={activeDoc.esignFields.includeExplanation}
-                            onChange={(e) => handleEsignFieldToggle('includeExplanation', e.target.checked)}
-                          />
-                          <span className="field-toggle-label">
-                            <span className="field-toggle-icon" style={{ color: '#6d4c41' }}>&#9998;</span>
-                            Explanation Text Area
-                          </span>
-                        </label>
-
-                        <label className="esign-field-toggle">
-                          <input
-                            type="checkbox"
-                            checked={activeDoc.esignFields.includeDateStamp}
-                            onChange={(e) => handleEsignFieldToggle('includeDateStamp', e.target.checked)}
-                          />
-                          <span className="field-toggle-label">
-                            <span className="field-toggle-icon" style={{ color: '#00897b' }}>&#128197;</span>
-                            Date Stamp
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-
-                    {/* Explanation Prompt (when explanation is toggled on) */}
-                    {activeDoc.esignFields.includeExplanation && (
-                      <div className="form-section">
-                        <label>Explanation Prompt for Borrower</label>
                         <input
-                          type="text"
-                          value={activeDoc.esignFields.explanationPrompt}
-                          onChange={(e) => handleEsignFieldToggle('explanationPrompt', e.target.value)}
-                          placeholder="e.g., Please explain the recent credit inquiry from (company) on (date)"
-                          className="form-input"
+                          ref={fileInputRef}
+                          type="file"
+                          accept=".pdf,application/pdf"
+                          style={{ display: 'none' }}
+                          onChange={handleEsignFileSelect}
                         />
                       </div>
+                    ) : (
+                      <>
+                        {/* File info bar */}
+                        <div className="esign-file-bar">
+                          <span className="file-icon">&#128196;</span>
+                          <span className="file-name">{activeDoc.esignFileName}</span>
+                          <span className="file-size">
+                            {(activeDoc.esignFile.size / 1024).toFixed(0)} KB
+                          </span>
+                          <button
+                            type="button"
+                            className="file-remove-btn"
+                            onClick={handleRemoveEsignFile}
+                            title="Remove file"
+                          >
+                            &times;
+                          </button>
+                          <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept=".pdf,application/pdf"
+                            style={{ display: 'none' }}
+                            onChange={handleEsignFileSelect}
+                          />
+                        </div>
+
+                        {/* Signer Selection */}
+                        <div className="form-section" style={{ marginBottom: 8 }}>
+                          <label>Who Needs to Sign?</label>
+                          <select
+                            value={activeDoc.esignSigner}
+                            onChange={(e) => updateActiveDoc('esignSigner', e.target.value)}
+                            className="form-select"
+                          >
+                            {SIGNER_OPTIONS.map((opt) => (
+                              <option key={opt.value} value={opt.value}>
+                                {opt.label}
+                                {opt.value === 'borrower' && borrowerName ? ` (${borrowerName})` : ''}
+                                {opt.value === 'co_borrower' && coBorrowerName ? ` (${coBorrowerName})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Field Placement Toolbar */}
+                        <div className="placement-toolbar">
+                          <span className="toolbar-label">
+                            {activeFieldTool
+                              ? `Click on the document to place a ${ESIGN_FIELD_CONFIG[activeFieldTool].label} field`
+                              : 'Select a field type, then click on the document to place it'}
+                          </span>
+                          <div className="toolbar-buttons">
+                            {Object.entries(ESIGN_FIELD_CONFIG).map(([type, config]) => (
+                              <button
+                                key={type}
+                                type="button"
+                                className={`field-tool-btn ${activeFieldTool === type ? 'active' : ''}`}
+                                style={{
+                                  borderColor: activeFieldTool === type ? config.color : '#ccc',
+                                  color: activeFieldTool === type ? config.color : '#555',
+                                  backgroundColor: activeFieldTool === type ? `${config.color}10` : '#fff',
+                                }}
+                                onClick={() => setActiveFieldTool(activeFieldTool === type ? null : type)}
+                              >
+                                <span className="field-tool-icon">{config.icon}</span>
+                                {config.label}
+                              </button>
+                            ))}
+                          </div>
+                          {activeDoc.esignPlacedFields.length > 0 && (
+                            <span className="field-count">
+                              {activeDoc.esignPlacedFields.length} field{activeDoc.esignPlacedFields.length !== 1 ? 's' : ''} placed
+                            </span>
+                          )}
+                        </div>
+
+                        {/* PDF Viewer + Field Placement */}
+                        <div className="pdf-placement-wrapper">
+                          <div
+                            ref={pdfContainerRef}
+                            className={`pdf-placement-container ${activeFieldTool ? 'placing' : ''}`}
+                            onClick={handlePlaceField}
+                          >
+                            {pdfBlobUrl && (
+                              <iframe
+                                src={`${pdfBlobUrl}#toolbar=0&navpanes=0`}
+                                className="pdf-background-frame"
+                                title="Document Preview"
+                              />
+                            )}
+                            <div className="pdf-field-overlay">
+                              {activeDoc.esignPlacedFields.map((field) => {
+                                const config = ESIGN_FIELD_CONFIG[field.type] || ESIGN_FIELD_CONFIG.text;
+                                const leftPct = (field.x / PDF_PAGE_WIDTH) * 100;
+                                const topPct = ((PDF_PAGE_HEIGHT - field.y - field.h) / PDF_PAGE_HEIGHT) * 100;
+                                const widthPct = (field.w / PDF_PAGE_WIDTH) * 100;
+                                const heightPct = (field.h / PDF_PAGE_HEIGHT) * 100;
+
+                                return (
+                                  <div
+                                    key={field.id}
+                                    className={`placed-field ${draggingFieldId === field.id ? 'dragging' : ''}`}
+                                    style={{
+                                      left: `${leftPct}%`,
+                                      top: `${topPct}%`,
+                                      width: `${widthPct}%`,
+                                      height: `${heightPct}%`,
+                                      borderColor: config.color,
+                                      backgroundColor: `${config.color}20`,
+                                    }}
+                                    onMouseDown={(e) => handleFieldMouseDown(e, field.id)}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <span className="placed-field-label" style={{ color: config.color }}>
+                                      {config.icon} {config.label}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className="placed-field-delete"
+                                      onClick={(e) => { e.stopPropagation(); handleRemoveField(field.id); }}
+                                    >
+                                      &times;
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </>
                     )}
                   </div>
                 )}

@@ -35,6 +35,7 @@ class EmailProvider(str, Enum):
     SENDGRID = "sendgrid"
     MICROSOFT = "microsoft"
     GMAIL = "gmail"
+    SMTP = "smtp"      # Direct SMTP (Gmail app password, etc.)
     NONE = "none"  # Dry-run / logging only
 
 

@@ -24,8 +24,11 @@ export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-U
   const onFinalTranscriptRef = useRef(onFinalTranscript);
   const retryCountRef = useRef(0);
   const retryTimerRef = useRef(null);
+  const lastSpeechRef = useRef(0);
+  const silenceIntervalRef = useRef(null);
 
   const MAX_RETRIES = 3;
+  const SILENCE_TIMEOUT_MS = 10000; // 10s silence → stop listening, back to tap-to-speak
 
   useEffect(() => { onTranscriptRef.current = onTranscript; }, [onTranscript]);
   useEffect(() => { onFinalTranscriptRef.current = onFinalTranscript; }, [onFinalTranscript]);
@@ -55,13 +58,16 @@ export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-U
         onPartialResult: (text) => {
           setTranscript(text);
           onTranscriptRef.current?.(text);
+          lastSpeechRef.current = Date.now();
         },
         onResult: (text) => {
           setTranscript(text);
           onTranscriptRef.current?.(text);
           onFinalTranscriptRef.current?.(text);
-          // Reset retry count on successful result
           retryCountRef.current = 0;
+          // Final result received — stop recording, return to tap-to-speak
+          shouldBeRecordingRef.current = false;
+          clearInterval(silenceIntervalRef.current);
         },
         onError: (err) => {
           console.error('[useAriaVoice] Speech error:', err);
@@ -88,7 +94,12 @@ export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-U
             // Circuit breaker: stop after max retries
             shouldBeRecordingRef.current = false;
             setIsRecording(false);
+            clearInterval(silenceIntervalRef.current);
             setError('Speech recognition stopped. Tap the mic to try again.');
+          } else {
+            // Result was submitted or user stopped — clean up recording state
+            setIsRecording(false);
+            clearInterval(silenceIntervalRef.current);
           }
         },
       });
@@ -110,12 +121,30 @@ export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-U
     shouldBeRecordingRef.current = true;
     retryCountRef.current = 0;
     setIsRecording(true);
+    lastSpeechRef.current = Date.now();
+
+    // 10-second silence timeout — returns to tap-to-speak if no speech detected
+    clearInterval(silenceIntervalRef.current);
+    silenceIntervalRef.current = setInterval(() => {
+      if (shouldBeRecordingRef.current && Date.now() - lastSpeechRef.current > SILENCE_TIMEOUT_MS) {
+        clearInterval(silenceIntervalRef.current);
+        shouldBeRecordingRef.current = false;
+        if (controllerRef.current) {
+          controllerRef.current.stop().catch(() => {});
+          controllerRef.current = null;
+        }
+        setIsRecording(false);
+        setTranscript('');
+      }
+    }, 1000);
+
     doStart();
   }, [isSupported, doStart]);
 
   const stopRecording = useCallback(async () => {
     shouldBeRecordingRef.current = false;
     clearTimeout(retryTimerRef.current);
+    clearInterval(silenceIntervalRef.current);
 
     if (controllerRef.current) {
       try {
@@ -143,6 +172,7 @@ export function useAriaVoice({ onTranscript, onFinalTranscript, language = 'en-U
     return () => {
       shouldBeRecordingRef.current = false;
       clearTimeout(retryTimerRef.current);
+      clearInterval(silenceIntervalRef.current);
       if (controllerRef.current) {
         try { controllerRef.current.stop(); } catch {}
         controllerRef.current = null;

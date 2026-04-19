@@ -180,8 +180,8 @@ async def execute_tool(
     _verify_internal_key(request)
 
     try:
-        from agents.tools.base import ToolRegistry
-        registry = ToolRegistry()
+        from agents.tools import tool_registry
+        registry = tool_registry
         tool_def = registry.get(req.tool_name)
     except Exception as e:
         return {"error": f"Tool registry unavailable: {e}"}

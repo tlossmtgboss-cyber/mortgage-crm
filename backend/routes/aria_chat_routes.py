@@ -144,9 +144,13 @@ async def aria_websocket(
     )
 
     # Send greeting
-    from aria.core.context_loader import AriaContextLoader
-    context_loader = AriaContextLoader()
-    context = await context_loader.load_full(uid)
+    try:
+        from aria.core.context_loader import AriaContextLoader
+        context_loader = AriaContextLoader()
+        context = await asyncio.wait_for(context_loader.load_full(uid), timeout=10.0)
+    except Exception as e:
+        logger.warning(f"Context load failed for user {uid}: {e}")
+        context = {"active_loan_count": 0, "urgent_task_count": 0}
     greeting = _build_greeting(user.full_name, context)
     await websocket.send_json({"type": "greeting", "content": greeting})
 
@@ -258,7 +262,16 @@ async def _heartbeat_loop(websocket: WebSocket):
 async def _run_graph_step(state, websocket: WebSocket):
     """Run one step of the Aria LangGraph and stream the response."""
     aria_graph = _get_aria_graph()
-    new_state = await aria_graph.ainvoke(state)
+    try:
+        new_state = await asyncio.wait_for(aria_graph.ainvoke(state), timeout=45.0)
+    except asyncio.TimeoutError:
+        logger.error("Aria graph invocation timed out after 45s")
+        await websocket.send_json({"type": "error", "message": "Response took too long. Try a shorter message?"})
+        return state
+    except Exception as e:
+        logger.error(f"Aria graph error: {e}", exc_info=True)
+        await websocket.send_json({"type": "error", "message": "Something went wrong. Try again?"})
+        return state
 
     ai_messages = [m for m in new_state.get("messages", []) if isinstance(m, AIMessage)]
     if ai_messages:

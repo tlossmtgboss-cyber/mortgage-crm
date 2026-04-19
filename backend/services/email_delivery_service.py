@@ -436,6 +436,7 @@ class EmailDeliveryService:
             EmailProvider.SENDGRID,
             EmailProvider.MICROSOFT,
             EmailProvider.GMAIL,
+            EmailProvider.SMTP,
         ]
         # Put preferred first, keep others in default order after
         ordered: List[EmailProvider] = [config.preferred_provider]
@@ -459,6 +460,8 @@ class EmailDeliveryService:
             return await self._send_via_microsoft(message, org_id)
         if provider == EmailProvider.GMAIL:
             return await self._send_via_gmail(message, org_id)
+        if provider == EmailProvider.SMTP:
+            return await self._send_via_smtp(message)
         # Fallthrough — dry-run
         return self._dry_run_result(message)
 
@@ -1192,6 +1195,109 @@ class EmailDeliveryService:
             outer[k] = v
 
         return outer.as_bytes()
+
+    # ------------------------------------------------------------------
+    # Provider: Direct SMTP
+    # ------------------------------------------------------------------
+
+    async def _send_via_smtp(self, message: EmailMessage) -> EmailDeliveryResult:
+        """
+        Send via direct SMTP using SMTP_HOST/SMTP_USER/SMTP_PASSWORD env vars.
+
+        This is a last-resort fallback when SendGrid, Microsoft, and Gmail
+        OAuth are unavailable.  Uses Gmail app-password by default.
+        """
+        smtp_host = os.getenv("SMTP_HOST", "")
+        smtp_port = int(os.getenv("SMTP_PORT", "587"))
+        smtp_user = os.getenv("SMTP_USER", "")
+        smtp_pass = os.getenv("SMTP_PASSWORD", "")
+
+        if not smtp_user or not smtp_pass or not smtp_host:
+            return EmailDeliveryResult(
+                status=EmailStatus.FAILED,
+                provider=EmailProvider.SMTP,
+                error="SMTP credentials not configured (SMTP_HOST/SMTP_USER/SMTP_PASSWORD)",
+                to=message.to,
+            )
+
+        try:
+            import smtplib
+            from email.mime.multipart import MIMEMultipart as _MMP
+            from email.mime.text import MIMEText as _MT
+            from email.mime.base import MIMEBase as _MB
+            from email import encoders as _enc
+
+            def _do_smtp_send():
+                msg = _MMP("mixed")
+                from_display = message.from_name or "Perennia AI"
+                from_addr = message.from_email or smtp_user
+                msg["From"] = f"{from_display} <{from_addr}>"
+                msg["To"] = ", ".join(message.to)
+                msg["Subject"] = message.subject
+                if message.cc:
+                    msg["Cc"] = ", ".join(message.cc)
+                if message.reply_to:
+                    msg["Reply-To"] = message.reply_to
+                for k, v in (message.headers or {}).items():
+                    msg[k] = v
+
+                # Body
+                if message.html_body:
+                    msg.attach(_MT(message.html_body, "html"))
+                elif message.text_body:
+                    msg.attach(_MT(message.text_body, "plain"))
+
+                # Attachments
+                if message.attachments:
+                    for att in message.attachments:
+                        try:
+                            raw = _encode_attachment(att)
+                            maintype, subtype = att.content_type.split("/", 1) if "/" in att.content_type else ("application", "octet-stream")
+                            part = _MB(maintype, subtype)
+                            part.set_payload(raw)
+                            _enc.encode_base64(part)
+                            part.add_header("Content-Disposition", "attachment", filename=att.filename)
+                            msg.attach(part)
+                        except Exception as att_err:
+                            logger.error("email.smtp.attachment_error filename=%s: %s", att.filename, att_err)
+
+                all_recipients = list(message.to)
+                if message.cc:
+                    all_recipients.extend(message.cc)
+                if message.bcc:
+                    all_recipients.extend(message.bcc)
+
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as server:
+                    server.starttls()
+                    server.login(smtp_user, smtp_pass)
+                    server.sendmail(smtp_user, all_recipients, msg.as_string())
+
+                return True
+
+            # Run blocking SMTP in executor
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(None, _do_smtp_send)
+
+            msg_id = f"smtp-{uuid.uuid4()}"
+            logger.info(
+                "email.smtp.sent message_id=%s to=%s subject=%r",
+                msg_id, message.to, message.subject,
+            )
+            return EmailDeliveryResult(
+                message_id=msg_id,
+                status=EmailStatus.SENT,
+                provider=EmailProvider.SMTP,
+                to=message.to,
+            )
+
+        except Exception as exc:
+            logger.error("email.smtp.exception: %s", exc)
+            return EmailDeliveryResult(
+                status=EmailStatus.FAILED,
+                provider=EmailProvider.SMTP,
+                error=str(exc),
+                to=message.to,
+            )
 
     # ------------------------------------------------------------------
     # Dry-run fallback

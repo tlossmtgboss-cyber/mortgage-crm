@@ -514,6 +514,14 @@ except Exception as e:
     if ENVIRONMENT == "production":
         logger.critical("SOC 2 audit middleware failed in production — audit logging degraded")
 
+# Breadcrumb audit middleware — defense-in-depth for mutating API calls
+try:
+    from middleware.audit_middleware import AuditMiddleware as BreadcrumbAuditMiddleware
+    app.add_middleware(BreadcrumbAuditMiddleware)
+    logger.info("✅ Breadcrumb audit middleware enabled (audit_events table)")
+except Exception as e:
+    logger.warning(f"⚠️ Breadcrumb audit middleware not loaded: {e}")
+
 logger.info(f"✅ Security middleware enabled (ENVIRONMENT={os.getenv('ENVIRONMENT', 'development')}): "
             "IP access control, rate limiting, IP blocking, security headers, request validation, and logging")
 

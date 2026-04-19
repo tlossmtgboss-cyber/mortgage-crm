@@ -48,7 +48,7 @@ router = APIRouter(
 @router.post("/needs-list/{loan_id}/custom-request")
 async def add_custom_request(
     loan_id: int,
-    borrower_id: int = Query(...),
+    borrower_id: Optional[int] = Query(None),
     body: AddCustomRequestBody = None,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
@@ -60,6 +60,14 @@ async def add_custom_request(
     is set to True and borrower_email is provided.
     """
     _verify_loan_tenant(db, loan_id, current_user)
+
+    if not borrower_id:
+        from sqlalchemy import text as _text
+        row = db.execute(
+            _text("SELECT lead_id FROM loans WHERE id = :lid"), {"lid": loan_id}
+        ).first()
+        borrower_id = row[0] if row else 0
+
     generator = NeedsListGenerator(db)
     result = generator.add_custom_request(
         loan_id=loan_id,
@@ -77,23 +85,46 @@ async def add_custom_request(
     notification_sent = False
     if body.send_notification and body.borrower_email:
         try:
-            # Get the created request from the database
+            from sqlalchemy import text as _text
+
             request = db.query(DocumentRequest).filter(
                 DocumentRequest.loan_id == loan_id,
                 DocumentRequest.title == body.title
             ).order_by(DocumentRequest.created_at.desc()).first()
 
             if request:
+                lo_name = "Your Loan Officer"
+                borrower_phone = None
+
+                lo_row = db.execute(_text(
+                    "SELECT u.first_name, u.last_name "
+                    "FROM users u JOIN loans l ON l.loan_officer_id = u.id "
+                    "WHERE l.id = :lid"
+                ), {"lid": loan_id}).first()
+                if lo_row:
+                    lo_name = f"{lo_row[0] or ''} {lo_row[1] or ''}".strip() or "Your Loan Officer"
+
+                phone_row = db.execute(_text(
+                    "SELECT COALESCE(l2.borrower_phone, ld.phone) "
+                    "FROM loans l2 "
+                    "LEFT JOIN leads ld ON ld.id = l2.lead_id "
+                    "WHERE l2.id = :lid"
+                ), {"lid": loan_id}).first()
+                if phone_row and phone_row[0]:
+                    borrower_phone = phone_row[0]
+
                 notification_service = SmartDocsNotificationService(db)
                 notification_sent = notification_service.send_document_request_notification(
                     request=request,
                     borrower_email=body.borrower_email,
                     borrower_name=body.borrower_name or "Borrower",
+                    loan_officer_name=lo_name,
+                    borrower_phone=borrower_phone,
+                    loan_id=loan_id,
                 )
-        except SQLAlchemyError as e:
+        except Exception as e:
             logger.error(f"Failed to send notification for custom request: {e}")
 
-    # Add notification status to response
     if isinstance(result, dict):
         result["notification_sent"] = notification_sent
     return result

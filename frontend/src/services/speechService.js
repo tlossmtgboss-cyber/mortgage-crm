@@ -84,53 +84,89 @@ async function startNativeListening({ language, partialResults, onPartialResult,
     return { stop: async () => {} };
   }
 
-  // Request permission if needed
   const hasPermission = await requestPermission();
   if (!hasPermission) {
     onError?.('Speech recognition permission denied');
     return { stop: async () => {} };
   }
 
-  // Remove any existing listeners
   await plugin.removeAllListeners();
 
-  // Listen for partial results
+  // Silence detection: auto-finalize speech after 3s of no new partial results.
+  // iOS native speech recognition only provides partial results — it never fires
+  // a "final result" event on its own. Without this timer, accumulated speech text
+  // is never sent to the AI backend.
+  let lastPartialText = '';
+  let finalizeTimer = null;
+  let stopped = false;
+  const AUTO_FINALIZE_MS = 3000;
+
+  const clearTimers = () => { clearTimeout(finalizeTimer); finalizeTimer = null; };
+
+  const doFinalize = async () => {
+    if (stopped) return;
+    stopped = true;
+    clearTimers();
+    const text = lastPartialText;
+    lastPartialText = '';
+    if (text) onResult?.(text);
+    try { await plugin.stop(); } catch {}
+    await plugin.removeAllListeners();
+    onEnd?.();
+  };
+
   await plugin.addListener('partialResults', (data) => {
+    if (stopped) return;
     const text = data.matches?.[0] || data.value || '';
     if (text) {
+      lastPartialText = text;
       onPartialResult?.(text);
+      // Reset finalize timer — user is still speaking
+      clearTimers();
+      finalizeTimer = setTimeout(doFinalize, AUTO_FINALIZE_MS);
     }
   });
 
-  // Listen for recognition ending (iOS terminates after ~60s of continuous listening)
   await plugin.addListener('listeningState', (data) => {
-    if (data.status === 'stopped') {
+    if (data.status === 'stopped' && !stopped) {
+      stopped = true;
+      clearTimers();
+      // Capture any accumulated text that was never finalized
+      if (lastPartialText) {
+        onResult?.(lastPartialText);
+        lastPartialText = '';
+      }
       onEnd?.();
     }
   });
 
-  // Start recognition
   try {
-    await plugin.start({
-      language,
-      partialResults,
-      popup: false,
-    });
+    await plugin.start({ language, partialResults, popup: false });
   } catch (err) {
     onError?.(err.message || 'Failed to start speech recognition');
-    return { stop: async () => {} };
+    return { stop: async () => { clearTimers(); } };
   }
 
   return {
     stop: async () => {
+      if (stopped) { clearTimers(); return; }
+      stopped = true;
+      clearTimers();
       try {
         const result = await plugin.stop();
         const finalText = result?.matches?.[0] || result?.value || '';
         if (finalText) {
           onResult?.(finalText);
+        } else if (lastPartialText) {
+          onResult?.(lastPartialText);
+          lastPartialText = '';
         }
         onEnd?.();
       } catch {
+        if (lastPartialText) {
+          onResult?.(lastPartialText);
+          lastPartialText = '';
+        }
         onEnd?.();
       }
       await plugin.removeAllListeners();

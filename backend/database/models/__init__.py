@@ -748,6 +748,9 @@ from .recovery_opt_out import RecoveryOptOut
 # Mobile audit events (iOS AuditLogger hash-chain persistence, SOC 2)
 from .audit import MobileAuditEvent
 
+# SOC 2 audit events (API breadcrumb trail, enterprise compliance)
+from .audit_event import AuditEvent
+
 # GDPR data subject requests
 from .security import DataSubjectRequest
 
