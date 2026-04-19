@@ -320,9 +320,14 @@ class SmartDocsS3Service:
                 "error": "S3 storage not configured"
             }
 
-        # Validate tenant access if organization_id provided
-        if organization_id:
-            if not self._validate_org_access(storage_key, organization_id):
+        # Validate tenant access (required for all presigned URLs)
+        if not organization_id:
+            logger.error("presigned_url_denied: organization_id is required")
+            return {
+                "success": False,
+                "error": "organization_id is required for presigned URL generation"
+            }
+        if not self._validate_org_access(storage_key, organization_id):
                 logger.warning(
                     f"Presigned URL denied: org {organization_id} cannot access key {storage_key}"
                 )
@@ -366,24 +371,20 @@ class SmartDocsS3Service:
         """
         Verify the storage key belongs to the requesting organization.
 
-        Checks both new (org-{id}/) and old (org/{id}/) prefix formats.
-
-        Args:
-            storage_key: S3 object key to validate
-            organization_id: Organization ID of the requesting user
-
-        Returns:
-            True if the key belongs to the org, False otherwise
+        Keys MUST begin with org-{id}/ or org/{id}/. Legacy untagged keys
+        must be migrated via scripts/migrate_legacy_s3_keys.py first.
         """
-        if not organization_id:
+        if not organization_id or not storage_key:
             return False
-        # Check new format (org-{id}/) and legacy format (org/{id}/)
         new_prefix = f"org-{organization_id}/"
         legacy_prefix = f"org/{organization_id}/"
-        if storage_key.startswith("org-") or storage_key.startswith("org/"):
-            return storage_key.startswith(new_prefix) or storage_key.startswith(legacy_prefix)
-        # Legacy keys (no org prefix) -- allow access for backward compatibility
-        return True
+        if storage_key.startswith(new_prefix) or storage_key.startswith(legacy_prefix):
+            return True
+        logger.warning(
+            "s3_access_denied key=%s org_id=%s (no matching org prefix)",
+            storage_key, organization_id,
+        )
+        return False
 
     def delete_file(self, storage_key: str) -> Dict[str, Any]:
         """

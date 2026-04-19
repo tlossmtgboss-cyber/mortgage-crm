@@ -32,6 +32,7 @@ Usage:
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 import re
@@ -42,15 +43,21 @@ from typing import Any, Dict, List, Optional, Tuple
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Optional dependency: cryptography
+# Required dependency: cryptography (C2: fail-closed, no plaintext fallback)
 # ---------------------------------------------------------------------------
 
 try:
     from cryptography.fernet import Fernet, InvalidToken
-    HAS_CRYPTOGRAPHY = True
-except ImportError:
-    HAS_CRYPTOGRAPHY = False
-    InvalidToken = Exception  # type: ignore[misc,assignment]
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+except ImportError as _imp_err:
+    raise RuntimeError(
+        "cryptography library is required for PII encryption. "
+        "Install it (`pip install cryptography`) — plaintext PII storage is not permitted."
+    ) from _imp_err
+
+# AES-256-GCM envelope constants
+_V2_PREFIX = "v2:"
+_NONCE_LEN = 12  # GCM standard
 
 
 # ---------------------------------------------------------------------------
@@ -148,74 +155,90 @@ _PII_PATTERNS: List[Tuple[PIIType, re.Pattern, str]] = [
 class PIIEncryptionService:
     """Column-level encryption and PII handling for Smart Docs.
 
-    Raises ``RuntimeError`` during ``__init__`` when the ``cryptography``
-    library is installed but ``PII_ENCRYPTION_KEY`` is not set.  In
-    environments where the library is absent, a plaintext fallback is
-    used with a prominent warning.
+    Envelope format:
+        v2:<base64(nonce + ciphertext)>    AES-256-GCM  (current)
+        <Fernet token>                     AES-128-CBC  (legacy, read-only)
+
+    Encrypt always writes v2. Decrypt handles both formats.
     """
 
     def __init__(self) -> None:
-        self._fernet: Optional[Any] = None  # Fernet instance or None
+        self._fernet: Optional[Any] = None
+        self._gcm: Optional[AESGCM] = None
         self._plaintext_mode = False
 
-        if not HAS_CRYPTOGRAPHY:
+        # Primary key: AES-256-GCM (PII_KEY_V2 or fall back to PII_ENCRYPTION_KEY)
+        v2_raw = os.environ.get("PII_KEY_V2")
+        legacy_raw = os.environ.get("PII_ENCRYPTION_KEY")
+
+        if v2_raw:
+            try:
+                v2_key = base64.b64decode(v2_raw)
+                if len(v2_key) != 32:
+                    raise ValueError(f"PII_KEY_V2 must decode to 32 bytes, got {len(v2_key)}")
+                self._gcm = AESGCM(v2_key)
+            except Exception as e:
+                raise RuntimeError(f"Invalid PII_KEY_V2: {e}") from e
+            logger.info("PII encryption service initialised (AES-256-GCM mode)")
+        elif legacy_raw:
             logger.warning(
-                "cryptography library not installed -- PII encryption "
-                "disabled (plaintext fallback).  Install with: "
-                "pip install cryptography"
+                "PII_KEY_V2 not set — using legacy Fernet key for both read and write. "
+                "Set PII_KEY_V2 (base64, 32 bytes) to upgrade to AES-256-GCM."
             )
-            self._plaintext_mode = True
-            return
-
-        key = os.environ.get("PII_ENCRYPTION_KEY")
-        if not key:
+        else:
             raise RuntimeError(
-                "PII_ENCRYPTION_KEY environment variable is required when "
-                "the cryptography library is installed.  Generate a key "
-                "with: python -c \"from cryptography.fernet import Fernet; "
-                "print(Fernet.generate_key().decode())\""
+                "PII_KEY_V2 (preferred) or PII_ENCRYPTION_KEY (legacy) is required. "
+                "Generate v2 key: python -c \"import base64,os; print(base64.b64encode(os.urandom(32)).decode())\""
             )
 
-        try:
-            self._fernet = Fernet(key.encode() if isinstance(key, str) else key)
-        except Exception as e:
-            raise RuntimeError(
-                f"Invalid PII_ENCRYPTION_KEY: {e}.  Must be a valid "
-                "Fernet key (base64-encoded 32-byte key)."
-            ) from e
-
-        logger.info("PII encryption service initialised (Fernet mode)")
+        # Legacy Fernet reader (for decrypting old data)
+        if legacy_raw:
+            try:
+                self._fernet = Fernet(legacy_raw.encode() if isinstance(legacy_raw, str) else legacy_raw)
+            except Exception as e:
+                raise RuntimeError(f"Invalid PII_ENCRYPTION_KEY: {e}") from e
 
     # ------------------------------------------------------------------
     # Core encrypt / decrypt
     # ------------------------------------------------------------------
 
     def encrypt(self, plaintext: str) -> str:
-        """Encrypt *plaintext* and return a base64-encoded ciphertext string.
-
-        In plaintext-fallback mode the value is returned unchanged.
-        """
-        if self._plaintext_mode:
-            return plaintext
+        """Encrypt *plaintext*. Uses AES-256-GCM (v2) when available, else Fernet."""
+        if self._gcm is not None:
+            nonce = os.urandom(_NONCE_LEN)
+            ct = self._gcm.encrypt(nonce, plaintext.encode("utf-8"), associated_data=None)
+            return _V2_PREFIX + base64.b64encode(nonce + ct).decode("ascii")
         assert self._fernet is not None
         return self._fernet.encrypt(plaintext.encode("utf-8")).decode("utf-8")
 
     def decrypt(self, ciphertext: str) -> str:
-        """Decrypt a base64-encoded *ciphertext* string.
+        """Decrypt a ciphertext string. Handles both v2 (AES-256-GCM) and legacy Fernet."""
+        if ciphertext.startswith(_V2_PREFIX):
+            if self._gcm is None:
+                raise RuntimeError("v2 token found but PII_KEY_V2 is not configured")
+            blob = base64.b64decode(ciphertext[len(_V2_PREFIX):])
+            if len(blob) < _NONCE_LEN + 16:
+                raise ValueError("ciphertext too short")
+            nonce, ct = blob[:_NONCE_LEN], blob[_NONCE_LEN:]
+            return self._gcm.decrypt(nonce, ct, associated_data=None).decode("utf-8")
 
-        In plaintext-fallback mode the value is returned unchanged.
-
-        Raises ``ValueError`` if decryption fails (bad key or tampered data).
-        """
-        if self._plaintext_mode:
-            return ciphertext
-        assert self._fernet is not None
+        if self._fernet is None:
+            raise RuntimeError(
+                "Legacy Fernet token found but PII_ENCRYPTION_KEY is not configured. "
+                "Set PII_ENCRYPTION_KEY or run the re-encryption migration."
+            )
         try:
             return self._fernet.decrypt(ciphertext.encode("utf-8")).decode("utf-8")
         except InvalidToken as e:
             raise ValueError(
                 "Failed to decrypt PII field -- key mismatch or corrupted data"
             ) from e
+
+    def needs_reencryption(self, token: Optional[str]) -> bool:
+        """Return True if token uses legacy Fernet format (needs upgrade to v2)."""
+        if token is None:
+            return False
+        return not token.startswith(_V2_PREFIX)
 
     # ------------------------------------------------------------------
     # None-safe wrappers

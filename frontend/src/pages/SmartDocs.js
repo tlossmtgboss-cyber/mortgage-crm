@@ -9,6 +9,7 @@
  * - Completed clients (finished financing)
  */
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useDebounce } from '../hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
 import { smartDocsAPI } from '../services/smartDocsApi';
 import { API_BASE_URL } from '../services/api';
@@ -38,7 +39,8 @@ function SmartDocs() {
   const [error, setError] = useState(null);
   const [pagination, setPagination] = useState({ page: 1, limit: 20 });
   const [overdueOnly, setOverdueOnly] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const searchQuery = useDebounce(searchInput, 300);
   const [statusFilter, setStatusFilter] = useState('all');
   const [docTypeFilter, setDocTypeFilter] = useState('all');
   const [duplicateMap, setDuplicateMap] = useState({});  // Map of email -> list of loan IDs
@@ -587,13 +589,13 @@ function SmartDocs() {
             className="search-input"
             placeholder="Search by name, email, or loan..."
             aria-label="Search documents by name, email, or loan number"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
-          {searchQuery && (
+          {searchInput && (
             <button
               className="search-clear"
-              onClick={() => setSearchQuery('')}
+              onClick={() => setSearchInput('')}
               aria-label="Clear search"
             >
               ×
@@ -727,11 +729,18 @@ function SmartDocs() {
                 Show overdue only
               </label>
             </div>
-            {filteredData.length === 0 ? (
+            {error ? (
+              <div className="empty-state" role="alert">
+                <span className="empty-icon">⚠</span>
+                <h3>Unable to load documents</h3>
+                <p>{typeof error === 'string' ? error : 'Something went wrong. Please try again.'}</p>
+                <button className="retry-btn" onClick={() => { setError(null); fetchAllLoans(); }}>Retry</button>
+              </div>
+            ) : filteredData.length === 0 ? (
               <div className="empty-state">
                 <span className="empty-icon">✓</span>
-                <h3>{searchQuery ? 'No matching clients' : 'All documents collected!'}</h3>
-                <p>{searchQuery ? 'Try a different search term' : 'No outstanding document requests'}</p>
+                <h3>{searchQuery ? 'No matching clients' : 'No outstanding document requests'}</h3>
+                <p>{searchQuery ? 'Try a different search term' : 'All documents have been collected for active loans.'}</p>
               </div>
             ) : (
               <div className="table-container">
@@ -750,7 +759,7 @@ function SmartDocs() {
                   <tbody>
                     {filteredData.map((applicant) => {
                       const docsCollected = applicant.docs_collected || 0;
-                      const docsRequired = applicant.docs_required || 8;
+                      const docsRequired = applicant.docs_required || applicant.outstanding_count || docsCollected || 1;
                       const completionPct = docsRequired > 0 ? Math.round((docsCollected / docsRequired) * 100) : 0;
                       const daysWaiting = applicant.created_at
                         ? Math.floor((new Date() - new Date(applicant.created_at)) / (1000 * 60 * 60 * 24))
@@ -762,7 +771,16 @@ function SmartDocs() {
                       <tr
                         key={applicant.loan_id}
                         className={`${isOverdue ? 'has-overdue' : ''} ${hasDuplicate(applicant.loan_id) ? 'has-duplicate' : ''}`}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Open loan for ${applicant.borrower_name}`}
                         onClick={() => navigate(`/smart-docs/client/${applicant.loan_id}`)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            navigate(`/smart-docs/client/${applicant.loan_id}`);
+                          }
+                        }}
                       >
                         <td>
                           <div className="borrower-info">

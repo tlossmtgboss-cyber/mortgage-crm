@@ -97,6 +97,14 @@ class Settings(BaseSettings):
     )
 
     # =========================================================================
+    # SMART DOCS
+    # =========================================================================
+    PRESIGNED_URL_EXPIRY_SECONDS: int = Field(
+        default=300,
+        description="S3 presigned URL expiry in seconds"
+    )
+
+    # =========================================================================
     # CIRCUIT BREAKER
     # =========================================================================
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = Field(

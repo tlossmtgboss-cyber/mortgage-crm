@@ -354,6 +354,21 @@
   margin: 0;
 }
 
+.retry-btn {
+  margin-top: 12px;
+  padding: 8px 20px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.retry-btn:hover {
+  background: #2563eb;
+}
+
 /* List Filters */
 .list-filters {
   padding: 12px 0;

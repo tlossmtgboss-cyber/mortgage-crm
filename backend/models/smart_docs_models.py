@@ -15,7 +15,7 @@ from typing import Optional, List
 
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
-    Text, JSON, Enum as SQLEnum, Numeric, Index
+    Text, JSON, Enum as SQLEnum, Numeric, Index, func
 )
 # Note: relationship import removed - using ID-based queries instead of ORM relationships
 
@@ -161,8 +161,8 @@ class DocumentRequest(Base):
     superseded_by = Column(Integer, nullable=True)  # FK to replacement request
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Note: Documents relationship accessed via SmartDocument.request_id queries
 
@@ -196,9 +196,10 @@ class SmartDocument(Base):
     original_filename = Column(String(512), nullable=True)  # Original uploaded filename
     mime_type = Column(String(128), nullable=False)
     file_size = Column(Integer, nullable=False)
+    file_hash = Column(String(64), nullable=True, index=True)
     storage_key = Column(String(1024), nullable=False)  # S3 key
     page_count = Column(Integer, nullable=True)
-    uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))  # When document was uploaded
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())  # When document was uploaded
 
     # Document type
     doc_type = Column(SQLEnum(DocType), nullable=True)
@@ -244,8 +245,8 @@ class SmartDocument(Base):
     assigned_owner = Column(String(20), nullable=True)  # BORROWER, CO_BORROWER
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Note: Request relationship accessed via request_id column
 
@@ -281,7 +282,7 @@ class DocPolicyEvent(Base):
     payload = Column(JSON, nullable=True)
 
     # Timestamp
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Indexes
     __table_args__ = (
@@ -318,8 +319,8 @@ class NeedsListTemplate(Base):
     version = Column(String(16), default="1")
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Indexes
     __table_args__ = (
@@ -349,8 +350,8 @@ class ClientReminderSettings(Base):
     reminder_count = Column(Integer, default=0)
 
     # Timestamps
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Indexes
     __table_args__ = (

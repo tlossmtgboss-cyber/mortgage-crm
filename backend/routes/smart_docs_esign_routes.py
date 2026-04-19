@@ -910,8 +910,11 @@ async def download_signed_document(
                 ip_address=_get_client_ip(request),
                 details={"envelope_uuid": envelope_uuid, "is_signed": envelope.signed_document_storage_key is not None},
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(
+                "esign_audit_write_failed: %s",
+                e, exc_info=True,
+            )
 
         db.commit()
 

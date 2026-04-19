@@ -13,7 +13,7 @@
  * - Bulk select for merge operations
  * - Expired documents highlighted
  */
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import { resendPortalLink } from '../services/docDeliveryApi';
@@ -338,8 +338,10 @@ function SmartDocsClientDetail() {
     }
   };
 
-  // Optimistic update helper — patches local state, returns rollback fn
+  // Optimistic update helper — patches local state, returns version-aware rollback fn
+  const optimisticVersionRef = useRef(0);
   const optimisticUpdate = (docId, patch) => {
+    const myVersion = ++optimisticVersionRef.current;
     let snapshot;
     setDocuments(prev => {
       snapshot = prev;
@@ -347,7 +349,7 @@ function SmartDocsClientDetail() {
     });
     setSelectedDoc(s => s?.id === docId ? { ...s, ...patch } : s);
     return () => {
-      if (snapshot) {
+      if (snapshot && optimisticVersionRef.current === myVersion) {
         setDocuments(snapshot);
         setSelectedDoc(s => snapshot.find(d => d.id === s?.id) || s);
       }
@@ -772,39 +774,45 @@ function SmartDocsClientDetail() {
             </label>
           </div>
 
-          <div className="document-list">
+          <ul className="document-list" aria-label="Requested documents">
             {documents.length === 0 ? (
-              <div className="no-documents">
+              <li className="no-documents">
                 <span className="empty-icon">📄</span>
                 <p>No documents requested</p>
-              </div>
+              </li>
             ) : (
               documents.map((doc) => (
-                <div
+                <li
                   key={doc.id}
                   className={`document-item ${selectedDoc?.id === doc.id ? 'active' : ''} ${isExpired(doc) ? 'expired' : ''}`}
-                  onClick={() => setSelectedDoc(doc)}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedDocs.has(doc.id)}
-                    onChange={(e) => {
-                      e.stopPropagation();
-                      toggleDocSelection(doc.id);
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                  <div className="doc-item-content">
-                    <span className="doc-title">{getDocTypeName(doc.doc_type)}</span>
-                    <span className={`doc-status ${getStatusClass(doc)}`}>
-                      {isExpired(doc) ? 'Expired' : doc.status?.replace(/_/g, ' ')}
-                    </span>
-                  </div>
-                  {isExpired(doc) && <span className="expired-badge">!</span>}
-                </div>
+                  <button
+                    type="button"
+                    className="doc-item-btn"
+                    aria-current={selectedDoc?.id === doc.id ? 'true' : undefined}
+                    onClick={() => setSelectedDoc(doc)}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedDocs.has(doc.id)}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleDocSelection(doc.id);
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                    <div className="doc-item-content">
+                      <span className="doc-title">{getDocTypeName(doc.doc_type)}</span>
+                      <span className={`doc-status ${getStatusClass(doc)}`}>
+                        {isExpired(doc) ? 'Expired' : doc.status?.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    {isExpired(doc) && <span className="expired-badge">!</span>}
+                  </button>
+                </li>
               ))
             )}
-          </div>
+          </ul>
 
           {/* Bulk Actions */}
           {selectedDocs.size > 0 && (

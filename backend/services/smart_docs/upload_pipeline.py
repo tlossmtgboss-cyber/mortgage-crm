@@ -242,7 +242,7 @@ class DocumentUploadPipeline:
                     f.threat_name for f in scan_result.findings
                     if not f.clean and f.threat_name
                 ]
-                logger.warning(
+                logger.error(
                     "Upload rejected for malware: file='%s', threats=%s, user=%s, org=%s",
                     filename, threat_names, user_id, org_id,
                 )
