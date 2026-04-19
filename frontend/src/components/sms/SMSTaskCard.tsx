@@ -53,7 +53,7 @@ function statusLabel(task: SMSTaskCardProps['task']): { text: string; color: str
   return { text: 'Pending', color: '#adb5bd' }
 }
 
-export default function SMSTaskCard({ task, selected, onClick }: SMSTaskCardProps) {
+function SMSTaskCard({ task, selected, onClick }: SMSTaskCardProps) {
   const [hovered, setHovered] = React.useState(false)
   const preview = task.inbound_message.length > 80
     ? task.inbound_message.slice(0, 80) + '\u2026'
@@ -109,3 +109,5 @@ export default function SMSTaskCard({ task, selected, onClick }: SMSTaskCardProp
     </div>
   )
 }
+
+export default React.memo(SMSTaskCard)

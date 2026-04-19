@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { memo, useState } from 'react'
 import AIConfidenceBadge from './AIConfidenceBadge'
 
 interface AIRecommendationPanelProps {
@@ -73,7 +73,7 @@ const textBtn: React.CSSProperties = {
   padding: '8px 12px',
 }
 
-export default function AIRecommendationPanel({
+function AIRecommendationPanel({
   task,
   onRespond,
   onDismiss,
@@ -271,3 +271,5 @@ export default function AIRecommendationPanel({
     </div>
   )
 }
+
+export default memo(AIRecommendationPanel)

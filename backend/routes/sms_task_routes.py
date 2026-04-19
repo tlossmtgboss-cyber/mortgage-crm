@@ -24,6 +24,15 @@ class RespondRequest(BaseModel):
     response_text: str
     response_source: str = "human"
 
+    @validator("response_text")
+    def validate_response_text(cls, v):
+        v = v.strip()
+        if not v:
+            raise ValueError("response_text cannot be empty")
+        if len(v) > 1600:
+            raise ValueError("response_text must be 1600 characters or fewer")
+        return v
+
     @validator("response_source")
     def validate_response_source(cls, v):
         allowed = {"ai_accepted", "ai_edited", "human", "ai", "manual"}
@@ -45,6 +54,12 @@ class FeedbackRequest(BaseModel):
 
 class RegenerateRequest(BaseModel):
     feedback: str = ""
+
+    @validator("feedback")
+    def validate_feedback(cls, v):
+        if len(v) > 500:
+            raise ValueError("feedback must be 500 characters or fewer")
+        return v
 
 
 class SettingsUpdate(BaseModel):

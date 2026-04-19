@@ -44,7 +44,7 @@ function injectKeyframes() {
   document.head.appendChild(style)
 }
 
-export default function AIConfidenceBadge({
+function AIConfidenceBadge({
   confidence,
   size = 'md',
   showLabel = true,
@@ -103,3 +103,5 @@ export default function AIConfidenceBadge({
     </div>
   )
 }
+
+export default React.memo(AIConfidenceBadge)

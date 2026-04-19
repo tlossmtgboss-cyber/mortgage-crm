@@ -8,7 +8,7 @@ Sends appointment lifecycle SMS notifications via Telnyx:
 - Reschedule notification (on APPOINTMENT_RESCHEDULED)
 
 Integrates with:
-- scheduler_email_service.check_sms_consent for TCPA/DNC compliance
+- services.sms_compliance.check_sms_consent for TCPA/DNC compliance
 - AppointmentReminder model for tracking sent reminders
 - Telnyx SDK for message delivery
 
@@ -457,7 +457,7 @@ class SMSConfirmationService:
 
         # TCPA/DNC consent check using existing scheduler_email_service infrastructure
         try:
-            from scheduler_email_service import check_sms_consent
+            from services.sms_compliance import check_sms_consent
 
             can_send, reason = check_sms_consent(clean_number, organization_id=organization_id)
             if not can_send:

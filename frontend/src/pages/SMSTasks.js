@@ -9,9 +9,11 @@ const POLL_INTERVAL = 30000;
 const STATUS_TABS = [
   { key: 'all', label: 'All' },
   { key: 'pending', label: 'Pending' },
+  { key: 'in_progress', label: 'In Progress' },
   { key: 'auto_responded', label: 'Auto-responded' },
   { key: 'completed', label: 'Completed' },
   { key: 'dismissed', label: 'Dismissed' },
+  { key: 'expired', label: 'Expired' },
 ];
 
 const CATEGORY_OPTIONS = [
@@ -74,8 +76,11 @@ function SMSTasks() {
   const [newTaskCount, setNewTaskCount] = useState(0);
   const [feedbackTaskId, setFeedbackTaskId] = useState(null);
   const [settingsLoading, setSettingsLoading] = useState({});
+  const [fetchError, setFetchError] = useState(null);
   const previousCountRef = useRef(0);
   const pollRef = useRef(null);
+  const fetchTasksRef = useRef(null);
+  const fetchStatsRef = useRef(null);
 
   const headers = getAuthHeaders();
 
@@ -95,8 +100,10 @@ function SMSTasks() {
       }
       previousCountRef.current = taskList.length;
       setTasks(taskList);
+      setFetchError(null);
     } catch (err) {
       console.error('Error fetching SMS tasks:', err);
+      setFetchError('Failed to load tasks');
     } finally {
       setLoading(false);
     }
@@ -121,6 +128,9 @@ function SMSTasks() {
       console.error('Error fetching stats:', err);
     }
   }, []);
+
+  fetchTasksRef.current = fetchTasks;
+  fetchStatsRef.current = fetchStats;
 
   const fetchSettings = useCallback(async () => {
     try {
@@ -155,12 +165,12 @@ function SMSTasks() {
   }, [fetchTasks, fetchStats, fetchSettings]);
 
   useEffect(() => {
-    pollRef.current = setInterval(() => {
-      fetchTasks(false);
-      fetchStats();
+    const id = setInterval(() => {
+      if (fetchTasksRef.current) fetchTasksRef.current();
+      if (fetchStatsRef.current) fetchStatsRef.current();
     }, POLL_INTERVAL);
-    return () => clearInterval(pollRef.current);
-  }, [fetchTasks, fetchStats]);
+    return () => clearInterval(id);
+  }, []); // empty deps - refs always have latest functions
 
   useEffect(() => {
     if (selectedTask) {
@@ -384,6 +394,12 @@ function SMSTasks() {
         </select>
       </div>
 
+      {fetchError && (
+        <div style={{ padding: '8px 16px', background: '#fee', color: '#c00', borderRadius: 4, margin: '0 16px 8px' }}>
+          {fetchError} — <button onClick={fetchTasks} style={{ background: 'none', border: 'none', color: '#c00', textDecoration: 'underline', cursor: 'pointer' }}>retry</button>
+        </div>
+      )}
+
       <div className="sms-tasks-body">
         <div className={`task-list-panel ${selectedTask ? 'has-selection' : ''}`}>
           {loading ? (
@@ -420,7 +436,7 @@ function SMSTasks() {
                       <span className="contact-name">{task.contact_name || 'Unknown'}</span>
                       <span className="contact-phone">{task.phone_number || ''}</span>
                     </div>
-                    <span className="task-time">{timeAgo(task.created_at)}</span>
+                    <span className="task-time">{timeAgo(task.inbound_received_at || task.created_at)}</span>
                   </div>
                   <p className="task-message-preview">{truncate(task.inbound_message, 100)}</p>
                   <div className="task-card-bottom">
@@ -476,7 +492,7 @@ function SMSTasks() {
                 <h4>Inbound Message</h4>
                 <div className="inbound-message-box">
                   <p>{taskDetail.inbound_message}</p>
-                  <span className="message-time">{timeAgo(taskDetail.created_at)}</span>
+                  <span className="message-time">{timeAgo(taskDetail.inbound_received_at || taskDetail.created_at)}</span>
                 </div>
               </div>
 

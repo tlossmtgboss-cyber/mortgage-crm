@@ -55,6 +55,7 @@ def record_response(
                 WHERE organization_id = :org_id
                   AND category = :category
                 ORDER BY times_used DESC
+                LIMIT 100
             """),
             {"org_id": organization_id, "category": category},
         ).fetchall()
@@ -64,7 +65,13 @@ def record_response(
 
     matched_row = None
     for row in existing:
-        stored_kw = row[1] if isinstance(row[1], list) else json.loads(row[1] or "[]")
+        raw_kw = row[1]
+        if isinstance(raw_kw, list):
+            stored_kw = raw_kw
+        elif isinstance(raw_kw, str):
+            stored_kw = json.loads(raw_kw) if raw_kw else []
+        else:
+            stored_kw = []
         if not stored_kw or not keywords:
             continue
         overlap = len(set(stored_kw) & set(keywords))

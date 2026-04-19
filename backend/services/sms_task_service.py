@@ -310,20 +310,27 @@ def dismiss_task(
         raise
 
 
-def expire_stale_tasks(db: Session, hours: int = 24) -> int:
+def expire_stale_tasks(db: Session, hours: int = 24, organization_id: Optional[int] = None) -> int:
     try:
         cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         now = datetime.now(timezone.utc)
 
+        org_filter = ""
+        params: Dict[str, Any] = {"now": now, "cutoff": cutoff}
+        if organization_id is not None:
+            org_filter = "AND organization_id = :org_id"
+            params["org_id"] = organization_id
+
         result = db.execute(
-            text("""
+            text(f"""
                 UPDATE sms_tasks
                 SET status = 'expired',
                     updated_at = :now
                 WHERE status = 'pending'
                   AND created_at < :cutoff
+                  {org_filter}
             """),
-            {"now": now, "cutoff": cutoff},
+            params,
         )
         db.flush()
         count = result.rowcount

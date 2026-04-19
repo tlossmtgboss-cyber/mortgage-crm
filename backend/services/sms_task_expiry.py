@@ -9,23 +9,31 @@ logger = logging.getLogger(__name__)
 _stop_event: threading.Event | None = None
 
 
-def expire_stale_tasks(hours=24) -> int:
+def expire_stale_tasks(hours=24, organization_id=None) -> int:
     from db import SessionLocal
     session = SessionLocal()
     try:
+        org_filter = ""
+        params = {"hours": int(hours)}
+        if organization_id is not None:
+            org_filter = "AND organization_id = :org_id"
+            params["org_id"] = organization_id
+
         result = session.execute(
             text("""
                 UPDATE sms_tasks
                 SET status = 'expired', updated_at = NOW()
                 WHERE status = 'pending'
                   AND created_at < NOW() - make_interval(hours => :hours)
-            """),
-            {"hours": int(hours)}
+                  {org_filter}
+            """.format(org_filter=org_filter)),
+            params
         )
         count = result.rowcount
         session.commit()
         if count > 0:
-            logger.info(f"Expired {count} stale SMS tasks (older than {hours}h)")
+            scope = f"org={organization_id}" if organization_id else "all orgs"
+            logger.info(f"Expired {count} stale SMS tasks (older than {hours}h, {scope})")
         return count
     except Exception as e:
         session.rollback()

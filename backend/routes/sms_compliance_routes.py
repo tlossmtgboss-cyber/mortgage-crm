@@ -116,6 +116,7 @@ def _opt_out(db: Session, phone: str, org_id: Optional[int], keyword: str):
     except Exception as e:
         logger.exception("Failed to record opt-out for ***%s: %s", phone[-4:], e)
         db.rollback()
+        raise  # Opt-out MUST succeed or visibly fail — TCPA violation if silently ignored
 
 
 def _opt_in(db: Session, phone: str, org_id: Optional[int], keyword: str):
@@ -138,6 +139,7 @@ def _opt_in(db: Session, phone: str, org_id: Optional[int], keyword: str):
     except Exception as e:
         logger.exception("Failed to record opt-in for ***%s: %s", phone[-4:], e)
         db.rollback()
+        raise  # Opt-in must succeed or visibly fail — caller needs to know
 
 
 def is_opted_out(db: Session, phone: str, org_id: Optional[int]) -> bool:
@@ -240,7 +242,16 @@ async def sms_inbound_webhook(
 
     # ── STOP keywords ──
     if keyword in STOP_KEYWORDS:
-        _opt_out(db, from_number, org_id, keyword)
+        try:
+            _opt_out(db, from_number, org_id, keyword)
+        except Exception:
+            # Still send the legally-required STOP confirmation
+            await _send_sms(to=from_number, from_=to_number, body=STOP_REPLY)
+            # Return 500 so Telnyx retries the webhook — opt-out MUST persist
+            return JSONResponse(
+                {"status": "error", "detail": "opt-out failed to persist"},
+                status_code=500,
+            )
         await _send_sms(to=from_number, from_=to_number, body=STOP_REPLY)
         return JSONResponse({"status": "opt_out", "keyword": keyword})
 
@@ -251,7 +262,14 @@ async def sms_inbound_webhook(
 
     # ── START keywords ──
     if keyword in START_KEYWORDS:
-        _opt_in(db, from_number, org_id, keyword)
+        try:
+            _opt_in(db, from_number, org_id, keyword)
+        except Exception:
+            await _send_sms(to=from_number, from_=to_number, body=START_REPLY)
+            return JSONResponse(
+                {"status": "error", "detail": "opt-in failed to persist"},
+                status_code=500,
+            )
         await _send_sms(to=from_number, from_=to_number, body=START_REPLY)
         return JSONResponse({"status": "opt_in", "keyword": keyword})
 

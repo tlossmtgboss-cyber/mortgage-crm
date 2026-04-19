@@ -275,6 +275,45 @@ def run_migration(engine):
                     logger.warning(f"Could not create index {idx_name}: {e}")
         conn.commit()
 
+        # -------------------------------------------------------------------
+        # 5. Schema patches for existing tables
+        # -------------------------------------------------------------------
+        logger.info("Applying SMS schema patches...")
+
+        patches = [
+            ("Add category to sms_ai_audit_log",
+             "ALTER TABLE sms_ai_audit_log ADD COLUMN IF NOT EXISTS category TEXT"),
+            ("Add created_at to sms_ai_confidence",
+             "ALTER TABLE sms_ai_confidence ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW()"),
+            ("Add index on sms_ai_audit_log.created_at",
+             "CREATE INDEX IF NOT EXISTS ix_sms_ai_audit_log_created_at ON sms_ai_audit_log (created_at)"),
+            ("Add index on sms_ai_audit_log.category",
+             "CREATE INDEX IF NOT EXISTS ix_sms_ai_audit_log_category ON sms_ai_audit_log (category)"),
+        ]
+        for desc, sql in patches:
+            try:
+                conn.execute(text(sql))
+                logger.info(f"  {desc}")
+            except Exception as e:
+                logger.warning(f"  Patch failed ({desc}): {e}")
+        conn.commit()
+
+        # Unique constraint to prevent duplicate tasks from webhook retries
+        try:
+            conn.execute(text("""
+                DO $$ BEGIN
+                    ALTER TABLE sms_tasks
+                        ADD CONSTRAINT uq_sms_tasks_org_message_id
+                        UNIQUE (organization_id, inbound_message_id);
+                EXCEPTION WHEN duplicate_table THEN NULL;
+                          WHEN duplicate_object THEN NULL;
+                END $$
+            """))
+            conn.commit()
+            logger.info("  Added unique constraint uq_sms_tasks_org_message_id")
+        except Exception as e:
+            logger.warning(f"  Could not add unique constraint: {e}")
+
     logger.info("SMS task tables migration complete")
     return True
 

@@ -26,10 +26,14 @@ def create_task_notification(
 
     try:
         msg_row = db.execute(
-            text("SELECT inbound_message FROM sms_tasks WHERE id = :tid"),
-            {"tid": task_id},
+            text("SELECT inbound_message FROM sms_tasks WHERE id = :tid AND organization_id = :org_id"),
+            {"tid": task_id, "org_id": organization_id},
         ).fetchone()
-        body = (msg_row[0][:200] + "...") if msg_row and msg_row[0] and len(msg_row[0]) > 200 else (msg_row[0] if msg_row else "")
+        if msg_row and msg_row[0]:
+            raw = msg_row[0]
+            body = (raw[:200] + "...") if len(raw) > 200 else raw
+        else:
+            body = ""
     except Exception as e:
         logger.warning("Failed to fetch inbound message for task %s: %s", task_id, e)
         body = ""

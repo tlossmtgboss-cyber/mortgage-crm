@@ -130,8 +130,8 @@ class SMSIntentDetector:
     async def detect_intent_llm(self, message: str, history: list = None) -> IntentResult:
         """LLM-based intent detection for ambiguous messages."""
         try:
-            from openai import AsyncOpenAI
-            client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            from anthropic import AsyncAnthropic
+            client = AsyncAnthropic()
 
             history_context = ""
             if history:
@@ -141,22 +141,22 @@ class SMSIntentDetector:
                     for m in recent
                 )
 
-            response = await client.chat.completions.create(
-                model="gpt-4o-mini",
+            model = os.getenv("SMS_AI_MODEL_VERSION", "claude-sonnet-4-20250514")
+            response = await client.messages.create(
+                model=model,
+                max_tokens=200,
+                system=(
+                    "Classify this SMS message from a mortgage lead into exactly one category: "
+                    "scheduling, qualifying, objection, positive, question, document, greeting, unknown. "
+                    "Respond with JSON: {\"intent\": \"...\", \"confidence\": 0.0-1.0, \"stage\": \"...\"}"
+                ),
                 messages=[
-                    {"role": "system", "content": (
-                        "Classify this SMS message from a mortgage lead into exactly one category: "
-                        "scheduling, qualifying, objection, positive, question, document, greeting, unknown. "
-                        "Respond with JSON: {\"intent\": \"...\", \"confidence\": 0.0-1.0, \"stage\": \"...\"}"
-                    )},
                     {"role": "user", "content": f"Conversation history:\n{history_context}\n\nNew message: {message}"},
                 ],
-                max_tokens=100,
-                temperature=0,
             )
 
             import json
-            result = json.loads(response.choices[0].message.content)
+            result = json.loads(response.content[0].text)
             return IntentResult(
                 intent=result.get("intent", "unknown"),
                 confidence=result.get("confidence", 0.5),

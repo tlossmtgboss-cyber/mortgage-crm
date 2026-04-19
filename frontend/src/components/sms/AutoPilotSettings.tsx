@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { memo, useState } from 'react'
 
 interface CategorySetting {
   category: string
@@ -150,7 +150,7 @@ function CategoryCard({ setting, onUpdate }: { setting: CategorySetting; onUpdat
   )
 }
 
-export default function AutoPilotSettings({ settings, onUpdateSetting }: AutoPilotSettingsProps) {
+function AutoPilotSettings({ settings, onUpdateSetting }: AutoPilotSettingsProps) {
   const [expanded, setExpanded] = useState(false)
 
   return (
@@ -199,3 +199,5 @@ export default function AutoPilotSettings({ settings, onUpdateSetting }: AutoPil
     </div>
   )
 }
+
+export default memo(AutoPilotSettings)

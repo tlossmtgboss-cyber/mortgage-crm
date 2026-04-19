@@ -21,13 +21,13 @@ class SMSTask(Base):
     __tablename__ = "sms_tasks"
     __table_args__ = (
         Index('ix_sms_tasks_org_status', 'organization_id', 'status'),
-        Index('ix_sms_tasks_org_assigned', 'organization_id', 'assigned_user_id'),
-        Index('ix_sms_tasks_assigned_status', 'assigned_user_id', 'status'),
+        Index('ix_sms_tasks_org_assigned_user', 'organization_id', 'assigned_user_id'),
+        Index('ix_sms_tasks_assigned_user_status', 'assigned_user_id', 'status'),
         Index('ix_sms_tasks_phone_number', 'phone_number'),
         Index('ix_sms_tasks_lead_id', 'lead_id'),
         Index(
             'ix_sms_tasks_pending',
-            'organization_id', 'assigned_user_id', 'created_at',
+            'organization_id', 'created_at',
             postgresql_where=text("status = 'pending'"),
         ),
     )
@@ -107,6 +107,7 @@ class SMSAIConfidence(Base):
     confidence_score = Column(Float, default=20.0)
     auto_respond_enabled = Column(Boolean, default=False)
     auto_respond_threshold = Column(Float, default=80.0)
+    created_at = Column(DateTime(timezone=True), server_default=text('NOW()'))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
 
