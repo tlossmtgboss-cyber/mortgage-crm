@@ -1793,6 +1793,135 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ device_tokens migration note: {e}")
 
+        # SMS pipeline: add missing columns that cause inbound SMS to crash
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE sms_messages ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR;
+                    ALTER TABLE sms_messages ADD COLUMN IF NOT EXISTS template_used VARCHAR;
+                    ALTER TABLE sms_messages ADD COLUMN IF NOT EXISTS error_message TEXT;
+                    ALTER TABLE sms_messages ADD COLUMN IF NOT EXISTS ai_generated BOOLEAN DEFAULT FALSE;
+                    ALTER TABLE sms_messages ADD COLUMN IF NOT EXISTS meta_data JSONB;
+                    ALTER TABLE sms_messages ADD COLUMN IF NOT EXISTS consent_record_id INTEGER;
+
+                    ALTER TABLE verified_caller_ids ADD COLUMN IF NOT EXISTS organization_id INTEGER;
+
+                    ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS organization_id INTEGER;
+                    ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS sender_user_id INTEGER;
+                    ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS sender_role VARCHAR;
+                    ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS media_urls JSONB DEFAULT '[]';
+                    ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS media_s3_keys JSONB DEFAULT '[]';
+                    ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS page_type VARCHAR;
+                    ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS borrower_type VARCHAR;
+                    ALTER TABLE sms_panel_messages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP;
+                """))
+                conn.commit()
+                logger.info("✅ SMS pipeline columns added (sms_messages, verified_caller_ids, sms_panel_messages)")
+        except Exception as e:
+            logger.warning(f"⚠️ SMS pipeline columns note: {e}")
+
+        # SMS auto-responder: create sms_tasks + supporting tables
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    CREATE TABLE IF NOT EXISTS sms_tasks (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL,
+                        assigned_user_id INTEGER,
+                        lead_id INTEGER,
+                        phone_number VARCHAR NOT NULL,
+                        contact_name VARCHAR,
+                        inbound_message TEXT NOT NULL,
+                        inbound_message_id VARCHAR,
+                        inbound_received_at TIMESTAMPTZ NOT NULL,
+                        status VARCHAR DEFAULT 'pending',
+                        priority VARCHAR DEFAULT 'normal',
+                        category VARCHAR,
+                        ai_recommendation TEXT,
+                        ai_confidence FLOAT DEFAULT 0,
+                        ai_model_version VARCHAR,
+                        ai_reasoning TEXT,
+                        ai_generated_at TIMESTAMPTZ,
+                        response_text TEXT,
+                        response_source VARCHAR,
+                        response_sent_at TIMESTAMPTZ,
+                        responded_by_user_id INTEGER,
+                        lo_feedback VARCHAR,
+                        lo_edited_response TEXT,
+                        edit_distance INTEGER,
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_sms_tasks_org_status ON sms_tasks(organization_id, status);
+                    CREATE INDEX IF NOT EXISTS ix_sms_tasks_phone_number ON sms_tasks(phone_number);
+
+                    CREATE TABLE IF NOT EXISTS sms_response_patterns (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL,
+                        category VARCHAR NOT NULL,
+                        response_template TEXT NOT NULL,
+                        usage_count INTEGER DEFAULT 0,
+                        success_rate FLOAT DEFAULT 0,
+                        avg_edit_distance FLOAT DEFAULT 0,
+                        source VARCHAR DEFAULT 'ai',
+                        created_at TIMESTAMPTZ DEFAULT NOW(),
+                        updated_at TIMESTAMPTZ DEFAULT NOW()
+                    );
+                    CREATE INDEX IF NOT EXISTS ix_sms_patterns_org_cat ON sms_response_patterns(organization_id, category);
+
+                    CREATE TABLE IF NOT EXISTS sms_ai_confidence (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL,
+                        user_id INTEGER,
+                        category VARCHAR NOT NULL,
+                        auto_respond_enabled BOOLEAN DEFAULT FALSE,
+                        confidence_threshold FLOAT DEFAULT 0.75,
+                        total_suggestions INTEGER DEFAULT 0,
+                        accepted_count INTEGER DEFAULT 0,
+                        rejected_count INTEGER DEFAULT 0,
+                        edited_count INTEGER DEFAULT 0,
+                        acceptance_rate FLOAT DEFAULT 0,
+                        updated_at TIMESTAMPTZ DEFAULT NOW(),
+                        UNIQUE(organization_id, user_id, category)
+                    );
+
+                    CREATE TABLE IF NOT EXISTS sms_ai_audit_log (
+                        id SERIAL PRIMARY KEY,
+                        organization_id INTEGER NOT NULL,
+                        task_id INTEGER,
+                        action VARCHAR NOT NULL,
+                        details JSONB DEFAULT '{}',
+                        created_at TIMESTAMPTZ DEFAULT NOW()
+                    );
+                """))
+                conn.commit()
+                logger.info("✅ SMS auto-responder tables created (sms_tasks, sms_response_patterns, sms_ai_confidence, sms_ai_audit_log)")
+        except Exception as e:
+            logger.warning(f"⚠️ SMS auto-responder tables note: {e}")
+
+        # Seed verified_caller_ids with Telnyx number + org_id
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    INSERT INTO verified_caller_ids (phone_number, friendly_name, verification_status, organization_id)
+                    SELECT '+18438838956', 'Perennia AI (Telnyx)', 'verified', o.id
+                    FROM organizations o
+                    WHERE NOT EXISTS (
+                        SELECT 1 FROM verified_caller_ids WHERE phone_number = '+18438838956'
+                    )
+                    LIMIT 1
+                """))
+                conn.execute(text("""
+                    UPDATE verified_caller_ids
+                    SET organization_id = (SELECT id FROM organizations LIMIT 1)
+                    WHERE phone_number = '+18438838956'
+                      AND organization_id IS NULL
+                """))
+                conn.commit()
+                logger.info("✅ Telnyx number seeded in verified_caller_ids")
+        except Exception as e:
+            logger.warning(f"⚠️ verified_caller_ids seed note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
