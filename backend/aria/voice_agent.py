@@ -544,7 +544,7 @@ def _build_session(mode: str = "lo_assistant", context: dict = None) -> tuple:
         punctuate=True,
         filler_words=True,
         no_delay=True,
-        endpointing=25 if is_telephony else 50,
+        endpointing_ms=25 if is_telephony else 50,
     )
 
     tts = cartesia.TTS(
