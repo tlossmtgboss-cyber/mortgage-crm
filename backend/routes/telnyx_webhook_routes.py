@@ -8,6 +8,7 @@ Handles all Telnyx webhook callbacks including:
 - Recording events
 """
 
+import hmac
 import os
 import json
 import asyncio
@@ -58,7 +59,7 @@ def _validate_texml_request(request: Request):
     """Validate TeXML callback requests using a shared secret or Telnyx signature."""
     api_key = request.headers.get("X-API-Key", "")
     expected = os.environ.get("TEXML_CALLBACK_SECRET", "")
-    if not expected or not api_key or api_key != expected:
+    if not expected or not api_key or not hmac.compare_digest(api_key, expected):
         raise HTTPException(status_code=403, detail="Invalid callback authentication")
 
 
@@ -66,7 +67,7 @@ def _validate_texml_request(request: Request):
 # Inbound Call Routing — Telnyx answer + LiveKit outbound SIP callback
 # =============================================================================
 
-ARIA_DID = "+18438838956"
+ARIA_DID = os.getenv("ARIA_DID", "")
 
 
 async def _route_inbound_to_livekit(
@@ -84,7 +85,7 @@ async def _route_inbound_to_livekit(
     lk_url = os.getenv("LIVEKIT_URL", "")
     lk_key = os.getenv("LIVEKIT_API_KEY", "")
     lk_secret = os.getenv("LIVEKIT_API_SECRET", "")
-    outbound_trunk = os.getenv("LIVEKIT_SIP_OUTBOUND_TRUNK_ID", "ST_nif29TasyWjm")
+    outbound_trunk = os.getenv("LIVEKIT_SIP_OUTBOUND_TRUNK_ID", "")
 
     if not telnyx_key:
         logger.error("[AriaInbound] TELNYX_API_KEY not set")
@@ -956,11 +957,10 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     _telnyx_key = os.environ.get("TELNYX_API_KEY", "")
                     _telnyx_from = os.environ.get(
                         "TELNYX_FROM_NUMBER",
-                        os.environ.get("TELNYX_PHONE_NUMBER", "+18438838956"),
+                        os.environ.get("TELNYX_PHONE_NUMBER", ""),
                     )
                     _telnyx_profile = os.environ.get(
-                        "TELNYX_MESSAGING_PROFILE_ID",
-                        "40019bed-2fa1-4407-a0c6-fe4c6b222c93",
+                        "TELNYX_MESSAGING_PROFILE_ID", "",
                     )
                     if _telnyx_key:
                         _send_resp = _req.post(
@@ -1896,11 +1896,8 @@ async def send_appointment_invite(
     """
     # Auth check
     api_key = request.headers.get("X-Internal-API-Key", "")
-    expected = os.environ.get(
-        "INTERNAL_API_KEY",
-        "068ef1be6beeb7fd1efbf4f4b928afda34ba9725d61521c2a27debcb5f6dfb1d",
-    )
-    if api_key != expected:
+    expected = os.environ.get("INTERNAL_API_KEY", "")
+    if not expected or not hmac.compare_digest(api_key, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     body = await request.json()
