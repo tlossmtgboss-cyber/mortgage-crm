@@ -152,6 +152,9 @@ class DocumentRequest(Base):
     completed_at = Column(DateTime, nullable=True)
     fulfilled_at = Column(DateTime, nullable=True)  # When request was fulfilled (synced with completed_at)
 
+    # E-sign
+    requires_esign = Column(Boolean, default=False, server_default="false")
+
     # SLA Tracking
     sla_due_at = Column(DateTime, nullable=True)  # 3 business days from created_at
     is_active = Column(Boolean, default=True)  # For superseding logic

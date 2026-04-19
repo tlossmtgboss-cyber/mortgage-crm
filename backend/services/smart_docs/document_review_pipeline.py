@@ -263,13 +263,11 @@ class DocumentReviewPipeline:
                 filename=filename,
             )
         except Exception as e:
-            logger.warning(f"Screenshot detection failed: {e}")
-            # Return safe default
-            from services.smart_docs.screenshot_detector import DetectionLayer, LayerResult
+            logger.exception("Screenshot detection failed — routing to manual review: %s", e)
             return ScreenshotDetectionResult(
                 is_screenshot=False,
                 confidence=0.0,
-                reasons=["Detection unavailable"],
+                reasons=["Detection service unavailable — routed to manual review"],
                 layer_results=[],
                 recommendation="needs_review",
             )

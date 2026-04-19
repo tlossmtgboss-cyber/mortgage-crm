@@ -12,37 +12,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { sendReminder } from '../../services/docDeliveryApi';
 import { toast } from '../../utils/toast';
+import { getDocTypeName } from '../../constants/documentTypes';
 import './SendReminderModal.css';
-
-// Map doc_type codes to display names
-const DOC_TYPE_NAMES = {
-  PAYSTUB: 'Pay Stubs',
-  BANK_STATEMENT: 'Bank Statements',
-  TAX_RETURN: 'Tax Returns',
-  BUSINESS_TAX_RETURN: 'Business Tax Returns',
-  W2: 'W-2 Forms',
-  DRIVERS_LICENSE: "Driver's License",
-  PURCHASE_CONTRACT: 'Purchase Contract',
-  GIFT_LETTER: 'Gift Letter',
-  PROFIT_LOSS: 'Profit & Loss Statement',
-  BALANCE_SHEET: 'Balance Sheet',
-  INVESTMENT_STATEMENT: 'Investment Statement',
-  LOE: 'Letter of Explanation',
-  LEASE_AGREEMENT: 'Lease Agreement',
-  FHA_CERT: 'FHA Certificate',
-  VA_COE: 'VA Certificate of Eligibility',
-  DD214: 'DD-214',
-  BANKRUPTCY_DISCHARGE: 'Bankruptcy Discharge',
-  APPRAISAL: 'Appraisal',
-  TITLE_REPORT: 'Title Report',
-  HOMEOWNERS_INSURANCE: 'Homeowners Insurance',
-  OTHER: 'Other',
-};
 
 function getDocDisplayName(doc) {
   if (doc.title) return doc.title;
-  const type = (doc.doc_type || '').toUpperCase();
-  return DOC_TYPE_NAMES[type] || type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'Document';
+  return getDocTypeName(doc.doc_type);
 }
 
 function SendReminderModal({
@@ -71,8 +46,7 @@ function SendReminderModal({
       setChannels({ email: true, sms: true });
       setSending(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen]);
+  }, [isOpen, openDocs]);
 
   // Focus trap and escape key
   useEffect(() => {

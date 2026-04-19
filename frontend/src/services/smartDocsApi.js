@@ -91,19 +91,28 @@ export async function addCustomRequest(loanId, borrowerId, data) {
 }
 
 /**
- * Add multiple custom document requests in sequence
- * Returns per-document success/failure results
+ * Add multiple custom document requests in parallel (concurrency-capped).
+ * Returns per-document success/failure results preserving original order.
  */
-export async function addBulkCustomRequests(loanId, borrowerId, requests) {
-  const results = [];
-  for (const req of requests) {
-    try {
-      const result = await addCustomRequest(loanId, borrowerId, req);
-      results.push({ success: true, title: req.title, result });
-    } catch (err) {
-      results.push({ success: false, title: req.title, error: err.message });
+export async function addBulkCustomRequests(loanId, borrowerId, requests, concurrency = 5) {
+  const results = new Array(requests.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (cursor < requests.length) {
+      const idx = cursor++;
+      const req = requests[idx];
+      try {
+        const result = await addCustomRequest(loanId, borrowerId, req);
+        results[idx] = { success: true, title: req.title, result };
+      } catch (err) {
+        results[idx] = { success: false, title: req.title, error: err.message };
+      }
     }
   }
+
+  const workers = Array.from({ length: Math.min(concurrency, requests.length) }, () => worker());
+  await Promise.all(workers);
   return results;
 }
 

@@ -41,7 +41,9 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    raise SystemExit("FATAL: SECRET_KEY environment variable is required but not set")
 PORTAL_V2_ALGORITHM = "HS256"
 PORTAL_V2_ISSUER = "perennia-portal-v2"
 PORTAL_V2_TOKEN_EXPIRY_HOURS = 24

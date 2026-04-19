@@ -53,7 +53,7 @@ function getRowMod(priority) {
 // Component
 // ---------------------------------------------------------------------------
 
-export default function ReviewQueueItem({
+function ReviewQueueItem({
   document,
   onClaim,
   onRelease,
@@ -227,3 +227,5 @@ export default function ReviewQueueItem({
     </div>
   );
 }
+
+export default React.memo(ReviewQueueItem);

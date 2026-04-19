@@ -13,7 +13,7 @@
  * - Bulk select for merge operations
  * - Expired documents highlighted
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../services/api';
 import { resendPortalLink } from '../services/docDeliveryApi';
@@ -22,6 +22,8 @@ import ESignModal from '../components/esign/ESignModal';
 import RequestDocumentModal from '../components/smart-docs/RequestDocumentModal';
 import SendNeedsListModal from '../components/smart-docs/SendNeedsListModal';
 import SendReminderModal from '../components/smart-docs/SendReminderModal';
+import SectionErrorBoundary from '../components/SectionErrorBoundary';
+import { getDocTypeName } from '../constants/documentTypes';
 import './SmartDocsClientDetail.css';
 import { toast } from '../utils/toast';
 import { getToken, getUserData } from '../utils/tokenStore';
@@ -219,16 +221,18 @@ function SmartDocsClientDetail() {
     setActionLoading(true);
     try {
       const token = getToken();
-      // Map selected request IDs to actual document IDs
-      const documentIds = documents
-        .filter(doc => selectedDocs.has(doc.id))
-        .map(doc => doc.document_id)
-        .filter(Boolean);
-      if (documentIds.length === 0) {
-        toast.error('No uploaded documents found for the selected items');
+      const selected = documents.filter(doc => selectedDocs.has(doc.id));
+      const withUploads = selected.filter(doc => doc.document_id);
+      const missingUploads = selected.filter(doc => !doc.document_id);
+      if (withUploads.length === 0) {
+        toast.error('None of the selected items have uploaded documents yet');
         setActionLoading(false);
         return;
       }
+      if (missingUploads.length > 0) {
+        toast.info(`${missingUploads.length} item(s) skipped — no upload yet: ${missingUploads.map(d => getDocTypeName(d.doc_type)).join(', ')}`);
+      }
+      const documentIds = withUploads.map(doc => doc.document_id);
       const response = await fetch(`${API_BASE_URL}/api/v1/smart-docs/merge`, {
         method: 'POST',
         headers: {
@@ -265,16 +269,18 @@ function SmartDocsClientDetail() {
     setActionLoading(true);
     try {
       const token = getToken();
-      // Map selected request IDs to actual document IDs
-      const documentIds = documents
-        .filter(doc => selectedDocs.has(doc.id))
-        .map(doc => doc.document_id)
-        .filter(Boolean);
-      if (documentIds.length === 0) {
-        toast.error('No uploaded documents found for the selected items');
+      const selected = documents.filter(doc => selectedDocs.has(doc.id));
+      const withUploads = selected.filter(doc => doc.document_id);
+      const missingUploads = selected.filter(doc => !doc.document_id);
+      if (withUploads.length === 0) {
+        toast.error('None of the selected items have uploaded documents yet');
         setActionLoading(false);
         return;
       }
+      if (missingUploads.length > 0) {
+        toast.info(`${missingUploads.length} item(s) skipped — no upload yet`);
+      }
+      const documentIds = withUploads.map(doc => doc.document_id);
       await fetch(`${API_BASE_URL}/api/v1/smart-docs/merge-email`, {
         method: 'POST',
         headers: {
@@ -332,38 +338,58 @@ function SmartDocsClientDetail() {
     }
   };
 
+  // Optimistic update helper — patches local state, returns rollback fn
+  const optimisticUpdate = (docId, patch) => {
+    let snapshot;
+    setDocuments(prev => {
+      snapshot = prev;
+      return prev.map(d => d.id === docId ? { ...d, ...patch } : d);
+    });
+    setSelectedDoc(s => s?.id === docId ? { ...s, ...patch } : s);
+    return () => {
+      if (snapshot) {
+        setDocuments(snapshot);
+        setSelectedDoc(s => snapshot.find(d => d.id === s?.id) || s);
+      }
+    };
+  };
+
   // Approve document
   const handleApprove = async (doc) => {
     if (!window.confirm(`Approve this ${getDocTypeName(doc.doc_type)}?`)) return;
-    setActionLoading(true);
+
+    const documentId = doc.document_id;
+    if (!documentId) {
+      toast.error('Cannot approve — no document has been uploaded yet');
+      return;
+    }
+
+    const rollback = optimisticUpdate(doc.id, { status: 'APPROVED' });
+    toast.success('Document approved!');
+
     try {
       const token = getToken();
       const user = getUserData() || {};
       const reviewer = user.email || user.name || 'Unknown';
 
-      // Get document ID from document object
-      const documentId = doc.document_id || doc.id;
-
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}/approve?reviewer=${encodeURIComponent(reviewer)}`,
+        `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}/approve`,
         {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ reviewer }),
         }
       );
 
-      if (response.ok) {
-        toast.success('Document approved!');
-        fetchClientData(); // Refresh data
-      } else {
-        const error = await response.json();
+      if (!response.ok) {
+        rollback();
+        const error = await response.json().catch(() => ({}));
         toast.error(`Error: ${error.detail || 'Failed to approve document'}`);
       }
     } catch (err) {
+      rollback();
       console.error('Error approving document:', err);
-      toast.error('Error approving document');
-    } finally {
-      setActionLoading(false);
+      toast.error('Error approving document — reverted');
     }
   };
 
@@ -372,13 +398,19 @@ function SmartDocsClientDetail() {
     const reason = window.prompt('Enter rejection reason:');
     if (!reason) return;
 
-    setActionLoading(true);
+    const documentId = doc.document_id;
+    if (!documentId) {
+      toast.error('Cannot reject — no document has been uploaded yet');
+      return;
+    }
+
+    const rollback = optimisticUpdate(doc.id, { status: 'REJECTED' });
+    toast.success('Document rejected');
+
     try {
       const token = getToken();
       const user = getUserData() || {};
       const reviewer = user.email || user.name || 'Unknown';
-
-      const documentId = doc.document_id || doc.id;
 
       const response = await fetch(
         `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}/reject`,
@@ -396,18 +428,15 @@ function SmartDocsClientDetail() {
         }
       );
 
-      if (response.ok) {
-        toast.success('Document rejected');
-        fetchClientData();
-      } else {
-        const error = await response.json();
+      if (!response.ok) {
+        rollback();
+        const error = await response.json().catch(() => ({}));
         toast.error(`Error: ${error.detail || 'Failed to reject document'}`);
       }
     } catch (err) {
+      rollback();
       console.error('Error rejecting document:', err);
-      toast.error('Error rejecting document');
-    } finally {
-      setActionLoading(false);
+      toast.error('Error rejecting document — reverted');
     }
   };
 
@@ -415,34 +444,38 @@ function SmartDocsClientDetail() {
   const handleDelete = async (doc) => {
     if (!window.confirm(`Delete this ${getDocTypeName(doc.doc_type)}? This will allow the borrower to re-upload.`)) return;
 
-    setActionLoading(true);
+    const documentId = doc.document_id;
+    if (!documentId) {
+      toast.error('Cannot delete — no document has been uploaded yet');
+      return;
+    }
+
+    const rollback = optimisticUpdate(doc.id, { status: 'OPEN', document_id: null, file_url: null, s3_url: null, filename: null });
+
     try {
       const token = getToken();
       const user = getUserData() || {};
       const reviewer = user.email || user.name || 'Unknown';
 
-      const documentId = doc.document_id || doc.id;
-
       const response = await fetch(
-        `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}?reviewer=${encodeURIComponent(reviewer)}`,
+        `${API_BASE_URL}/api/v1/smart-docs/document/${documentId}`,
         {
           method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` }
+          headers: { 'Authorization': `Bearer ${token}` },
         }
       );
 
       if (response.ok) {
         toast.success('Document deleted');
-        fetchClientData();
       } else {
-        const error = await response.json();
+        rollback();
+        const error = await response.json().catch(() => ({}));
         toast.error(`Error: ${error.detail || 'Failed to delete document'}`);
       }
     } catch (err) {
+      rollback();
       console.error('Error deleting document:', err);
-      toast.error('Error deleting document');
-    } finally {
-      setActionLoading(false);
+      toast.error('Error deleting document — reverted');
     }
   };
 
@@ -601,53 +634,10 @@ function SmartDocsClientDetail() {
     return 'open';
   };
 
-  // Get document type display name (handles both uppercase and lowercase formats)
-  const getDocTypeName = (docType) => {
-    if (!docType) return 'Document';
-
-    // Normalize to uppercase for lookup
-    const normalizedType = docType.toUpperCase();
-
-    const names = {
-      // Uppercase format (new/backend standard)
-      'PAYSTUB': 'Pay Stubs',
-      'BANK_STATEMENT': 'Bank Statements',
-      'TAX_RETURN': 'Tax Returns',
-      'BUSINESS_TAX_RETURN': 'Business Tax Returns',
-      'W2': 'W-2 Forms',
-      'DRIVERS_LICENSE': "Driver's License",
-      'PURCHASE_CONTRACT': 'Purchase Contract',
-      'GIFT_LETTER': 'Gift Letter',
-      'PROFIT_LOSS': 'Profit & Loss Statement',
-      'BALANCE_SHEET': 'Balance Sheet',
-      'INVESTMENT_STATEMENT': 'Investment Statement',
-      'LOE': 'Letter of Explanation',
-      'LEASE_AGREEMENT': 'Lease Agreement',
-      'FHA_CERT': 'FHA Certificate',
-      'VA_COE': 'VA Certificate of Eligibility',
-      'DD214': 'DD-214',
-      'BANKRUPTCY_DISCHARGE': 'Bankruptcy Discharge',
-      'APPRAISAL': 'Appraisal',
-      'TITLE_REPORT': 'Title Report',
-      'HOMEOWNERS_INSURANCE': 'Homeowners Insurance',
-      'HOA': 'HOA Documents',
-      'OTHER': 'Other',
-      // Legacy lowercase formats
-      'PAYSTUBS': 'Pay Stubs',
-      'BANK_STATEMENTS': 'Bank Statements',
-      'TAX_RETURNS': 'Tax Returns',
-      '1099': '1099 Forms',
-      'HOA_DOCS': 'HOA Documents'
-    };
-
-    return names[normalizedType] || docType.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-  };
-
-  // Count open documents for delivery actions
-  const openDocumentCount = documents.filter((doc) => {
+  const openDocumentCount = useMemo(() => documents.filter((doc) => {
     const status = (doc.status || '').toUpperCase();
     return status === 'OPEN' || status === 'REQUESTED' || status === 'OVERDUE' || status === 'PENDING';
-  }).length;
+  }).length, [documents]);
 
   // Handle resend portal link
   const handleResendPortalLink = async (channel) => {
@@ -768,6 +758,7 @@ function SmartDocsClientDetail() {
 
       <div className="client-content" aria-busy={actionLoading}>
         {/* Left Sidebar - Document List */}
+        <SectionErrorBoundary sectionName="Document List">
         <aside className="document-sidebar">
           <div className="sidebar-header">
             <h2>Documents</h2>
@@ -839,8 +830,10 @@ function SmartDocsClientDetail() {
           )}
 
         </aside>
+        </SectionErrorBoundary>
 
         {/* Main Content - Document Viewer */}
+        <SectionErrorBoundary sectionName="Document Viewer">
         <main className="document-viewer">
           {selectedDoc ? (
             <>
@@ -1063,6 +1056,7 @@ function SmartDocsClientDetail() {
             </div>
           )}
         </main>
+        </SectionErrorBoundary>
       </div>
 
       {/* Income Calculator Modal */}

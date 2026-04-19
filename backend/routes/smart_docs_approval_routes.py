@@ -128,7 +128,7 @@ async def delete_document(
     document_id: int,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
-    reviewer: str = Query(..., description="User performing the delete"),
+    reviewer: Optional[str] = Query(None, description="(deprecated) Use current_user instead"),
     reason: Optional[str] = Query(None, description="Reason for deletion"),
 ):
     """
@@ -138,6 +138,7 @@ async def delete_document(
     The document can be restored later if needed.
     """
     _require_approval_role(current_user)
+    reviewer = reviewer or getattr(current_user, 'email', None) or 'Unknown'
 
     document = db.query(SmartDocument).filter(
         SmartDocument.id == document_id
@@ -215,12 +216,14 @@ async def reject_document(
     document.reviewed_at = datetime.now(timezone.utc)
     document.reviewed_by = body.reviewer
 
-    # Set rejection category if provided
     if body.rejection_category:
         try:
             document.rejection_category = RejectionCategory(body.rejection_category)
         except ValueError:
-            pass  # Invalid category, skip
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid rejection category: {body.rejection_category}. Valid: {[c.value for c in RejectionCategory]}",
+            )
 
     # Update linked request to allow re-upload
     if document.request_id:
@@ -237,19 +240,22 @@ async def reject_document(
     return {
         "document_id": document_id,
         "status": "REJECTED",
+        "action": "rejected",
+        "action_by": body.reviewer,
+        "action_at": datetime.now(timezone.utc).isoformat(),
         "rejection_reason": body.reason,
         "rejection_category": body.rejection_category,
-        "rejected_by": body.reviewer,
-        "rejected_at": datetime.now(timezone.utc).isoformat(),
-        "message": "Document rejected successfully"
+        "notes": None,
+        "message": "Document rejected successfully",
     }
 
 
 @router.post("/document/{document_id}/approve")
 async def approve_document(
     document_id: int,
-    reviewer: str = Query(..., description="User performing the approval"),
-    notes: Optional[str] = Query(None, description="Approval notes"),
+    body: Optional[ApproveDocumentBody] = None,
+    reviewer: Optional[str] = Query(None, description="(deprecated) Use request body instead"),
+    notes: Optional[str] = Query(None, description="(deprecated) Use request body instead"),
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user),
 ):
@@ -259,6 +265,8 @@ async def approve_document(
     Sets the document status to APPROVED and updates the linked request.
     """
     _require_approval_role(current_user)
+    reviewer = (body.reviewer if body and body.reviewer else reviewer) or getattr(current_user, 'email', None) or 'Unknown'
+    notes = (body.notes if body else None) or notes
 
     document = db.query(SmartDocument).filter(
         SmartDocument.id == document_id
@@ -294,10 +302,13 @@ async def approve_document(
     return {
         "document_id": document_id,
         "status": "APPROVED",
-        "approved_by": reviewer,
-        "approved_at": datetime.now(timezone.utc).isoformat(),
+        "action": "approved",
+        "action_by": reviewer,
+        "action_at": datetime.now(timezone.utc).isoformat(),
+        "rejection_reason": None,
+        "rejection_category": None,
         "notes": notes,
-        "message": "Document approved successfully"
+        "message": "Document approved successfully",
     }
 
 
@@ -330,12 +341,14 @@ async def re_request_document(
     request.status = RequestStatus.OPEN
     request.updated_at = datetime.now(timezone.utc)
 
-    # Set new due date if provided
     if body.new_due_date:
         try:
-            request.due_date = datetime.fromisoformat(body.new_due_date.replace('Z', '+00:00'))
-        except (ValueError, AttributeError) as e:
+            parsed_date = datetime.fromisoformat(body.new_due_date.replace('Z', '+00:00'))
+        except (ValueError, AttributeError):
             raise HTTPException(status_code=400, detail=f"Invalid date format: {body.new_due_date}")
+        if parsed_date < datetime.now(timezone.utc):
+            raise HTTPException(status_code=400, detail="Due date must be in the future")
+        request.due_date = parsed_date
     elif not request.due_date or request.due_date < datetime.now(timezone.utc):
         # Default to 7 days from now
         request.due_date = datetime.now(timezone.utc) + timedelta(days=7)

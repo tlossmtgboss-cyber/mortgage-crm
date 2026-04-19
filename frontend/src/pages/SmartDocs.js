@@ -8,7 +8,7 @@
  * - Clients with uploaded documents pending review
  * - Completed clients (finished financing)
  */
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { smartDocsAPI } from '../services/smartDocsApi';
 import { API_BASE_URL } from '../services/api';
@@ -16,6 +16,7 @@ import { usePermissions } from '../contexts/PermissionContext';
 import { isMasterAdmin } from '../config/roleConfig';
 import AdminContracts from '../components/AdminContracts';
 import BatchReminderModal from '../components/smart-docs/BatchReminderModal';
+import SectionErrorBoundary from '../components/SectionErrorBoundary';
 import './SmartDocs.css';
 import { toast } from '../utils/toast';
 import { getToken, getUserData } from '../utils/tokenStore';
@@ -305,12 +306,25 @@ function SmartDocs() {
     loadData();
   }, [fetchAllLoans, fetchQueueSummary]);
 
-  // Fetch queue when tab is active
+  // Fetch tab-specific data with abort on tab switch
+  const abortRef = useRef(null);
   useEffect(() => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     if (activeTab === 'queue') {
       fetchQueue();
+    } else if (activeTab === 'documents-uploaded') {
+      fetchPendingReview();
+    } else if (activeTab === 'documents-owed') {
+      fetchOutstandingDocs();
+    } else if (activeTab === 'completed') {
+      fetchCompletedClients();
     }
-  }, [activeTab, fetchQueue]);
+
+    return () => controller.abort();
+  }, [activeTab, fetchQueue, fetchPendingReview, fetchOutstandingDocs, fetchCompletedClients]);
 
   // Handle tab change
   const handleTabChange = (tab) => {
@@ -339,8 +353,8 @@ function SmartDocs() {
     document.querySelector(`[data-tab="${TAB_KEYS[nextIdx]}"]`)?.focus();
   };
 
-  // Filter applicants by search query
-  const filterBySearch = (applicants) => {
+  // Filter applicants by search query (memoized)
+  const filterBySearch = useCallback((applicants) => {
     if (!searchQuery.trim()) return applicants;
     const query = searchQuery.toLowerCase();
     return applicants.filter(applicant =>
@@ -349,10 +363,10 @@ function SmartDocs() {
       (applicant.borrower_email && applicant.borrower_email.toLowerCase().includes(query)) ||
       (applicant.loan_id && String(applicant.loan_id).includes(query))
     );
-  };
+  }, [searchQuery]);
 
-  // Get filtered data based on active tab
-  const getFilteredData = () => {
+  // Get filtered data based on active tab (memoized)
+  const getFilteredData = useMemo(() => {
     if (activeTab === 'documents-uploaded') {
       return filterBySearch(pendingReview.applicants);
     } else if (activeTab === 'documents-owed') {
@@ -361,7 +375,7 @@ function SmartDocs() {
       return filterBySearch(completedClients.applicants);
     }
     return [];
-  };
+  }, [activeTab, filterBySearch, pendingReview.applicants, outstandingDocs.applicants, completedClients.applicants]);
 
   // Format currency
   const formatCurrency = (amount) => {
@@ -485,7 +499,7 @@ function SmartDocs() {
     );
   }
 
-  const filteredData = getFilteredData();
+  const filteredData = getFilteredData;
 
   return (
     <div className="smart-docs-page">
@@ -688,6 +702,7 @@ function SmartDocs() {
       </div>
 
       {/* Tab Content */}
+      <SectionErrorBoundary sectionName="Smart Docs Content">
       <div className="smart-docs-content" aria-busy={loading}>
         {loading ? (
           <div className="loading-state" role="alert" aria-live="polite">
@@ -1067,6 +1082,7 @@ function SmartDocs() {
           </div>
         )}
       </div>
+      </SectionErrorBoundary>
 
       {/* Pagination */}
       {((activeTab === 'documents-uploaded' && pendingReview.total_pages > 1) ||

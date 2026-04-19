@@ -9,11 +9,13 @@
  * - Batch AI Review for all unclaimed items grouped by loan
  */
 import React, { useState, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from '../utils/toast';
 
 import useReviewQueue from '../hooks/useReviewQueue';
 import ReviewQueueItem from '../components/smart-docs/ReviewQueueItem';
 import AnalyticsCard from '../components/smart-docs/AnalyticsCard';
+import SectionErrorBoundary from '../components/SectionErrorBoundary';
 import docReviewApi from '../services/docReviewApi';
 
 import './SmartDocsReviewQueue.css';
@@ -39,6 +41,7 @@ function formatAvgWait(minutes) {
 // ---------------------------------------------------------------------------
 
 export default function SmartDocsReviewQueue() {
+  const navigate = useNavigate();
   const currentUserId = localStorage.getItem('userId') || localStorage.getItem('user_id') || null;
 
   const {
@@ -139,9 +142,8 @@ export default function SmartDocsReviewQueue() {
   }, [refresh]);
 
   const handleViewDetail = useCallback((documentId) => {
-    // Navigate using window.location to keep this page self-contained
-    window.location.href = `/smart-docs/document/${documentId}`;
-  }, []);
+    navigate(`/smart-docs/document/${documentId}`);
+  }, [navigate]);
 
   const handleBatchAiReview = useCallback(async () => {
     const unclaimed = items.filter((item) => !item.claimed_by_id);
@@ -330,6 +332,7 @@ export default function SmartDocsReviewQueue() {
       )}
 
       {/* ── Queue list ── */}
+      <SectionErrorBoundary sectionName="Review Queue List">
       {items.length > 0 && (
         <div className="sd-review-queue__list" aria-busy={loading}>
           {items.map((doc) => (
@@ -345,6 +348,7 @@ export default function SmartDocsReviewQueue() {
           ))}
         </div>
       )}
+      </SectionErrorBoundary>
 
       {/* ── Pagination ── */}
       {total > limit && (

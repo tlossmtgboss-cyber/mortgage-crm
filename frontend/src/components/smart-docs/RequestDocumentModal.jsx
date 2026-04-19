@@ -373,14 +373,8 @@ function RequestDocumentModal({
           const uploadResult = await uploadDocument(
             doc.esignFile, loanId, borrowerId, requestId, doc.docType
           );
-          // [FUNC-007] Extract S3 storage key (not URL)
-          const storageKey = uploadResult?.storage_key
-            || uploadResult?.data?.storage_key
-            || uploadResult?.s3_key
-            || uploadResult?.data?.s3_key;
-          const originalFilename = uploadResult?.filename
-            || uploadResult?.data?.filename
-            || doc.esignFileName;
+          const storageKey = uploadResult?.storage_key;
+          const originalFilename = uploadResult?.filename || doc.esignFileName;
 
           if (!storageKey) {
             throw new Error('Document upload did not return a storage key');
@@ -522,6 +516,9 @@ function RequestDocumentModal({
                   {r.esign && <span className="esign-sent-badge">E-Sign Sent</span>}
                   {!r.success && <span className="result-error">{r.error}</span>}
                   {r.warning && <span className="result-warning">{r.warning}</span>}
+                  {r.warning && r.error?.includes('e-sign') && (
+                    <span className="result-hint">Use the E-Sign button on the client page to retry.</span>
+                  )}
                 </div>
               ))}
             </div>

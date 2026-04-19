@@ -623,21 +623,53 @@ class AIDocumentReviewService:
         self,
         organization_id: int,
         limit: int = 50,
-    ) -> List[Dict]:
+        offset: int = 0,
+        priority: Optional[str] = None,
+        doc_type: Optional[str] = None,
+    ) -> tuple:
         """
         Get documents needing human review, prioritized by urgency.
 
-        CRITICAL priority first, then HIGH, NORMAL, LOW.
-
-        Args:
-            organization_id: Filter to this organization's documents
-            limit: Max number of documents to return
-
-        Returns:
-            List of document info dicts with AI recommendations
+        Returns (items, total_count) so the caller gets correct pagination.
         """
-        # Query documents that need human review, joined with loan for org filter
-        rows = self.db.execute(text("""
+        base_where = """
+            l.organization_id = :org_id
+            AND sd.status IN ('PROCESSING', 'SCANNING', 'UPLOADED')
+            AND (sd.decision IS NULL OR sd.decision = :needs_review)
+        """
+        params: dict = {
+            "org_id": organization_id,
+            "needs_review": DocumentDecision.NEEDS_REVIEW.value,
+        }
+
+        priority_filter = ""
+        if priority:
+            p = priority.upper()
+            if p == "CRITICAL":
+                priority_filter = " AND sd.detected_is_screenshot = true"
+            elif p == "HIGH":
+                priority_filter = " AND (sd.is_expired = true OR (sd.screenshot_confidence > 0.4 AND sd.detected_is_screenshot IS NOT TRUE))"
+            elif p == "NORMAL":
+                priority_filter = " AND sd.detected_is_screenshot IS NOT TRUE AND sd.is_expired IS NOT TRUE AND (sd.screenshot_confidence IS NULL OR sd.screenshot_confidence <= 0.4)"
+
+        doc_type_filter = ""
+        if doc_type:
+            doc_type_filter = " AND UPPER(sd.doc_type) = :doc_type"
+            params["doc_type"] = doc_type.upper()
+
+        where_clause = base_where + priority_filter + doc_type_filter
+
+        total = self.db.execute(text(f"""
+            SELECT COUNT(*)
+            FROM smart_documents sd
+            JOIN loans l ON l.id = sd.loan_id
+            WHERE {where_clause}
+        """), params).scalar() or 0
+
+        params["limit"] = limit
+        params["offset"] = offset
+
+        rows = self.db.execute(text(f"""
             SELECT
                 sd.id AS document_id,
                 sd.file_name,
@@ -659,9 +691,7 @@ class AIDocumentReviewService:
                 l.borrower_name
             FROM smart_documents sd
             JOIN loans l ON l.id = sd.loan_id
-            WHERE l.organization_id = :org_id
-              AND sd.status IN ('PROCESSING', 'SCANNING', 'UPLOADED')
-              AND (sd.decision IS NULL OR sd.decision = :needs_review)
+            WHERE {where_clause}
             ORDER BY
                 CASE
                     WHEN sd.detected_is_screenshot = true THEN 1
@@ -670,12 +700,8 @@ class AIDocumentReviewService:
                     ELSE 4
                 END ASC,
                 sd.uploaded_at ASC
-            LIMIT :limit
-        """), {
-            "org_id": organization_id,
-            "needs_review": DocumentDecision.NEEDS_REVIEW.value,
-            "limit": limit,
-        }).fetchall()
+            LIMIT :limit OFFSET :offset
+        """), params).fetchall()
 
         queue_items: List[Dict] = []
         columns = [
@@ -728,7 +754,7 @@ class AIDocumentReviewService:
                 "is_expired": row_dict.get("is_expired"),
             })
 
-        return queue_items
+        return queue_items, total
 
     def get_review_stats(
         self,

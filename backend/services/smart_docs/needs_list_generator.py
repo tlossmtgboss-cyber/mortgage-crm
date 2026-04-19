@@ -497,6 +497,7 @@ class NeedsListGenerator:
         freshness_days: Optional[int] = None,
         auto_renew: bool = False,
         due_date: Optional[datetime] = None,
+        requires_esign: bool = False,
     ) -> DocumentRequest:
         """Create a single document request."""
         # Use default freshness if not specified
@@ -521,6 +522,7 @@ class NeedsListGenerator:
             auto_renew=auto_renew,
             status=RequestStatus.OPEN,
             due_date=due_date,
+            requires_esign=requires_esign,
         )
 
     def _request_to_dict(self, request: DocumentRequest) -> Dict[str, Any]:
@@ -538,6 +540,7 @@ class NeedsListGenerator:
             "status": request.status.value,
             "freshness_days": request.freshness_days,
             "auto_renew": request.auto_renew,
+            "requires_esign": request.requires_esign or False,
             "due_date": request.due_date.isoformat() if request.due_date else None,
         }
 
@@ -608,6 +611,7 @@ class NeedsListGenerator:
             instructions=instructions,
             priority=RequestPriority(priority),
             due_date=due_date,
+            requires_esign=requires_esign,
         )
 
         self.db.add(request)

@@ -10,24 +10,6 @@ import { getQueue, getQueueStats, claimDocument, releaseDocument } from '../serv
 
 const DEFAULT_FILTERS = { limit: 50, offset: 0 };
 
-/**
- * Hook for managing the document review queue.
- *
- * @returns {{
- *   items: Array,
- *   stats: object|null,
- *   total: number,
- *   loading: boolean,
- *   error: string|null,
- *   filters: object,
- *   setFilters: function,
- *   nextPage: function,
- *   prevPage: function,
- *   claim: function,
- *   release: function,
- *   refresh: function,
- * }}
- */
 export default function useReviewQueue() {
   const [items, setItems] = useState([]);
   const [stats, setStats] = useState(null);
@@ -36,22 +18,18 @@ export default function useReviewQueue() {
   const [error, setError] = useState(null);
   const [filters, setFiltersState] = useState(DEFAULT_FILTERS);
 
-  // Track mounted state to prevent state updates after unmount
   const mountedRef = useRef(true);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
+
   useEffect(() => {
     mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
+    return () => { mountedRef.current = false; };
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // Core load function — accepts an optional filters override so callers can
-  // pass freshly-computed filters before the state update has propagated.
-  // ---------------------------------------------------------------------------
-
+  // Core load — always reads filtersRef.current so it never captures stale state
   const load = useCallback(async (filtersOverride) => {
-    const activeFilters = filtersOverride ?? filters;
+    const activeFilters = filtersOverride ?? filtersRef.current;
     setLoading(true);
     setError(null);
     try {
@@ -68,54 +46,43 @@ export default function useReviewQueue() {
       setItems([]);
       setError(err.message ?? String(err));
     } finally {
-      if (mountedRef.current) {
-        setLoading(false);
-      }
+      if (mountedRef.current) setLoading(false);
     }
-  }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load on mount
-  useEffect(() => {
-    load(filters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reload whenever filters change (skip initial mount — load() above handles it)
+  // Load on mount
+  useEffect(() => { load(); }, [load]);
+
+  // Reload whenever filters change (skip mount — load above handles it)
   const isFirstRender = useRef(true);
   useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    load(filters);
-  }, [filters]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    load();
+  }, [filters, load]);
 
-  // ---------------------------------------------------------------------------
-  // Filter management
-  // ---------------------------------------------------------------------------
+  // Auto-refresh every 30s while the tab is visible
+  useEffect(() => {
+    let intervalId = null;
+    const start = () => { if (!intervalId) intervalId = setInterval(() => { if (mountedRef.current) load(); }, 30_000); };
+    const stop = () => { clearInterval(intervalId); intervalId = null; };
+    const onVisibility = () => { document.hidden ? stop() : start(); };
+
+    if (!document.hidden) start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
+  }, [load]);
 
   const setFilters = useCallback((newFilters) => {
     setFiltersState((prev) => ({ ...prev, ...newFilters, offset: 0 }));
   }, []);
-
-  // ---------------------------------------------------------------------------
-  // Pagination
-  // ---------------------------------------------------------------------------
 
   const nextPage = useCallback(() => {
     setFiltersState((prev) => ({ ...prev, offset: prev.offset + prev.limit }));
   }, []);
 
   const prevPage = useCallback(() => {
-    setFiltersState((prev) => ({
-      ...prev,
-      offset: Math.max(0, prev.offset - prev.limit),
-    }));
+    setFiltersState((prev) => ({ ...prev, offset: Math.max(0, prev.offset - prev.limit) }));
   }, []);
-
-  // ---------------------------------------------------------------------------
-  // Actions
-  // ---------------------------------------------------------------------------
 
   const claim = useCallback(async (documentId, reviewerId) => {
     await claimDocument(documentId, reviewerId);
@@ -127,22 +94,7 @@ export default function useReviewQueue() {
     await load();
   }, [load]);
 
-  const refresh = useCallback(async () => {
-    await load();
-  }, [load]);
+  const refresh = useCallback(async () => { await load(); }, [load]);
 
-  return {
-    items,
-    stats,
-    total,
-    loading,
-    error,
-    filters,
-    setFilters,
-    nextPage,
-    prevPage,
-    claim,
-    release,
-    refresh,
-  };
+  return { items, stats, total, loading, error, filters, setFilters, nextPage, prevPage, claim, release, refresh };
 }

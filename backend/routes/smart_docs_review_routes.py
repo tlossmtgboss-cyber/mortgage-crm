@@ -219,20 +219,13 @@ async def get_review_queue(
         raise HTTPException(status_code=400, detail="Organization ID required")
 
     review_service = get_ai_review_service(db)
-    queue_items = review_service.review_queue(
+    queue_items, total = review_service.review_queue(
         organization_id=org_id,
-        limit=limit + offset,  # Fetch enough to handle offset
+        limit=limit,
+        offset=offset,
+        priority=priority,
+        doc_type=doc_type,
     )
-
-    # Apply additional filters
-    if priority:
-        queue_items = [q for q in queue_items if q.get("priority") == priority.upper()]
-    if doc_type:
-        queue_items = [q for q in queue_items if q.get("doc_type") == doc_type.upper()]
-
-    # Apply offset/limit
-    total = len(queue_items)
-    queue_items = queue_items[offset:offset + limit]
 
     return {
         "total": total,

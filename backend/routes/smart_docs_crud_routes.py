@@ -334,9 +334,7 @@ async def sync_documents_from_application(
                 "priority": priority.value,
             })
 
-        db.commit()
-
-        # Log the sync event
+        # Log the sync event in same transaction
         if created_requests:
             event = DocPolicyEvent(
                 loan_id=request.loan_id,
@@ -350,7 +348,8 @@ async def sync_documents_from_application(
                 }
             )
             db.add(event)
-            db.commit()
+
+        db.commit()
 
         return {
             "success": True,
@@ -511,7 +510,10 @@ async def upload_document(
         request_id=request_id,
     )
 
-    return pipeline.result_to_dict(result)
+    response = pipeline.result_to_dict(result)
+    response["storage_key"] = storage_key
+    response["filename"] = safe_filename
+    return response
 
 
 @router.get("/document/{document_id}")
@@ -608,8 +610,8 @@ async def download_document(
             ip_address=_get_client_ip(request),
             details={"document_id": document_id, "file_name": document.file_name},
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Failed to log export event for document %s: %s", document_id, e)
 
     return {
         "document_id": document.id,
@@ -772,15 +774,18 @@ async def merge_and_email_documents(
         raise HTTPException(status_code=503, detail="Document storage not available")
 
     # Determine recipient email
+    import re
     recipient_email = request.recipient_email
     if not recipient_email:
-        # Try to get from loan officer or borrower
         if loan.loan_officer_email:
             recipient_email = loan.loan_officer_email
         elif hasattr(loan, 'borrower_email') and loan.borrower_email:
             recipient_email = loan.borrower_email
         else:
             raise HTTPException(status_code=400, detail="No recipient email provided or available")
+
+    if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', recipient_email):
+        raise HTTPException(status_code=400, detail="Invalid recipient email address")
 
     # Download and merge PDFs using PdfWriter (pypdf 4.x)
     writer = PdfWriter()
@@ -1200,21 +1205,33 @@ async def get_applicants_with_pending_review(
             func.min(SmartDocument.uploaded_at).asc()
         ).offset(offset).limit(limit).all()
 
+        # Prefetch loans and workspaces in bulk to avoid N+1
+        loan_ids = [row[0] for row in pending_loans]
+        loans_by_id = {}
+        workspaces_by_id = {}
+        if loan_ids:
+            all_loans = db.query(PURLLoan).filter(PURLLoan.id.in_(loan_ids)).all()
+            loans_by_id = {l.id: l for l in all_loans}
+            ws_ids = [l.workspace_id for l in all_loans if l.workspace_id]
+            if ws_ids:
+                all_ws = db.query(PURLWorkspace).filter(PURLWorkspace.id.in_(ws_ids)).all()
+                workspaces_by_id = {w.id: w for w in all_ws}
+
+            all_pending_docs = db.query(SmartDocument).filter(
+                SmartDocument.loan_id.in_(loan_ids),
+                SmartDocument.status == 'PENDING_REVIEW',
+            ).all()
+        else:
+            all_pending_docs = []
+
+        docs_by_loan = {}
+        for doc in all_pending_docs:
+            docs_by_loan.setdefault(doc.loan_id, []).append(doc)
+
         applicants = []
         for loan_id, pending_count, oldest_upload in pending_loans:
-            # Get loan/workspace info
-            loan = db.query(PURLLoan).filter(PURLLoan.id == loan_id).first()
-            workspace = None
-            if loan and loan.workspace_id:
-                workspace = db.query(PURLWorkspace).filter(
-                    PURLWorkspace.id == loan.workspace_id
-                ).first()
-
-            # Get pending document details
-            pending_docs = db.query(SmartDocument).filter(
-                SmartDocument.loan_id == loan_id,
-                SmartDocument.status == 'PENDING_REVIEW'
-            ).all()
+            loan = loans_by_id.get(loan_id)
+            workspace = workspaces_by_id.get(loan.workspace_id) if loan and loan.workspace_id else None
 
             applicants.append({
                 "loan_id": loan_id,
@@ -1230,8 +1247,8 @@ async def get_applicants_with_pending_review(
                         "doc_type": doc.doc_type.value if doc.doc_type else None,
                         "uploaded_at": (doc.uploaded_at or doc.created_at).isoformat() if (doc.uploaded_at or doc.created_at) else None,
                     }
-                    for doc in pending_docs
-                ]
+                    for doc in docs_by_loan.get(loan_id, [])
+                ],
             })
 
         return {
@@ -1308,77 +1325,74 @@ async def get_applicants_with_outstanding_docs(
         func.min(DocumentRequest.due_date).asc().nullslast()
     ).offset(offset).limit(limit).all()
 
+    # Prefetch loans, workspaces, contacts in bulk to avoid N+1
+    loan_ids = [row[0] for row in outstanding_loans]
+    loans_by_id = {}
+    workspaces_by_id = {}
+    contacts_by_ws = {}
+
+    if loan_ids:
+        all_loans = db.query(PURLLoan).filter(PURLLoan.id.in_(loan_ids)).all()
+        loans_by_id = {l.id: l for l in all_loans}
+        ws_ids = [l.workspace_id for l in all_loans if l.workspace_id]
+        if ws_ids:
+            all_ws = db.query(PURLWorkspace).filter(PURLWorkspace.id.in_(ws_ids)).all()
+            workspaces_by_id = {w.id: w for w in all_ws}
+            from models.purl import PURLContact
+            all_contacts = db.query(PURLContact).filter(
+                PURLContact.workspace_id.in_(ws_ids),
+                PURLContact.contact_type == 'borrower',
+            ).all()
+            for c in all_contacts:
+                contacts_by_ws[c.workspace_id] = c
+
+        # Prefetch all open requests for these loans
+        all_requests = db.query(DocumentRequest).filter(
+            DocumentRequest.loan_id.in_(loan_ids),
+            DocumentRequest.status == RequestStatus.OPEN,
+        ).order_by(DocumentRequest.priority.desc(), DocumentRequest.due_date.asc().nullslast()).all()
+
+        # Prefetch received counts in single query
+        received_rows = db.query(
+            DocumentRequest.loan_id,
+            func.count(DocumentRequest.id),
+        ).filter(
+            DocumentRequest.loan_id.in_(loan_ids),
+            DocumentRequest.status != RequestStatus.OPEN,
+        ).group_by(DocumentRequest.loan_id).all()
+        received_by_loan = dict(received_rows)
+    else:
+        all_requests = []
+        received_by_loan = {}
+
+    reqs_by_loan = {}
+    for req in all_requests:
+        reqs_by_loan.setdefault(req.loan_id, []).append(req)
+
     applicants = []
     for loan_id, outstanding_count, overdue_count, nearest_due in outstanding_loans:
-        # Get loan/workspace info - try PURLLoan first
-        loan = db.query(PURLLoan).filter(PURLLoan.id == loan_id).first()
-        workspace = None
+        loan = loans_by_id.get(loan_id)
+        workspace = workspaces_by_id.get(loan.workspace_id) if loan and loan.workspace_id else None
+
         borrower_name = None
-        loan_number = None
-        loan_purpose = None
-
-        if loan:
-            loan_number = loan.loan_number
-            loan_purpose = loan.loan_purpose
-            if loan.workspace_id:
-                workspace = db.query(PURLWorkspace).filter(
-                    PURLWorkspace.id == loan.workspace_id
-                ).first()
-
-        # Try to get borrower name from various sources
         if workspace and workspace.display_name:
             borrower_name = workspace.display_name
-        else:
-            # Try to get borrower from purl_contacts
-            from models.purl import PURLContact
-            if loan and loan.workspace_id:
-                borrower_contact = db.query(PURLContact).filter(
-                    PURLContact.workspace_id == loan.workspace_id,
-                    PURLContact.contact_type == 'borrower'
-                ).first()
-                if borrower_contact:
-                    borrower_name = f"{borrower_contact.first_name or ''} {borrower_contact.last_name or ''}".strip()
-
-            # If still no borrower name, try the main loans table
-            if not borrower_name:
-                from models.leads import Lead
-                try:
-                    # Check if there's a lead associated
-                    if workspace and workspace.meta_data:
-                        lead_id = workspace.meta_data.get('lead_id')
-                        if lead_id:
-                            lead = db.query(Lead).filter(Lead.id == lead_id).first()
-                            if lead:
-                                borrower_name = lead.name
-                except Exception as e:
-                    logger.error(f"Error fetching lead name for loan {loan_id}: {e}")
-
-        # Fallback to loan ID if no name found
+        elif loan and loan.workspace_id:
+            contact = contacts_by_ws.get(loan.workspace_id)
+            if contact:
+                borrower_name = f"{contact.first_name or ''} {contact.last_name or ''}".strip()
         if not borrower_name:
             borrower_name = f"Loan {loan_id}"
 
-        # Get outstanding requests
-        requests = db.query(DocumentRequest).filter(
-            DocumentRequest.loan_id == loan_id,
-            DocumentRequest.status == RequestStatus.OPEN
-        ).order_by(
-            DocumentRequest.priority.desc(),
-            DocumentRequest.due_date.asc().nullslast()
-        ).all()
-
-        # Count received documents (any status other than OPEN)
-        received_count = db.query(func.count(DocumentRequest.id)).filter(
-            DocumentRequest.loan_id == loan_id,
-            DocumentRequest.status != RequestStatus.OPEN
-        ).scalar() or 0
+        requests = reqs_by_loan.get(loan_id, [])
 
         applicants.append({
             "loan_id": loan_id,
-            "loan_number": loan_number,
+            "loan_number": loan.loan_number if loan else None,
             "borrower_name": borrower_name,
-            "loan_purpose": loan_purpose,
+            "loan_purpose": loan.loan_purpose if loan else None,
             "outstanding_count": outstanding_count,
-            "received_count": received_count,
+            "received_count": received_by_loan.get(loan_id, 0),
             "overdue_count": overdue_count or 0,
             "nearest_due": nearest_due.isoformat() if nearest_due else None,
             "requests": [
@@ -1391,7 +1405,7 @@ async def get_applicants_with_outstanding_docs(
                     "is_overdue": req.due_date and req.due_date < datetime.now(timezone.utc),
                 }
                 for req in requests
-            ]
+            ],
         })
 
     return {
