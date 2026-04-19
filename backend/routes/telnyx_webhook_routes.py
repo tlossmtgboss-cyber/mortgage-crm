@@ -181,8 +181,8 @@ async def _route_inbound_to_livekit(
         logger.error(f"[AriaInbound] CRM lookup failed: {e}")
 
     # Step 4: Create LiveKit room and dispatch agent BEFORE dialing caller
-    import hashlib, time as _time
-    room_suffix = hashlib.md5(f"{from_number}-{_time.time()}".encode()).hexdigest()[:8]
+    import secrets as _secrets
+    room_suffix = _secrets.token_hex(8)
     room_name = f"aria-inbound-{room_suffix}"
 
     try:
