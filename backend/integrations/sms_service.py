@@ -50,7 +50,7 @@ class SMSClient:
                 bool(self._api_key), self.from_number or "(empty)",
             )
 
-    async def send_sms(
+    def send_sms(
         self,
         to_phone: str,
         message: str,
@@ -163,7 +163,7 @@ class SMSClient:
             logger.error(f"Transmission error to ...{normalized_phone[-4:] if normalized_phone else '????'}: {e}", exc_info=True)
             return {"success": False, "error": f"SMS transmission error: {e}"}
 
-    async def send_templated_sms(
+    def send_templated_sms(
         self,
         to_phone: str,
         template_name: str,
@@ -176,15 +176,15 @@ class SMSClient:
         message = render_builtin(template_name, context)
         if not message:
             return {"success": False, "error": f"Template '{template_name}' not found"}
-        return await self.send_sms(
+        return self.send_sms(
             to_phone, message, lead_id=lead_id,
             user_id=user_id, organization_id=organization_id,
         )
 
 # Global helper
-async def send_quick_sms(to: str, msg: str, db: Session, user_id: Optional[int] = None):
+def send_quick_sms(to: str, msg: str, db: Session, user_id: Optional[int] = None):
     client = SMSClient(db, user_id=user_id)
-    return await client.send_sms(to, msg)
+    return client.send_sms(to, msg)
 
 
 def get_sms_client(db: Session = None, user_id: Optional[int] = None) -> SMSClient:

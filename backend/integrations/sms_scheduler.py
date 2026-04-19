@@ -353,7 +353,7 @@ class SMSScheduler:
 
         try:
             if self.sms_service:
-                result = await self.sms_service.send_sms(
+                result = self.sms_service.send_sms(
                     to=job.to,
                     body=job.body,
                     tenant_id=job.tenant_id,

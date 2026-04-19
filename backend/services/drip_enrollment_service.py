@@ -592,8 +592,7 @@ class DripEnrollmentService:
             if not lead or not lead.phone:
                 return True  # Can't check, allow enrollment
 
-            # SMSOptOut lives in models/sms_models.py, not database/models/
-            from models.sms_models import SMSOptOut
+            from database.models.sms_compliance import SMSOptOut
             opt_out = db.query(SMSOptOut).filter(
                 SMSOptOut.phone_number == lead.phone,
                 SMSOptOut.organization_id == org_id,

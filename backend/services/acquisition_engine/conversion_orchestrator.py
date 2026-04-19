@@ -318,7 +318,7 @@ class ConversionOrchestrator:
                 message = f"Hi {lead_info.get('first_name', 'there')}! Thanks for your interest. I'll be in touch shortly to discuss your options. Reply STOP to opt out."
 
                 if lead_info.get("phone"):
-                    sid = await sms_client.send_sms(
+                    sid = sms_client.send_sms(
                         to_number=lead_info["phone"],
                         message=message,
                     )

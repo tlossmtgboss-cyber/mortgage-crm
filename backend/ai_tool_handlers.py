@@ -335,7 +335,7 @@ async def handle_send_sms(input_data: Dict[str, Any], context: ToolContext) -> D
             }
 
         # Send SMS
-        provider_message_id = await sms_client.send_sms(to_number=to_number, message=message)
+        provider_message_id = sms_client.send_sms(to_number=to_number, message=message)
 
         # Log communication
         if lead_id:

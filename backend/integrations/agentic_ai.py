@@ -276,7 +276,7 @@ Context:
             if action_type == ActionType.SEND_SMS:
                 sms_client = integrations.get("sms")
                 if sms_client:
-                    result = await sms_client.send_sms(
+                    result = sms_client.send_sms(
                         to_number=params["to"],
                         message=params["message"]
                     )

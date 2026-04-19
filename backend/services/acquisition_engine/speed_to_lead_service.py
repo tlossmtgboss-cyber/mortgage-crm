@@ -408,7 +408,7 @@ class SpeedToLeadService:
             message = template.format(**context)
 
             # Send SMS
-            sid = await self.sms_client.send_sms(
+            sid = self.sms_client.send_sms(
                 to_number=lead_info["phone"],
                 message=message,
             )

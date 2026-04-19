@@ -316,7 +316,7 @@ class TaskProcessor:
             from integrations.sms_service import get_sms_client
 
             client = get_sms_client()
-            result = await client.send_sms(
+            result = client.send_sms(
                 to=task.payload.get("phone"),
                 message=task.payload.get("message"),
             )
@@ -404,7 +404,7 @@ class TaskProcessor:
         message = f"Hi {lead.first_name}, following up on your mortgage inquiry. Reply to connect!"
 
         client = get_sms_client()
-        await client.send_sms(to_number=lead.phone, message=message)
+        client.send_sms(to_number=lead.phone, message=message)
 
     async def _execute_email_step(self, task: ScheduledTask):
         """Execute email sequence step"""

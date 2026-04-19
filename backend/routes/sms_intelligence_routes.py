@@ -2013,7 +2013,7 @@ async def send_sms(
                 message = message.replace("{borrower_name}", lead[0] or "")
 
         # Send the SMS
-        send_result = await sms_client.send_sms(normalized_phone, message)
+        send_result = sms_client.send_sms(normalized_phone, message)
 
         if not send_result["success"]:
             raise HTTPException(
@@ -2304,7 +2304,7 @@ async def send_bulk_sms(
 
             # Send
             try:
-                send_result = await sms_client.send_sms(normalized, personalized)
+                send_result = sms_client.send_sms(normalized, personalized)
                 if send_result["success"]:
                     sid = send_result.get("message_id")
                     results["sent"] += 1

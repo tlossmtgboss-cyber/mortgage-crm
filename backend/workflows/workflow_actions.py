@@ -112,7 +112,7 @@ class WorkflowActionExecutor:
             if not to_number or not message:
                 return {"success": False, "error": "Missing phone or message"}
 
-            sid = await self.sms_client.send_sms(to_number, message)
+            sid = self.sms_client.send_sms(to_number, message)
 
             if sid:
                 logger.info(f"SMS sent to {to_number}: {message[:50]}...")

@@ -194,7 +194,7 @@ async def voicemail_drop(
         sms_client = SMSClient(db)
         phone = req.template_context.get("phone", "")
         if phone:
-            await sms_client.send_sms(
+            sms_client.send_sms(
                 to_phone=phone,
                 message=message,
                 lead_id=req.lead_id,

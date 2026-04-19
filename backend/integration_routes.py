@@ -174,7 +174,7 @@ async def send_sms(
 
     try:
         # Send SMS
-        result = await sms_client.send_sms(
+        result = sms_client.send_sms(
             to_number=request.to_number,
             message=request.message
         )
@@ -394,7 +394,7 @@ async def sms_webhook(
 
         if ai_response and sms_client.enabled:
             # Send AI response via Telnyx
-            response_sid = await sms_client.send_sms(
+            response_sid = sms_client.send_sms(
                 to_number=from_number,
                 message=ai_response
             )

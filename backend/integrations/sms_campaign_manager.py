@@ -406,7 +406,7 @@ class SMSCampaignManager:
         # Send via SMS service
         if self.sms_service:
             try:
-                result = await self.sms_service.send_sms(
+                result = self.sms_service.send_sms(
                     to=phone,
                     body=body,
                     tenant_id=campaign.tenant_id,

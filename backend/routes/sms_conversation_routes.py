@@ -446,7 +446,7 @@ async def send_sms(
         except (ValueError, TypeError):
             pass
 
-        result = await client.send_sms(
+        result = client.send_sms(
             to_phone=req.to,
             message=req.message.strip(),
             lead_id=lead_id,

@@ -402,7 +402,8 @@ async def _execute_campaign(campaign_id: str, org_id: int, user_id: int):
     """
     logger.info("Starting campaign execution: %s", campaign_id)
 
-    # Load campaign details
+    # Load campaign details and sender name for panel messages
+    sender_name = "Campaign"
     with get_db_with_tenant(org_id) as db:
         campaign = db.execute(
             text("SELECT message_template, filter_criteria FROM bulk_sms_campaigns WHERE id = :id"),
@@ -416,6 +417,17 @@ async def _execute_campaign(campaign_id: str, org_id: int, user_id: int):
         filter_criteria = campaign.filter_criteria
         if isinstance(filter_criteria, str):
             filter_criteria = json.loads(filter_criteria)
+
+        # Resolve sender display name for SMS Archive panel
+        try:
+            user_row = db.execute(
+                text("SELECT first_name, last_name FROM users WHERE id = :uid"),
+                {"uid": user_id},
+            ).fetchone()
+            if user_row:
+                sender_name = f"{user_row.first_name or ''} {user_row.last_name or ''}".strip() or "Campaign"
+        except Exception:
+            pass  # keep default "Campaign"
 
         # Mark as sending
         _update_campaign_status(db, campaign_id, "sending")
@@ -517,6 +529,33 @@ async def _execute_campaign(campaign_id: str, org_id: int, user_id: int):
                 except Exception as e:
                     db.rollback()
                     logger.warning("Failed to log send for campaign %s: %s", campaign_id, e)
+
+                # Also write to sms_panel_messages so the SMS Archive tab can see it
+                try:
+                    import uuid as _uuid
+                    db.execute(text("""
+                        INSERT INTO sms_panel_messages
+                            (id, phone, organization_id, direction, body,
+                             sender_name, sender_user_id, status,
+                             media_urls, telnyx_message_id, created_at)
+                        VALUES
+                            (:id, :phone, :org_id, 'outbound', :body,
+                             :sender_name, :sender_user_id, 'sent',
+                             '[]'::jsonb, :telnyx_id, NOW())
+                        ON CONFLICT (id) DO NOTHING
+                    """), {
+                        "id": str(_uuid.uuid4()),
+                        "phone": phone,
+                        "org_id": org_id,
+                        "body": rendered[:2000],
+                        "sender_name": sender_name,
+                        "sender_user_id": user_id,
+                        "telnyx_id": message_id or "",
+                    })
+                    db.commit()
+                except Exception as panel_err:
+                    logger.warning("Failed to write campaign SMS to panel_messages: %s", panel_err)
+                    db.rollback()
             else:
                 failed_count += 1
                 _increment_campaign_counter(db, campaign_id, "failed_count")

@@ -121,7 +121,7 @@ Or just reply to this text with any questions!
 - {self._lo_name} at {self._business_name}"""
 
         try:
-            message_sid = await client.send_sms(
+            message_sid = client.send_sms(
                 to_number=phone_number,
                 message=message
             )
@@ -188,7 +188,7 @@ Pick a time that works best for you!
 - {self._lo_name} at {self._business_name}"""
 
         try:
-            message_sid = await client.send_sms(
+            message_sid = client.send_sms(
                 to_number=phone_number,
                 message=message
             )
@@ -250,7 +250,7 @@ We'll call you at this number at the scheduled time.
 - {self._lo_name} at {self._business_name}"""
 
         try:
-            message_sid = await client.send_sms(
+            message_sid = client.send_sms(
                 to_number=phone_number,
                 message=message
             )
@@ -326,7 +326,7 @@ We'll call you at this number at the scheduled time.
             if response and response.get("should_respond"):
                 client = self._get_sms_client()
                 if client:
-                    message_sid = await client.send_sms(
+                    message_sid = client.send_sms(
                         to_number=from_number,
                         message=response.get("message")
                     )

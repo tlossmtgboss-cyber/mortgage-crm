@@ -770,6 +770,12 @@ from .sms_compliance import SMSOptOut, SMSConsent, SMSComplianceLog
 # SMS AI Auto-Response (task queue, patterns, confidence, audit)
 from .sms_task import SMSTask, SMSResponsePattern, SMSAIConfidence, SMSAIAuditLog
 
+# SMS Panel Messages (two-way SMS Archive visibility, tenant-isolated)
+from .sms_panel_message import SMSPanelMessage
+
+# SMS Delivery Log (Telnyx delivery tracking with TCPA consent proof)
+from .sms_delivery import SMSDeliveryLog
+
 
 __all__ = [
     # =====================
@@ -1603,4 +1609,14 @@ __all__ = [
     "SMSResponsePattern",
     "SMSAIConfidence",
     "SMSAIAuditLog",
+
+    # =====================
+    # SMS Panel Messages (Archive)
+    # =====================
+    "SMSPanelMessage",
+
+    # =====================
+    # SMS Delivery Log (Telnyx)
+    # =====================
+    "SMSDeliveryLog",
 ]

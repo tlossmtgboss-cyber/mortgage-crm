@@ -735,7 +735,7 @@ async def send_sms_response(
         sms_client = get_sms_client()
 
         if sms_client.enabled:
-            message_sid = await sms_client.send_sms(
+            message_sid = sms_client.send_sms(
                 to_number=to_number,
                 message=message
             )

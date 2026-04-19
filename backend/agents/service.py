@@ -2224,7 +2224,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
             clean_phone = f"+1{clean_phone}" if len(clean_phone) == 10 else f"+{clean_phone}"
 
         try:
-            message_sid = await sms_client.send_sms(
+            message_sid = sms_client.send_sms(
                 to_number=clean_phone,
                 message=message
             )
@@ -2354,7 +2354,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
                 try:
                     # Send SMS
-                    sid = await sms_client.send_sms(to_number=phone, message=message)
+                    sid = sms_client.send_sms(to_number=phone, message=message)
                     if sid:
                         results["texts_sent"] += 1
                         results["leads_contacted"].append({

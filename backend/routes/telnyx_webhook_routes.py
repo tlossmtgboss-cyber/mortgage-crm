@@ -1273,89 +1273,6 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
         db.rollback()
         logger.error(f"ACO intercept error (falling through): {e}")
 
-    # ======================================================================
-    # Voice Scheduling Workflow Intercept
-    # Check if this SMS is a reply to an active scheduling workflow.
-    # CRITICAL: Resolve org_id from the "to" number (our Telnyx number) to
-    # ensure tenant isolation. The "to" number belongs to a specific org's
-    # user via user_twilio_config. Only falls back to cross-org lookup if
-    # org resolution fails (e.g., phone number not in config table).
-    # ======================================================================
-    try:
-        from services.voice_scheduling_workflow_service import VoiceSchedulingWorkflowService
-        from services.scheduling_conversation_service import SchedulingConversationService
-
-        wf_service = VoiceSchedulingWorkflowService(db)
-
-        # Resolve org_id from the "to" number (our Telnyx number belongs to a specific org)
-        workflow = None
-        resolved_org_id = None
-        if normalized_to:
-            org_result = db.execute(
-                sa_text(
-                    "SELECT u.organization_id FROM user_twilio_config utc "
-                    "JOIN users u ON u.id = utc.user_id "
-                    "WHERE utc.telnyx_phone_number = :phone "
-                    "AND u.organization_id IS NOT NULL "
-                    "LIMIT 1"
-                ),
-                {"phone": normalized_to},
-            ).fetchone()
-            if org_result:
-                resolved_org_id = org_result[0]
-                workflow = wf_service.find_active_workflow_by_phone(normalized_from, resolved_org_id)
-
-        # Fallback: cross-org lookup (less safe, but needed if phone number
-        # config table doesn't have our "to" number mapped to an org)
-        if not workflow and not resolved_org_id:
-            logger.debug(
-                f"Voice workflow intercept: could not resolve org for to_number={normalized_to}, "
-                "trying cross-org fallback"
-            )
-            workflow = wf_service.find_active_workflow_by_phone_any_org(normalized_from)
-            if workflow:
-                # Use the workflow's own org_id for downstream tenant isolation
-                resolved_org_id = workflow.organization_id
-
-        if workflow and resolved_org_id:
-            conv_service = SchedulingConversationService(db)
-            conv_result = conv_service.handle_reply(
-                workflow_id=workflow.id,
-                sender_phone=normalized_from,
-                message_body=message_body,
-                organization_id=resolved_org_id,
-            )
-            if conv_result is not None:
-                # Workflow handled this SMS — store for audit trail, skip intelligence queue
-                try:
-                    db.execute(sa_text("""
-                        INSERT INTO sms_messages (
-                            direction, from_number, to_number, message,
-                            provider_message_id, status, created_at
-                        ) VALUES (
-                            'inbound', :from_number, :to_number, :body,
-                            :message_id, 'received', NOW()
-                        )
-                    """), {
-                        "from_number": from_number,
-                        "to_number": to_number,
-                        "body": message_body,
-                        "message_id": event.message_id,
-                    })
-                    db.commit()
-                except Exception as e:
-                    logger.error(f"Failed to store workflow-intercepted SMS: {e}")
-                return {
-                    "status": "received",
-                    "handler": "voice_scheduling_workflow",
-                    "workflow_id": workflow.id,
-                }
-    except ImportError:
-        pass  # Voice scheduling workflow module not available
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Voice scheduling workflow intercept error (falling through): {e}")
-
     # Store inbound SMS in sms_messages table
     try:
         db.execute(sa_text("""
@@ -1442,29 +1359,44 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
         db.rollback()
         logger.warning(f"Org lookup for inbound SMS panel storage failed: {e}")
 
+    # Resolve contact_id (lead) from the sender's phone number for attribution
+    _inbound_contact_id = None
+    if _inbound_org_id:
+        try:
+            _lead_row = db.execute(sa_text("""
+                SELECT id FROM leads
+                WHERE phone = :phone AND organization_id = :org_id
+                ORDER BY updated_at DESC LIMIT 1
+            """), {"phone": normalized_from, "org_id": _inbound_org_id}).fetchone()
+            if _lead_row:
+                _inbound_contact_id = str(_lead_row[0])
+        except Exception as e:
+            logger.debug(f"Lead lookup for inbound SMS contact_id failed (non-critical): {e}")
+
     try:
         import uuid as _uuid
         _panel_id = str(_uuid.uuid4())
         db.execute(sa_text("""
             INSERT INTO sms_panel_messages
-                (id, phone, organization_id, direction, body,
+                (id, phone, contact_id, organization_id, direction, body,
                  sender_name, status, media_urls,
                  telnyx_message_id, created_at)
             VALUES
-                (:id, :phone, :org_id, 'inbound', :body,
+                (:id, :phone, :contact_id, :org_id, 'inbound', :body,
                  :sender_name, 'received', '[]'::jsonb,
                  :telnyx_id, NOW())
             ON CONFLICT (id) DO NOTHING
         """), {
             "id": _panel_id,
             "phone": normalized_from,
+            "contact_id": _inbound_contact_id,
             "org_id": _inbound_org_id,
             "body": message_body or "",
             "sender_name": normalized_from,
             "telnyx_id": event.message_id,
         })
         db.commit()
-        logger.info(f"Inbound SMS stored in sms_panel_messages for phone=...{normalized_from[-4:]}")
+        logger.info(f"Inbound SMS stored in sms_panel_messages for phone=...{normalized_from[-4:]}, contact_id={_inbound_contact_id}")
     except Exception as e:
         logger.warning(f"Failed to store inbound SMS in sms_panel_messages: {e}")
         db.rollback()

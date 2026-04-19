@@ -9,8 +9,11 @@ and calendar services.
 import asyncio
 import logging
 import os
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
+
+from sqlalchemy import text as sa_text
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +44,38 @@ class CommunicationTools:
                 workflow_id=None,
                 metadata={"source": "aria", "user_id": str(from_user.get("id", ""))},
             )
+
+            # Record in sms_panel_messages so it appears in SMS Archive tab
+            try:
+                from database import SessionLocal
+                db = SessionLocal()
+                try:
+                    panel_id = str(uuid.uuid4())
+                    db.execute(sa_text("""
+                        INSERT INTO sms_panel_messages
+                            (id, phone, organization_id, direction, body,
+                             sender_name, sender_role, status,
+                             media_urls, telnyx_message_id, created_at)
+                        VALUES
+                            (:id, :phone, :org_id, 'outbound', :body,
+                             'Aria', 'ai_assistant', 'sent',
+                             '[]'::jsonb, :telnyx_id, NOW())
+                        ON CONFLICT (id) DO NOTHING
+                    """), {
+                        "id": panel_id,
+                        "phone": to_phone,
+                        "org_id": org_id,
+                        "body": message[:2000],
+                        "telnyx_id": result.get("message_id", ""),
+                    })
+                    db.commit()
+                except Exception as e:
+                    logger.warning(f"Failed to write Aria SMS to panel_messages: {e}")
+                    db.rollback()
+                finally:
+                    db.close()
+            except Exception as e:
+                logger.warning(f"Could not open DB session for panel_messages: {e}")
 
             return {
                 "message_id": result.get("message_id", ""),

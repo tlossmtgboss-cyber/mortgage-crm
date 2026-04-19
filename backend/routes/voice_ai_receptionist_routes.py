@@ -776,7 +776,7 @@ async def vapi_voicemail_status_webhook(
                             f"Hi {contact_name}, I just left you a voicemail. "
                             f"Feel free to call or text me back at your convenience!"
                         )
-                        await sms_client.send_sms(
+                        sms_client.send_sms(
                             to_number=voicemail_drop.phone_number,
                             message=sms_body,
                         )

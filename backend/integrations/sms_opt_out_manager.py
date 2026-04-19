@@ -55,7 +55,7 @@ class SMSOptOutManager:
         # Check DB if available
         if self.db:
             try:
-                from models.sms_models import SMSOptOut
+                from database.models.sms_compliance import SMSOptOut
                 record = self.db.query(SMSOptOut).filter(
                     SMSOptOut.phone_number == normalized,
                     SMSOptOut.active == True,

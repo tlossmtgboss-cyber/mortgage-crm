@@ -194,6 +194,10 @@ When scheduling appointments, confirm the time first via SMS before creating the
                 {"role": "user", "content": f"[User Task]\n{task}\n[End User Task]"}
             ]
 
+            # Per-request SMS send cap to prevent mass-texting
+            sms_send_count = 0
+            SMS_PER_TASK_LIMIT = 5
+
             # Run AI with function calling (max 5 iterations)
             for iteration in range(5):
                 response = client.chat.completions.create(
@@ -216,6 +220,12 @@ When scheduling appointments, confirm the time first via SMS before creating the
                         tool_result = None
 
                         if function_name == "send_sms":
+                            # Per-request SMS cap check
+                            if sms_send_count >= SMS_PER_TASK_LIMIT:
+                                tool_result = {"success": False, "error": f"SMS limit reached ({SMS_PER_TASK_LIMIT} per task). Send remaining messages separately."}
+                                messages.append({"role": "tool", "tool_call_id": tool_call.id, "content": json.dumps(tool_result)})
+                                continue
+
                             # TCPA/DNC compliance check before sending
                             try:
                                 from integrations.sms_compliance_gate import check_sms_compliance
@@ -253,7 +263,7 @@ When scheduling appointments, confirm the time first via SMS before creating the
                                 else:
                                     to_num = function_args["to_number"]
                                     sms_body = function_args["message"]
-                                    message_sid = await sms_client.send_sms(
+                                    message_sid = sms_client.send_sms(
                                         to_number=to_num,
                                         message=sms_body
                                     )
@@ -316,6 +326,7 @@ When scheduling appointments, confirm the time first via SMS before creating the
                                             "message": "SMS sent successfully"
                                         }
 
+                                        sms_send_count += 1
                                         completed_action_types.add("sms")
                                         activity_log.append({
                                             "icon": "sent",

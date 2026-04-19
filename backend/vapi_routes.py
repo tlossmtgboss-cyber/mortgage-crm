@@ -431,7 +431,7 @@ async def create_task_function(
                         sms_message = f"🚨 URGENT: {caller_name} needs immediate callback.\n\nReason: {title}\n\n{description}\n\nView task in CRM: https://perenniaai.com/tasks"
 
                         # Send SMS
-                        message_sid = await sms_client.send_sms(
+                        message_sid = sms_client.send_sms(
                             to_number=owner_phone,
                             message=sms_message
                         )

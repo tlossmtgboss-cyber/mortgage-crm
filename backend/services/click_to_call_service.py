@@ -558,8 +558,7 @@ class ClickToCallService:
                 )
 
             sms_client = get_sms_client()
-            import asyncio
-            asyncio.create_task(sms_client.send_sms(borrower_phone, message))
+            sms_client.send_sms(borrower_phone, message)
 
             logger.info(f"Sent unavailability SMS to {borrower_phone}")
 
