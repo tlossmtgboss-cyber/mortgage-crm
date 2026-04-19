@@ -697,7 +697,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             import os
 
             secret = os.getenv("SECRET_KEY", "")
-            payload = jwt.decode(token, secret, algorithms=["HS256"], options={"verify_aud": False})
+            payload = jwt.decode(token, secret, algorithms=[os.getenv("AUTH_ALGORITHM", "HS256")], options={"verify_aud": False})
 
             # Extract user info from token
             user_id = payload.get("user_id") or payload.get("sub")
@@ -853,7 +853,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; "
+            # TODO: Migrate to nonce-based CSP to remove 'unsafe-inline'
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https:; "

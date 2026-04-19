@@ -697,6 +697,30 @@ func pinWebViewChallenge(
 }
 
 
+// MARK: - Shared Pinned URLSession
+
+/// Namespace providing a shared pinned URLSession for use across the app.
+///
+/// Use `CertificatePinning.pinnedSession` anywhere you would otherwise use
+/// `URLSession.shared` when making requests to pinned domains. This ensures
+/// all native HTTP requests go through SPKI certificate pinning validation.
+///
+/// Example:
+///   let (data, response) = try await CertificatePinning.pinnedSession.data(for: request)
+///   // or
+///   let task = CertificatePinning.pinnedSession.dataTask(with: request) { ... }
+///
+enum CertificatePinning {
+    /// A long-lived URLSession configured with the certificate pinning delegate.
+    /// Thread-safe; initialized once on first access.
+    static let pinnedSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        let delegate = CertificatePinningDelegate()
+        return URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
+    }()
+}
+
+
 // MARK: - Convenience: Pinned URLSession Factory
 
 /// Create a URLSession pre-configured with certificate pinning.

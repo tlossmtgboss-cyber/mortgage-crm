@@ -301,7 +301,7 @@ def verify_password_reset_token(token: str) -> Optional[dict]:
         return {"email": email, "iat": iat}
     except ExpiredSignatureError:
         return None
-    except JWTError:
+    except InvalidTokenError:
         return None
 
 
@@ -709,7 +709,7 @@ async def _login_impl(http_request: Request, form_data, db: Session):
                 "error_type": type(e).__name__,
             },
         )
-    except (JWTError, ExpiredSignatureError) as e:
+    except (InvalidTokenError, ExpiredSignatureError) as e:
         import traceback
         tb_str = traceback.format_exc()
         logger.error(f"Login token error for {form_data.username}: {type(e).__name__}: {str(e)}\n{tb_str}")
@@ -822,7 +822,7 @@ async def refresh_access_token(
                 "token_type": "bearer",
                 "expires_in": config['ACCESS_TOKEN_EXPIRE_MINUTES'] * 60,
             }
-        except JWTError:
+        except InvalidTokenError:
             raise credentials_exception
 
 
@@ -1090,6 +1090,17 @@ async def reset_password(http_request: Request, request: ResetPasswordRequest, d
             user.password_changed_at = datetime.now(timezone.utc)
         db.commit()
 
+        # HIGH-02: Revoke all existing sessions after password reset
+        try:
+            config = get_auth_config()
+            token_blacklist = config['token_blacklist']
+            _USE_SECURE_TOKENS = config['_USE_SECURE_TOKENS']
+            if _USE_SECURE_TOKENS and token_blacklist and token_blacklist._enabled:
+                token_blacklist.revoke_all_for_user(user.id)
+                logger.info(f"All sessions revoked for user ID {user.id} after password reset")
+        except Exception as e:
+            logger.warning(f"Failed to revoke sessions after password reset for user ID {user.id}: {e}")
+
         # SOC 2: Log password reset event
         _log_access_event_bg(
             user_id=user.id,
@@ -1133,7 +1144,7 @@ async def admin_force_password_reset(http_request: Request, request: AdminPasswo
 
     # Verify admin key
     expected_key = os.getenv("ADMIN_RESET_KEY", "")
-    if not expected_key or request.admin_key != expected_key:
+    if not expected_key or not secrets.compare_digest(request.admin_key, expected_key):
         logger.warning("Invalid admin reset attempt (bad admin key)")
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
@@ -1187,7 +1198,7 @@ async def admin_unlock_account(http_request: Request, request: AdminUnlockReques
     User = models['User']
 
     expected_key = os.getenv("ADMIN_RESET_KEY", "")
-    if not expected_key or request.admin_key != expected_key:
+    if not expected_key or not secrets.compare_digest(request.admin_key, expected_key):
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     user = db.query(User).filter(func.lower(User.email) == request.email.lower()).first()

@@ -228,16 +228,27 @@ class TenantDatabaseManager:
             conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
             cursor = conn.cursor()
             
+            # Validate db_name matches expected tenant DB pattern
+            import re as _re
+            if not _re.match(r'^[a-zA-Z0-9_-]+$', db_name):
+                raise ValueError(f"Invalid database name: {db_name}")
+
+            from psycopg2 import sql as psql
+
             # Terminate existing connections
-            cursor.execute(f"""
-                SELECT pg_terminate_backend(pg_stat_activity.pid)
-                FROM pg_stat_activity
-                WHERE pg_stat_activity.datname = '{db_name}'
-                AND pid <> pg_backend_pid();
-            """)
-            
+            cursor.execute(
+                psql.SQL("""
+                    SELECT pg_terminate_backend(pg_stat_activity.pid)
+                    FROM pg_stat_activity
+                    WHERE pg_stat_activity.datname = {name}
+                    AND pid <> pg_backend_pid()
+                """).format(name=psql.Literal(db_name))
+            )
+
             # Drop database
-            cursor.execute(f'DROP DATABASE IF EXISTS "{db_name}"')
+            cursor.execute(
+                psql.SQL("DROP DATABASE IF EXISTS {}").format(psql.Identifier(db_name))
+            )
             
             cursor.close()
             conn.close()

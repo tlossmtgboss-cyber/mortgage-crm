@@ -174,6 +174,9 @@ class User(Base):
     sso_provider = Column(String, nullable=True)  # 'saml' or 'oidc' if JIT-provisioned
     sso_subject_id = Column(String, nullable=True)  # IdP unique identifier (NameID or sub claim)
 
+    # Password change tracking (HIGH-03: session revocation after password reset)
+    password_changed_at = Column(DateTime(timezone=True), nullable=True)
+
     # Relationships
     branch = relationship("Branch", back_populates="users")
     organization = relationship("Organization", back_populates="users")

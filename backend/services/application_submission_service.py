@@ -4,7 +4,7 @@ Handles PDF generation for consent documents and Fannie Mae 3.4 file creation
 """
 import os
 import uuid
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from datetime import datetime
 from io import BytesIO
 from typing import Dict, Any, Optional

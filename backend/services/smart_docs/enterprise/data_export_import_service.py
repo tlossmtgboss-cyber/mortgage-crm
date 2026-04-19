@@ -1135,7 +1135,7 @@ class DataExportImportService:
             )
 
         # Fallback: minimal MISMO wrapper with loan metadata
-        import xml.etree.ElementTree as ET
+        import defusedxml.ElementTree as ET
 
         root = ET.Element("MESSAGE", xmlns="http://www.mismo.org/residential/2009/schemas")
         root.set("MISMOReferenceModelIdentifier", "3.6")

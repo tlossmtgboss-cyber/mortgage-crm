@@ -4,12 +4,13 @@ Schema migrations, data cleanup, emergency admin reset, account cleanup
 Extracted from account_management_routes.py
 """
 
-from fastapi import APIRouter, Depends, Request, Query, HTTPException
+from fastapi import APIRouter, Depends, Request, Query, Header, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from datetime import datetime, timezone
 import logging
 import os
+import secrets
 
 from database import get_db as _get_db_func
 from utils.error_handling import (
@@ -19,6 +20,7 @@ from utils.error_handling import (
     success_response
 )
 from sqlalchemy.exc import SQLAlchemyError
+from pydantic import BaseModel
 
 from routes.account_models import (
     table_exists,
@@ -52,7 +54,7 @@ def set_dependencies(user_model, current_user_func):
 
 @router.post("/run-migration")
 async def run_account_management_migration(
-    admin_key: str = None,
+    admin_key: str = Header(None, alias="X-Admin-Key"),
     action: str = Query(default="migrate", description="Action: migrate or cleanup"),
     keep_admin_email: str = Query(default="admin@perenniaai.com", description="Admin email to preserve (for cleanup action)"),
     db: Session = Depends(_get_db_func)
@@ -65,7 +67,7 @@ async def run_account_management_migration(
     """
     # Verify admin key
     expected_key = os.getenv("ADMIN_API_KEY", "")
-    if admin_key != expected_key:
+    if not expected_key or not secrets.compare_digest(admin_key or "", expected_key):
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     # Handle cleanup action
@@ -302,7 +304,7 @@ async def run_cleanup_migration(
     """
     # Verify admin key
     expected_key = os.getenv("ADMIN_API_KEY", "")
-    if admin_key != expected_key:
+    if not expected_key or not secrets.compare_digest(admin_key or "", expected_key):
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -457,7 +459,7 @@ async def run_invitations_migration(
     """Run the subscriber_invitations table migration."""
     # Verify admin key
     expected_key = os.getenv("ADMIN_API_KEY", "")
-    if admin_key != expected_key:
+    if not expected_key or not secrets.compare_digest(admin_key or "", expected_key):
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -517,11 +519,11 @@ async def run_invitations_migration(
 @router.delete("/cleanup/sample-data")
 async def cleanup_sample_data(
     request: Request,
-    admin_key: str = Query(default=None, description="Admin API key for auth bypass"),
+    admin_key: str = Header(None, alias="X-Admin-Key"),
     db: Session = Depends(_get_db_func)
 ):
     """Delete all sample/demo data from account management tables.
-    Can be called with admin_key query param to bypass JWT authentication.
+    Can be called with X-Admin-Key header to bypass JWT authentication.
     """
     # Check for admin key bypass
     expected_key = os.getenv("ADMIN_API_KEY", "")
@@ -534,7 +536,7 @@ async def cleanup_sample_data(
         except Exception as e:
             logger.error(f"Error in cleanup_sample_data (auth check): {e}")
             if not admin_key:
-                raise HTTPException(status_code=401, detail="Auth required. Provide admin_key or JWT token.")
+                raise HTTPException(status_code=401, detail="Auth required. Provide X-Admin-Key header or JWT token.")
             raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -599,12 +601,12 @@ async def cleanup_sample_data(
 @router.delete("/cleanup/users")
 async def cleanup_users(
     request: Request,
-    admin_key: str = Query(default=None, description="Admin API key for auth bypass"),
+    admin_key: str = Header(None, alias="X-Admin-Key"),
     keep_admin_email: str = Query(default="admin@perenniaai.com", description="Admin email to preserve"),
     db: Session = Depends(_get_db_func)
 ):
     """Delete all users except the specified admin user.
-    Can be called with admin_key query param to bypass JWT authentication.
+    Can be called with X-Admin-Key header to bypass JWT authentication.
     """
     admin_id = None
 
@@ -629,7 +631,7 @@ async def cleanup_users(
         except Exception as e:
             logger.error(f"Error in cleanup_users (auth check): {e}")
             if not admin_key:
-                raise HTTPException(status_code=401, detail="Auth required. Provide admin_key or JWT token.")
+                raise HTTPException(status_code=401, detail="Auth required. Provide X-Admin-Key header or JWT token.")
             raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -715,7 +717,7 @@ async def cleanup_users(
 async def cleanup_all_sample_data(
     request: Request,
     keep_admin_email: str = Query(default="admin@perenniaai.com", description="Admin email to preserve"),
-    admin_key: str = Query(default=None, description="Admin API key for authentication bypass"),
+    admin_key: str = Header(None, alias="X-Admin-Key"),
     db: Session = Depends(_get_db_func)
 ):
     """Comprehensive cleanup: Delete ALL sample data including tasks, users, accounts.
@@ -727,7 +729,7 @@ async def cleanup_all_sample_data(
     - All suspended and cancelled accounts
     - All account management sample data
 
-    Can be called with admin_key query param to bypass JWT authentication.
+    Can be called with X-Admin-Key header to bypass JWT authentication.
     """
     current_user = None
 
@@ -742,7 +744,7 @@ async def cleanup_all_sample_data(
             require_master_admin(current_user)
         except Exception as auth_error:
             if not admin_key:
-                raise HTTPException(status_code=401, detail="Authentication required. Provide admin_key or valid JWT token.")
+                raise HTTPException(status_code=401, detail="Authentication required. Provide X-Admin-Key header or valid JWT token.")
             raise HTTPException(status_code=403, detail="Invalid admin key")
 
     try:
@@ -905,22 +907,30 @@ async def cleanup_all_sample_data(
         raise DatabaseException("Failed to cleanup")
 
 
+class EmergencyResetRequest(BaseModel):
+    email: str
+    password: str
+    secret_key: str
+
+
 @router.post("/emergency-admin-reset")
 async def emergency_admin_reset(
-    request: Request,
-    email: str = Query(..., description="Admin email address"),
-    password: str = Query(..., description="New password"),
-    secret_key: str = Query(..., description="Emergency reset key"),
+    body: EmergencyResetRequest,
     db: Session = Depends(_get_db_func)
 ):
     """Emergency endpoint to create or reset admin user password.
     Requires secret key for security.
     """
     import bcrypt
+    import secrets as _secrets
 
-    # Verify secret key
+    email = body.email
+    password = body.password
+    secret_key = body.secret_key
+
+    # Verify secret key (constant-time comparison)
     expected_key = os.getenv("EMERGENCY_ADMIN_KEY", "")
-    if secret_key != expected_key:
+    if not expected_key or not _secrets.compare_digest(secret_key, expected_key):
         raise HTTPException(status_code=403, detail="Invalid secret key")
 
     try:
@@ -995,7 +1005,7 @@ async def find_accounts_by_api_key(
     """Find accounts by name using ADMIN_API_KEY auth."""
     api_key = request.headers.get('X-API-Key', '')
     expected_key = os.getenv('ADMIN_API_KEY', '')
-    if not api_key or not expected_key or api_key != expected_key:
+    if not api_key or not expected_key or not secrets.compare_digest(api_key, expected_key):
         raise HTTPException(status_code=403, detail="Invalid API key")
 
     accounts = db.execute(text("""
@@ -1028,7 +1038,7 @@ async def cleanup_account_by_api_key(
     """
     api_key = request.headers.get('X-API-Key', '')
     expected_key = os.getenv('ADMIN_API_KEY', '')
-    if not api_key or not expected_key or api_key != expected_key:
+    if not api_key or not expected_key or not secrets.compare_digest(api_key, expected_key):
         raise HTTPException(status_code=403, detail="Invalid API key")
 
     try:

@@ -883,7 +883,7 @@ final class PushNotificationRouter {
         request.timeoutInterval = 10
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await CertificatePinning.pinnedSession.data(for: request)
             if let httpResponse = response as? HTTPURLResponse {
                 if (200...299).contains(httpResponse.statusCode) {
                     logger.info("Task \(taskId) marked complete via notification action")

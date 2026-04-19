@@ -9,6 +9,7 @@ import os
 
 from database import SessionLocal
 from sqlalchemy import text
+from jwt.exceptions import InvalidTokenError
 
 router = APIRouter(prefix="/api/v1/migrations", tags=["migrations"])
 
@@ -110,7 +111,7 @@ async def debug_auth(
             return {"token_valid": True, "email": email, "user_found": False}
         finally:
             db.close()
-    except JWTError as e:
+    except InvalidTokenError as e:
         return {"token_valid": False, "error": "Internal server error"}
 
 
@@ -664,7 +665,7 @@ async def update_user_email(
             "message": f"User email updated from {old_email} to {new_email}",
             "new_credentials": {
                 "email": new_email,
-                "password": "demo123 (unchanged)"
+                "password": "(unchanged — set via DEMO_USER_PASSWORD env var)"
             }
         }
 
@@ -1932,13 +1933,11 @@ async def add_missing_database_columns(
 
 
 @router.post("/fix-loan-stages")
-async def fix_loan_stages(key: str = ""):
+async def fix_loan_stages(admin: Any = Depends(verify_admin_access)):
     """
     Fix NULL loan stage values to 'Processing'.
-    Call with: POST /api/v1/migrations/fix-loan-stages?key=fix-stages
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if key != "fix-stages":
-        raise HTTPException(status_code=403, detail="Invalid key")
 
     db = SessionLocal()
     try:
@@ -1963,13 +1962,11 @@ async def fix_loan_stages(key: str = ""):
 
 
 @router.post("/fix-loan-required-fields")
-async def fix_loan_required_fields(key: str = ""):
+async def fix_loan_required_fields(admin: Any = Depends(verify_admin_access)):
     """
     Fix NULL values in required loan fields that cause validation errors.
-    Call with: POST /api/v1/migrations/fix-loan-required-fields?key=fix-loans
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if key != "fix-loans":
-        raise HTTPException(status_code=403, detail="Invalid key")
 
     db = SessionLocal()
     try:
@@ -2040,16 +2037,11 @@ async def fix_loan_required_fields(key: str = ""):
 
 
 @router.get("/debug-loans")
-async def debug_loans(key: str = ""):
+async def debug_loans(admin: Any = Depends(verify_admin_access)):
     """
     Debug endpoint to check loan data for validation issues.
-    Call with: GET /api/v1/migrations/debug-loans?key=debug
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "development")).lower() == "production":
-        raise HTTPException(status_code=404, detail="Not found")
-
-    if key != "debug":
-        raise HTTPException(status_code=403, detail="Invalid key")
 
     db = SessionLocal()
     try:
@@ -2089,13 +2081,11 @@ async def debug_loans(key: str = ""):
 
 
 @router.delete("/delete-unknown-borrowers")
-async def delete_unknown_borrowers(key: str = ""):
+async def delete_unknown_borrowers(admin: Any = Depends(verify_admin_access)):
     """
     Delete loans with 'Unknown Borrower' as borrower_name.
-    Call with: DELETE /api/v1/migrations/delete-unknown-borrowers?key=delete-unknown
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if key != "delete-unknown":
-        raise HTTPException(status_code=403, detail="Invalid key")
 
     db = SessionLocal()
     try:
@@ -2136,16 +2126,11 @@ async def delete_unknown_borrowers(key: str = ""):
 
 
 @router.get("/debug-mum-clients")
-async def debug_mum_clients(key: str = ""):
+async def debug_mum_clients(admin: Any = Depends(verify_admin_access)):
     """
     Debug endpoint to check mum_clients data and table structure.
-    Call with: GET /api/v1/migrations/debug-mum-clients?key=debug
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if os.getenv("RAILWAY_ENVIRONMENT", os.getenv("ENVIRONMENT", "development")).lower() == "production":
-        raise HTTPException(status_code=404, detail="Not found")
-
-    if key != "debug":
-        raise HTTPException(status_code=403, detail="Invalid key")
 
     db = SessionLocal()
     try:
@@ -2192,13 +2177,11 @@ async def debug_mum_clients(key: str = ""):
 
 
 @router.post("/test-mum-insert")
-async def test_mum_insert(key: str = "", user_id: int = 118):
+async def test_mum_insert(admin: Any = Depends(verify_admin_access), user_id: int = 118):
     """
     Test direct insert into mum_clients to debug issues.
-    Call with: POST /api/v1/migrations/test-mum-insert?key=test-mum&user_id=118
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if key != "test-mum":
-        raise HTTPException(status_code=403, detail="Invalid key")
 
     db = SessionLocal()
     try:
@@ -2237,13 +2220,11 @@ async def test_mum_insert(key: str = "", user_id: int = 118):
 
 
 @router.post("/test-mum-import-row")
-async def test_mum_import_row(key: str = "", user_id: int = 118):
+async def test_mum_import_row(admin: Any = Depends(verify_admin_access), user_id: int = 118):
     """
     Test importing a single mum_clients row using import-style columns.
-    Call with: POST /api/v1/migrations/test-mum-import-row?key=test-import&user_id=118
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if key != "test-import":
-        raise HTTPException(status_code=403, detail="Invalid key")
 
     import psycopg2
     from datetime import datetime
@@ -2359,13 +2340,11 @@ async def test_mum_import_row(key: str = "", user_id: int = 118):
 
 
 @router.post("/fix-mum-clients-user-id")
-async def fix_mum_clients_user_id(key: str = "", user_id: int = 118):
+async def fix_mum_clients_user_id(admin: Any = Depends(verify_admin_access), user_id: int = 118):
     """
     Fix mum_clients with NULL user_id by assigning them to specified user.
-    Call with: POST /api/v1/migrations/fix-mum-clients-user-id?key=fix-mum&user_id=118
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if key != "fix-mum":
-        raise HTTPException(status_code=403, detail="Invalid key")
 
     db = SessionLocal()
     try:
@@ -2404,13 +2383,11 @@ async def fix_mum_clients_user_id(key: str = "", user_id: int = 118):
 
 
 @router.post("/clear-mum-clients-for-reimport")
-async def clear_mum_clients_for_reimport(key: str = "", user_id: int = 0):
+async def clear_mum_clients_for_reimport(admin: Any = Depends(verify_admin_access), user_id: int = 0):
     """
     Delete all mum_clients for a user to allow fresh re-import with corrected names.
-    Call with: POST /api/v1/migrations/clear-mum-clients-for-reimport?key=clear-mum&user_id=118
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if key != "clear-mum":
-        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=clear-mum&user_id=N")
 
     if user_id <= 0:
         raise HTTPException(status_code=400, detail="Must specify a valid user_id")
@@ -2450,13 +2427,11 @@ async def clear_mum_clients_for_reimport(key: str = "", user_id: int = 0):
 
 
 @router.post("/fix-mum-client-names")
-async def fix_mum_client_names(key: str = ""):
+async def fix_mum_client_names(admin: Any = Depends(verify_admin_access)):
     """
     Fix mum_clients with generic 'Client N' names by looking up borrower names from loans table.
-    Call with: POST /api/v1/migrations/fix-mum-client-names?key=fix-names
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if key != "fix-names":
-        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=fix-names")
 
     db = SessionLocal()
     try:
@@ -2537,7 +2512,7 @@ async def fix_mum_client_names(key: str = ""):
 
 @router.post("/migrate-leads-to-mum-clients")
 async def migrate_leads_to_mum_clients(
-    key: str = "",
+    admin: Any = Depends(verify_admin_access),
     source_filter: str = "Auto Import",
     user_id: int = 0,
     delete_after: bool = True
@@ -2545,17 +2520,13 @@ async def migrate_leads_to_mum_clients(
     """
     Migrate leads to MUM clients.
     This moves leads that were accidentally imported as leads to the mum_clients table.
-
-    Call with: POST /api/v1/migrations/migrate-leads-to-mum-clients?key=migrate-to-mum&source_filter=Auto%20Import&user_id=118&delete_after=true
+    Requires admin access via X-Admin-Key header or admin JWT.
 
     Parameters:
-    - key: Security key (must be "migrate-to-mum")
     - source_filter: Only migrate leads with this source (default: "Auto Import")
     - user_id: User ID to assign MUM clients to (if 0, uses lead's owner_id)
     - delete_after: Delete leads after successful migration (default: true)
     """
-    if key != "migrate-to-mum":
-        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=migrate-to-mum")
 
     db = SessionLocal()
     try:
@@ -2719,15 +2690,12 @@ async def migrate_leads_to_mum_clients(
 
 
 @router.post("/create-salesforce-oauth-tables")
-async def create_salesforce_oauth_tables(key: str = ""):
+async def create_salesforce_oauth_tables(admin: Any = Depends(verify_admin_access)):
     """
     Create all Salesforce OAuth integration tables.
     Required for the new per-user Salesforce OAuth system.
-
-    Call with: POST /api/v1/migrations/create-salesforce-oauth-tables?key=create-sf-oauth
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if key != "create-sf-oauth":
-        raise HTTPException(status_code=403, detail="Invalid key. Use ?key=create-sf-oauth")
 
     try:
         from migrations.add_salesforce_oauth_tables import run_migration
@@ -2765,9 +2733,10 @@ async def create_salesforce_oauth_tables(key: str = ""):
 
 
 @router.get("/diagnose-salesforce")
-async def diagnose_salesforce():
+async def diagnose_salesforce(admin: Any = Depends(verify_admin_access)):
     """
-    Diagnose Salesforce integration profiles - no auth required for debugging.
+    Diagnose Salesforce integration profiles.
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
     db = SessionLocal()
     try:
@@ -3352,13 +3321,11 @@ async def run_survey_seed_simple(
 
 
 @router.get("/debug-survey-templates")
-async def debug_survey_templates(key: str = ""):
+async def debug_survey_templates(admin: Any = Depends(verify_admin_access)):
     """
     Debug endpoint to check survey templates.
-    Call with: GET /api/v1/migrations/debug-survey-templates?key=debug
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
-    if key != "debug":
-        raise HTTPException(status_code=403, detail="Invalid key")
 
     try:
         from database import engine

@@ -1,5 +1,129 @@
 import Foundation
+import CommonCrypto
 import Security
+
+// MARK: - Share Extension Certificate Pinning
+
+/// Lightweight certificate pinning delegate for the share extension.
+/// Mirrors the SPKI pin validation in the main app's CertificatePinning.swift,
+/// but is self-contained to avoid pulling in UIKit/WebKit/AuditLogger dependencies.
+private class ShareCertificatePinningDelegate: NSObject, URLSessionDelegate {
+
+    /// SPKI SHA-256 hashes for pinned domains (must match CertificatePinning.swift).
+    private static let pinnedDomains: [String: [String]] = [
+        "api.perenniaai.com": [
+            "STrmUQMdkvmuC5EJ/5StR+WXmwAq6RLFCIPe3rMVgPA=",
+            "C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=",
+            "jQJTbIh0grw0/1TkHSumWb+Fs0Ggogr621gT3PvPKG0="
+        ],
+        "app.perenniaai.com": [
+            "amKlKR/XR507OEn640jX8dUOfmFxM+fz1umrpwlbi5s=",
+            "C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=",
+            "jQJTbIh0grw0/1TkHSumWb+Fs0Ggogr621gT3PvPKG0="
+        ]
+    ]
+
+    func urlSession(
+        _ session: URLSession,
+        didReceive challenge: URLAuthenticationChallenge,
+        completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void
+    ) {
+        guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
+              let serverTrust = challenge.protectionSpace.serverTrust else {
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        let host = challenge.protectionSpace.host
+
+        // Find pins for this host (direct match or parent domain)
+        let pins: [String]? = Self.pinnedDomains[host] ?? Self.pinnedDomains.first(where: { host.hasSuffix(".\($0.key)") })?.value
+
+        guard let expectedHashes = pins else {
+            // Host not pinned -- use default system validation
+            completionHandler(.performDefaultHandling, nil)
+            return
+        }
+
+        // Standard chain-of-trust validation first
+        let policy = SecPolicyCreateSSL(true, host as CFString)
+        SecTrustSetPolicies(serverTrust, policy)
+        var secError: CFError?
+        guard SecTrustEvaluateWithError(serverTrust, &secError) else {
+            completionHandler(.cancelAuthenticationChallenge, nil)
+            return
+        }
+
+        // Check SPKI hash against certificate chain
+        if #available(iOS 15.0, *) {
+            if let chain = SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate] {
+                for cert in chain {
+                    if let hash = Self.extractSPKIHash(from: cert), expectedHashes.contains(hash) {
+                        completionHandler(.useCredential, URLCredential(trust: serverTrust))
+                        return
+                    }
+                }
+            }
+        } else {
+            for i in 0..<SecTrustGetCertificateCount(serverTrust) {
+                if let cert = SecTrustGetCertificateAtIndex(serverTrust, i),
+                   let hash = Self.extractSPKIHash(from: cert),
+                   expectedHashes.contains(hash) {
+                    completionHandler(.useCredential, URLCredential(trust: serverTrust))
+                    return
+                }
+            }
+        }
+
+        // No pin matched -- reject
+        NSLog("[SharePinning] Certificate pin mismatch for %@", host)
+        completionHandler(.cancelAuthenticationChallenge, nil)
+    }
+
+    /// Extract SHA-256 of the SPKI from a certificate (matches main app logic).
+    private static func extractSPKIHash(from certificate: SecCertificate) -> String? {
+        guard let publicKey = SecCertificateCopyKey(certificate) else { return nil }
+        var error: Unmanaged<CFError>?
+        guard let keyData = SecKeyCopyExternalRepresentation(publicKey, &error) as Data? else { return nil }
+
+        let rsa2048Header: [UInt8] = [
+            0x30, 0x82, 0x01, 0x22, 0x30, 0x0D, 0x06, 0x09,
+            0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01,
+            0x05, 0x00, 0x03, 0x82, 0x01, 0x0F, 0x00
+        ]
+        let ecHeader: [UInt8] = [
+            0x30, 0x59, 0x30, 0x13, 0x06, 0x07,
+            0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01,
+            0x06, 0x08,
+            0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07,
+            0x03, 0x42, 0x00
+        ]
+
+        let attrs = SecKeyCopyAttributes(publicKey) as? [String: Any]
+        let keyType = attrs?[kSecAttrKeyType as String] as? String
+
+        var spki = Data()
+        if keyType == (kSecAttrKeyTypeRSA as String) {
+            spki.append(contentsOf: rsa2048Header)
+        } else if keyType == (kSecAttrKeyTypeECSECPrimeRandom as String) {
+            spki.append(contentsOf: ecHeader)
+        }
+        spki.append(keyData)
+
+        var hash = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+        spki.withUnsafeBytes { _ = CC_SHA256($0.baseAddress, CC_LONG(spki.count), &hash) }
+        return Data(hash).base64EncodedString()
+    }
+}
+
+/// Shared pinned URLSession for the share extension.
+/// Equivalent to CertificatePinning.pinnedSession in the main app target.
+enum SharePinnedSession {
+    static let session: URLSession = {
+        let delegate = ShareCertificatePinningDelegate()
+        return URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
+    }()
+}
 
 // MARK: - Share Extension Network Service
 // Lightweight networking for the Perennia AI share extension.
@@ -108,7 +232,7 @@ final class ShareNetworkService {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        let task = SharePinnedSession.session.dataTask(with: request) { data, response, error in
             if let error = error {
                 completion(.failure(.network(error.localizedDescription)))
                 return
@@ -183,7 +307,7 @@ final class ShareNetworkService {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        let task = SharePinnedSession.session.dataTask(with: request) { data, response, error in
             if let error = error {
                 completion(.failure(.network(error.localizedDescription)))
                 return

@@ -156,12 +156,7 @@ def parse_saml_response(
         Tuple of (is_valid, attributes_dict).
         attributes_dict contains: email, name_id, first_name, last_name, groups, session_index.
     """
-    try:
-        import defusedxml.ElementTree as ET
-    except ImportError:
-        # Fallback to standard library (less secure against XML attacks)
-        import xml.etree.ElementTree as ET
-        logger.warning("defusedxml not installed; using stdlib XML parser (install defusedxml for production)")
+    import defusedxml.ElementTree as ET
 
     try:
         # Decode base64

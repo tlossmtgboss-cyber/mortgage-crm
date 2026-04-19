@@ -72,11 +72,8 @@ def _validate_and_filter_loan_data(loan_data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _safe_parse_xml(xml_string: bytes) -> "xml.etree.ElementTree.Element":
-    """Parse XML with XXE protection."""
-    xml_text = xml_string.decode("utf-8", errors="replace") if isinstance(xml_string, bytes) else xml_string
-    if '<!DOCTYPE' in xml_text or '<!ENTITY' in xml_text:
-        raise ValueError("XML contains prohibited DTD/ENTITY declarations")
-    import xml.etree.ElementTree as ET
+    """Parse XML with XXE protection via defusedxml."""
+    import defusedxml.ElementTree as ET
     return ET.fromstring(xml_string)
 
 

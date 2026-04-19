@@ -9,7 +9,7 @@ Reference: https://developers.telnyx.com/docs/voice/programmable-voice/texml
 """
 
 from typing import Optional, List, Union
-from xml.etree.ElementTree import Element, SubElement, tostring
+from xml.etree.ElementTree import Element, SubElement, tostring  # XML building only
 import html
 
 

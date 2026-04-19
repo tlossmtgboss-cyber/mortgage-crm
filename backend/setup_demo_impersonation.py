@@ -198,7 +198,7 @@ try:
         print("\n🎉 Demo account setup complete!")
         print(f"\n📋 Login credentials:")
         print(f"   Email: admin@perenniaai.com")
-        print(f"   Password: demo123")
+        print(f"   Password: (set via DEMO_USER_PASSWORD env var)")
         print(f"\n✨ The demo account can now:")
         print(f"   - Impersonate other employees")
         print(f"   - View all teams and data")

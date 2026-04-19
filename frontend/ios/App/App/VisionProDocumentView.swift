@@ -72,7 +72,7 @@ final class VisionProDocumentViewModel: ObservableObject {
                 request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
             }
 
-            let (data, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await CertificatePinning.pinnedSession.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
                 self.errorMessage = "Invalid server response."

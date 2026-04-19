@@ -118,7 +118,7 @@ class WebhookConfig:
     def from_env(cls) -> "WebhookConfig":
         """Create config from environment variables."""
         return cls(
-            verify_signatures=os.getenv("WEBHOOK_VERIFY_SIGNATURES", "true").lower() == "true",
+            verify_signatures=True,  # Always verify — removed env var toggle per security audit
             telnyx_api_key=os.getenv("TELNYX_API_KEY"),
             vonage_api_secret=os.getenv("VONAGE_API_SECRET"),
             custom_secret_key=os.getenv("WEBHOOK_SECRET_KEY"),

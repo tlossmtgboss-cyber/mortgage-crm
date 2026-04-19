@@ -2,7 +2,7 @@
 Vapi AI Receptionist - FastAPI Routes
 Webhook handlers and API endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, Header
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional
@@ -34,6 +34,62 @@ def get_current_user_flexible():
     """Lazy import auth dependency"""
     from auth.dependencies import get_current_user_flexible as _get_current_user_flexible
     return _get_current_user_flexible
+
+
+async def verify_admin_access(
+    x_admin_key: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None)
+):
+    """
+    Verify admin access for diagnostic endpoints.
+    Requires either:
+    1. X-Admin-Key header matching MIGRATION_ADMIN_KEY env var
+    2. Valid admin user token (checks is_admin flag)
+    """
+    from database import SessionLocal
+    from sqlalchemy import text
+
+    admin_key = os.getenv("MIGRATION_ADMIN_KEY")
+
+    # Option 1: Check admin key header
+    if admin_key and x_admin_key == admin_key:
+        return True
+
+    # Option 2: Check for authenticated admin user via JWT token
+    if authorization and authorization.startswith("Bearer "):
+        try:
+            from auth.tokens import verify_access_token
+
+            token = authorization.replace("Bearer ", "")
+
+            try:
+                payload = verify_access_token(token)
+                if payload:
+                    email = payload.get("sub")
+
+                    if email:
+                        db = SessionLocal()
+                        try:
+                            result = db.execute(text("""
+                                SELECT u.id, u.is_admin, u.role
+                                FROM users u
+                                WHERE u.email = :email
+                            """), {"email": email}).fetchone()
+
+                            if result and (result[1] or result[2] in ('admin', 'site_admin')):
+                                return True
+                        finally:
+                            db.close()
+            except Exception as e:
+                logger.warning(f"JWT decode failed: {e}")
+
+        except Exception as e:
+            logger.warning(f"Admin auth check failed: {e}")
+
+    raise HTTPException(
+        status_code=403,
+        detail="Admin access required. Provide X-Admin-Key header or authenticate as admin user."
+    )
 
 
 # Pydantic Models
@@ -1617,11 +1673,12 @@ async def get_vapi_config(
 # ============================================================================
 
 @router.get("/diagnostic/assistant")
-async def diagnose_vapi_assistant(full: bool = False):
+async def diagnose_vapi_assistant(admin: Any = Depends(verify_admin_access), full: bool = False):
     """
     Diagnose VAPI assistant configuration.
     Checks if firstMessage is configured and returns full assistant config.
     Use ?full=true to get complete VAPI response.
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
     import httpx
     import os
@@ -1877,10 +1934,11 @@ async def change_voice_provider(
 
 
 @router.get("/diagnostic/phone-numbers")
-async def diagnose_phone_numbers():
+async def diagnose_phone_numbers(admin: Any = Depends(verify_admin_access)):
     """
     Check VAPI phone number configurations.
     Shows which assistant is linked to each number.
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
     import httpx
     import os
@@ -1932,9 +1990,10 @@ async def diagnose_phone_numbers():
 
 
 @router.get("/diagnostic/account")
-async def diagnose_vapi_account():
+async def diagnose_vapi_account(admin: Any = Depends(verify_admin_access)):
     """
     Check VAPI account status including credits and usage.
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
     import httpx
     import os

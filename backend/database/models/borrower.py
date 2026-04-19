@@ -192,14 +192,14 @@ class BorrowerApplication(Base):
     # GMI (Government Monitoring Information) - ECOA/HMDA demographics
     # Stored separately from decisioning data per ECOA requirements.
     # All fields are nullable (voluntary collection per ECOA).
-    applicant_ethnicity = Column(String, nullable=True)      # HMDA ethnicity code
-    applicant_race = Column(String, nullable=True)            # HMDA race code
-    applicant_sex = Column(String, nullable=True)             # HMDA sex code
-    applicant_age = Column(Integer, nullable=True)            # Applicant age at application
-    co_applicant_ethnicity = Column(String, nullable=True)    # Co-applicant HMDA ethnicity
-    co_applicant_race = Column(String, nullable=True)         # Co-applicant HMDA race
-    co_applicant_sex = Column(String, nullable=True)          # Co-applicant HMDA sex
-    co_applicant_age = Column(Integer, nullable=True)         # Co-applicant age
+    applicant_ethnicity = Column(EncryptedString, nullable=True)    # PII: HMDA ethnicity (ECOA protected)
+    applicant_race = Column(EncryptedString, nullable=True)        # PII: HMDA race (ECOA protected)
+    applicant_sex = Column(EncryptedString, nullable=True)         # PII: HMDA sex (ECOA protected)
+    applicant_age = Column(Integer, nullable=True)                 # Applicant age at application
+    co_applicant_ethnicity = Column(EncryptedString, nullable=True)  # PII: Co-applicant HMDA ethnicity
+    co_applicant_race = Column(EncryptedString, nullable=True)       # PII: Co-applicant HMDA race
+    co_applicant_sex = Column(EncryptedString, nullable=True)        # PII: Co-applicant HMDA sex
+    co_applicant_age = Column(Integer, nullable=True)                # Co-applicant age
     gmi_collection_method = Column(String, nullable=True)     # face_to_face, telephone, mail_internet
     gmi_collected_at = Column(DateTime, nullable=True)        # When GMI data was collected
 

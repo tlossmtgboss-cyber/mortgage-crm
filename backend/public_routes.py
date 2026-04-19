@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta, timezone
-import jwt
 import logging
 import os
 
@@ -18,16 +17,7 @@ try:
 except ImportError:
     mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
 
-# Lazy import for get_db to avoid circular dependency with main.py
-# Other model imports (User, Subscription, etc.) are done inside each function that needs them
-def get_db():
-    """Wrapper for get_db to avoid circular import with main.py."""
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+from db import get_db
 # from integrations.stripe_service import StripeService  # Disabled for now
 from integrations.email_service import EmailService, VerificationTokenService
 
@@ -35,19 +25,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# JWT Configuration (duplicated to avoid circular import)
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    raise ValueError("SECRET_KEY environment variable is required")
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
-
-def create_access_token(data: dict):
-    """Create JWT access token"""
-    to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+# Use canonical token creation from auth module (RS256, jti, blacklist-compatible)
+from auth.tokens import create_access_token
 
 # Initialize services
 # Stripe service disabled for now - using mock
@@ -155,7 +134,9 @@ async def create_demo_user(
         from sqlalchemy import text as _text
 
         demo_email = "demo@perenniaai.com"
-        demo_password = _os.getenv("DEMO_USER_PASSWORD", "demo123!")
+        demo_password = _os.getenv("DEMO_USER_PASSWORD", "")
+        if not demo_password:
+            raise HTTPException(status_code=500, detail="DEMO_USER_PASSWORD env var required")
         now = datetime.now(timezone.utc)
         org_slug = "summit-peak-demo-appstore"
 

@@ -62,7 +62,7 @@ async def classify_document_with_ai(filename: str, file_content: bytes) -> dict:
     Use Claude AI to classify the document type
     """
     try:
-        import anthropic
+        from agents.anthropic_client import get_anthropic_client
 
         # Get file extension
         ext = filename.lower().split('.')[-1] if '.' in filename else ''
@@ -77,7 +77,7 @@ async def classify_document_with_ai(filename: str, file_content: bytes) -> dict:
         if ext in ['txt', 'csv']:
             text_content = file_content.decode('utf-8', errors='ignore')[:2000]
 
-            client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+            client = get_anthropic_client()
 
             prompt = f"""Classify this mortgage document based on its content.
 

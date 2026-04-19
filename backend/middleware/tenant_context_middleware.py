@@ -181,11 +181,20 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                             algorithms=[self.algorithm],
                             options={"verify_aud": False}
                         )
-                        sub = payload.get("sub")
-                        try:
-                            user_id = int(sub)
-                        except (ValueError, TypeError):
-                            pass
+                        jti = payload.get("jti")
+                        if jti:
+                            try:
+                                from auth.tokens import is_token_blacklisted
+                                if is_token_blacklisted(jti):
+                                    payload = None
+                            except ImportError:
+                                pass
+                        if payload:
+                            sub = payload.get("sub")
+                            try:
+                                user_id = int(sub)
+                            except (ValueError, TypeError):
+                                pass
 
                     if self.get_db and self.user_model:
                         db = next(self.get_db())
@@ -206,7 +215,7 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                         finally:
                             db.close()
 
-                except JWTError as e:
+                except InvalidTokenError as e:
                     # Token invalid - route auth will handle the error
                     logger.debug(f"JWT decode failed in middleware: {e}")
                 except Exception as e:

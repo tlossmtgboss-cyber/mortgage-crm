@@ -2988,7 +2988,9 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
             pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
             demo_email = "demo@perenniaai.com"
-            demo_password = os.getenv("DEMO_USER_PASSWORD", "demo123!")
+            demo_password = os.getenv("DEMO_USER_PASSWORD", "")
+            if not demo_password:
+                raise HTTPException(status_code=500, detail="DEMO_USER_PASSWORD env var required")
             org_name = "Summit Peak Mortgage"
             org_slug = "summit-peak-demo-appstore"
             now = datetime.now(timezone.utc)

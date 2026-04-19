@@ -48,9 +48,9 @@ ACTION_RISK_LEVELS = {
 
     # HIGH RISK - Requires confirmation (but will auto-execute for explicit requests)
     "send_email_to_contact": "high",  # External emails
-    "send_sms": "medium",             # Changed to medium for explicit user requests
-    "send_text": "medium",            # Alias for send_sms
-    "make_phone_call": "medium",
+    "send_sms": "high",               # Outbound comms require confirmation
+    "send_text": "high",              # Alias for send_sms — same policy
+    "make_phone_call": "high",        # Outbound calls require confirmation
     "make_call": "medium",            # Alias for click_to_dial
     "click_to_dial": "medium",        # User explicitly requested call
     "call_contact": "medium",         # Alias

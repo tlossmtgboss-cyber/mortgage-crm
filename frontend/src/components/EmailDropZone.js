@@ -4,6 +4,7 @@ import DocumentDropModal from './DocumentDropModal';
 import { emailDropAPI, documentDropAPI } from '../services/api';
 import './EmailDropZone.css';
 import { toast } from '../utils/toast';
+import { sanitizeHTML } from '../utils/sanitize';
 
 /**
  * EmailDropZone - Drag and drop component for email and document files
@@ -380,7 +381,7 @@ function EmailDropZone({ children }) {
 
     if (contentType === 'html') {
       const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = content;
+      tempDiv.innerHTML = sanitizeHTML(content);
       const allText = tempDiv.textContent || tempDiv.innerText;
       textContent = allText;
 

@@ -14,6 +14,7 @@ import logging
 import uuid
 import json
 import os
+import secrets
 
 from database import get_db
 from utils.error_handling import (
@@ -1216,7 +1217,7 @@ async def list_invitations(
     """List subscriber invitations. Requires ADMIN_API_KEY."""
     admin_key = request.headers.get('X-Admin-Key', '')
     expected_key = (os.getenv('ADMIN_API_KEY') or '').strip()
-    if not admin_key or not expected_key or admin_key != expected_key:
+    if not admin_key or not expected_key or not secrets.compare_digest(admin_key, expected_key):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     invites = db.execute(text("""
@@ -1241,7 +1242,7 @@ async def reset_invitation(
     """Reset a subscriber invitation to pending with fresh expiry. Requires ADMIN_API_KEY."""
     admin_key = request.headers.get('X-Admin-Key', '')
     expected_key = (os.getenv('ADMIN_API_KEY') or '').strip()
-    if not admin_key or not expected_key or admin_key != expected_key:
+    if not admin_key or not expected_key or not secrets.compare_digest(admin_key, expected_key):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     try:
@@ -1280,7 +1281,7 @@ async def cleanup_test_account(
     Requires ADMIN_API_KEY header for auth."""
     admin_key = request.headers.get('X-Admin-Key', '')
     expected_key = (os.getenv('ADMIN_API_KEY') or '').strip()
-    if not admin_key or not expected_key or admin_key != expected_key:
+    if not admin_key or not expected_key or not secrets.compare_digest(admin_key, expected_key):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     try:

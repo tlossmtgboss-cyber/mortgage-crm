@@ -7,7 +7,7 @@ import os
 import json
 import logging
 from typing import Dict, Any, List, Optional
-from anthropic import Anthropic
+from agents.anthropic_client import get_anthropic_client
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ class ConciergeService:
     """AI Concierge for conversational mortgage applications"""
 
     def __init__(self):
-        self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self.client = get_anthropic_client()
         self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
 
     def _get_missing_fields(self, stage: str, existing_data: Dict) -> List[str]:

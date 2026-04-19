@@ -22,7 +22,7 @@ Usage:
 """
 
 import logging
-import xml.etree.ElementTree as ET
+import defusedxml.ElementTree as ET
 from datetime import datetime, date, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple

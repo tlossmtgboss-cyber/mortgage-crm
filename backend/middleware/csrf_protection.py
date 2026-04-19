@@ -10,6 +10,7 @@ Usage:
     3. Token is obtained from /api/v1/csrf-token endpoint or cookie
 """
 
+import os
 import secrets
 import logging
 from typing import Optional, Set
@@ -145,10 +146,13 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         if auth_header.startswith("Bearer ") and self._is_jwt_token(auth_header[7:]):
             return await call_next(request)
 
-        # Skip if request uses X-API-Key header (machine-to-machine auth).
-        # X-API-Key is not auto-sent by browsers, so it is inherently CSRF-safe.
-        if request.headers.get("X-API-Key"):
-            return await call_next(request)
+        # Skip if request uses X-API-Key header with a valid key (machine-to-machine auth).
+        # Validate against ADMIN_API_KEY to prevent CSRF bypass via empty/arbitrary header.
+        api_key = request.headers.get("X-API-Key")
+        if api_key:
+            expected_key = os.getenv("ADMIN_API_KEY", "")
+            if expected_key and secrets.compare_digest(api_key, expected_key):
+                return await call_next(request)
 
         # Validate CSRF token
         if not self._validate_token(request):

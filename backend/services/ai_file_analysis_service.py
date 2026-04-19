@@ -18,7 +18,6 @@ from datetime import datetime, date, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-import anthropic
 import logging
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -123,9 +122,8 @@ class AIFileAnalysisService:
 
     def __init__(self, db: Session, use_underwriting_engine: bool = True):
         self.db = db
-        self.client = anthropic.Anthropic(
-            api_key=os.getenv("ANTHROPIC_API_KEY")
-        )
+        from agents.anthropic_client import get_anthropic_client
+        self.client = get_anthropic_client()
         self.use_underwriting_engine = use_underwriting_engine and _underwriting_engine_available
 
         # Initialize underwriting engine components if available

@@ -3,14 +3,19 @@
 Fix MUM clients schema to match the model expectations
 """
 
+import os
 import requests
 
 API_BASE = "https://app.perenniaai.com"
 
+_password = os.getenv("DEMO_USER_PASSWORD")
+if not _password:
+    raise ValueError("DEMO_USER_PASSWORD env var required")
+
 # Login
 response = requests.post(
     f"{API_BASE}/token",
-    data={"username": "admin@perenniaai.com", "password": "demo123"},
+    data={"username": "admin@perenniaai.com", "password": _password},
     headers={"Content-Type": "application/x-www-form-urlencoded"}
 )
 

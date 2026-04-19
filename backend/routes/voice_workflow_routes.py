@@ -179,13 +179,22 @@ async def voice_workflow_websocket(
         # First try JWT token
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
-            email = payload.get("sub")
-            if email:
-                result = db.execute(text("""
-                    SELECT id FROM users WHERE email = :email
-                """), {"email": email}).fetchone()
-                if result:
-                    user_id = result[0]
+            jti = payload.get("jti")
+            if jti:
+                try:
+                    from auth.tokens import is_token_blacklisted
+                    if is_token_blacklisted(jti):
+                        payload = None  # Treat as invalid
+                except ImportError:
+                    pass
+            if payload:
+                email = payload.get("sub")
+                if email:
+                    result = db.execute(text("""
+                        SELECT id FROM users WHERE email = :email
+                    """), {"email": email}).fetchone()
+                    if result:
+                        user_id = result[0]
         except jwt.PyJWTError:
             pass  # Not a valid JWT, try session token
 

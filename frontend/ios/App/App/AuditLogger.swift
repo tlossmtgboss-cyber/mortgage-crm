@@ -315,7 +315,7 @@ final class AuditLogger: @unchecked Sendable {
             let payload = try JSONEncoder().encode(["entries": unsyncedEntries])
             request.httpBody = payload
 
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (_, response) = try await CertificatePinning.pinnedSession.data(for: request)
 
             if let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) {
                 // Mark as synced

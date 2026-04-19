@@ -10,6 +10,7 @@ import logging
 import asyncio
 import os
 from datetime import datetime, timezone
+from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +68,7 @@ async def resolve_host_status(token: Optional[str], room_code: str) -> Tuple[boo
     except ExpiredSignatureError:
         logger.info(f"Expired token for room {room_code}")
         return False, None
-    except JWTError as e:
+    except InvalidTokenError as e:
         logger.warning(f"JWT error for room {room_code}: {e}")
         return False, None
     except Exception as e:

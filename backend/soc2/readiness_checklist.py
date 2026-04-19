@@ -170,7 +170,7 @@ def check_cc2_jwt_token_management() -> CheckResult:
     """CC6 — RS256 JWT token management."""
     cid = "CC-2"
     path = "auth/tokens.py"
-    if _contains(path, "RS256", "jwt", "JWTError"):
+    if _contains(path, "RS256", "jwt", "InvalidTokenError"):
         return CheckResult(
             control_id=cid,
             title="Access Control — JWT Token Management (RS256)",
@@ -185,7 +185,7 @@ def check_cc2_jwt_token_management() -> CheckResult:
             title="Access Control — JWT Token Management (RS256)",
             criterion=Criterion.CC,
             status=Status.PARTIAL,
-            detail="auth/tokens.py exists but RS256 or JWTError not found.",
+            detail="auth/tokens.py exists but RS256 or InvalidTokenError not found.",
             evidence_paths=[path],
             remediation="Migrate token signing to RS256 asymmetric keys.",
         )

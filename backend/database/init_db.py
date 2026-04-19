@@ -1827,9 +1827,12 @@ def create_sample_data(db: Session):
         db.commit()
 
         # Create demo user
+        _demo_pw = os.getenv("DEMO_USER_PASSWORD", "")
+        if not _demo_pw:
+            raise ValueError("DEMO_USER_PASSWORD env var required")
         demo_user = User(
             email="admin@perenniaai.com",
-            hashed_password=get_password_hash(os.getenv("DEMO_USER_PASSWORD", "")),
+            hashed_password=get_password_hash(_demo_pw),
             full_name="Demo User",
             role="loan_officer",
             branch_id=branch.id

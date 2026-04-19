@@ -70,7 +70,7 @@ struct PerenniaAPIClient {
 
     /// Execute a request and return the decoded JSON (dictionary or array).
     static func execute(_ request: URLRequest) async throws -> Any {
-        let (data, response) = try await URLSession.shared.data(for: request)
+        let (data, response) = try await CertificatePinning.pinnedSession.data(for: request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
             throw PerenniaIntentError.networkError("Invalid response")

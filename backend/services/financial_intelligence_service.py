@@ -29,7 +29,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
-import anthropic
+from agents.anthropic_client import get_anthropic_client
 
 from models.financial_intelligence import (
     LoanSale, HedgePosition, SecondaryMetrics, MSRPortfolio,
@@ -47,9 +47,7 @@ class FinancialIntelligenceService:
         self.db = db
         self.organization_id = organization_id
         self.profitability_service = ProfitabilityService(db, organization_id)
-        self.client = anthropic.Anthropic(
-            api_key=os.getenv("ANTHROPIC_API_KEY")
-        )
+        self.client = get_anthropic_client()
 
     # ============ Question 1: Gain-on-Sale ============
 

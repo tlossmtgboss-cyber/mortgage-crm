@@ -172,7 +172,7 @@ def extract_claims_from_id_token(id_token: str) -> Optional[dict]:
 
     NOTE: This performs base64 decoding only (no signature verification).
     For production, you should verify the signature against the IdP's JWKS.
-    Consider using PyJWT or python-jose with JWKS key fetching.
+    Consider using PyJWT with JWKS key fetching.
 
     Args:
         id_token: The JWT ID token string.

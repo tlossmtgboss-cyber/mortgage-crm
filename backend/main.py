@@ -374,12 +374,15 @@ from schemas.core import (
 # FASTAPI APP
 # ============================================================================
 
+_IS_PROD = os.getenv("ENVIRONMENT", "").lower() == "production"
+
 app = FastAPI(
     title="Agentic AI Mortgage CRM",
     description="Complete mortgage CRM with AI automation - All features implemented",
     version="4.0.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    docs_url=None if _IS_PROD else "/docs",
+    redoc_url=None if _IS_PROD else "/redoc",
+    openapi_url=None if _IS_PROD else "/openapi.json",
     redirect_slashes=False  # Prevent HTTP redirects that cause mixed content errors
 )
 
@@ -431,7 +434,7 @@ app.add_middleware(ImpersonationEnforcementMiddleware, db_session_factory=Sessio
 try:
     from middleware.csrf_protection import CSRFProtectionMiddleware
     # Enable CSRF in production, disable in development for easier testing
-    csrf_enabled = ENVIRONMENT == "production"
+    csrf_enabled = ENVIRONMENT not in ("development", "test")
     app.add_middleware(
         CSRFProtectionMiddleware,
         enabled=csrf_enabled,
@@ -861,6 +864,14 @@ async def get_current_user(
                 email: str = payload.get("sub")
                 if email is None:
                     raise credentials_exception
+                jti = payload.get("jti")
+                if jti:
+                    try:
+                        from auth.tokens import is_token_blacklisted
+                        if is_token_blacklisted(jti):
+                            raise credentials_exception
+                    except ImportError:
+                        pass
             except InvalidTokenError:
                 raise credentials_exception
 

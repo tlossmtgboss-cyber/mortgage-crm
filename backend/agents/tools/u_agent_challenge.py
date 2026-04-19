@@ -52,7 +52,7 @@ class Config:
     CHAT_ENDPOINT = "/api/v1/ai/langgraph-chat"
     AUTH_ENDPOINT = "/token"
     API_USERNAME = os.getenv("PERENNIA_API_USER", "demo@example.com")
-    API_PASSWORD = os.getenv("PERENNIA_API_PASS", "demo123")
+    API_PASSWORD = os.getenv("PERENNIA_API_PASS", "")
     
     # Judge model for scoring
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -1099,6 +1099,8 @@ class AgentAPIClient:
     
     async def _authenticate(self):
         """Get auth token from the API."""
+        if not self.config.API_PASSWORD:
+            raise ValueError("PERENNIA_API_PASS env var required")
         try:
             response = await self.client.post(
                 f"{self.base_url}{self.config.AUTH_ENDPOINT}",

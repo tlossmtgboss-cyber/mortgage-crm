@@ -397,7 +397,7 @@ final class SpotlightIndexer {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 30
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        let task = CertificatePinning.pinnedSession.dataTask(with: request) { data, response, error in
             guard let data = data, error == nil else {
                 if let error = error {
                     NSLog("[SpotlightIndexer] API fetch error for mobile/tasks: %@", error.localizedDescription)
@@ -461,7 +461,7 @@ final class SpotlightIndexer {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 30
 
-        let task = URLSession.shared.dataTask(with: request) { data, response, error in
+        let task = CertificatePinning.pinnedSession.dataTask(with: request) { data, response, error in
             guard let data = data, error == nil else {
                 if let error = error {
                     NSLog("[SpotlightIndexer] API fetch error for %@: %@", path, error.localizedDescription)

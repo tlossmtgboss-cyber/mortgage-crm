@@ -94,7 +94,7 @@ async def _route_inbound_to_livekit(
         logger.error("[AriaInbound] LiveKit credentials not set")
         return
 
-    logger.warning(f"[AriaInbound] Routing {from_number} to Aria")
+    logger.warning("[AriaInbound] Routing ...%s to Aria", from_number[-4:] if from_number else "?")
 
     headers = {
         "Authorization": f"Bearer {telnyx_key}",
@@ -174,9 +174,9 @@ async def _route_inbound_to_livekit(
                 "organization_id": lead_row[6],
                 "lo_name": f"{lead_row[7] or ''} {lead_row[8] or ''}".strip(),
             }
-            logger.warning(f"[AriaInbound] Known caller: {caller_info['first_name']} {caller_info['last_name']} (lead {caller_info['lead_id']})")
+            logger.warning(f"[AriaInbound] Known caller: lead_id={caller_info['lead_id']}")
         else:
-            logger.warning(f"[AriaInbound] New caller: {from_number} — no CRM record")
+            logger.warning("[AriaInbound] New caller: ...%s — no CRM record", from_number[-4:] if from_number else "?")
     except Exception as e:
         logger.error(f"[AriaInbound] CRM lookup failed: {e}")
 
@@ -229,8 +229,9 @@ async def _route_inbound_to_livekit(
         )
         sip_result = await lk.sip.create_sip_participant(sip_req)
         logger.warning(
-            f"[AriaInbound] LiveKit calling {from_number}, "
-            f"room={room_name} sip_call={sip_result.sip_call_id}"
+            "[AriaInbound] LiveKit calling ...%s, room=%s sip_call=%s",
+            from_number[-4:] if from_number else "?",
+            room_name, sip_result.sip_call_id,
         )
         await lk.aclose()
 
@@ -278,9 +279,10 @@ async def handle_telnyx_webhook(
     _raw_ccid = _raw_payload.get("call_control_id", "n/a")
     _raw_hangup = _raw_payload.get("hangup_cause", "")
     _raw_sip = _raw_payload.get("sip_hangup_cause", "")
+    _mask = lambda n: f"...{n[-4:]}" if isinstance(n, str) and len(n) > 4 else n
     logger.warning(
         f"[WEBHOOK-ENTRY] type={_raw_event_type} dir={_raw_direction} "
-        f"from={_raw_from} to={_raw_to} ccid={str(_raw_ccid)[:25]}"
+        f"from={_mask(_raw_from)} to={_mask(_raw_to)} ccid={str(_raw_ccid)[:25]}"
         + (f" hangup={_raw_hangup} sip={_raw_sip}" if _raw_hangup else "")
     )
 
@@ -682,7 +684,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     normalized_from = _normalize_phone(from_number)
     normalized_to = _normalize_phone(to_number)
 
-    logger.info(f"Inbound SMS from {from_number}: {message_body[:50]}...")
+    logger.info("Inbound SMS from ...%s: %s...", from_number[-4:] if from_number else "?", message_body[:50])
 
     # ======================================================================
     # Voice Workflow Scheduling Intercept

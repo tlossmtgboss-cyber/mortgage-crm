@@ -343,6 +343,8 @@ def create_orchestrator(
                 updates["verification_report"] = verification_summary
 
                 # Flag if high-confidence hallucinations detected
+                node_intent = state.get("intent_str", "")
+                COMPLIANCE_CRITICAL_INTENTS = {"compliance", "rates", "sla"}
                 if report.contradicted_claims > 0 and report.hallucination_rate > 0.3:
                     updates["verification_passed"] = False
                     logger.warning(
@@ -352,14 +354,36 @@ def create_orchestrator(
                 else:
                     updates["verification_passed"] = True
 
+                # Block response delivery for compliance-critical intents
+                # with low faithfulness scores
+                if node_intent in COMPLIANCE_CRITICAL_INTENTS and report.faithfulness_score < 0.5:
+                    updates["response"] = (
+                        "I'm not confident enough in this answer to share it "
+                        "— it involves compliance-sensitive information. "
+                        "Please consult your compliance team or check the "
+                        "guidelines directly."
+                    )
+                    updates["verification_passed"] = False
+                    updates["blocked_by_verification"] = True
+                    logger.warning(
+                        f"[VERIFY] Response BLOCKED for compliance intent '{node_intent}' "
+                        f"— faithfulness={report.faithfulness_score:.0%}"
+                    )
+
                 logger.info(
                     f"[VERIFY] Hallucination check: faithfulness={report.faithfulness_score:.0%}, "
                     f"claims={report.total_claims}, contradicted={report.contradicted_claims}, "
                     f"time={report.analysis_time_ms:.0f}ms"
                 )
             except Exception as e:
-                logger.warning(f"[VERIFY] Hallucination verification failed (graceful): {e}")
-                updates["verification_passed"] = True  # Don't block on failure
+                node_intent = state.get("intent_str", "")
+                COMPLIANCE_CRITICAL_INTENTS = {"compliance", "rates", "sla"}
+                if node_intent in COMPLIANCE_CRITICAL_INTENTS:
+                    updates["verification_passed"] = False
+                    logger.warning(f"[VERIFY] Hallucination verification failed for compliance intent '{node_intent}': {e}")
+                else:
+                    updates["verification_passed"] = True  # Don't block on failure for non-compliance intents
+                    logger.warning(f"[VERIFY] Hallucination verification failed (graceful): {e}")
 
         # --- Quality Analysis ---
         try:
@@ -880,9 +904,23 @@ async def run_orchestrator(
                         verification = await asyncio.wait_for(
                             _run_verification_task(), timeout=10.0
                         )
-                        if verification and hasattr(verification, 'faithfulness_score') and verification.faithfulness_score < 0.7:
-                            response["response"] += "\n\nThis response may need human verification for accuracy."
-                            logger.warning(f"[HALLUCINATION] Low faithfulness ({verification.faithfulness_score:.2%}) for compliance intent '{intent}'")
+                        if verification and hasattr(verification, 'faithfulness_score'):
+                            if verification.faithfulness_score < 0.5:
+                                # Very low faithfulness — block the response entirely
+                                response["response"] = (
+                                    "I'm not confident enough in this answer to share it "
+                                    "— it involves compliance-sensitive information. "
+                                    "Please consult your compliance team or check the "
+                                    "guidelines directly."
+                                )
+                                response["blocked_by_verification"] = True
+                                logger.warning(
+                                    f"[HALLUCINATION] Response BLOCKED — faithfulness "
+                                    f"({verification.faithfulness_score:.2%}) for compliance intent '{intent}'"
+                                )
+                            elif verification.faithfulness_score < 0.7:
+                                response["response"] += "\n\n⚠️ This response may need human verification for accuracy."
+                                logger.warning(f"[HALLUCINATION] Low faithfulness ({verification.faithfulness_score:.2%}) for compliance intent '{intent}'")
                     except asyncio.TimeoutError:
                         logger.warning("[HALLUCINATION] Blocking hallucination check timed out after 10s")
                     except Exception as verify_err:

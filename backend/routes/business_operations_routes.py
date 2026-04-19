@@ -66,11 +66,21 @@ def get_organization_id(request: Request = None) -> int:
                 token = auth_header[7:]
                 try:
                     payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"], options={"verify_aud": False})
+                    jti = payload.get("jti")
+                    if jti:
+                        try:
+                            from auth.tokens import is_token_blacklisted
+                            if is_token_blacklisted(jti):
+                                raise HTTPException(status_code=401, detail="Token has been revoked")
+                        except ImportError:
+                            pass
                     if "org_id" in payload:
                         return payload["org_id"]
                     if "company_id" in payload:
                         return payload["company_id"]
-                except JWTError:
+                except HTTPException:
+                    raise
+                except Exception:
                     raise HTTPException(status_code=401, detail="Invalid authentication token")
     raise HTTPException(status_code=401, detail="Authentication required")
 

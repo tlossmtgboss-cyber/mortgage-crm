@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+import hmac
 import os
 
 from database import get_db
@@ -23,7 +24,7 @@ INTERNAL_API_KEY = os.environ.get("INTERNAL_API_KEY", "")
 
 def _verify_internal_key(request: Request):
     key = request.headers.get("X-Internal-API-Key", "")
-    if not INTERNAL_API_KEY or key != INTERNAL_API_KEY:
+    if not INTERNAL_API_KEY or not hmac.compare_digest(key, INTERNAL_API_KEY):
         raise HTTPException(status_code=403, detail="Invalid internal API key")
 
 

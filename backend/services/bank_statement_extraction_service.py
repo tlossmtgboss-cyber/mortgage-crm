@@ -12,7 +12,7 @@ from datetime import datetime, date
 from decimal import Decimal
 from typing import Optional, Dict, List, Any, Tuple
 
-from anthropic import Anthropic
+from agents.anthropic_client import get_anthropic_client
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class BankStatementExtractionService:
     """Service for extracting data from bank statements using AI."""
 
     def __init__(self):
-        self.client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+        self.client = get_anthropic_client()
         self.model = "claude-sonnet-4-20250514"
 
     async def extract_statement_data(

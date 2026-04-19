@@ -896,7 +896,10 @@ def create_team_members(db):
 
     created_count = 0
     import os as _os
-    default_password = pwd_context.hash(_os.getenv("DEMO_USER_PASSWORD", "demo123"))
+    _demo_pw = _os.getenv("DEMO_USER_PASSWORD", "")
+    if not _demo_pw:
+        raise ValueError("DEMO_USER_PASSWORD env var required")
+    default_password = pwd_context.hash(_demo_pw)
 
     for category, members in TEAM_MEMBERS.items():
         for member in members:
