@@ -293,31 +293,8 @@ async def get_rate_monitor_alerts(
     return {"alerts": alerts, "count": count}
 
 
-@router.get("/api/v1/rate-alerts")
-async def get_rate_alerts_alias(
-    limit: int = Query(10, ge=1, le=100),
-    status: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Alias endpoint used by iOS BackgroundSyncManager.
-
-    Returns the same data as ``/api/v1/rate-monitor/alerts`` wrapped in
-    ``{"alerts": [...], "count": N}``.  The iOS decoder tries a plain
-    array first, then falls back to the ``alerts`` key.
-    """
-    rows = _fetch_alerts(db, current_user, limit, status)
-
-    alerts = []
-    for row in rows:
-        try:
-            alert = _row_to_alert(row)
-            if alert is not None:
-                alerts.append(alert)
-        except Exception as e:
-            logger.warning("Skipping malformed rate alert row: %s", e)
-
-    return {"alerts": alerts, "count": len(alerts)}
+# NOTE: GET /api/v1/rate-alerts is served by rate_monitor_routes.py (plain array
+# format expected by iOS BackgroundSyncManager). Do NOT duplicate it here.
 
 
 # ---------------------------------------------------------------------------

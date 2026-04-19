@@ -22,7 +22,7 @@ export default defineConfig({
   // Build output directory (matches CRA's default)
   build: {
     outDir: 'build',
-    sourcemap: true,
+    sourcemap: false,
     // Rollup options for chunking
     rollupOptions: {
       // Native-only Capacitor plugins — not available in web builds

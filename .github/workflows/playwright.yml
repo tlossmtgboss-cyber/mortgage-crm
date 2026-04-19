@@ -20,7 +20,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
 
@@ -33,12 +33,12 @@ jobs:
       - name: Run API Tests
         run: npx playwright test tests/api.spec.js --project=chromium
         env:
-          API_BASE_URL: https://app.perenniaai.com
+          API_BASE_URL: ${{ vars.STAGING_API_URL || 'http://localhost:8000' }}
 
       - name: Run E2E Tests
         run: npx playwright test --project=chromium --ignore-pattern="**/api.spec.js"
         env:
-          TEST_BASE_URL: https://frontend-tim-loss-projects.vercel.app
+          TEST_BASE_URL: ${{ vars.STAGING_FRONTEND_URL || 'http://localhost:5173' }}
 
       - uses: actions/upload-artifact@v4
         if: always()

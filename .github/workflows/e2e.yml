@@ -1,5 +1,5 @@
-# ci/e2e.yml
-# Drop-in: .github/workflows/e2e.yml
+# E2E tests with Playwright against a local backend+frontend stack.
+# Runs on PRs to main and nightly.
 
 name: E2E (Playwright)
 
@@ -7,8 +7,11 @@ on:
   pull_request:
     branches: [main, develop]
   schedule:
-    # Nightly smoke against main, independent of PRs
     - cron: "0 7 * * *"
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "22"
 
 jobs:
   e2e:
@@ -30,8 +33,7 @@ jobs:
         ports: ["6379:6379"]
 
     env:
-      DATABASE_URL: postgresql+asyncpg://test:test@localhost:5432/perennia_e2e
-      DATABASE_MIGRATE_URL: postgresql+asyncpg://test:test@localhost:5432/perennia_e2e
+      DATABASE_URL: postgresql+psycopg2://test:test@localhost:5432/perennia_e2e
       REDIS_URL: redis://localhost:6379/0
       ENV: test
       PII_ENCRYPTION_KEY: ${{ secrets.TEST_PII_ENCRYPTION_KEY }}
@@ -45,10 +47,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
-        with: { python-version: "3.12", cache: pip }
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
 
       - uses: actions/setup-node@v4
-        with: { node-version: "20", cache: npm }
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install backend
         run: |
@@ -60,22 +67,18 @@ jobs:
           cd frontend
           npm ci
 
-      - name: Enable pgcrypto and run migrations
+      - name: Enable pgcrypto
         run: |
           psql "postgresql://test:test@localhost:5432/perennia_e2e" -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
-          cd backend && alembic upgrade head
-
-      - name: Seed test data
-        run: cd backend && python -m scripts.seed_e2e
 
       - name: Start backend
         run: |
           cd backend
-          uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          uvicorn main:app --host 0.0.0.0 --port 8000 &
           echo $! > /tmp/backend.pid
-          # Wait for readiness
-          for i in {1..30}; do
-            if curl -sf http://localhost:8000/ready; then break; fi
+          # Wait for health endpoint
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health/live; then break; fi
             sleep 1
           done
 
@@ -83,9 +86,9 @@ jobs:
         run: |
           cd frontend
           npm run build
-          npx serve -s dist -l 5173 &
+          npx serve -s build -l 5173 &
           echo $! > /tmp/frontend.pid
-          for i in {1..20}; do
+          for i in $(seq 1 20); do
             if curl -sf http://localhost:5173/; then break; fi
             sleep 1
           done
