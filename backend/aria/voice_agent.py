@@ -72,25 +72,41 @@ class AriaVoiceAgent(Agent):
     """Aria — Perennia AI's real-time voice assistant."""
 
     def __init__(self, mode: str = "lo_assistant", context: dict = None) -> None:
-        prompt = get_prompt(mode, context or {})
+        ctx = context or {}
+        prompt = get_prompt(mode, ctx)
         super().__init__(instructions=prompt)
         self._mode = mode
         self._session_data: Dict[str, Any] = {
             "mode": mode,
             "tools_executed": [],
             "started_at": datetime.now(timezone.utc).isoformat(),
+            **ctx,
         }
 
     async def on_enter(self) -> None:
+        if self._mode == "inbound_receptionist":
+            caller_name = self._session_data.get("caller_name", "")
+            is_existing = self._session_data.get("is_existing_client", False)
+            if is_existing and caller_name:
+                first = caller_name.split()[0]
+                greeting = (
+                    f"Greet the caller by name — you already know who they are. "
+                    f"Say something like 'Hi {first}, thanks for calling Perennia, "
+                    f"this is Aria. How can I help you today?'"
+                )
+            else:
+                greeting = (
+                    "Greet the caller warmly. "
+                    "Say 'Thanks for calling Perennia, this is Aria. "
+                    "How can I help you today?'"
+                )
+            await self.session.generate_reply(instructions=greeting)
+            return
+
         greetings = {
             "lo_assistant": (
                 "Greet the loan officer briefly. "
                 "Say something like 'Hey, Aria here. What can I help you with?'"
-            ),
-            "inbound_receptionist": (
-                "Greet the caller warmly. "
-                "Say 'Thanks for calling Perennia, this is Aria. "
-                "How can I help you today?'"
             ),
             "outbound_followup": (
                 "Introduce yourself briefly using the context in your instructions."
@@ -347,6 +363,69 @@ class AriaVoiceAgent(Agent):
         return json.dumps(lead, default=str)
 
     @function_tool()
+    async def create_lead(
+        self,
+        context: RunContext,
+        first_name: str,
+        last_name: str,
+        email: str = "",
+        loan_purpose: str = "",
+        property_type: str = "",
+        timeline: str = "",
+        notes: str = "",
+    ):
+        """Create a new lead profile in the CRM for a first-time caller.
+        Use this when the caller is new and you've gathered their basic info during the conversation.
+        You already have their phone number — never ask for it."""
+        from_number = self._session_data.get("from_number", "")
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "create_lead", "params": {
+                "first_name": first_name,
+                "last_name": last_name,
+                "phone": from_number,
+                "email": email,
+                "source": "inbound_call",
+                "loan_purpose": loan_purpose,
+                "property_type": property_type,
+                "timeline": timeline,
+                "notes": f"Created from inbound call. {notes}".strip(),
+            }},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "create_lead",
+            "name": f"{first_name} {last_name}",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def update_lead(
+        self,
+        context: RunContext,
+        lead_id: int,
+        notes: str = "",
+        email: str = "",
+        loan_purpose: str = "",
+        property_type: str = "",
+    ):
+        """Update an existing lead's profile with new information gathered during the call."""
+        params: Dict[str, Any] = {"lead_id": lead_id}
+        if notes:
+            params["notes"] = notes
+        if email:
+            params["email"] = email
+        if loan_purpose:
+            params["loan_purpose"] = loan_purpose
+        if property_type:
+            params["property_type"] = property_type
+        result = await call_backend_tool_safe(
+            "/internal/aria/tool/execute",
+            {"tool_name": "update_lead", "params": params},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
     async def warm_transfer_to_lo(self, context: RunContext, reason: str, summary: str):
         """Transfer the caller to their assigned loan officer with a verbal brief.
         Use when the caller needs to speak with their LO directly.
@@ -494,13 +573,22 @@ async def aria_voice_session(ctx: agents.JobContext):
 
     if trigger == "inbound_call":
         mode = "inbound_receptionist"
+        caller_name = metadata.get("caller_name", "")
+        is_existing = metadata.get("is_existing_client", False)
         context = {
-            "first_name": metadata.get("borrower_name", ""),
+            "caller_name": caller_name,
+            "first_name": caller_name.split()[0] if caller_name else "",
+            "from_number": metadata.get("from_number", ""),
+            "lead_id": metadata.get("lead_id"),
             "lo_name": metadata.get("lo_name", ""),
+            "is_existing_client": is_existing,
+            "stage": metadata.get("stage", ""),
+            "organization_id": metadata.get("organization_id"),
         }
         logger.info(
             f"[AriaVoice] Inbound receptionist mode: "
-            f"from={metadata.get('from_number', 'unknown')}"
+            f"from={metadata.get('from_number', 'unknown')} "
+            f"caller={caller_name or 'NEW'} existing={is_existing}"
         )
     elif trigger == "outbound_call":
         mode = "outbound_followup"

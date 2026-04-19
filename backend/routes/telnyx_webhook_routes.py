@@ -127,7 +127,59 @@ async def _route_inbound_to_livekit(
     except Exception as e:
         logger.warning(f"[AriaInbound] Speak failed: {e}")
 
-    # Step 3: Create LiveKit room and dispatch agent BEFORE dialing caller
+    # Step 3: Look up caller in CRM before creating room
+    caller_info = {"is_existing_client": False}
+    try:
+        normalized = from_number.lstrip("+")
+        if len(normalized) == 10:
+            normalized = f"+1{normalized}"
+        elif not from_number.startswith("+"):
+            normalized = f"+{normalized}"
+        else:
+            normalized = from_number
+
+        lead_row = db.execute(sa_text("""
+            SELECT l.id, l.first_name, l.last_name, l.email, l.stage,
+                   l.assigned_to, l.organization_id,
+                   u.first_name AS lo_first, u.last_name AS lo_last
+            FROM leads l
+            LEFT JOIN users u ON u.id = l.assigned_to
+            WHERE l.phone = :phone
+            ORDER BY l.updated_at DESC NULLS LAST
+            LIMIT 1
+        """), {"phone": normalized}).fetchone()
+
+        if not lead_row:
+            lead_row = db.execute(sa_text("""
+                SELECT l.id, l.first_name, l.last_name, l.email, l.stage,
+                       l.assigned_to, l.organization_id,
+                       u.first_name AS lo_first, u.last_name AS lo_last
+                FROM leads l
+                LEFT JOIN users u ON u.id = l.assigned_to
+                WHERE l.phone = :phone
+                ORDER BY l.updated_at DESC NULLS LAST
+                LIMIT 1
+            """), {"phone": from_number}).fetchone()
+
+        if lead_row:
+            caller_info = {
+                "is_existing_client": True,
+                "lead_id": lead_row[0],
+                "first_name": lead_row[1] or "",
+                "last_name": lead_row[2] or "",
+                "email": lead_row[3] or "",
+                "stage": lead_row[4] or "",
+                "assigned_to": lead_row[5],
+                "organization_id": lead_row[6],
+                "lo_name": f"{lead_row[7] or ''} {lead_row[8] or ''}".strip(),
+            }
+            logger.warning(f"[AriaInbound] Known caller: {caller_info['first_name']} {caller_info['last_name']} (lead {caller_info['lead_id']})")
+        else:
+            logger.warning(f"[AriaInbound] New caller: {from_number} — no CRM record")
+    except Exception as e:
+        logger.error(f"[AriaInbound] CRM lookup failed: {e}")
+
+    # Step 4: Create LiveKit room and dispatch agent BEFORE dialing caller
     import hashlib, time as _time
     room_suffix = hashlib.md5(f"{from_number}-{_time.time()}".encode()).hexdigest()[:8]
     room_name = f"aria-inbound-{room_suffix}"
@@ -139,6 +191,12 @@ async def _route_inbound_to_livekit(
             "trigger": "inbound_call",
             "from_number": from_number,
             "to_number": to_number,
+            "caller_name": f"{caller_info.get('first_name', '')} {caller_info.get('last_name', '')}".strip(),
+            "lead_id": caller_info.get("lead_id"),
+            "lo_name": caller_info.get("lo_name", ""),
+            "is_existing_client": caller_info.get("is_existing_client", False),
+            "stage": caller_info.get("stage", ""),
+            "organization_id": caller_info.get("organization_id"),
         })
 
         # 3a: Create room
