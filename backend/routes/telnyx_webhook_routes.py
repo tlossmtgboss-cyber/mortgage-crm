@@ -1912,6 +1912,15 @@ async def send_appointment_invite(
     if not emails or not appt_date or not appt_time:
         raise HTTPException(status_code=400, detail="emails, date, and time are required")
 
+    if len(emails) > 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 email recipients allowed")
+
+    import re as _re
+    _email_re = _re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    for addr in emails:
+        if not isinstance(addr, str) or not _email_re.match(addr):
+            raise HTTPException(status_code=400, detail=f"Invalid email address: {addr}")
+
     try:
         start_dt = datetime.strptime(f"{appt_date} {appt_time}", "%Y-%m-%d %H:%M").replace(
             tzinfo=timezone.utc
