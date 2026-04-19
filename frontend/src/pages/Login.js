@@ -66,10 +66,10 @@ function Login() {
     // Check for a pending deep link queued before auth (e.g. push notification tap)
     const pendingDeepLink = consumePendingDeepLink();
     if (pendingDeepLink) return pendingDeepLink;
-    // Native app and mobile browsers go straight to Aria voice assistant
-    if (Capacitor.isNativePlatform()) return '/aria-voice';
+    // Native app and mobile browsers go to dashboard (Aria is accessible via FAB)
+    if (Capacitor.isNativePlatform()) return '/dashboard';
     const isMobileBrowser = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (isMobileBrowser) return '/aria-voice';
+    if (isMobileBrowser) return '/dashboard';
     const permissionRole = data?.user?.permission_role || 'sales';
     const legacyRole = data?.user?.role || null;
     const effectiveRole = getUserEffectiveRole(permissionRole, legacyRole);
@@ -133,12 +133,12 @@ function Login() {
       }
     }
     setShowEnableBiometric(false);
-    navigate(pendingRoute || '/aria-voice');
+    navigate(pendingRoute || '/dashboard');
   };
 
   const handleSkipBiometric = () => {
     setShowEnableBiometric(false);
-    navigate(pendingRoute || '/aria-voice');
+    navigate(pendingRoute || '/dashboard');
   };
 
   // Show biometric enable prompt

@@ -57,7 +57,7 @@ export function OfflineIndicator() {
       <span className="offline-indicator__message">
         {isNative
           ? "You're offline \u2014 changes will sync when reconnected"
-          : "You're offline \u2014 some features may be limited"}
+          : "You're offline \u2014 showing cached data"}
       </span>
       <button
         className="offline-indicator__dismiss"

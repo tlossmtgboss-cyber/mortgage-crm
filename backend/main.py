@@ -1703,6 +1703,16 @@ except Exception as e:
     logger.warning(f"Mobile tasks routes not loaded: {e}")
 
 # ============================================================================
+# TASK SNOOZE ROUTES — PATCH /api/v1/tasks/{task_id}/snooze for iOS push actions
+# ============================================================================
+try:
+    from routes.task_snooze_routes import router as task_snooze_router
+    app.include_router(task_snooze_router, tags=["Tasks"])
+    logger.info("Task snooze routes loaded")
+except Exception as e:
+    logger.warning(f"Task snooze routes not loaded: {e}")
+
+# ============================================================================
 # MOBILE ANALYTICS ROUTES — Log-sink for frontend mobileAnalytics.js
 # ============================================================================
 try:
@@ -2808,6 +2818,14 @@ try:
     logger.info("Rate monitor iOS routes loaded")
 except Exception as e:
     logger.warning(f"Rate monitor iOS routes skipped: {e}")
+
+# --- Rate Alerts (unified /rate-monitor/alerts + /rate-alerts with empty-state handling) ---
+try:
+    from routes.rate_alerts_routes import router as rate_alerts_router
+    app.include_router(rate_alerts_router, tags=["Rate Monitor"])
+    logger.info("Rate alerts routes loaded")
+except Exception as e:
+    logger.warning(f"Rate alerts routes skipped: {e}")
 
 # ============================================================================
 # STARTUP EVENT — Initialize scheduler for workflow task generation

@@ -3,9 +3,9 @@
 name: Test Suite
 on:
   push:
-    branches: [main, develop]
+    branches: [main]
   pull_request:
-    branches: [main, develop]
+    branches: [main]
 env:
   PYTHON_VERSION: '3.11'
   NODE_VERSION: '22'
@@ -193,13 +193,6 @@ jobs:
           TESTING: 'true'
         run: |
           pytest tests/ -v -m "integration" --timeout=180 --tb=short
-      - name: Upload coverage report
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./backend/coverage.xml
-          flags: backend
-          name: backend-coverage
-          fail_ci_if_error: false
   ai-harness-tests:
     name: AI Harness Tests
     runs-on: ubuntu-latest
@@ -299,31 +292,8 @@ jobs:
       - name: Run ESLint
         working-directory: ./frontend
         run: npm run lint --if-present
-  security-scan:
-    name: Security Scan
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - name: Install security tools
-        run: pip install bandit safety
-      - name: Run Bandit security scan
-        working-directory: ./backend
-        run: |
-          bandit -r . -x ./tests -ll -f json -o bandit-report.json
-      - name: Check for known vulnerabilities
-        working-directory: ./backend
-        run: safety check -r requirements.txt --full-report || true
-      - name: Upload security report
-        uses: actions/upload-artifact@v4
-        with:
-          name: security-reports
-          path: ./backend/bandit-report.json
-          retention-days: 30
+  # NOTE: Security scanning is handled by the dedicated security-scan.yml workflow
+  # which runs gitleaks, pip-audit, npm audit, semgrep, codeql, and trivy.
   type-check:
     name: Type Check (mypy)
     runs-on: ubuntu-latest

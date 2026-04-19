@@ -59,11 +59,13 @@ function RateMonitor() {
   const loadDashboard = useCallback(async () => {
     try {
       const data = await rateMonitorAPI.getDashboard();
-      setMetrics(data.metrics);
-      setCurrentRates(data.current_rates);
+      setMetrics(data.metrics || null);
+      setCurrentRates(data.current_rates || null);
     } catch (err) {
       console.error('Failed to load dashboard:', err);
-      setError('Failed to load dashboard data');
+      // On 404 or network error, use empty defaults so the page still renders
+      setMetrics(null);
+      setCurrentRates(null);
     }
   }, []);
 
@@ -74,10 +76,12 @@ function RateMonitor() {
       if (targetFilters.isActive !== null) params.is_active = targetFilters.isActive;
 
       const data = await rateMonitorAPI.getTargets(params);
-      setTargets(data.targets || []);
-      setTargetsTotal(data.total || 0);
+      setTargets(data?.targets || []);
+      setTargetsTotal(data?.total || 0);
     } catch (err) {
       console.error('Failed to load targets:', err);
+      setTargets([]);
+      setTargetsTotal(0);
     }
   }, [targetFilters]);
 
@@ -88,19 +92,22 @@ function RateMonitor() {
       if (alertFilters.priority) params.priority = alertFilters.priority;
 
       const data = await rateMonitorAPI.getAlerts(params);
-      setAlerts(data.alerts || []);
-      setAlertsTotal(data.total || 0);
+      setAlerts(data?.alerts || []);
+      setAlertsTotal(data?.total || 0);
     } catch (err) {
       console.error('Failed to load alerts:', err);
+      setAlerts([]);
+      setAlertsTotal(0);
     }
   }, [alertFilters]);
 
   const loadRateSheets = useCallback(async () => {
     try {
       const data = await rateSheetAPI.getSheets({ limit: 20 });
-      setRateSheets(data.sheets || []);
+      setRateSheets(data?.sheets || []);
     } catch (err) {
       console.error('Failed to load rate sheets:', err);
+      setRateSheets([]);
     }
   }, []);
 
@@ -110,23 +117,29 @@ function RateMonitor() {
       if (opportunityFilters.status) params.status = opportunityFilters.status;
       if (opportunityFilters.priority) params.priority = opportunityFilters.priority;
 
-      const [oppData, metricsData] = await Promise.all([
+      const [oppData, metricsData] = await Promise.allSettled([
         rateSheetAPI.getOpportunities(params),
         rateSheetAPI.getOpportunitiesDashboard(),
       ]);
 
-      setOpportunities(oppData.opportunities || []);
-      setOpportunitiesTotal(oppData.total || 0);
-      setOpportunitiesMetrics(metricsData);
+      const oppResult = oppData.status === 'fulfilled' ? oppData.value : null;
+      const metricsResult = metricsData.status === 'fulfilled' ? metricsData.value : null;
+
+      setOpportunities(oppResult?.opportunities || []);
+      setOpportunitiesTotal(oppResult?.total || 0);
+      setOpportunitiesMetrics(metricsResult || null);
     } catch (err) {
       console.error('Failed to load opportunities:', err);
+      setOpportunities([]);
+      setOpportunitiesTotal(0);
+      setOpportunitiesMetrics(null);
     }
   }, [opportunityFilters]);
 
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
-      await Promise.all([loadDashboard(), loadTargets(), loadAlerts(), loadRateSheets(), loadOpportunities()]);
+      await Promise.allSettled([loadDashboard(), loadTargets(), loadAlerts(), loadRateSheets(), loadOpportunities()]);
       setLoading(false);
     };
     loadData();
@@ -174,7 +187,7 @@ function RateMonitor() {
     setSelectedSheet(sheet);
     try {
       const data = await rateSheetAPI.getSheetRates(sheet.id);
-      setSheetRates(data.rates || []);
+      setSheetRates(data?.rates || []);
     } catch (err) {
       console.error('Failed to load rates:', err);
       setSheetRates([]);
@@ -505,68 +518,80 @@ function RateMonitor() {
       </div>
 
       {/* Dashboard Tab */}
-      {activeTab === 'dashboard' && metrics && (
+      {activeTab === 'dashboard' && (
         <div className="dashboard-content">
-          <div className="metrics-grid">
-            <div className="metric-card">
-              <div className="metric-value">{metrics.active_monitors}</div>
-              <div className="metric-label">Active Monitors</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-value">{metrics.auto_call_enabled}</div>
-              <div className="metric-label">Auto-Call Enabled</div>
-            </div>
-            <div className="metric-card highlight">
-              <div className="metric-value">{metrics.pending_alerts}</div>
-              <div className="metric-label">Pending Alerts</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-value">{metrics.high_priority_alerts}</div>
-              <div className="metric-label">High Priority</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-value">{metrics.alerts_today}</div>
-              <div className="metric-label">Alerts Today</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-value">{metrics.calls_made_this_month}</div>
-              <div className="metric-label">Calls This Month</div>
-            </div>
-            <div className="metric-card">
-              <div className="metric-value">{metrics.appointments_this_month}</div>
-              <div className="metric-label">Appointments</div>
-            </div>
-            <div className="metric-card success">
-              <div className="metric-value">{metrics.conversions_this_month}</div>
-              <div className="metric-label">Conversions</div>
-            </div>
-          </div>
-
-          {/* Opportunities Summary */}
-          {opportunitiesMetrics && (
-            <div className="opportunities-summary">
-              <h3>Refinance Opportunities</h3>
-              <div className="summary-stats">
-                <div className="stat">
-                  <span className="stat-value">{opportunitiesMetrics.pending_total || 0}</span>
-                  <span className="stat-label">Pending</span>
+          {metrics ? (
+            <>
+              <div className="metrics-grid">
+                <div className="metric-card">
+                  <div className="metric-value">{metrics.active_monitors ?? 0}</div>
+                  <div className="metric-label">Active Monitors</div>
                 </div>
-                <div className="stat">
-                  <span className="stat-value">{opportunitiesMetrics.by_priority?.urgent || 0}</span>
-                  <span className="stat-label">Urgent</span>
+                <div className="metric-card">
+                  <div className="metric-value">{metrics.auto_call_enabled ?? 0}</div>
+                  <div className="metric-label">Auto-Call Enabled</div>
                 </div>
-                <div className="stat highlight">
-                  <span className="stat-value">{formatCurrency(opportunitiesMetrics.total_monthly_savings)}</span>
-                  <span className="stat-label">Monthly Savings Potential</span>
+                <div className="metric-card highlight">
+                  <div className="metric-value">{metrics.pending_alerts ?? 0}</div>
+                  <div className="metric-label">Pending Alerts</div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-value">{metrics.high_priority_alerts ?? 0}</div>
+                  <div className="metric-label">High Priority</div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-value">{metrics.alerts_today ?? 0}</div>
+                  <div className="metric-label">Alerts Today</div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-value">{metrics.calls_made_this_month ?? 0}</div>
+                  <div className="metric-label">Calls This Month</div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-value">{metrics.appointments_this_month ?? 0}</div>
+                  <div className="metric-label">Appointments</div>
+                </div>
+                <div className="metric-card success">
+                  <div className="metric-value">{metrics.conversions_this_month ?? 0}</div>
+                  <div className="metric-label">Conversions</div>
                 </div>
               </div>
+
+              {/* Opportunities Summary */}
+              {opportunitiesMetrics && (
+                <div className="opportunities-summary">
+                  <h3>Refinance Opportunities</h3>
+                  <div className="summary-stats">
+                    <div className="stat">
+                      <span className="stat-value">{opportunitiesMetrics.pending_total || 0}</span>
+                      <span className="stat-label">Pending</span>
+                    </div>
+                    <div className="stat">
+                      <span className="stat-value">{opportunitiesMetrics.by_priority?.urgent || 0}</span>
+                      <span className="stat-label">Urgent</span>
+                    </div>
+                    <div className="stat highlight">
+                      <span className="stat-value">{formatCurrency(opportunitiesMetrics.total_monthly_savings)}</span>
+                      <span className="stat-label">Monthly Savings Potential</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="savings-summary">
+                <h3>Potential Monthly Savings from Pending Alerts</h3>
+                <div className="savings-value">{formatCurrency(metrics.pending_monthly_savings)}</div>
+              </div>
+            </>
+          ) : (
+            <div className="no-alerts-message">
+              <p>No rate monitoring data available yet.</p>
+              <p>Set up rate targets to start tracking refinance opportunities for your clients.</p>
+              <button className="btn-primary" onClick={handleCreateTarget} style={{ marginTop: '12px' }}>
+                + New Rate Target
+              </button>
             </div>
           )}
-
-          <div className="savings-summary">
-            <h3>Potential Monthly Savings from Pending Alerts</h3>
-            <div className="savings-value">{formatCurrency(metrics.pending_monthly_savings)}</div>
-          </div>
 
           {/* Recent Pending Alerts Preview */}
           <div className="recent-alerts-section">
@@ -856,7 +881,7 @@ function RateMonitor() {
                     </td>
                     <td>
                       <span className={`status-badge ${getStatusClass(opp.status)}`}>
-                        {opp.status.replace('_', ' ')}
+                        {(opp.status || 'unknown').replace('_', ' ')}
                       </span>
                     </td>
                     <td className="actions-cell">
@@ -965,7 +990,7 @@ function RateMonitor() {
                       )}
                     </td>
                     <td>
-                      <span className="target-type">{target.target_type.replace(/_/g, ' ')}</span>
+                      <span className="target-type">{(target.target_type || '').replace(/_/g, ' ')}</span>
                     </td>
                     <td>{target.threshold_description}</td>
                     <td>

@@ -61,20 +61,9 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script>
-      // Only register SW on web — WKWebView (iOS) doesn't support service workers
-      var isNative = (window.Capacitor && (
-        (typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
-        window.Capacitor.isNative
-      ));
-      if (!isNative && 'serviceWorker' in navigator) {
-        window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/sw.js').then(function(registration) {
-            console.log('Service worker registered, scope:', registration.scope);
-          }).catch(function(error) {
-            console.warn('Service worker registration failed:', error);
-          });
-        });
-      }
+      // Service worker is registered by main.jsx via serviceWorkerRegistration.js
+      // Do NOT register here — duplicate registrations cause cache conflicts.
+      // The registration module handles native-platform guards (Capacitor/WKWebView).
 
       // Global error handler to prevent blank pages
       window.addEventListener('error', function(event) {

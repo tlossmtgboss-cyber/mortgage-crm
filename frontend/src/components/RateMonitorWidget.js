@@ -30,17 +30,21 @@ function RateMonitorWidget({ mumClientId, compact = false }) {
 
       const params = mumClientId ? { mum_client_id: mumClientId } : {};
 
-      const [targetsRes, alertsRes, dashboardRes] = await Promise.all([
+      const [targetsRes, alertsRes, dashboardRes] = await Promise.allSettled([
         rateMonitorAPI.getTargets({ ...params, is_active: true, limit: 5 }),
         rateMonitorAPI.getAlerts({ ...params, status: 'pending', limit: 5 }),
         rateMonitorAPI.getDashboard(),
       ]);
 
+      const targets = targetsRes.status === 'fulfilled' ? targetsRes.value : null;
+      const alerts = alertsRes.status === 'fulfilled' ? alertsRes.value : null;
+      const dashboard = dashboardRes.status === 'fulfilled' ? dashboardRes.value : null;
+
       setData({
-        targets: targetsRes.targets || [],
-        alerts: alertsRes.alerts || [],
-        currentRates: dashboardRes.current_rates,
-        metrics: dashboardRes.metrics,
+        targets: targets?.targets || [],
+        alerts: alerts?.alerts || [],
+        currentRates: dashboard?.current_rates || null,
+        metrics: dashboard?.metrics || null,
       });
     } catch (error) {
       console.error('Failed to load rate monitor data:', error);
@@ -209,7 +213,7 @@ function RateMonitorWidget({ mumClientId, compact = false }) {
           <div className="targets-list">
             {data.targets.map(target => (
               <div key={target.id} className="target-item">
-                <div className="target-type">{target.target_type.replace(/_/g, ' ')}</div>
+                <div className="target-type">{(target.target_type || '').replace(/_/g, ' ')}</div>
                 <div className="target-threshold">{target.threshold_description}</div>
                 <div className={`target-status ${target.auto_call_enabled ? 'auto-call' : ''}`}>
                   {target.auto_call_enabled ? 'Auto-Call On' : 'Manual'}

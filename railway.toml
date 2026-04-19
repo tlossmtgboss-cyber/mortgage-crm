@@ -12,4 +12,3 @@ healthcheckPath = "/health/live"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 5
-# Force rebuild: 2026-01-19-salesforce-tables-v2

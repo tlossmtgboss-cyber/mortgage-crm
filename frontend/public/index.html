@@ -64,24 +64,30 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
     <script>
-      // Unregister all service workers and clear storage on load
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-          for (let registration of registrations) {
-            registration.unregister();
-            console.log('Service worker unregistered');
-          }
-        });
-      }
-
-      // Clear all caches
-      if ('caches' in window) {
-        caches.keys().then(function(names) {
-          for (let name of names) {
-            caches.delete(name);
-            console.log('Cache cleared:', name);
-          }
-        });
+      // On native iOS/Android (Capacitor), unregister any stale service workers
+      // and clear caches — WKWebView doesn't support SWs and they cause issues.
+      // On web, leave service workers alone so offline support works.
+      var isNative = (window.Capacitor && (
+        (typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform()) ||
+        window.Capacitor.isNative
+      ));
+      if (isNative) {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for (var i = 0; i < registrations.length; i++) {
+              registrations[i].unregister();
+              console.log('Service worker unregistered (native platform)');
+            }
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then(function(names) {
+            for (var i = 0; i < names.length; i++) {
+              caches.delete(names[i]);
+              console.log('Cache cleared (native platform):', names[i]);
+            }
+          });
+        }
       }
 
       // Global error handler to prevent blank pages
@@ -106,4 +112,3 @@
     </script>
   </body>
 </html>
-/* Force cache-busting rebuild - 1763213000 */

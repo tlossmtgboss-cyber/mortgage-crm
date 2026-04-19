@@ -8,17 +8,20 @@ conflict with the database/ package. All existing imports continue to work:
 
 Production settings (Railway PostgreSQL):
 - PgBouncer support: Use DATABASE_POOLED_URL for connection pooling
-- Direct connection fallback: 3 permanent + 5 overflow (max 8 total)
-- Pool recycling: Refresh connections every 15 min
-- Pool pre-ping: Verify connections before use
-- TCP keepalives: Detect dead connections quickly
+- Direct connection: pool_size=0 (all on-demand), max_overflow=3 (max 3 concurrent)
+- Pool recycling: Refresh connections every 5 min (pool_recycle=300)
+- Pool pre-ping: Verify connections before use (catches stale/dead connections)
+- TCP keepalives: Detect dead connections quickly (15s idle, 5s interval, 3 retries)
 - Statement timeout: 30 seconds (PostgreSQL only, direct connections)
-- Slow query logging: Configurable threshold
+- Slow query logging: Configurable threshold (default 500ms)
 
 Connection exhaustion prevention:
 - Prefer PgBouncer (Railway's pooled URL) for unlimited virtual connections
-- Conservative pool size for direct connections
+- pool_size=0 prevents crash-loop connection pileup (no pre-allocated connections)
+- LIFO pool reuse keeps fewer connections warm
 - TCP keepalives detect network issues before they cause pool exhaustion
+- Per-tenant connection limits (MAX_DB_CONNECTIONS_PER_TENANT, default 3)
+- Startup cleanup terminates stale connections from previous instances
 - Pool events logged for debugging connection issues
 """
 import os
@@ -93,7 +96,7 @@ else:
         pool_pre_ping=True,           # CRITICAL: Verify connections before use (catches stale/dead connections)
         pool_size=0,                  # NO pre-allocated connections — all on-demand via overflow
         max_overflow=3,               # Max 3 concurrent connections — keeps 2 instances under Railway's ~20 limit
-        pool_recycle=60,              # Recycle connections every 60s (frees slots faster during deploys)
+        pool_recycle=300,             # Recycle connections every 5min (prevents stale connections without excessive churn)
         pool_timeout=10,              # Wait max 10s for a connection (fail fast)
         pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)
         pool_reset_on_return='rollback',  # Clean connections before reuse

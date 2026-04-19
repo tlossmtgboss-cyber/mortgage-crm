@@ -460,12 +460,13 @@ function LazyPage({ children }) {
   );
 }
 
-// Floating action button for Aria — only on native (iOS) authenticated screens
+// Floating action button for Aria — only on native (iOS) and mobile browser authenticated screens
 function AriaFAB() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  if (!Capacitor.isNativePlatform()) return null;
+  const isMobile = Capacitor.isNativePlatform() || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  if (!isMobile) return null;
   if (!isAuthenticated()) return null;
 
   // Hide on public/auth pages and when already on Aria
@@ -477,37 +478,47 @@ function AriaFAB() {
   }
 
   return (
-    <button
-      onClick={() => navigate('/aria-voice')}
-      aria-label="Open Aria voice assistant"
-      style={{
-        position: 'fixed',
-        bottom: 'calc(24px + env(safe-area-inset-bottom, 0px))',
-        right: '20px',
-        width: '56px',
-        height: '56px',
-        borderRadius: '50%',
-        background: 'linear-gradient(135deg, #1a2744 0%, #2a4a7f 100%)',
-        border: 'none',
-        boxShadow: '0 4px 12px rgba(26, 39, 68, 0.4)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        cursor: 'pointer',
-        zIndex: 9998,
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-        WebkitTapHighlightColor: 'transparent',
-      }}
-      onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
-      onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-    >
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M12 1C11.2044 1 10.4413 1.31607 9.87868 1.87868C9.31607 2.44129 9 3.20435 9 4V12C9 12.7956 9.31607 13.5587 9.87868 14.1213C10.4413 14.6839 11.2044 15 12 15C12.7956 15 13.5587 14.6839 14.1213 14.1213C14.6839 13.5587 15 12.7956 15 12V4C15 3.20435 14.6839 2.44129 14.1213 1.87868C13.5587 1.31607 12.7956 1 12 1Z" fill="white"/>
-        <path d="M19 10V12C19 13.8565 18.2625 15.637 16.9497 16.9497C15.637 18.2625 13.8565 19 12 19C10.1435 19 8.36301 18.2625 7.05025 16.9497C5.7375 15.637 5 13.8565 5 12V10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M12 19V23" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M8 23H16" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-      </svg>
-    </button>
+    <>
+      <style>{`
+        @keyframes aria-fab-pulse {
+          0% { box-shadow: 0 4px 12px rgba(126, 184, 247, 0.4); }
+          50% { box-shadow: 0 4px 20px rgba(126, 184, 247, 0.7), 0 0 0 8px rgba(126, 184, 247, 0.15); }
+          100% { box-shadow: 0 4px 12px rgba(126, 184, 247, 0.4); }
+        }
+      `}</style>
+      <button
+        onClick={() => navigate('/aria-voice')}
+        aria-label="Open Aria voice assistant"
+        style={{
+          position: 'fixed',
+          bottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
+          right: '20px',
+          width: '56px',
+          height: '56px',
+          borderRadius: '50%',
+          background: '#7EB8F7',
+          border: 'none',
+          boxShadow: '0 4px 12px rgba(126, 184, 247, 0.4)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          zIndex: 9998,
+          animation: 'aria-fab-pulse 3s ease-in-out infinite',
+          transition: 'transform 0.2s ease',
+          WebkitTapHighlightColor: 'transparent',
+        }}
+        onTouchStart={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
+        onTouchEnd={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+      >
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 1C11.2044 1 10.4413 1.31607 9.87868 1.87868C9.31607 2.44129 9 3.20435 9 4V12C9 12.7956 9.31607 13.5587 9.87868 14.1213C10.4413 14.6839 11.2044 15 12 15C12.7956 15 13.5587 14.6839 14.1213 14.1213C14.6839 13.5587 15 12.7956 15 12V4C15 3.20435 14.6839 2.44129 14.1213 1.87868C13.5587 1.31607 12.7956 1 12 1Z" fill="white"/>
+          <path d="M19 10V12C19 13.8565 18.2625 15.637 16.9497 16.9497C15.637 18.2625 13.8565 19 12 19C10.1435 19 8.36301 18.2625 7.05025 16.9497C5.7375 15.637 5 13.8565 5 12V10" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M12 19V23" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M8 23H16" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+      </button>
+    </>
   );
 }
 
@@ -728,7 +739,7 @@ function App() {
           {/* Check for native platform OR loading from local IP (dev mode on device) */}
           <Route path="/" element={
             Capacitor.isNativePlatform() || window.location.hostname.startsWith('192.168.')
-              ? <Navigate to="/aria-voice" />
+              ? <Navigate to="/dashboard" />
               : <ExternalRedirect to="https://www.perenniaai.com" />
           } />
           <Route path="/aria-test" element={<LazyPage><AriaTestPage /></LazyPage>} />

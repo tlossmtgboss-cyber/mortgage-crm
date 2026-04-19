@@ -10,7 +10,7 @@ import './AriaTabNav.css';
 const TABS = [
   {
     key: 'home',
-    path: '/aria-voice',
+    path: '/dashboard',
     label: 'Home',
   },
   {

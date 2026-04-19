@@ -1,11 +1,17 @@
 /* Perennia AI — Service Worker for Offline Support */
 /* Caches app shell, handles API fallback, queues offline mutations, push notifications */
 
-const CACHE_NAME = 'perennia-v2';
-const API_CACHE_NAME = 'perennia-api-v1';
+const CACHE_NAME = 'perennia-v3';
+const API_CACHE_NAME = 'perennia-api-v2';
 const OFFLINE_QUEUE_DB = 'perennia-offline-queue';
 const OFFLINE_QUEUE_STORE = 'mutations';
 const DB_VERSION = 1;
+
+// Max age for cached API responses (24 hours)
+const API_CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+// Max number of API responses to keep in cache
+const API_CACHE_MAX_ENTRIES = 100;
 
 const STATIC_ASSETS = [
   '/',
@@ -13,19 +19,55 @@ const STATIC_ASSETS = [
   '/manifest.json',
 ];
 
-// API paths that should be cached for offline read access
+// API paths eligible for network-first caching (GET only).
+// Pipeline and loan data are the primary offline targets.
 const CACHEABLE_API_PATHS = [
+  '/api/v1/pipeline',
+  '/api/v1/dashboard',
   '/api/v1/leads',
   '/api/v1/loans',
-  '/api/v1/pipeline',
   '/api/v1/tasks',
   '/api/v1/contacts',
   '/api/v1/users/me',
   '/api/v1/notifications',
+  '/api/v1/scheduler/appointments',
+  '/api/v1/rate-alerts',
+  '/api/v1/rate-monitor/alerts',
+  '/api/v1/mobile/dashboard',
+  '/api/v1/mobile/pipeline',
+  '/api/v1/mobile/tasks',
+  '/api/v1/mobile/notifications',
+];
+
+// Paths that must never be cached (auth tokens, CSRF)
+const NEVER_CACHE_PREFIXES = [
+  '/api/v1/auth/',
+  '/api/v1/csrf-token',
 ];
 
 // HTTP methods that represent mutations (queue when offline)
 const MUTATION_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
+
+// Extensions treated as static assets
+const STATIC_EXTENSIONS = [
+  '.js', '.css', '.woff', '.woff2', '.ttf', '.otf', '.eot',
+  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.webp',
+];
+
+// ─── Native platform guard ─────────────────────────────────────────────────
+// Avoid running caching logic in iOS WKWebView where service workers behave
+// unpredictably. Capacitor apps load from capacitor:// or ionic:// schemes.
+
+function isNativeWebView() {
+  if (
+    typeof self !== 'undefined' &&
+    self.location &&
+    !self.location.protocol.startsWith('http')
+  ) {
+    return true;
+  }
+  return false;
+}
 
 // ─── IndexedDB helpers for offline mutation queue ────────────────────────────
 
@@ -171,33 +213,63 @@ self.addEventListener('activate', (event) => {
   console.log('[SW] Activating service worker...');
   const validCaches = [CACHE_NAME, API_CACHE_NAME];
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((k) => !validCaches.includes(k)).map((k) => caches.delete(k))
-      )
-    )
+    Promise.all([
+      // Delete old cache versions
+      caches.keys().then((keys) =>
+        Promise.all(
+          keys.filter((k) => !validCaches.includes(k)).map((k) => {
+            console.log('[SW] Deleting old cache:', k);
+            return caches.delete(k);
+          })
+        )
+      ),
+      // Evict expired API entries
+      evictExpiredEntries(),
+      // Enforce size limit
+      enforceApiCacheSizeLimit(),
+    ]).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 // ─── Fetch strategies ───────────────────────────────────────────────────────
 
+/**
+ * Network-first with expiry timestamps for API responses.
+ * Caches successful responses with a timestamp header so we can check freshness.
+ * Falls back to cache (even expired) when offline — stale data beats no data.
+ */
 async function networkFirst(request) {
   try {
     const response = await fetch(request);
     // Cache successful GET responses for offline fallback
     if (request.method === 'GET' && response.ok) {
       const cache = await caches.open(API_CACHE_NAME);
-      cache.put(request, response.clone());
+      const cloned = response.clone();
+      const headers = new Headers(cloned.headers);
+      headers.set('x-sw-cached-at', Date.now().toString());
+      const timestampedResponse = new Response(await cloned.blob(), {
+        status: cloned.status,
+        statusText: cloned.statusText,
+        headers: headers,
+      });
+      await cache.put(request, timestampedResponse);
+      // Enforce size limit after adding a new entry
+      enforceApiCacheSizeLimit();
     }
     return response;
   } catch (error) {
-    // Network failed — try cache
+    // Network failed — try cache (even expired data is better than nothing offline)
     const cached = await caches.match(request);
-    if (cached) return cached;
+    if (cached) {
+      console.log('[SW] Serving cached API response:', request.url);
+      return cached;
+    }
     // No cache — return offline error
     return new Response(
-      JSON.stringify({ error: 'You are offline', offline: true }),
+      JSON.stringify({
+        error: 'You are offline and no cached data is available.',
+        offline: true,
+      }),
       {
         status: 503,
         headers: { 'Content-Type': 'application/json' },
@@ -206,6 +278,10 @@ async function networkFirst(request) {
   }
 }
 
+/**
+ * Cache-first for static assets (JS, CSS, fonts, images).
+ * Falls back to network, then caches the response for next time.
+ */
 async function cacheFirst(request) {
   const cached = await caches.match(request);
   if (cached) return cached;
@@ -226,9 +302,80 @@ async function cacheFirst(request) {
   }
 }
 
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function isCacheableApiPath(pathname) {
+  return CACHEABLE_API_PATHS.some((path) => pathname.startsWith(path));
+}
+
+function isNeverCachePath(pathname) {
+  return NEVER_CACHE_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
+function isStaticAsset(pathname) {
+  return STATIC_EXTENSIONS.some((ext) => pathname.endsWith(ext));
+}
+
+// ─── Cache maintenance ─────────────────────────────────────────────────────
+
+async function evictExpiredEntries() {
+  try {
+    const cache = await caches.open(API_CACHE_NAME);
+    const requests = await cache.keys();
+    const now = Date.now();
+
+    await Promise.all(
+      requests.map(async (request) => {
+        const response = await cache.match(request);
+        if (!response) return;
+        const cachedAt = parseInt(response.headers.get('x-sw-cached-at') || '0', 10);
+        if (cachedAt > 0 && (now - cachedAt) > API_CACHE_MAX_AGE_MS) {
+          console.log('[SW] Evicting expired cache entry:', request.url);
+          await cache.delete(request);
+        }
+      })
+    );
+  } catch (error) {
+    console.warn('[SW] Error evicting expired entries:', error);
+  }
+}
+
+async function enforceApiCacheSizeLimit() {
+  try {
+    const cache = await caches.open(API_CACHE_NAME);
+    const requests = await cache.keys();
+
+    if (requests.length <= API_CACHE_MAX_ENTRIES) return;
+
+    const entries = await Promise.all(
+      requests.map(async (request) => {
+        const response = await cache.match(request);
+        const cachedAt = parseInt(
+          (response && response.headers.get('x-sw-cached-at')) || '0',
+          10
+        );
+        return { request, cachedAt };
+      })
+    );
+
+    // Sort oldest-first, evict until under limit
+    entries.sort((a, b) => a.cachedAt - b.cachedAt);
+    const toRemove = entries.length - API_CACHE_MAX_ENTRIES;
+    for (let i = 0; i < toRemove; i++) {
+      console.log('[SW] Evicting cache entry (over limit):', entries[i].request.url);
+      await cache.delete(entries[i].request);
+    }
+  } catch (error) {
+    console.warn('[SW] Error enforcing cache size limit:', error);
+  }
+}
+
 // ─── Fetch handler ──────────────────────────────────────────────────────────
 
 self.addEventListener('fetch', (event) => {
+  // Skip entirely in native iOS WebView
+  if (isNativeWebView()) return;
+
   const url = new URL(event.request.url);
 
   // Skip non-HTTP(S) requests
@@ -237,6 +384,9 @@ self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests (CDN assets, analytics, etc.)
   if (url.origin !== self.location.origin) return;
 
+  // Never cache auth endpoints
+  if (isNeverCachePath(url.pathname)) return;
+
   // API calls
   if (url.pathname.startsWith('/api/')) {
     // Mutations: queue if offline
@@ -244,8 +394,12 @@ self.addEventListener('fetch', (event) => {
       event.respondWith(handleMutation(event.request));
       return;
     }
-    // GET: network-first with cache fallback
-    event.respondWith(networkFirst(event.request));
+    // Only cache GET requests for cacheable API paths
+    if (event.request.method === 'GET' && isCacheableApiPath(url.pathname)) {
+      event.respondWith(networkFirst(event.request));
+      return;
+    }
+    // Other API GETs: pass through without caching
     return;
   }
 
@@ -256,7 +410,12 @@ self.addEventListener('fetch', (event) => {
   }
 
   // Static assets (JS, CSS, images, fonts): cache-first
-  event.respondWith(cacheFirst(event.request));
+  if (isStaticAsset(url.pathname)) {
+    event.respondWith(cacheFirst(event.request));
+    return;
+  }
+
+  // Everything else: pass through
 });
 
 async function handleMutation(request) {

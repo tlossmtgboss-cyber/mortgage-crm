@@ -4,6 +4,7 @@ import './setupConsole'; // Disable console.log in production
 import './index.css';
 import App from './App';
 import ErrorBoundary from './ErrorBoundary';
+import * as serviceWorkerRegistration from './serviceWorkerRegistration';
 
 // Global handler for chunk load errors (stale cache after deployment)
 window.addEventListener('error', (event) => {
@@ -19,17 +20,6 @@ window.addEventListener('unhandledrejection', (event) => {
     window.location.reload();
   }
 });
-
-// Register service worker for offline support (web only, not Capacitor native)
-// WKWebView on iOS doesn't support service workers and will crash/error
-const isNative = window.Capacitor?.isNativePlatform?.() || window.Capacitor?.isNative;
-if (!isNative && 'serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then(reg => console.log('SW registered:', reg.scope))
-      .catch(err => console.warn('SW registration failed:', err));
-  });
-}
 
 // Initialize certificate pinning (native only — no-op on web)
 import certificatePinning from './services/certificatePinning';
@@ -54,3 +44,21 @@ root.render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+// Register service worker for offline support and push notifications.
+// Guard is inside serviceWorkerRegistration.register() — it checks for native
+// platform and will no-op on iOS/Android Capacitor where WKWebView lacks SW support.
+serviceWorkerRegistration.register({
+  onUpdate: (registration) => {
+    console.log('[App] New version available — will activate on next reload');
+  },
+  onSuccess: () => {
+    console.log('[App] Offline support ready');
+  },
+  onMutationQueued: (data) => {
+    console.log('[App] Change saved offline:', data.method, data.url);
+  },
+  onSyncComplete: (data) => {
+    console.log('[App] Offline changes synced, remaining:', data.remaining);
+  },
+});

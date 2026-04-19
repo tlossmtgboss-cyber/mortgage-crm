@@ -57,7 +57,7 @@ updates:
 
   # iOS Swift Package Manager
   - package-ecosystem: "swift"
-    directory: "/ios"
+    directory: "/frontend/ios/App/CapApp-SPM"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -72,9 +72,9 @@ updates:
     commit-message:
       prefix: "deps(ci)"
 
-  # Docker
+  # Docker (main backend Dockerfile)
   - package-ecosystem: "docker"
-    directory: "/"
+    directory: "/backend"
     schedule:
       interval: "weekly"
     labels: ["dependencies", "docker"]

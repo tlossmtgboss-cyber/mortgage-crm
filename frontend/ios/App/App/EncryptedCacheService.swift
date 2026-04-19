@@ -184,15 +184,19 @@ final class EncryptedCacheService: @unchecked Sendable {
 }
 
 // MARK: - Well-Known Cache Keys
+//
+// These mirror the keys used by BackgroundSyncManager to store data in
+// the encrypted cache. Other consumers (widgets, extensions) should use
+// these constants when reading cached data from the shared container.
 
 extension EncryptedCacheService {
     enum CacheKey {
-        static let dashboard = "dashboard"
-        static let tasks = "tasks"
-        static let contacts = "contacts"
-        static let rateAlerts = "rate_alerts"
-        static let pipeline = "pipeline"
-        static let recentLeads = "recent_leads"
+        static let dashboard = "carplay_dashboard_cache"
+        static let tasks = "carplay_tasks_cache"
+        static let contacts = "carplay_contacts_cache"
+        static let rateAlerts = "carplay_rate_alerts_cache"
+        static let voiceCalls = "carplay_voice_calls_cache"
+        static let lastSync = "carplay_last_sync"
         static let widgetData = "widget_data"
     }
 }

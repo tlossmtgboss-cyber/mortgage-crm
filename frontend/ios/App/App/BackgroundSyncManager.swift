@@ -737,6 +737,17 @@ final class BackgroundSyncManager {
             logger.error("Voice calls fetch failed: \(error.localizedDescription)")
         }
 
+        // Sync audit logs to backend while we have connectivity
+        if #available(iOS 14.0, *) {
+            let auditSynced = await AuditLogger.shared.syncToBackend()
+            if auditSynced > 0 {
+                logger.info("Synced \(auditSynced) audit log entries to backend")
+            }
+        }
+
+        // Refresh certificate pins if stale
+        RemotePinManager.shared.refreshIfNeeded()
+
         // Update last sync timestamp
         UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: CacheKey.lastSync)
 
@@ -889,6 +900,10 @@ final class BackgroundSyncManager {
             }
             logger.warning("Auth token expired during background sync (retry=\(isRetry))")
             throw SyncError.authExpired
+        case 404:
+            // New endpoints may not be deployed yet — log a warning instead of error
+            logger.warning("Endpoint not found (404) for \(path) — endpoint may not be deployed yet")
+            throw SyncError.httpError(statusCode: 404)
         case 429:
             logger.info("Rate limited by server for \(path) — will back off")
             // Double the minimum sync interval temporarily (capped at 30 min)

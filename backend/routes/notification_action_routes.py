@@ -7,6 +7,7 @@ that either proxy to existing internal logic or provide the exact REST path the
 clients expect.
 
 Endpoints created here:
+- PUT  /api/v1/tasks/{task_id}/complete             — Complete a task (iOS push action)
 - POST /api/v1/loans/{loan_id}/rate-lock/extend
 - POST /api/v1/smart-docs/delivery/send-reminder   (alias for /api/smart-docs/delivery/send-reminder)
 """
@@ -16,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from db import get_db
@@ -60,6 +61,87 @@ class DocReminderResponse(BaseModel):
     doc_count: int = 0
     portal_url: Optional[str] = None
     error: Optional[str] = None
+
+
+# =============================================================================
+# PUT /api/v1/tasks/{task_id}/complete
+# =============================================================================
+
+
+class TaskCompleteResponse(BaseModel):
+    success: bool
+    task_id: int
+    status: str
+    completed_at: Optional[str] = None
+    message: str = "Task completed"
+
+
+@router.put(
+    "/tasks/{task_id}/complete",
+    response_model=TaskCompleteResponse,
+    summary="Complete a task — iOS push notification action",
+)
+async def complete_task(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(current_user_dep),
+):
+    """
+    Mark a task as completed.
+
+    Called from the iOS PushNotificationRouter ``completeTaskViaAPI()`` method
+    when the user taps the "Complete Task" action button on a push notification.
+    Also usable from any client that needs a simple PUT-to-complete semantic.
+
+    Queries the ``tasks`` table (CRM tasks), scoped to the user's organisation.
+    """
+    from database.models.task import Task
+
+    task = (
+        db.query(Task)
+        .filter(
+            Task.id == task_id,
+            Task.organization_id == current_user.organization_id,
+        )
+        .first()
+    )
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    if task.status == "completed":
+        # Idempotent — already done
+        return TaskCompleteResponse(
+            success=True,
+            task_id=task.id,
+            status="completed",
+            completed_at=task.completed_at.isoformat() if task.completed_at else None,
+            message="Task was already completed",
+        )
+
+    now = datetime.now(timezone.utc)
+    task.status = "completed"
+    task.completed_at = now
+    task.updated_at = now
+
+    try:
+        db.commit()
+        db.refresh(task)
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Failed to complete task %s: %s", task_id, exc)
+        raise HTTPException(status_code=500, detail="Failed to complete task")
+
+    logger.info(
+        "Task %s completed via push action by user %s",
+        task_id, current_user.id,
+    )
+
+    return TaskCompleteResponse(
+        success=True,
+        task_id=task.id,
+        status="completed",
+        completed_at=task.completed_at.isoformat() if task.completed_at else None,
+    )
 
 
 # =============================================================================

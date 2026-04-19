@@ -256,7 +256,7 @@ export default function MobileCallIntel({ borrowerContext }) {
       <div className="mci-top-bar">
         <button
           className="mci-back-btn"
-          onClick={() => navigate('/aria-voice')}
+          onClick={() => navigate('/dashboard')}
           type="button"
           aria-label="Go back"
         >

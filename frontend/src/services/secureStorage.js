@@ -5,21 +5,23 @@
  * Capacitor Preferences. Provides data classification, authenticated encryption,
  * and transparent migration from legacy storage formats.
  *
+ * Security approach:
+ * - ALL sensitive data is encrypted with AES-256-GCM via the Web Crypto API
+ * - Web Crypto is available in all modern browsers and iOS WKWebView (Capacitor)
+ * - If Web Crypto is unavailable (ancient browser), sensitive writes are REFUSED
+ *   rather than falling back to weak obfuscation — GLBA compliance requires real encryption
+ * - AES key is stored in Capacitor Preferences (native) or sessionStorage (web)
+ *
  * Architecture:
  * - RESTRICTED data: Handled exclusively by OS keychain via NativeBiometric (never touches Preferences)
  * - SENSITIVE data: Encrypted with AES-256-GCM before writing to Preferences
  * - INTERNAL data: Stored in Preferences with integrity checksums
  * - PUBLIC data: Stored in Preferences as-is
  *
- * On web (non-native), falls back to localStorage with AES-256-GCM encryption
- * for sensitive keys. The AES key is stored in sessionStorage (cleared when tab closes).
- *
- * GLBA compliance: Uses Web Crypto API AES-256-GCM which provides both
- * confidentiality and integrity (authenticated encryption). The GCM authentication
- * tag replaces the previous FNV-1a checksum for tamper detection.
- *
  * Backward compatibility: Old XOR-encrypted envelopes (v1) are transparently
- * decrypted and re-encrypted with AES-GCM on read.
+ * decrypted and re-encrypted with AES-GCM on read. The legacy XOR decryption
+ * code is retained solely for this one-time migration and is never used for
+ * new writes.
  */
 
 import { Capacitor } from '@capacitor/core';
@@ -62,9 +64,10 @@ const HAS_WEB_CRYPTO = (() => {
 })();
 
 if (!HAS_WEB_CRYPTO) {
-  console.warn(
-    'Secure storage: Web Crypto API not available. Falling back to XOR cipher. ' +
-    'This does NOT meet GLBA encryption requirements. Upgrade to a modern browser.'
+  console.error(
+    'Secure storage: Web Crypto API not available. ' +
+    'Sensitive data CANNOT be encrypted — writes to sensitive keys will be refused. ' +
+    'GLBA compliance requires AES-256-GCM. Upgrade to a modern browser.'
   );
 }
 
@@ -197,8 +200,9 @@ function _legacyDecrypt(cipherBase64, keyBytes) {
 }
 
 /**
- * Computes FNV-1a checksum (legacy v1 format — used for integrity verification
- * during migration only).
+ * Computes FNV-1a checksum for integrity verification.
+ * Used for non-encrypted (INTERNAL/PUBLIC) data tamper detection and
+ * legacy v1 envelope migration.
  * @private
  */
 function _legacyComputeChecksum(value) {
@@ -279,42 +283,11 @@ async function aesGcmDecrypt(cipherBase64, cryptoKey) {
   return decoder.decode(plainBuffer);
 }
 
-// ---------------------------------------------------------------------------
-// Fallback XOR encryption (only used when Web Crypto API is unavailable)
-// ---------------------------------------------------------------------------
-
-/**
- * XOR-based encrypt for environments without Web Crypto API.
- * NOT real encryption — only obfuscation. Used as a last resort.
- * @private
- */
-function _fallbackEncrypt(plaintext, keyBytes) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(plaintext);
-  const encrypted = new Uint8Array(data.length);
-
-  for (let i = 0; i < data.length; i++) {
-    encrypted[i] = data[i] ^ keyBytes[i % keyBytes.length];
-  }
-
-  return uint8ToBase64(encrypted);
-}
-
-/**
- * XOR-based decrypt for environments without Web Crypto API.
- * @private
- */
-function _fallbackDecrypt(cipherBase64, keyBytes) {
-  return _legacyDecrypt(cipherBase64, keyBytes);
-}
-
-/**
- * FNV-1a checksum for the fallback path (no GCM auth tag available).
- * @private
- */
-function _fallbackComputeChecksum(value) {
-  return _legacyComputeChecksum(value);
-}
+// NOTE: XOR fallback encrypt/decrypt functions have been removed.
+// XOR provides zero real security (trivially reversible obfuscation) and
+// does not meet GLBA encryption requirements. If Web Crypto API is not
+// available, sensitive data writes are refused rather than silently
+// downgrading to insecure obfuscation.
 
 // ---------------------------------------------------------------------------
 // Storage envelope format
@@ -350,7 +323,7 @@ function _fallbackComputeChecksum(value) {
  *   t: 1711900000
  * }
  */
-async function createEnvelope(value, classification, cryptoKey, fallbackKeyBytes) {
+async function createEnvelope(value, classification, cryptoKey) {
   const serialized = typeof value === 'string' ? value : JSON.stringify(value);
 
   let storedData;
@@ -358,19 +331,20 @@ async function createEnvelope(value, classification, cryptoKey, fallbackKeyBytes
 
   if (classification === DATA_CLASSIFICATION.SENSITIVE) {
     if (cryptoKey) {
-      // AES-256-GCM — GCM tag provides integrity, no separate checksum needed
+      // AES-256-GCM — GCM authentication tag provides both integrity and authenticity
       storedData = await aesGcmEncrypt(serialized, cryptoKey);
-    } else if (fallbackKeyBytes) {
-      // Fallback XOR — include checksum since XOR has no integrity
-      storedData = _fallbackEncrypt(serialized, fallbackKeyBytes);
-      checksum = _fallbackComputeChecksum(serialized);
     } else {
-      storedData = serialized;
+      // Refuse to write sensitive data without real encryption.
+      // XOR obfuscation was removed — it provided zero security and violated GLBA.
+      throw new Error(
+        'Secure storage: cannot write sensitive data without AES-256-GCM encryption. ' +
+        'Web Crypto API is required.'
+      );
     }
   } else {
     storedData = serialized;
     // Non-encrypted data still gets a checksum for tamper detection
-    checksum = _fallbackComputeChecksum(serialized);
+    checksum = _legacyComputeChecksum(serialized);
   }
 
   const envelope = {
@@ -397,7 +371,7 @@ async function createEnvelope(value, classification, cryptoKey, fallbackKeyBytes
  * Returns { value, valid, classification, timestamp, legacy, needsReEncrypt }
  * or null if the envelope is malformed.
  */
-async function openEnvelope(envelopeStr, cryptoKey, fallbackKeyBytes, legacyKeyBytes) {
+async function openEnvelope(envelopeStr, cryptoKey, legacyKeyBytes) {
   if (!envelopeStr) return null;
 
   try {
@@ -423,24 +397,10 @@ async function openEnvelope(envelopeStr, cryptoKey, fallbackKeyBytes, legacyKeyB
             console.warn('Secure storage: AES-GCM decryption/authentication failed');
             return { value: null, valid: false, classification: envelope.c, timestamp: envelope.t, legacy: false, needsReEncrypt: false };
           }
-        } else if (fallbackKeyBytes) {
-          // Fallback XOR decrypt
-          try {
-            plaintext = _fallbackDecrypt(envelope.d, fallbackKeyBytes);
-          } catch (e) {
-            console.warn('Secure storage: fallback decryption failed');
-            return { value: null, valid: false, classification: envelope.c, timestamp: envelope.t, legacy: false, needsReEncrypt: false };
-          }
-          // Verify checksum for fallback path
-          if (envelope.h) {
-            const expectedChecksum = _fallbackComputeChecksum(plaintext);
-            if (expectedChecksum !== envelope.h) {
-              console.warn('Secure storage: checksum mismatch — possible tampering detected');
-              return { value: null, valid: false, classification: envelope.c, timestamp: envelope.t, legacy: false, needsReEncrypt: false };
-            }
-          }
         } else {
-          plaintext = envelope.d;
+          // No crypto key available — cannot decrypt sensitive data
+          console.warn('Secure storage: cannot decrypt sensitive data without AES-GCM key');
+          return { value: null, valid: false, classification: envelope.c, timestamp: envelope.t, legacy: false, needsReEncrypt: false };
         }
 
         return {
@@ -457,7 +417,7 @@ async function openEnvelope(envelopeStr, cryptoKey, fallbackKeyBytes, legacyKeyB
       plaintext = envelope.d;
       let valid = true;
       if (envelope.h) {
-        const expectedChecksum = _fallbackComputeChecksum(plaintext);
+        const expectedChecksum = _legacyComputeChecksum(plaintext);
         valid = expectedChecksum === envelope.h;
         if (!valid) {
           console.warn('Secure storage: checksum mismatch — possible tampering detected');
@@ -475,13 +435,14 @@ async function openEnvelope(envelopeStr, cryptoKey, fallbackKeyBytes, legacyKeyB
     }
 
     // ------- v1 envelope (legacy XOR) — migration path -------
+    // Legacy XOR decryption is retained ONLY to read old v1 data so it can
+    // be re-encrypted with AES-GCM. No new data is ever written in v1 format.
     if (envelope.v === 1) {
       let plaintext;
-      const effectiveLegacyKey = legacyKeyBytes || fallbackKeyBytes;
 
-      if (envelope.c === DATA_CLASSIFICATION.SENSITIVE && effectiveLegacyKey) {
+      if (envelope.c === DATA_CLASSIFICATION.SENSITIVE && legacyKeyBytes) {
         try {
-          plaintext = _legacyDecrypt(envelope.d, effectiveLegacyKey);
+          plaintext = _legacyDecrypt(envelope.d, legacyKeyBytes);
         } catch (e) {
           console.warn('Secure storage: legacy XOR decryption failed, key may have rotated');
           return { value: null, valid: false, classification: envelope.c, timestamp: envelope.t, legacy: false, needsReEncrypt: false };
@@ -537,24 +498,19 @@ function generateRandomSeed() {
 /**
  * Manages the encryption key lifecycle.
  *
- * For AES-GCM (primary path):
  * - Generates a 256-bit AES-GCM CryptoKey via Web Crypto API
  * - Exports the key as JWK for storage
  * - On native: stores JWK in Capacitor Preferences
  * - On web: stores JWK in sessionStorage (cleared when tab closes)
  *
- * For XOR fallback (no Web Crypto):
- * - Falls back to the legacy seed-based XOR approach
- *
- * Also maintains the legacy XOR key bytes for decrypting old v1 envelopes.
+ * Also maintains the legacy XOR key bytes solely for decrypting old v1
+ * envelopes during migration. No new data is ever encrypted with XOR.
  */
 class KeyManager {
   constructor() {
     /** @type {CryptoKey|null} AES-256-GCM CryptoKey (null if Web Crypto unavailable) */
     this._cryptoKey = null;
-    /** @type {Uint8Array|null} XOR key bytes — used as fallback OR for legacy v1 decryption */
-    this._fallbackKeyBytes = null;
-    /** @type {Uint8Array|null} Legacy XOR key bytes from old seed — for decrypting v1 envelopes */
+    /** @type {Uint8Array|null} Legacy XOR key bytes from old seed — for decrypting v1 envelopes only */
     this._legacyKeyBytes = null;
     this._initialized = false;
     this._initPromise = null;
@@ -575,22 +531,23 @@ class KeyManager {
 
   async _doInitialize() {
     try {
-      // Always load/create legacy key bytes for v1 migration
+      // Load legacy key bytes so we can decrypt any remaining v1 envelopes
       await this._loadLegacyKey();
 
       if (HAS_WEB_CRYPTO) {
-        // Primary path: AES-256-GCM
         await this._loadOrCreateAesKey();
       } else {
-        // Fallback: XOR cipher (same as legacy, just reuse legacy key)
-        this._fallbackKeyBytes = this._legacyKeyBytes;
+        // Web Crypto unavailable — sensitive data cannot be encrypted or decrypted.
+        // Non-sensitive storage still works. This is intentional: refusing to use
+        // XOR obfuscation prevents a false sense of security.
+        console.error(
+          'Secure storage: Web Crypto API unavailable. ' +
+          'Sensitive storage operations will fail. Non-sensitive storage is unaffected.'
+        );
       }
     } catch (error) {
-      console.error('Secure storage: key initialization failed, using fallback', error);
-      // Last-resort fallback key
-      const fallbackSeed = 'perennia-fallback-' + navigator.userAgent.slice(0, 32);
-      this._fallbackKeyBytes = _legacyDeriveKeyBytes(fallbackSeed);
-      this._legacyKeyBytes = this._fallbackKeyBytes;
+      console.error('Secure storage: key initialization failed', error);
+      // Legacy key loading is best-effort — don't block the entire storage layer
     }
   }
 
@@ -686,11 +643,6 @@ class KeyManager {
     return this._cryptoKey;
   }
 
-  /** Returns XOR fallback key bytes (used when Web Crypto is unavailable). */
-  getFallbackKeyBytes() {
-    return this._fallbackKeyBytes;
-  }
-
   /** Returns legacy XOR key bytes for decrypting v1 envelopes during migration. */
   getLegacyKeyBytes() {
     return this._legacyKeyBytes;
@@ -761,8 +713,7 @@ class SecureStorage {
     const envelope = await createEnvelope(
       serialized,
       DATA_CLASSIFICATION.SENSITIVE,
-      this._keyManager.getCryptoKey(),
-      this._keyManager.getFallbackKeyBytes()
+      this._keyManager.getCryptoKey()
     );
 
     await this._rawSet(SECURE_PREFIX + key, envelope);
@@ -783,7 +734,6 @@ class SecureStorage {
     const result = await openEnvelope(
       raw,
       this._keyManager.getCryptoKey(),
-      this._keyManager.getFallbackKeyBytes(),
       this._keyManager.getLegacyKeyBytes()
     );
     if (!result) return null;
@@ -801,8 +751,7 @@ class SecureStorage {
         const newEnvelope = await createEnvelope(
           result.value,
           DATA_CLASSIFICATION.SENSITIVE,
-          this._keyManager.getCryptoKey(),
-          this._keyManager.getFallbackKeyBytes()
+          this._keyManager.getCryptoKey()
         );
         await this._rawSet(SECURE_PREFIX + key, newEnvelope);
       } catch (e) {
@@ -868,7 +817,6 @@ class SecureStorage {
     const result = await openEnvelope(
       raw,
       this._keyManager.getCryptoKey(),
-      this._keyManager.getFallbackKeyBytes(),
       this._keyManager.getLegacyKeyBytes()
     );
     if (!result) return null;
@@ -1045,7 +993,6 @@ class SecureStorage {
       const result = await openEnvelope(
         raw,
         this._keyManager.getCryptoKey(),
-        this._keyManager.getFallbackKeyBytes(),
         this._keyManager.getLegacyKeyBytes()
       );
 
@@ -1194,12 +1141,17 @@ class SecureStorage {
           if (existingSecure !== null) continue;
 
           const classification = this._classifyKey(key);
-          const envelope = await createEnvelope(
-            legacyValue,
-            classification,
-            classification === DATA_CLASSIFICATION.SENSITIVE ? this._keyManager.getCryptoKey() : null,
-            classification === DATA_CLASSIFICATION.SENSITIVE ? this._keyManager.getFallbackKeyBytes() : null
-          );
+          const cryptoKey = classification === DATA_CLASSIFICATION.SENSITIVE
+            ? this._keyManager.getCryptoKey()
+            : null;
+
+          // Skip sensitive keys if we don't have a real crypto key — cannot encrypt
+          if (classification === DATA_CLASSIFICATION.SENSITIVE && !cryptoKey) {
+            console.warn(`Secure storage: skipping migration of sensitive key "${key}" — no AES key available`);
+            continue;
+          }
+
+          const envelope = await createEnvelope(legacyValue, classification, cryptoKey);
           await this._rawSet(SECURE_PREFIX + key, envelope);
 
           migratedCount++;
@@ -1244,12 +1196,11 @@ class SecureStorage {
               }
             }
 
-            // Re-encrypt with AES-GCM
+            // Re-encrypt with AES-GCM (requires Web Crypto — already checked above)
             const newEnvelope = await createEnvelope(
               plaintext,
               DATA_CLASSIFICATION.SENSITIVE,
-              this._keyManager.getCryptoKey(),
-              this._keyManager.getFallbackKeyBytes()
+              this._keyManager.getCryptoKey()
             );
             await this._rawSet(rawKey, newEnvelope);
             reEncryptedCount++;
@@ -1270,18 +1221,10 @@ class SecureStorage {
         try {
           const jwk = await crypto.subtle.exportKey('jwk', cryptoKey);
           // Use first 16 chars of the key material as fingerprint
-          const fingerprint = _fallbackComputeChecksum(jwk.k ? jwk.k.slice(0, 16) : 'aes-gcm');
+          const fingerprint = _legacyComputeChecksum(jwk.k ? jwk.k.slice(0, 16) : 'aes-gcm');
           await this._rawSet(KEY_FINGERPRINT_KEY, fingerprint);
         } catch {
           // Non-critical
-        }
-      } else {
-        const keyBytes = this._keyManager.getFallbackKeyBytes();
-        if (keyBytes) {
-          const fingerprint = _fallbackComputeChecksum(
-            Array.from(keyBytes.slice(0, 8), (b) => b.toString(16)).join('')
-          );
-          await this._rawSet(KEY_FINGERPRINT_KEY, fingerprint);
         }
       }
 
