@@ -57,7 +57,7 @@ router = APIRouter(prefix="/api/v1/business-ops", tags=["business-operations"], 
 def get_organization_id(request: Request = None) -> int:
     """Get organization ID from authenticated user's context."""
     if request:
-        from jose import jwt, JWTError
+        import jwt
         import os
         SECRET_KEY = os.getenv("SECRET_KEY")
         if SECRET_KEY:

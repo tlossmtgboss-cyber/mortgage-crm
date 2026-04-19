@@ -1,5 +1,9 @@
 """
 Analytics Routes - Application analytics and reporting endpoints.
+
+Security: All endpoints require authentication via router-level dependency.
+Fixed 2026-04-19 per audit finding H5 — previously had a broken local
+get_current_user stub that was never wired into route handlers.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,25 +13,16 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any
 import logging
 
+from db import get_db
+from auth.dependencies import require_auth
+
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/v1/analytics", tags=["analytics"])
-
-
-def get_db():
-    """Database session dependency - imported from main"""
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-def get_current_user(db: Session):
-    """Get current user - simplified for analytics"""
-    from auth.dependencies import get_current_user as main_get_current_user
-    return main_get_current_user
+router = APIRouter(
+    prefix="/api/v1/analytics",
+    tags=["analytics"],
+    dependencies=[Depends(require_auth)],
+)
 
 
 @router.get("/applications/overview")

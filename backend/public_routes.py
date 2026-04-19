@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta, timezone
-from jose import jwt
+import jwt
 import logging
 import os
 

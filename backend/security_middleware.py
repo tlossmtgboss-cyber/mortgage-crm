@@ -693,7 +693,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         try:
             # Import here to avoid circular imports
-            from jose import jwt
+            import jwt
             import os
 
             secret = os.getenv("SECRET_KEY", "")

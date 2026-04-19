@@ -266,7 +266,8 @@ async def verify_mfa_login(
 
     # Validate the MFA-scoped provisional token
     try:
-        from jose import jwt as jose_jwt, JWTError as JoseJWTError
+        import jwt as jose_jwt
+        from jwt.exceptions import InvalidTokenError as JoseJWTError
         payload = jose_jwt.decode(
             request.access_token,
             main.SECRET_KEY,

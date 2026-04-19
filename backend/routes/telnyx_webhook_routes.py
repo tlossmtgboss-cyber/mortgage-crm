@@ -1427,6 +1427,86 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             logger.error(f"Failed to trigger background SMS processing: {e}")
 
     # ==========================================================================
+    # Store inbound SMS in sms_panel_messages for Archive visibility
+    # ==========================================================================
+    _inbound_org_id = None
+    try:
+        _org_row = db.execute(sa_text("""
+            SELECT organization_id FROM verified_caller_ids
+            WHERE phone_number = :to_phone AND organization_id IS NOT NULL
+            LIMIT 1
+        """), {"to_phone": normalized_to}).fetchone()
+        if _org_row:
+            _inbound_org_id = _org_row[0]
+    except Exception as e:
+        db.rollback()
+        logger.warning(f"Org lookup for inbound SMS panel storage failed: {e}")
+
+    try:
+        import uuid as _uuid
+        _panel_id = str(_uuid.uuid4())
+        db.execute(sa_text("""
+            INSERT INTO sms_panel_messages
+                (id, phone, organization_id, direction, body,
+                 sender_name, status, media_urls,
+                 telnyx_message_id, created_at)
+            VALUES
+                (:id, :phone, :org_id, 'inbound', :body,
+                 :sender_name, 'received', '[]'::jsonb,
+                 :telnyx_id, NOW())
+            ON CONFLICT (id) DO NOTHING
+        """), {
+            "id": _panel_id,
+            "phone": normalized_from,
+            "org_id": _inbound_org_id,
+            "body": message_body or "",
+            "sender_name": normalized_from,
+            "telnyx_id": event.message_id,
+        })
+        db.commit()
+        logger.info(f"Inbound SMS stored in sms_panel_messages for phone=...{normalized_from[-4:]}")
+    except Exception as e:
+        logger.warning(f"Failed to store inbound SMS in sms_panel_messages: {e}")
+        db.rollback()
+
+    # ==========================================================================
+    # SMS Auto-Responder: create task + AI recommendation + auto-reply
+    # ==========================================================================
+    if _inbound_org_id:
+        try:
+            from services.sms_auto_responder import handle_inbound_sms as _auto_respond
+
+            _contact_name = None
+            try:
+                _lead_name_row = db.execute(sa_text("""
+                    SELECT first_name || ' ' || last_name FROM leads
+                    WHERE phone = :phone AND organization_id = :org_id
+                    ORDER BY updated_at DESC LIMIT 1
+                """), {"phone": normalized_from, "org_id": _inbound_org_id}).fetchone()
+                if _lead_name_row:
+                    _contact_name = _lead_name_row[0]
+            except Exception:
+                pass
+
+            _ar_result = _auto_respond(
+                db=db,
+                phone_number=normalized_from,
+                message_text=message_body or "",
+                telnyx_message_id=event.message_id,
+                organization_id=_inbound_org_id,
+                contact_name=_contact_name,
+            )
+            logger.info(
+                f"SMS auto-responder result: task_id={_ar_result.get('task_id')}, "
+                f"auto_responded={_ar_result.get('auto_responded')}, "
+                f"confidence={_ar_result.get('ai_confidence')}"
+            )
+        except ImportError:
+            logger.warning("sms_auto_responder not available, skipping auto-reply")
+        except Exception as e:
+            logger.error(f"SMS auto-responder failed (non-blocking): {e}", exc_info=True)
+
+    # ==========================================================================
     # Real-time notification: Alert loan officer via WebSocket
     # ==========================================================================
 

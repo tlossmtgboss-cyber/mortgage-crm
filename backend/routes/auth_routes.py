@@ -31,7 +31,8 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from sqlalchemy.exc import OperationalError, InterfaceError
-from jose import jwt, JWTError, ExpiredSignatureError
+import jwt
+from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
 
 from db import get_db
 

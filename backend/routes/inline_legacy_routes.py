@@ -35,7 +35,8 @@ import requests
 import anthropic
 from openai import OpenAI
 from passlib.context import CryptContext
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError
 
 logger = logging.getLogger(__name__)
 

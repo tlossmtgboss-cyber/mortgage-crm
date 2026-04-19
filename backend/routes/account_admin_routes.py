@@ -1291,7 +1291,17 @@ async def start_impersonation(
     request: Request,
     db: Session = Depends(_get_db_func)
 ):
-    """Start impersonating a user - generates a real JWT for the target user"""
+    """Start impersonating a user.
+
+    Security (2026-04-19 audit, finding C1):
+    - Uses canonical create_access_token (RS256, jti, iss, aud, type)
+    - 15-min TTL (was 1hr), type=impersonation, impersonator claims
+    - Cannot impersonate yourself or cross-org (unless superadmin)
+    - Every issuance logged to admin_audit_log
+    """
+    import secrets
+    from auth.tokens import create_access_token
+
     try:
         current_user = await get_user_from_request(request, db)
         require_master_admin(current_user)
@@ -1302,6 +1312,10 @@ async def start_impersonation(
         except (ValueError, TypeError):
             raise ValidationException(f"Invalid user_id: {imp_request.user_id}")
 
+        # C1 guardrail: cannot impersonate yourself
+        if user_id_int == current_user.id:
+            raise ValidationException("Cannot impersonate yourself")
+
         target_user = db.execute(text("""
             SELECT id, full_name, email, tenant_account_id, role, permission_role
             FROM users
@@ -1311,32 +1325,43 @@ async def start_impersonation(
         if not target_user:
             raise NotFoundException(f"User {imp_request.user_id} not found")
 
-        # Generate a real JWT token for the target user
-        import secrets
-        import jwt
+        # C1 guardrail: cross-org impersonation blocked unless superadmin
+        admin_tenant = getattr(current_user, 'tenant_account_id', None)
+        target_tenant = target_user[3]  # tenant_account_id
+        is_superadmin = getattr(current_user, 'is_superadmin', False)
+        if target_tenant != admin_tenant and not is_superadmin:
+            raise PermissionException("Cannot impersonate users in other organizations")
 
-        SECRET_KEY = os.getenv("SECRET_KEY", "")
-        ALGORITHM = "HS256"
-
-        # Create token data for the target user
-        token_data = {
-            "sub": target_user[2],  # email
-            "user_id": target_user[0],  # id
-            "impersonated_by": current_user.id,  # track who is impersonating
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1)  # 1 hour expiry for preview
-        }
-
-        # Generate the JWT
-        access_token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+        # Use canonical token creator — sets jti, iat, exp, iss, aud,
+        # type, and uses settings.algorithm (RS256 in prod). Per C1 fix.
+        access_token = create_access_token(
+            data={
+                "sub": target_user[2],  # email
+                "user_id": target_user[0],  # id
+                "type": "impersonation",
+                "impersonator_id": current_user.id,
+                "impersonator_email": getattr(current_user, 'email', None),
+                "organization_id": target_tenant,
+            },
+            expires_delta=timedelta(minutes=15),
+        )
 
         target_name = target_user[1] or target_user[2] or f"User {target_user[0]}"
         target_role = target_user[4] or target_user[5] or "user"
 
+        # SOC 2: audit every impersonation issuance
+        log_admin_action(
+            db, current_user, 'impersonation.started', 'user',
+            str(target_user[0]), target_name=target_name, request=request,
+        )
+
         return success_response(
             data={
                 'sessionId': f"preview_{user_id_int}_{secrets.token_hex(4)}",
-                'sessionToken': access_token,  # This is now a real JWT
-                'token': access_token,  # Also provide as 'token' for compatibility
+                'sessionToken': access_token,
+                'token': access_token,
+                'token_type': 'bearer',
+                'expires_in': 900,
                 'targetUserId': str(target_user[0]),
                 'targetUserName': target_name,
                 'targetUserRole': target_role,

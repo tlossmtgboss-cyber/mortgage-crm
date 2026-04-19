@@ -22,7 +22,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 import requests
-from jose import jwt
+import jwt
 
 logger = logging.getLogger(__name__)
 

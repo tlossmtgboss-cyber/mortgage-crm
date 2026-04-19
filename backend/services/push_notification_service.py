@@ -128,8 +128,8 @@ class APNsTokenManager:
         try:
             import jwt as pyjwt
         except ImportError:
-            # Fall back to jose if PyJWT not available
-            from jose import jwt as pyjwt
+            # PyJWT is the only JWT library (python-jose removed per audit C2)
+            raise
 
         key = self._load_key()
         issued_at = int(now)

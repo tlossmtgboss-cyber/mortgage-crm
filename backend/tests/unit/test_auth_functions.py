@@ -198,13 +198,13 @@ class TestTokenExpiration:
     def test_access_token_has_expiration(self):
         """Access token should contain an expiration claim."""
         from main import create_access_token
-        from jose import jwt as jose_jwt
+        import jwt as jose_jwt
 
         token = create_access_token(data={"sub": "exp_test@example.com"})
 
         try:
             # Decode without verification to inspect claims
-            payload = jose_jwt.get_unverified_claims(token)
+            payload = jose_jwt.decode(token, options={"verify_signature": False}, algorithms=["HS256", "RS256"])
             assert "exp" in payload, "Token should contain 'exp' claim"
             # Expiration should be in the future
             exp_time = payload["exp"]
@@ -217,15 +217,15 @@ class TestTokenExpiration:
     def test_refresh_token_expires_later_than_access(self):
         """Refresh token should expire later than access token."""
         from main import create_access_token, create_refresh_token
-        from jose import jwt as jose_jwt
+        import jwt as jose_jwt
 
         data = {"sub": "expiry_compare@example.com"}
         access = create_access_token(data=data)
         refresh = create_refresh_token(data=data)
 
         try:
-            access_claims = jose_jwt.get_unverified_claims(access)
-            refresh_claims = jose_jwt.get_unverified_claims(refresh)
+            access_claims = jose_jwt.decode(access, options={"verify_signature": False}, algorithms=["HS256", "RS256"])
+            refresh_claims = jose_jwt.decode(refresh, options={"verify_signature": False}, algorithms=["HS256", "RS256"])
 
             if "exp" in access_claims and "exp" in refresh_claims:
                 assert refresh_claims["exp"] > access_claims["exp"], (

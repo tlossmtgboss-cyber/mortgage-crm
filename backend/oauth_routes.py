@@ -16,7 +16,8 @@ import uuid
 import logging
 from urllib.parse import urlencode
 import os
-from jose import jwt, JWTError
+import jwt
+from jwt.exceptions import InvalidTokenError
 
 from database import get_db
 import hmac

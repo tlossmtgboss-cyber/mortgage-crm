@@ -199,7 +199,8 @@ def _try_get_current_user(request: Request, get_current_user, get_db):
     db = next(get_db())
     try:
         # Try to resolve the user via the standard auth dependency
-        from jose import jwt as jose_jwt, JWTError
+        import jwt as jose_jwt
+        from jwt.exceptions import InvalidTokenError
         import os
 
         auth_header = request.headers.get("authorization", "")
@@ -208,8 +209,9 @@ def _try_get_current_user(request: Request, get_current_user, get_db):
 
         token = auth_header.split(" ", 1)[1]
         SECRET_KEY = os.getenv("SECRET_KEY", "")
+        ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
         try:
-            payload = jose_jwt.decode(token, SECRET_KEY, algorithms=["HS256", "RS256"])
+            payload = jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
         except Exception:
             return None, db
 

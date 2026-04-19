@@ -29,7 +29,8 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import InvalidTokenError
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Dict, Any
 import uvicorn
@@ -860,7 +861,7 @@ async def get_current_user(
                 email: str = payload.get("sub")
                 if email is None:
                     raise credentials_exception
-            except JWTError:
+            except InvalidTokenError:
                 raise credentials_exception
 
         actual_user = db.query(User).filter(User.email == email).first()
@@ -1124,7 +1125,7 @@ async def get_current_user_flexible(
             email: str = payload.get("sub")
             if email is None:
                 raise credentials_exception
-        except JWTError:
+        except InvalidTokenError:
             raise credentials_exception
 
     actual_user = db.query(User).filter(User.email == email).first()

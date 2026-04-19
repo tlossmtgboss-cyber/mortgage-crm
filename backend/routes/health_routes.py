@@ -1142,11 +1142,11 @@ def register_health_routes(app, get_db, **kwargs):
                     pass
                 if not authenticated:
                     try:
-                        from jose import jwt as jose_jwt
+                        import jwt as jose_jwt
                         secret_key = os.getenv("SECRET_KEY", "")
                         algorithm = os.getenv("JWT_ALGORITHM", "HS256")
                         if secret_key:
-                            payload = jose_jwt.decode(token, secret_key, algorithms=[algorithm])
+                            payload = jose_jwt.decode(token, secret_key, algorithms=[algorithm], options={"verify_aud": False})
                             if payload.get("sub"):
                                 authenticated = True
                     except Exception:
@@ -1676,11 +1676,11 @@ def register_health_routes(app, get_db, **kwargs):
                         pass
                     # Fallback to HS256 JWT
                     if not authenticated:
-                        from jose import jwt as jose_jwt
+                        import jwt as jose_jwt
                         secret_key = os.getenv("SECRET_KEY", "")
                         algorithm = os.getenv("JWT_ALGORITHM", "HS256")
                         if secret_key:
-                            payload = jose_jwt.decode(token, secret_key, algorithms=[algorithm])
+                            payload = jose_jwt.decode(token, secret_key, algorithms=[algorithm], options={"verify_aud": False})
                             if payload.get("sub"):
                                 authenticated = True
                 except Exception:

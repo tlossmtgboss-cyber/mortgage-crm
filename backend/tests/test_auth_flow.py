@@ -20,7 +20,7 @@ import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from jose import jwt
+import jwt
 
 # ---------------------------------------------------------------------------
 # Auth module imports (always available in the backend tree)

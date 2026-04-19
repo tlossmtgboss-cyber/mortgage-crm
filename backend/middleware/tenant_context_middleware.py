@@ -31,8 +31,9 @@ except ImportError:
     _SECURE_AUTH_AVAILABLE = False
     _verify_secure_token = None
 
-# Fallback: raw jose decode for environments without auth.tokens
-from jose import JWTError, jwt
+# Fallback: raw PyJWT decode for environments without auth.tokens
+import jwt
+from jwt.exceptions import InvalidTokenError
 
 # Import structured logging context setters
 try:

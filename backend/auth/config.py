@@ -75,8 +75,10 @@ class AuthSettings(BaseModel):
         description="Redis URL for token blacklist"
     )
     token_blacklist_enabled: bool = Field(
-        default_factory=lambda: os.getenv("AUTH_TOKEN_BLACKLIST_ENABLED", "").lower() == "true",
-        description="Enable token blacklist in Redis"
+        default_factory=lambda: os.getenv("AUTH_TOKEN_BLACKLIST_ENABLED", "true").lower() == "true",
+        description="Enable token blacklist in Redis. Defaults to TRUE per 2026-04-19 audit H1 — "
+        "disabling means stolen/logged-out tokens remain valid for the full access-token TTL "
+        "with no revocation path. Set AUTH_TOKEN_BLACKLIST_ENABLED=false to disable temporarily."
     )
 
     # Security Settings

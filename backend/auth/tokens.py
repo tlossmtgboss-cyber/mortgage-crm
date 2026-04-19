@@ -28,7 +28,8 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 
-from jose import jwt, JWTError
+import jwt
+from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
 
 from .config import get_auth_settings
@@ -288,7 +289,7 @@ def decode_token(token: str, verify_exp: bool = True) -> Optional[Dict[str, Any]
             options=options,
         )
         return payload
-    except JWTError as e:
+    except InvalidTokenError as e:
         logger.debug(f"Token decode failed: {e}")
         return None
 
