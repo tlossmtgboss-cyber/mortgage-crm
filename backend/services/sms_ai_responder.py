@@ -419,7 +419,7 @@ def _build_context_prompt(db: Session, phone_number: str, lead_id: Optional[int]
                 parts.append(f"Active Loan: {', '.join(loan_parts)}")
 
     messages = db.execute(
-        text("SELECT direction, body, created_at FROM sms_panel_messages WHERE phone_number = :phone AND organization_id = :oid ORDER BY created_at DESC LIMIT 10"),
+        text("SELECT direction, body, created_at FROM sms_panel_messages WHERE phone = :phone AND organization_id = :oid ORDER BY created_at DESC LIMIT 10"),
         {"phone": phone_number, "oid": organization_id},
     ).mappings().all()
     if messages:

@@ -26,7 +26,7 @@ class RespondRequest(BaseModel):
 
     @validator("response_source")
     def validate_response_source(cls, v):
-        allowed = {"ai_accepted", "ai_edited", "human"}
+        allowed = {"ai_accepted", "ai_edited", "human", "ai", "manual"}
         if v not in allowed:
             raise ValueError(f"response_source must be one of {allowed}")
         return v
@@ -37,7 +37,7 @@ class FeedbackRequest(BaseModel):
 
     @validator("rating")
     def validate_rating(cls, v):
-        allowed = {"good", "acceptable", "poor"}
+        allowed = {"good", "acceptable", "poor", "positive", "negative"}
         if v not in allowed:
             raise ValueError(f"rating must be one of {allowed}")
         return v

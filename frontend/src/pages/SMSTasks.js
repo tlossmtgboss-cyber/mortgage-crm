@@ -107,10 +107,15 @@ function SMSTasks() {
       const res = await fetch(`${API_BASE_URL}/api/v1/sms-tasks/stats`, { headers });
       if (!res.ok) return;
       const data = await res.json();
+      const counts = data.counts || data;
+      const confList = data.confidence || [];
+      const avgConf = confList.length > 0
+        ? Math.round(confList.reduce((s, c) => s + (c.confidence_score || 0), 0) / confList.length)
+        : 0;
       setStats({
-        pending: data.pending || 0,
-        auto_responded_today: data.auto_responded_today || 0,
-        avg_confidence: data.avg_confidence || 0,
+        pending: counts.pending || 0,
+        auto_responded_today: counts.auto_responded_today || 0,
+        avg_confidence: avgConf,
       });
     } catch (err) {
       console.error('Error fetching stats:', err);
@@ -493,11 +498,11 @@ function SMSTasks() {
                 </span>
               </div>
 
-              {taskDetail.ai_recommended_response && (
+              {taskDetail.ai_recommendation && (
                 <div className="detail-section">
                   <h4>AI Recommended Response</h4>
                   <div className="ai-response-box">
-                    <p>{taskDetail.ai_recommended_response}</p>
+                    <p>{taskDetail.ai_recommendation}</p>
                     <div className="ai-confidence-row">
                       <span>Confidence: {taskDetail.ai_confidence || 0}%</span>
                       <div className="confidence-bar-bg large">
@@ -524,8 +529,8 @@ function SMSTasks() {
                 <div className="action-buttons">
                   <button
                     className="action-btn send-ai"
-                    onClick={() => handleSendResponse(taskDetail.ai_recommended_response, 'ai')}
-                    disabled={!taskDetail.ai_recommended_response || sending}
+                    onClick={() => handleSendResponse(taskDetail.ai_recommendation, 'ai')}
+                    disabled={!taskDetail.ai_recommendation || sending}
                   >
                     {sending ? 'Sending...' : 'Send AI Response'}
                   </button>
@@ -533,7 +538,7 @@ function SMSTasks() {
                     className="action-btn edit-send"
                     onClick={() => {
                       setResponseMode('edit');
-                      setEditText(taskDetail.ai_recommended_response || '');
+                      setEditText(taskDetail.ai_recommendation || '');
                     }}
                   >
                     Edit & Send

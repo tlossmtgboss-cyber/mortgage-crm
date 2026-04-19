@@ -18,8 +18,9 @@ def expire_stale_tasks(hours=24) -> int:
                 UPDATE sms_tasks
                 SET status = 'expired', updated_at = NOW()
                 WHERE status = 'pending'
-                  AND created_at < NOW() - INTERVAL ':hours hours'
-            """.replace(":hours", str(int(hours))))
+                  AND created_at < NOW() - make_interval(hours => :hours)
+            """),
+            {"hours": int(hours)}
         )
         count = result.rowcount
         session.commit()

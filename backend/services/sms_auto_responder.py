@@ -168,7 +168,7 @@ def process_user_response(
 
     confidence_updated = False
     try:
-        outcome = "accepted" if response_source == "ai_suggested" else "edited" if response_source == "ai_edited" else "rejected"
+        outcome = "accepted" if response_source in ("ai_accepted", "ai_suggested", "ai", "auto") else "edited" if response_source == "ai_edited" else "rejected"
         record_outcome(db, organization_id, user_id, category, outcome)
         confidence_updated = True
     except Exception as e:
@@ -189,7 +189,7 @@ def process_user_response(
                 "org_id": organization_id,
                 "category": category,
                 "template": response_text[:500],
-                "rate": 1.0 if response_source == "ai_suggested" else 0.6 if response_source == "ai_edited" else 0.0,
+                "rate": 1.0 if response_source in ("ai_accepted", "ai_suggested", "ai", "auto") else 0.6 if response_source == "ai_edited" else 0.0,
                 "now": now,
             },
         )
