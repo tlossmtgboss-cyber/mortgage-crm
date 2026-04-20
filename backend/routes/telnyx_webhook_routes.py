@@ -64,7 +64,7 @@ def _validate_texml_request(request: Request):
 
 
 # =============================================================================
-# Inbound Call Routing — Telnyx answer + LiveKit outbound SIP callback
+# Inbound Call Routing — Telnyx answer + SIP transfer to LiveKit
 # =============================================================================
 
 ARIA_DID = os.getenv("ARIA_DID", "")
@@ -73,10 +73,11 @@ ARIA_DID = os.getenv("ARIA_DID", "")
 async def _route_inbound_to_livekit(
     call_control_id: str, from_number: str, to_number: str, db: Session,
 ):
-    """Route an inbound call to Aria via callback.
+    """Route an inbound call to Aria via SIP transfer.
 
-    Answer → hold message → hang up → LiveKit calls caller back.
-    LiveKit Cloud inbound SIP is broken (404), so callback is the only path.
+    Answer → CRM lookup → transfer to LiveKit SIP endpoint.
+    Caller is connected directly to Aria — no hold message.
+    Falls back to outbound SIP callback if transfer fails.
     """
     import requests as http_requests
     from livekit import api as livekit_api
@@ -86,6 +87,7 @@ async def _route_inbound_to_livekit(
     lk_key = os.getenv("LIVEKIT_API_KEY", "")
     lk_secret = os.getenv("LIVEKIT_API_SECRET", "")
     outbound_trunk = os.getenv("LIVEKIT_SIP_OUTBOUND_TRUNK_ID", "")
+    lk_sip_uri = os.getenv("LIVEKIT_SIP_URI", "")
 
     if not telnyx_key:
         logger.error("[AriaInbound] TELNYX_API_KEY not set")
@@ -93,6 +95,12 @@ async def _route_inbound_to_livekit(
     if not all([lk_url, lk_key, lk_secret]):
         logger.error("[AriaInbound] LiveKit credentials not set")
         return
+
+    # Derive SIP URI from LiveKit URL if not explicitly set
+    if not lk_sip_uri and lk_url:
+        host = lk_url.replace("wss://", "").replace("ws://", "").rstrip("/")
+        if ".livekit.cloud" in host:
+            lk_sip_uri = host.replace(".livekit.cloud", ".sip.livekit.cloud")
 
     logger.warning("[AriaInbound] Routing ...%s to Aria", from_number[-4:] if from_number else "?")
 
@@ -102,7 +110,7 @@ async def _route_inbound_to_livekit(
     }
     base_url = f"https://api.telnyx.com/v2/calls/{call_control_id}/actions"
 
-    # Step 1: Answer the inbound call
+    # Step 1: Answer the inbound call immediately (no hold message)
     try:
         resp = http_requests.post(f"{base_url}/answer", headers=headers, json={}, timeout=10)
         logger.warning(f"[AriaInbound] Answer: {resp.status_code}")
@@ -113,24 +121,26 @@ async def _route_inbound_to_livekit(
         logger.error(f"[AriaInbound] Answer failed: {e}", exc_info=True)
         return
 
-    # Step 2: Tell caller what's happening
-    try:
-        http_requests.post(
-            f"{base_url}/speak",
-            headers=headers,
-            json={
-                "payload": "Thanks for calling Perennia. Aria will be right with you — please stay on the line.",
-                "voice": "female",
-                "language": "en-US",
-            },
-            timeout=10,
-        )
-    except Exception as e:
-        logger.warning(f"[AriaInbound] Speak failed: {e}")
-
-    # Step 3: Look up caller in CRM before creating room
+    # Step 2: CRM lookup for caller context
     caller_info = {"is_existing_client": False}
+    _call_org_id = None
     try:
+        try:
+            _org_row = db.execute(sa_text("""
+                SELECT organization_id FROM verified_caller_ids
+                WHERE phone_number = :to_phone AND organization_id IS NOT NULL
+                LIMIT 1
+            """), {"to_phone": to_number}).fetchone()
+            if _org_row:
+                _call_org_id = _org_row[0]
+            else:
+                logger.warning(
+                    "[AriaInbound] No org mapping for receiving number %s",
+                    to_number[-4:] if to_number else "?",
+                )
+        except Exception as e:
+            logger.warning("[AriaInbound] Org lookup failed: %s", e)
+
         normalized = from_number.lstrip("+")
         if len(normalized) == 10:
             normalized = f"+1{normalized}"
@@ -139,28 +149,34 @@ async def _route_inbound_to_livekit(
         else:
             normalized = from_number
 
-        lead_row = db.execute(sa_text("""
+        _org_clause = "AND l.organization_id = :org_id" if _call_org_id else ""
+        _params = {"phone": normalized}
+        if _call_org_id:
+            _params["org_id"] = _call_org_id
+
+        lead_row = db.execute(sa_text(f"""
             SELECT l.id, l.first_name, l.last_name, l.email, l.stage,
-                   l.assigned_to, l.organization_id,
+                   l.owner_id, l.organization_id,
                    u.first_name AS lo_first, u.last_name AS lo_last
             FROM leads l
-            LEFT JOIN users u ON u.id = l.assigned_to
-            WHERE l.phone = :phone
+            LEFT JOIN users u ON u.id = l.owner_id
+            WHERE l.phone = :phone {_org_clause}
             ORDER BY l.updated_at DESC NULLS LAST
             LIMIT 1
-        """), {"phone": normalized}).fetchone()
+        """), _params).fetchone()
 
         if not lead_row:
-            lead_row = db.execute(sa_text("""
+            _params["phone"] = from_number
+            lead_row = db.execute(sa_text(f"""
                 SELECT l.id, l.first_name, l.last_name, l.email, l.stage,
-                       l.assigned_to, l.organization_id,
+                       l.owner_id, l.organization_id,
                        u.first_name AS lo_first, u.last_name AS lo_last
                 FROM leads l
-                LEFT JOIN users u ON u.id = l.assigned_to
-                WHERE l.phone = :phone
+                LEFT JOIN users u ON u.id = l.owner_id
+                WHERE l.phone = :phone {_org_clause}
                 ORDER BY l.updated_at DESC NULLS LAST
                 LIMIT 1
-            """), {"phone": from_number}).fetchone()
+            """), _params).fetchone()
 
         if lead_row:
             caller_info = {
@@ -170,17 +186,72 @@ async def _route_inbound_to_livekit(
                 "last_name": lead_row[2] or "",
                 "email": lead_row[3] or "",
                 "stage": lead_row[4] or "",
-                "assigned_to": lead_row[5],
+                "owner_id": lead_row[5],
                 "organization_id": lead_row[6],
                 "lo_name": f"{lead_row[7] or ''} {lead_row[8] or ''}".strip(),
             }
             logger.warning(f"[AriaInbound] Known caller: lead_id={caller_info['lead_id']}")
         else:
-            logger.warning("[AriaInbound] New caller: ...%s — no CRM record", from_number[-4:] if from_number else "?")
+            logger.warning("[AriaInbound] New caller: ...%s", from_number[-4:] if from_number else "?")
     except Exception as e:
         logger.error(f"[AriaInbound] CRM lookup failed: {e}")
 
-    # Step 4: Create LiveKit room and dispatch agent BEFORE dialing caller
+    # Step 3: Transfer call to LiveKit via SIP (best UX — direct connection)
+    if lk_sip_uri:
+        transfer_payload = {
+            "to": f"sip:{to_number}@{lk_sip_uri}",
+        }
+        if caller_info.get("is_existing_client"):
+            transfer_payload["custom_headers"] = [
+                {"name": "X-Lead-Id", "value": str(caller_info.get("lead_id", ""))},
+                {"name": "X-Caller-Name", "value": f"{caller_info.get('first_name', '')} {caller_info.get('last_name', '')}".strip()},
+                {"name": "X-LO-Name", "value": caller_info.get("lo_name", "")},
+                {"name": "X-Lead-Stage", "value": caller_info.get("stage", "")},
+                {"name": "X-Org-Id", "value": str(caller_info.get("organization_id", ""))},
+            ]
+
+        try:
+            resp = http_requests.post(
+                f"{base_url}/transfer",
+                headers=headers,
+                json=transfer_payload,
+                timeout=10,
+            )
+            if resp.status_code < 400:
+                logger.warning(
+                    "[AriaInbound] SIP transfer to %s: %s — caller connected directly",
+                    lk_sip_uri, resp.status_code,
+                )
+                return
+            logger.warning(
+                "[AriaInbound] SIP transfer failed (%s): %s — trying callback",
+                resp.status_code, resp.text[:200],
+            )
+        except Exception as e:
+            logger.warning("[AriaInbound] SIP transfer error: %s — trying callback", e)
+
+    # Step 4: Fallback — outbound SIP callback via LiveKit
+    if not outbound_trunk:
+        logger.error(
+            "[AriaInbound] No LIVEKIT_SIP_OUTBOUND_TRUNK_ID and SIP transfer unavailable"
+        )
+        try:
+            http_requests.post(
+                f"{base_url}/speak",
+                headers=headers,
+                json={
+                    "payload": "I'm sorry, I'm unable to connect you right now. Please try again shortly.",
+                    "voice": "female",
+                    "language": "en-US",
+                },
+                timeout=10,
+            )
+            await asyncio.sleep(4)
+            http_requests.post(f"{base_url}/hangup", headers=headers, json={}, timeout=10)
+        except Exception:
+            pass
+        return
+
     import secrets as _secrets
     room_suffix = _secrets.token_hex(8)
     room_name = f"aria-inbound-{room_suffix}"
@@ -200,13 +271,11 @@ async def _route_inbound_to_livekit(
             "organization_id": caller_info.get("organization_id"),
         })
 
-        # 3a: Create room
         await lk.room.create_room(livekit_api.CreateRoomRequest(
             name=room_name, metadata=room_metadata,
         ))
         logger.warning(f"[AriaInbound] Room created: {room_name}")
 
-        # 3b: Explicitly dispatch agent so it joins before the caller
         await lk.agent_dispatch.create_dispatch(
             livekit_api.CreateAgentDispatchRequest(
                 agent_name="aria-voice",
@@ -216,10 +285,8 @@ async def _route_inbound_to_livekit(
         )
         logger.warning(f"[AriaInbound] Agent dispatched to {room_name}")
 
-        # 3c: Give agent time to connect before dialing the caller
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
 
-        # 3d: Now dial the caller via outbound SIP
         sip_req = livekit_api.CreateSIPParticipantRequest(
             sip_trunk_id=outbound_trunk,
             sip_call_to=from_number,
@@ -229,7 +296,7 @@ async def _route_inbound_to_livekit(
         )
         sip_result = await lk.sip.create_sip_participant(sip_req)
         logger.warning(
-            "[AriaInbound] LiveKit calling ...%s, room=%s sip_call=%s",
+            "[AriaInbound] Callback: ...%s, room=%s sip_call=%s",
             from_number[-4:] if from_number else "?",
             room_name, sip_result.sip_call_id,
         )
@@ -238,8 +305,7 @@ async def _route_inbound_to_livekit(
     except Exception as e:
         logger.error(f"[AriaInbound] Callback setup failed: {e}", exc_info=True)
 
-    # Step 4: Wait for TTS, then hang up so caller's phone is free for callback
-    await asyncio.sleep(3)
+    await asyncio.sleep(1)
     try:
         http_requests.post(f"{base_url}/hangup", headers=headers, json={}, timeout=10)
         logger.warning("[AriaInbound] Original call hung up — callback in progress")
@@ -1445,24 +1511,30 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     # ==========================================================================
 
     try:
-        # Look up which user owns this phone number / is assigned to the contact
-        lo_match = db.execute(sa_text("""
+        # Look up which user owns this phone number (scoped to org if resolved)
+        _lo_org_clause = "AND l.organization_id = :org_id" if _inbound_org_id else ""
+        _lo_params = {"phone": normalized_from}
+        if _inbound_org_id:
+            _lo_params["org_id"] = _inbound_org_id
+
+        lo_match = db.execute(sa_text(f"""
             SELECT DISTINCT l.loan_officer_id
             FROM loans l
             WHERE l.borrower_phone = :phone
             AND l.loan_officer_id IS NOT NULL
+            {_lo_org_clause}
             LIMIT 1
-        """), {"phone": normalized_from}).fetchone()
+        """), _lo_params).fetchone()
 
         if not lo_match:
-            # Try matching via leads table
-            lo_match = db.execute(sa_text("""
-                SELECT DISTINCT l.assigned_to
+            lo_match = db.execute(sa_text(f"""
+                SELECT DISTINCT l.owner_id
                 FROM leads l
                 WHERE l.phone = :phone
-                AND l.assigned_to IS NOT NULL
+                AND l.owner_id IS NOT NULL
+                {_lo_org_clause}
                 LIMIT 1
-            """), {"phone": normalized_from}).fetchone()
+            """), _lo_params).fetchone()
 
         if lo_match:
             lo_user_id = lo_match[0]
