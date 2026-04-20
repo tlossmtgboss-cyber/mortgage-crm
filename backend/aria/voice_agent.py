@@ -766,8 +766,8 @@ def _build_session(mode: str = "lo_assistant", context: dict = None) -> tuple:
     tts = cartesia.TTS(
         model="sonic-3",
         voice=CARTESIA_VOICE_ID,
-        speed="normal",
-        emotion=["positivity:high", "curiosity"],
+        speed=1.0,
+        emotion="content",
     )
 
     session = AgentSession(
