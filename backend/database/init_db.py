@@ -1189,6 +1189,7 @@ def init_db():
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_enabled_at TIMESTAMP;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_provider VARCHAR;
                     ALTER TABLE users ADD COLUMN IF NOT EXISTS sso_subject_id VARCHAR;
+                    ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMP WITH TIME ZONE;
                 """))
                 conn.execute(text("""
                     ALTER TABLE organizations ADD COLUMN IF NOT EXISTS sso_enforced BOOLEAN DEFAULT FALSE;

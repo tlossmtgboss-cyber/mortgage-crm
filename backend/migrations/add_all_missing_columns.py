@@ -51,6 +51,8 @@ def run_migration():
             # SSO provisioning (Enterprise Check 5.11)
             ("sso_provider", "VARCHAR", None),
             ("sso_subject_id", "VARCHAR", None),
+            # Password change tracking (session revocation after password reset)
+            ("password_changed_at", "TIMESTAMP WITH TIME ZONE", None),
         ]
 
         for col_name, col_type, default in user_columns:
