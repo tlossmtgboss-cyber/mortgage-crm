@@ -789,6 +789,7 @@ def _build_session(mode: str = "lo_assistant", context: dict = None) -> tuple:
             model=CLAUDE_MODEL,
             client=anthropic_client,
             max_tokens=256,
+            _strict_tool_schema=False,
         ),
         tts=tts,
         turn_handling=TURN_HANDLING,
