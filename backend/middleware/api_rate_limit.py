@@ -97,6 +97,7 @@ WINDOW_SECONDS = 60  # 1-minute sliding window
 # Paths exempt from rate limiting entirely
 EXEMPT_PATHS = frozenset({
     "/health",
+    "/health/live",
     "/api/health",
     "/docs",
     "/openapi.json",
