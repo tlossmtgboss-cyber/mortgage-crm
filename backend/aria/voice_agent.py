@@ -214,7 +214,6 @@ class AriaVoiceAgent(Agent):
 
     # ─── CRM Tools (all via HTTP backend) ─────────────────────────────
 
-    @function_tool()
     async def search_pipeline(self, context: RunContext, query: str):
         """Search the loan pipeline by borrower name, loan number, or stage."""
         result = await self._call_backend(
@@ -223,7 +222,6 @@ class AriaVoiceAgent(Agent):
         )
         return json.dumps(result, default=str)
 
-    @function_tool()
     async def get_pipeline_summary(self, context: RunContext):
         """Get a summary of the current loan pipeline — total loans, by stage, SLA alerts."""
         result = await self._call_backend(
@@ -232,7 +230,6 @@ class AriaVoiceAgent(Agent):
         )
         return json.dumps(result, default=str)
 
-    @function_tool()
     async def search_leads(self, context: RunContext, query: str):
         """Search for leads by name, email, or phone number."""
         result = await self._call_backend(
@@ -311,7 +308,6 @@ class AriaVoiceAgent(Agent):
         })
         return json.dumps(result, default=str)
 
-    @function_tool()
     async def get_sla_alerts(self, context: RunContext):
         """Get current SLA alerts and overdue items."""
         result = await self._call_backend(
@@ -320,7 +316,6 @@ class AriaVoiceAgent(Agent):
         )
         return json.dumps(result, default=str)
 
-    @function_tool()
     async def check_rates(self, context: RunContext, loan_type: str):
         """Check current mortgage rates."""
         result = await self._call_backend(
@@ -364,7 +359,6 @@ class AriaVoiceAgent(Agent):
         })
         return json.dumps(result, default=str)
 
-    @function_tool()
     async def get_daily_briefing(self, context: RunContext):
         """Get a morning briefing with today's tasks, appointments, pipeline updates, and alerts."""
         result = await self._call_backend(
@@ -375,7 +369,6 @@ class AriaVoiceAgent(Agent):
 
     # ─── SMS Conversation Tools ──────────────────────────────────────
 
-    @function_tool()
     async def get_sms_conversation(self, context: RunContext, phone_number: str):
         """Get the SMS conversation history with a phone number. Shows recent messages back and forth."""
         result = await self._call_backend(
@@ -386,7 +379,6 @@ class AriaVoiceAgent(Agent):
         )
         return json.dumps(result, default=str)
 
-    @function_tool()
     async def start_scheduling_conversation(
         self,
         context: RunContext,
@@ -415,7 +407,6 @@ class AriaVoiceAgent(Agent):
 
     # ─── Document Generation Tools ───────────────────────────────────
 
-    @function_tool()
     async def generate_pre_approval_letter(
         self,
         context: RunContext,
@@ -501,7 +492,6 @@ class AriaVoiceAgent(Agent):
         })
         return json.dumps(result, default=str)
 
-    @function_tool()
     async def update_lead(
         self,
         context: RunContext,
@@ -605,7 +595,6 @@ class AriaVoiceAgent(Agent):
         "get_sla_status", "calculate_income",
     })
 
-    @function_tool()
     async def run_crm_tool(
         self, context: RunContext, tool_name: str, parameters: str
     ):
