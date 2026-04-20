@@ -43,6 +43,13 @@ from livekit.plugins.anthropic import LLM as AnthropicLLM
 from agents.aria_backend_client import call_backend_tool_safe
 from agents.aria_prompts import get_prompt
 
+# Override default API connect timeout — the 10s default is too aggressive for
+# streaming requests with large tool schemas on Railway's network
+import livekit.agents.types as _agent_types
+_agent_types.DEFAULT_API_CONNECT_OPTIONS = _agent_types.APIConnectOptions(
+    timeout=30.0, max_retry=3, retry_interval=2.0
+)
+
 logger = logging.getLogger("aria.voice_agent")
 
 # ─── Configuration ───────────────────────────────────────────────────────────
