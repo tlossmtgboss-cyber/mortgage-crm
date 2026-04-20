@@ -70,20 +70,15 @@ async def load_context(
     """Tier 1 context load at call start."""
     _verify_internal_key(request)
 
-    try:
-        from services.aria_memory.context_loader import AriaContextLoader, ContextLoadRequest
-        loader = AriaContextLoader(db)
-        ctx = await loader.load_context(ContextLoadRequest(
-            borrower_id=req.borrower_id,
-            tenant_id=req.tenant_id,
-            call_trigger=req.call_trigger,
-            loan_stage=req.loan_stage,
-        ))
-        return ctx.model_dump()
-    except Exception as e:
-        import traceback
-        logger.error("Context load failed: %s\n%s", e, traceback.format_exc())
-        return {"error": str(e), "type": type(e).__name__, "trace": traceback.format_exc()[-500:]}
+    from services.aria_memory.context_loader import AriaContextLoader, ContextLoadRequest
+    loader = AriaContextLoader(db)
+    ctx = await loader.load_context(ContextLoadRequest(
+        borrower_id=req.borrower_id,
+        tenant_id=req.tenant_id,
+        call_trigger=req.call_trigger,
+        loan_stage=req.loan_stage,
+    ))
+    return ctx.model_dump()
 
 
 @router.post("/retrieve")
@@ -98,26 +93,21 @@ async def retrieve(
     if req.scope == "memory" and req.borrower_id is None:
         raise HTTPException(status_code=400, detail="borrower_id required for memory scope")
 
-    try:
-        from services.aria_memory.retrieval_service import AriaRetrievalService
-        redis = _get_redis()
-        service = AriaRetrievalService(db=db, redis=redis)
-        result = await service.retrieve(
-            scope=req.scope,
-            query=req.query,
-            tenant_id=req.tenant_id,
-            borrower_id=req.borrower_id,
-            jurisdiction=req.jurisdiction,
-            effective_date=req.effective_date,
-            top_k=req.top_k,
-            time_scope_days=req.time_scope_days,
-            topic=req.topic,
-        )
-        return result.model_dump()
-    except Exception as e:
-        import traceback
-        logger.error("Retrieve failed: %s\n%s", e, traceback.format_exc())
-        return {"error": str(e), "type": type(e).__name__, "trace": traceback.format_exc()[-500:]}
+    from services.aria_memory.retrieval_service import AriaRetrievalService
+    redis = _get_redis()
+    service = AriaRetrievalService(db=db, redis=redis)
+    result = await service.retrieve(
+        scope=req.scope,
+        query=req.query,
+        tenant_id=req.tenant_id,
+        borrower_id=req.borrower_id,
+        jurisdiction=req.jurisdiction,
+        effective_date=req.effective_date,
+        top_k=req.top_k,
+        time_scope_days=req.time_scope_days,
+        topic=req.topic,
+    )
+    return result.model_dump()
 
 
 @router.post("/consolidate", status_code=202)

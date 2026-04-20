@@ -128,6 +128,7 @@ class AriaRetrievalService:
             mem_type = row.memory_type
             if hasattr(mem_type, "value"):
                 mem_type = mem_type.value
+            mem_type = mem_type.lower() if isinstance(mem_type, str) else mem_type
 
             facts.append(RetrievedFact(
                 text=row.value,
