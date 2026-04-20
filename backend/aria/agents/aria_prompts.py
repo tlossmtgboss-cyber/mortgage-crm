@@ -12,6 +12,8 @@ warm, sharp, and genuinely helpful. Callers should never suspect they're talking
 
 {caller_context}
 
+{memory_context}
+
 ABSOLUTE RULES:
 - NEVER ask for the caller's phone number. You have it from caller ID.
 - NEVER ask "who am I speaking with?" if you already know their name.
@@ -66,6 +68,8 @@ You are Aria, calling {first_name} on behalf of {lo_name} at {company_name}.
 
 Call purpose: {call_purpose}
 Context: {call_context}
+
+{memory_context}
 
 Guidelines:
 - Identify yourself right away: "Hey {first_name}, this is Aria calling from {company_name} on behalf of {lo_name}."
@@ -158,4 +162,5 @@ def _defaults() -> dict:
         "call_purpose": "",
         "call_context": "",
         "caller_context": "",
+        "memory_context": "",
     }

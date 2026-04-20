@@ -313,6 +313,7 @@ const PURLApplication = lazyRetry(() => import('./pages/PURLApplication'));
 const PortalContainer = lazyRetry(() => import('./pages/portal/PortalContainer'));
 const LoanPortalRedirect = lazyRetry(() => import('./components/Portal/LoanPortalRedirect'));
 const AdminDocumentReviewQueue = lazyRetry(() => import('./pages/AdminDocumentReviewQueue'));
+const MemoryStaging = lazyRetry(() => import('./pages/MemoryStaging'));
 const LeadAssignmentConfig = lazyRetry(() => import('./pages/LeadAssignmentConfig'));
 const IncomeCalculatorPopout = lazyRetry(() => import('./pages/IncomeCalculatorPopout'));
 const IntakeEngine = lazyRetry(() => import('./components/intake/IntakeEngine'));
@@ -4513,6 +4514,28 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><LeadAssignmentConfig /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/admin/memory-staging"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><MemoryStaging /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

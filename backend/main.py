@@ -166,11 +166,15 @@ try:
             logger.error(f"Redis connection FAILED: {e} — token revocation and rate limiting may not work")
         logger.info("Token blacklist initialized with Redis")
     else:
+        # No Redis — blacklist uses in-memory fallback (already active by default)
         _env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
         if _env in ("production", "staging"):
-            logger.error("REDIS_URL not set — token revocation disabled in production")
+            logger.warning(
+                "REDIS_URL not set — token blacklist using in-memory fallback. "
+                "Blacklisted tokens will not persist across restarts or sync across processes."
+            )
         else:
-            logger.warning("REDIS_URL not set — using in-memory token blacklist (dev only)")
+            logger.info("REDIS_URL not set — using in-memory token blacklist (dev mode)")
 except ImportError as e:
     logger.warning(f"⚠️ Secure auth module not available, using legacy JWT: {e}")
     _USE_SECURE_TOKENS = False
@@ -864,6 +868,13 @@ async def get_current_user(
                 email: str = payload.get("sub")
                 if email is None:
                     raise credentials_exception
+                # CRIT-V2-01: Reject MFA provisional tokens — they must NOT
+                # grant full API access. Only the MFA verification endpoint
+                # should accept tokens with scope=mfa_verify.
+                token_scope = payload.get("scope")
+                if token_scope == "mfa_verify":
+                    logger.warning(f"Rejected MFA provisional token used as access token for {email}")
+                    raise credentials_exception
                 jti = payload.get("jti")
                 if jti:
                     try:
@@ -1135,6 +1146,13 @@ async def get_current_user_flexible(
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
             email: str = payload.get("sub")
             if email is None:
+                raise credentials_exception
+            # CRIT-V2-01: Reject MFA provisional tokens — they must NOT
+            # grant full API access. Only the MFA verification endpoint
+            # should accept tokens with scope=mfa_verify.
+            token_scope = payload.get("scope")
+            if token_scope == "mfa_verify":
+                logger.warning(f"Rejected MFA provisional token used as access token for {email}")
                 raise credentials_exception
         except InvalidTokenError:
             raise credentials_exception
@@ -4019,6 +4037,16 @@ except Exception as e:
     logger.error(f"❌ Mobile API routes failed to load: {e}")
     import traceback
     traceback.print_exc()
+
+# ============================================================================
+# ADMIN ROUTES - Memory staging UI API
+# ============================================================================
+try:
+    from routes.admin.memory_staging_routes import router as memory_staging_router
+    app.include_router(memory_staging_router)
+    logger.info("✅ Admin memory staging routes loaded")
+except Exception as e:
+    logger.error(f"❌ Admin memory staging routes failed to load: {e}")
 
 # ============================================================================
 # TEMPORARY: One-time seed endpoint for App Store demo account

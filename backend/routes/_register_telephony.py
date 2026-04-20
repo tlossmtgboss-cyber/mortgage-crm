@@ -358,4 +358,12 @@ def register_telephony_routes(app, get_db, get_current_user, get_current_user_fl
     except Exception as e:
         logger.warning(f"Could not load Aria Internal Workflow routes: {e}")
 
+    # Include Aria Internal Memory routes
+    try:
+        from routes.internal.aria_memory_routes import router as aria_memory_router
+        app.include_router(aria_memory_router, tags=["Aria Memory Internal"])
+        logger.info("Aria Internal Memory routes loaded")
+    except Exception as e:
+        logger.warning(f"Could not load Aria Internal Memory routes: {e}")
+
     logger.info("Telephony & Voice route group loaded")

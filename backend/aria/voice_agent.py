@@ -50,7 +50,19 @@ CARTESIA_VOICE_ID = os.getenv(
 CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-sonnet-4-5-20250414")
 TELNYX_TRUNK_ID = os.getenv("TELNYX_SIP_TRUNK_ID", "")
 
+BRIDGE_PHRASES = [
+    "Let me pull that up real quick.",
+    "Give me just a sec.",
+    "One moment, let me check.",
+    "Checking on that for you.",
+    "Let me look into that.",
+]
 
+CUE_PHRASES = [
+    "last time", "as i mentioned", "you know my", "remember when",
+    "we talked about", "you told me", "previously", "before",
+    "earlier", "my preference",
+]
 
 MAX_SESSION_SECONDS = 1800  # 30-minute hard limit
 
@@ -97,7 +109,11 @@ class AriaVoiceAgent(Agent):
         ctx = context or {}
         prompt = get_prompt(mode, ctx) + self.INJECTION_DEFENSE
         super().__init__(instructions=prompt)
+        self._initial_instructions = prompt
         self._mode = mode
+        self._bridge_idx = 0
+        self._speculative_turn_id: Optional[str] = None
+        self._transcript_lines: list[str] = []
         self._session_data: Dict[str, Any] = {
             "mode": mode,
             "tools_executed": [],
@@ -106,6 +122,33 @@ class AriaVoiceAgent(Agent):
         }
 
     async def on_enter(self) -> None:
+        memory_context = ""
+        if self._mode in ("inbound_receptionist", "outbound_followup"):
+            borrower_id = self._session_data.get("lead_id") or self._session_data.get("borrower_id")
+            org_id = self._session_data.get("organization_id")
+            if borrower_id and org_id:
+                try:
+                    ctx_result = await call_backend_tool_safe(
+                        "/internal/aria/context",
+                        {
+                            "borrower_id": borrower_id,
+                            "tenant_id": org_id,
+                            "call_trigger": "inbound_call" if self._mode == "inbound_receptionist" else "outbound_followup",
+                            "loan_stage": self._session_data.get("stage"),
+                        },
+                    )
+                    if not ctx_result.get("error"):
+                        memory_context = self._format_memory_context(ctx_result)
+                except Exception as e:
+                    logger.warning("[AriaVoice] Context load failed: %s", e)
+
+            if memory_context:
+                self.update_instructions(
+                    self._initial_instructions.replace("{memory_context}", memory_context)
+                    if "{memory_context}" in (self._initial_instructions or "")
+                    else (self._initial_instructions or "") + "\n\n" + memory_context
+                )
+
         if self._mode == "inbound_receptionist":
             caller_name = self._session_data.get("caller_name", "")
             is_existing = self._session_data.get("is_existing_client", False)
@@ -124,6 +167,7 @@ class AriaVoiceAgent(Agent):
                 )
             await self.session.generate_reply(instructions=greeting)
             asyncio.create_task(self._enforce_session_timeout())
+            self._register_speech_handler()
             return
 
         greetings = {
@@ -139,6 +183,7 @@ class AriaVoiceAgent(Agent):
             instructions=greetings.get(self._mode, greetings["lo_assistant"])
         )
         asyncio.create_task(self._enforce_session_timeout())
+        self._register_speech_handler()
 
     async def _enforce_session_timeout(self) -> None:
         await asyncio.sleep(MAX_SESSION_SECONDS)
@@ -572,9 +617,103 @@ class AriaVoiceAgent(Agent):
         })
         return json.dumps(result, default=str)
 
+    @function_tool()
+    async def recall_borrower_history(
+        self,
+        context: RunContext,
+        query: str,
+        time_scope_days: Optional[int] = None,
+    ) -> str:
+        """Search past conversations with this borrower for preferences, facts, or history."""
+        bridge = BRIDGE_PHRASES[self._bridge_idx % len(BRIDGE_PHRASES)]
+        self._bridge_idx += 1
+        await self.session.generate_reply(instructions=bridge)
+
+        borrower_id = self._session_data.get("lead_id") or self._session_data.get("borrower_id")
+        if not borrower_id:
+            return json.dumps({"facts": [], "no_results": True})
+
+        payload = {
+            "scope": "memory",
+            "query": query,
+            "tenant_id": self._session_data.get("organization_id", 0),
+            "borrower_id": borrower_id,
+            "top_k": 5,
+        }
+        if time_scope_days:
+            payload["time_scope_days"] = time_scope_days
+
+        result = await self._call_backend("/internal/aria/retrieve", payload)
+
+        self._session_data["tools_executed"].append({
+            "tool": "recall_borrower_history",
+            "query": query,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+        if result.get("error"):
+            return json.dumps({"facts": [], "no_results": True})
+        return json.dumps(result, default=str)
+
+    # ─── Speech Handler & Speculative Pre-fetch ──────────────────────
+
+    def _register_speech_handler(self) -> None:
+        """Register speculative pre-fetch + transcript accumulation on user speech."""
+        @self.session.on("user_input_transcribed")
+        def _on_transcribed(event):
+            text = event.transcript
+            if event.is_final:
+                self._transcript_lines.append(f"CALLER: {text}")
+            if len(text.split()) < 3:
+                return
+            turn_id = f"turn_{hash(text)}"
+            if self._speculative_turn_id == turn_id:
+                return
+            text_lower = text.lower()
+            for cue in CUE_PHRASES:
+                if cue in text_lower:
+                    self._speculative_turn_id = turn_id
+                    borrower_id = self._session_data.get("lead_id") or self._session_data.get("borrower_id")
+                    org_id = self._session_data.get("organization_id")
+                    if borrower_id and org_id:
+                        asyncio.create_task(self._call_backend("/internal/aria/retrieve", {
+                            "scope": "memory",
+                            "query": text,
+                            "tenant_id": org_id,
+                            "borrower_id": borrower_id,
+                            "top_k": 3,
+                        }))
+                    break
+
+    # ─── Memory Context Helpers ──────────────────────────────────────
+
+    def _format_memory_context(self, ctx: dict) -> str:
+        """Format context load result as structured text for system prompt."""
+        parts = []
+        if ctx.get("preferences"):
+            prefs = ", ".join(f"{k}: {v}" for k, v in ctx["preferences"].items())
+            parts.append(f"KNOWN PREFERENCES: {prefs}")
+        if ctx.get("relevant_facts"):
+            for f in ctx["relevant_facts"][:5]:
+                parts.append(f"PRIOR FACT ({f.get('topic', 'general')}): {f.get('text', '')}")
+        if ctx.get("last_interaction"):
+            parts.append(f"LAST INTERACTION: {ctx['last_interaction']}")
+        if ctx.get("pending_conditions"):
+            conds = ", ".join(ctx["pending_conditions"][:5])
+            parts.append(f"PENDING CONDITIONS: {conds}")
+        return "\n".join(parts)
+
+    def _compute_duration(self) -> int:
+        try:
+            started = datetime.fromisoformat(self._session_data.get("started_at", ""))
+            ended = datetime.fromisoformat(self._session_data.get("ended_at", ""))
+            return int((ended - started).total_seconds())
+        except Exception:
+            return 0
 
     async def on_exit(self) -> None:
         self._session_data["ended_at"] = datetime.now(timezone.utc).isoformat()
+        self._session_data["transcript"] = "\n".join(self._transcript_lines)
         try:
             await call_backend_tool_safe(
                 "/internal/aria/call/log",
@@ -582,6 +721,27 @@ class AriaVoiceAgent(Agent):
             )
         except Exception as e:
             logger.error("[AriaVoice] Failed to persist audit trail: %s", e)
+
+        borrower_id = self._session_data.get("lead_id") or self._session_data.get("borrower_id")
+        org_id = self._session_data.get("organization_id")
+        if borrower_id and org_id and self._mode != "lo_assistant":
+            try:
+                await call_backend_tool_safe(
+                    "/internal/aria/consolidate",
+                    {
+                        "call_session_id": self._session_data.get("call_session_id", f"aria_{id(self)}"),
+                        "tenant_id": org_id,
+                        "borrower_id": borrower_id,
+                        "transcript": self._session_data.get("transcript", ""),
+                        "call_metadata": {
+                            "mode": self._mode,
+                            "duration_seconds": self._compute_duration(),
+                            "tools_used": [t["tool"] for t in self._session_data.get("tools_executed", [])],
+                        },
+                    },
+                )
+            except Exception as e:
+                logger.warning("[AriaVoice] Consolidation trigger failed: %s", e)
 
 
 # ─── Agent Server ────────────────────────────────────────────────────────────
