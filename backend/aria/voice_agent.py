@@ -36,6 +36,7 @@ from livekit.agents import (
     AgentServer,
     TurnHandlingOptions,
 )
+import anthropic as anthropic_sdk
 from livekit.plugins import cartesia, deepgram
 from livekit.plugins.anthropic import LLM as AnthropicLLM
 
@@ -773,11 +774,24 @@ def _build_session(mode: str = "lo_assistant", context: dict = None) -> tuple:
         emotion="content",
     )
 
+    anthropic_client = anthropic_sdk.AsyncClient(
+        api_key=os.environ.get("ANTHROPIC_API_KEY"),
+        http_client=httpx.AsyncClient(
+            timeout=30.0,
+            follow_redirects=True,
+            limits=httpx.Limits(
+                max_connections=1000,
+                max_keepalive_connections=100,
+                keepalive_expiry=120,
+            ),
+        ),
+    )
+
     session = AgentSession(
         stt=stt,
         llm=AnthropicLLM(
             model=CLAUDE_MODEL,
-            api_key=os.environ.get("ANTHROPIC_API_KEY"),
+            client=anthropic_client,
             max_tokens=256,
         ),
         tts=tts,
