@@ -882,24 +882,30 @@ async def aria_voice_session(ctx: agents.JobContext):
         context = {}
         logger.info("[AriaVoice] LO assistant mode (WebRTC)")
 
-    # Preflight: verify Anthropic API connectivity from this worker process
+    # Preflight: verify Anthropic streaming works from this worker process
     try:
         t0 = time.monotonic()
-        async with httpx.AsyncClient(timeout=10.0) as hc:
-            resp = await hc.post(
+        async with httpx.AsyncClient(timeout=30.0) as hc:
+            async with hc.stream(
+                "POST",
                 "https://api.anthropic.com/v1/messages",
                 headers={
                     "x-api-key": os.environ.get("ANTHROPIC_API_KEY", ""),
                     "anthropic-version": "2023-06-01",
                     "content-type": "application/json",
                 },
-                json={"model": CLAUDE_MODEL, "max_tokens": 5, "messages": [{"role": "user", "content": "hi"}]},
-            )
-            elapsed = int((time.monotonic() - t0) * 1000)
-            logger.info(f"[AriaVoice] Anthropic preflight: status={resp.status_code} latency={elapsed}ms")
+                json={"model": CLAUDE_MODEL, "max_tokens": 10, "stream": True, "messages": [{"role": "user", "content": "say hi"}]},
+            ) as resp:
+                first_chunk = None
+                async for line in resp.aiter_lines():
+                    if line.startswith("data:"):
+                        first_chunk = line[:60]
+                        break
+                elapsed = int((time.monotonic() - t0) * 1000)
+                logger.info(f"[AriaVoice] Anthropic stream preflight: status={resp.status_code} latency={elapsed}ms chunk={first_chunk}")
     except Exception as e:
         elapsed = int((time.monotonic() - t0) * 1000)
-        logger.error(f"[AriaVoice] Anthropic preflight FAILED: {type(e).__name__}: {e} latency={elapsed}ms")
+        logger.error(f"[AriaVoice] Anthropic stream preflight FAILED: {type(e).__name__}: {e} latency={elapsed}ms")
 
     session, agent = _build_session(mode, context)
     await session.start(room=ctx.room, agent=agent)
