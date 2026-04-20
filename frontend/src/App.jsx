@@ -787,6 +787,7 @@ function App() {
           <Route path="/mobile/pipeline" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobilePipelineView /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           <Route path="/aria/notifications" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileNotificationCenter /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           {/* Aria Mobile Redesign — voice-first 5-screen app */}
+          <Route path="/aria-mobile" element={<MobileErrorBoundary><PrivateRoute><LazyPage><AriaVoiceHome /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           <Route path="/aria-voice" element={<MobileErrorBoundary><PrivateRoute><LazyPage><AriaVoiceHome /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           <Route path="/aria-history" element={<MobileErrorBoundary><PrivateRoute><LazyPage><AriaVoiceHistory /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
           <Route path="/mobile-calendar" element={<MobileErrorBoundary><PrivateRoute><LazyPage><MobileCalendar /></LazyPage></PrivateRoute></MobileErrorBoundary>} />
