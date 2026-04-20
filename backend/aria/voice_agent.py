@@ -17,12 +17,15 @@ import os
 import json
 import logging
 import asyncio
+import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+import httpx
 
 from livekit import agents, api as livekit_api
 from livekit.agents import (
@@ -143,7 +146,7 @@ class AriaVoiceAgent(Agent):
                     logger.warning("[AriaVoice] Context load failed: %s", e)
 
             if memory_context:
-                self.update_instructions(
+                await self.update_instructions(
                     self._initial_instructions.replace("{memory_context}", memory_context)
                     if "{memory_context}" in (self._initial_instructions or "")
                     else (self._initial_instructions or "") + "\n\n" + memory_context
@@ -772,7 +775,11 @@ def _build_session(mode: str = "lo_assistant", context: dict = None) -> tuple:
 
     session = AgentSession(
         stt=stt,
-        llm=AnthropicLLM(model=CLAUDE_MODEL, max_tokens=256),
+        llm=AnthropicLLM(
+            model=CLAUDE_MODEL,
+            api_key=os.environ.get("ANTHROPIC_API_KEY"),
+            max_tokens=256,
+        ),
         tts=tts,
         turn_handling=TURN_HANDLING,
         tts_text_transforms=["filter_markdown", "filter_emoji"],
@@ -853,6 +860,25 @@ async def aria_voice_session(ctx: agents.JobContext):
         mode = "lo_assistant"
         context = {}
         logger.info("[AriaVoice] LO assistant mode (WebRTC)")
+
+    # Preflight: verify Anthropic API connectivity from this worker process
+    try:
+        t0 = time.monotonic()
+        async with httpx.AsyncClient(timeout=10.0) as hc:
+            resp = await hc.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": os.environ.get("ANTHROPIC_API_KEY", ""),
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={"model": CLAUDE_MODEL, "max_tokens": 5, "messages": [{"role": "user", "content": "hi"}]},
+            )
+            elapsed = int((time.monotonic() - t0) * 1000)
+            logger.info(f"[AriaVoice] Anthropic preflight: status={resp.status_code} latency={elapsed}ms")
+    except Exception as e:
+        elapsed = int((time.monotonic() - t0) * 1000)
+        logger.error(f"[AriaVoice] Anthropic preflight FAILED: {type(e).__name__}: {e} latency={elapsed}ms")
 
     session, agent = _build_session(mode, context)
     await session.start(room=ctx.room, agent=agent)
