@@ -70,15 +70,20 @@ async def load_context(
     """Tier 1 context load at call start."""
     _verify_internal_key(request)
 
-    from services.aria_memory.context_loader import AriaContextLoader, ContextLoadRequest
-    loader = AriaContextLoader(db)
-    ctx = await loader.load_context(ContextLoadRequest(
-        borrower_id=req.borrower_id,
-        tenant_id=req.tenant_id,
-        call_trigger=req.call_trigger,
-        loan_stage=req.loan_stage,
-    ))
-    return ctx.model_dump()
+    try:
+        from services.aria_memory.context_loader import AriaContextLoader, ContextLoadRequest
+        loader = AriaContextLoader(db)
+        ctx = await loader.load_context(ContextLoadRequest(
+            borrower_id=req.borrower_id,
+            tenant_id=req.tenant_id,
+            call_trigger=req.call_trigger,
+            loan_stage=req.loan_stage,
+        ))
+        return ctx.model_dump()
+    except Exception as e:
+        import traceback
+        logger.error("Context load failed: %s\n%s", e, traceback.format_exc())
+        return {"error": str(e), "type": type(e).__name__, "trace": traceback.format_exc()[-500:]}
 
 
 @router.post("/retrieve")
