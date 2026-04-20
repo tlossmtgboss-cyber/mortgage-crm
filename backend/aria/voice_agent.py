@@ -281,9 +281,9 @@ class AriaVoiceAgent(Agent):
         self,
         context: RunContext,
         title: str,
-        description: str = "",
-        due_date: str = "",
-        priority: str = "medium",
+        description: str,
+        due_date: str,
+        priority: str,
     ):
         """Create a task or follow-up item."""
         params = {"title": title, "description": description, "priority": priority}
@@ -310,7 +310,7 @@ class AriaVoiceAgent(Agent):
         return json.dumps(result, default=str)
 
     @function_tool()
-    async def check_rates(self, context: RunContext, loan_type: str = "conventional"):
+    async def check_rates(self, context: RunContext, loan_type: str):
         """Check current mortgage rates."""
         result = await self._call_backend(
             "/internal/aria/tool/execute",
@@ -322,12 +322,12 @@ class AriaVoiceAgent(Agent):
     async def schedule_appointment(
         self,
         context: RunContext,
-        contact_id: str = "",
-        datetime_str: str = "",
-        duration_minutes: int = 30,
-        appointment_type: str = "consultation",
-        title: str = "",
-        notes: str = "",
+        contact_id: str,
+        datetime_str: str,
+        duration_minutes: int,
+        appointment_type: str,
+        title: str,
+        notes: str,
     ):
         """Schedule a new appointment on the calendar. Use contact_id if known, or provide details in notes."""
         params = {
@@ -381,8 +381,8 @@ class AriaVoiceAgent(Agent):
         context: RunContext,
         phone_number: str,
         borrower_name: str,
-        proposed_times: str = "",
-        appointment_type: str = "consultation",
+        proposed_times: str,
+        appointment_type: str,
     ):
         """Start an SMS conversation with a borrower to schedule an appointment.
         Sends an initial text asking for their availability. They'll text back to confirm."""
@@ -410,9 +410,9 @@ class AriaVoiceAgent(Agent):
         context: RunContext,
         lead_id: str,
         approval_amount: str,
-        loan_type: str = "Conventional",
-        property_address: str = "",
-        recipient_email: str = "",
+        loan_type: str,
+        property_address: str,
+        recipient_email: str,
     ):
         """Generate and email a pre-approval letter for a borrower.
         Requires the lead ID and approval amount. The letter is emailed as a PDF."""
@@ -459,11 +459,11 @@ class AriaVoiceAgent(Agent):
         context: RunContext,
         first_name: str,
         last_name: str,
-        email: str = "",
-        loan_purpose: str = "",
-        property_type: str = "",
-        timeline: str = "",
-        notes: str = "",
+        email: str,
+        loan_purpose: str,
+        property_type: str,
+        timeline: str,
+        notes: str,
     ):
         """Create a new lead profile in the CRM for a first-time caller.
         Use this when the caller is new and you've gathered their basic info during the conversation.
@@ -495,10 +495,10 @@ class AriaVoiceAgent(Agent):
         self,
         context: RunContext,
         lead_id: int,
-        notes: str = "",
-        email: str = "",
-        loan_purpose: str = "",
-        property_type: str = "",
+        notes: str,
+        email: str,
+        loan_purpose: str,
+        property_type: str,
     ):
         """Update an existing lead's profile with new information gathered during the call."""
         params: Dict[str, Any] = {"lead_id": lead_id}
@@ -596,7 +596,7 @@ class AriaVoiceAgent(Agent):
 
     @function_tool()
     async def run_crm_tool(
-        self, context: RunContext, tool_name: str, parameters: str = "{}"
+        self, context: RunContext, tool_name: str, parameters: str
     ):
         """Run a read-only CRM tool by name with JSON parameters.
         Fallback for tools without a specific wrapper."""
@@ -622,7 +622,7 @@ class AriaVoiceAgent(Agent):
         self,
         context: RunContext,
         query: str,
-        time_scope_days: Optional[int] = None,
+        time_scope_days: int = 0,
     ) -> str:
         """Search past conversations with this borrower for preferences, facts, or history."""
         bridge = BRIDGE_PHRASES[self._bridge_idx % len(BRIDGE_PHRASES)]
