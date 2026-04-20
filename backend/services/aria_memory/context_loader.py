@@ -140,37 +140,36 @@ class AriaContextLoader:
         return prefs
 
     def _load_active_loan(self, borrower_id: int, tenant_id: int) -> Optional[ActiveLoanSummary]:
-        from database.models.lead_loan import Lead
+        from database.models.lead_loan import Lead, Loan
         lead = self._db.query(Lead).filter(
             Lead.id == borrower_id, Lead.organization_id == tenant_id
         ).first()
         if not lead or not lead.email:
             return None
 
-        sql = text("""
-            SELECT l.id, l.stage, l.amount, l.property_address,
-                   l.loan_officer_name AS lo_name
-            FROM loans l
-            WHERE l.borrower_email = :email
-              AND l.organization_id = :tenant_id
-              AND l.stage NOT IN ('FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY', 'NURTURE')
-            ORDER BY l.created_at DESC
-            LIMIT 1
-        """)
-        row = self._db.execute(sql, {
-            "email": lead.email,
-            "tenant_id": tenant_id,
-        }).fetchone()
+        # ORM query required: Loan.borrower_email is EncryptedString,
+        # raw SQL would compare plaintext against ciphertext and never match.
+        TERMINAL = {'FUNDED', 'CANCELLED', 'DENIED', 'DEAD', 'WITHDRAWN', 'DOES_NOT_QUALIFY', 'NURTURE'}
+        loan = (
+            self._db.query(Loan)
+            .filter(
+                Loan.borrower_email == lead.email,
+                Loan.organization_id == tenant_id,
+                ~Loan.stage.in_(TERMINAL),
+            )
+            .order_by(Loan.created_at.desc())
+            .first()
+        )
 
-        if not row:
+        if not loan:
             return None
 
         return ActiveLoanSummary(
-            loan_id=row.id,
-            stage=row.stage or "UNKNOWN",
-            loan_amount=float(row.amount) if row.amount else None,
-            property_address=row.property_address,
-            loan_officer_name=(row.lo_name or "").strip() or None,
+            loan_id=loan.id,
+            stage=loan.stage or "UNKNOWN",
+            loan_amount=float(loan.amount) if loan.amount else None,
+            property_address=loan.property_address,
+            loan_officer_name=(loan.loan_officer_name or "").strip() or None,
         )
 
     def _resolve_topics(

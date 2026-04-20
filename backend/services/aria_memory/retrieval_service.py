@@ -192,7 +192,7 @@ class AriaRetrievalService:
             if data is None:
                 return None
             parsed = json.loads(data)
-            return RetrievalResult(**parsed)
+            return RetrievalResult.model_validate(parsed)
         except Exception:
             return None
 
