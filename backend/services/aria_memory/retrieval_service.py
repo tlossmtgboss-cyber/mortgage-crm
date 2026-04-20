@@ -106,11 +106,11 @@ class AriaRetrievalService:
                 am.confidence,
                 am.memory_type,
                 am.last_verified_at,
-                1 - (am.embedding <=> :embedding::vector) AS relevance_score
+                1 - (am.embedding <=> CAST(:embedding AS vector)) AS relevance_score
             FROM agent_memories am
             WHERE {where_sql}
               AND am.embedding IS NOT NULL
-            ORDER BY am.embedding <=> :embedding::vector
+            ORDER BY am.embedding <=> CAST(:embedding AS vector)
             LIMIT :top_k
         """)
 
