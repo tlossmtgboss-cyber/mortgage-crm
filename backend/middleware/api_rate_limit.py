@@ -113,10 +113,12 @@ EXEMPT_PREFIXES_AUTH = (
     "/token",
 )
 
-# Exempt prefixes — webhooks and public endpoints are rate-limited elsewhere
+# Exempt prefixes — webhooks, public endpoints, and internal server-to-server
+# calls are rate-limited elsewhere or self-authenticated
 EXEMPT_PREFIXES = (
     "/api/v1/webhook/",
     "/api/v1/public/",
+    "/internal/",
 )
 
 # Prefix-specific rate limits.  Evaluated in order; first match wins.
