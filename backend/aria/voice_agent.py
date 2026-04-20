@@ -795,12 +795,18 @@ async def aria_voice_session(ctx: agents.JobContext):
     room_name = ctx.room.name
     logger.info(f"[AriaVoice] Session started: room={room_name}")
 
-    # Parse room metadata to determine session type
+    # Parse job metadata (from dispatch request) — this is always available.
+    # Fall back to room metadata for SIP dispatch rule auto-created rooms.
     metadata = {}
     try:
-        metadata = json.loads(ctx.room.metadata or "{}")
-    except (json.JSONDecodeError, AttributeError):
+        metadata = json.loads(ctx.job.metadata or "{}")
+    except (json.JSONDecodeError, AttributeError, TypeError):
         pass
+    if not metadata:
+        try:
+            metadata = json.loads(ctx.room.metadata or "{}")
+        except (json.JSONDecodeError, AttributeError):
+            pass
 
     trigger = metadata.get("trigger", "")
 
