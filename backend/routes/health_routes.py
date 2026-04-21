@@ -1340,61 +1340,111 @@ def register_health_routes(app, get_db, **kwargs):
     @app.post("/health/smart-docs-post-test")
     async def smart_docs_post_test(request: Request):
         """
-        Diagnostic POST endpoint that tests:
-        1. Middleware lets a POST through without 500
-        2. JSON body is accessible after middleware chain
-        3. DB INSERT into smart_document_requests works
+        Diagnostic POST that replicates the full add_custom_request handler flow.
+        No auth — tests each step and reports where it fails.
+        Send the same JSON body the frontend sends.
         """
         import traceback as _tb
-        results = {"method": request.method, "path": str(request.url.path)}
+        import json as _json
+        steps = {}
 
-        # Step 1: Read the request body
+        # Step 1: Read request body
         try:
             body_bytes = await request.body()
-            results["body_size"] = len(body_bytes)
-            if body_bytes:
-                import json as _json
-                results["body_parsed"] = _json.loads(body_bytes)
-            else:
-                results["body_parsed"] = None
+            steps["1_body_read"] = f"ok ({len(body_bytes)} bytes)"
+            body_data = _json.loads(body_bytes) if body_bytes else {}
         except Exception as e:
-            results["body_error"] = f"{type(e).__name__}: {e}"
+            steps["1_body_read"] = f"FAIL: {type(e).__name__}: {e}"
+            return {"steps": steps, "failed_at": "body_read"}
 
-        # Step 2: Test DB connection + INSERT
+        # Step 2: Parse with Pydantic model
+        try:
+            from routes.smart_docs_models import AddCustomRequestBody
+            body = AddCustomRequestBody(**body_data)
+            steps["2_pydantic_parse"] = f"ok (title={body.title!r}, doc_type={body.doc_type!r})"
+        except Exception as e:
+            steps["2_pydantic_parse"] = f"FAIL: {type(e).__name__}: {e}"
+            return {"steps": steps, "failed_at": "pydantic_parse"}
+
+        # Step 3: DB connection
         try:
             from db import SessionLocal
-            from sqlalchemy import text as _text, inspect as _insp
-
             db = SessionLocal()
+            from sqlalchemy import text as _text
+            db.execute(_text("SELECT 1")).fetchone()
+            steps["3_db_connection"] = "ok"
+        except Exception as e:
+            steps["3_db_connection"] = f"FAIL: {type(e).__name__}: {e}"
+            return {"steps": steps, "failed_at": "db_connection"}
+
+        try:
+            # Step 4: Find a test loan
+            loan_row = db.execute(_text(
+                "SELECT id, lead_id FROM loans ORDER BY id DESC LIMIT 1"
+            )).first()
+            if not loan_row:
+                steps["4_find_loan"] = "FAIL: no loans in DB"
+                return {"steps": steps, "failed_at": "find_loan"}
+            loan_id = loan_row[0]
+            borrower_id = loan_row[1] or 0
+            steps["4_find_loan"] = f"ok (loan_id={loan_id}, borrower_id={borrower_id})"
+
+            # Step 5: Import NeedsListGenerator
             try:
-                db.execute(_text("SELECT 1")).fetchone()
-                results["db_connection"] = "ok"
+                from services.smart_docs.needs_list_generator import NeedsListGenerator
+                steps["5_import_generator"] = "ok"
+            except Exception as e:
+                steps["5_import_generator"] = f"FAIL: {type(e).__name__}: {e}"
+                steps["5_traceback"] = _tb.format_exc()[-500:]
+                return {"steps": steps, "failed_at": "import_generator"}
 
-                inspector = _insp(db.bind)
-                tables = inspector.get_table_names()
-                results["table_exists"] = "smart_document_requests" in tables
+            # Step 6: Instantiate NeedsListGenerator
+            try:
+                generator = NeedsListGenerator(db)
+                steps["6_instantiate_generator"] = "ok"
+            except Exception as e:
+                steps["6_instantiate_generator"] = f"FAIL: {type(e).__name__}: {e}"
+                return {"steps": steps, "failed_at": "instantiate_generator"}
 
-                if results["table_exists"]:
-                    cols = inspector.get_columns("smart_document_requests")
-                    results["columns"] = sorted(c["name"] for c in cols)
-
-                    db.execute(_text("""
-                        INSERT INTO smart_document_requests
-                            (loan_id, doc_type, title, status, priority, required_count, applies_to)
-                        VALUES (0, 'BANK_STATEMENT', '__post_diag__', 'OPEN', 'NORMAL', 1, 'BORROWER')
-                    """))
-                    db.rollback()
-                    results["test_insert"] = "ok"
+            # Step 7: Call add_custom_request
+            try:
+                result = generator.add_custom_request(
+                    loan_id=loan_id,
+                    borrower_id=borrower_id,
+                    title=body.title,
+                    description=body.description,
+                    instructions=body.instructions,
+                    priority=body.priority,
+                    due_date=body.due_date,
+                    doc_type=body.doc_type,
+                    requires_esign=body.requires_esign,
+                )
+                steps["7_add_custom_request"] = f"ok (id={result.get('id')})"
             except Exception as e:
                 db.rollback()
-                results["db_error"] = f"{type(e).__name__}: {e}"
-                results["db_traceback"] = _tb.format_exc()[-500:]
-            finally:
-                db.close()
-        except Exception as e:
-            results["db_import_error"] = f"{type(e).__name__}: {e}"
+                steps["7_add_custom_request"] = f"FAIL: {type(e).__name__}: {e}"
+                steps["7_traceback"] = _tb.format_exc()[-800:]
+                return {"steps": steps, "failed_at": "add_custom_request"}
 
-        return results
+            # Step 8: Clean up (delete the test request)
+            try:
+                req_id = result.get("id")
+                if req_id:
+                    db.execute(_text(
+                        "DELETE FROM smart_document_requests WHERE id = :rid"
+                    ), {"rid": req_id})
+                    db.commit()
+                    steps["8_cleanup"] = f"ok (deleted request {req_id})"
+                else:
+                    steps["8_cleanup"] = "skipped (no id in result)"
+            except Exception as e:
+                db.rollback()
+                steps["8_cleanup"] = f"FAIL: {type(e).__name__}: {e}"
+
+        finally:
+            db.close()
+
+        return {"steps": steps, "result": "ALL STEPS PASSED"}
 
     # ========================================================================
     # Admin-only: DB Pool Stats (detailed monitoring for operations)
