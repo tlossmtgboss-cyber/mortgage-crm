@@ -56,7 +56,7 @@ logger = logging.getLogger("aria.voice_agent")
 
 CARTESIA_VOICE_ID = os.getenv(
     "ARIA_CARTESIA_VOICE_ID",
-    "a0e99841-438c-4a64-b679-ae501e7d6091",  # Jacqueline
+    "b7d50908-b17c-442d-ad8d-810c63997ed9",  # California Girl — enthusiastic, friendly
 )
 CLAUDE_MODEL = os.getenv("ARIA_LLM_MODEL", "claude-sonnet-4-5-20250414")
 TELNYX_TRUNK_ID = os.getenv("TELNYX_SIP_TRUNK_ID", "")
@@ -407,6 +407,7 @@ class AriaVoiceAgent(Agent):
 
     # ─── Document Generation Tools ───────────────────────────────────
 
+    @function_tool()
     async def generate_pre_approval_letter(
         self,
         context: RunContext,
@@ -869,8 +870,16 @@ async def aria_voice_session(ctx: agents.JobContext):
         )
     else:
         mode = "lo_assistant"
-        context = {}
-        logger.info("[AriaVoice] LO assistant mode (WebRTC)")
+        context = {
+            "user_id": metadata.get("user_id"),
+            "organization_id": metadata.get("org_id"),
+            "email": metadata.get("email", ""),
+        }
+        logger.info(
+            "[AriaVoice] LO assistant mode (WebRTC): user=%s org=%s",
+            context.get("user_id", "unknown"),
+            context.get("organization_id", "unknown"),
+        )
 
     # Preflight: verify Anthropic streaming works from this worker process
     try:
