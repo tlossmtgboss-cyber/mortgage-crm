@@ -4,7 +4,7 @@ import { getAuthHeaders } from '../utils/auth';
 import { toast } from '../utils/toast';
 import './SMSTasks.css';
 
-const POLL_INTERVAL = 30000;
+const POLL_INTERVAL = 120000;
 
 const STATUS_TABS = [
   { key: 'all', label: 'All' },

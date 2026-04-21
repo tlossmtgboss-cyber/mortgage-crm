@@ -130,6 +130,33 @@ async def add_custom_request(
     return result
 
 
+@router.delete("/needs-list/request/{request_id}")
+async def delete_document_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """Delete a document request and its associated documents."""
+    _verify_request_tenant(db, request_id, current_user)
+
+    request = db.query(DocumentRequest).filter(DocumentRequest.id == request_id).first()
+    if not request:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    linked_docs = db.query(SmartDocument).filter(
+        SmartDocument.request_id == request_id
+    ).all()
+    for doc in linked_docs:
+        doc.status = "DELETED"
+        doc.request_id = None
+
+    db.delete(request)
+    db.commit()
+
+    logger.info(f"Deleted document request {request_id} (loan {request.loan_id})")
+    return {"success": True, "request_id": request_id, "documents_unlinked": len(linked_docs)}
+
+
 @router.post("/needs-list/request/{request_id}/waive")
 async def waive_request(
     request_id: int,

@@ -304,7 +304,7 @@ function SmartDocsClientDetail() {
   const handleDownloadSingle = async (doc) => {
     try {
       const token = getToken();
-      const response = await fetch(`${API_BASE_URL}/api/v1/smart-docs/documents/${doc.id}/download`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/smart-docs/document/${doc.id}/download`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
 
@@ -326,15 +326,29 @@ function SmartDocsClientDetail() {
 
   // Email individual document
   const handleEmailSingle = async (doc) => {
+    if (!doc.document_id) {
+      toast.error('No uploaded document to email yet');
+      return;
+    }
     try {
       const token = getToken();
-      await fetch(`${API_BASE_URL}/api/v1/smart-docs/documents/${doc.id}/email`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/smart-docs/document/${doc.document_id}/email`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ loan_id: loanId })
       });
-      toast.success('Document emailed!');
+      if (response.ok) {
+        toast.success('Document emailed!');
+      } else {
+        const error = await response.json().catch(() => ({}));
+        toast.error(error.detail || 'Failed to email document');
+      }
     } catch (err) {
       console.error('Error emailing document:', err);
+      toast.error('Error emailing document');
     }
   };
 
@@ -478,6 +492,33 @@ function SmartDocsClientDetail() {
       rollback();
       console.error('Error deleting document:', err);
       toast.error('Error deleting document — reverted');
+    }
+  };
+
+  // Delete document request (removes the request entirely)
+  const handleDeleteRequest = async (doc) => {
+    if (!window.confirm(`Delete this "${doc.title || getDocTypeName(doc.doc_type)}" request? This cannot be undone.`)) return;
+
+    setActionLoading(true);
+    try {
+      const token = getToken();
+      const response = await fetch(
+        `${API_BASE_URL}/api/v1/smart-docs/needs-list/request/${doc.id}`,
+        { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }
+      );
+      if (response.ok) {
+        toast.success('Request deleted');
+        setDocuments(prev => prev.filter(d => d.id !== doc.id));
+        setSelectedDoc(null);
+      } else {
+        const error = await response.json().catch(() => ({}));
+        toast.error(`Error: ${error.detail || 'Failed to delete request'}`);
+      }
+    } catch (err) {
+      console.error('Error deleting request:', err);
+      toast.error('Error deleting request');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -1011,6 +1052,14 @@ function SmartDocsClientDetail() {
                       aria-label={`Send Reminder to borrower for ${getDocTypeName(selectedDoc.doc_type)}`}
                     >
                       🔄 Send Reminder
+                    </button>
+                    <button
+                      className="action-btn delete-btn"
+                      onClick={() => handleDeleteRequest(selectedDoc)}
+                      disabled={actionLoading}
+                      title="Delete this document request"
+                    >
+                      🗑 Delete Request
                     </button>
                   </div>
                 </div>

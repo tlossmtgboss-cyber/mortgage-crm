@@ -623,6 +623,56 @@ async def download_document(
     }
 
 
+@router.post("/document/{document_id}/email")
+async def email_single_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    """Email a single document to the loan's borrower or LO."""
+    document = _verify_document_tenant(db, document_id, current_user)
+
+    if not document.storage_key:
+        raise HTTPException(status_code=404, detail="Document file not available")
+
+    from database.models.lead_loan import Loan
+    loan = db.query(Loan).filter(Loan.id == document.loan_id).first()
+    if not loan:
+        raise HTTPException(status_code=404, detail="Loan not found")
+
+    recipient_email = getattr(current_user, 'email', None)
+    if not recipient_email:
+        raise HTTPException(status_code=400, detail="No recipient email available")
+
+    s3_service = get_smart_docs_s3_service()
+    if not s3_service.is_available:
+        raise HTTPException(status_code=503, detail="Document storage not configured")
+
+    download_result = s3_service.download_file(document.storage_key)
+    if not download_result.get("success"):
+        raise HTTPException(status_code=500, detail="Failed to download document from storage")
+    file_bytes = download_result["content"]
+
+    try:
+        from email_service import EmailService
+        email_service = EmailService()
+        filename = document.file_name or f"{document.doc_type}.pdf"
+        email_service.send_email(
+            to=recipient_email,
+            subject=f"Document: {filename} - {getattr(loan, 'borrower_name', '') or 'Loan ' + str(loan.id)}",
+            body=f"<p>Please find the attached document for loan {getattr(loan, 'loan_number', '') or loan.id}.</p><p>This is an automated message from Perennia AI.</p>",
+            attachments=[{
+                "filename": filename,
+                "content": file_bytes,
+                "content_type": document.mime_type or "application/pdf"
+            }]
+        )
+        return {"success": True, "message": f"Document sent to {recipient_email}"}
+    except Exception as e:
+        logger.error(f"Failed to email document {document_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send email")
+
+
 @router.post("/merge")
 async def merge_documents(
     request: MergeDocumentsRequest,
@@ -637,7 +687,7 @@ async def merge_documents(
     """
     from fastapi.responses import StreamingResponse
     from pypdf import PdfWriter, PdfReader
-    from models.loan import Loan
+    from database.models.lead_loan import Loan
     import io
 
     if not request.document_ids:
@@ -742,7 +792,7 @@ async def merge_and_email_documents(
     and sends via email.
     """
     from pypdf import PdfWriter, PdfReader
-    from models.loan import Loan
+    from database.models.lead_loan import Loan
     import io
 
     if not request.document_ids:
@@ -1171,7 +1221,7 @@ async def get_applicants_with_pending_review(
     try:
         from sqlalchemy import func, distinct
         from models.purl import PURLLoan, PURLWorkspace
-        from models.loan import Loan
+        from database.models.lead_loan import Loan
 
         # Tenant isolation
         org_id = getattr(current_user, 'organization_id', None)
@@ -1279,7 +1329,7 @@ async def get_applicants_with_outstanding_docs(
     """
     from sqlalchemy import func, distinct, case
     from models.purl import PURLLoan, PURLWorkspace
-    from models.loan import Loan
+    from database.models.lead_loan import Loan
 
     # Tenant isolation
     org_id = getattr(current_user, 'organization_id', None)
@@ -1426,7 +1476,7 @@ async def get_document_dashboard_summary(
     Get summary statistics for the document management dashboard.
     """
     from sqlalchemy import func
-    from models.loan import Loan
+    from database.models.lead_loan import Loan
 
     # Tenant isolation
     org_id = getattr(current_user, 'organization_id', None)

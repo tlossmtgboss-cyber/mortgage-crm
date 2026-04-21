@@ -117,6 +117,17 @@ export async function addBulkCustomRequests(loanId, borrowerId, requests, concur
 }
 
 /**
+ * Delete a document request
+ */
+export async function deleteDocumentRequest(requestId) {
+  const response = await fetch(`${API_BASE}/needs-list/request/${requestId}`, {
+    method: 'DELETE',
+    headers: getHeaders(),
+  });
+  return handleResponse(response);
+}
+
+/**
  * Waive a document request
  */
 export async function waiveRequest(requestId, reason, waivedBy) {
@@ -451,6 +462,7 @@ export const smartDocsAPI = {
   getNeedsList,
   addCustomRequest,
   addBulkCustomRequests,
+  deleteDocumentRequest,
   waiveRequest,
   // Documents
   uploadDocument,

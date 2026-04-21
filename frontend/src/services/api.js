@@ -2101,19 +2101,19 @@ export const notificationsApi = {
   // Get notifications
   getNotifications: async (unreadOnly = false, limit = 50) => {
     const params = { unread_only: unreadOnly, limit };
-    const response = await api.get('/api/v1/notifications', { params });
+    const response = await api.get('/api/v1/mobile/notifications', { params });
     return { ...response, data: ensureArray(response.data, 'notifications') };
   },
 
   // Mark notification as read
   markAsRead: async (notificationId) => {
-    const response = await api.put(`/api/v1/notifications/${notificationId}/read`);
+    const response = await api.patch(`/api/v1/mobile/notifications/${notificationId}/read`);
     return response;
   },
 
   // Mark all notifications as read
   markAllAsRead: async () => {
-    const response = await api.put('/api/v1/notifications/read-all');
+    const response = await api.post('/api/v1/mobile/notifications/read-all');
     return response;
   },
 };

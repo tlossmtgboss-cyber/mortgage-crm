@@ -68,7 +68,7 @@ interface UseSMSTasksOptions {
 }
 
 export function useSMSTasks(options: UseSMSTasksOptions = {}) {
-  const { status, category, mine, pollInterval = 30000 } = options
+  const { status, category, mine, pollInterval = 120000 } = options
   const [tasks, setTasks] = useState<SMSTask[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -241,7 +241,7 @@ export function useSMSTaskStats() {
   useEffect(() => {
     mountedRef.current = true
     fetchStats()
-    const interval = setInterval(fetchStats, 60000)
+    const interval = setInterval(fetchStats, 120000)
     return () => {
       mountedRef.current = false
       clearInterval(interval)

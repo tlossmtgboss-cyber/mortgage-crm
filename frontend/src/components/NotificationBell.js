@@ -25,8 +25,8 @@ const NotificationBell = () => {
   useEffect(() => {
     loadNotifications();
 
-    // Auto-refresh every 30 seconds
-    const interval = setInterval(loadNotifications, 30000);
+    // Auto-refresh every 2 minutes
+    const interval = setInterval(loadNotifications, 120000);
 
     // Click outside to close dropdown
     const handleClickOutside = (event) => {
