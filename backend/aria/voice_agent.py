@@ -450,6 +450,129 @@ class AriaVoiceAgent(Agent):
         })
         return json.dumps(result, default=str)
 
+    # ─── Email Tools ────────────────────────────────────────────────
+
+    @function_tool()
+    async def send_email(
+        self,
+        context: RunContext,
+        to_email: str,
+        subject: str,
+        body: str,
+    ):
+        """Send an email to a contact. The email is sent from the LO's connected Outlook account via Microsoft Graph."""
+        if self._mode != "lo_assistant":
+            return json.dumps({"error": "Emails can only be sent in LO assistant mode."})
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "send_email", "params": {
+                "to_email": to_email,
+                "subject": subject,
+                "body": body,
+                "user_id": str(self._session_data.get("user_id", "")),
+            }},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "send_email",
+            "to": to_email,
+            "subject": subject,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def send_mass_email(
+        self,
+        context: RunContext,
+        client_ids: str,
+        subject: str,
+        body_template: str,
+    ):
+        """Send a personalized email to multiple clients. Use {first_name} in the body for personalization.
+        Provide client_ids as a comma-separated list of lead IDs."""
+        if self._mode != "lo_assistant":
+            return json.dumps({"error": "Mass emails can only be sent in LO assistant mode."})
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "send_bulk_email_outreach", "params": {
+                "client_ids": client_ids,
+                "subject": subject,
+                "body_template": body_template,
+                "user_id": str(self._session_data.get("user_id", "")),
+                "organization_id": str(self._session_data.get("organization_id", "")),
+            }},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "send_mass_email",
+            "count": len(client_ids.split(",")),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    # ─── Mass SMS Tool ───────────────────────────────────────────────
+
+    @function_tool()
+    async def send_mass_sms(
+        self,
+        context: RunContext,
+        client_ids: str,
+        message_template: str,
+        campaign_name: str,
+    ):
+        """Send a personalized SMS to multiple clients. Use {first_name} in the message for personalization.
+        Provide client_ids as a comma-separated list of lead IDs. Max 200 per batch."""
+        if self._mode != "lo_assistant":
+            return json.dumps({"error": "Mass SMS can only be sent in LO assistant mode."})
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "send_bulk_sms_outreach", "params": {
+                "client_ids": client_ids,
+                "message_template": message_template,
+                "campaign_name": campaign_name or "Aria Voice Campaign",
+                "user_id": str(self._session_data.get("user_id", "")),
+                "organization_id": str(self._session_data.get("organization_id", "")),
+            }},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "send_mass_sms",
+            "count": len(client_ids.split(",")),
+            "campaign": campaign_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    # ─── Phone Call Tool ─────────────────────────────────────────────
+
+    @function_tool()
+    async def make_phone_call(
+        self,
+        context: RunContext,
+        phone_number: str,
+        contact_id: str,
+        purpose: str,
+    ):
+        """Initiate an outbound phone call to a contact via the dialer.
+        TCPA and DNC compliance checks are enforced automatically.
+        Purpose: follow_up, rate_lock, application, closing, or general."""
+        if self._mode != "lo_assistant":
+            return json.dumps({"error": "Outbound calls can only be made in LO assistant mode."})
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "initiate_outbound_call", "params": {
+                "phone_number": phone_number,
+                "contact_id": contact_id,
+                "contact_type": "lead",
+                "purpose": purpose or "follow_up",
+            }},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "make_phone_call",
+            "phone": phone_number,
+            "purpose": purpose,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
     # ─── Existing Tools (Inbound/Transfer) ───────────────────────────
 
     @function_tool()

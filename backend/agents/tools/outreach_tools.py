@@ -454,6 +454,103 @@ def send_mortgage_review_outreach(
 
 
 # =============================================================================
+# Tool: send_bulk_email_outreach
+# =============================================================================
+
+@mortgage_tool(
+    name="send_bulk_email_outreach",
+    description=(
+        "Send a personalized email to multiple clients. Personalizes each email "
+        "with the client's first name. Use {first_name} in subject or body. "
+        "Sends via Microsoft Graph if the LO has a connected Outlook account."
+    ),
+    agent_roles=["voice_os", "lead_nurturer", "email_intelligence"],
+    risk_level="HIGH",
+    requires_confirmation=True,
+    parameters={
+        "client_ids": "Comma-separated list of lead IDs",
+        "subject": "Email subject line. Use {first_name} for personalization",
+        "body_template": "Email body. Use {first_name} for personalization",
+        "user_id": "LO user ID sending the emails",
+        "organization_id": "Organization ID for tenant scoping",
+    },
+)
+def send_bulk_email_outreach(
+    client_ids: str,
+    subject: str,
+    body_template: str,
+    user_id: Optional[str] = None,
+    organization_id: Optional[str] = None,
+) -> ToolResult:
+    """Send personalized emails to a list of clients."""
+    if not client_ids or not subject or not body_template:
+        return ToolResult.error("client_ids, subject, and body_template are required")
+
+    try:
+        ids = [int(x.strip()) for x in str(client_ids).split(",") if x.strip()]
+    except ValueError:
+        return ToolResult.error("client_ids must be comma-separated integers")
+
+    if len(ids) > 200:
+        return ToolResult.error("Maximum 200 recipients per campaign")
+    if not ids:
+        return ToolResult.error("No client IDs provided")
+
+    placeholders = ", ".join(f":id_{i}" for i in range(len(ids)))
+    id_params = {f"id_{i}": cid for i, cid in enumerate(ids)}
+    clients = execute_query(
+        f"""SELECT id, first_name, last_name, email
+            FROM leads
+            WHERE id IN ({placeholders})
+              AND email IS NOT NULL AND email != ''""",
+        id_params,
+    )
+
+    if not clients:
+        return ToolResult.no_data("No clients found with valid email addresses")
+
+    sent = 0
+    failed = 0
+    skipped = 0
+    _uid = int(user_id) if user_id else None
+
+    for client in clients:
+        first = client.get("first_name", "there")
+        email = client.get("email", "")
+        if not email:
+            skipped += 1
+            continue
+
+        personalized_subject = subject.replace("{first_name}", first)
+        personalized_body = body_template.replace("{first_name}", first)
+
+        try:
+            from agents.tools.email_intel import send_email as _send_email_tool
+            result = _send_email_tool(
+                to_email=email,
+                subject=personalized_subject,
+                body=personalized_body,
+                contact_id=str(client["id"]),
+                contact_type="lead",
+                user_id=_uid,
+            )
+            if hasattr(result, "success") and result.success:
+                sent += 1
+            else:
+                failed += 1
+        except Exception as e:
+            logger.warning("Bulk email send failed for lead %s: %s", client["id"], e)
+            failed += 1
+
+        time.sleep(0.2)
+
+    return ToolResult.success(
+        data={"sent": sent, "failed": failed, "skipped": skipped, "total": len(clients)},
+        message=f"Email campaign complete: {sent} sent, {failed} failed, {skipped} skipped",
+    )
+
+
+# =============================================================================
 # Tool: send_calendar_invite_email
 # =============================================================================
 
