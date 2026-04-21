@@ -128,25 +128,25 @@ class DocumentRequest(Base):
     loan_id = Column(Integer, nullable=False)  # References loans.id - indexed in __table_args__
     borrower_id = Column(Integer, nullable=True)  # References borrower_profiles.id
 
-    # Request details
-    doc_type = Column(SQLEnum(DocType), nullable=False)
+    # Request details — native_enum=False avoids PG ENUM type mismatches
+    doc_type = Column(SQLEnum(DocType, native_enum=False, create_type=False, length=100), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
     instructions = Column(Text, nullable=True)
 
     # Requirements
-    required_count = Column(Integer, default=1)
-    applies_to = Column(SQLEnum(AppliesTo), default=AppliesTo.BORROWER)
-    priority = Column(SQLEnum(RequestPriority), default=RequestPriority.NORMAL)
+    required_count = Column(Integer, default=1, server_default="1")
+    applies_to = Column(SQLEnum(AppliesTo, native_enum=False, create_type=False, length=50), default=AppliesTo.BORROWER)
+    priority = Column(SQLEnum(RequestPriority, native_enum=False, create_type=False, length=50), default=RequestPriority.NORMAL)
 
     # Freshness policy
-    freshness_days = Column(Integer, nullable=True)  # 30 for paystubs, 90 for bank statements
+    freshness_days = Column(Integer, nullable=True)
     auto_renew = Column(Boolean, default=False)
     next_expected_available_at = Column(DateTime, nullable=True)
-    payroll_frequency = Column(SQLEnum(PayrollFrequency), nullable=True)
+    payroll_frequency = Column(SQLEnum(PayrollFrequency, native_enum=False, create_type=False, length=50), nullable=True)
 
     # Status
-    status = Column(SQLEnum(RequestStatus), default=RequestStatus.OPEN)
+    status = Column(SQLEnum(RequestStatus, native_enum=False, create_type=False, length=50), default=RequestStatus.OPEN)
     is_required = Column(Boolean, default=True, server_default="true")
     due_date = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
@@ -202,7 +202,7 @@ class SmartDocument(Base):
     uploaded_at = Column(DateTime(timezone=True), server_default=func.now())  # When document was uploaded
 
     # Document type
-    doc_type = Column(SQLEnum(DocType), nullable=True)
+    doc_type = Column(SQLEnum(DocType, native_enum=False, create_type=False, length=100), nullable=True)
     detected_doc_type = Column(String(64), nullable=True)  # AI-detected type
 
     # Screenshot detection
@@ -227,10 +227,10 @@ class SmartDocument(Base):
 
     # Review decision
     status = Column(String(32), default="UPLOADED")  # UPLOADED, SCANNING, PROCESSING, APPROVED, REJECTED, EXPIRED
-    decision = Column(SQLEnum(DocumentDecision), nullable=True)
+    decision = Column(SQLEnum(DocumentDecision, native_enum=False, create_type=False, length=50), nullable=True)
     decision_reasons = Column(JSON, nullable=True)
     rejection_reason = Column(Text, nullable=True)
-    rejection_category = Column(SQLEnum(RejectionCategory), nullable=True)
+    rejection_category = Column(SQLEnum(RejectionCategory, native_enum=False, create_type=False, length=50), nullable=True)
     fix_instructions = Column(Text, nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     reviewed_by = Column(String(64), nullable=True)  # 'SYSTEM' or user ID
@@ -278,7 +278,7 @@ class DocPolicyEvent(Base):
     document_id = Column(Integer, nullable=True)  # References smart_documents.id
 
     # Event details
-    event_type = Column(SQLEnum(DocPolicyEventType), nullable=False)
+    event_type = Column(SQLEnum(DocPolicyEventType, native_enum=False, create_type=False, length=100), nullable=False)
     payload = Column(JSON, nullable=True)
 
     # Timestamp

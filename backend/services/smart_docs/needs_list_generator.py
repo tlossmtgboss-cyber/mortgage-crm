@@ -527,17 +527,18 @@ class NeedsListGenerator:
 
     def _request_to_dict(self, request: DocumentRequest) -> Dict[str, Any]:
         """Convert request to dictionary for API response."""
+        _v = lambda x: x.value if hasattr(x, 'value') else (x or "")
         return {
             "id": request.id,
             "borrower_id": request.borrower_id,
-            "doc_type": request.doc_type.value,
+            "doc_type": _v(request.doc_type),
             "title": request.title,
             "description": request.description,
             "instructions": request.instructions,
             "required_count": request.required_count,
-            "applies_to": request.applies_to.value,
-            "priority": request.priority.value,
-            "status": request.status.value,
+            "applies_to": _v(request.applies_to),
+            "priority": _v(request.priority),
+            "status": _v(request.status),
             "freshness_days": request.freshness_days,
             "auto_renew": request.auto_renew,
             "requires_esign": request.requires_esign or False,
@@ -563,7 +564,8 @@ class NeedsListGenerator:
         }
 
         for request in requests:
-            status_key = request.status.value.lower()
+            status_val = request.status.value if hasattr(request.status, 'value') else (request.status or "")
+            status_key = status_val.lower()
             if status_key in by_status:
                 by_status[status_key].append(self._request_to_dict(request))
 

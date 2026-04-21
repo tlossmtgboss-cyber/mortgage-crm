@@ -3254,6 +3254,12 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Smart docs missing columns migration: {e}")
 
+    try:
+        from migrations.fix_smart_docs_requests_schema import run_migration as _run_smart_schema
+        _run_smart_schema()
+    except Exception as e:
+        logger.warning(f"Smart docs schema fix migration: {e}")
+
     # --- E-Signature & E-Closing ---
     try:
         from migrations.add_esign_tables import run_migration as _run_esign
