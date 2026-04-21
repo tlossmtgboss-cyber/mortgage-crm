@@ -275,6 +275,8 @@ class AriaVoiceAgent(Agent):
             {"tool_name": "send_sms_message", "params": {
                 "to_phone": phone_number,
                 "message": message,
+                "organization_id": str(self._session_data.get("organization_id", "")),
+                "user_id": str(self._session_data.get("user_id", "")),
             }},
         )
         self._session_data["tools_executed"].append({
@@ -294,7 +296,11 @@ class AriaVoiceAgent(Agent):
         priority: str,
     ):
         """Create a task or follow-up item."""
-        params = {"title": title, "description": description, "priority": priority}
+        params = {
+            "title": title, "description": description, "priority": priority,
+            "organization_id": str(self._session_data.get("organization_id", "")),
+            "user_id": str(self._session_data.get("user_id", "")),
+        }
         if due_date:
             params["due_date"] = due_date
         result = await self._call_backend(
@@ -425,6 +431,8 @@ class AriaVoiceAgent(Agent):
             "lead_id": lead_id,
             "approval_amount": approval_amount,
             "loan_type": loan_type,
+            "organization_id": str(self._session_data.get("organization_id", "")),
+            "user_id": str(self._session_data.get("user_id", "")),
         }
         if property_address:
             params["property_address"] = property_address
