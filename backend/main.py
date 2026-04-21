@@ -2997,6 +2997,13 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Autonomous task executor skipped: {e}")
 
+    # Vapi phone number health check — ensure assistantId is set
+    try:
+        import asyncio as _aio_vapi
+        _aio_vapi.create_task(_check_vapi_phone_config())
+    except Exception as e:
+        logger.warning(f"Vapi phone config check skipped: {e}")
+
     # Create all AI autonomy tables (autonomous_tasks, agent_feedback, learning,
     # agent_memory, agent_metrics, webhook_idempotency)
     try:
@@ -4105,6 +4112,87 @@ async def seed_demo_account(request: Request):
         logger.exception("Demo seed failed")
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
+async def _check_vapi_phone_config():
+    """Startup check: verify Vapi phone number has assistantId set and log config."""
+    import httpx
+
+    vapi_api_key = _os.getenv("VAPI_API_KEY")
+    if not vapi_api_key:
+        logger.warning("VAPI_API_KEY not set — skipping phone config check")
+        return
+
+    assistant_id = _os.getenv("VAPI_ASSISTANT_ID", "120e239e-4d19-4e43-ad92-1f8b07d08c8c")
+    phone_number_id = "6adaf897-34d7-42d5-bc34-f1a17162a453"
+    headers = {"Authorization": f"Bearer {vapi_api_key}", "Content-Type": "application/json"}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://api.vapi.ai/phone-number/{phone_number_id}",
+                headers=headers, timeout=10,
+            )
+            if resp.status_code != 200:
+                logger.error("Vapi phone config check FAILED: status=%s body=%s", resp.status_code, resp.text[:200])
+                return
+
+            phone = resp.json()
+            current_aid = phone.get("assistantId")
+            current_surl = phone.get("serverUrl")
+            logger.info(
+                "Vapi phone config: number=%s assistantId=%s serverUrl=%s squadId=%s",
+                phone.get("number"), current_aid, current_surl, phone.get("squadId"),
+            )
+
+            if current_aid == assistant_id:
+                logger.info("Vapi phone config OK — assistantId matches")
+                # Also check the assistant itself
+                a_resp = await client.get(
+                    f"https://api.vapi.ai/assistant/{assistant_id}",
+                    headers=headers, timeout=10,
+                )
+                if a_resp.status_code == 200:
+                    a = a_resp.json()
+                    logger.info(
+                        "Vapi assistant config: name=%s model=%s/%s voice=%s/%s serverUrl=%s",
+                        a.get("name"),
+                        a.get("model", {}).get("provider"), a.get("model", {}).get("model"),
+                        a.get("voice", {}).get("provider"), a.get("voice", {}).get("voiceId"),
+                        a.get("serverUrl"),
+                    )
+                    surl = a.get("serverUrl", "")
+                    if "app.perenniaai.com" in surl:
+                        logger.warning("Vapi assistant has WRONG serverUrl: %s — fixing to api.perenniaai.com", surl)
+                        fix_resp = await client.patch(
+                            f"https://api.vapi.ai/assistant/{assistant_id}",
+                            headers=headers,
+                            json={"serverUrl": "https://api.perenniaai.com/api/vapi/webhook"},
+                            timeout=10,
+                        )
+                        logger.info("Vapi assistant serverUrl fix: status=%s", fix_resp.status_code)
+                else:
+                    logger.error("Could not fetch Vapi assistant %s: %s", assistant_id, a_resp.status_code)
+                return
+
+            logger.warning(
+                "Vapi phone number MISSING assistantId (has: assistantId=%s serverUrl=%s) — restoring",
+                current_aid, current_surl,
+            )
+            fix_resp = await client.patch(
+                f"https://api.vapi.ai/phone-number/{phone_number_id}",
+                headers=headers,
+                json={"assistantId": assistant_id, "serverUrl": None},
+                timeout=15,
+            )
+            logger.info("Vapi phone config restore: status=%s", fix_resp.status_code)
+            if fix_resp.status_code == 200:
+                logger.info("Vapi phone number restored to assistantId=%s", assistant_id)
+            else:
+                logger.error("Vapi phone restore FAILED: %s", fix_resp.text[:200])
+    except Exception as e:
+        logger.error("Vapi phone config check error: %s", e)
+
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
