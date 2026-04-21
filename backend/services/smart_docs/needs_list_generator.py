@@ -602,6 +602,14 @@ class NeedsListGenerator:
                 except (KeyError, AttributeError):
                     resolved_doc_type = DocType.OTHER
 
+        priority_str = (priority or "NORMAL").upper()
+        if priority_str == "URGENT":
+            priority_str = "CRITICAL"
+        try:
+            resolved_priority = RequestPriority(priority_str)
+        except (ValueError, AttributeError):
+            resolved_priority = RequestPriority.NORMAL
+
         request = self._create_request(
             loan_id=loan_id,
             borrower_id=borrower_id,
@@ -609,7 +617,7 @@ class NeedsListGenerator:
             title=title,
             description=description,
             instructions=instructions,
-            priority=RequestPriority(priority),
+            priority=resolved_priority,
             due_date=due_date,
             requires_esign=requires_esign,
         )
