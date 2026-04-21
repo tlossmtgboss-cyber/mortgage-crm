@@ -954,11 +954,20 @@ class URLAAgent(Agent):
                 "TRID triggers met after Section 4A",
                 extra={"loan_id": app.loan_id, "application_received_at": app.application_received_at.isoformat()},
             )
+        # "Re-ask loud" — critical financial fields get explicit readback + confirmation.
+        # Both extraction paths consume the same STT transcript, so a systematic
+        # Deepgram mishear (e.g. "$425k" → "$225k") would pass the dual-path
+        # diff undetected. Verbal confirmation catches this at zero infra cost.
+        loan_spelled = _spell_dollars_for_voice(loan_amount)
+        value_spelled = _spell_dollars_for_voice(property_value)
+        state_code = V.parse_state(subject_state)
         return (
-            f"Got it: ${loan_amount:,.0f} {loan_purpose.lower()} on "
-            f"{subject_street}, {subject_city}. "
-            f"Are you taking out any other new mortgages on this property, "
-            f"like a piggyback second?"
+            f"Let me confirm the key numbers before we continue. "
+            f"The loan amount is {loan_spelled}. "
+            f"The property value is {value_spelled}. "
+            f"And the property address is {subject_street}, {subject_city}, "
+            f"{state_code} {subject_zip}. "
+            f"Is all of that correct?"
         )
 
     @function_tool
@@ -1651,6 +1660,24 @@ def _norm_enum(raw: str, enum_cls) -> str:
     if candidates:
         return candidates[0]
     raise ValueError(f"Could not map '{raw}' to {enum_cls.__name__}. Valid: {', '.join(values)}")
+
+
+def _spell_dollars_for_voice(amount: float) -> str:
+    """Voice-friendly dollar readback: $425,000 -> 'four hundred twenty-five thousand dollars'."""
+    if amount <= 0:
+        return "zero dollars"
+    n = int(round(amount))
+    if n >= 1_000_000 and n % 1_000_000 == 0:
+        return f"{n // 1_000_000} million dollars"
+    if n >= 1_000_000:
+        millions = n // 1_000_000
+        remainder = n % 1_000_000
+        if remainder % 1_000 == 0:
+            return f"{millions} million {remainder // 1_000} thousand dollars"
+        return f"${n:,.0f}"
+    if n >= 1_000 and n % 1_000 == 0:
+        return f"{n // 1_000} thousand dollars"
+    return f"${n:,.0f}"
 
 
 def _sum_monthly_income(borrower: Borrower) -> float:

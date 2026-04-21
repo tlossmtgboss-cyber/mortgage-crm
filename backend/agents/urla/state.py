@@ -154,14 +154,25 @@ class URLAStateManager:
     def _get_cipher(self) -> Optional[Fernet]:
         """
         Return a Fernet cipher derived from the URLA_ENCRYPTION_KEY env var.
-        Returns None (plaintext mode) if the key is not set — suitable for
-        local dev, but a WARNING is logged on first call.
+        Returns None (plaintext mode) in dev only. In production, missing
+        key is a fatal error — GLBA Safeguards Rule requires encryption at rest.
         """
         key = os.getenv("URLA_ENCRYPTION_KEY", "")
         if not key:
+            is_prod = bool(
+                os.getenv("RAILWAY_ENVIRONMENT")
+                or os.getenv("RAILWAY_SERVICE_NAME")
+                or os.getenv("ENV", "").lower() == "production"
+            )
+            if is_prod:
+                raise RuntimeError(
+                    "URLA_ENCRYPTION_KEY is required in production. "
+                    "GLBA Safeguards Rule prohibits storing PII in plaintext. "
+                    "Set this env var before deploying the URLA agent."
+                )
             logger.warning(
                 "URLA_ENCRYPTION_KEY not set — PII stored as plaintext in Redis. "
-                "Set this env var in production."
+                "This is acceptable for local dev only."
             )
             return None
         # Derive a valid 32-byte Fernet key from any arbitrary string

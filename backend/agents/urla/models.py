@@ -661,6 +661,12 @@ class URLAApplication(URLABase):
     bytepro_loan_number: Optional[str] = None
     bytepro_submitted_at: Optional[datetime] = None
 
+    # Credit authorization — verbal consent does NOT satisfy FCRA 15 U.S.C. 1681b(a)(2).
+    # Separate e-signed authorization required before any credit pull.
+    credit_authorization_pending: bool = True
+    credit_authorization_sent_at: Optional[datetime] = None
+    credit_authorization_signed_at: Optional[datetime] = None
+
     # LO kickoff call booked via Smart Calendar (post-finalize)
     lo_kickoff_booking: Optional[LOKickoffBooking] = None
 

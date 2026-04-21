@@ -86,11 +86,11 @@ way."""
 # =============================================================================
 
 GREETING_NEW_CALLER = (
-    "Hi there, this is Avery from Perennia. I help with new mortgage loan "
-    "applications over the phone. Before we start, I want to let you know this "
-    "call is recorded for quality and compliance, and everything you share with "
-    "me today is kept secure. Whenever you're ready, just let me know if you'd "
-    "like to start a new application or pick up one you already started."
+    "Hi there, this is Avery, an A I assistant from Perennia. I'm not a "
+    "licensed loan officer — I help collect mortgage application information "
+    "over the phone. Before we start, I want to let you know this call is "
+    "recorded for quality and compliance, and everything you share with me "
+    "today is encrypted and stored securely. Is it okay to continue?"
 )
 
 GREETING_RETURNING_CALLER_TEMPLATE = (
@@ -448,6 +448,9 @@ SECTION_5B_QUESTIONS = [
 # SECTION 6 — ACKNOWLEDGMENTS & AGREEMENTS (VERBAL CONSENT)
 # =============================================================================
 
+# NOTE: Penalty language softened from "civil or criminal penalties" (18 U.S.C.
+# 1014 reference) to "civil liability" pending compliance counsel review.
+# Credit report authorization REMOVED — FCRA requires separate written consent.
 SECTION_6_VERBAL_CONSENT_SCRIPT = (
     "We're almost done. Before we wrap up, I need to read you a short "
     "acknowledgment required on every mortgage application, and I'll need "
@@ -457,11 +460,14 @@ SECTION_6_VERBAL_CONSENT_SCRIPT = (
     "By saying 'I agree,' you're confirming that the information you've "
     "provided today is true and accurate to the best of your knowledge. You "
     "understand this application is being submitted for a mortgage loan, and "
-    "any intentional misrepresentation can subject you to civil or criminal "
-    "penalties. You authorize Perennia and its lending partners to verify the "
-    "information you've provided, including by obtaining your credit report. "
-    "You also authorize us to share your application information with "
-    "service providers and investors as needed to process this loan."
+    "any intentional misrepresentation may result in civil liability, "
+    "including denial of the loan. You authorize Perennia and its lending "
+    "partners to verify the information you've provided and to share your "
+    "application information with service providers and investors as needed "
+    "to process this loan."
+    "\n\n"
+    "A separate written authorization for accessing your credit report will "
+    "be sent to you electronically after this call."
     "\n\n"
     "Do you agree?"
 )
