@@ -214,36 +214,12 @@ class AriaVoiceAgent(Agent):
 
     # ─── CRM Tools (all via HTTP backend) ─────────────────────────────
 
-    async def search_pipeline(self, context: RunContext, query: str):
-        """Search the loan pipeline by borrower name, loan number, or stage."""
-        result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "search_pipeline", "params": {"query": query}},
-        )
-        return json.dumps(result, default=str)
-
-    async def get_pipeline_summary(self, context: RunContext):
-        """Get a summary of the current loan pipeline — total loans, by stage, SLA alerts."""
-        result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "get_pipeline_summary", "params": {}},
-        )
-        return json.dumps(result, default=str)
-
-    async def search_leads(self, context: RunContext, query: str):
-        """Search for leads by name, email, or phone number."""
-        result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "search_leads", "params": {"query": query}},
-        )
-        return json.dumps(result, default=str)
-
     @function_tool()
     async def get_lead_details(self, context: RunContext, lead_id: int):
         """Get full details for a specific lead by ID."""
         result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "get_lead_details", "params": {"lead_id": lead_id}},
+            "/internal/aria/lead-info",
+            {"lead_id": lead_id},
         )
         return json.dumps(result, default=str)
 
@@ -275,7 +251,6 @@ class AriaVoiceAgent(Agent):
             {"tool_name": "send_sms_message", "params": {
                 "to_phone": phone_number,
                 "message": message,
-                "organization_id": str(self._session_data.get("organization_id", "")),
                 "user_id": str(self._session_data.get("user_id", "")),
             }},
         )
@@ -298,7 +273,6 @@ class AriaVoiceAgent(Agent):
         """Create a task or follow-up item."""
         params = {
             "title": title, "description": description, "priority": priority,
-            "organization_id": str(self._session_data.get("organization_id", "")),
             "user_id": str(self._session_data.get("user_id", "")),
         }
         if due_date:
@@ -314,21 +288,6 @@ class AriaVoiceAgent(Agent):
         })
         return json.dumps(result, default=str)
 
-    async def get_sla_alerts(self, context: RunContext):
-        """Get current SLA alerts and overdue items."""
-        result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "get_sla_alerts", "params": {}},
-        )
-        return json.dumps(result, default=str)
-
-    async def check_rates(self, context: RunContext, loan_type: str):
-        """Check current mortgage rates."""
-        result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "get_current_rates", "params": {"loan_type": loan_type}},
-        )
-        return json.dumps(result, default=str)
 
     @function_tool()
     async def schedule_appointment(
@@ -342,9 +301,10 @@ class AriaVoiceAgent(Agent):
         notes: str,
     ):
         """Schedule a new appointment on the calendar. Use contact_id if known, or provide details in notes."""
-        params = {
+        params: Dict[str, Any] = {
             "duration_minutes": duration_minutes,
             "appointment_type": appointment_type,
+            "user_id": str(self._session_data.get("user_id", "")),
         }
         if contact_id:
             params["contact_id"] = contact_id
@@ -365,52 +325,6 @@ class AriaVoiceAgent(Agent):
         })
         return json.dumps(result, default=str)
 
-    async def get_daily_briefing(self, context: RunContext):
-        """Get a morning briefing with today's tasks, appointments, pipeline updates, and alerts."""
-        result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "get_daily_briefing", "params": {}},
-        )
-        return json.dumps(result, default=str)
-
-    # ─── SMS Conversation Tools ──────────────────────────────────────
-
-    async def get_sms_conversation(self, context: RunContext, phone_number: str):
-        """Get the SMS conversation history with a phone number. Shows recent messages back and forth."""
-        result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "get_sms_conversation_history", "params": {
-                "phone_number": phone_number,
-            }},
-        )
-        return json.dumps(result, default=str)
-
-    async def start_scheduling_conversation(
-        self,
-        context: RunContext,
-        phone_number: str,
-        borrower_name: str,
-        proposed_times: str,
-        appointment_type: str,
-    ):
-        """Start an SMS conversation with a borrower to schedule an appointment.
-        Sends an initial text asking for their availability. They'll text back to confirm."""
-        result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "start_scheduling_sms", "params": {
-                "to_phone": phone_number,
-                "borrower_name": borrower_name,
-                "proposed_times": proposed_times,
-                "appointment_type": appointment_type,
-            }},
-        )
-        self._session_data["tools_executed"].append({
-            "tool": "start_scheduling_sms",
-            "borrower": borrower_name,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-        return json.dumps(result, default=str)
-
     # ─── Document Generation Tools ───────────────────────────────────
 
     @function_tool()
@@ -427,11 +341,10 @@ class AriaVoiceAgent(Agent):
         Requires the lead ID and approval amount. The letter is emailed as a PDF."""
         if self._mode != "lo_assistant":
             return json.dumps({"error": "Pre-approval letters can only be generated in LO assistant mode."})
-        params = {
+        params: Dict[str, Any] = {
             "lead_id": lead_id,
             "approval_amount": approval_amount,
             "loan_type": loan_type,
-            "organization_id": str(self._session_data.get("organization_id", "")),
             "user_id": str(self._session_data.get("user_id", "")),
         }
         if property_address:
@@ -465,14 +378,14 @@ class AriaVoiceAgent(Agent):
             "/internal/aria/tool/execute",
             {"tool_name": "find_contact_phone", "params": {
                 "name": name,
-                "user_id": self._session_data.get("user_id"),
+                "user_id": str(self._session_data.get("user_id", "")),
             }},
         )
         email_result = await self._call_backend(
             "/internal/aria/tool/execute",
             {"tool_name": "find_contact_email", "params": {
                 "name": name,
-                "user_id": self._session_data.get("user_id"),
+                "user_id": str(self._session_data.get("user_id", "")),
             }},
         )
         phone_matches = result.get("result", {}).get("data", {}).get("results", []) if isinstance(result.get("result"), dict) else []
@@ -524,7 +437,7 @@ class AriaVoiceAgent(Agent):
                 "to_email": to_email,
                 "subject": subject,
                 "body": body,
-                "user_id": str(self._session_data.get("user_id", "")),
+                "user_id": self._session_data.get("user_id"),
             }},
         )
         self._session_data["tools_executed"].append({
@@ -554,8 +467,7 @@ class AriaVoiceAgent(Agent):
                 "client_ids": client_ids,
                 "subject": subject,
                 "body_template": body_template,
-                "user_id": str(self._session_data.get("user_id", "")),
-                "organization_id": str(self._session_data.get("organization_id", "")),
+                "user_id": self._session_data.get("user_id"),
             }},
         )
         self._session_data["tools_executed"].append({
@@ -586,8 +498,7 @@ class AriaVoiceAgent(Agent):
                 "client_ids": client_ids,
                 "message_template": message_template,
                 "campaign_name": campaign_name or "Aria Voice Campaign",
-                "user_id": str(self._session_data.get("user_id", "")),
-                "organization_id": str(self._session_data.get("organization_id", "")),
+                "user_id": self._session_data.get("user_id"),
             }},
         )
         self._session_data["tools_executed"].append({
@@ -620,6 +531,7 @@ class AriaVoiceAgent(Agent):
                 "contact_id": contact_id,
                 "contact_type": "lead",
                 "purpose": purpose or "follow_up",
+                "user_id": self._session_data.get("user_id"),
             }},
         )
         self._session_data["tools_executed"].append({
@@ -641,7 +553,9 @@ class AriaVoiceAgent(Agent):
         Use when the user asks about pipeline health, how many loans are in processing, what's closing soon, etc."""
         result = await self._call_backend(
             "/internal/aria/tool/execute",
-            {"tool_name": "get_pipeline_metrics", "params": {}},
+            {"tool_name": "get_pipeline_metrics", "params": {
+                "user_id": self._session_data.get("user_id"),
+            }},
         )
         return json.dumps(result, default=str)
 
@@ -678,7 +592,10 @@ class AriaVoiceAgent(Agent):
         Use when the user asks things like 'what do I have in underwriting' or 'how many loans are clear to close'."""
         result = await self._call_backend(
             "/internal/aria/tool/execute",
-            {"tool_name": "get_loans_by_status", "params": {"status": stage}},
+            {"tool_name": "get_loans_by_status", "params": {
+                "status": stage,
+                "user_id": self._session_data.get("user_id"),
+            }},
         )
         return json.dumps(result, default=str)
 
@@ -703,6 +620,7 @@ class AriaVoiceAgent(Agent):
                 "phone_number": phone_number,
                 "voicemail_template": voicemail_template,
                 "contact_id": contact_id,
+                "user_id": self._session_data.get("user_id"),
             }},
         )
         self._session_data["tools_executed"].append({
@@ -751,6 +669,7 @@ class AriaVoiceAgent(Agent):
                         "phone_number": phone,
                         "voicemail_template": voicemail_template,
                         "contact_id": cid,
+                        "user_id": self._session_data.get("user_id"),
                     }},
                 )
                 if not vm_result.get("error"):
@@ -783,6 +702,7 @@ class AriaVoiceAgent(Agent):
                 "limit": min(limit, 200),
                 "has_phone": "true",
                 "has_email": "true",
+                "user_id": self._session_data.get("user_id"),
             }},
         )
         return json.dumps(result, default=str)
@@ -796,31 +716,13 @@ class AriaVoiceAgent(Agent):
         """Find referral partners (realtors, financial advisors, attorneys, etc.) in the CRM.
         Returns their names, phone numbers, and emails so you can send voicemail drops, texts, or emails to them.
         Category: realtor, financial_advisor, attorney, insurance, builder, or all."""
-        from database import SessionLocal
-        from sqlalchemy import text as sa_text
-        try:
-            db = SessionLocal()
-            q = """SELECT id, name, contact_name, phone, email, category, company, status
-                   FROM referral_partners
-                   WHERE status = 'active'"""
-            params: Dict[str, Any] = {}
-            if category and category.lower() != "all":
-                q += " AND LOWER(category) = :category"
-                params["category"] = category.lower()
-            org_id = self._session_data.get("organization_id")
-            if org_id:
-                q += " AND organization_id = :org_id"
-                params["org_id"] = int(org_id)
-            q += " ORDER BY name LIMIT 200"
-            rows = db.execute(sa_text(q), params).mappings().all()
-            db.close()
-            partners = [dict(r) for r in rows]
-            if not partners:
-                return f"No {category} partners found in the CRM."
-            return json.dumps({"partners": partners, "count": len(partners)}, default=str)
-        except Exception as e:
-            logger.error("[AriaVoice] find_referral_partners failed: %s", e)
-            return json.dumps({"error": str(e)})
+        result = await self._call_backend(
+            "/internal/aria/find-referral-partners",
+            {"category": category},
+        )
+        if result.get("count", 0) == 0:
+            return f"No {category} partners found in the CRM."
+        return json.dumps(result, default=str)
 
     # ─── Existing Tools (Inbound/Transfer) ───────────────────────────
 
@@ -860,38 +762,36 @@ class AriaVoiceAgent(Agent):
 
         As you get each answer, use update_lead to add the details."""
         from_number = self._session_data.get("from_number", "")
-        params: Dict[str, Any] = {
+        payload: Dict[str, Any] = {
             "first_name": first_name,
             "last_name": last_name,
             "source": "voice_assistant",
-            "organization_id": str(self._session_data.get("organization_id", "")),
-            "user_id": str(self._session_data.get("user_id", "")),
+            "user_id": self._session_data.get("user_id"),
         }
         if phone:
-            params["phone"] = phone
+            payload["phone"] = phone
         elif from_number:
-            params["phone"] = from_number
+            payload["phone"] = from_number
         if email:
-            params["email"] = email
+            payload["email"] = email
         if loan_purpose:
-            params["loan_purpose"] = loan_purpose
+            payload["loan_purpose"] = loan_purpose
         if property_type:
-            params["property_type"] = property_type
+            payload["property_type"] = property_type
         if timeline:
-            params["timeline"] = timeline
+            payload["timeline"] = timeline
         if notes:
-            params["notes"] = notes
+            payload["notes"] = notes
         result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "create_lead", "params": params},
+            "/internal/aria/create-lead",
+            payload,
         )
         self._session_data["tools_executed"].append({
             "tool": "create_lead",
             "name": f"{first_name} {last_name}",
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
-        lead_data = result.get("result", {})
-        lead_id = lead_data.get("id") or lead_data.get("lead_id")
+        lead_id = result.get("lead_id")
         if lead_id:
             self._session_data["last_created_lead_id"] = lead_id
         return json.dumps(result, default=str)
@@ -914,23 +814,28 @@ class AriaVoiceAgent(Agent):
         resolved_id = lead_id or str(self._session_data.get("last_created_lead_id", ""))
         if not resolved_id:
             return json.dumps({"error": "No lead_id provided and no lead was created in this session."})
-        params: Dict[str, Any] = {"lead_id": resolved_id}
+        payload: Dict[str, Any] = {"lead_id": int(resolved_id)}
         if phone:
-            params["phone"] = phone
+            payload["phone"] = phone
         if email:
-            params["email"] = email
+            payload["email"] = email
         if loan_purpose:
-            params["loan_purpose"] = loan_purpose
+            payload["loan_purpose"] = loan_purpose
         if property_type:
-            params["property_type"] = property_type
+            payload["property_type"] = property_type
         if timeline:
-            params["timeline"] = timeline
+            payload["timeline"] = timeline
         if notes:
-            params["notes"] = notes
+            payload["notes"] = notes
         result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "update_lead", "params": params},
+            "/internal/aria/update-lead",
+            payload,
         )
+        self._session_data["tools_executed"].append({
+            "tool": "update_lead",
+            "lead_id": resolved_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
         return json.dumps(result, default=str)
 
     @function_tool()
@@ -1000,38 +905,6 @@ class AriaVoiceAgent(Agent):
             f"{summary} "
             f"I'll let you two take it from here."
         )
-
-    # Tools the voice agent is allowed to invoke via the generic executor.
-    # All destructive, compliance, or admin tools are excluded.
-    _CRM_TOOL_ALLOWLIST = frozenset({
-        "search_pipeline", "get_pipeline_summary", "search_leads",
-        "get_lead_details", "get_loan_status", "get_loan_details",
-        "get_tasks", "get_upcoming_appointments", "get_rate_alerts",
-        "get_contact_info", "get_loan_conditions", "get_document_status",
-        "get_sla_status", "calculate_income",
-    })
-
-    async def run_crm_tool(
-        self, context: RunContext, tool_name: str, parameters: str
-    ):
-        """Run a read-only CRM tool by name with JSON parameters.
-        Fallback for tools without a specific wrapper."""
-        if tool_name not in self._CRM_TOOL_ALLOWLIST:
-            return json.dumps({"error": f"Tool '{tool_name}' is not available via voice. Use a specific command instead."})
-        try:
-            params = json.loads(parameters)
-        except json.JSONDecodeError:
-            return json.dumps({"error": "Invalid JSON parameters"})
-        logger.info("[AriaVoice] run_crm_tool: %s params=%s", tool_name, list(params.keys()))
-        result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": tool_name, "params": params},
-        )
-        self._session_data["tools_executed"].append({
-            "tool": tool_name,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-        return json.dumps(result, default=str)
 
     @function_tool()
     async def recall_borrower_history(
@@ -1278,6 +1151,9 @@ async def aria_voice_session(ctx: agents.JobContext):
             "lo_name": metadata.get("lo_name", ""),
             "call_purpose": metadata.get("call_purpose", ""),
             "call_context": metadata.get("call_context", ""),
+            "organization_id": metadata.get("organization_id") or metadata.get("org_id"),
+            "user_id": metadata.get("user_id"),
+            "lead_id": metadata.get("lead_id"),
         }
         logger.info(
             f"[AriaVoice] Outbound follow-up mode: "
@@ -1287,7 +1163,7 @@ async def aria_voice_session(ctx: agents.JobContext):
         mode = "lo_assistant"
         context = {
             "user_id": metadata.get("user_id"),
-            "organization_id": metadata.get("org_id"),
+            "organization_id": metadata.get("org_id") or metadata.get("organization_id"),
             "email": metadata.get("email", ""),
         }
         logger.info(

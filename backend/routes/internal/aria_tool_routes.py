@@ -43,6 +43,28 @@ class ToolExecuteRequest(BaseModel):
     params: Dict[str, Any] = {}
     organization_id: Optional[int] = None
 
+class LeadCreateRequest(BaseModel):
+    first_name: str
+    last_name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    source: str = "voice_assistant"
+    loan_purpose: Optional[str] = None
+    property_type: Optional[str] = None
+    timeline: Optional[str] = None
+    notes: Optional[str] = None
+    organization_id: Optional[int] = None
+    user_id: Optional[int] = None
+
+class LeadUpdateRequest(BaseModel):
+    lead_id: int
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    loan_purpose: Optional[str] = None
+    property_type: Optional[str] = None
+    timeline: Optional[str] = None
+    notes: Optional[str] = None
+
 class LeadInfoRequest(BaseModel):
     lead_id: int
     organization_id: Optional[int] = None
@@ -249,4 +271,116 @@ async def lo_info(
         "phone": user.phone or "",
         "email": user.email,
         "timezone": getattr(user, "timezone", "America/Chicago"),
+    }
+
+
+@router.post("/create-lead")
+async def create_lead_endpoint(
+    req: LeadCreateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Create a new lead from voice agent."""
+    _verify_internal_key(request)
+    from database.models.lead_loan import Lead
+
+    lead = Lead(
+        first_name=req.first_name,
+        last_name=req.last_name,
+        name=f"{req.first_name} {req.last_name}".strip(),
+        phone=req.phone or "",
+        email=req.email or "",
+        source=req.source,
+        loan_purpose=req.loan_purpose or "",
+        property_type=req.property_type or "",
+        timeline=req.timeline or "",
+        notes=req.notes or "",
+        stage="New",
+    )
+    if req.organization_id:
+        lead.organization_id = req.organization_id
+    if req.user_id:
+        lead.owner_id = req.user_id
+    db.add(lead)
+    db.commit()
+    db.refresh(lead)
+
+    return {
+        "lead_id": lead.id,
+        "name": lead.name,
+        "phone": lead.phone,
+        "email": lead.email,
+        "stage": lead.stage,
+    }
+
+
+@router.post("/update-lead")
+async def update_lead_endpoint(
+    req: LeadUpdateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Update an existing lead from voice agent."""
+    _verify_internal_key(request)
+    from database.models.lead_loan import Lead
+
+    lead = db.query(Lead).filter(Lead.id == req.lead_id).first()
+    if not lead:
+        return {"error": f"Lead {req.lead_id} not found"}
+
+    if req.phone:
+        lead.phone = req.phone
+    if req.email:
+        lead.email = req.email
+    if req.loan_purpose:
+        lead.loan_purpose = req.loan_purpose
+    if req.property_type:
+        lead.property_type = req.property_type
+    if req.timeline:
+        lead.timeline = req.timeline
+    if req.notes:
+        lead.notes = (lead.notes or "") + f"\n{req.notes}" if lead.notes else req.notes
+    db.commit()
+
+    return {
+        "lead_id": lead.id,
+        "name": lead.name,
+        "updated": True,
+    }
+
+
+@router.post("/find-referral-partners")
+async def find_referral_partners_endpoint(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Find referral partners by category."""
+    _verify_internal_key(request)
+    body = await request.json()
+    category = body.get("category", "realtor")
+    org_id = body.get("organization_id")
+
+    from database.models.referral import ReferralPartner
+    q = db.query(ReferralPartner).filter(ReferralPartner.status == "active")
+    if category and category.lower() != "all":
+        q = q.filter(ReferralPartner.category == category.lower())
+    if org_id:
+        q = q.filter(ReferralPartner.organization_id == int(org_id))
+    q = q.order_by(ReferralPartner.name).limit(200)
+    partners = q.all()
+
+    return {
+        "partners": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "contact_name": p.contact_name,
+                "phone": p.phone or "",
+                "email": p.email or "",
+                "category": p.category or "",
+                "company": p.company or "",
+            }
+            for p in partners
+        ],
+        "count": len(partners),
     }
