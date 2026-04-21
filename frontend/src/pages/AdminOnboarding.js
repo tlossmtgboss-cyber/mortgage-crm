@@ -150,9 +150,8 @@ function AdminOnboarding() {
         { module_key: 'ai_assistant', module_name: 'AI Assistant', description: 'AI-powered underwriting, chat, and email assistance', monthly_price: 149, icon: '🤖', included_features: ['ai_underwriter', 'ai_chat', 'email_training'] },
         { module_key: 'partner_portals', module_name: 'Partner Portals', description: 'Realtor portal, listing portal, and personalized URLs', monthly_price: 99, icon: '🤝', included_features: ['realtor_portal', 'listing_portal', 'purl'] },
         { module_key: 'video_os', module_name: 'Video OS', description: 'Create personalized videos with AI avatars', monthly_price: 79, icon: '🎬', included_features: ['video_creation', 'ai_avatars', 'templates'] },
-        // { module_key: 'recruiting_suite', module_name: 'Recruiting Suite', description: 'Full recruiting pipeline with DISC assessments', monthly_price: 199, icon: '👥', included_features: ['candidates', 'disc_assessment', 'onboarding'] },  // DEPRECATED: Premium feature deregistered — not yet launched
         { module_key: 'conversation_intelligence', module_name: 'Conversation Intelligence', description: 'Call recording, transcription, and QA scoring', monthly_price: 129, icon: '📞', included_features: ['call_recording', 'transcription', 'qa_scoring'] },
-        { module_key: 'advanced_analytics', module_name: 'Advanced Analytics', description: 'Profitability analysis and market insights', monthly_price: 149, icon: '📊', included_features: [/* 'decision_lab', */ 'profitability', 'market_data'] }, // DEPRECATED: decision_lab experimental feature deregistered
+        { module_key: 'advanced_analytics', module_name: 'Advanced Analytics', description: 'Profitability analysis and market insights', monthly_price: 149, icon: '📊', included_features: ['profitability', 'market_data'] },
         { module_key: 'integrations', module_name: 'Integrations', description: 'Connect to Salesforce, HubSpot, Encompass and more', monthly_price: 79, icon: '🔗', included_features: ['salesforce', 'hubspot', 'encompass'] },
       ]);
     } finally {

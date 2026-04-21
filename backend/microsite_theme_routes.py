@@ -71,15 +71,8 @@ def ensure_microsite_columns_exist():
 # Run migration on module load
 ensure_microsite_columns_exist()
 
-# Lazy imports to avoid circular dependencies
-def get_db():
-    """Wrapper for get_db to avoid circular import."""
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Use canonical RLS-aware get_db from db.py
+from db import get_db
 
 
 async def get_current_user(

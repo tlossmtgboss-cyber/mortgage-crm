@@ -328,17 +328,32 @@ export default function SlideCanvas() {
   const dimensions = ASPECT_RATIO_SIZES[currentProject?.aspect_ratio] || { width: 1080, height: 1080 };
   const aspectRatio = `${dimensions.width} / ${dimensions.height}`;
 
-  // Build background styles
+  // Build background styles (sanitize CSS values to prevent injection)
+  const sanitizeCSS = (val) => val ? String(val).replace(/[;{}<>"'\\]/g, '') : '';
+  const sanitizeUrl = (url) => {
+    if (!url) return '';
+    const trimmed = String(url).trim();
+    if (!/^(https?:|data:image\/)/i.test(trimmed)) return '';
+    return trimmed.replace(/[)"'\\;{}]/g, '');
+  };
+
   const backgroundStyles = {};
   if (selectedSlide.background_type === 'gradient' && selectedSlide.background_gradient) {
-    const { angle = 135, colors = ['#667eea', '#764ba2'] } = selectedSlide.background_gradient;
+    const angle = parseInt(selectedSlide.background_gradient.angle, 10) || 135;
+    const colors = (selectedSlide.background_gradient.colors || ['#667eea', '#764ba2'])
+      .map(c => sanitizeCSS(c));
     backgroundStyles.background = `linear-gradient(${angle}deg, ${colors.join(', ')})`;
   } else if (selectedSlide.background_type === 'image' && selectedSlide.background_image_url) {
-    backgroundStyles.backgroundImage = `url(${selectedSlide.background_image_url})`;
-    backgroundStyles.backgroundSize = 'cover';
-    backgroundStyles.backgroundPosition = 'center';
+    const safeUrl = sanitizeUrl(selectedSlide.background_image_url);
+    if (safeUrl) {
+      backgroundStyles.backgroundImage = `url(${safeUrl})`;
+      backgroundStyles.backgroundSize = 'cover';
+      backgroundStyles.backgroundPosition = 'center';
+    } else {
+      backgroundStyles.backgroundColor = '#217F8D';
+    }
   } else {
-    backgroundStyles.backgroundColor = selectedSlide.background_color || '#217F8D';
+    backgroundStyles.backgroundColor = sanitizeCSS(selectedSlide.background_color) || '#217F8D';
   }
 
   return (

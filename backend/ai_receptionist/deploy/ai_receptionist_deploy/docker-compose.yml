@@ -40,7 +40,7 @@ services:
     container_name: perennia-db
     environment:
       - POSTGRES_USER=${DB_USER:-perennia}
-      - POSTGRES_PASSWORD=${DB_PASSWORD:-perennia_secure_password}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
       - POSTGRES_DB=${DB_NAME:-perennia}
     volumes:
       - postgres_data:/var/lib/postgresql/data

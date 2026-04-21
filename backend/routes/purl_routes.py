@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
@@ -1639,14 +1640,16 @@ async def regenerate_token_temp(
     db: Session = Depends(get_db)
 ):
     """Temporary endpoint to regenerate a token for a workspace."""
-    import os
-    import secrets
     import hashlib
     from datetime import timezone, timedelta
 
-    # Simple admin key check
-    expected_key = os.getenv("ADMIN_REGEN_KEY", "temp_regen_key_2024")
-    if admin_key != expected_key:
+    # Fail closed: if ADMIN_REGEN_KEY is not configured, refuse all requests
+    expected_key = os.getenv("ADMIN_REGEN_KEY", "")
+    if not expected_key:
+        raise HTTPException(status_code=503, detail="Regeneration key not configured")
+
+    # Timing-safe comparison to prevent timing attacks
+    if not secrets.compare_digest(admin_key, expected_key):
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
     # Get workspace

@@ -207,6 +207,7 @@ async def chat_stream(
                     AITask.type != TaskType.COMPLETED
                 ).all()
                 all_loans = db.query(Loan).filter(Loan.loan_officer_id == current_user.id).all()
+                loans_by_id = {l.id: l for l in all_loans}
 
                 priority_tasks = sorted(
                     all_tasks,
@@ -219,7 +220,7 @@ async def chat_stream(
                 for task in priority_tasks:
                     loan_info = None
                     if task.loan_id:
-                        loan = next((l for l in all_loans if l.id == task.loan_id), None)
+                        loan = loans_by_id.get(task.loan_id)
                         if loan:
                             loan_info = {
                                 "borrower": loan.borrower_name,

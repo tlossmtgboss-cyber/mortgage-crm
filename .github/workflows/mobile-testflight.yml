@@ -51,6 +51,9 @@ on:
         default: 'Bug fixes and improvements.'
         type: string
 
+permissions:
+  contents: write
+
 concurrency:
   group: testflight-deploy
   cancel-in-progress: false

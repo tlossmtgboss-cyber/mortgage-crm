@@ -15,6 +15,24 @@ import re
 logger = logging.getLogger(__name__)
 
 
+_ALLOWED_SQL_TYPES = frozenset({
+    "TEXT", "INTEGER", "NUMERIC", "BOOLEAN", "VARCHAR",
+    "TIMESTAMP", "DATE", "FLOAT", "JSONB", "UUID",
+})
+
+
+def _validate_sql_identifier(name: str) -> str:
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', name):
+        raise ValueError(f"Invalid SQL identifier: {name!r}")
+    return name
+
+
+def _validate_sql_type(col_type: str) -> str:
+    if col_type.upper() not in _ALLOWED_SQL_TYPES:
+        raise ValueError(f"Disallowed SQL column type: {col_type!r}")
+    return col_type
+
+
 def _safe_column_name(col: str) -> str:
     """Validate column name contains only safe characters for SQL interpolation."""
     if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', col):
@@ -681,8 +699,13 @@ def ensure_import_columns_exist(conn, destination: str):
 
     for col_name, col_type in columns_to_add:
         try:
-            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {col_name} {col_type}")
+            safe_table = _validate_sql_identifier(table_name)
+            safe_col = _validate_sql_identifier(col_name)
+            safe_type = _validate_sql_type(col_type)
+            cursor.execute(f"ALTER TABLE {safe_table} ADD COLUMN IF NOT EXISTS {safe_col} {safe_type}")
             conn.commit()
+        except ValueError as e:
+            logger.error(f"Invalid identifier in column addition: {e}")
         except Exception as e:
             logger.exception(f"Failed to add column {col_name} to {table_name}: {e}")
             conn.rollback()

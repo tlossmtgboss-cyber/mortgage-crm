@@ -34,7 +34,7 @@ services:
       - ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
 
       # Database
-      - DATABASE_URL=postgresql://perennia:perennia@postgres:5432/perennia
+      - DATABASE_URL=${DATABASE_URL:-postgresql://perennia:${DB_PASSWORD:?Set DB_PASSWORD}@postgres:5432/perennia}
 
       # Server
       - HOST=0.0.0.0
@@ -60,9 +60,9 @@ services:
     container_name: perennia-postgres
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=perennia
-      - POSTGRES_PASSWORD=perennia
-      - POSTGRES_DB=perennia
+      - POSTGRES_USER=${DB_USER:-perennia}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD in .env}
+      - POSTGRES_DB=${DB_NAME:-perennia}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro

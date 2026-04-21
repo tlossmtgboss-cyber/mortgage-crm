@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import Navigation from '../components/Navigation';
 import CoachCorner from '../components/CoachCorner';
+import RouteErrorBoundary from '../components/RouteErrorBoundary';
 
 // Simple loading component for lazy-loaded pages
 const PageLoader = () => (
@@ -54,9 +55,11 @@ function MainLayout({
         taskCounts={taskCounts}
       />
       <main className={`app-main ${assistantOpen ? 'with-assistant' : ''} ${taskSidebarOpen ? 'with-task-sidebar' : ''}`}>
-        <Suspense fallback={<PageLoader />}>
-          {children}
-        </Suspense>
+        <RouteErrorBoundary>
+          <Suspense fallback={<PageLoader />}>
+            {children}
+          </Suspense>
+        </RouteErrorBoundary>
       </main>
       {showCoach && (
         <CoachCorner isOpen={coachOpen} onClose={() => onToggleCoach && onToggleCoach()} />

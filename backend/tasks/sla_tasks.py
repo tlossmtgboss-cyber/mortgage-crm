@@ -40,7 +40,12 @@ logger = logging.getLogger(__name__)
 
 
 def get_db_session():
-    """Create a new database session for background tasks."""
+    """Create a new database session for background tasks.
+
+    Note: Background tasks run outside the FastAPI request lifecycle,
+    so RLS context is not available from middleware. For tenant-scoped
+    background work, use get_db_with_tenant(org_id) instead.
+    """
     db = SessionLocal()
     try:
         return db

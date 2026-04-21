@@ -157,7 +157,7 @@ All endpoints tested and returning HTTP 200 in production:
 ```bash
 curl -X POST "https://app.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=tloss@cmgfi.com&password=Woodwindow00!"
+  -d "username=tloss@cmgfi.com&password=$YOUR_PASSWORD"
 ```
 
 ### 2. Test Any Endpoint
@@ -279,7 +279,7 @@ Now that the backend is complete, the next phase is building the UI:
 ## Important Notes
 
 ### Security
-- ⚠️ **Change test password** after verification: `Woodwindow00!`
+- ⚠️ Password must be provided via environment variable
 - ✅ All endpoints require authentication
 - ✅ Bearer token validation enforced
 - ✅ No sensitive data exposed

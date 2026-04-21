@@ -51,10 +51,13 @@ MAX_RECOVERY_WINDOW_HOURS = 96
 # Batch size for queries to avoid excessive memory usage
 RECOVERY_BATCH_SIZE = 200
 
-_SECRET_KEY = os.getenv("SECRET_KEY")
-if not _SECRET_KEY and os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production":
-    raise RuntimeError("SECRET_KEY must be set in production")
-_SECRET_KEY = _SECRET_KEY or "dev-only-insecure-key"
+_SECRET_KEY = os.getenv("SECRET_KEY", "")
+if not _SECRET_KEY:
+    if os.getenv("RAILWAY_ENVIRONMENT", "").lower() == "production":
+        raise RuntimeError("SECRET_KEY must be set in production")
+    logger.critical(
+        "SECRET_KEY not set — opt-out token generation/verification will be refused"
+    )
 
 
 def _get_secret_key() -> str:

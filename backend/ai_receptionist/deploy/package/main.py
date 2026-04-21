@@ -51,7 +51,12 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def get_db():
-    """Database session dependency."""
+    """Database session dependency.
+
+    WARNING: This is a standalone deployment package with its own engine.
+    RLS tenant context is NOT set because this runs outside the main app.
+    The AI receptionist uses organization-scoped queries explicitly.
+    """
     db = SessionLocal()
     try:
         yield db

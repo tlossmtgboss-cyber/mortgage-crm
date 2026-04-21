@@ -132,6 +132,16 @@ if not _SECRET_KEY:
 else:
     SECRET_KEY = _SECRET_KEY
 
+# ADMIN_API_KEY must be set and sufficiently long in production
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "").strip()
+if ENVIRONMENT == "production" and (not _ADMIN_API_KEY or len(_ADMIN_API_KEY) < 32):
+    raise ValueError(
+        "ADMIN_API_KEY must be set and at least 32 characters in production. "
+        "Generate with: python -c \"import secrets; print(secrets.token_hex(32))\""
+    )
+elif not _ADMIN_API_KEY:
+    logger.warning("ADMIN_API_KEY not set — CSRF API-key bypass and admin endpoints disabled")
+
 # JWT Configuration - Uses new auth module for RS256 support
 # Keep these for backward compatibility, but auth module settings take precedence
 ALGORITHM = os.getenv("AUTH_ALGORITHM", "HS256")  # Can be overridden to RS256
@@ -1936,6 +1946,14 @@ try:
     logger.info("Custom domain routes loaded")
 except Exception as e:
     logger.warning(f"Custom domain routes skipped: {e}")
+
+# URLA 1003 Voice Agent — Call Intelligence routes
+try:
+    from routes.urla_call_intelligence_routes import router as urla_ci_router
+    app.include_router(urla_ci_router, tags=["URLA Call Intelligence"])
+    logger.info("URLA call intelligence routes loaded")
+except Exception as e:
+    logger.warning(f"URLA call intelligence routes skipped: {e}")
 
 # ============================================================================
 # DB MIGRATION ROUTES

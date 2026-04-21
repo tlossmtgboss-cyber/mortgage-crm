@@ -84,11 +84,16 @@ async def run_ai_migration_endpoint(request: dict):
 
 
 @router.get("/api/v1/migrations/check-phase2-permissions", response_model=None)
-async def check_phase2_permission_migration(db: Session = Depends(lambda: get_db_dep())):
+async def check_phase2_permission_migration(
+    db: Session = Depends(lambda: get_db_dep()),
+    current_user=Depends(current_user_dep)
+):
     """
     Check if Phase 2 Permission System Migration has completed
     Returns status of tables and templates
     """
+    if getattr(current_user, 'role', None) != 'admin' and getattr(current_user, 'permission_role', None) != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
     try:
         results = {
             "permission_role_column_exists": False,
@@ -176,32 +181,6 @@ async def bootstrap_admin_user(
         logger.error(f"Bootstrap error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-
-@router.post("/api/v1/admin/set-admin-role")
-async def set_admin_role(
-    db: Session = Depends(lambda: get_db_dep()),
-    current_user = Depends(current_user_dep)
-):
-    """
-    Set the current user's permission_role to admin.
-    """
-    try:
-        current_user.permission_role = "admin"
-        current_user.role = "admin"
-        db.commit()
-        db.refresh(current_user)
-
-        return {
-            "success": True,
-            "message": f"User {current_user.email} is now an admin",
-            "user_id": current_user.id,
-            "email": current_user.email,
-            "permission_role": current_user.permission_role
-        }
-    except Exception as e:
-        db.rollback()
-        logger.error(f"Failed to set admin role: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 def set_dependencies(get_db_func, get_current_user_func):

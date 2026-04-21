@@ -1,3 +1,6 @@
+<!-- SECURITY: Never commit actual API keys in this file. Reference them by env var name only. -->
+<!-- The Zapier API key is stored in Railway as ZAPIER_API_KEY. Rotate immediately if exposed. -->
+
 # Zapier Setup Guide - Step-by-Step Instructions
 
 Complete guide to setting up Zaps for your Mortgage CRM.
@@ -8,7 +11,7 @@ Complete guide to setting up Zaps for your Mortgage CRM.
 
 Before you begin:
 - ✅ Zapier account (free or paid)
-- ✅ API Key: `185b7101-9435-44da-87ab-b7582c4e4607`
+- ✅ API Key: `<your-zapier-api-key-from-railway-env>`
 - ✅ API URL: `https://app.perenniaai.com`
 
 ---
@@ -149,7 +152,7 @@ Key: notes         | Value: {{Additional Comments}}
 
 **Header 1:**
 - **Key:** `X-API-Key`
-- **Value:** `185b7101-9435-44da-87ab-b7582c4e4607`
+- **Value:** `<your-zapier-api-key-from-railway-env>`
 
 **Header 2:**
 - **Key:** `Content-Type`
@@ -273,7 +276,7 @@ Key: notes         | Value: {{Additional Comments}}
 3. **Headers:**
    - Header 1:
      - Key: `X-API-Key`
-     - Value: `185b7101-9435-44da-87ab-b7582c4e4607`
+     - Value: `<your-zapier-api-key-from-railway-env>`
    - Header 2:
      - Key: `Content-Type`
      - Value: `application/json`
@@ -416,7 +419,7 @@ Map the webhook data to spreadsheet columns:
 
 3. **Headers:**
    - Key: `X-API-Key`
-   - Value: `185b7101-9435-44da-87ab-b7582c4e4607`
+   - Value: `<your-zapier-api-key-from-railway-env>`
 
 4. **ID Key:** `id` (tells Zapier which field is unique)
 
@@ -470,7 +473,7 @@ Create a Zap step that:
 ## Option 3: Manual Lookup
 ```bash
 curl "https://app.perenniaai.com/api/v1/leads" \
--H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607" | grep "sarah@email.com"
+-H "X-API-Key: <your-zapier-api-key-from-railway-env>" | grep "sarah@email.com"
 ```
 
 ---
@@ -494,7 +497,7 @@ curl "https://app.perenniaai.com/api/v1/leads" \
 ## Test 3: Verify in CRM
 ```bash
 curl "https://app.perenniaai.com/api/v1/leads?limit=10" \
--H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607"
+-H "X-API-Key: <your-zapier-api-key-from-railway-env>"
 ```
 
 ---
@@ -505,7 +508,7 @@ curl "https://app.perenniaai.com/api/v1/leads?limit=10" \
 **Error:** `{"detail": "Not authenticated"}`
 
 **Solutions:**
-1. Check X-API-Key header is exactly: `185b7101-9435-44da-87ab-b7582c4e4607`
+1. Check X-API-Key header is exactly: `<your-zapier-api-key-from-railway-env>`
 2. Ensure you added both headers (X-API-Key AND Content-Type)
 3. Check for extra spaces in the API key
 
@@ -568,7 +571,7 @@ Organize Zaps in folders: "Lead Generation", "Lead Nurture", etc.
 
 # Quick Reference
 
-**API Key:** `185b7101-9435-44da-87ab-b7582c4e4607`
+**API Key:** `<your-zapier-api-key-from-railway-env>`
 
 **Base URL:** `https://app.perenniaai.com`
 
@@ -580,7 +583,7 @@ Organize Zaps in folders: "Lead Generation", "Lead Nurture", etc.
 
 **Required Headers:**
 ```
-X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607
+X-API-Key: <your-zapier-api-key-from-railway-env>
 Content-Type: application/json
 ```
 
@@ -590,7 +593,7 @@ Content-Type: application/json
 
 **Your Webhook URL:**
 ```
-https://hooks.zapier.com/hooks/catch/2446725/usnpkzc/
+https://hooks.zapier.com/hooks/catch/YOUR_ACCOUNT_ID/YOUR_ZAP_ID/
 ```
 
 ---
@@ -621,7 +624,7 @@ Here's a complete example with exact values:
 
 **Headers:**
 ```
-X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607
+X-API-Key: <your-zapier-api-key-from-railway-env>
 Content-Type: application/json
 ```
 

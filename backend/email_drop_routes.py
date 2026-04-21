@@ -11,6 +11,8 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from db import get_db
+from auth.dependencies import get_current_user
 
 # Initialize router
 router = APIRouter(prefix="/api/v1/email-drop", tags=["email-drop"])
@@ -88,21 +90,6 @@ class SearchMatchResponse(BaseModel):
     leads: List[Dict[str, Any]]
     loans: List[Dict[str, Any]]
     best_match: Optional[Dict[str, Any]] = None
-
-
-# =============================================================================
-# Dependency Injection Setup
-# =============================================================================
-
-# Import database from main module
-def get_db():
-    """Get database session - imported from main"""
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -233,7 +220,8 @@ def extract_email_from_string(from_field: str) -> Optional[str]:
 @router.post("/parse", response_model=AIParseResponse)
 async def parse_email(
     request: AIParseRequest,
-    db: Session = Depends(get_db)
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Parse a dropped email with AI and return extracted fields + suggestions
@@ -241,6 +229,7 @@ async def parse_email(
     """
     try:
         email_data = request.email_data
+        org_id = getattr(current_user, "organization_id", None)
 
         # Call AI parsing
         ai_result = await parse_email_with_ai(email_data, db)
@@ -248,11 +237,12 @@ async def parse_email(
         if not ai_result.get("success"):
             raise HTTPException(status_code=500, detail="AI parsing failed")
 
-        # Search for matching entities in database
+        # Search for matching entities in database (scoped to user's org)
         matched_entities = await search_for_matches(
             email_data=email_data,
             extracted_fields=ai_result.get("extracted_fields", {}),
-            db=db
+            org_id=org_id,
+            db=db,
         )
 
         return AIParseResponse(
@@ -275,7 +265,8 @@ async def parse_email(
 @router.post("/process", response_model=ProcessEmailResponse)
 async def process_email(
     request: ProcessEmailRequest,
-    db: Session = Depends(get_db)
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Process the email based on user's chosen action
@@ -306,7 +297,8 @@ async def process_email(
                 target_id=request.target_entity_id,
                 create_new=request.create_new,
                 user_answers=request.user_answers,
-                db=db
+                current_user=current_user,
+                db=db,
             )
 
         elif action == "loan":
@@ -316,7 +308,8 @@ async def process_email(
                 target_id=request.target_entity_id,
                 create_new=request.create_new,
                 user_answers=request.user_answers,
-                db=db
+                current_user=current_user,
+                db=db,
             )
 
         elif action == "archive":
@@ -324,7 +317,8 @@ async def process_email(
                 email_data=email_data,
                 target_id=request.target_entity_id,
                 target_type=request.target_entity_type,
-                db=db
+                current_user=current_user,
+                db=db,
             )
         else:
             raise HTTPException(status_code=400, detail=f"Invalid action: {action}")
@@ -343,7 +337,8 @@ async def process_email(
 @router.post("/search-matches", response_model=SearchMatchResponse)
 async def search_matches(
     request: SearchMatchRequest,
-    db: Session = Depends(get_db)
+    current_user=Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Search for matching leads and loans based on email/name/loan number
@@ -351,11 +346,14 @@ async def search_matches(
     try:
         from database.models import Lead, Loan
 
+        org_id = getattr(current_user, "organization_id", None)
         leads = []
         loans = []
 
-        # Search leads
+        # Search leads (scoped to user's organization)
         lead_query = db.query(Lead)
+        if org_id:
+            lead_query = lead_query.filter(Lead.organization_id == org_id)
         if request.email:
             lead_query = lead_query.filter(Lead.email.ilike(f"%{request.email}%"))
         elif request.search_term:
@@ -375,8 +373,10 @@ async def search_matches(
                 "display_name": lead.name or lead.email
             })
 
-        # Search loans
+        # Search loans (scoped to user's organization)
         loan_query = db.query(Loan)
+        if org_id:
+            loan_query = loan_query.filter(Loan.organization_id == org_id)
         if request.loan_number:
             loan_query = loan_query.filter(Loan.loan_number.ilike(f"%{request.loan_number}%"))
         elif request.search_term:
@@ -421,9 +421,10 @@ async def search_matches(
 async def search_for_matches(
     email_data: EmailData,
     extracted_fields: Dict[str, Any],
-    db: Session
+    org_id: Optional[int],
+    db: Session,
 ) -> Dict[str, Any]:
-    """Search database for matching entities based on extracted data"""
+    """Search database for matching entities based on extracted data (scoped to org)"""
     from database.models import Lead, Loan
 
     matches = {
@@ -436,9 +437,12 @@ async def search_for_matches(
     # Extract email from 'From' field
     email = extract_email_from_string(email_data.from_address)
 
-    # Search by email
+    # Search by email (scoped to org)
     if email:
-        lead = db.query(Lead).filter(Lead.email == email).first()
+        q = db.query(Lead).filter(Lead.email == email)
+        if org_id:
+            q = q.filter(Lead.organization_id == org_id)
+        lead = q.first()
         if lead:
             matches["leads"].append({
                 "id": lead.id,
@@ -449,10 +453,13 @@ async def search_for_matches(
             matches["best_match"] = {"type": "lead", "id": lead.id, "reason": "email"}
             matches["match_confidence"] = 95
 
-    # Search by loan number
+    # Search by loan number (scoped to org)
     loan_number = extracted_fields.get("loan_number") or email_data.matched_loan_number
     if loan_number:
-        loan = db.query(Loan).filter(Loan.loan_number == loan_number).first()
+        q = db.query(Loan).filter(Loan.loan_number == loan_number)
+        if org_id:
+            q = q.filter(Loan.organization_id == org_id)
+        loan = q.first()
         if loan:
             matches["loans"].append({
                 "id": loan.id,
@@ -470,9 +477,10 @@ async def search_for_matches(
     full_name = f"{first_name} {last_name}".strip() if first_name or last_name else None
 
     if full_name:
-        lead = db.query(Lead).filter(
-            Lead.name.ilike(f"%{full_name}%")
-        ).first()
+        q = db.query(Lead).filter(Lead.name.ilike(f"%{full_name}%"))
+        if org_id:
+            q = q.filter(Lead.organization_id == org_id)
+        lead = q.first()
         if lead and lead.id not in [m["id"] for m in matches["leads"]]:
             matches["leads"].append({
                 "id": lead.id,
@@ -493,10 +501,13 @@ async def process_as_lead(
     target_id: Optional[str],
     create_new: bool,
     user_answers: Dict[str, Any],
-    db: Session
+    current_user,
+    db: Session,
 ) -> Dict[str, Any]:
     """Create or update a lead from email data"""
     from database.models import Lead
+
+    org_id = getattr(current_user, "organization_id", None)
 
     # Merge user answers with extracted fields
     fields = {**extracted_fields, **user_answers}
@@ -507,8 +518,11 @@ async def process_as_lead(
         fields["email"] = email
 
     if target_id and not create_new:
-        # Update existing lead
-        lead = db.query(Lead).filter(Lead.id == int(target_id)).first()
+        # Update existing lead (verify it belongs to user's org)
+        q = db.query(Lead).filter(Lead.id == int(target_id))
+        if org_id:
+            q = q.filter(Lead.organization_id == org_id)
+        lead = q.first()
         if not lead:
             return {
                 "success": False,
@@ -547,8 +561,11 @@ async def process_as_lead(
         }
     else:
         # Create new lead
-        # Check if email already exists
-        existing = db.query(Lead).filter(Lead.email == fields.get("email")).first()
+        # Check if email already exists within this org
+        dup_q = db.query(Lead).filter(Lead.email == fields.get("email"))
+        if org_id:
+            dup_q = dup_q.filter(Lead.organization_id == org_id)
+        existing = dup_q.first()
         if existing:
             return {
                 "success": False,
@@ -568,6 +585,8 @@ async def process_as_lead(
             email=fields.get("email"),
             phone=fields.get("phone"),
             source="email_drop",
+            owner_id=current_user.id,
+            organization_id=org_id,
             notes=f"Created from email drop: {email_data.subject}\nFrom: {email_data.from_address}"
         )
 
@@ -599,17 +618,23 @@ async def process_as_loan(
     target_id: Optional[str],
     create_new: bool,
     user_answers: Dict[str, Any],
-    db: Session
+    current_user,
+    db: Session,
 ) -> Dict[str, Any]:
     """Create or update a loan from email data"""
     from database.models import Loan
+
+    org_id = getattr(current_user, "organization_id", None)
 
     # Merge user answers with extracted fields
     fields = {**extracted_fields, **user_answers}
 
     if target_id and not create_new:
-        # Update existing loan
-        loan = db.query(Loan).filter(Loan.id == int(target_id)).first()
+        # Update existing loan (verify it belongs to user's org)
+        q = db.query(Loan).filter(Loan.id == int(target_id))
+        if org_id:
+            q = q.filter(Loan.organization_id == org_id)
+        loan = q.first()
         if not loan:
             return {
                 "success": False,

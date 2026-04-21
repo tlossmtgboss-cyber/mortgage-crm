@@ -258,7 +258,7 @@ export default function MobileLeadsList() {
 
   const handleEmail = useCallback((lead) => {
     if (lead.email) {
-      window.location.href = `mailto:${lead.email}`;
+      window.location.href = `mailto:${encodeURIComponent(lead.email)}`;
     } else {
       toast.info('No email on file');
     }

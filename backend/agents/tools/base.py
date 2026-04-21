@@ -105,9 +105,21 @@ def get_session_factory():
 
 @contextmanager
 def get_db():
-    """Context manager for database sessions."""
+    """Context manager for database sessions with RLS tenant context.
+
+    Sets PostgreSQL RLS tenant context from the ContextVar _tenant_org_id
+    (populated by set_tenant_context() before tool execution).
+    """
     session = get_session_factory()()
     try:
+        # Set RLS tenant context if available
+        org_id = _tenant_org_id.get()
+        if org_id is not None:
+            try:
+                from database.tenant_mixin import set_tenant_context as _set_rls
+                _set_rls(session, org_id)
+            except Exception as e:
+                logger.warning(f"Failed to set RLS context for org {org_id}: {e}")
         yield session
         session.commit()
     except Exception as e:

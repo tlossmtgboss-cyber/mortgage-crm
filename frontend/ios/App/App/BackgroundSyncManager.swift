@@ -236,7 +236,8 @@ final class BackgroundSyncManager {
         config.timeoutIntervalForResource = 30
         config.waitsForConnectivity = false
         config.allowsCellularAccess = true
-        self.session = URLSession(configuration: config)
+        // Use certificate pinning to protect PII during background sync
+        self.session = createPinnedURLSession(configuration: config)
 
         self.encoder = JSONEncoder()
         self.encoder.dateEncodingStrategy = .iso8601

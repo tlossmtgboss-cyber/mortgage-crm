@@ -13,8 +13,11 @@ OPTIMIZATION v3: Intent-Based Tool Loading
 import asyncio
 import logging
 import os
+import threading
+import time as _time_module
 from typing import Any, Callable, Dict, Optional, Literal
 from datetime import datetime, timezone
+from enum import Enum
 
 from langgraph.graph import StateGraph, END
 from anthropic import Anthropic
@@ -42,6 +45,115 @@ from .token_budget import get_token_budget, get_rate_limiter
 from .audit import AuditEntry, get_audit_logger, set_request_id, get_request_id, clear_request_id
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# CIRCUIT BREAKER
+# =============================================================================
+
+class CircuitState(Enum):
+    CLOSED = "closed"          # Normal operation — requests flow through
+    OPEN = "open"              # Failing — reject requests immediately
+    HALF_OPEN = "half_open"    # Testing recovery — allow one probe request
+
+
+class CircuitBreaker:
+    """
+    Thread-safe circuit breaker for LLM API calls.
+
+    Prevents cascading failures during Anthropic outages by fast-failing
+    requests instead of letting each one timeout individually.
+
+    State transitions:
+        CLOSED  -> OPEN:      after `failure_threshold` consecutive failures
+        OPEN    -> HALF_OPEN: after `cooldown_seconds` elapse
+        HALF_OPEN -> CLOSED:  if the probe request succeeds
+        HALF_OPEN -> OPEN:    if the probe request fails
+    """
+
+    def __init__(
+        self,
+        failure_threshold: int = 5,
+        cooldown_seconds: float = 30.0,
+        name: str = "llm",
+    ):
+        self.failure_threshold = failure_threshold
+        self.cooldown_seconds = cooldown_seconds
+        self.name = name
+
+        self._state = CircuitState.CLOSED
+        self._consecutive_failures = 0
+        self._last_failure_time: float = 0.0
+        self._lock = threading.Lock()
+
+    @property
+    def state(self) -> CircuitState:
+        with self._lock:
+            if self._state == CircuitState.OPEN:
+                # Check if cooldown has elapsed -> transition to HALF_OPEN
+                elapsed = _time_module.monotonic() - self._last_failure_time
+                if elapsed >= self.cooldown_seconds:
+                    self._state = CircuitState.HALF_OPEN
+                    logger.warning(
+                        f"[CIRCUIT-BREAKER:{self.name}] OPEN -> HALF_OPEN "
+                        f"(cooldown {self.cooldown_seconds}s elapsed)"
+                    )
+            return self._state
+
+    def allow_request(self) -> bool:
+        """Return True if the request should be allowed through."""
+        current = self.state  # triggers OPEN->HALF_OPEN check
+        if current == CircuitState.CLOSED:
+            return True
+        if current == CircuitState.HALF_OPEN:
+            # Allow exactly one probe request
+            return True
+        # OPEN — reject
+        return False
+
+    def record_success(self) -> None:
+        """Record a successful call — reset failure count, close circuit."""
+        with self._lock:
+            prev = self._state
+            self._consecutive_failures = 0
+            self._state = CircuitState.CLOSED
+            if prev != CircuitState.CLOSED:
+                logger.warning(
+                    f"[CIRCUIT-BREAKER:{self.name}] {prev.value} -> CLOSED (success)"
+                )
+
+    def record_failure(self) -> None:
+        """Record a failed call — increment counter, potentially open circuit."""
+        with self._lock:
+            self._consecutive_failures += 1
+            self._last_failure_time = _time_module.monotonic()
+
+            if self._state == CircuitState.HALF_OPEN:
+                # Probe failed — go back to OPEN
+                self._state = CircuitState.OPEN
+                logger.warning(
+                    f"[CIRCUIT-BREAKER:{self.name}] HALF_OPEN -> OPEN "
+                    f"(probe request failed)"
+                )
+            elif (
+                self._state == CircuitState.CLOSED
+                and self._consecutive_failures >= self.failure_threshold
+            ):
+                self._state = CircuitState.OPEN
+                logger.warning(
+                    f"[CIRCUIT-BREAKER:{self.name}] CLOSED -> OPEN "
+                    f"({self._consecutive_failures} consecutive failures)"
+                )
+
+
+# Module-level circuit breaker instance shared across all orchestrator calls.
+# Single instance is fine — the LLM backend is the same for all requests.
+_llm_circuit_breaker = CircuitBreaker(failure_threshold=5, cooldown_seconds=30.0)
+
+
+def _get_circuit_breaker() -> CircuitBreaker:
+    """Return the module-level circuit breaker (useful for testing)."""
+    return _llm_circuit_breaker
 
 
 def _is_retryable(error: Exception) -> bool:
@@ -613,20 +725,52 @@ async def run_orchestrator(
         logger.info(f"[ORCHESTRATOR] Graph created with {tool_count} scoped tools")
 
         # ================================================================
-        # STEP 3: Execute workflow (with retry on transient LLM failures)
+        # STEP 3: Execute workflow (circuit breaker + retry on transient LLM failures)
         # ================================================================
         step_start = time.perf_counter()
+        circuit = _get_circuit_breaker()
+
+        # Fast-fail if circuit is OPEN (Anthropic API likely down)
+        if not circuit.allow_request():
+            logger.warning(
+                f"[ORCHESTRATOR] Circuit breaker OPEN — rejecting request immediately "
+                f"(rid={request_id})"
+            )
+            clear_request_id()
+            return {
+                "response": (
+                    "I'm temporarily unable to process requests. "
+                    "Please try again in a moment."
+                ),
+                "error": "circuit_open",
+                "error_type": "external_api",
+                "request_id": request_id,
+                "processing_time_seconds": (datetime.now(timezone.utc) - start_time).total_seconds(),
+            }
+
         MAX_RETRIES = 2
+        BACKOFF_SCHEDULE = [1.0, 3.0]  # Exponential backoff: 1s, 3s
+
         for attempt in range(MAX_RETRIES + 1):
             try:
                 final_state = await orchestrator.ainvoke(state)
+                circuit.record_success()
                 break
             except Exception as workflow_err:
-                if attempt < MAX_RETRIES and _is_retryable(workflow_err):
-                    wait_time = (2 ** attempt) * 0.5  # 0.5s, 1s
-                    logger.warning(f"[ORCHESTRATOR] LLM retry {attempt + 1}/{MAX_RETRIES} after {wait_time}s: {workflow_err}")
+                is_retryable = _is_retryable(workflow_err)
+
+                if attempt < MAX_RETRIES and is_retryable:
+                    wait_time = BACKOFF_SCHEDULE[attempt]
+                    logger.warning(
+                        f"[ORCHESTRATOR] LLM retry {attempt + 1}/{MAX_RETRIES} "
+                        f"after {wait_time}s: {workflow_err}"
+                    )
                     await asyncio.sleep(wait_time)
                     continue
+
+                # Out of retries or non-retryable — record failure and raise
+                if is_retryable:
+                    circuit.record_failure()
                 raise
         timing["workflow_execute"] = (time.perf_counter() - step_start) * 1000
 

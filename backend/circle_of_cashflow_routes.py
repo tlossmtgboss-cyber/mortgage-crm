@@ -86,16 +86,8 @@ class ReferralCreate(BaseModel):
     introduction_method: str = "email"
     opportunity_id: Optional[int] = None
 
-# Database dependency
-def get_db():
-    from database import engine
-    from sqlalchemy.orm import sessionmaker
-    SessionLocal = sessionmaker(bind=engine)
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Database dependency - use canonical RLS-aware get_db from db.py
+from db import get_db
 
 # ============================================
 # QUESTIONNAIRE ENDPOINTS

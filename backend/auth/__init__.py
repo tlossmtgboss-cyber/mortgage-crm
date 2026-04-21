@@ -35,6 +35,7 @@ from .tokens import (
     verify_access_token,
     decode_token,
     get_token_jti,
+    is_token_blacklisted,
     token_blacklist,
     TokenType,
     TokenData,
@@ -57,6 +58,7 @@ __all__ = [
     'TokenData',
     # Blacklist
     'token_blacklist',
+    'is_token_blacklisted',
     # Key management
     'load_rsa_keys',
     'get_signing_key',

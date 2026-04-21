@@ -408,7 +408,14 @@ class MeetingLinkService:
 
         # Generate a short, URL-friendly room ID
         # Combine appointment ID with start time and a secret salt for uniqueness
-        salt = os.getenv("SECRET_KEY", "perennia-meet-salt")
+        salt = os.getenv("SECRET_KEY", "")
+        if not salt:
+            logger.critical(
+                "SECRET_KEY not set — cannot generate deterministic meeting room IDs securely"
+            )
+            raise RuntimeError(
+                "SECRET_KEY environment variable must be set for meeting link generation"
+            )
         hash_input = f"{appt_id}:{start_str}:{salt}"
         room_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:12]
 

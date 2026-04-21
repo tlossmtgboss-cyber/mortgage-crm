@@ -1,14 +1,24 @@
 import requests
 import json
+import os
 
 API_BASE = "https://app.perenniaai.com"
+
+# SECURITY: Password must be provided via environment variable
+USERNAME = os.environ.get("MISSION_CONTROL_USERNAME", "")
+PASSWORD = os.environ.get("MISSION_CONTROL_PASSWORD", "")
+
+if not USERNAME or not PASSWORD:
+    print("❌ Error: Set MISSION_CONTROL_USERNAME and MISSION_CONTROL_PASSWORD environment variables")
+    print("Usage: MISSION_CONTROL_USERNAME='user@example.com' MISSION_CONTROL_PASSWORD='...' python test_mission_control_api.py")
+    exit(1)
 
 # Try to get token
 print("🔐 Getting authentication token...")
 try:
     response = requests.post(
         f"{API_BASE}/token",
-        data={"username": "tloss@cmgfi.com", "password": "Cmgfi2024!"}
+        data={"username": USERNAME, "password": PASSWORD}
     )
     
     if response.status_code == 200:

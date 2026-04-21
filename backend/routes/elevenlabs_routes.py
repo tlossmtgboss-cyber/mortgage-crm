@@ -11,6 +11,7 @@ from typing import Optional, List, Dict, Any
 from datetime import datetime
 import logging
 import os
+import secrets
 import httpx
 
 import base64
@@ -28,7 +29,9 @@ router = APIRouter(prefix="/api/v1/elevenlabs", tags=["ElevenLabs"])
 
 def _get_fernet() -> Fernet:
     """Get Fernet cipher using SECRET_KEY from environment."""
-    secret = os.getenv("SECRET_KEY", "fallback-secret-key-change-me")
+    secret = os.getenv("SECRET_KEY", "")
+    if not secret:
+        raise ValueError("SECRET_KEY environment variable not configured")
     # Derive a valid 32-byte Fernet key from SECRET_KEY
     key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
     return Fernet(key)
@@ -780,7 +783,7 @@ async def _get_elevenlabs_api_key(admin_key: str, user_email: str, current_user,
     user_id = None
 
     expected_admin_key = os.getenv("ADMIN_API_KEY")
-    if expected_admin_key and admin_key == expected_admin_key and user_email:
+    if expected_admin_key and admin_key and secrets.compare_digest(admin_key, expected_admin_key) and user_email:
         # Admin mode - look up user by email
         user_result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_email}).fetchone()
         if not user_result:

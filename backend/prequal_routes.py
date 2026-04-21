@@ -73,6 +73,10 @@ class PreQualSubmission(BaseModel):
     mobile_phone: str = Field(..., min_length=10)
     email: EmailStr
     date_of_birth: Optional[str] = None
+    # ECOA: marital_status is collected for property rights purposes only
+    # (e.g., community property state determinations), NOT for credit decisioning.
+    # This field must NEVER be passed to classify_lead(), suggest_loan_types(),
+    # or any scoring/eligibility function.
     marital_status: Optional[str] = None
 
     # Property Goals
@@ -131,6 +135,11 @@ def classify_lead(submission: PreQualSubmission) -> Dict[str, Any]:
     """
     Classify lead based on form data to determine routing and priority.
 
+    ECOA compliance: This function intentionally does NOT use marital_status,
+    date_of_birth, race, ethnicity, sex, national_origin, religion, age,
+    or any other ECOA protected class field.  Only financial and
+    credit-related factors drive classification.
+
     Complexity factors:
     - Credit < 640: Complex
     - Self-employed/1099: Complex
@@ -138,6 +147,19 @@ def classify_lead(submission: PreQualSubmission) -> Dict[str, Any]:
     - Down payment < 5%: Complex
     - Timeline ASAP + high credit: Hot
     """
+    # ECOA compliance: explicitly exclude protected class data from decisioning.
+    # These fields are collected for property-rights / HMDA purposes only.
+    from services.compliance.ecoa_protected_fields import ECOA_PROTECTED_FIELDS
+    _protected_present = {
+        f for f in ECOA_PROTECTED_FIELDS
+        if hasattr(submission, f) and getattr(submission, f, None) is not None
+    }
+    if _protected_present:
+        logger.debug(
+            "ECOA: Protected fields present but excluded from decisioning: %s",
+            _protected_present,
+        )
+
     complexity = LeadComplexity.STANDARD
     priority = LeadPriority.WARM
     flags = []
@@ -265,8 +287,14 @@ def generate_ai_context(
     flags: List[str],
     routing_notes: List[str]
 ) -> Dict[str, Any]:
-    """Generate context packet for AI follow-up and conversation"""
+    """Generate context packet for AI follow-up and conversation.
+
+    ECOA compliance: borrower_profile intentionally excludes marital_status,
+    date_of_birth, and all other protected class fields.  AI context must
+    not contain data that could influence credit/lending recommendations.
+    """
     return {
+        # ECOA: Only financial/credit fields included — no protected class data
         "borrower_profile": {
             "name": f"{submission.first_name} {submission.last_name}",
             "credit_tier": submission.credit_score_range,

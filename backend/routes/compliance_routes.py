@@ -584,6 +584,31 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
             raise HTTPException(status_code=404, detail=f"Loan {loan_id} not found")
 
         result = _validate_hmda_for_loan(db, loan)
+
+        # --- HMDA field-level audit logging (Finding SEC-HMDA-001) ---
+        # Log access to ECOA-protected demographic fields during validation
+        _demo_fields_checked = [
+            f["field"] for f in result.get("fields", [])
+            if f.get("source") == "borrower_application"
+            and f["field"] in ("applicant_ethnicity", "applicant_race", "applicant_sex",
+                               "co_applicant_ethnicity", "co_applicant_race", "co_applicant_sex")
+        ]
+        if _demo_fields_checked:
+            try:
+                from services.pii_audit_service import pii_audit, PIIField, PIIAccessType
+                pii_audit.log_access(
+                    entity_type="loan",
+                    entity_id=str(loan_id),
+                    fields_accessed=[PIIField.HMDA_ETHNICITY, PIIField.HMDA_RACE, PIIField.HMDA_SEX],
+                    access_type=PIIAccessType.READ,
+                    user_id=getattr(current_user, "id", None),
+                    organization_id=str(getattr(current_user, "organization_id", None)),
+                    reason="HMDA field validation — demographic completeness check",
+                    metadata={"fields_checked": _demo_fields_checked},
+                )
+            except Exception as audit_err:
+                logger.debug(f"HMDA validation audit log failed: {audit_err}")
+
         return result
 
     @app.get(
@@ -664,6 +689,7 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
         # Build pipe-delimited LAR
         output = io.StringIO()
 
+        _borrower_app_ids_accessed = []
         for loan in reportable:
             # Look up borrower application for demographics
             app = db.query(BorrowerApplication).filter(
@@ -673,8 +699,34 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
             row = _build_lar_row(loan, app)
             output.write("|".join(str(f) for f in row) + "\n")
 
+            # Track borrower applications with HMDA data accessed
+            if app and any(
+                getattr(app, f, None)
+                for f in ("applicant_ethnicity", "applicant_race", "applicant_sex",
+                          "co_applicant_ethnicity", "co_applicant_race", "co_applicant_sex")
+            ):
+                _borrower_app_ids_accessed.append(str(app.id))
+
         content = output.getvalue()
         output.close()
+
+        # --- HMDA field-level audit logging (Finding SEC-HMDA-001) ---
+        # Log bulk access to ECOA-protected demographic fields during LAR export
+        if _borrower_app_ids_accessed:
+            try:
+                from services.pii_audit_service import pii_audit, PIIField, PIIAccessType
+                pii_audit.log_export(
+                    entity_type="borrower_application",
+                    entity_ids=_borrower_app_ids_accessed,
+                    fields_exported=[PIIField.HMDA_ETHNICITY, PIIField.HMDA_RACE, PIIField.HMDA_SEX],
+                    export_format="hmda_lar_pipe_delimited",
+                    user_id=getattr(current_user, "id", None),
+                    organization_id=str(org_id),
+                    reason="HMDA LAR export — ECOA demographic data included in regulatory filing",
+                    metadata={"year": year, "record_count": len(_borrower_app_ids_accessed)},
+                )
+            except Exception as audit_err:
+                logger.debug(f"HMDA export audit log failed: {audit_err}")
 
         try:
             from utils.export_audit import log_export_event, _get_client_ip

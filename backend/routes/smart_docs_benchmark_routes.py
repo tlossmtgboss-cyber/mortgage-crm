@@ -99,7 +99,7 @@ async def create_benchmark_dataset(
     except Exception as e:
         db.rollback()
         logger.exception("Failed to create benchmark dataset")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to create benchmark dataset")
 
 
 @router.post("/benchmark/datasets/{dataset_id}/samples")
@@ -145,7 +145,7 @@ async def add_labeled_sample(
     except Exception as e:
         db.rollback()
         logger.exception("Failed to add benchmark sample")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to add benchmark sample")
 
 
 # =============================================================================
@@ -196,7 +196,7 @@ async def collect_from_corrections(
     except Exception as e:
         db.rollback()
         logger.exception("Failed to collect from corrections")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to collect samples from corrections")
 
 
 # =============================================================================
@@ -244,7 +244,7 @@ async def run_benchmark(
     except Exception as e:
         db.rollback()
         logger.exception("Failed to run benchmark")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to run benchmark")
 
 
 # =============================================================================
@@ -279,7 +279,7 @@ async def accuracy_trend(
         }
     except Exception as e:
         logger.exception("Failed to get accuracy trend")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to get accuracy trend")
 
 
 @router.get("/benchmark/confusion-matrix")
@@ -308,7 +308,7 @@ async def confusion_matrix(
         }
     except Exception as e:
         logger.exception("Failed to get confusion matrix")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to get confusion matrix")
 
 
 @router.get("/benchmark/calibration")
@@ -337,7 +337,7 @@ async def confidence_calibration(
         }
     except Exception as e:
         logger.exception("Failed to get calibration data")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to get calibration data")
 
 
 @router.get("/benchmark/report")
@@ -366,4 +366,4 @@ async def benchmark_report(
         }
     except Exception as e:
         logger.exception("Failed to generate benchmark report")
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to generate benchmark report")

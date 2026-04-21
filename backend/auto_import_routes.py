@@ -42,7 +42,12 @@ except Exception as e:
 
 
 def get_db_connection():
-    """Get a raw psycopg2 database connection for history queries."""
+    """Get a raw psycopg2 database connection for history queries.
+
+    WARNING: This is a raw psycopg2 connection WITHOUT RLS tenant context.
+    Only used for import-history queries that are already scoped by user_id
+    in the SQL. For ORM operations, use get_db from db.py instead.
+    """
     import psycopg2
     import os
     return psycopg2.connect(os.getenv("DATABASE_URL"))

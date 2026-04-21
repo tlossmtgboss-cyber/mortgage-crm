@@ -57,7 +57,6 @@ function UpgradeModal({ isOpen, onClose, module }) {
     ai_assistant: '🤖',
     partner_portals: '👥',
     video_os: '🎬',
-    // recruiting_suite: '💼',  // DEPRECATED: Premium feature deregistered — not yet launched
     conversation_intelligence: '📞',
     advanced_analytics: '📊',
     integrations: '🔌',

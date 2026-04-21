@@ -16,6 +16,7 @@ from vapi_models import VapiCall, VapiCallNote, VapiAssistant
 from middleware.webhook_verification import require_vapi_webhook
 import os
 import json
+import secrets
 
 try:
     from utils.pii_mask import mask_phone
@@ -25,6 +26,27 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/vapi", tags=["vapi"])
+
+
+def _resolve_org_id_from_assistant(db: Session, data: dict) -> Optional[int]:
+    """Resolve organization_id from Vapi webhook payload via assistant lookup."""
+    assistant_id = (
+        data.get("assistant_id")
+        or data.get("assistantId")
+        or (data.get("call", {}) or {}).get("assistantId")
+        or (data.get("message", {}) or {}).get("call", {}).get("assistantId")
+    )
+    if assistant_id:
+        assistant = db.query(VapiAssistant).filter(
+            VapiAssistant.assistant_id == assistant_id
+        ).first()
+        if assistant and getattr(assistant, "organization_id", None):
+            return assistant.organization_id
+    logger.warning(
+        "TENANT-ISOLATION: Could not resolve org_id from webhook payload (assistant_id=%s)",
+        assistant_id,
+    )
+    return None
 
 # Backward compatibility alias — existing routes may reference verify_vapi_request
 verify_vapi_request = require_vapi_webhook
@@ -52,7 +74,7 @@ async def verify_admin_access(
     admin_key = os.getenv("MIGRATION_ADMIN_KEY")
 
     # Option 1: Check admin key header
-    if admin_key and x_admin_key == admin_key:
+    if admin_key and x_admin_key and secrets.compare_digest(x_admin_key, admin_key):
         return True
 
     # Option 2: Check for authenticated admin user via JWT token
@@ -276,16 +298,21 @@ async def get_lead_info_function(
         if not phone:
             return {"success": False, "error": "Phone number required"}
 
+        org_id = _resolve_org_id_from_assistant(db, data)
+
         # Clean phone number (remove formatting)
         phone_clean = ''.join(filter(str.isdigit, phone))
 
-        # Search for lead by phone
-        lead = db.query(Lead).filter(
+        # Search for lead by phone (scoped to org)
+        query = db.query(Lead).filter(
             or_(
                 Lead.phone == phone,
-                Lead.phone.contains(phone_clean[-10:])  # Match last 10 digits
+                Lead.phone.contains(phone_clean[-10:])
             )
-        ).first()
+        )
+        if org_id:
+            query = query.filter(Lead.organization_id == org_id)
+        lead = query.first()
 
         if not lead:
             return {
@@ -340,16 +367,21 @@ async def update_lead_status_function(
         if not phone:
             return {"success": False, "error": "Phone number required"}
 
+        org_id = _resolve_org_id_from_assistant(db, data)
+
         # Clean phone number
         phone_clean = ''.join(filter(str.isdigit, phone))
 
-        # Find lead
-        lead = db.query(Lead).filter(
+        # Find lead (scoped to org)
+        query = db.query(Lead).filter(
             or_(
                 Lead.phone == phone,
                 Lead.phone.contains(phone_clean[-10:])
             )
-        ).first()
+        )
+        if org_id:
+            query = query.filter(Lead.organization_id == org_id)
+        lead = query.first()
 
         if not lead:
             return {"success": False, "error": "Lead not found"}
@@ -426,16 +458,21 @@ async def create_task_function(
         if not phone or not title:
             return {"success": False, "error": "Phone number and title required"}
 
+        org_id = _resolve_org_id_from_assistant(db, data)
+
         # Clean phone number
         phone_clean = ''.join(filter(str.isdigit, phone))
 
-        # Find lead
-        lead = db.query(Lead).filter(
+        # Find lead (scoped to org)
+        query = db.query(Lead).filter(
             or_(
                 Lead.phone == phone,
                 Lead.phone.contains(phone_clean[-10:])
             )
-        ).first()
+        )
+        if org_id:
+            query = query.filter(Lead.organization_id == org_id)
+        lead = query.first()
 
         if not lead:
             return {"success": False, "error": "Lead not found"}
@@ -542,16 +579,21 @@ async def schedule_appointment_function(
         if not phone:
             return {"success": False, "error": "Phone number required"}
 
+        org_id = _resolve_org_id_from_assistant(db, data)
+
         # Clean phone number
         phone_clean = ''.join(filter(str.isdigit, phone))
 
-        # Find lead
-        lead = db.query(Lead).filter(
+        # Find lead (scoped to org)
+        query = db.query(Lead).filter(
             or_(
                 Lead.phone == phone,
                 Lead.phone.contains(phone_clean[-10:])
             )
-        ).first()
+        )
+        if org_id:
+            query = query.filter(Lead.organization_id == org_id)
+        lead = query.first()
 
         if not lead:
             return {"success": False, "error": "Lead not found"}
@@ -727,16 +769,21 @@ async def submit_preapproval_application_function(
         if not phone or not first_name or not last_name:
             return {"success": False, "error": "Phone, first name, and last name are required"}
 
+        org_id = _resolve_org_id_from_assistant(db, data)
+
         # Clean phone number
         phone_clean = ''.join(filter(str.isdigit, phone))
 
-        # Find or create lead
-        lead = db.query(Lead).filter(
+        # Find or create lead (scoped to org)
+        query = db.query(Lead).filter(
             or_(
                 Lead.phone == phone,
                 Lead.phone.contains(phone_clean[-10:])
             )
-        ).first()
+        )
+        if org_id:
+            query = query.filter(Lead.organization_id == org_id)
+        lead = query.first()
 
         if not lead:
             # Create new lead
@@ -865,16 +912,21 @@ async def schedule_calendly_appointment_function(
         if not phone:
             return {"success": False, "error": "Phone number required"}
 
+        org_id = _resolve_org_id_from_assistant(db, data)
+
         # Clean phone number
         phone_clean = ''.join(filter(str.isdigit, phone))
 
-        # Find or create lead
-        lead = db.query(Lead).filter(
+        # Find or create lead (scoped to org)
+        query = db.query(Lead).filter(
             or_(
                 Lead.phone == phone,
                 Lead.phone.contains(phone_clean[-10:])
             )
-        ).first()
+        )
+        if org_id:
+            query = query.filter(Lead.organization_id == org_id)
+        lead = query.first()
 
         if not lead and name:
             # Create new lead
@@ -1003,18 +1055,26 @@ async def transfer_to_production_assistant_function(
         if not vapi_call_id or not caller_phone:
             return {"success": False, "error": "vapi_call_id and caller_phone required"}
 
-        # Find available Production Assistant
-        pa = db.query(StaffAvailability).filter(
+        org_id = _resolve_org_id_from_assistant(db, data)
+
+        # Find available Production Assistant (scoped to org)
+        query = db.query(StaffAvailability).filter(
             StaffAvailability.role == 'production_assistant',
             StaffAvailability.available_for_calls == True,
             StaffAvailability.status == 'available'
-        ).first()
+        )
+        if org_id:
+            query = query.filter(StaffAvailability.organization_id == org_id)
+        pa = query.first()
 
         if not pa:
-            # Fallback: get first PA regardless of availability
-            pa = db.query(StaffAvailability).filter(
+            # Fallback: get first PA regardless of availability (still scoped)
+            query = db.query(StaffAvailability).filter(
                 StaffAvailability.role == 'production_assistant'
-            ).first()
+            )
+            if org_id:
+                query = query.filter(StaffAvailability.organization_id == org_id)
+            pa = query.first()
 
         if not pa:
             return {
@@ -1086,18 +1146,26 @@ async def transfer_to_loan_officer_function(
         if not vapi_call_id or not caller_phone:
             return {"success": False, "error": "vapi_call_id and caller_phone required"}
 
-        # Find available Loan Officer
-        lo = db.query(StaffAvailability).filter(
+        org_id = _resolve_org_id_from_assistant(db, data)
+
+        # Find available Loan Officer (scoped to org)
+        query = db.query(StaffAvailability).filter(
             StaffAvailability.role == 'loan_officer',
             StaffAvailability.available_for_calls == True,
             StaffAvailability.status == 'available'
-        ).first()
+        )
+        if org_id:
+            query = query.filter(StaffAvailability.organization_id == org_id)
+        lo = query.first()
 
         if not lo:
-            # Check if LO exists but unavailable
-            lo = db.query(StaffAvailability).filter(
+            # Check if LO exists but unavailable (still scoped)
+            query = db.query(StaffAvailability).filter(
                 StaffAvailability.role == 'loan_officer'
-            ).first()
+            )
+            if org_id:
+                query = query.filter(StaffAvailability.organization_id == org_id)
+            lo = query.first()
 
             if lo and not lo.available_for_calls:
                 return {
@@ -1178,18 +1246,26 @@ async def transfer_to_processor_function(
         if not vapi_call_id or not caller_phone:
             return {"success": False, "error": "vapi_call_id and caller_phone required"}
 
-        # Find available Processor
-        processor = db.query(StaffAvailability).filter(
+        org_id = _resolve_org_id_from_assistant(db, data)
+
+        # Find available Processor (scoped to org)
+        query = db.query(StaffAvailability).filter(
             StaffAvailability.role == 'processor',
             StaffAvailability.available_for_calls == True,
             StaffAvailability.status == 'available'
-        ).first()
+        )
+        if org_id:
+            query = query.filter(StaffAvailability.organization_id == org_id)
+        processor = query.first()
 
         if not processor:
-            # Fallback: get first processor
-            processor = db.query(StaffAvailability).filter(
+            # Fallback: get first processor (still scoped)
+            query = db.query(StaffAvailability).filter(
                 StaffAvailability.role == 'processor'
-            ).first()
+            )
+            if org_id:
+                query = query.filter(StaffAvailability.organization_id == org_id)
+            processor = query.first()
 
         if not processor:
             return {
@@ -1257,9 +1333,12 @@ async def get_available_staff(
     try:
         from vapi_models import StaffAvailability
 
+        org_id = getattr(current_user, "organization_id", None)
         query = db.query(StaffAvailability).filter(
             StaffAvailability.available_for_calls == True
         )
+        if org_id:
+            query = query.filter(StaffAvailability.organization_id == org_id)
 
         if role:
             query = query.filter(StaffAvailability.role == role)
@@ -1299,7 +1378,11 @@ async def get_routing_log(
     try:
         from vapi_models import CallRoutingLog
 
-        logs = db.query(CallRoutingLog).order_by(
+        org_id = getattr(current_user, "organization_id", None)
+        query = db.query(CallRoutingLog)
+        if org_id:
+            query = query.filter(CallRoutingLog.organization_id == org_id)
+        logs = query.order_by(
             CallRoutingLog.created_at.desc()
         ).offset(skip).limit(limit).all()
 
@@ -1345,10 +1428,15 @@ async def update_staff_availability(
         if not user_id:
             return {"success": False, "error": "user_id required"}
 
-        # Find or create staff availability record
-        staff = db.query(StaffAvailability).filter(
+        org_id = getattr(current_user, "organization_id", None)
+
+        # Find or create staff availability record (scoped to org)
+        query = db.query(StaffAvailability).filter(
             StaffAvailability.user_id == user_id
-        ).first()
+        )
+        if org_id:
+            query = query.filter(StaffAvailability.organization_id == org_id)
+        staff = query.first()
 
         if not staff:
             # Create new record
@@ -1403,7 +1491,11 @@ async def get_calls(
     current_user = Depends(get_current_user_flexible)
 ):
     """Get all Vapi calls with filtering"""
-    query = db.query(VapiCall).order_by(VapiCall.created_at.desc())
+    org_id = getattr(current_user, "organization_id", None)
+    query = db.query(VapiCall)
+    if org_id:
+        query = query.filter(VapiCall.organization_id == org_id)
+    query = query.order_by(VapiCall.created_at.desc())
 
     if status:
         query = query.filter(VapiCall.status == status)
@@ -1419,7 +1511,11 @@ async def get_call(
     current_user = Depends(get_current_user_flexible)
 ):
     """Get specific call details"""
-    call = db.query(VapiCall).filter(VapiCall.id == call_id).first()
+    org_id = getattr(current_user, "organization_id", None)
+    query = db.query(VapiCall).filter(VapiCall.id == call_id)
+    if org_id:
+        query = query.filter(VapiCall.organization_id == org_id)
+    call = query.first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     return call
@@ -1432,7 +1528,11 @@ async def get_call_transcript(
     current_user = Depends(get_current_user_flexible)
 ):
     """Get formatted call transcript"""
-    call = db.query(VapiCall).filter(VapiCall.id == call_id).first()
+    org_id = getattr(current_user, "organization_id", None)
+    query = db.query(VapiCall).filter(VapiCall.id == call_id)
+    if org_id:
+        query = query.filter(VapiCall.organization_id == org_id)
+    call = query.first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
 
@@ -1454,9 +1554,13 @@ async def get_call_notes(
     current_user = Depends(get_current_user_flexible)
 ):
     """Get action items and notes from call"""
-    notes = db.query(VapiCallNote).filter(
+    org_id = getattr(current_user, "organization_id", None)
+    query = db.query(VapiCallNote).filter(
         VapiCallNote.call_id == call_id
-    ).all()
+    )
+    if org_id:
+        query = query.filter(VapiCallNote.organization_id == org_id)
+    notes = query.all()
 
     return {
         "call_id": call_id,
@@ -1514,16 +1618,20 @@ async def get_daily_stats(
     """Get daily call statistics"""
     from sqlalchemy import func
 
+    org_id = getattr(current_user, "organization_id", None)
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
-    stats = db.query(
+    query = db.query(
         func.date(VapiCall.created_at).label('date'),
         func.count(VapiCall.id).label('total_calls'),
         func.sum(VapiCall.duration).label('total_duration'),
         func.avg(VapiCall.duration).label('avg_duration')
     ).filter(
         VapiCall.created_at >= start_date
-    ).group_by(
+    )
+    if org_id:
+        query = query.filter(VapiCall.organization_id == org_id)
+    stats = query.group_by(
         func.date(VapiCall.created_at)
     ).all()
 
@@ -1550,15 +1658,19 @@ async def get_sentiment_analysis(
     """Get sentiment analysis of calls"""
     from sqlalchemy import func
 
+    org_id = getattr(current_user, "organization_id", None)
     start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
-    sentiment_stats = db.query(
+    query = db.query(
         VapiCall.sentiment,
         func.count(VapiCall.id).label('count')
     ).filter(
         VapiCall.created_at >= start_date,
         VapiCall.sentiment.isnot(None)
-    ).group_by(
+    )
+    if org_id:
+        query = query.filter(VapiCall.organization_id == org_id)
+    sentiment_stats = query.group_by(
         VapiCall.sentiment
     ).all()
 
@@ -1624,9 +1736,13 @@ async def list_assistants(
     current_user = Depends(get_current_user_flexible)
 ):
     """List all configured assistants"""
-    assistants = db.query(VapiAssistant).filter(
+    org_id = getattr(current_user, "organization_id", None)
+    query = db.query(VapiAssistant).filter(
         VapiAssistant.is_active == True
-    ).all()
+    )
+    if org_id:
+        query = query.filter(VapiAssistant.organization_id == org_id)
+    assistants = query.all()
 
     return {
         "assistants": [
@@ -1653,12 +1769,18 @@ async def get_vapi_config(
 
     has_api_key = bool(os.getenv("VAPI_API_KEY"))
 
-    # Count total calls
+    # Count total calls (scoped to org)
     from sqlalchemy import func
-    total_calls = db.query(func.count(VapiCall.id)).scalar() or 0
-    active_assistants = db.query(func.count(VapiAssistant.id)).filter(
+    org_id = getattr(current_user, "organization_id", None)
+    call_query = db.query(func.count(VapiCall.id))
+    assistant_query = db.query(func.count(VapiAssistant.id)).filter(
         VapiAssistant.is_active == True
-    ).scalar() or 0
+    )
+    if org_id:
+        call_query = call_query.filter(VapiCall.organization_id == org_id)
+        assistant_query = assistant_query.filter(VapiAssistant.organization_id == org_id)
+    total_calls = call_query.scalar() or 0
+    active_assistants = assistant_query.scalar() or 0
 
     return {
         "enabled": has_api_key,
@@ -1799,11 +1921,13 @@ async def diagnose_vapi_assistant(admin: Any = Depends(verify_admin_access), ful
 
 @router.post("/diagnostic/fix-greeting")
 async def fix_vapi_greeting(
-    greeting: str = "Hello! Thank you for calling CMG Home Loans. I'm Sam, your AI assistant. How can I help you today?"
+    greeting: str = "Hello! Thank you for calling CMG Home Loans. I'm Sam, your AI assistant. How can I help you today?",
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Fix VAPI assistant greeting by setting firstMessage.
     This updates the assistant configuration in VAPI directly.
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
     import httpx
     import os
@@ -1853,10 +1977,12 @@ async def fix_vapi_greeting(
 @router.post("/diagnostic/change-voice")
 async def change_voice_provider(
     provider: str = "deepgram",
-    voice_id: str = "asteria"
+    voice_id: str = "asteria",
+    admin: Any = Depends(verify_admin_access)
 ):
     """
     Change the VAPI assistant's voice provider.
+    Requires admin access via X-Admin-Key header or admin JWT.
 
     Deepgram voices: asteria, luna, stella, athena, hera, orion, arcas, perseus, angus, orpheus, helios, zeus
     PlayHT voices: jennifer, matt, etc.
@@ -2048,95 +2174,12 @@ async def diagnose_vapi_account(admin: Any = Depends(verify_admin_access)):
         return {"error": "Internal server error"}
 
 
-@router.post("/diagnostic/test-call")
-async def test_vapi_call(
-    to_number: str = None,
-    use_your_number: bool = True
-):
-    """
-    Make a test outbound call to verify VAPI is working.
-    If use_your_number is True (default), it will call your VAPI phone number.
-    Otherwise, specify to_number (must be E.164 format like +15551234567).
-    """
-    import httpx
-    import os
-
-    vapi_api_key = os.getenv("VAPI_API_KEY")
-    assistant_id = os.getenv("VAPI_ASSISTANT_ID", "120e239e-4d19-4e43-ad92-1f8b07d08c8c")
-
-    if not vapi_api_key:
-        return {"error": "VAPI_API_KEY not configured"}
-
-    headers = {
-        "Authorization": f"Bearer {vapi_api_key}",
-        "Content-Type": "application/json"
-    }
-
-    try:
-        async with httpx.AsyncClient() as client:
-            # First get our phone number ID
-            phone_response = await client.get(
-                "https://api.vapi.ai/phone-number",
-                headers=headers,
-                timeout=10
-            )
-
-            if phone_response.status_code != 200:
-                return {"error": "Failed to get phone numbers"}
-
-            phones = phone_response.json()
-            if not phones:
-                return {"error": "No phone numbers configured in VAPI"}
-
-            phone_number_id = phones[0].get("id")
-            our_number = phones[0].get("number")
-
-            if use_your_number:
-                to_number = our_number
-            elif not to_number:
-                return {"error": "Please provide to_number or set use_your_number=true"}
-
-            # Create outbound call
-            response = await client.post(
-                "https://api.vapi.ai/call/phone",
-                headers=headers,
-                json={
-                    "assistantId": assistant_id,
-                    "phoneNumberId": phone_number_id,
-                    "customer": {
-                        "number": to_number
-                    }
-                },
-                timeout=15
-            )
-
-            if response.status_code == 201:
-                call_data = response.json()
-                return {
-                    "success": True,
-                    "message": f"Test call initiated from {our_number} to {to_number}",
-                    "call_id": call_data.get("id"),
-                    "status": call_data.get("status"),
-                    "note": "You should receive a call now. Answer it to test the greeting."
-                }
-            else:
-                return {
-                    "success": False,
-                    "error": f"Failed to create call: {response.status_code}",
-                    "response": response.text,
-                    "hint": "This might indicate account/billing issues or missing phone number configuration"
-                }
-
-    except Exception as e:
-        logger.error(f"Test call error: {str(e)}")
-        return {"success": False, "error": "Internal server error"}
-
-
 @router.get("/diagnostic/recent-calls")
-async def get_recent_vapi_calls(limit: int = 10):
+async def get_recent_vapi_calls(limit: int = 10, admin: Any = Depends(verify_admin_access)):
     """
     Fetch recent calls directly from VAPI API.
     Shows call status, duration, and any errors.
+    Requires admin access via X-Admin-Key header or admin JWT.
     """
     import httpx
     import os

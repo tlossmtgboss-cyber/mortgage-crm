@@ -22,7 +22,15 @@ from database.models import (
 from database import SessionLocal
 
 logger = logging.getLogger(__name__)
-_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY")
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
+
+
+def _verify_admin_key(provided_key: str) -> None:
+    """Validate admin API key with timing-safe comparison. Fail-closed if not configured."""
+    if not _ADMIN_API_KEY:
+        raise HTTPException(status_code=503, detail="Admin key not configured")
+    if not provided_key or not secrets.compare_digest(provided_key, _ADMIN_API_KEY):
+        raise HTTPException(status_code=403, detail="Invalid admin key")
 
 import re
 _SAFE_IDENTIFIER_RE = re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]*$')
@@ -627,8 +635,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         Use this when pool is exhausted and connections are stale.
         Requires admin key for safety.
         """
-        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-            raise HTTPException(status_code=403, detail="Invalid admin key")
+        _verify_admin_key(admin_key)
 
         try:
             from database import engine, get_pool_status
@@ -671,8 +678,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         Update telephony configuration for a user by email.
         Requires admin key for safety.
         """
-        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-            raise HTTPException(status_code=403, detail="Invalid admin key")
+        _verify_admin_key(admin_key)
 
         try:
             # Find the user
@@ -800,8 +806,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         Run essential table migrations using existing connection pool.
         Creates: notifications, user_permissions, permission_templates, ai_tasks tables.
         """
-        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-            raise HTTPException(status_code=403, detail="Invalid admin key")
+        _verify_admin_key(admin_key)
 
         results = {"created": [], "already_exists": [], "errors": []}
 
@@ -1811,8 +1816,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         db: Session = Depends(get_db)
     ):
         """Debug endpoint to create a test user for deletion testing"""
-        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-            raise HTTPException(status_code=403, detail="Invalid admin key")
+        _verify_admin_key(admin_key)
 
         import random
         import string
@@ -1820,16 +1824,17 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
 
         pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-        # Generate unique email
+        # Generate unique email and secure random password
         random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=6))
         test_email = f"test-user-{random_suffix}@example.com"
+        generated_password = secrets.token_urlsafe(16)
 
         # Create the user
         new_user = User(
             email=test_email,
             first_name="Test",
             last_name=f"User {random_suffix}",
-            hashed_password=pwd_context.hash("TestPassword123!"),
+            hashed_password=pwd_context.hash(generated_password),
             role="loan_officer",
             is_active=True
         )
@@ -1845,7 +1850,8 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
                 "email": new_user.email,
                 "full_name": new_user.full_name,
                 "role": new_user.role
-            }
+            },
+            "temp_password": generated_password
         }
 
 
@@ -1856,8 +1862,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         db: Session = Depends(get_db)
     ):
         """Debug endpoint to delete user with admin_key protection"""
-        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-            raise HTTPException(status_code=403, detail="Invalid admin key")
+        _verify_admin_key(admin_key)
 
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
@@ -2236,8 +2241,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         db: Session = Depends(get_db)
     ):
         """Check loan and user status for debugging."""
-        if migration_key != "fix-loans-2026":
-            raise HTTPException(status_code=403, detail="Invalid migration key")
+        _verify_admin_key(migration_key)
 
         try:
             # Get all users using raw SQL
@@ -2326,8 +2330,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         db: Session = Depends(get_db)
     ):
         """Debug endpoint to check data isolation."""
-        if migration_key != "fix-loans-2026":
-            raise HTTPException(status_code=403, detail="Invalid migration key")
+        _verify_admin_key(migration_key)
 
         try:
             # Check loans
@@ -2365,8 +2368,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         db: Session = Depends(get_db)
     ):
         """Debug endpoint to check task assignments and multi-tenancy."""
-        if migration_key != "fix-loans-2026":
-            raise HTTPException(status_code=403, detail="Invalid migration key")
+        _verify_admin_key(migration_key)
 
         try:
             # Check all tasks with their assignments
@@ -2419,8 +2421,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         db: Session = Depends(get_db)
     ):
         """Clear loans that were imported (have IMP- prefix or Unknown borrower)."""
-        if migration_key != "fix-loans-2026":
-            raise HTTPException(status_code=403, detail="Invalid migration key")
+        _verify_admin_key(migration_key)
 
         try:
             result = db.execute(text("""
@@ -2443,8 +2444,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         db: Session = Depends(get_db)
     ):
         """Import loans from Excel file (admin only, protected by migration key)."""
-        if migration_key != "fix-loans-2026":
-            raise HTTPException(status_code=403, detail="Invalid migration key")
+        _verify_admin_key(migration_key)
 
         import pandas as pd
         import io
@@ -2612,8 +2612,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         Pass dry_run=false to actually delete. Default is dry_run=true (preview only).
         Requires ADMIN_API_KEY.
         """
-        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-            raise HTTPException(status_code=403, detail="Invalid admin key")
+        _verify_admin_key(admin_key)
 
         try:
             # --- Count what will be deleted ---
@@ -2774,8 +2773,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         Delete ALL CRM data: leads, loans, MUM clients, tasks, documents,
         smart docs, activities, etc. Keeps user accounts and settings.
         """
-        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-            raise HTTPException(status_code=403, detail="Invalid admin key")
+        _verify_admin_key(admin_key)
 
         try:
             cleaned = {}
@@ -2948,8 +2946,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         db: Session = Depends(get_db),
     ):
         """Quick count of all CRM data tables for verification."""
-        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-            raise HTTPException(status_code=403, detail="Invalid admin key")
+        _verify_admin_key(admin_key)
 
         tables = [
             "leads", "loans", "mum_clients", "tasks", "documents",
@@ -2980,8 +2977,7 @@ def register_admin_ops_routes(app, get_db, get_current_user, get_current_user_fl
         """Create the demo@perenniaai.com account for App Store review.
         Protected by ADMIN_API_KEY.
         """
-        if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
-            raise HTTPException(status_code=403, detail="Invalid admin key")
+        _verify_admin_key(admin_key)
 
         try:
             from passlib.context import CryptContext

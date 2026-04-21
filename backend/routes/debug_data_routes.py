@@ -56,42 +56,46 @@ def register_debug_data_routes(
         Debug endpoint: Check email sync and reconciliation status
         """
         try:
-            # Check incoming emails
+            # Check incoming emails (filtered to current user's data only)
             email_stats = db.execute(text("""
                 SELECT
                     COUNT(*) as total,
                     COUNT(CASE WHEN processed = true THEN 1 END) as processed,
                     COUNT(CASE WHEN processed = false THEN 1 END) as pending
                 FROM incoming_data_events
-                WHERE source = 'microsoft365'
-            """)).fetchone()
+                WHERE source = 'microsoft365' AND user_id = :user_id
+            """), {"user_id": current_user.id}).fetchone()
 
-            # Check reconciliation items
+            # Check reconciliation items (filtered to current user's data only)
             recon_stats = db.execute(text("""
                 SELECT
                     COUNT(*) as total,
-                    COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
-                    COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved,
-                    COUNT(CASE WHEN status = 'rejected' THEN 1 END) as rejected
-                FROM reconciliation_items
-            """)).fetchone()
+                    COUNT(CASE WHEN ri.status = 'pending' THEN 1 END) as pending,
+                    COUNT(CASE WHEN ri.status = 'approved' THEN 1 END) as approved,
+                    COUNT(CASE WHEN ri.status = 'rejected' THEN 1 END) as rejected
+                FROM reconciliation_items ri
+                JOIN incoming_data_events ide ON ri.event_id = ide.id
+                WHERE ide.user_id = :user_id
+            """), {"user_id": current_user.id}).fetchone()
 
-            # Get recent emails
+            # Get recent emails (filtered to current user)
             recent_emails = db.execute(text("""
                 SELECT subject, sender, received_at, processed
                 FROM incoming_data_events
-                WHERE source = 'microsoft365'
+                WHERE source = 'microsoft365' AND user_id = :user_id
                 ORDER BY received_at DESC
                 LIMIT 5
-            """)).fetchall()
+            """), {"user_id": current_user.id}).fetchall()
 
-            # Get recent reconciliation items
+            # Get recent reconciliation items (filtered to current user)
             recent_recon = db.execute(text("""
-                SELECT entity_type, confidence_score, status, created_at
-                FROM reconciliation_items
-                ORDER BY created_at DESC
+                SELECT ri.entity_type, ri.confidence_score, ri.status, ri.created_at
+                FROM reconciliation_items ri
+                JOIN incoming_data_events ide ON ri.event_id = ide.id
+                WHERE ide.user_id = :user_id
+                ORDER BY ri.created_at DESC
                 LIMIT 5
-            """)).fetchall()
+            """), {"user_id": current_user.id}).fetchall()
 
             return {
                 "success": True,
@@ -584,42 +588,7 @@ def register_debug_data_routes(
             raise HTTPException(status_code=500, detail="Internal server error")
 
 
-    @app.get("/api/v1/debug/all-loans")
-    async def debug_all_loans(
-        current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)
-    ):
-        """Debug endpoint to see ALL loans in the database (bypasses permission filtering)"""
-        try:
-            from sqlalchemy import text
-
-            # Get ALL loans regardless of loan_officer_id
-            all_loans = db.execute(text("""
-                SELECT id, loan_number, borrower_name, borrower_email, stage, loan_officer_id, created_at
-                FROM loans
-                ORDER BY created_at DESC
-                LIMIT 50
-            """)).fetchall()
-
-            return {
-                "total_loans": len(all_loans),
-                "loans": [
-                    {
-                        "id": row[0],
-                        "loan_number": row[1],
-                        "borrower_name": row[2],
-                        "borrower_email": row[3],
-                        "stage": row[4],
-                        "loan_officer_id": row[5],
-                        "created_at": str(row[6]) if row[6] else None
-                    }
-                    for row in all_loans
-                ]
-            }
-        except Exception as e:
-            logger.error(f"Debug all loans error: {e}")
-            raise HTTPException(status_code=500, detail="Internal server error")
-
+    # DELETED: /api/v1/debug/all-loans — RLS bypass, exposed all tenants' loan data (security remediation 2026-04-19)
 
     @app.get("/api/v1/debug/dashboard-diagnosis")
     async def debug_dashboard_diagnosis(
@@ -1466,10 +1435,13 @@ def register_debug_data_routes(
         }
 
         try:
-            # Step 1: Get the loan
-            loan = db.query(Loan).filter(Loan.id == loan_id).first()
+            # Step 1: Get the loan (must belong to current user)
+            loan = db.query(Loan).filter(
+                Loan.id == loan_id,
+                Loan.loan_officer_id == current_user.id
+            ).first()
             if not loan:
-                debug_info["error"] = f"Loan {loan_id} not found"
+                debug_info["error"] = f"Loan {loan_id} not found or not owned by current user"
                 return debug_info
 
             debug_info["steps"].append(f"Found loan: {loan.loan_number}, stage={loan.stage}, loan_officer_id={loan.loan_officer_id}")
@@ -1507,135 +1479,12 @@ def register_debug_data_routes(
     # (admin/pool-status, admin/salesforce-*, admin/pool-reset,
     #  admin/update-telephony-config, /ping)
 
-    @app.get("/admin/create-salesforce-tables")
-    async def create_salesforce_tables(db: Session = Depends(get_db)):
-        """Admin endpoint to create Salesforce integration tables"""
-        results = []
-
-        try:
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS oauth_states (
-                    id SERIAL PRIMARY KEY,
-                    state_token VARCHAR(255) UNIQUE NOT NULL,
-                    user_id INTEGER NOT NULL,
-                    provider VARCHAR(50) NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    expires_at TIMESTAMP NOT NULL,
-                    used BOOLEAN DEFAULT FALSE,
-                    return_url TEXT,
-                    state_metadata JSONB
-                )
-            """))
-            db.commit()
-            results.append("oauth_states: created/verified")
-        except Exception as e:
-            results.append(f"oauth_states: {str(e)}")
-            db.rollback()
-
-        try:
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS integration_profiles (
-                    id SERIAL PRIMARY KEY,
-                    user_id INTEGER NOT NULL,
-                    provider VARCHAR(50) NOT NULL DEFAULT 'salesforce',
-                    status VARCHAR(50) NOT NULL DEFAULT 'disconnected',
-                    access_token_encrypted TEXT,
-                    refresh_token_encrypted TEXT,
-                    instance_url TEXT,
-                    sf_org_id VARCHAR(100),
-                    sf_user_id VARCHAR(100),
-                    sf_username VARCHAR(255),
-                    connected_at TIMESTAMP,
-                    last_sync_at TIMESTAMP,
-                    last_error TEXT,
-                    field_map_version INTEGER DEFAULT 1,
-                    sync_enabled BOOLEAN DEFAULT TRUE,
-                    sync_interval_minutes INTEGER DEFAULT 15,
-                    sync_direction VARCHAR(20) DEFAULT 'bidirectional',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(user_id, provider)
-                )
-            """))
-            db.commit()
-            results.append("integration_profiles: created/verified")
-        except Exception as e:
-            results.append(f"integration_profiles: {str(e)}")
-            db.rollback()
-
-        # Create sf_user_schemas table for Salesforce schema discovery
-        try:
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS sf_user_schemas (
-                    id SERIAL PRIMARY KEY,
-                    integration_profile_id INTEGER NOT NULL REFERENCES integration_profiles(id) ON DELETE CASCADE,
-                    object_name VARCHAR(100) NOT NULL,
-                    fields JSONB NOT NULL,
-                    record_types JSONB,
-                    picklist_values JSONB,
-                    discovered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_validated_at TIMESTAMP,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(integration_profile_id, object_name)
-                )
-            """))
-            db.commit()
-            results.append("sf_user_schemas: created/verified")
-        except Exception as e:
-            results.append(f"sf_user_schemas: {str(e)}")
-            db.rollback()
-
-        # Create field_mappings table
-        try:
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS field_mappings (
-                    id SERIAL PRIMARY KEY,
-                    integration_profile_id INTEGER NOT NULL REFERENCES integration_profiles(id) ON DELETE CASCADE,
-                    sf_object VARCHAR(100) NOT NULL,
-                    sf_field VARCHAR(255) NOT NULL,
-                    crm_entity VARCHAR(100) NOT NULL,
-                    crm_field VARCHAR(255) NOT NULL,
-                    transform_type VARCHAR(50) DEFAULT 'direct',
-                    transform_config JSONB,
-                    is_active BOOLEAN DEFAULT TRUE,
-                    is_required BOOLEAN DEFAULT FALSE,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(integration_profile_id, sf_object, sf_field)
-                )
-            """))
-            db.commit()
-            results.append("field_mappings: created/verified")
-        except Exception as e:
-            results.append(f"field_mappings: {str(e)}")
-            db.rollback()
-
-        # Create integration_events table for logging
-        try:
-            db.execute(text("""
-                CREATE TABLE IF NOT EXISTS integration_events (
-                    id SERIAL PRIMARY KEY,
-                    integration_profile_id INTEGER NOT NULL REFERENCES integration_profiles(id) ON DELETE CASCADE,
-                    event_type VARCHAR(100) NOT NULL,
-                    status VARCHAR(50) NOT NULL,
-                    error_message TEXT,
-                    duration_ms INTEGER,
-                    event_data JSONB,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """))
-            db.commit()
-            results.append("integration_events: created/verified")
-        except Exception as e:
-            results.append(f"integration_events: {str(e)}")
-            db.rollback()
-
-        return {"results": results}
+    # DELETED: /admin/create-salesforce-tables — no authentication, DDL endpoint exposed to public (security remediation 2026-04-19)
+    # Tables should be created via migrations in init_db.py, not via unauthenticated HTTP endpoints.
 
 
-    # Extracted to routes/health_routes.py
-    # (/api/v1/health, /deploy-test, /debug/routers, /debug/scheduler-status)
+    # Extracted to routes/health_routes.py (/api/v1/health, /deploy-test)
+    # /debug/routers and /debug/scheduler-status DELETED — unauthenticated attack surface exposure
 
     @app.post("/api/v1/debug/complete-onboarding-by-email")
     async def debug_complete_onboarding_by_email(

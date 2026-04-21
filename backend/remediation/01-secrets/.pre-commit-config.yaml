@@ -1,0 +1,57 @@
+# .pre-commit-config.yaml — copy this to repo root
+# Install: pip install pre-commit && pre-commit install
+
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+        name: Detect hardcoded secrets
+        description: Block commits that contain secrets
+        entry: gitleaks protect --verbose --redact --staged
+        language: system
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key
+      - id: detect-aws-credentials
+        args: [--allow-missing-credentials]
+      - id: check-added-large-files
+        args: [--maxkb=1000]
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-json
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: package-lock.json|yarn.lock|pnpm-lock.yaml
+
+  # Python backend checks
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # Frontend checks
+  - repo: local
+    hooks:
+      - id: no-localstorage-jwt
+        name: Block localStorage JWT patterns
+        description: Prevent regression to localStorage auth
+        entry: bash -c 'if grep -rn --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" "localStorage\.\(set\|get\|remove\)Item.*\(token\|jwt\|auth\)" frontend/src/; then echo "localStorage auth tokens are not allowed. Use httpOnly cookies."; exit 1; fi'
+        language: system
+        pass_filenames: false
+
+      - id: no-console-log-prod
+        name: Warn on console.log in production code
+        entry: bash -c 'git diff --cached --name-only | grep -E "\.(ts|tsx|js|jsx)$" | xargs -r grep -l "console\.log" | grep -v ".test." | grep -v ".spec." && echo "Remove console.log or use logger.info"; exit 0'
+        language: system
+        pass_filenames: false

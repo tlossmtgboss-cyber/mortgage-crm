@@ -11,6 +11,7 @@ Usage:
 """
 
 import os
+import re
 import secrets
 import logging
 from typing import Optional, Set
@@ -151,7 +152,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         # Validate against ADMIN_API_KEY to prevent CSRF bypass via empty/arbitrary header.
         api_key = request.headers.get("X-API-Key")
         if api_key:
-            expected_key = os.getenv("ADMIN_API_KEY", "")
+            expected_key = os.getenv("ADMIN_API_KEY", "").strip()
             if expected_key and secrets.compare_digest(api_key, expected_key):
                 return await call_next(request)
 
@@ -187,9 +188,14 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
                 path="/",
             )
 
+    _BASE64URL_RE = re.compile(r'^[A-Za-z0-9_-]+$')
+
     def _is_jwt_token(self, token: str) -> bool:
-        """Check if token is a JWT (three base64 segments separated by dots)."""
-        return len(token) >= 50 and token.count(".") == 2
+        """Check if token is a JWT (three non-empty base64url segments separated by dots)."""
+        if len(token) < 50 or token.count(".") != 2:
+            return False
+        parts = token.split(".")
+        return all(part and self._BASE64URL_RE.match(part) for part in parts)
 
 
 

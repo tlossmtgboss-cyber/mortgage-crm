@@ -731,6 +731,23 @@ async def get_milestone_drilldown(
 
         milestones = query.all()
 
+        # Batch-fetch all referenced loans and leads to avoid N+1 queries
+        milestone_loan_ids = {m.loan_id for m in milestones if m.loan_id}
+        milestone_lead_ids = {m.lead_id for m in milestones if m.lead_id and not m.loan_id}
+        loans_map = {}
+        leads_map = {}
+
+        if milestone_loan_ids:
+            from sqlalchemy.orm import joinedload as _jl
+            loans_batch = db.query(Loan).options(
+                _jl(Loan.loan_officer)
+            ).filter(Loan.id.in_(milestone_loan_ids)).all()
+            loans_map = {l.id: l for l in loans_batch}
+
+        if milestone_lead_ids:
+            leads_batch = db.query(Lead).filter(Lead.id.in_(milestone_lead_ids)).all()
+            leads_map = {l.id: l for l in leads_batch}
+
         # Build response with loan details
         result = []
         for m in milestones:
@@ -742,10 +759,10 @@ async def get_milestone_drilldown(
             loan_status = "Unknown"
             lo_name = "Unassigned"
 
-            # Get loan details if loan_id exists
+            # Get loan details from pre-fetched map
             if m.loan_id:
                 try:
-                    loan = db.query(Loan).filter(Loan.id == m.loan_id).first()
+                    loan = loans_map.get(m.loan_id)
                     if loan:
                         borrower_name = loan.borrower_name or "Unknown"
                         loan_number = loan.loan_number or loan_number
@@ -756,10 +773,10 @@ async def get_milestone_drilldown(
                 except SQLAlchemyError as e:
                     logger.warning(f"Error fetching loan {m.loan_id}: {e}")
 
-            # Get lead details if lead_id exists
+            # Get lead details from pre-fetched map
             if m.lead_id and not m.loan_id:
                 try:
-                    lead = db.query(Lead).filter(Lead.id == m.lead_id).first()
+                    lead = leads_map.get(m.lead_id)
                     if lead:
                         borrower_name = f"{lead.first_name or ''} {lead.last_name or ''}".strip() or "Unknown Lead"
                         loan_status = lead.status or "Lead"

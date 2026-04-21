@@ -138,8 +138,15 @@ async def get_command_center(
             Task.lead_id.isnot(None)
         ).order_by(Task.due_date.asc().nullslast()).limit(30).all()
 
+        # Batch-fetch all referenced leads to avoid N+1 queries
+        lead_ids_needed = {t.lead_id for t in lead_tasks if t.lead_id}
+        leads_map = {}
+        if lead_ids_needed:
+            leads_batch = db.query(Lead).filter(Lead.id.in_(lead_ids_needed)).all()
+            leads_map = {l.id: l for l in leads_batch}
+
         for task in lead_tasks:
-            lead = db.query(Lead).filter(Lead.id == task.lead_id).first()
+            lead = leads_map.get(task.lead_id)
             is_overdue = task.due_date and task.due_date < now if task.due_date else False
             priority = "critical" if is_overdue else (task.priority or "medium")
 
@@ -206,8 +213,15 @@ async def get_command_center(
             Task.loan_id.isnot(None)
         ).order_by(Task.due_date.asc().nullslast()).limit(30).all()
 
+        # Batch-fetch all referenced loans to avoid N+1 queries
+        loan_ids_needed = {t.loan_id for t in loan_tasks if t.loan_id}
+        loans_map = {}
+        if loan_ids_needed:
+            loans_batch = db.query(Loan).filter(Loan.id.in_(loan_ids_needed)).all()
+            loans_map = {l.id: l for l in loans_batch}
+
         for task in loan_tasks:
-            loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+            loan = loans_map.get(task.loan_id)
             is_overdue = task.due_date and task.due_date < now if task.due_date else False
             priority = "critical" if is_overdue else (task.priority or "medium")
 

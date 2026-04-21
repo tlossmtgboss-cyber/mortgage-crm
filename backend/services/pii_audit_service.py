@@ -55,6 +55,11 @@ class PIIField(str, Enum):
     EMPLOYER = "employer"
     SALARY = "salary"
 
+    # HMDA Demographics (ECOA protected)
+    HMDA_ETHNICITY = "hmda_ethnicity"
+    HMDA_RACE = "hmda_race"
+    HMDA_SEX = "hmda_sex"
+
     # Other
     FULL_NAME = "full_name"
     MEDICAL = "medical"

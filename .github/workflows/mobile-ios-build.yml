@@ -16,6 +16,9 @@ on:
       - 'frontend/package.json'
       - 'frontend/package-lock.json'
 
+permissions:
+  contents: read
+
 concurrency:
   group: ios-build-${{ github.head_ref || github.ref }}
   cancel-in-progress: true

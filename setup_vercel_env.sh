@@ -2,6 +2,12 @@
 
 # Setup Vercel Environment Variables for Microsoft 365 Integration
 # This script adds REACT_APP_MICROSOFT_CLIENT_ID to your Vercel project
+# SECURITY: Set MICROSOFT_CLIENT_ID env var before running this script.
+
+if [ -z "$MICROSOFT_CLIENT_ID" ]; then
+    echo "ERROR: MICROSOFT_CLIENT_ID env var is not set. Export it before running this script."
+    exit 1
+fi
 
 echo "🔧 Setting up Vercel environment variable for Microsoft 365..."
 echo ""
@@ -36,9 +42,9 @@ fi
 echo "⚙️  Adding REACT_APP_MICROSOFT_CLIENT_ID to Vercel..."
 echo ""
 
-vercel env add REACT_APP_MICROSOFT_CLIENT_ID production <<< "185b7101-9435-44da-87ab-b7582c4e4607"
-vercel env add REACT_APP_MICROSOFT_CLIENT_ID preview <<< "185b7101-9435-44da-87ab-b7582c4e4607"
-vercel env add REACT_APP_MICROSOFT_CLIENT_ID development <<< "185b7101-9435-44da-87ab-b7582c4e4607"
+vercel env add REACT_APP_MICROSOFT_CLIENT_ID production <<< "$MICROSOFT_CLIENT_ID"
+vercel env add REACT_APP_MICROSOFT_CLIENT_ID preview <<< "$MICROSOFT_CLIENT_ID"
+vercel env add REACT_APP_MICROSOFT_CLIENT_ID development <<< "$MICROSOFT_CLIENT_ID"
 
 echo ""
 echo "✅ Environment variable added!"

@@ -7,7 +7,7 @@ import os
 import logging
 from typing import Optional, Callable
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, Header
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, EmailStr
@@ -566,7 +566,7 @@ async def process_unsubscribe(
 
 @router.get("/admin/run-migration")
 async def run_migration(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     db: Session = Depends(get_db)
 ):
     """Run the listing portal migration (admin only)"""
@@ -586,7 +586,7 @@ async def run_migration(
 
 @router.post("/admin/trigger-weekly-updates")
 async def trigger_weekly_updates(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     dry_run: bool = Query(False, description="If true, don't send emails"),
     organization_id: Optional[int] = Query(None, description="Filter by organization"),
     db: Session = Depends(get_db)
@@ -614,7 +614,7 @@ async def trigger_weekly_updates(
 
 @router.get("/admin/scheduler-status")
 async def get_scheduler_status(
-    admin_key: str = Query(..., description="Admin API key")
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key")
 ):
     """Get the status of all scheduled jobs (admin only)"""
     expected_key = os.getenv("ADMIN_API_KEY", "")

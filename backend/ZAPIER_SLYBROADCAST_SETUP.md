@@ -13,7 +13,7 @@ This guide shows you how to set up ringless voicemail using Zapier as a bridge b
 
 1. **Slybroadcast Account** (you already have this)
    - Email: tloss@cmgfi.com
-   - Password: Woodwindow00!
+   - Password: [SET VIA ENVIRONMENT VARIABLE]
    - Caller ID: 843-834-5251
 
 2. **Zapier Account**
@@ -64,7 +64,7 @@ This guide shows you how to set up ringless voicemail using Zapier as a bridge b
    - Click "Sign in to Slybroadcast"
    - Enter your credentials:
      - Email: tloss@cmgfi.com
-     - Password: Woodwindow00!
+     - Password: [SET VIA ENVIRONMENT VARIABLE]
    - Click "Yes, Continue"
 
 4. **Configure the Action**:

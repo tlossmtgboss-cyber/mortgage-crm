@@ -55,16 +55,24 @@ export default function ExportModal({ open, onClose }) {
 
         const slide = slides[i];
 
-        // Build background styles
+        // Build background styles (sanitize all CSS values to prevent injection)
         let backgroundStyle = '';
         if (slide.background_type === 'gradient' && slide.background_gradient) {
-          const { angle = 135, colors = ['#667eea', '#764ba2'] } = slide.background_gradient;
+          const angle = parseInt(slide.background_gradient.angle, 10) || 135;
+          const colors = (slide.background_gradient.colors || ['#667eea', '#764ba2'])
+            .map(c => sanitizeCSSValue(c));
           backgroundStyle = `background: linear-gradient(${angle}deg, ${colors.join(', ')});`;
         } else if (slide.background_type === 'image' && slide.background_image_url) {
-          backgroundStyle = `background-image: url(${slide.background_image_url}); background-size: cover; background-position: center;`;
+          const safeUrl = sanitizeCSSUrl(slide.background_image_url);
+          backgroundStyle = safeUrl
+            ? `background-image: url(${safeUrl}); background-size: cover; background-position: center;`
+            : `background-color: #217F8D;`;
         } else {
-          backgroundStyle = `background-color: ${slide.background_color || '#217F8D'};`;
+          backgroundStyle = `background-color: ${sanitizeCSSValue(slide.background_color) || '#217F8D'};`;
         }
+
+        // Sanitize text color
+        const textColor = sanitizeCSSValue(slide.custom_styles?.textColor) || '#ffffff';
 
         // Create slide HTML
         const slideHtml = `
@@ -84,7 +92,7 @@ export default function ExportModal({ open, onClose }) {
               <div style="
                 font-size: 48px;
                 font-weight: bold;
-                color: ${slide.custom_styles?.textColor || '#ffffff'};
+                color: ${textColor};
                 text-align: center;
                 margin-bottom: 16px;
                 word-wrap: break-word;
@@ -95,7 +103,7 @@ export default function ExportModal({ open, onClose }) {
               <div style="
                 font-size: 24px;
                 font-weight: 500;
-                color: ${slide.custom_styles?.textColor || '#ffffff'};
+                color: ${textColor};
                 opacity: 0.9;
                 text-align: center;
                 margin-bottom: 12px;
@@ -106,7 +114,7 @@ export default function ExportModal({ open, onClose }) {
             ${slide.body_text ? `
               <div style="
                 font-size: 18px;
-                color: ${slide.custom_styles?.textColor || '#ffffff'};
+                color: ${textColor};
                 opacity: 0.85;
                 text-align: center;
                 line-height: 1.5;
@@ -312,4 +320,27 @@ function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
+}
+
+/**
+ * Sanitize a CSS value to prevent CSS injection.
+ * Strips characters that could break out of a CSS property value context.
+ */
+function sanitizeCSSValue(value) {
+  if (!value) return '';
+  // Remove characters that can break out of CSS context: ; { } < > " '
+  return String(value).replace(/[;{}<>"'\\]/g, '');
+}
+
+/**
+ * Sanitize a URL for use in CSS url().
+ * Only allows http:, https:, and data: (for blob URLs) protocols.
+ */
+function sanitizeCSSUrl(url) {
+  if (!url) return '';
+  const trimmed = String(url).trim();
+  // Only allow safe protocols
+  if (!/^(https?:|data:image\/)/i.test(trimmed)) return '';
+  // Remove characters that could break out of url() context
+  return trimmed.replace(/[)"'\\;{}]/g, '');
 }

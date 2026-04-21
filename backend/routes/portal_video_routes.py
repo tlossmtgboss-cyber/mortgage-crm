@@ -17,7 +17,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -528,7 +528,7 @@ async def view_video(
 
 @router.post("/admin/configure-s3-cors")
 async def configure_s3_cors(
-    admin_key: str = Query(...)
+    admin_key: str = Header(..., alias="X-Admin-Key")
 ):
     """Configure S3 bucket CORS to allow browser-based presigned URL uploads."""
     if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
@@ -576,7 +576,7 @@ async def configure_s3_cors(
 
 @router.post("/admin/run-migration")
 async def run_portal_video_migration(
-    admin_key: str = Query(...),
+    admin_key: str = Header(..., alias="X-Admin-Key"),
     db=Depends(get_db)
 ):
     """Run migration to create portal_video_messages table."""

@@ -180,7 +180,8 @@ async def generate_reschedule_link(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except RuntimeError as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Reschedule link generation failed: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to generate reschedule link")
 
     _audit_log(
         db, org_id, user.id, "reschedule_link_generated",

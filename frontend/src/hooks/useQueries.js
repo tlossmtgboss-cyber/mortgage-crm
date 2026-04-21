@@ -196,29 +196,6 @@ export const useTeamMembers = (options = {}) => {
 };
 
 // ============================================================================
-// RECRUITING QUERIES
-// ============================================================================
-
-export const useCandidates = (options = {}) => {
-  return useQuery({
-    queryKey: ['candidates', options],
-    queryFn: () => fetchWithAuth('/api/v1/recruiting/candidates'),
-    staleTime: 1000 * 60 * 5,
-    ...options,
-  });
-};
-
-export const useCandidate = (candidateId, options = {}) => {
-  return useQuery({
-    queryKey: ['candidate', candidateId],
-    queryFn: () => fetchWithAuth(`/api/v1/recruiting/candidates/${candidateId}`),
-    enabled: !!candidateId,
-    staleTime: 1000 * 60 * 5,
-    ...options,
-  });
-};
-
-// ============================================================================
 // PREFETCH UTILITIES
 // ============================================================================
 

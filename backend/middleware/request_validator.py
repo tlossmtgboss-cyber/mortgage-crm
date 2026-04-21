@@ -34,10 +34,11 @@ Configuration (environment variables):
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
-from typing import FrozenSet, Optional, Pattern
+from typing import Any, FrozenSet, Optional, Pattern
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -60,6 +61,9 @@ def _max_body_bytes() -> int:
 
 
 MAX_BODY_BYTES: int = _max_body_bytes()
+
+_BODY_SCAN_MAX_BYTES: int = 1 * 1024 * 1024  # 1 MB
+_BODY_SCAN_MAX_DEPTH: int = 10
 
 # HTTP methods that carry a request body
 _BODY_METHODS: FrozenSet[str] = frozenset({"POST", "PUT", "PATCH"})
@@ -187,6 +191,30 @@ def _check_xss(value: str) -> Optional[str]:
     for pattern in _XSS_PATTERNS:
         if pattern.search(value):
             return pattern.pattern
+    return None
+
+
+def _check_json_value(value: Any, depth: int = 0) -> Optional[tuple[str, str]]:
+    """Recursively scan parsed JSON for SQL injection and XSS patterns in string values."""
+    if depth > _BODY_SCAN_MAX_DEPTH:
+        return None
+    if isinstance(value, str):
+        sqli_match = _check_sql_injection(value)
+        if sqli_match:
+            return ("SQL injection", sqli_match)
+        xss_match = _check_xss(value)
+        if xss_match:
+            return ("XSS", xss_match)
+    elif isinstance(value, dict):
+        for v in value.values():
+            result = _check_json_value(v, depth + 1)
+            if result:
+                return result
+    elif isinstance(value, list):
+        for item in value:
+            result = _check_json_value(item, depth + 1)
+            if result:
+                return result
     return None
 
 
@@ -329,6 +357,44 @@ class RequestValidatorMiddleware(BaseHTTPMiddleware):
                         return JSONResponse(
                             status_code=400,
                             content={"detail": "Bad request"},
+                        )
+
+        # ------------------------------------------------------------------
+        # 6. SQL injection & XSS detection in JSON request bodies
+        # ------------------------------------------------------------------
+        if request.method in _BODY_METHODS:
+            ct = request.headers.get("content-type", "").lower()
+            if ct.startswith("application/json"):
+                should_scan = True
+                if content_length_str:
+                    try:
+                        if int(content_length_str) > _BODY_SCAN_MAX_BYTES:
+                            should_scan = False
+                    except (ValueError, TypeError):
+                        pass
+                if should_scan:
+                    try:
+                        body_bytes = await request.body()
+                        if body_bytes and len(body_bytes) <= _BODY_SCAN_MAX_BYTES:
+                            parsed = json.loads(body_bytes)
+                            match = _check_json_value(parsed)
+                            if match:
+                                check_type, pattern = match
+                                logger.warning(
+                                    "Request rejected: %s pattern in JSON body | "
+                                    "request_id=%s ip=%s path=%s pattern=%s",
+                                    check_type, request_id, client_ip, path, pattern,
+                                )
+                                return JSONResponse(
+                                    status_code=400,
+                                    content={"detail": "Bad request"},
+                                )
+                    except (json.JSONDecodeError, UnicodeDecodeError):
+                        pass
+                    except Exception:
+                        logger.debug(
+                            "Body scan error (non-fatal) | request_id=%s path=%s",
+                            request_id, path, exc_info=True,
                         )
 
         # ------------------------------------------------------------------

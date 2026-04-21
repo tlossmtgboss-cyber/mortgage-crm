@@ -1,3 +1,6 @@
+<!-- SECURITY: Never commit actual API keys in this file. Reference them by env var name only. -->
+<!-- The Zapier API key is stored in Railway as ZAPIER_API_KEY. Rotate immediately if exposed. -->
+
 # Zapier Integration Configuration Guide
 
 ## Test Results
@@ -15,11 +18,11 @@ All tests completed successfully on 2025-11-09.
 
 ## Authentication
 
-**API Key:** `185b7101-9435-44da-87ab-b7582c4e4607`
+**API Key:** `<your-zapier-api-key-from-railway-env>`
 
 **Required Header:**
 ```
-X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607
+X-API-Key: <your-zapier-api-key-from-railway-env>
 ```
 
 ---
@@ -45,7 +48,7 @@ URL: https://app.perenniaai.com/api/v1/leads/
 Method: POST
 
 Headers:
-X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607
+X-API-Key: <your-zapier-api-key-from-railway-env>
 Content-Type: application/json
 
 Data (JSON):
@@ -122,7 +125,7 @@ URL: https://app.perenniaai.com/api/v1/leads/{{Lead ID}}
 Method: PATCH
 
 Headers:
-X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607
+X-API-Key: <your-zapier-api-key-from-railway-env>
 Content-Type: application/json
 
 Data (JSON):
@@ -167,11 +170,11 @@ Data (JSON):
 - **Authentication:** X-API-Key header
 
 #### Action
-- **Your Zapier Webhook:** `https://hooks.zapier.com/hooks/catch/2446725/usnpkzc/`
+- **Your Zapier Webhook:** `https://hooks.zapier.com/hooks/catch/YOUR_ACCOUNT_ID/YOUR_ZAP_ID/`
 
 **Configuration:**
 ```
-URL: https://hooks.zapier.com/hooks/catch/2446725/usnpkzc/
+URL: https://hooks.zapier.com/hooks/catch/YOUR_ACCOUNT_ID/YOUR_ZAP_ID/
 
 Method: POST
 
@@ -280,7 +283,7 @@ Data: (Pass through lead data from trigger)
 ### Test Create Lead
 ```bash
 curl -X POST "https://app.perenniaai.com/api/v1/leads/" \
--H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607" \
+-H "X-API-Key: <your-zapier-api-key-from-railway-env>" \
 -H "Content-Type: application/json" \
 -d '{
   "name": "Test Lead",
@@ -293,7 +296,7 @@ curl -X POST "https://app.perenniaai.com/api/v1/leads/" \
 ### Test Update Lead
 ```bash
 curl -X PATCH "https://app.perenniaai.com/api/v1/leads/44" \
--H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607" \
+-H "X-API-Key: <your-zapier-api-key-from-railway-env>" \
 -H "Content-Type: application/json" \
 -d '{
   "stage": "Prospect",
@@ -304,7 +307,7 @@ curl -X PATCH "https://app.perenniaai.com/api/v1/leads/44" \
 ### Test Get Leads
 ```bash
 curl "https://app.perenniaai.com/api/v1/leads?limit=10" \
--H "X-API-Key: 185b7101-9435-44da-87ab-b7582c4e4607"
+-H "X-API-Key: <your-zapier-api-key-from-railway-env>"
 ```
 
 ---
@@ -312,13 +315,13 @@ curl "https://app.perenniaai.com/api/v1/leads?limit=10" \
 ## Common Issues & Solutions
 
 ### Issue: "Not authenticated"
-**Solution:** Ensure X-API-Key header is exactly: `185b7101-9435-44da-87ab-b7582c4e4607`
+**Solution:** Ensure X-API-Key header is exactly: `<your-zapier-api-key-from-railway-env>`
 
 ### Issue: "Lead not found"
 **Solution:** Verify the lead ID exists by listing leads first
 
 ### Issue: Webhook not receiving data
-**Solution:** Check that the webhook URL is exactly: `https://hooks.zapier.com/hooks/catch/2446725/usnpkzc/`
+**Solution:** Check that the webhook URL is exactly: `https://hooks.zapier.com/hooks/catch/YOUR_ACCOUNT_ID/YOUR_ZAP_ID/`
 
 ### Issue: Field validation errors
 **Solution:** Ensure required fields (name, email) are provided and properly formatted
@@ -334,5 +337,5 @@ For questions or issues:
 4. Check Zapier task history for detailed error messages
 
 **API Base URL:** `https://app.perenniaai.com`
-**API Key:** `185b7101-9435-44da-87ab-b7582c4e4607`
-**Webhook URL:** `https://hooks.zapier.com/hooks/catch/2446725/usnpkzc/`
+**API Key:** `<your-zapier-api-key-from-railway-env>`
+**Webhook URL:** `https://hooks.zapier.com/hooks/catch/YOUR_ACCOUNT_ID/YOUR_ZAP_ID/`

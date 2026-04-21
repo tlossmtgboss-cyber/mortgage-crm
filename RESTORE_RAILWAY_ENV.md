@@ -24,7 +24,7 @@ FRONTEND_URL=https://app.perenniaai.com
 ## Microsoft 365 Integration
 
 ```bash
-MICROSOFT_CLIENT_ID=185b7101-9435-44da-87ab-b7582c4e4607
+MICROSOFT_CLIENT_ID=<your-microsoft-client-id>
 MICROSOFT_CLIENT_SECRET=your-microsoft-client-secret
 MICROSOFT_TENANT_ID=common
 MICROSOFT_REDIRECT_URI=https://app.perenniaai.com/api/v1/email/oauth/callback
@@ -72,7 +72,7 @@ railway variables set JWT_SECRET_KEY="$(openssl rand -base64 32)"
 railway variables set FRONTEND_URL="https://app.perenniaai.com"
 
 # Microsoft 365
-railway variables set MICROSOFT_CLIENT_ID="185b7101-9435-44da-87ab-b7582c4e4607"
+railway variables set MICROSOFT_CLIENT_ID="<your-microsoft-client-id>"
 railway variables set MICROSOFT_CLIENT_SECRET="YOUR_SECRET_HERE"
 railway variables set MICROSOFT_TENANT_ID="common"
 railway variables set MICROSOFT_REDIRECT_URI="https://app.perenniaai.com/api/v1/email/oauth/callback"

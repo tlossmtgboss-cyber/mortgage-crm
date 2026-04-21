@@ -9,7 +9,7 @@ Provides endpoints for:
 - Scheduled task execution
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Request, Header
 from sqlalchemy.orm import Session
 from typing import Optional, List, Callable, Any
 from pydantic import BaseModel
@@ -2747,7 +2747,7 @@ async def verify_unified_tasks_for_user(
 
 @router.post("/admin/seed-salesforce-sla-workflows")
 async def seed_salesforce_sla_workflows(
-    admin_key: str = Query(..., description="Admin API key for authentication"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key for authentication"),
     db: Session = Depends(get_db)
 ):
     """
@@ -2926,7 +2926,7 @@ async def seed_salesforce_sla_workflows(
 
 @router.post("/admin/fix-salesforce-sla-day-configs")
 async def fix_salesforce_sla_day_configs(
-    admin_key: str = Query(..., description="Admin API key for authentication"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key for authentication"),
     db: Session = Depends(get_db)
 ):
     """

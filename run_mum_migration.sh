@@ -2,10 +2,17 @@
 
 # Script to run MUM client fields migration on Railway
 
+# SECURITY: Password must be provided via environment variable
+if [ -z "${MIGRATION_USERNAME}" ] || [ -z "${MIGRATION_PASSWORD}" ]; then
+  echo "❌ Error: Set MIGRATION_USERNAME and MIGRATION_PASSWORD environment variables"
+  echo "Usage: MIGRATION_USERNAME='user@example.com' MIGRATION_PASSWORD='...' ./run_mum_migration.sh"
+  exit 1
+fi
+
 echo "🔑 Getting authentication token..."
 TOKEN=$(curl -X POST "https://app.perenniaai.com/token" \
   -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=tloss@cmgfi.com&password=Up2024!" \
+  -d "username=${MIGRATION_USERNAME}&password=${MIGRATION_PASSWORD}" \
   -s | jq -r '.access_token')
 
 if [ "$TOKEN" = "null" ] || [ -z "$TOKEN" ]; then

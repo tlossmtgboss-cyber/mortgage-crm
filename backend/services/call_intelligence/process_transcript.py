@@ -496,7 +496,9 @@ def extractions_to_lead_data(results: Dict[str, ExtractionResult]) -> Dict[str, 
         lead_data['meta_data'] = lead_data.get('meta_data', {})
         lead_data['meta_data']['citizenship_status'] = citizenship
 
-    # Marital status
+    # ECOA: marital_status is stored in meta_data for property-rights analysis
+    # (community property states) and HMDA reporting only.  It must NEVER be
+    # passed to scoring, pricing, eligibility, or any decisioning function.
     marital = get('marital_status')
     if marital:
         lead_data['meta_data'] = lead_data.get('meta_data', {})

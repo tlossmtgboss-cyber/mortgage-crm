@@ -1,0 +1,1670 @@
+# ============================================================================
+# SMART DOCS REMEDIATION — 100-AGENT REGISTRY
+# ============================================================================
+# Each agent maps 1:1 to a specific finding or sub-task from the critical
+# analysis report. Agents are grouped by tier matching the report's priority.
+#
+# Fields:
+#   id                : Stable identifier (used in logs, PR titles, metrics)
+#   name              : Human-readable label
+#   tier              : critical | important | consider | meta
+#   finding_refs      : Findings from the report this agent addresses
+#   mission           : What the agent is responsible for producing
+#   inputs            : Paths/artifacts it needs to read
+#   outputs           : Patches/files/migrations/tests it produces
+#   depends_on        : Other agents that must complete first
+#   tools             : Tool permissions (read, patch, migrate, test, deploy)
+#   model             : claude-sonnet-4-5 | claude-opus-4-7 (risk-weighted)
+#   autonomy          : auto | review_required | human_approval
+#   risk              : low | medium | high
+# ============================================================================
+
+version: "1.0.0"
+project: perennia-smart-docs-remediation
+total_agents: 100
+
+# ============================================================================
+# CRITICAL TIER — 30 agents (Fix Now, blocks production)
+# ============================================================================
+
+agents:
+
+  # ---- Finding #1: Document ID vs Request ID Confusion (8 agents) ----------
+
+  - id: A01
+    name: schema-id-auditor
+    tier: critical
+    finding_refs: [1]
+    mission: >
+      Inventory every id column across DocumentRequest, SmartDocument,
+      BorrowerDocument, esign tables. Produce a canonical ERD labeling
+      request_id vs document_id vs envelope_id. Flag every FK that blurs
+      the two.
+    inputs: [models/smart_docs/*.py, alembic/versions/*.py]
+    outputs: [artifacts/erd.mmd, artifacts/id_inventory.json]
+    depends_on: []
+    tools: [read, static_analysis]
+    model: claude-opus-4-7
+    autonomy: auto
+    risk: low
+
+  - id: A02
+    name: backend-id-usage-scanner
+    tier: critical
+    finding_refs: [1]
+    mission: >
+      AST-scan the FastAPI backend for every reference to `.id` and
+      `.document_id` on smart-docs models. Produce a CSV of every call
+      site with the inferred ID type. Mark ambiguous sites.
+    inputs: [routes/smart_docs/*.py, services/smart_docs/*.py]
+    outputs: [artifacts/id_call_sites.csv]
+    depends_on: [A01]
+    tools: [read, ast_walk]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A03
+    name: frontend-id-usage-scanner
+    tier: critical
+    finding_refs: [1, 16]
+    mission: >
+      Scan React/TS sources for selectedDocs, doc.id, doc.document_id.
+      Flag SmartDocsClientDetail.js lines 223–226, 345, 460 explicitly;
+      produce a report of every conflation site.
+    inputs: ["frontend/src/**/*.{js,jsx,ts,tsx}"]
+    outputs: [artifacts/frontend_id_report.md]
+    depends_on: [A01]
+    tools: [read, ts_ast]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A04
+    name: merge-flow-fixer
+    tier: critical
+    finding_refs: [1, 16]
+    mission: >
+      Patch SmartDocsClientDetail merge to validate document_id is non-null
+      before building the merge array. Fall back to inline error toast when
+      any selected request has no uploaded file.
+    inputs: [frontend/src/pages/SmartDocs/SmartDocsClientDetail.js]
+    outputs: [fixes/patches/A04-merge-flow.patch]
+    depends_on: [A03]
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A05
+    name: approve-reject-fixer
+    tier: critical
+    finding_refs: [1]
+    mission: >
+      Ensure approve/reject uses the uploaded document_id and rejects
+      gracefully when the request has no upload yet. Add 409 response
+      code to backend route.
+    inputs:
+      - frontend/src/pages/SmartDocs/SmartDocsClientDetail.js
+      - routes/smart_docs/smart_docs_approval_routes.py
+    outputs: [fixes/patches/A05-approve-reject.patch]
+    depends_on: [A03, A02]
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A06
+    name: rerequest-fixer
+    tier: critical
+    finding_refs: [1]
+    mission: >
+      Confirm re-request correctly uses request_id (not document_id).
+      Add type hint and runtime assertion to the backend handler.
+    inputs: [routes/smart_docs/smart_docs_request_routes.py]
+    outputs: [fixes/patches/A06-rerequest.patch]
+    depends_on: [A02]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A07
+    name: id-contract-validator
+    tier: critical
+    finding_refs: [1]
+    mission: >
+      Introduce RequestId and DocumentId NewTypes (Python) / branded
+      types (TypeScript). Migrate signatures. A function accepting a
+      RequestId should refuse to compile if passed a DocumentId.
+    inputs: [models/smart_docs/, frontend/src/types/]
+    outputs:
+      - fixes/patches/A07-newtype-backend.patch
+      - fixes/patches/A07-branded-frontend.patch
+    depends_on: [A02, A03]
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A08
+    name: id-regression-test-writer
+    tier: critical
+    finding_refs: [1]
+    mission: >
+      Write pytest + React Testing Library regression tests that would
+      have caught the merge/approve/reject ID confusions. Tests must
+      use a request with NO uploaded document and assert failure modes.
+    inputs: [fixes/patches/A04*, fixes/patches/A05*]
+    outputs:
+      - tests/smart_docs/test_id_contract_backend.py
+      - frontend/src/pages/SmartDocs/__tests__/id-contract.test.jsx
+    depends_on: [A04, A05, A06]
+    tools: [read, write_test]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  # ---- Finding #2: Inconsistent API Response Schema (5 agents) -------------
+
+  - id: A09
+    name: response-shape-inventory
+    tier: critical
+    finding_refs: [2]
+    mission: >
+      Crawl every smart_docs route. For each endpoint, extract the
+      response shape. Produce a diff report of endpoints returning
+      storage_key vs s3_key vs data.storage_key vs data.s3_key.
+    inputs: [routes/smart_docs/*.py]
+    outputs: [artifacts/response_shape_audit.md]
+    depends_on: []
+    tools: [read, ast_walk]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A10
+    name: storage-key-normalizer
+    tier: critical
+    finding_refs: [2]
+    mission: >
+      Pick `storage_key` as the canonical field. Patch every backend
+      endpoint to emit a single response envelope containing
+      storage_key. Remove s3_key from public responses (keep internally).
+    inputs: [artifacts/response_shape_audit.md]
+    outputs: [fixes/patches/A10-storage-key.patch]
+    depends_on: [A09]
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A11
+    name: defensive-extractor-remover
+    tier: critical
+    finding_refs: [2]
+    mission: >
+      Remove the 4-fallback extraction in RequestDocumentModal.jsx:377–380.
+      Replace with single-key read. Add a contract test asserting the
+      response conforms to StorageKeyResponse.
+    inputs: [frontend/src/components/SmartDocs/RequestDocumentModal.jsx]
+    outputs: [fixes/patches/A11-remove-fallback.patch]
+    depends_on: [A10]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A12
+    name: typescript-contract-generator
+    tier: critical
+    finding_refs: [2]
+    mission: >
+      Generate TypeScript types from Pydantic models using
+      `datamodel-code-generator`. Wire into CI so a drift between
+      Python models and TS types fails the build.
+    inputs: [schemas/smart_docs/*.py]
+    outputs:
+      - frontend/src/types/generated/smart_docs.ts
+      - .github/workflows/contract-sync.yml
+    depends_on: [A10]
+    tools: [read, write, ci]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A13
+    name: contract-test-suite-builder
+    tier: critical
+    finding_refs: [2]
+    mission: >
+      Build a schemathesis contract test suite pointed at the local
+      FastAPI app. Every endpoint's response is validated against its
+      Pydantic model before the patch is merged.
+    inputs: [schemas/smart_docs/]
+    outputs: [tests/contract/test_smart_docs_schemas.py]
+    depends_on: [A10, A12]
+    tools: [read, write_test]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  # ---- Finding #3: Partial Failure Recovery (5 agents) ---------------------
+
+  - id: A14
+    name: esign-state-machine-designer
+    tier: critical
+    finding_refs: [3]
+    mission: >
+      Design a finite state machine for DocumentRequest.esign_status:
+      NONE → ENVELOPE_PENDING → ENVELOPE_CREATED → SIGNED | FAILED.
+      Every transition is logged. FAILED transitions record the cause.
+    inputs: [models/smart_docs/document_request.py]
+    outputs:
+      - docs/esign_state_machine.md
+      - models/smart_docs/esign_state.py
+    depends_on: []
+    tools: [read, write]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A15
+    name: retry-endpoint-builder
+    tier: critical
+    finding_refs: [3]
+    mission: >
+      Build POST /smart-docs/requests/{request_id}/retry-esign. Idempotent.
+      Only valid when esign_status = FAILED. Transitions to ENVELOPE_PENDING
+      and enqueues the envelope worker.
+    inputs: [models/smart_docs/esign_state.py]
+    outputs: [fixes/patches/A15-retry-esign-endpoint.patch]
+    depends_on: [A14]
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A16
+    name: retry-ui-builder
+    tier: critical
+    finding_refs: [3]
+    mission: >
+      Add "Retry E-Sign Setup" button on requests where
+      esign_status = FAILED. Show the failure reason on hover.
+      Call POST /retry-esign; surface success/failure toast.
+    inputs: [frontend/src/components/SmartDocs/RequestDocumentModal.jsx]
+    outputs: [fixes/patches/A16-retry-ui.patch]
+    depends_on: [A15]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A17
+    name: orphan-detector
+    tier: critical
+    finding_refs: [3]
+    mission: >
+      Celery beat job that runs every 10 minutes: finds DocumentRequests
+      with esign_status = ENVELOPE_PENDING older than 5 min. Transitions
+      to FAILED with reason=TIMEOUT. Emits metric smart_docs.esign.orphan.
+    inputs: [models/smart_docs/esign_state.py]
+    outputs:
+      - workers/smart_docs/orphan_detector.py
+      - celery_beat_schedule.py
+    depends_on: [A14]
+    tools: [read, write, celery]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A18
+    name: recovery-dashboard-panel
+    tier: critical
+    finding_refs: [3]
+    mission: >
+      Admin-only page listing requests in FAILED state with bulk
+      "Retry Selected" action. Shows failure reason, age, retry count.
+    inputs: [fixes/patches/A15-retry-esign-endpoint.patch]
+    outputs:
+      - frontend/src/pages/Admin/EsignRecoveryDashboard.jsx
+      - frontend/src/routes/admin.js
+    depends_on: [A15, A16, A17]
+    tools: [read, write]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  # ---- Finding #4: requires_esign Dead Code (3 agents) ---------------------
+
+  - id: A19
+    name: dead-field-detector
+    tier: critical
+    finding_refs: [4]
+    mission: >
+      Scan every smart_docs route. For each field accepted by a Pydantic
+      request model, verify the field is actually persisted or acted
+      upon. Produce report of dead fields. requires_esign should appear.
+    inputs: [routes/smart_docs/, services/smart_docs/]
+    outputs: [artifacts/dead_fields.md]
+    depends_on: []
+    tools: [read, ast_walk]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A20
+    name: requires-esign-schema-migrator
+    tier: critical
+    finding_refs: [4]
+    mission: >
+      Add `requires_esign BOOLEAN NOT NULL DEFAULT FALSE` to
+      document_requests. Alembic migration with data backfill (infer from
+      existing envelopes).
+    inputs: [models/smart_docs/document_request.py]
+    outputs:
+      - alembic/versions/add_requires_esign.py
+      - fixes/patches/A20-model-field.patch
+    depends_on: [A19]
+    tools: [read, patch, migrate]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A21
+    name: requires-esign-service-wiring
+    tier: critical
+    finding_refs: [4]
+    mission: >
+      Update NeedsListGenerator.add_custom_request to persist
+      requires_esign to the DocumentRequest row. Add query
+      `get_requests_requiring_esign(loan_id)`.
+    inputs: [services/smart_docs/needs_list_generator.py]
+    outputs: [fixes/patches/A21-persist-requires-esign.patch]
+    depends_on: [A20]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  # ---- Finding #5: Hardcoded SECRET_KEY (4 agents) -------------------------
+
+  - id: A22
+    name: secret-audit
+    tier: critical
+    finding_refs: [5]
+    mission: >
+      grep every `os.getenv(...)` call across the codebase. Flag any
+      that use a fallback containing 'dev', 'secret', 'change', 'test',
+      or any hardcoded value that looks like a credential.
+    inputs: [services/**/*.py, routes/**/*.py]
+    outputs: [artifacts/secret_fallbacks.csv]
+    depends_on: []
+    tools: [read, grep]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A23
+    name: secret-startup-validator
+    tier: critical
+    finding_refs: [5]
+    mission: >
+      Build a required-env validator that runs at FastAPI startup.
+      Missing required secret => app refuses to boot. Lists all keys it
+      needs. borrower_portal_v2_service.py:44 loses its fallback.
+    inputs: [artifacts/secret_fallbacks.csv]
+    outputs:
+      - config/required_env.py
+      - fixes/patches/A23-remove-fallback.patch
+    depends_on: [A22]
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: high
+
+  - id: A24
+    name: env-contract-documenter
+    tier: critical
+    finding_refs: [5]
+    mission: >
+      Produce .env.example listing every required secret with a
+      description and the service it's used by. Wire into onboarding
+      README.
+    inputs: [config/required_env.py]
+    outputs: [.env.example, docs/secrets.md]
+    depends_on: [A23]
+    tools: [read, write]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A25
+    name: secret-rotation-scheduler
+    tier: critical
+    finding_refs: [5]
+    mission: >
+      Integrate with Railway secrets (current deployment target). Add
+      rotation policy: SECRET_KEY rotated quarterly, JWT signing key
+      rotated monthly with dual-key overlap.
+    inputs: [config/required_env.py]
+    outputs: [docs/secret_rotation_runbook.md]
+    depends_on: [A23]
+    tools: [read, write]
+    model: claude-opus-4-7
+    autonomy: human_approval
+    risk: high
+
+  # ---- Finding #11: Screenshot detection fails open (3 agents) -------------
+
+  - id: A26
+    name: fail-closed-policy
+    tier: critical
+    finding_refs: [11]
+    mission: >
+      Patch document_review_pipeline.py:269–275. When screenshot detector
+      raises OR times out, set screenshot_status = NEEDS_REVIEW, not
+      NOT_SCREENSHOT. Route to manual review queue.
+    inputs: [services/smart_docs/document_review_pipeline.py]
+    outputs: [fixes/patches/A26-fail-closed.patch]
+    depends_on: []
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: high
+
+  - id: A27
+    name: pipeline-circuit-breaker
+    tier: critical
+    finding_refs: [11]
+    mission: >
+      Wrap the screenshot detection call in a circuit breaker. After
+      5 failures in 60s, fast-fail to NEEDS_REVIEW for 5 minutes and
+      emit PagerDuty alert. Use pybreaker.
+    inputs: [services/smart_docs/document_review_pipeline.py]
+    outputs: [fixes/patches/A27-circuit-breaker.patch]
+    depends_on: [A26]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: medium
+
+  - id: A28
+    name: manual-review-queue-router
+    tier: critical
+    finding_refs: [11]
+    mission: >
+      Ensure NEEDS_REVIEW documents surface in processor queue with a
+      visible banner explaining detection was unavailable. SLA clock
+      starts at enqueue time.
+    inputs: [routes/smart_docs/smart_docs_review_routes.py]
+    outputs: [fixes/patches/A28-manual-queue.patch]
+    depends_on: [A26]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  # ---- Finding #6: TCPA Consent (2 critical agents) ------------------------
+
+  - id: A29
+    name: consent-source-inventory
+    tier: critical
+    finding_refs: [6, 19]
+    mission: >
+      Catalog every consent source: SmartDocsConsentRecord,
+      InternalDNCEntry, OutreachLog, telephony compliance layer, TCPA
+      models, per-request notification flags. Produce truth table of
+      when each says yes/no.
+    inputs: [models/**/*.py, services/telephony/, services/tcpa/]
+    outputs: [artifacts/consent_truth_table.md]
+    depends_on: []
+    tools: [read, ast_walk]
+    model: claude-opus-4-7
+    autonomy: auto
+    risk: low
+
+  - id: A30
+    name: unified-consent-gateway
+    tier: critical
+    finding_refs: [6, 19]
+    mission: >
+      Build check_all_consent(phone, channel, purpose) -> ConsentResult.
+      Single choke point queried by every outbound SMS, voice, email.
+      Deny-by-default. Emits audit record on every check.
+    inputs: [artifacts/consent_truth_table.md]
+    outputs:
+      - services/consent/unified_gateway.py
+      - tests/consent/test_unified_gateway.py
+    depends_on: [A29]
+    tools: [read, write, write_test]
+    model: claude-opus-4-7
+    autonomy: human_approval
+    risk: high
+
+  # ==========================================================================
+  # IMPORTANT TIER — 40 agents (Address Soon)
+  # ==========================================================================
+
+  # ---- Finding #12: Multi-Page PDF (5 agents) ------------------------------
+
+  - id: A31
+    name: pdf-viewer-page-nav
+    tier: important
+    finding_refs: [12]
+    mission: >
+      Add prev/next + page-number jump to the e-sign field placement
+      viewer. Use react-pdf. Keyboard shortcuts (←/→, g to go-to).
+    inputs: [frontend/src/components/SmartDocs/ESignFieldPlacer.jsx]
+    outputs: [fixes/patches/A31-page-nav.patch]
+    depends_on: []
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A32
+    name: field-page-schema
+    tier: important
+    finding_refs: [12]
+    mission: >
+      Add page_number INTEGER NOT NULL DEFAULT 1 to signature_fields.
+      Update Pydantic model. Validator: page_number must be <=
+      document's page count.
+    inputs: [models/smart_docs/signature_field.py]
+    outputs:
+      - alembic/versions/add_page_number_to_fields.py
+      - fixes/patches/A32-field-model.patch
+    depends_on: []
+    tools: [read, patch, migrate]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A33
+    name: field-migration-backfill
+    tier: important
+    finding_refs: [12]
+    mission: >
+      Backfill existing signature_field rows with page_number = 1.
+      Idempotent. Dry-run mode prints row count first.
+    inputs: [alembic/versions/add_page_number_to_fields.py]
+    outputs: [scripts/backfill_field_page.py]
+    depends_on: [A32]
+    tools: [read, write, migrate]
+    model: claude-sonnet-4-5
+    autonomy: review_required
+    risk: medium
+
+  - id: A34
+    name: zoom-pan-controls
+    tier: important
+    finding_refs: [12]
+    mission: >
+      Pinch-zoom on touch. Keyboard +/-. Click-and-drag pan. Maintain
+      field placement coordinates through zoom transforms.
+    inputs: [frontend/src/components/SmartDocs/ESignFieldPlacer.jsx]
+    outputs: [fixes/patches/A34-zoom-pan.patch]
+    depends_on: [A31]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A35
+    name: mobile-pdf-viewer
+    tier: important
+    finding_refs: [12, 15]
+    mission: >
+      iOS-optimized PDF viewer: page thumbnails in a scroll strip,
+      tap-to-jump, lazy-rendered pages, max 3 pages in memory at once.
+    inputs: [frontend/src/components/SmartDocs/ESignFieldPlacer.jsx]
+    outputs: [fixes/patches/A35-mobile-pdf.patch]
+    depends_on: [A31, A34]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  # ---- Finding #7 & #18: Route/Enterprise consolidation (8 agents) ---------
+
+  - id: A36
+    name: route-file-inventory
+    tier: important
+    finding_refs: [7, 18]
+    mission: >
+      Map all 25 smart_docs route files to traffic from last 30 days
+      of access logs. Produce heat map: which routes get zero traffic.
+    inputs: [logs/api/**/*.jsonl, routes/smart_docs/]
+    outputs: [artifacts/route_traffic_heatmap.csv]
+    depends_on: []
+    tools: [read, log_query]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A37
+    name: dead-route-detector
+    tier: important
+    finding_refs: [7, 18]
+    mission: >
+      From the heat map, produce a list of routes with zero traffic in
+      30 days that aren't on a known roadmap. These are candidates for
+      removal or feature-flagging.
+    inputs: [artifacts/route_traffic_heatmap.csv]
+    outputs: [artifacts/dead_routes.md]
+    depends_on: [A36]
+    tools: [read, ast_walk]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A38
+    name: route-consolidator
+    tier: important
+    finding_refs: [7]
+    mission: >
+      Merge related route files (e.g., esign + esign_fields + esign_session
+      into smart_docs_esign.py). Preserve URL paths via router mounting.
+      Emit redirect map.
+    inputs: [artifacts/dead_routes.md]
+    outputs: [fixes/patches/A38-route-consolidation.patch]
+    depends_on: [A37]
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A39
+    name: enterprise-usage-analyzer
+    tier: important
+    finding_refs: [8, 18]
+    mission: >
+      For the 15,339-line enterprise/ directory, map each service to
+      route handlers. Services with no route binding are zombies.
+    inputs: [services/enterprise/, routes/]
+    outputs: [artifacts/enterprise_usage.md]
+    depends_on: []
+    tools: [read, ast_walk]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A40
+    name: dead-module-archiver
+    tier: important
+    finding_refs: [8, 18]
+    mission: >
+      Move zombie enterprise services to archive/enterprise/ with a
+      DEPRECATED.md tombstone. Do not delete; quarantine.
+    inputs: [artifacts/enterprise_usage.md]
+    outputs: [fixes/patches/A40-archive.patch]
+    depends_on: [A39]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: human_approval
+    risk: medium
+
+  - id: A41
+    name: feature-flag-introducer
+    tier: important
+    finding_refs: [8]
+    mission: >
+      For enterprise features that exist but aren't used in production,
+      gate them behind LaunchDarkly-style flags. Default: off.
+    inputs: [services/enterprise/]
+    outputs: [fixes/patches/A41-feature-flags.patch]
+    depends_on: [A39]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: review_required
+    risk: low
+
+  - id: A42
+    name: api-deprecator
+    tier: important
+    finding_refs: [7]
+    mission: >
+      Build deprecation pipeline: flagged endpoints return Sunset header,
+      log each call, emit metric. After 30 days of zero traffic, archive.
+    inputs: [routes/]
+    outputs: [middleware/deprecation.py, fixes/patches/A42-deprecation.patch]
+    depends_on: []
+    tools: [read, write, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A43
+    name: api-reference-generator
+    tier: important
+    finding_refs: [7]
+    mission: >
+      Regenerate OpenAPI spec after consolidation. Publish to /docs with
+      grouped tags matching the new file structure.
+    inputs: [fixes/patches/A38-route-consolidation.patch]
+    outputs: [docs/openapi.yaml]
+    depends_on: [A38]
+    tools: [read, write]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  # ---- Finding #9: Sequential Bulk (3 agents) -----------------------------
+
+  - id: A44
+    name: parallel-bulk-refactor
+    tier: important
+    finding_refs: [9]
+    mission: >
+      Rewrite smartDocsApi.addBulkCustomRequests using Promise.allSettled.
+      Concurrency cap of 8 via p-limit. Update hook useSmartDocs
+      similarly.
+    inputs:
+      - frontend/src/api/smartDocsApi.js
+      - frontend/src/hooks/useSmartDocs.js
+    outputs: [fixes/patches/A44-parallel-bulk.patch]
+    depends_on: []
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A45
+    name: per-item-result-ui
+    tier: important
+    finding_refs: [9]
+    mission: >
+      Show per-item success/fail in the bulk modal. Failed items remain
+      selected; successful items are checkmarked. "Retry failed" button.
+    inputs: [frontend/src/components/SmartDocs/BulkRequestModal.jsx]
+    outputs: [fixes/patches/A45-per-item-ui.patch]
+    depends_on: [A44]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A46
+    name: backend-bulk-endpoint
+    tier: important
+    finding_refs: [9]
+    mission: >
+      Add POST /smart-docs/requests:bulk accepting up to 50 requests in
+      one call, wrapped in a transaction. Returns per-item result array.
+    inputs: [routes/smart_docs/smart_docs_request_routes.py]
+    outputs: [fixes/patches/A46-bulk-endpoint.patch]
+    depends_on: []
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  # ---- Finding #13: Error Boundaries (3 agents) ----------------------------
+
+  - id: A47
+    name: error-boundary-generator
+    tier: important
+    finding_refs: [13]
+    mission: >
+      Wrap each top-level SmartDocs page in <ErrorBoundary>. Fallback
+      UI: "Something went wrong", retry button, copy-error-details link.
+    inputs: [frontend/src/pages/SmartDocs/]
+    outputs: [fixes/patches/A47-error-boundaries.patch]
+    depends_on: []
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A48
+    name: error-telemetry
+    tier: important
+    finding_refs: [13]
+    mission: >
+      Wire Sentry error reporting into the ErrorBoundary. Include user
+      role, loan_id, request_id breadcrumbs.
+    inputs: [frontend/src/components/ErrorBoundary.jsx]
+    outputs: [fixes/patches/A48-sentry.patch]
+    depends_on: [A47]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A49
+    name: error-recovery-component
+    tier: important
+    finding_refs: [13]
+    mission: >
+      Reusable <RecoverableError> component with retry, reload, go-back
+      actions. Styled in the deep-space / electric-blue design system.
+    inputs: [frontend/src/components/]
+    outputs: [fixes/patches/A49-recoverable-error.patch]
+    depends_on: [A47]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  # ---- Finding #14: Real-Time Updates (5 agents) ---------------------------
+
+  - id: A50
+    name: sse-channel-designer
+    tier: important
+    finding_refs: [14]
+    mission: >
+      Design SSE channels: /smart-docs/stream/loan/{loan_id} emits
+      events on upload, approve, reject, status_change. Auth via JWT.
+    inputs: [routes/smart_docs/]
+    outputs:
+      - docs/realtime_channels.md
+      - routes/smart_docs/stream_routes.py
+    depends_on: []
+    tools: [read, write]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A51
+    name: react-query-invalidation
+    tier: important
+    finding_refs: [14]
+    mission: >
+      On SSE events, invalidate matching React Query keys. Remove manual
+      refetch(); let Query do it.
+    inputs: [frontend/src/hooks/useSmartDocs.js]
+    outputs: [fixes/patches/A51-query-invalidation.patch]
+    depends_on: [A50]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A52
+    name: post-action-auto-refresh
+    tier: important
+    finding_refs: [14]
+    mission: >
+      After upload/approve/reject/waive, call the mutation's onSuccess
+      to invalidate the document list. Belt-and-suspenders w/ SSE.
+    inputs: [frontend/src/pages/SmartDocs/]
+    outputs: [fixes/patches/A52-post-action-refresh.patch]
+    depends_on: [A51]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A53
+    name: presence-indicator
+    tier: important
+    finding_refs: [14]
+    mission: >
+      Show tiny avatar bubble "Sarah is viewing this loan" in the header
+      when another user has the page open. Redis-backed presence.
+    inputs: [routes/smart_docs/stream_routes.py]
+    outputs: [fixes/patches/A53-presence.patch]
+    depends_on: [A50]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A54
+    name: concurrent-action-conflict-resolver
+    tier: important
+    finding_refs: [14]
+    mission: >
+      Optimistic locking on DocumentRequest with version column. Rejected
+      updates return 409 with current state. UI shows "Sarah already
+      approved this — reload?".
+    inputs: [models/smart_docs/document_request.py]
+    outputs: [fixes/patches/A54-optimistic-lock.patch]
+    depends_on: []
+    tools: [read, patch, migrate]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: high
+
+  # ---- Finding #15: Offline / Network Resilience (5 agents) ----------------
+
+  - id: A55
+    name: retry-queue-builder
+    tier: important
+    finding_refs: [15]
+    mission: >
+      IndexedDB-backed retry queue for failed uploads. Exponential
+      backoff. Flushes on window online event.
+    inputs: [frontend/src/api/smartDocsApi.js]
+    outputs: [frontend/src/offline/retryQueue.js]
+    depends_on: []
+    tools: [read, write]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A56
+    name: offline-upload-buffer
+    tier: important
+    finding_refs: [15]
+    mission: >
+      Allow document selection + preview while offline. Queues upload.
+      On reconnect, uploads in background. Shows queue badge.
+    inputs: [frontend/src/components/SmartDocs/UploadModal.jsx]
+    outputs: [fixes/patches/A56-offline-upload.patch]
+    depends_on: [A55]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A57
+    name: connection-status-indicator
+    tier: important
+    finding_refs: [15]
+    mission: >
+      Top-bar banner when offline. Green pulse when back online.
+      Respects prefers-reduced-motion.
+    inputs: [frontend/src/layout/]
+    outputs: [fixes/patches/A57-connection-banner.patch]
+    depends_on: []
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A58
+    name: ios-network-resilience
+    tier: important
+    finding_refs: [15]
+    mission: >
+      iOS-specific hooks into Network framework: background upload via
+      URLSession, silent-push trigger for retry, Keychain-stored auth
+      to survive app kills.
+    inputs: [ios/PerenniaApp/Services/Upload/]
+    outputs: [fixes/patches/A58-ios-upload.patch]
+    depends_on: [A55]
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A59
+    name: resumable-upload
+    tier: important
+    finding_refs: [15]
+    mission: >
+      tus.io resumable uploads for files >20MB. Backend tus server mounted
+      at /smart-docs/uploads/tus.
+    inputs: [routes/smart_docs/]
+    outputs:
+      - routes/smart_docs/tus_upload.py
+      - fixes/patches/A59-resumable.patch
+    depends_on: []
+    tools: [read, write, patch]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  # ---- Finding #16: Bulk Merge Silent Failure (2 agents) -------------------
+
+  - id: A60
+    name: merge-precondition-validator
+    tier: important
+    finding_refs: [16]
+    mission: >
+      Merge endpoint rejects (422) if any selected request has no
+      uploaded document. Returns list of offending request_ids.
+    inputs: [routes/smart_docs/smart_docs_request_routes.py]
+    outputs: [fixes/patches/A60-merge-precondition.patch]
+    depends_on: []
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A61
+    name: merge-ui-feedback
+    tier: important
+    finding_refs: [16]
+    mission: >
+      Before merge, show summary: "5 selected, 3 will be merged, 2 are
+      missing files (see below)". Disable merge until all selected
+      have files or are deselected.
+    inputs: [frontend/src/pages/SmartDocs/SmartDocsClientDetail.js]
+    outputs: [fixes/patches/A61-merge-ui.patch]
+    depends_on: [A60]
+    tools: [read, patch]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  # ---- Finding #10: In-memory filtering (5 agents) -------------------------
+
+  - id: A62
+    name: memory-filter-scanner
+    tier: important
+    finding_refs: [10]
+    mission: >
+      AST-scan Python for patterns like `[x for x in fetched if ...]`
+      and `list(filter(...))` on DB query results. Flag as candidates
+      for SQL-level filtering.
+    inputs: [routes/smart_docs/, services/smart_docs/]
+    outputs: [artifacts/memory_filters.csv]
+    depends_on: []
+    tools: [read, ast_walk]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A63
+    name: sql-filter-migrator
+    tier: important
+    finding_refs: [10]
+    mission: >
+      For each flagged filter, generate a SQLAlchemy .where() equivalent.
+      Produce the patch; unit tests assert identical result sets.
+    inputs: [artifacts/memory_filters.csv]
+    outputs: [fixes/patches/A63-sql-filters.patch]
+    depends_on: [A62]
+    tools: [read, patch, write_test]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A64
+    name: filter-index-generator
+    tier: important
+    finding_refs: [10]
+    mission: >
+      For each new WHERE clause, determine whether an index is needed.
+      Generate alembic migration with the indexes.
+    inputs: [fixes/patches/A63-sql-filters.patch]
+    outputs: [alembic/versions/smart_docs_filter_indexes.py]
+    depends_on: [A63]
+    tools: [read, migrate]
+    model: claude-sonnet-4-5
+    autonomy: review_required
+    risk: medium
+
+  - id: A65
+    name: analytics-sql-reviewer
+    tier: important
+    finding_refs: [10]
+    mission: >
+      Review all 47 raw SQL queries in analytics_routes.py. For each:
+      EXPLAIN plan, verify result correctness against a test fixture,
+      flag dangerous patterns (Cartesian joins, missing partitions).
+    inputs: [routes/smart_docs/smart_docs_analytics_routes.py]
+    outputs: [artifacts/analytics_sql_review.md]
+    depends_on: []
+    tools: [read, sql_explain]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: high
+
+  - id: A66
+    name: cte-to-orm
+    tier: important
+    finding_refs: [10]
+    mission: >
+      Convert reviewed raw SQL to SQLAlchemy Core where feasible (keep
+      raw SQL only for complex window functions). Add query-plan tests.
+    inputs: [artifacts/analytics_sql_review.md]
+    outputs: [fixes/patches/A66-analytics-orm.patch]
+    depends_on: [A65]
+    tools: [read, patch, write_test]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  # ---- Finding #8: Enterprise quality (4 agents) ---------------------------
+
+  - id: A67
+    name: enterprise-smoke-tests
+    tier: important
+    finding_refs: [8]
+    mission: >
+      Smoke tests for each enterprise module that survives audit. "Does
+      it import? Does its main entry point not crash on a minimal input?"
+    inputs: [services/enterprise/]
+    outputs: [tests/enterprise/test_smoke.py]
+    depends_on: [A39]
+    tools: [read, write_test]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A68
+    name: approval-chain-tester
+    tier: important
+    finding_refs: [8]
+    mission: >
+      End-to-end test of multi-step approval: 3-level chain with waive
+      at step 2. Asserts final state and audit log correctness.
+    inputs: [services/enterprise/approval_chains/]
+    outputs: [tests/enterprise/test_approval_chain_e2e.py]
+    depends_on: [A67]
+    tools: [read, write_test]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A69
+    name: capacity-planning-validator
+    tier: important
+    finding_refs: [8]
+    mission: >
+      Property-based tests on capacity math: sum(assignments) <=
+      sum(capacity) under all permutations. Uses hypothesis.
+    inputs: [services/enterprise/capacity_planning/]
+    outputs: [tests/enterprise/test_capacity.py]
+    depends_on: [A67]
+    tools: [read, write_test]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A70
+    name: report-builder-tester
+    tier: important
+    finding_refs: [8]
+    mission: >
+      End-to-end report build: create report → run → export CSV → assert
+      row count and checksum match computed expectation.
+    inputs: [services/enterprise/report_builder/]
+    outputs: [tests/enterprise/test_report_builder_e2e.py]
+    depends_on: [A67]
+    tools: [read, write_test]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  # ==========================================================================
+  # CONSIDER TIER — 20 agents (Future)
+  # ==========================================================================
+
+  # ---- Finding #17: Migration verification (5 agents) ----------------------
+
+  - id: A71
+    name: schema-diff-tool
+    tier: consider
+    finding_refs: [17]
+    mission: >
+      Tool that compares SQLAlchemy models to actual production schema
+      via information_schema. Emits diff report.
+    inputs: [models/]
+    outputs: [tools/schema_diff.py]
+    depends_on: []
+    tools: [read, write, sql_read]
+    model: claude-opus-4-7
+    autonomy: auto
+    risk: low
+
+  - id: A72
+    name: migration-savepoint-wrapper
+    tier: consider
+    finding_refs: [17]
+    mission: >
+      Wrap each alembic migration op in a savepoint so partial failure
+      rolls back cleanly. Update the 36K-line migration first.
+    inputs: [alembic/versions/smart_docs_v2_migration.py]
+    outputs: [fixes/patches/A72-savepoints.patch]
+    depends_on: []
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: human_approval
+    risk: high
+
+  - id: A73
+    name: migration-test-harness
+    tier: consider
+    finding_refs: [17]
+    mission: >
+      Each migration runs up/down on a fresh DB in CI. Captures row
+      counts before and after. Fails if any migration is not
+      round-trippable.
+    inputs: [alembic/versions/]
+    outputs: [tests/migrations/test_roundtrip.py]
+    depends_on: []
+    tools: [read, write_test]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A74
+    name: migration-splitter
+    tier: consider
+    finding_refs: [17]
+    mission: >
+      Split the 36K-line smart_docs_v2_migration into logical chunks
+      (per table family). Preserves ordering via revision chain.
+    inputs: [alembic/versions/smart_docs_v2_migration.py]
+    outputs: [alembic/versions/smart_docs_v2_*.py]
+    depends_on: []
+    tools: [read, write]
+    model: claude-opus-4-7
+    autonomy: human_approval
+    risk: high
+
+  - id: A75
+    name: migration-idempotency
+    tier: consider
+    finding_refs: [17]
+    mission: >
+      Rewrite DDL to IF NOT EXISTS / IF EXISTS variants where safe so
+      partial prior runs can be resumed.
+    inputs: [alembic/versions/]
+    outputs: [fixes/patches/A75-idempotent-ddl.patch]
+    depends_on: [A74]
+    tools: [read, patch]
+    model: claude-opus-4-7
+    autonomy: human_approval
+    risk: high
+
+  # ---- Finding #21: Follow-up deduplication (3 agents) ---------------------
+
+  - id: A76
+    name: followup-engine-comparator
+    tier: consider
+    finding_refs: [21]
+    mission: >
+      Compare Smart Docs follow-up engine (1,414 lines) to the workflow
+      engine's nurturing flows. Decision matrix: features, triggers,
+      template management, compliance.
+    inputs:
+      - services/smart_docs/followup/
+      - services/workflow_engine/nurturing/
+    outputs: [artifacts/followup_comparison.md]
+    depends_on: []
+    tools: [read, ast_walk]
+    model: claude-opus-4-7
+    autonomy: auto
+    risk: low
+
+  - id: A77
+    name: canonical-engine-selector
+    tier: consider
+    finding_refs: [21]
+    mission: >
+      Select workflow engine as canonical (per report rec). Draft
+      migration plan to move Smart Docs follow-up features into it.
+    inputs: [artifacts/followup_comparison.md]
+    outputs: [docs/followup_migration_plan.md]
+    depends_on: [A76]
+    tools: [read, write]
+    model: claude-opus-4-7
+    autonomy: human_approval
+    risk: medium
+
+  - id: A78
+    name: dedup-outreach-gate
+    tier: consider
+    finding_refs: [21]
+    mission: >
+      While migrating, install a dedup gate: no two outreach messages to
+      the same phone within 30 minutes, regardless of source system.
+    inputs: [services/consent/unified_gateway.py]
+    outputs: [services/consent/dedup_gate.py]
+    depends_on: [A30]
+    tools: [read, write]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: high
+
+  # ---- Finding #20: Analytics foundation (3 agents) ------------------------
+
+  - id: A79
+    name: data-quality-gate
+    tier: consider
+    finding_refs: [20]
+    mission: >
+      Before any analytics query runs, verify underlying data passes
+      quality checks (no null request_ids, consistent status enums).
+      Return empty-with-warning if gate fails.
+    inputs: [services/smart_docs/analytics/]
+    outputs: [services/smart_docs/analytics/quality_gate.py]
+    depends_on: [A85]
+    tools: [read, write]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A80
+    name: analytics-cache-invalidator
+    tier: consider
+    finding_refs: [20]
+    mission: >
+      On DocumentRequest mutations, invalidate cached analytics keys.
+      Uses Redis pub/sub; analytics service subscribes.
+    inputs: [services/smart_docs/]
+    outputs: [services/smart_docs/analytics/invalidation.py]
+    depends_on: []
+    tools: [read, write]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A81
+    name: analytics-sla-freshness
+    tier: consider
+    finding_refs: [20]
+    mission: >
+      Emit metric smart_docs.analytics.freshness_seconds. Alert when
+      stale > 5 min. Dashboard surfaces last-updated-at on every panel.
+    inputs: [services/smart_docs/analytics/]
+    outputs: [services/smart_docs/analytics/freshness.py]
+    depends_on: []
+    tools: [read, write]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  # ---- Finding #6/#19 extended consent (3 agents) --------------------------
+
+  - id: A82
+    name: consent-schema-unifier
+    tier: consider
+    finding_refs: [6, 19]
+    mission: >
+      Design unified consent_records table (phone, channel, purpose,
+      status, source, timestamp, proof_url). Replaces 6+ tables.
+    inputs: [artifacts/consent_truth_table.md]
+    outputs:
+      - docs/unified_consent_schema.md
+      - models/consent/consent_record.py
+    depends_on: [A29]
+    tools: [read, write]
+    model: claude-opus-4-7
+    autonomy: human_approval
+    risk: high
+
+  - id: A83
+    name: consent-migration
+    tier: consider
+    finding_refs: [19]
+    mission: >
+      Backfill unified consent_records from 6 legacy sources. Reconcile
+      conflicts (most-recent wins, with audit trail).
+    inputs: [models/consent/consent_record.py]
+    outputs: [scripts/backfill_consent.py]
+    depends_on: [A82]
+    tools: [read, write, migrate]
+    model: claude-opus-4-7
+    autonomy: human_approval
+    risk: high
+
+  - id: A84
+    name: consent-audit-log
+    tier: consider
+    finding_refs: [19]
+    mission: >
+      Immutable audit log: every consent change and every check emits an
+      append-only record. Used for TCPA defense evidence.
+    inputs: [services/consent/unified_gateway.py]
+    outputs: [services/consent/audit_log.py]
+    depends_on: [A30, A82]
+    tools: [read, write]
+    model: claude-opus-4-7
+    autonomy: human_approval
+    risk: high
+
+  # ---- Polish (6 agents) ---------------------------------------------------
+
+  - id: A85
+    name: status-enum-normalizer
+    tier: consider
+    finding_refs: [20]
+    mission: >
+      All status values UPPERCASE at the DB layer via CHECK constraint.
+      Frontend normalizer becomes redundant; remove it. Migration
+      upper-cases existing data.
+    inputs: [models/smart_docs/]
+    outputs:
+      - alembic/versions/normalize_status_enums.py
+      - fixes/patches/A85-status-check.patch
+    depends_on: []
+    tools: [read, patch, migrate]
+    model: claude-opus-4-7
+    autonomy: review_required
+    risk: medium
+
+  - id: A86
+    name: classification-retry-worker
+    tier: consider
+    finding_refs: [14]
+    mission: >
+      Worker that polls for documents stuck in classification_pending
+      > 10 min and retries. Max 3 retries; then flags for manual review.
+    inputs: [workers/smart_docs/]
+    outputs: [workers/smart_docs/classification_retry.py]
+    depends_on: []
+    tools: [read, write, celery]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A87
+    name: loan-id-diagnostic-fixer
+    tier: consider
+    finding_refs: [13]
+    mission: >
+      Resolve the known loan_id mismatch between portal and smart docs.
+      Use the diagnostic endpoints' output to build a one-time
+      reconciler, then prevent via FK constraint.
+    inputs: [routes/portal/diagnostic_routes.py]
+    outputs:
+      - scripts/reconcile_loan_ids.py
+      - alembic/versions/loan_id_fk.py
+    depends_on: []
+    tools: [read, write, migrate]
+    model: claude-opus-4-7
+    autonomy: human_approval
+    risk: high
+
+  - id: A88
+    name: upload-telemetry-dashboard
+    tier: consider
+    finding_refs: [20]
+    mission: >
+      DataDog dashboard: upload success rate, avg time, classification
+      accuracy, rejection reasons. Alerting on success rate < 95%.
+    inputs: [services/smart_docs/upload/]
+    outputs: [infra/datadog/smart_docs_upload.json]
+    depends_on: []
+    tools: [read, write]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A89
+    name: adoption-dashboard
+    tier: consider
+    finding_refs: [20]
+    mission: >
+      End-to-end adoption dashboard: how many loans had a needs-list
+      generated, % with any upload, % with all required uploads, median
+      time to completion.
+    inputs: [services/smart_docs/analytics/]
+    outputs: [infra/datadog/smart_docs_adoption.json]
+    depends_on: [A81]
+    tools: [read, write]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: A90
+    name: legal-review-report
+    tier: consider
+    finding_refs: [6, 19]
+    mission: >
+      Generate a human-readable report for outside counsel: consent
+      architecture, choke points, audit evidence, TCPA risk surface.
+    inputs:
+      - docs/unified_consent_schema.md
+      - services/consent/audit_log.py
+    outputs: [docs/legal/tcpa_architecture_review.md]
+    depends_on: [A30, A82, A84]
+    tools: [read, write]
+    model: claude-opus-4-7
+    autonomy: human_approval
+    risk: high
+
+  # ==========================================================================
+  # META TIER — 10 orchestration agents
+  # ==========================================================================
+
+  - id: M91
+    name: coordinator
+    tier: meta
+    finding_refs: []
+    mission: >
+      Top-level LangGraph conductor. Reads agents.yaml, schedules
+      agents, tracks status, handles failures. Single source of truth.
+    inputs: [config/agents.yaml]
+    outputs: ["state/run_{run_id}.json"]
+    depends_on: []
+    tools: [all]
+    model: claude-opus-4-7
+    autonomy: auto
+    risk: low
+
+  - id: M92
+    name: dependency-resolver
+    tier: meta
+    finding_refs: []
+    mission: >
+      Topological sort of agents by depends_on. Detects cycles. Emits
+      an ordered execution plan with parallelism groups.
+    inputs: [config/agents.yaml]
+    outputs: [state/execution_plan.json]
+    depends_on: []
+    tools: [read, write]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: M93
+    name: conflict-detector
+    tier: meta
+    finding_refs: []
+    mission: >
+      Before applying patches, compute the set of files each agent
+      touches. Flag two agents that write to the same file; schedule
+      them sequentially instead of in parallel.
+    inputs: [fixes/patches/]
+    outputs: [state/conflict_report.json]
+    depends_on: []
+    tools: [read]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: medium
+
+  - id: M94
+    name: patch-merger
+    tier: meta
+    finding_refs: []
+    mission: >
+      Merges non-conflicting patches into a coherent branch. Uses
+      git-merge-octopus; on conflict, defers to M99 human approver.
+    inputs: [fixes/patches/]
+    outputs: [state/merged_branch.txt]
+    depends_on: [M93]
+    tools: [git]
+    model: claude-sonnet-4-5
+    autonomy: review_required
+    risk: medium
+
+  - id: M95
+    name: test-runner
+    tier: meta
+    finding_refs: []
+    mission: >
+      Runs pytest + vitest against the merged branch. Agents whose
+      patches cause new test failures are rolled back.
+    inputs: [state/merged_branch.txt]
+    outputs: [state/test_report.xml]
+    depends_on: [M94]
+    tools: [test]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low
+
+  - id: M96
+    name: ci-gate
+    tier: meta
+    finding_refs: []
+    mission: >
+      Enforces: contract tests pass, coverage does not drop, no
+      security-critical files changed without M99 approval. Blocks PR
+      otherwise.
+    inputs: [state/test_report.xml]
+    outputs: [state/ci_gate_result.json]
+    depends_on: [M95]
+    tools: [read]
+    model: claude-opus-4-7
+    autonomy: auto
+    risk: low
+
+  - id: M97
+    name: pr-creator
+    tier: meta
+    finding_refs: []
+    mission: >
+      Creates a GitHub PR per agent group, with finding refs in the
+      description and agent attribution in commit trailers.
+    inputs: [state/ci_gate_result.json]
+    outputs: [state/pr_urls.json]
+    depends_on: [M96]
+    tools: [git, github]
+    model: claude-sonnet-4-5
+    autonomy: review_required
+    risk: low
+
+  - id: M98
+    name: rollback-manager
+    tier: meta
+    finding_refs: []
+    mission: >
+      For every applied patch, stores a revert patch and a health
+      check. If post-deploy metrics go red, triggers rollback.
+    inputs: [state/pr_urls.json]
+    outputs: [state/rollback_plans.json]
+    depends_on: [M97]
+    tools: [git, deploy]
+    model: claude-opus-4-7
+    autonomy: auto
+    risk: medium
+
+  - id: M99
+    name: human-approver
+    tier: meta
+    finding_refs: []
+    mission: >
+      Any agent marked autonomy=human_approval or risk=high pauses
+      here with a summary + diff + risk assessment. Tim approves or
+      rejects; decision logged.
+    inputs: [state/]
+    outputs: [state/approvals.jsonl]
+    depends_on: []
+    tools: [notify]
+    model: claude-opus-4-7
+    autonomy: auto
+    risk: low
+
+  - id: M100
+    name: observer
+    tier: meta
+    finding_refs: []
+    mission: >
+      Central telemetry. Every agent emits structured logs here;
+      surfaces the dashboard, exports to DataDog, retains run history.
+    inputs: [state/, fixes/]
+    outputs: [state/telemetry.jsonl]
+    depends_on: []
+    tools: [read, write, datadog]
+    model: claude-sonnet-4-5
+    autonomy: auto
+    risk: low

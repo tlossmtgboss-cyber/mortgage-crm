@@ -241,7 +241,7 @@ export default function MobileLeadCard({
           </button>
           <button
             className="mlc__action-btn mlc__action-btn--email"
-            onClick={(e) => { e.stopPropagation(); if (onEmail) onEmail(lead); else if (email) window.location.href = `mailto:${email}`; }}
+            onClick={(e) => { e.stopPropagation(); if (onEmail) onEmail(lead); else if (email) window.location.href = `mailto:${encodeURIComponent(email)}`; }}
             aria-label="Email"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

@@ -169,7 +169,9 @@ def _encode_attachment(att: EmailAttachment) -> bytes:
 
 def _make_unsubscribe_token(email: str, secret: str = "") -> str:
     """Deterministic HMAC-SHA256 token for an unsubscribe link."""
-    key = (secret or os.getenv("SECRET_KEY", "perennia-email-unsub")).encode()
+    key = (secret or os.getenv("SECRET_KEY", "")).encode()
+    if not key:
+        logger.warning("SECRET_KEY not set — unsubscribe token generation will be weak")
     return hmac.new(key, email.encode(), hashlib.sha256).hexdigest()[:32]
 
 

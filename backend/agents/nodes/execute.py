@@ -51,9 +51,10 @@ ACTION_RISK_LEVELS = {
     "send_sms": "high",               # Outbound comms require confirmation
     "send_text": "high",              # Alias for send_sms — same policy
     "make_phone_call": "high",        # Outbound calls require confirmation
-    "make_call": "medium",            # Alias for click_to_dial
-    "click_to_dial": "medium",        # User explicitly requested call
-    "call_contact": "medium",         # Alias
+    "make_call": "high",              # Outbound calls require confirmation
+    "click_to_dial": "high",          # Outbound calls require confirmation
+    "call_contact": "high",           # Outbound calls require confirmation
+    "bulk_lead_outreach": "high",     # Mass messaging requires confirmation
     "create_lead": "high",
     "update_loan_status": "high",
 

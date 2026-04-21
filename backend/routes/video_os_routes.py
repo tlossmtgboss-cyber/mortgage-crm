@@ -8,7 +8,7 @@ import logging
 from typing import Optional, Callable, List
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status, BackgroundTasks, Header
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.orm import Session
 
@@ -1309,7 +1309,7 @@ def _generate_watch_page_html(video: dict) -> str:
 
 @router.get("/admin/run-migration")
 async def run_video_os_migration(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
 ):
     """Run the Video OS migration (admin only)."""
     expected_key = os.getenv("ADMIN_API_KEY", "")

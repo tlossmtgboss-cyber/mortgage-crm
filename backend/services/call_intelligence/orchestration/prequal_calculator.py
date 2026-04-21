@@ -235,6 +235,11 @@ class PreQualificationCalculator:
         """
         Calculate pre-qualification from extracted call data.
 
+        ECOA compliance: This method strips all protected class fields
+        (marital_status, race, ethnicity, sex, etc.) from extracted_data
+        before processing.  Only financial and credit data are used for
+        qualification decisions.
+
         Args:
             extracted_data: Data extracted from call (identity, financial, etc.)
             target_purchase_price: Specific purchase price to qualify for
@@ -243,9 +248,13 @@ class PreQualificationCalculator:
         Returns:
             PreQualificationResult with qualification details
         """
+        # ECOA compliance: exclude protected class data from decisioning
+        from services.compliance.ecoa_protected_fields import strip_protected_fields_nested
+        extracted_data = strip_protected_fields_nested(extracted_data)
+
         result = PreQualificationResult(status=QualificationStatus.INSUFFICIENT_DATA)
 
-        # Extract and normalize data
+        # Extract and normalize data — only financial/credit fields
         income = self._extract_income(extracted_data)
         debts = self._extract_debts(extracted_data)
         assets = self._extract_assets(extracted_data)

@@ -195,24 +195,24 @@ def _try_get_current_user(request: Request, get_current_user, get_db):
 
     Returns (user, db_session) on success, (None, db_session) if auth fails.
     This allows the GET endpoint to work both with and without auth.
+
+    Uses centralized auth.tokens.verify_access_token() for proper RS256/HS256
+    handling and token blacklist checks.
     """
     db = next(get_db())
     try:
-        # Try to resolve the user via the standard auth dependency
-        import jwt as jose_jwt
-        from jwt.exceptions import InvalidTokenError
-        import os
-
         auth_header = request.headers.get("authorization", "")
         if not auth_header.startswith("Bearer "):
             return None, db
 
         token = auth_header.split(" ", 1)[1]
-        SECRET_KEY = os.getenv("SECRET_KEY", "")
-        ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
         try:
-            payload = jose_jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
+            from auth.tokens import verify_access_token
+            payload = verify_access_token(token)
         except Exception:
+            return None, db
+
+        if not payload:
             return None, db
 
         user_id = payload.get("sub") or payload.get("user_id")

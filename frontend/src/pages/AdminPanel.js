@@ -2119,14 +2119,6 @@ const AdminPanel = () => {
                       </div>
                       <button className="btn-sm btn-outline">Add</button>
                     </div>
-                    {/* DEPRECATED: Premium feature deregistered — not yet launched */}
-                    {/* <div className="addon-item">
-                      <div className="addon-info">
-                        <span className="addon-name">Advanced Recruiting</span>
-                        <span className="addon-price">$149/mo</span>
-                      </div>
-                      <button className="btn-sm btn-outline">Add</button>
-                    </div> */}
                     <div className="addon-item">
                       <div className="addon-info">
                         <span className="addon-name">Conversation Intelligence</span>

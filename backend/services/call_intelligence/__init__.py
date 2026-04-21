@@ -37,7 +37,9 @@ from .agents import (
     FinancialExtractionAgent,
     ComplianceExtractionAgent,
     IntentExtractionAgent,
+    URLAExtractionAgent,
 )
+from .structured_diff import StructuredDiffComparator, DiffReport
 from .data_contracts import (
     TranscriptSegment,
     ExtractionResult,

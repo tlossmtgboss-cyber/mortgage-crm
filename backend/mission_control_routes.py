@@ -14,15 +14,8 @@ from pydantic import BaseModel
 from routes.auth_deps import require_auth
 
 logger = logging.getLogger(__name__)
-# Lazy import for get_db to avoid circular dependency with main.py
-def get_db():
-    """Wrapper for get_db to avoid circular import with main.py."""
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Use canonical RLS-aware get_db from db.py
+from db import get_db
 
 router = APIRouter(prefix="/api/mission-control", tags=["Mission Control"], dependencies=[Depends(require_auth)])
 

@@ -5,13 +5,21 @@ Run MUM client fields migration on production via API
 
 import requests
 import sys
+import os
 
 API_BASE = "https://app.perenniaai.com"
 
-# Try multiple credentials
+# SECURITY: Password must be provided via environment variable
+MIGRATION_USERNAME = os.environ.get("MIGRATION_USERNAME", "")
+MIGRATION_PASSWORD = os.environ.get("MIGRATION_PASSWORD", "")
+
+if not MIGRATION_USERNAME or not MIGRATION_PASSWORD:
+    print("❌ Error: Set MIGRATION_USERNAME and MIGRATION_PASSWORD environment variables")
+    print("Usage: MIGRATION_USERNAME='user@example.com' MIGRATION_PASSWORD='...' python run_production_migration.py")
+    sys.exit(1)
+
 credentials = [
-    {"username": "tloss@cmgfi.com", "password": "Up2024!"},
-    {"username": "admin@perenniaai.com", "password": "demo123"},
+    {"username": MIGRATION_USERNAME, "password": MIGRATION_PASSWORD},
 ]
 
 print("🔑 Attempting to authenticate...")

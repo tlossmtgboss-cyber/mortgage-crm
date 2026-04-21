@@ -19,6 +19,7 @@ from utils.response import success_response, error_response, ErrorCodes
 import asyncio
 import logging
 import os
+import secrets
 import sys
 import time
 
@@ -1021,89 +1022,6 @@ def register_health_routes(app, get_db, **kwargs):
 
 
     # ========================================================================
-    # Debug routers (lines ~15709-15728 in inline_legacy_routes.py)
-    # ========================================================================
-
-    @app.get("/debug/routers")
-    async def debug_routers():
-        """Debug endpoint to check loaded routers"""
-        routes = []
-        for route in app.routes:
-            if hasattr(route, 'path'):
-                routes.append(route.path)
-        scheduler_routes = [r for r in routes if 'scheduler' in r.lower()]
-
-        # Check specifically for the public available-slots endpoint
-        public_slots_exists = '/api/v1/scheduler/public/available-slots' in routes
-
-        return {
-            "total_routes": len(routes),
-            "scheduler_routes_count": len(scheduler_routes),
-            "scheduler_routes_sample": scheduler_routes[:30] if scheduler_routes else [],
-            "smart_scheduler_loaded": any('/api/v1/scheduler/' in r for r in routes),
-            "public_slots_endpoint_exists": public_slots_exists,
-            "public_slots_path": "/api/v1/scheduler/public/available-slots"
-        }
-
-    # ========================================================================
-    # Debug scheduler status (lines ~15731-15783 in inline_legacy_routes.py)
-    # ========================================================================
-
-    @app.get("/debug/scheduler-status")
-    async def debug_scheduler_status():
-        """Detailed diagnostic for Smart Scheduler routes"""
-        status = {
-            "smart_scheduler_routes_module": False,
-            "smart_scheduler_models_module": False,
-            "notification_service": False,
-            "microsoft_graph": False,
-            "public_slots_route": False,
-            "errors": []
-        }
-
-        # Try importing each dependency
-        try:
-            from smart_scheduler_models import create_smart_scheduler_models
-            status["smart_scheduler_models_module"] = True
-        except Exception as e:
-            status["errors"].append("smart_scheduler_models: import failed")
-
-        try:
-            from services.notification_service import notification_service
-            status["notification_service"] = True
-        except Exception as e:
-            status["errors"].append("notification_service: import failed")
-
-        try:
-            from services.microsoft_graph import create_event_via_graph, CalendarResult
-            status["microsoft_graph"] = True
-        except Exception as e:
-            status["errors"].append("microsoft_graph: import failed")
-
-        try:
-            from smart_scheduler_routes import router as smart_scheduler_router
-            status["smart_scheduler_routes_module"] = True
-            status["router_routes_count"] = len(smart_scheduler_router.routes)
-
-            # Check for specific endpoint
-            for route in smart_scheduler_router.routes:
-                if hasattr(route, 'path') and route.path == '/public/available-slots':
-                    status["public_slots_route"] = True
-                    break
-        except Exception as e:
-            status["errors"].append("smart_scheduler_routes: import failed")
-
-        # Check if route is registered in app
-        for route in app.routes:
-            if hasattr(route, 'path') and route.path == '/api/v1/scheduler/public/available-slots':
-                status["route_registered_in_app"] = True
-                break
-        else:
-            status["route_registered_in_app"] = False
-
-        return status
-
-    # ========================================================================
     # Health detailed (lines ~16886-16894 in inline_legacy_routes.py)
     # ========================================================================
 
@@ -1125,7 +1043,7 @@ def register_health_routes(app, get_db, **kwargs):
         # Check admin API key first (simpler, bypasses CSRF)
         api_key_header = request.headers.get("X-API-Key", "")
         admin_key = os.getenv("ADMIN_API_KEY", "")
-        if admin_key and api_key_header == admin_key:
+        if admin_key and api_key_header and secrets.compare_digest(api_key_header, admin_key):
             authenticated = True
 
         # Check Bearer token
@@ -1507,7 +1425,7 @@ def register_health_routes(app, get_db, **kwargs):
         # Check admin API key first (simpler, bypasses CSRF)
         api_key_header = request.headers.get("X-API-Key", "")
         admin_key = os.getenv("ADMIN_API_KEY", "")
-        if admin_key and api_key_header == admin_key:
+        if admin_key and api_key_header and secrets.compare_digest(api_key_header, admin_key):
             authenticated = True
 
         # Check Bearer token

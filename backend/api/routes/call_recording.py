@@ -377,7 +377,7 @@ def create_followup_task(
 # SIGNED PLAYBACK URLS (CR-005)
 # ============================================================================
 
-_PLAYBACK_SECRET = os.getenv("SECRET_KEY", "fallback-dev-secret-key")
+_PLAYBACK_SECRET = os.getenv("SECRET_KEY", "")
 _PLAYBACK_TOKEN_TTL = 3600  # 1 hour
 
 

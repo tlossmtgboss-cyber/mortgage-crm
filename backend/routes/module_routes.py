@@ -4,7 +4,7 @@ Module Subscription Routes
 API endpoints for managing subscription modules.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Header
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -392,7 +392,7 @@ async def get_public_modules(db: Session = Depends(get_db)):
 # Admin endpoint for running migration (no auth, uses admin key)
 @router.post("/admin/run-migration")
 async def run_module_migration(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
 ):
     """
     Run the subscription modules migration.
@@ -426,7 +426,7 @@ async def run_module_migration(
 
 @router.get("/admin/check-users")
 async def check_users_debug(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     org_id: int = Query(1, description="Organization ID"),
 ):
     """Debug endpoint to check users and their organization associations."""
@@ -473,7 +473,7 @@ async def check_users_debug(
 
 @router.get("/admin/debug")
 async def debug_modules(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     enable_all: bool = Query(False, description="Enable all modules for org 1"),
     org_id: int = Query(1, description="Organization ID"),
     set_admin_user: int = Query(None, description="User ID to set as admin"),
@@ -608,7 +608,7 @@ async def debug_modules(
 @router.post("/admin/enable-all")
 async def enable_all_modules(
     organization_id: int = Query(None, description="Organization ID (defaults to 1)"),
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
 ):
     """
     Enable all premium modules for an organization.
@@ -674,7 +674,7 @@ async def enable_all_modules(
 
 @router.get("/admin/check-integrations")
 async def check_integrations_config(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
 ):
     """Check if integration credentials are configured."""
     if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
@@ -717,7 +717,7 @@ async def check_integrations_config(
 
 @router.post("/admin/clear-demo-data")
 async def clear_demo_data(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     confirm: bool = Query(False, description="Must be true to confirm deletion"),
 ):
     """

@@ -21,7 +21,7 @@
 ```
 GUIDELINES_URL=https://my.mortgageguidelines.com/
 GUIDELINES_USERNAME=tloss@cmghomeloans.com
-GUIDELINES_PASSWORD=Woodwindow00!
+GUIDELINES_PASSWORD=<set-via-env-var>
 ```
 
 5. Click **Deploy** to restart the backend with new variables

@@ -264,16 +264,15 @@ async def verify_mfa_login(
     import main
     User = main.User
 
-    # Validate the MFA-scoped provisional token
+    # Validate the MFA-scoped provisional token using centralized auth
     try:
-        import jwt as jose_jwt
-        from jwt.exceptions import InvalidTokenError as JoseJWTError
-        payload = jose_jwt.decode(
-            request.access_token,
-            main.SECRET_KEY,
-            algorithms=[main.ALGORITHM],
-            options={"verify_aud": False},
-        )
+        from auth.tokens import decode_token
+        payload = decode_token(request.access_token)
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired MFA session token",
+            )
         token_scope = payload.get("scope", "")
         token_email = payload.get("sub", "")
         if token_scope != "mfa_verify" or token_email != request.email:
@@ -281,7 +280,9 @@ async def verify_mfa_login(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid or expired MFA session token",
             )
-    except JoseJWTError:
+    except HTTPException:
+        raise
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired MFA session token",

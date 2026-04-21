@@ -740,23 +740,35 @@ async def get_calendar_context_for_ai(
         {"user_id": current_user.id, "days_interval": days_ahead}
     ).fetchall()
 
+    # Batch-fetch all referenced leads and loans to avoid N+1 queries
+    event_lead_ids = {e[7] for e in events if e[7]}
+    event_loan_ids = {e[8] for e in events if e[8]}
+    event_leads_map = {}
+    event_loans_map = {}
+
+    if event_lead_ids:
+        lead_q = db.query(Lead).filter(Lead.id.in_(event_lead_ids))
+        if org_id:
+            lead_q = lead_q.filter(Lead.organization_id == org_id)
+        event_leads_map = {l.id: l for l in lead_q.all()}
+
+    if event_loan_ids:
+        loan_q = db.query(Loan).filter(Loan.id.in_(event_loan_ids))
+        if org_id:
+            loan_q = loan_q.filter(Loan.organization_id == org_id)
+        event_loans_map = {l.id: l for l in loan_q.all()}
+
     formatted_events = []
     for e in events:
-        # Get related lead/loan names (tenant-scoped)
+        # Get related lead/loan names from pre-fetched maps
         lead_name = None
         loan_info = None
         if e[7]:  # lead_id
-            lead_query = db.query(Lead).filter(Lead.id == e[7])
-            if org_id:
-                lead_query = lead_query.filter(Lead.organization_id == org_id)
-            lead = lead_query.first()
+            lead = event_leads_map.get(e[7])
             if lead:
                 lead_name = lead.name
         if e[8]:  # loan_id
-            loan_query = db.query(Loan).filter(Loan.id == e[8])
-            if org_id:
-                loan_query = loan_query.filter(Loan.organization_id == org_id)
-            loan = loan_query.first()
+            loan = event_loans_map.get(e[8])
             if loan:
                 loan_info = f"{loan.loan_number} - {loan.borrower_name}"
 

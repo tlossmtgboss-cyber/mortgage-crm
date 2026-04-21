@@ -30,6 +30,14 @@ def _get_railway_public_domain() -> Optional[str]:
     return os.getenv("RAILWAY_PUBLIC_DOMAIN")
 
 
+def _get_extra_railway_domains() -> Set[str]:
+    """Parse RAILWAY_CORS_DOMAINS env var (comma-separated hostnames) into a set."""
+    raw = os.getenv("RAILWAY_CORS_DOMAINS", "").strip()
+    if not raw:
+        return set()
+    return {d.strip().lower() for d in raw.split(",") if d.strip()}
+
+
 class DynamicCORSMiddleware(BaseHTTPMiddleware):
     """
     CORS middleware with dynamic origin checking.
@@ -106,6 +114,7 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         self.allow_credentials = allow_credentials
         self.is_production = _is_production()
         self._railway_domain = _get_railway_public_domain()
+        self._extra_railway_domains = _get_extra_railway_domains()
 
         # SECURITY: Reject wildcard values — force explicit allowlists
         if allow_methods == ["*"]:
@@ -136,6 +145,8 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
             self._static_origins.update(self._DEV_ORIGINS)
         if self._railway_domain:
             self._static_origins.add(f"https://{self._railway_domain}")
+        for domain in self._extra_railway_domains:
+            self._static_origins.add(f"https://{domain}")
 
         logger.info(
             "CORS middleware initialized: production=%s, static_origins=%d, max_age=%d",
@@ -191,13 +202,11 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         if hostname.endswith(".railway.app"):
             if self._railway_domain and hostname == self._railway_domain:
                 return True
-            if not self.is_production:
-                # In development, allow any railway.app subdomain for convenience
+            if hostname in self._extra_railway_domains:
                 return True
             logger.warning(
-                "Rejected railway.app origin %s (not this deployment's domain %s)",
+                "Rejected railway.app origin %s (not in allowed domains)",
                 origin,
-                self._railway_domain,
             )
             return False
 

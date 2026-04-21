@@ -4,6 +4,7 @@ import { Capacitor } from '@capacitor/core';
 import { isAuthenticatedSync as isAuthenticated } from '../utils/auth';
 import { getUserEffectiveRole, getDefaultRouteForRole } from '../config/roleConfig';
 import MainLayout from '../layouts/MainLayout';
+import RouteErrorBoundary from '../components/RouteErrorBoundary';
 import MobileErrorBoundary from '../components/mobile/MobileErrorBoundary';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
@@ -71,12 +72,14 @@ function lazyRetry(importFn) {
   );
 }
 
-// Wrapper to handle lazy-loaded pages with suspense
-function LazyPage({ children }) {
+// Wrapper to handle lazy-loaded pages with suspense and route-level error isolation
+function LazyPage({ children, fallback }) {
   return (
-    <Suspense fallback={<PageLoader />}>
-      {children}
-    </Suspense>
+    <RouteErrorBoundary fallback={fallback}>
+      <Suspense fallback={<PageLoader />}>
+        {children}
+      </Suspense>
+    </RouteErrorBoundary>
   );
 }
 
@@ -209,7 +212,6 @@ const PartnerROIDashboard = lazyRetry(() => import('../pages/PartnerROIDashboard
 const ProfitabilityDashboard = lazyRetry(() => import('../pages/ProfitabilityDashboard'));
 const UsageIntelligenceDashboard = lazyRetry(() => import('../pages/UsageIntelligenceDashboard'));
 const ScenarioModeling = lazyRetry(() => import('../pages/ScenarioModeling'));
-// const DecisionLab = lazyRetry(() => import('../pages/DecisionLab')); // DEPRECATED: Experimental feature deregistered
 const MortgageCalculator = lazyRetry(() => import('../pages/MortgageCalculator'));
 const AllInOneLoan = lazyRetry(() => import('../pages/AllInOneLoan'));
 const PipelineProbability = lazyRetry(() => import('../pages/PipelineProbability'));
@@ -238,8 +240,6 @@ const SmartDocsCadence = lazyRetry(() => import('../pages/SmartDocsCadence'));
 const EnterpriseDocumentationPortal = lazyRetry(() => import('../pages/EnterpriseDocumentationPortal'));
 const AppCompletionScoring = lazyRetry(() => import('../pages/AppCompletionScoring'));
 const AIDailyBlog = lazyRetry(() => import('../pages/AIDailyBlog'));
-// DEPRECATED: Experimental feature deregistered
-// const AvatarStudio = lazyRetry(() => import('../pages/AvatarStudio'));
 const PublicBooking = lazyRetry(() => import('../pages/PublicBooking'));
 const EmbedBooking = lazyRetry(() => import('../pages/EmbedBooking'));
 const ApplicationAnalytics = lazyRetry(() => import('../pages/ApplicationAnalytics'));
@@ -284,11 +284,6 @@ const CarouselBuilder = lazyRetry(() => import('../pages/CarouselBuilder/Carouse
 
 // Master Manager pages
 const MasterManagerCapacity = lazyRetry(() => import('../pages/MasterManager/CapacityCommandCenter'));
-// DEPRECATED: Premium feature deregistered — not yet launched
-// const MasterManagerRecruiting = lazyRetry(() => import('../pages/MasterManager/RecruitingDashboard'));
-// const RecruitDetail = lazyRetry(() => import('../pages/MasterManager/RecruitDetail'));
-// const PartnerRecruitingDashboard = lazyRetry(() => import('../pages/PartnerRecruiting/PartnerRecruitingDashboard'));
-// const PartnerRecruitDetail = lazyRetry(() => import('../pages/PartnerRecruiting/PartnerRecruitDetail'));
 const AgentGym = lazyRetry(() => import('../pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('../pages/AgentGovernanceSettings'));
 
@@ -318,9 +313,6 @@ const IntakeEngine = lazyRetry(() => import('../components/intake/IntakeEngine')
 const ListingPortalTransactions = lazyRetry(() => import('../pages/ListingPortalTransactions'));
 const ListingPortalTransactionDetail = lazyRetry(() => import('../pages/ListingPortalTransactionDetail'));
 const ListingAgentPortal = lazyRetry(() => import('../pages/ListingAgentPortal'));
-// DEPRECATED: Premium feature deregistered — not yet launched
-// const RecruitPortal = lazyRetry(() => import('../pages/RecruitPortal/RecruitPortal'));
-// const DISCAssessment = lazyRetry(() => import('../pages/DISCAssessment'));
 const PrivacyPolicy = lazyRetry(() => import('../pages/PrivacyPolicy'));
 const TermsOfService = lazyRetry(() => import('../pages/TermsOfService'));
 const LiveCallWhisper = lazyRetry(() => import('../pages/LiveCallWhisper'));
@@ -438,7 +430,6 @@ export function getRoutes(layoutProps) {
     <Route key="/apply/preview" path="/apply/preview" element={<LazyPage><ApplicationPreview /></LazyPage>} />,
     <Route key="/mortgage-planner" path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />,
     <Route key="/questionnaire" path="/questionnaire" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />,
-    // <Route key="/decision-lab" path="/decision-lab" element={<LazyPage><DecisionLab /></LazyPage>} />, // DEPRECATED: Experimental feature deregistered
     <Route key="/mortgage-calculator" path="/mortgage-calculator" element={<LazyPage><MortgageCalculator /></LazyPage>} />,
     <Route key="/estimate-comparison" path="/estimate-comparison" element={<LazyPage><EstimateComparison /></LazyPage>} />,
     <Route key="/aria" path="/aria" element={<LazyPage><AriaVoiceApp /></LazyPage>} />,
@@ -449,11 +440,6 @@ export function getRoutes(layoutProps) {
     // Public portals
     <Route key="/realtor-portal" path="/realtor-portal" element={<LazyPage><RealtorPortal /></LazyPage>} />,
     <Route key="/listing-agent-portal" path="/listing-agent-portal" element={<LazyPage><ListingAgentPortal /></LazyPage>} />,
-    {/* DEPRECATED: Premium feature deregistered — not yet launched */}
-    {/* <Route key="/recruit-portal/:slug" path="/recruit-portal/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} />, */}
-    {/* <Route key="/join/:slug" path="/join/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} />, */}
-    {/* <Route key="/disc-assessment/:token" path="/disc-assessment/:token" element={<LazyPage><DISCAssessment /></LazyPage>} />, */}
-    {/* <Route key="/assessment/disc" path="/assessment/disc" element={<LazyPage><DISCAssessment /></LazyPage>} />, */}
     <Route key="/invite/accept/:token" path="/invite/accept/:token" element={<LazyPage><AcceptInvite /></LazyPage>} />,
     <Route key="/accept-invite" path="/accept-invite" element={<LazyPage><AcceptInvite /></LazyPage>} />,
     <Route key="/activate" path="/activate" element={<LazyPage><ActivateAccount /></LazyPage>} />,
@@ -621,11 +607,6 @@ export function getRoutes(layoutProps) {
 
     // Master Manager
     <Route key="/master-manager" path="/master-manager" element={withMainLayout(MasterManagerCapacity)} />,
-    {/* DEPRECATED: Premium feature deregistered — not yet launched */}
-    {/* <Route key="/master-manager/recruiting" path="/master-manager/recruiting" element={withMainLayout(MasterManagerRecruiting)} />, */}
-    {/* <Route key="/master-manager/recruiting/:candidateId" path="/master-manager/recruiting/:candidateId" element={withMainLayout(RecruitDetail)} />, */}
-    {/* <Route key="/partner-recruiting" path="/partner-recruiting" element={withMainLayout(PartnerRecruitingDashboard)} />, */}
-    {/* <Route key="/partner-recruiting/:partnerId" path="/partner-recruiting/:partnerId" element={withMainLayout(PartnerRecruitDetail)} />, */}
 
     // Settings
     <Route key="/settings" path="/settings" element={withMainLayout(Settings)} />,
@@ -664,8 +645,6 @@ export function getRoutes(layoutProps) {
     <Route key="/communication-intelligence" path="/communication-intelligence" element={withMainLayout(CommunicationIntelligence)} />,
     <Route key="/email-intelligence" path="/email-intelligence" element={withMainLayout(CommunicationIntelligence)} />,
     <Route key="/ai-outreach" path="/ai-outreach" element={withMainLayout(AIOutreach)} />,
-    // DEPRECATED: Experimental feature deregistered
-    // <Route key="/avatar-studio" path="/avatar-studio" element={withMainLayout(AvatarStudio)} />,
     <Route key="/conversation-intelligence" path="/conversation-intelligence" element={withMainLayout(ConversationIntelligence)} />,
     <Route key="/call-intelligence" path="/call-intelligence" element={withMainLayout(CallIntelligencePage)} />,
     <Route key="/mobile/call-intelligence" path="/mobile/call-intelligence" element={<MobileErrorBoundary>{privateOnly(MobileCallIntelligencePage)}</MobileErrorBoundary>} />,

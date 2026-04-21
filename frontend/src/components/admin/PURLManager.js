@@ -946,17 +946,18 @@ function WorkspaceTokens({ tokens, onCreate, onRevoke }) {
 }
 
 function WorkspaceActivity({ activity }) {
+  // Use Unicode characters directly instead of dangerouslySetInnerHTML with HTML entities
   const getEventIcon = (type) => {
     const icons = {
-      workspace_created: '&#128194;',
-      token_created: '&#128273;',
-      application_started: '&#128221;',
-      application_submitted: '&#9989;',
-      document_uploaded: '&#128196;',
-      task_completed: '&#9745;',
-      message_sent: '&#128172;',
+      workspace_created: '\uD83D\uDCC2',
+      token_created: '\uD83D\uDD11',
+      application_started: '\uD83D\uDCDD',
+      application_submitted: '\u2705',
+      document_uploaded: '\uD83D\uDCC4',
+      task_completed: '\u2611',
+      message_sent: '\uD83D\uDCAC',
     };
-    return icons[type] || '&#128900;';
+    return icons[type] || '\uD83D\uDD24';
   };
 
   return (
@@ -967,10 +968,9 @@ function WorkspaceActivity({ activity }) {
         <div className="activity-timeline">
           {activity.map((event, index) => (
             <div key={index} className="activity-item">
-              <span
-                className="activity-icon"
-                dangerouslySetInnerHTML={{ __html: getEventIcon(event.event_type) }}
-              />
+              <span className="activity-icon">
+                {getEventIcon(event.event_type)}
+              </span>
               <div className="activity-details">
                 <span className="activity-type">{event.event_type?.replace(/_/g, ' ')}</span>
                 <span className="activity-time">

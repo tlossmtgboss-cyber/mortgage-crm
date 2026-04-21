@@ -9,7 +9,7 @@ import logging
 from typing import List, Optional
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Header
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -542,7 +542,7 @@ async def test_loan_query(
 
 @router.get("/admin/run-migration")
 async def run_deal_alerts_migration(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     db: Session = Depends(get_db),
 ):
     """

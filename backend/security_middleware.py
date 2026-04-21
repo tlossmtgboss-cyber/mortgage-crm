@@ -242,9 +242,15 @@ def is_websocket_request(request: Request) -> bool:
 
 def is_mobile_app_request(request: Request) -> bool:
     """
-    Check if the request is from a mobile app (Capacitor iOS/Android).
+    Check if the request claims to be from a mobile app (Capacitor iOS/Android).
     Mobile apps send the X-Mobile-App header to identify themselves.
-    This allows them to bypass IP-based blocking since mobile IPs change frequently.
+
+    WARNING: This header is trivially spoofable. It MUST NOT be used to bypass
+    security controls (IP access control, IP blocking, etc.). It may be used for
+    non-security purposes such as adjusting rate limits or response formatting.
+
+    For security-sensitive decisions about mobile identity, verify via JWT claims
+    (e.g., a 'platform' claim set during authentication).
     """
     mobile_app_header = request.headers.get("X-Mobile-App", "")
     valid_mobile_apps = ["capacitor-ios", "capacitor-android", "react-native"]
@@ -276,10 +282,9 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
         if is_websocket_request(request):
             return await call_next(request)
 
-        # Always allow mobile app requests (they authenticate via JWT token)
-        if is_mobile_app_request(request):
-            logger.info(f"Access granted for mobile app: {path}")
-            return await call_next(request)
+        # NOTE: Mobile app requests are NOT exempt from IP access controls.
+        # The X-Mobile-App header is trivially spoofable and must not bypass
+        # security checks. Mobile apps authenticate via JWT like any other client.
 
         # Always allow public paths
         if is_public_path(path):
@@ -559,7 +564,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             per_minute_limit = int(per_minute_limit * endpoint_config["multiplier"])
             per_hour_limit = int(per_hour_limit * endpoint_config["multiplier"])
 
-        # Mobile apps get higher limits (carrier NAT shares IPs)
+        # Mobile apps get higher limits (carrier NAT shares IPs).
+        # NOTE: This uses the spoofable X-Mobile-App header, which is acceptable
+        # here because adjusting rate limits upward is NOT a security bypass --
+        # the worst case is an attacker gets 2x rate limits, which is still
+        # well within acceptable bounds. Security controls (IP blocking, access
+        # control) are enforced regardless.
         is_mobile = is_mobile_app_request(request)
         if is_mobile:
             per_minute_limit = int(per_minute_limit * 2)
@@ -684,7 +694,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         return response
 
     def _extract_user_from_token(self, request: Request) -> Tuple[Optional[int], Optional[str]]:
-        """Extract user ID and role from JWT token if present."""
+        """Extract user ID and role from JWT token if present.
+
+        Uses the centralized auth.tokens.verify_access_token() which handles
+        RS256/HS256 algorithm selection and token blacklist checks.
+        """
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             return None, None
@@ -692,12 +706,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         token = auth_header[7:]  # Remove "Bearer " prefix
 
         try:
-            # Import here to avoid circular imports
-            import jwt
-            import os
-
-            secret = os.getenv("SECRET_KEY", "")
-            payload = jwt.decode(token, secret, algorithms=[os.getenv("AUTH_ALGORITHM", "HS256")], options={"verify_aud": False})
+            from auth.tokens import verify_access_token
+            payload = verify_access_token(token)
+            if not payload:
+                return None, None
 
             # Extract user info from token
             user_id = payload.get("user_id") or payload.get("sub")
@@ -853,12 +865,11 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            # TODO: Migrate to nonce-based CSP to remove 'unsafe-inline'
-            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "script-src 'self' https://cdn.jsdelivr.net https://unpkg.com; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https:; "
-            "connect-src 'self' https://api.openai.com https://api.anthropic.com https://graph.microsoft.com; "
+            "connect-src 'self' https://api.perenniaai.com https://api.openai.com https://api.anthropic.com https://graph.microsoft.com; "
             f"{frame_policy}"
         )
 
@@ -881,9 +892,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
         # Permissions policy (formerly Feature-Policy)
+        # microphone=(self) allows voice AI (Aria) within our own origin
         response.headers["Permissions-Policy"] = (
             "geolocation=(), "
-            "microphone=(), "
+            "microphone=(self), "
             "camera=(), "
             "payment=(), "
             "usb=(), "
@@ -920,10 +932,10 @@ class IPBlockingMiddleware(BaseHTTPMiddleware):
             logger.info(f"Bypassing IP blocking checks for WebSocket: {path}")
             return await call_next(request)
 
-        # Skip IP blocking for mobile app requests (they have dynamic IPs)
-        if is_mobile_app_request(request):
-            logger.info(f"Bypassing IP blocking for mobile app: {path}")
-            return await call_next(request)
+        # NOTE: Mobile app requests are NOT exempt from IP blocking.
+        # The X-Mobile-App header is trivially spoofable and must not bypass
+        # security checks. If a mobile IP gets blocked due to suspicious
+        # activity, that block is legitimate and should be enforced.
 
         client_ip = self._get_client_ip(request)
         logger.info(f"IPBlockingMiddleware: client_ip={client_ip}, path={path}")

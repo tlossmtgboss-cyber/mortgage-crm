@@ -284,15 +284,25 @@ def _format_date_hmda(dt: Any) -> str:
     return "NA"
 
 
-def _get_gmi_data(db: Session, loan: Any) -> Dict[str, str]:
+def _get_gmi_data(
+    db: Session,
+    loan: Any,
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+) -> Dict[str, str]:
     """Look up GMI (Government Monitoring Information) demographic data for a loan.
 
     GMI data is stored on BorrowerApplication, linked to the loan via loan_id.
     If no application is found or fields are empty, returns "NA" per HMDA spec.
 
+    All access to HMDA demographic fields (race, ethnicity, sex) is logged
+    to the PII audit infrastructure for ECOA/fair lending compliance.
+
     Args:
         db: SQLAlchemy database session
         loan: Loan ORM object
+        user_id: ID of user accessing the data (for audit logging)
+        organization_id: Organization context (for audit logging)
 
     Returns:
         Dict with HMDA demographic field values
@@ -322,7 +332,7 @@ def _get_gmi_data(db: Session, loan: Any) -> Dict[str, str]:
         if not app:
             return defaults
 
-        return {
+        result = {
             "applicant_ethnicity": _safe_str(getattr(app, "applicant_ethnicity", None)),
             "applicant_ethnicity_2": "NA",  # Secondary ethnicity not tracked separately
             "co_applicant_ethnicity": _safe_str(getattr(app, "co_applicant_ethnicity", None)),
@@ -336,6 +346,37 @@ def _get_gmi_data(db: Session, loan: Any) -> Dict[str, str]:
             "applicant_age": _safe_str(getattr(app, "applicant_age", None)),
             "co_applicant_age": _safe_str(getattr(app, "co_applicant_age", None)),
         }
+
+        # --- HMDA field-level audit logging (Finding SEC-HMDA-001) ---
+        # Log every access to ECOA-protected demographic fields
+        _fields_accessed = [
+            f for f in (
+                "applicant_ethnicity", "applicant_race", "applicant_sex",
+                "co_applicant_ethnicity", "co_applicant_race", "co_applicant_sex",
+            )
+            if result.get(f, "NA") != "NA"
+        ]
+        if _fields_accessed:
+            try:
+                from services.pii_audit_service import pii_audit, PIIField, PIIAccessType
+                pii_audit.log_access(
+                    entity_type="borrower_application",
+                    entity_id=str(app.id),
+                    fields_accessed=[PIIField.HMDA_ETHNICITY, PIIField.HMDA_RACE, PIIField.HMDA_SEX],
+                    access_type=PIIAccessType.READ,
+                    user_id=user_id,
+                    organization_id=str(organization_id) if organization_id else None,
+                    reason="HMDA LAR export — GMI demographic data retrieval",
+                    metadata={
+                        "loan_id": loan.id,
+                        "loan_number": getattr(loan, "loan_number", None),
+                        "fields_with_data": _fields_accessed,
+                    },
+                )
+            except Exception as audit_err:
+                logger.debug(f"HMDA audit log failed for loan {loan.id}: {audit_err}")
+
+        return result
     except Exception as e:
         logger.warning(f"Could not retrieve GMI data for loan {loan.id}: {e}")
         return defaults
@@ -346,6 +387,8 @@ def _build_lar_record(
     lei: str,
     year: int,
     db: Optional[Session] = None,
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
 ) -> str:
     """Build a single HMDA LAR record as a pipe-delimited line.
 
@@ -358,6 +401,8 @@ def _build_lar_record(
         lei: Legal Entity Identifier for the reporting institution
         year: Reporting year
         db: Optional SQLAlchemy session for looking up GMI demographics
+        user_id: ID of user generating the export (for audit logging)
+        organization_id: Organization context (for audit logging)
 
     Returns:
         Pipe-delimited string representing one LAR record
@@ -395,7 +440,7 @@ def _build_lar_record(
     # GMI demographics (Critical Failure 2.9 fix)
     # Look up from BorrowerApplication if db session is available
     if db is not None:
-        gmi = _get_gmi_data(db, loan)
+        gmi = _get_gmi_data(db, loan, user_id=user_id, organization_id=organization_id)
     else:
         gmi = {k: "NA" for k in [
             "applicant_ethnicity", "applicant_ethnicity_2",
@@ -466,6 +511,7 @@ def generate_hmda_lar(
     organization_id: int,
     year: int,
     lei: str = "NA",
+    user_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """Generate HMDA LAR (Loan Application Register) export.
 
@@ -478,6 +524,7 @@ def generate_hmda_lar(
         organization_id: Organization to generate report for
         year: Reporting year (e.g., 2025)
         lei: Legal Entity Identifier for the institution (20-char alphanumeric)
+        user_id: ID of user generating the export (for HMDA audit logging)
 
     Returns:
         Dict containing:
@@ -568,7 +615,10 @@ def generate_hmda_lar(
     lar_lines = []
     for loan in valid_loans:
         try:
-            record = _build_lar_record(loan, lei, year, db=db)
+            record = _build_lar_record(
+                loan, lei, year, db=db,
+                user_id=user_id, organization_id=organization_id,
+            )
             lar_lines.append(record)
         except Exception as e:
             logger.error(f"Failed to build HMDA record for loan {loan.id}: {e}")

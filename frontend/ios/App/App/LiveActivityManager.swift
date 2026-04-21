@@ -130,12 +130,13 @@ final class LiveActivityManager {
 
     static let shared = LiveActivityManager()
     private init() {
+        // Use certificate pinning to protect loan data shown on Lock Screen
         session = {
             let config = URLSessionConfiguration.default
             config.timeoutIntervalForRequest = 15
             config.timeoutIntervalForResource = 30
             config.waitsForConnectivity = false
-            return URLSession(configuration: config)
+            return createPinnedURLSession(configuration: config)
         }()
     }
 

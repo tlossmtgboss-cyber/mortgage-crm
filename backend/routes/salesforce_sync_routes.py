@@ -11,7 +11,7 @@ import re
 from datetime import datetime, timezone
 from typing import Dict, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Query, Response, Header
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
@@ -52,6 +52,16 @@ ALLOWED_LOAN_COLUMNS = {
 
 # Regex for validating column names
 _SAFE_COLUMN_RE = re.compile(r'^[a-z][a-z0-9_]*$')
+
+
+def _sanitize_error(e: Exception, max_len: int = 200) -> str:
+    """Return a safe error summary without leaking internals like SQL or credentials."""
+    msg = str(e)
+    # Strip connection strings, credentials, and SQL from error messages
+    for pattern in ("postgresql://", "postgres://", "password", "secret", "token", "INSERT INTO", "SELECT ", "UPDATE ", "DELETE "):
+        if pattern.lower() in msg.lower():
+            return f"{type(e).__name__}: operation failed"
+    return f"{type(e).__name__}: {msg[:max_len]}" if len(msg) > max_len else f"{type(e).__name__}: {msg}"
 
 
 def _validate_and_filter_loan_data(loan_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -183,7 +193,7 @@ def _parse_outbound_message(xml_body: bytes) -> Dict[str, Any]:
 
     except ValueError as e:
         logger.error(f"Rejected XML with prohibited content: {e}")
-        return {"records": [], "event_type": "outbound_message", "error": str(e)}
+        return {"records": [], "event_type": "outbound_message", "error": _sanitize_error(e)}
     except Exception as e:
         logger.error(f"Failed to parse Outbound Message XML: {e}")
         return {"records": [], "event_type": "outbound_message"}
@@ -296,7 +306,7 @@ async def salesforce_sync_history(
 
 @router.get("/admin/run-migration")
 async def run_salesforce_migration(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     db: Session = Depends(get_db)
 ):
     """
@@ -383,7 +393,7 @@ async def run_salesforce_migration(
 
 @router.get("/admin/pull-recent")
 async def admin_pull_recent_loans(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     limit: int = Query(10, ge=1, le=100, description="Number of loans to pull"),
     db: Session = Depends(get_db)
 ):

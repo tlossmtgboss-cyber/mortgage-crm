@@ -184,22 +184,30 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
                 content={"error": "Access denied", "reason": "Too many violations"}
             )
 
+        # Track rate limit info for headers on successful responses
+        rl_info: Optional[Dict[str, Any]] = None
+
         # --- Per-tenant rate limit check (PERF-004) ---
         org_id = getattr(getattr(request, 'state', None), 'organization_id', None)
         if org_id:
-            tenant_allowed, tenant_retry = await self._check_tenant_rate_limit(
+            tenant_result = await self._check_tenant_rate_limit(
                 org_id, request.url.path
             )
-            if not tenant_allowed:
+            if not tenant_result['allowed']:
                 logger.warning(f"Tenant rate limit exceeded for org_id={org_id}")
                 return JSONResponse(
                     status_code=429,
                     content={
                         "error": "Organization rate limit exceeded",
-                        "retry_after": tenant_retry,
+                        "retry_after": tenant_result['retry_after'],
                         "scope": "tenant"
                     },
-                    headers={"Retry-After": str(tenant_retry)}
+                    headers={
+                        "Retry-After": str(tenant_result['retry_after']),
+                        "X-RateLimit-Limit": str(tenant_result['limit']),
+                        "X-RateLimit-Remaining": "0",
+                        "X-RateLimit-Reset": str(tenant_result['reset']),
+                    }
                 )
 
         # --- Per-client rate limit check ---
@@ -208,28 +216,43 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
 
         if route_category:
             # Check rate limit
-            is_allowed, retry_after = await self._check_rate_limit(
+            rl_result = await self._check_rate_limit(
                 client_id,
                 route_category
             )
 
-            if not is_allowed:
+            if not rl_result['allowed']:
                 logger.warning(f"Rate limit exceeded for {client_id} on {route_category}")
                 return JSONResponse(
                     status_code=429,
                     content={
                         "error": "Rate limit exceeded",
-                        "retry_after": retry_after,
+                        "retry_after": rl_result['retry_after'],
                         "category": route_category
                     },
-                    headers={"Retry-After": str(retry_after)}
+                    headers={
+                        "Retry-After": str(rl_result['retry_after']),
+                        "X-RateLimit-Limit": str(rl_result['limit']),
+                        "X-RateLimit-Remaining": "0",
+                        "X-RateLimit-Reset": str(rl_result['reset']),
+                    }
                 )
+
+            # Save info for adding headers to successful response
+            rl_info = rl_result
 
             # Check for suspicious patterns (async, non-blocking)
             if route_category == 'chat_message':
                 await self._track_activity(client_id, request)
 
         response = await call_next(request)
+
+        # Attach rate limit headers to successful responses
+        if rl_info is not None:
+            response.headers["X-RateLimit-Limit"] = str(rl_info['limit'])
+            response.headers["X-RateLimit-Remaining"] = str(rl_info['remaining'])
+            response.headers["X-RateLimit-Reset"] = str(rl_info['reset'])
+
         return response
 
     def _get_client_identifier(self, request: Request) -> str:
@@ -249,7 +272,7 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
         if api_key:
             # Hash the key for privacy in Redis
             import hashlib
-            key_hash = hashlib.sha256(api_key.encode()).hexdigest()[:16]
+            key_hash = hashlib.sha256(api_key.encode()).hexdigest()
             return f"apikey:{key_hash}"
 
         # Priority 2: Visitor ID from header (set by frontend)
@@ -309,12 +332,22 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
         self,
         org_id: int,
         path: str,
-    ) -> Tuple[bool, int]:
+    ) -> Dict[str, Any]:
         """Check per-tenant (organization-level) rate limit (PERF-004).
 
         This prevents noisy-neighbor problems where one org consumes all API capacity.
         Limits are determined by the org's subscription tier.
+
+        Returns a dict with keys:
+            allowed (bool): Whether the request is permitted.
+            retry_after (int): Seconds until the window resets (meaningful when denied).
+            limit (int): Maximum requests allowed in the window.
+            remaining (int): Requests remaining in the current window.
+            reset (int): Unix timestamp when the current window expires.
         """
+        window = 60  # 1 minute sliding window
+        limit = 0
+        key = ""
         try:
             tier = await self._get_tenant_tier(org_id)
             tier_config = TENANT_TIER_LIMITS.get(tier, TENANT_TIER_LIMITS['default'])
@@ -328,20 +361,41 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
                 limit = tier_config['requests_per_min']
                 key = f"tenant_rl:api:{org_id}"
 
-            window = 60  # 1 minute sliding window
-
             current = self.redis.get(key)
             if current is None:
                 self.redis.setex(key, window, 1)
-                return True, 0
+                reset_at = int(time.time()) + window
+                return {
+                    'allowed': True,
+                    'retry_after': 0,
+                    'limit': limit,
+                    'remaining': limit - 1,
+                    'reset': reset_at,
+                }
 
             current = int(current)
+            ttl = self.redis.ttl(key)
+            if ttl < 0:
+                ttl = window
+            reset_at = int(time.time()) + ttl
+
             if current >= limit:
-                ttl = self.redis.ttl(key)
-                return False, max(ttl, 1)
+                return {
+                    'allowed': False,
+                    'retry_after': max(ttl, 1),
+                    'limit': limit,
+                    'remaining': 0,
+                    'reset': reset_at,
+                }
 
             self.redis.incr(key)
-            return True, 0
+            return {
+                'allowed': True,
+                'retry_after': 0,
+                'limit': limit,
+                'remaining': max(0, limit - current - 1),
+                'reset': reset_at,
+            }
 
         except redis.RedisError as e:
             logger.error(f"Redis error in tenant rate limiter: {e}")
@@ -350,7 +404,14 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
             allowed, remaining = self._memory_limiter.check(
                 key, limit, window
             )
-            return allowed, 0 if allowed else window
+            reset_at = int(time.time()) + window
+            return {
+                'allowed': allowed,
+                'retry_after': 0 if allowed else window,
+                'limit': limit,
+                'remaining': remaining,
+                'reset': reset_at,
+            }
 
     async def _get_tenant_tier(self, org_id: int) -> str:
         """Look up an org's subscription tier from cache or DB.
@@ -387,9 +448,19 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
         self,
         client_id: str,
         category: str
-    ) -> Tuple[bool, int]:
-        """Check if request is within rate limit"""
+    ) -> Dict[str, Any]:
+        """Check if request is within rate limit.
+
+        Returns a dict with keys:
+            allowed (bool): Whether the request is permitted.
+            retry_after (int): Seconds until the window resets (meaningful when denied).
+            limit (int): Maximum requests allowed in the window.
+            remaining (int): Requests remaining in the current window.
+            reset (int): Unix timestamp when the current window expires.
+        """
         limit_config = self.LIMITS.get(category, self.LIMITS['default'])
+        max_requests = limit_config['requests']
+        window = limit_config['window']
         key = f"ratelimit:{category}:{client_id}"
 
         try:
@@ -397,19 +468,42 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
 
             if current is None:
                 # First request in window
-                self.redis.setex(key, limit_config['window'], 1)
-                return True, 0
+                self.redis.setex(key, window, 1)
+                reset_at = int(time.time()) + window
+                return {
+                    'allowed': True,
+                    'retry_after': 0,
+                    'limit': max_requests,
+                    'remaining': max_requests - 1,
+                    'reset': reset_at,
+                }
 
             current = int(current)
+            ttl = self.redis.ttl(key)
+            # ttl can be -1 (no expiry) or -2 (key gone); treat as full window
+            if ttl < 0:
+                ttl = window
+            reset_at = int(time.time()) + ttl
 
-            if current >= limit_config['requests']:
+            if current >= max_requests:
                 # Exceeded limit
-                ttl = self.redis.ttl(key)
-                return False, max(ttl, 1)
+                return {
+                    'allowed': False,
+                    'retry_after': max(ttl, 1),
+                    'limit': max_requests,
+                    'remaining': 0,
+                    'reset': reset_at,
+                }
 
             # Increment counter
             self.redis.incr(key)
-            return True, 0
+            return {
+                'allowed': True,
+                'retry_after': 0,
+                'limit': max_requests,
+                'remaining': max(0, max_requests - current - 1),
+                'reset': reset_at,
+            }
 
         except redis.RedisError as e:
             logger.error(f"Redis error in rate limiter: {e}")
@@ -418,10 +512,17 @@ class AdaptiveRateLimiter(BaseHTTPMiddleware):
             fallback_key = f"ratelimit:{category}:{client_id}"
             allowed, remaining = self._memory_limiter.check(
                 fallback_key,
-                limit_config['requests'],
-                limit_config['window'],
+                max_requests,
+                window,
             )
-            return allowed, 0 if allowed else limit_config['window']
+            reset_at = int(time.time()) + window
+            return {
+                'allowed': allowed,
+                'retry_after': 0 if allowed else window,
+                'limit': max_requests,
+                'remaining': remaining,
+                'reset': reset_at,
+            }
 
     async def _track_activity(self, client_id: str, request: Request):
         """Track activity for suspicious pattern detection"""

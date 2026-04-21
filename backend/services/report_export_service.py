@@ -12,7 +12,6 @@ Provides:
 
 Dependencies (already in requirements.txt):
     - reportlab >= 4.0.0
-    - xhtml2pdf >= 0.2.11
     - openpyxl >= 3.1.0
     - pandas >= 2.0.0
 

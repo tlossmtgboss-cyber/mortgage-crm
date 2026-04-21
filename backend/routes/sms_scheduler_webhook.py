@@ -19,6 +19,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import JSONResponse
+from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
 from middleware.webhook_verification import require_telnyx_webhook
@@ -122,16 +123,35 @@ async def handle_sms_reply(
 
     logger.info(f"SMS reply from {from_number}: '{text[:50]}' (msg_id: {message_id})")
 
+    # --- Tenant isolation: resolve org_id from the receiving phone number ---
+    # Telnyx "to" is a list of dicts: [{"phone_number": "+1..."}]
+    to_list = payload.get("to", [])
+    to_number = ""
+    if isinstance(to_list, list) and to_list:
+        first_to = to_list[0]
+        to_number = first_to.get("phone_number", "") if isinstance(first_to, dict) else str(first_to)
+    elif isinstance(to_list, str):
+        to_number = to_list
+
+    org_id = _resolve_org_from_receiving_number(db, to_number)
+    if org_id:
+        logger.info(f"SMS webhook: resolved org_id={org_id} from receiving number {to_number}")
+    else:
+        logger.warning(
+            f"SMS webhook: could not resolve org_id from receiving number '{to_number}'. "
+            "Appointment lookup will proceed without tenant filter."
+        )
+
     # Normalize keyword
     keyword = text.upper().split()[0] if text.split() else ""
 
     # Route to handler
     if keyword in ("CONFIRM", "YES", "Y"):
-        return await _handle_confirm(db, from_number)
+        return await _handle_confirm(db, from_number, org_id)
     elif keyword in ("CANCEL", "NO", "N"):
-        return await _handle_cancel(db, from_number)
+        return await _handle_cancel(db, from_number, org_id)
     elif keyword == "RESCHEDULE":
-        return await _handle_reschedule(db, from_number)
+        return await _handle_reschedule(db, from_number, org_id)
     elif keyword == "HELP":
         return await _handle_help(from_number)
     elif keyword == "STOP":
@@ -148,7 +168,7 @@ async def handle_sms_reply(
 # ACTION HANDLERS
 # ============================================================================
 
-async def _handle_confirm(db: Session, phone: str) -> JSONResponse:
+async def _handle_confirm(db: Session, phone: str, org_id: Optional[int] = None) -> JSONResponse:
     """Confirm the next upcoming appointment for this phone number."""
     from smart_scheduler_models import AppointmentStatus
 
@@ -159,7 +179,7 @@ async def _handle_confirm(db: Session, phone: str) -> JSONResponse:
         logger.error("Appointment model not available for SMS confirm")
         return JSONResponse(content={"status": "error", "detail": "Service unavailable"})
 
-    appointment = _find_upcoming_appointment(db, Appointment, phone)
+    appointment = _find_upcoming_appointment(db, Appointment, phone, org_id)
     if not appointment:
         await _send_reply(phone, "We couldn't find an upcoming appointment for this number. Please contact us directly.")
         return JSONResponse(content={"status": "not_found"})
@@ -205,7 +225,7 @@ async def _handle_confirm(db: Session, phone: str) -> JSONResponse:
     return JSONResponse(content={"status": "confirmed", "appointment_id": appointment.id})
 
 
-async def _handle_cancel(db: Session, phone: str) -> JSONResponse:
+async def _handle_cancel(db: Session, phone: str, org_id: Optional[int] = None) -> JSONResponse:
     """Cancel the next upcoming appointment for this phone number."""
     from smart_scheduler_models import AppointmentStatus
 
@@ -216,7 +236,7 @@ async def _handle_cancel(db: Session, phone: str) -> JSONResponse:
         logger.error("Appointment model not available for SMS cancel")
         return JSONResponse(content={"status": "error", "detail": "Service unavailable"})
 
-    appointment = _find_upcoming_appointment(db, Appointment, phone)
+    appointment = _find_upcoming_appointment(db, Appointment, phone, org_id)
     if not appointment:
         await _send_reply(phone, "We couldn't find an upcoming appointment for this number. Please contact us directly.")
         return JSONResponse(content={"status": "not_found"})
@@ -260,7 +280,7 @@ async def _handle_cancel(db: Session, phone: str) -> JSONResponse:
     return JSONResponse(content={"status": "cancelled", "appointment_id": appointment.id})
 
 
-async def _handle_reschedule(db: Session, phone: str) -> JSONResponse:
+async def _handle_reschedule(db: Session, phone: str, org_id: Optional[int] = None) -> JSONResponse:
     """Reply with reschedule instructions."""
     from smart_scheduler_models import AppointmentStatus
 
@@ -270,7 +290,7 @@ async def _handle_reschedule(db: Session, phone: str) -> JSONResponse:
         await _send_reply(phone, "Please contact us directly to reschedule your appointment.")
         return JSONResponse(content={"status": "error", "detail": "Service unavailable"})
 
-    appointment = _find_upcoming_appointment(db, Appointment, phone)
+    appointment = _find_upcoming_appointment(db, Appointment, phone, org_id)
     if not appointment:
         await _send_reply(phone, "We couldn't find an upcoming appointment for this number. Please contact us directly.")
         return JSONResponse(content={"status": "not_found"})
@@ -318,12 +338,41 @@ async def _handle_help(phone: str) -> JSONResponse:
 # HELPERS
 # ============================================================================
 
-def _find_upcoming_appointment(db: Session, Appointment, phone: str):
+def _resolve_org_from_receiving_number(db: Session, to_number: str) -> Optional[int]:
+    """Resolve organization_id from the receiving (to) phone number.
+
+    Uses the verified_caller_ids table to map the Telnyx receiving
+    number to an organization. Same pattern as telnyx_webhook_routes.py.
+    """
+    if not to_number:
+        return None
+
+    try:
+        row = db.execute(
+            sa_text("""
+                SELECT organization_id FROM verified_caller_ids
+                WHERE phone_number = :to_phone AND organization_id IS NOT NULL
+                LIMIT 1
+            """),
+            {"to_phone": to_number},
+        ).fetchone()
+        if row:
+            return row[0]
+    except Exception as e:
+        logger.warning(f"Failed to resolve org from receiving number {to_number}: {e}")
+
+    return None
+
+
+def _find_upcoming_appointment(db: Session, Appointment, phone: str, org_id: Optional[int] = None):
     """Find the next upcoming appointment for a phone number.
 
     Matches on attendee_phone, looking for active appointments
     scheduled in the future (within the next 30 days).
     Normalizes the phone number for matching.
+
+    When org_id is provided, restricts the search to that organization
+    for proper tenant isolation.
     """
     from smart_scheduler_models import AppointmentStatus
 
@@ -335,8 +384,7 @@ def _find_upcoming_appointment(db: Session, Appointment, phone: str):
     if len(digits) > 10:
         digits = digits[-10:]
 
-    # Try exact match first, then suffix match
-    appointment = (
+    query = (
         db.query(Appointment)
         .filter(
             Appointment.attendee_phone.isnot(None),
@@ -352,9 +400,13 @@ def _find_upcoming_appointment(db: Session, Appointment, phone: str):
         .filter(
             Appointment.attendee_phone.ilike(f"%{digits}")
         )
-        .order_by(Appointment.scheduled_start.asc())
-        .first()
     )
+
+    # Apply tenant isolation when org_id is known
+    if org_id is not None:
+        query = query.filter(Appointment.organization_id == org_id)
+
+    appointment = query.order_by(Appointment.scheduled_start.asc()).first()
 
     if appointment:
         logger.debug(f"Found upcoming appointment {appointment.id} for phone ending {digits[-4:]}")

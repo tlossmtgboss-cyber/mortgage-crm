@@ -62,19 +62,11 @@ def set_dependencies(db_dependency, user_dependency):
 def get_db():
     """
     Database session dependency.
-    Wraps the main app's get_db to yield a session.
+    Wraps the main app's canonical RLS-aware get_db to yield a session.
     """
     if _deps.db_func is None:
         raise RuntimeError("Dependencies not set - call set_dependencies() first")
-    # Call the main app's get_db generator
-    gen = _deps.db_func()
-    try:
-        yield next(gen)
-    finally:
-        try:
-            next(gen)
-        except StopIteration:
-            pass
+    yield from _deps.db_func()
 
 
 async def get_current_user(

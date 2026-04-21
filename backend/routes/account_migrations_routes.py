@@ -527,7 +527,7 @@ async def cleanup_sample_data(
     """
     # Check for admin key bypass
     expected_key = os.getenv("ADMIN_API_KEY", "")
-    if admin_key and admin_key == expected_key:
+    if admin_key and expected_key and secrets.compare_digest(admin_key, expected_key):
         logger.info("Cleanup authorized via admin API key")
     else:
         try:
@@ -612,7 +612,7 @@ async def cleanup_users(
 
     # Check for admin key bypass
     expected_key = os.getenv("ADMIN_API_KEY", "")
-    if admin_key and admin_key == expected_key:
+    if admin_key and expected_key and secrets.compare_digest(admin_key, expected_key):
         logger.info("User cleanup authorized via admin API key")
         # Find admin user by email
         admin_result = db.execute(text("""
@@ -735,7 +735,7 @@ async def cleanup_all_sample_data(
 
     # Check for admin key bypass
     expected_key = os.getenv("ADMIN_API_KEY", "")
-    if admin_key and admin_key == expected_key:
+    if admin_key and expected_key and secrets.compare_digest(admin_key, expected_key):
         logger.info("Cleanup authorized via admin API key")
     else:
         # Fall back to JWT authentication

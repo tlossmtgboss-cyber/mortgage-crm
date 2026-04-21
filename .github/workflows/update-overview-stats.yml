@@ -15,8 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Skip if bot commit
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          if echo "${{ github.event.head_commit.message }}" | grep -q '^\[overview-bot\]'; then
+          if echo "$COMMIT_MSG" | grep -q '^\[overview-bot\]'; then
             echo "Bot commit detected, skipping."
             exit 0
           fi

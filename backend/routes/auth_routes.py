@@ -25,7 +25,7 @@ from typing import Optional
 import time
 import threading
 from collections import defaultdict
-from fastapi import APIRouter, Depends, HTTPException, status, Body, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Body, Query, Request, Header
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
@@ -876,12 +876,22 @@ def create_logout_routes(app, oauth2_scheme, get_current_user):
             # Add token to blacklist
             token_blacklist.add(token, reason="user_logout")
             logger.info(f"User ID {current_user.id} logged out, token blacklisted")
-            return {"message": "Successfully logged out"}
         else:
-            # Without Redis, we can't truly invalidate the token
-            # Client should discard the token
             logger.info(f"User ID {current_user.id} logged out (token not blacklisted - no Redis)")
-            return {"message": "Successfully logged out (token should be discarded by client)"}
+
+        # Revoke any active impersonation sessions for this manager
+        try:
+            from middleware.impersonation_middleware import revoke_manager_impersonation_sessions
+            from database import SessionLocal
+            _db = SessionLocal()
+            try:
+                revoke_manager_impersonation_sessions(current_user.id, _db)
+            finally:
+                _db.close()
+        except Exception as e:
+            logger.warning(f"Failed to revoke impersonation sessions on logout: {e}")
+
+        return {"message": "Successfully logged out"}
 
     # WAF-safe alias for logout (Fastly blocks "logout" in cross-origin POSTs)
     @app.post("/api/v1/account/signoff")
@@ -1165,9 +1175,22 @@ async def admin_force_password_reset(http_request: Request, request: AdminPasswo
             detail=f"Password does not meet security requirements: {'; '.join(password_violations)}"
         )
 
-    # Update password
+    # Update password and record timestamp to prevent token reuse
     user.hashed_password = auth_funcs['get_password_hash'](request.new_password)
+    if hasattr(user, 'password_changed_at'):
+        user.password_changed_at = datetime.now(timezone.utc)
     db.commit()
+
+    # H-13: Revoke all existing sessions after admin password reset
+    try:
+        config = get_auth_config()
+        token_blacklist = config['token_blacklist']
+        _USE_SECURE_TOKENS = config['_USE_SECURE_TOKENS']
+        if _USE_SECURE_TOKENS and token_blacklist and token_blacklist._enabled:
+            token_blacklist.revoke_all_for_user(user.id)
+            logger.info(f"All sessions revoked for user ID {user.id} after admin forced password reset")
+    except Exception as e:
+        logger.warning(f"Failed to revoke sessions after admin password reset for user ID {user.id}: {e}")
 
     logger.info(f"Admin forced password reset for user ID {user.id}")
 
@@ -1700,7 +1723,7 @@ def create_push_notification_routes(app, get_current_user, DeviceToken):
 @router.post("/api/v1/setup-admin")
 async def setup_admin_user(
     http_request: Request,
-    admin_key: str = Query(..., description="Admin API key for authorization"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key for authorization"),
     db: Session = Depends(get_db),
 ):
     """

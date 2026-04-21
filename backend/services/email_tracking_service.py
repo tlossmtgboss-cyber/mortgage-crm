@@ -28,10 +28,26 @@ PIXEL_GIF = (
 # HMAC-signed tracking tokens (SEC-005)
 # ---------------------------------------------------------------------------
 
+_TRACKING_SECRET = os.getenv("EMAIL_TRACKING_SECRET") or os.getenv("SECRET_KEY") or ""
+if not _TRACKING_SECRET:
+    logger.critical(
+        "EMAIL_TRACKING_SECRET (or SECRET_KEY) not set — "
+        "HMAC-signed tracking tokens will be rejected"
+    )
+
+
 def _get_tracking_secret() -> bytes:
-    """Return the secret key used for HMAC-signing tracking tokens."""
-    secret = os.getenv("EMAIL_TRACKING_SECRET") or os.getenv("SECRET_KEY") or "perennia-email-tracking-default"
-    return secret.encode("utf-8")
+    """Return the secret key used for HMAC-signing tracking tokens.
+
+    Raises RuntimeError if no secret is configured, preventing silent
+    operation with a weak hardcoded key.
+    """
+    if not _TRACKING_SECRET:
+        raise RuntimeError(
+            "EMAIL_TRACKING_SECRET or SECRET_KEY environment variable must be set "
+            "for HMAC-signed email tracking. Cannot proceed with no key configured."
+        )
+    return _TRACKING_SECRET.encode("utf-8")
 
 
 def sign_tracking_id(tracking_id: str) -> str:

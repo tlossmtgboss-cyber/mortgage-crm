@@ -17,7 +17,7 @@ import csv
 import io
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Request, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_
 from database import get_db
@@ -55,33 +55,26 @@ router = APIRouter(prefix="/api/v1/business-ops", tags=["business-operations"], 
 # =============================================================================
 
 def get_organization_id(request: Request = None) -> int:
-    """Get organization ID from authenticated user's context."""
+    """Get organization ID from authenticated user's context.
+
+    Reads from request.state set by TenantContextMiddleware (which already
+    performed canonical RS256 token verification and blacklist checks).
+    The router-level ``require_auth`` dependency guarantees the request
+    is authenticated before any endpoint handler executes.
+    """
     if request:
-        import jwt
-        import os
-        SECRET_KEY = os.getenv("SECRET_KEY")
-        if SECRET_KEY:
-            auth_header = request.headers.get("Authorization", "")
-            if auth_header.startswith("Bearer "):
-                token = auth_header[7:]
-                try:
-                    payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"], options={"verify_aud": False})
-                    jti = payload.get("jti")
-                    if jti:
-                        try:
-                            from auth.tokens import is_token_blacklisted
-                            if is_token_blacklisted(jti):
-                                raise HTTPException(status_code=401, detail="Token has been revoked")
-                        except ImportError:
-                            pass
-                    if "org_id" in payload:
-                        return payload["org_id"]
-                    if "company_id" in payload:
-                        return payload["company_id"]
-                except HTTPException:
-                    raise
-                except Exception:
-                    raise HTTPException(status_code=401, detail="Invalid authentication token")
+        # Primary: TenantContextMiddleware sets this after full auth
+        org_id = getattr(request.state, "organization_id", None)
+        if org_id:
+            return org_id
+
+        # Fallback: read from the User object stored on request state
+        user = getattr(request.state, "user", None)
+        if user:
+            org_id = getattr(user, "organization_id", None) or getattr(user, "company_id", None)
+            if org_id:
+                return org_id
+
     raise HTTPException(status_code=401, detail="Authentication required")
 
 
@@ -1534,7 +1527,7 @@ async def get_break_even_analysis(
 
 @router.get("/admin/run-migration")
 async def run_business_ops_migration(
-    admin_key: str = Query(..., description="Admin API key for authorization"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key for authorization"),
     db: Session = Depends(get_db)
 ):
     """

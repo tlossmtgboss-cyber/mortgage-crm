@@ -16,6 +16,7 @@ import AIAssistant from './components/AIAssistant';
 import CoachCorner from './components/CoachCorner';
 import ImpersonationBanner from './components/ImpersonationBanner';
 import ErrorBoundary from './components/ErrorBoundary';
+import RouteErrorBoundary from './components/RouteErrorBoundary';
 import UnifiedTaskSidebar from './components/UnifiedTaskSidebar';
 import GlobalLayoutFix from './components/GlobalLayoutFix';
 import GlobalSearch from './components/GlobalSearch';
@@ -185,6 +186,7 @@ const VoiceTalkToAgentPage = lazyRetry(() => import('./components/voice/TalkToAg
 const VoiceCallAnalyticsDashboard = lazyRetry(() => import('./components/voice/CallAnalyticsDashboard'));
 const CallIntelligencePage = lazyRetry(() => import('./pages/CallIntelligencePage'));
 const MobileCallIntelligencePage = lazyRetry(() => import('./pages/MobileCallIntelligencePage'));
+const URLACallIntelligencePage = lazyRetry(() => import('./pages/URLACallIntelligencePage'));
 const AILandingPage = lazyRetry(() => import('./pages/AILandingPage'));
 const WorkflowDashboard = lazyRetry(() => import('./pages/WorkflowDashboard'));
 const WorkflowStagePage = lazyRetry(() => import('./pages/WorkflowStagePage'));
@@ -194,7 +196,6 @@ const PartnerROIDashboard = lazyRetry(() => import('./pages/PartnerROIDashboard'
 const ProfitabilityDashboard = lazyRetry(() => import('./pages/ProfitabilityDashboard'));
 const UsageIntelligenceDashboard = lazyRetry(() => import('./pages/UsageIntelligenceDashboard'));
 const ScenarioModeling = lazyRetry(() => import('./pages/ScenarioModeling'));
-// const DecisionLab = lazyRetry(() => import('./pages/DecisionLab')); // DEPRECATED: Experimental feature deregistered
 const MortgageCalculator = lazyRetry(() => import('./pages/MortgageCalculator'));
 const AllInOneLoan = lazyRetry(() => import('./pages/AllInOneLoan'));
 const PipelineProbability = lazyRetry(() => import('./pages/PipelineProbability'));
@@ -245,8 +246,6 @@ const SmartDocsBankAnalysis = lazyRetry(() => import('./pages/SmartDocsBankAnaly
 const SmartDocsIncome = lazyRetry(() => import('./pages/SmartDocsIncome'));
 const SmartDocsAdmin = lazyRetry(() => import('./pages/SmartDocsAdmin'));
 const AIDailyBlog = lazyRetry(() => import('./pages/AIDailyBlog'));
-// DEPRECATED: Experimental feature deregistered
-// const AvatarStudio = lazyRetry(() => import('./pages/AvatarStudio'));
 const PublicBooking = lazyRetry(() => import('./pages/PublicBooking'));
 const BookingConfirmationPage = lazyRetry(() => import('./pages/BookingConfirmationPage'));
 const EmbedBooking = lazyRetry(() => import('./pages/EmbedBooking'));
@@ -285,11 +284,6 @@ const EngagementDashboard = lazyRetry(() => import('./pages/EngagementDashboard'
 const Marketing = lazyRetry(() => import('./pages/Marketing'));
 const CarouselBuilder = lazyRetry(() => import('./pages/CarouselBuilder/CarouselBuilderPage'));
 const MasterManagerCapacity = lazyRetry(() => import('./pages/MasterManager/CapacityCommandCenter'));
-// DEPRECATED: Premium feature deregistered — not yet launched
-// const MasterManagerRecruiting = lazyRetry(() => import('./pages/MasterManager/RecruitingDashboard'));
-// const RecruitDetail = lazyRetry(() => import('./pages/MasterManager/RecruitDetail'));
-// const PartnerRecruitingDashboard = lazyRetry(() => import('./pages/PartnerRecruiting/PartnerRecruitingDashboard'));
-// const PartnerRecruitDetail = lazyRetry(() => import('./pages/PartnerRecruiting/PartnerRecruitDetail'));
 const AgentGym = lazyRetry(() => import('./pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('./pages/AgentGovernanceSettings'));
 const EmailIntegrationSettings = lazyRetry(() => import('./pages/EmailIntegrationSettings'));
@@ -320,9 +314,6 @@ const IntakeEngine = lazyRetry(() => import('./components/intake/IntakeEngine'))
 const ListingPortalTransactions = lazyRetry(() => import('./pages/ListingPortalTransactions'));
 const ListingPortalTransactionDetail = lazyRetry(() => import('./pages/ListingPortalTransactionDetail'));
 const ListingAgentPortal = lazyRetry(() => import('./pages/ListingAgentPortal'));
-// DEPRECATED: Premium feature deregistered — not yet launched
-// const RecruitPortal = lazyRetry(() => import('./pages/RecruitPortal/RecruitPortal'));
-// const DISCAssessment = lazyRetry(() => import('./pages/DISCAssessment'));
 const PrivacyPolicy = lazyRetry(() => import('./pages/PrivacyPolicy'));
 const TermsOfService = lazyRetry(() => import('./pages/TermsOfService'));
 const LiveCallWhisper = lazyRetry(() => import('./pages/LiveCallWhisper'));
@@ -452,12 +443,14 @@ function RoleBasedRedirect() {
   return <Navigate to="/dashboard" replace />;
 }
 
-// Wrapper to handle lazy-loaded pages with suspense
-function LazyPage({ children }) {
+// Wrapper to handle lazy-loaded pages with suspense and route-level error isolation
+function LazyPage({ children, fallback }) {
   return (
-    <Suspense fallback={<PageLoader />}>
-      {children}
-    </Suspense>
+    <RouteErrorBoundary fallback={fallback}>
+      <Suspense fallback={<PageLoader />}>
+        {children}
+      </Suspense>
+    </RouteErrorBoundary>
   );
 }
 
@@ -748,7 +741,6 @@ function App() {
           <Route path="/apply/preview" element={<LazyPage><ApplicationPreview /></LazyPage>} />
           <Route path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
           <Route path="/questionnaire" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
-          {/* <Route path="/decision-lab" element={<LazyPage><DecisionLab /></LazyPage>} /> */}{/* DEPRECATED: Experimental feature deregistered */}
           <Route path="/mortgage-calculator" element={<LazyPage><MortgageCalculator /></LazyPage>} />
           <Route path="/estimate-comparison" element={<LazyPage><EstimateComparison /></LazyPage>} />
           <Route path="/register" element={<Registration />} />
@@ -806,14 +798,6 @@ function App() {
 
           {/* Listing Agent Portal (public - magic link auth) */}
           <Route path="/listing-agent-portal" element={<LazyPage><ListingAgentPortal /></LazyPage>} />
-
-          {/* DEPRECATED: Premium feature deregistered — not yet launched */}
-          {/* <Route path="/recruit-portal/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} /> */}
-          {/* <Route path="/join/:slug" element={<LazyPage><RecruitPortal /></LazyPage>} /> */}
-
-          {/* DEPRECATED: Premium feature deregistered — not yet launched */}
-          {/* <Route path="/disc-assessment/:token" element={<LazyPage><DISCAssessment /></LazyPage>} /> */}
-          {/* <Route path="/assessment/disc" element={<LazyPage><DISCAssessment /></LazyPage>} /> */}
 
           {/* Employee Invite Accept (public) */}
           <Route path="/invite/accept/:token" element={<LazyPage><AcceptInvite /></LazyPage>} />
@@ -2844,97 +2828,6 @@ function App() {
               </PrivateRoute>
             }
           />
-          {/* DEPRECATED: Premium feature deregistered — not yet launched */}
-          {/*
-          <Route
-            path="/master-manager/recruiting"
-            element={
-              <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    onToggleCoach={toggleCoach}
-                    onToggleTaskSidebar={toggleTaskSidebar}
-                    assistantOpen={assistantOpen}
-                    coachOpen={coachOpen}
-                    taskSidebarOpen={taskSidebarOpen}
-                    taskCounts={taskCounts}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LazyPage><MasterManagerRecruiting /></LazyPage>
-                  </main>
-                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                </div>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/master-manager/recruiting/:candidateId"
-            element={
-              <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    onToggleCoach={toggleCoach}
-                    onToggleTaskSidebar={toggleTaskSidebar}
-                    assistantOpen={assistantOpen}
-                    coachOpen={coachOpen}
-                    taskSidebarOpen={taskSidebarOpen}
-                    taskCounts={taskCounts}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LazyPage><RecruitDetail /></LazyPage>
-                  </main>
-                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                </div>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/partner-recruiting"
-            element={
-              <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    onToggleCoach={toggleCoach}
-                    onToggleTaskSidebar={toggleTaskSidebar}
-                    assistantOpen={assistantOpen}
-                    coachOpen={coachOpen}
-                    taskSidebarOpen={taskSidebarOpen}
-                    taskCounts={taskCounts}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LazyPage><PartnerRecruitingDashboard /></LazyPage>
-                  </main>
-                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                </div>
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/partner-recruiting/:partnerId"
-            element={
-              <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    onToggleCoach={toggleCoach}
-                    onToggleTaskSidebar={toggleTaskSidebar}
-                    assistantOpen={assistantOpen}
-                    coachOpen={coachOpen}
-                    taskSidebarOpen={taskSidebarOpen}
-                    taskCounts={taskCounts}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LazyPage><PartnerRecruitDetail /></LazyPage>
-                  </main>
-                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                </div>
-              </PrivateRoute>
-            }
-          />
-          */}
           <Route
             path="/agent/:agentId/settings"
             element={
@@ -3674,30 +3567,6 @@ function App() {
               </PrivateRoute>
             }
           />
-          {/* DEPRECATED: Experimental feature deregistered
-          <Route
-            path="/avatar-studio"
-            element={
-              <PrivateRoute>
-                <div className="app-layout">
-                  <Navigation
-                    onToggleAssistant={toggleAssistant}
-                    onToggleCoach={toggleCoach}
-                    onToggleTaskSidebar={toggleTaskSidebar}
-                    assistantOpen={assistantOpen}
-                    coachOpen={coachOpen}
-                    taskSidebarOpen={taskSidebarOpen}
-                    taskCounts={taskCounts}
-                  />
-                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
-                    <LazyPage><AvatarStudio /></LazyPage>
-                  </main>
-                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
-                </div>
-              </PrivateRoute>
-            }
-          />
-          */}
           <Route
             path="/conversation-intelligence"
             element={
@@ -3747,6 +3616,26 @@ function App() {
             element={
               <PrivateRoute>
                 <LazyPage><MobileCallIntelligencePage /></LazyPage>
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/urla-call-intelligence"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Sidebar
+                    onToggleAssistant={() => setAssistantOpen(!assistantOpen)}
+                    onToggleCoach={() => setCoachOpen(!coachOpen)}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><URLACallIntelligencePage /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
               </PrivateRoute>
             }
           />

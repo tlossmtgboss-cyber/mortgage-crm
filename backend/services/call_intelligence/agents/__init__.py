@@ -50,6 +50,7 @@ from .employment_agent import EmploymentExtractionAgent
 from .financial_agent import FinancialExtractionAgent
 from .compliance_agent import ComplianceExtractionAgent
 from .intent_agent import IntentExtractionAgent
+from .urla_extraction_agent import URLAExtractionAgent
 from .shared_patterns import (
     US_CITIZEN_PATTERNS_COMPILED,
     PERMANENT_RESIDENT_PATTERNS_COMPILED,
@@ -75,6 +76,7 @@ __all__ = [
     "FinancialExtractionAgent",
     "ComplianceExtractionAgent",
     "IntentExtractionAgent",
+    "URLAExtractionAgent",
     # Live call agents
     "LiveTranscriptionAgent",
     "SentimentAnalysisAgent",

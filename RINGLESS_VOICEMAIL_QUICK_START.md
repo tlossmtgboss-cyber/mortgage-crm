@@ -38,7 +38,7 @@ Your CRM now has **ringless voicemail** integration with **two options**:
 7. **Event**: Send Ringless Voicemail
 8. **Connect** your Slybroadcast account:
    - Email: tloss@cmgfi.com
-   - Password: Woodwindow00!
+   - Password: [SET VIA ENVIRONMENT VARIABLE]
 9. **Configure fields**:
    - Phone Number: `{{phone_number}}` (from webhook)
    - Message Text: `{{message}}` (from webhook)

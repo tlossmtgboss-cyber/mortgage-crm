@@ -1058,7 +1058,7 @@ async def underwriting_engine_health():
             getter()
             status["components"][name] = "available"
         except Exception as e:
-            status["components"][name] = f"unavailable: {str(e)}"
+            status["components"][name] = "unavailable"
             all_healthy = False
 
     if not all_healthy:

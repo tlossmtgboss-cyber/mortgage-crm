@@ -3,7 +3,7 @@ Master Manager Platform - API Routes
 Capacity tracking, talent state, performance, and recruiting endpoints.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -1292,7 +1292,7 @@ async def calculate_user_risks(
 
 @router.post("/admin/run-migration")
 async def run_migration(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     db: Session = Depends(get_db)
 ):
     """Run the Master Manager database migration."""
@@ -1309,7 +1309,7 @@ async def run_migration(
 
 @router.post("/admin/run-recruiting-migration")
 async def run_recruiting_migration(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     db: Session = Depends(get_db)
 ):
     """Run the Phase 2 Recruiting tables migration."""
@@ -1326,7 +1326,7 @@ async def run_recruiting_migration(
 
 @router.post("/admin/fix-duplicate-roles")
 async def fix_duplicate_roles(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     db: Session = Depends(get_db)
 ):
     """Remove duplicate role definitions, keeping only one of each role_name."""
@@ -1369,7 +1369,7 @@ async def fix_duplicate_roles(
 
 @router.post("/admin/assign-role")
 async def assign_role_to_user(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     user_id: int = Query(..., description="User ID"),
     role_id: int = Query(..., description="Role definition ID"),
     db: Session = Depends(get_db)
@@ -1439,7 +1439,7 @@ async def assign_role_to_user(
 
 @router.post("/admin/fix-duplicate-capacities")
 async def fix_duplicate_capacities(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     db: Session = Depends(get_db)
 ):
     """Remove duplicate capacity records, keeping one per user."""
@@ -1470,7 +1470,7 @@ async def fix_duplicate_capacities(
 
 @router.post("/admin/initialize-capacities")
 async def initialize_capacities(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     organization_id: Optional[int] = None,
     db: Session = Depends(get_db)
 ):

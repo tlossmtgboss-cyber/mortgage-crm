@@ -1306,7 +1306,47 @@ async def vapi_inbound_webhook(
             if aid:
                 return {"assistantId": aid}
 
-        return {"status": "no_override"}
+        default_aid = os.getenv("VAPI_DEFAULT_INBOUND_ASSISTANT_ID", "")
+        if default_aid:
+            return {"assistantId": default_aid}
+
+        return {
+            "assistant": {
+                "name": "Aria - Default Inbound",
+                "model": {
+                    "provider": "anthropic",
+                    "model": "claude-3-5-haiku-20241022",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": (
+                                "You are Aria, an AI assistant for Perennia AI. "
+                                "You're a mortgage loan officer's virtual receptionist.\n\n"
+                                "Your role:\n"
+                                "- Greet callers warmly and professionally\n"
+                                "- Answer basic mortgage questions\n"
+                                "- Offer to schedule a callback with the loan officer\n"
+                                "- Take messages\n\n"
+                                "Rules:\n"
+                                "- Never provide specific rate quotes\n"
+                                "- Never give legal or tax advice\n"
+                                "- Be concise — this is a phone call\n"
+                                "- Always confirm the caller's name and number before ending"
+                            ),
+                        }
+                    ],
+                },
+                "voice": {
+                    "provider": "deepgram",
+                    "voiceId": "asteria",
+                },
+                "firstMessage": (
+                    "Hi, thanks for calling! This is Aria. How can I help you today?"
+                ),
+                "silenceTimeoutSeconds": 30,
+                "maxDurationSeconds": 300,
+            }
+        }
 
     else:
         logger.debug("Unhandled Vapi webhook type: %s", message_type)

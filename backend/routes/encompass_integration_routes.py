@@ -858,7 +858,7 @@ def register_encompass_integration_routes(app, get_db, get_current_user, **kwarg
             logger.error(f"Encompass search failed for org {org_id}: {e}")
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=f"Encompass search failed: {str(e)}",
+                detail="Encompass search failed. Please try again or check your connection settings.",
             )
 
     # -----------------------------------------------------------------

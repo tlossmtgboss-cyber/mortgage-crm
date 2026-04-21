@@ -135,8 +135,8 @@ class SecurityConfig:
         "X-XSS-Protection": "1; mode=block",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Permissions-Policy": "geolocation=(), microphone=(), camera=()",
-        # CSP should be customized for your app
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.perenniaai.com https://*.railway.app",
+        # CSP — no unsafe-eval or unsafe-inline in script-src
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://api.perenniaai.com https://api.openai.com https://api.anthropic.com https://graph.microsoft.com; frame-ancestors 'none'",
     })
 
     # ==========================================================================

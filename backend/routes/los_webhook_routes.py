@@ -102,6 +102,50 @@ def register_los_webhook_routes(app, get_db, **kwargs):
 
         return hmac.compare_digest(expected, signature or "")
 
+    def _resolve_org_from_webhook_secret(
+        db: Session, request_body: bytes, signature: str
+    ) -> Optional[int]:
+        """Resolve organization_id by matching the webhook signature against per-org secrets.
+
+        Iterates active EncompassConfig records and checks which org's webhook_secret
+        produces a matching HMAC. Returns the organization_id on match, or None if
+        only the global fallback secret matched.
+
+        Args:
+            db: Database session
+            request_body: Raw request body bytes
+            signature: Signature from X-Encompass-Signature header
+
+        Returns:
+            organization_id if a per-org secret matched, else None
+        """
+        if not signature:
+            return None
+
+        try:
+            from database.models.encompass_config import EncompassConfig
+
+            configs = db.query(EncompassConfig).filter(
+                EncompassConfig.is_active == True,  # noqa: E712
+                EncompassConfig.webhook_secret.isnot(None),
+            ).all()
+
+            for config in configs:
+                secret = config.webhook_secret
+                if not secret:
+                    continue
+                expected = hmac.new(
+                    secret.encode("utf-8"),
+                    request_body,
+                    hashlib.sha256,
+                ).hexdigest()
+                if hmac.compare_digest(expected, signature):
+                    return config.organization_id
+        except Exception as e:
+            logger.warning(f"Could not resolve org from webhook secret: {e}")
+
+        return None
+
     # -----------------------------------------------------------------
     # Event Processing
     # -----------------------------------------------------------------
@@ -110,6 +154,7 @@ def register_los_webhook_routes(app, get_db, **kwargs):
         event_type: str,
         payload: dict,
         db: Session,
+        organization_id: Optional[int] = None,
     ) -> None:
         """Process a webhook event asynchronously.
 
@@ -119,25 +164,26 @@ def register_los_webhook_routes(app, get_db, **kwargs):
             event_type: The event type string
             payload: Event payload data
             db: Database session
+            organization_id: Resolved org for tenant-scoped loan lookup
         """
         try:
             los_loan_id = payload.get("loanId") or payload.get("resourceId")
             resource_type = payload.get("resourceType", "loan")
 
-            logger.info(f"Processing LOS webhook: {event_type} for {resource_type} {los_loan_id}")
+            logger.info(f"Processing LOS webhook: {event_type} for {resource_type} {los_loan_id} (org={organization_id})")
 
             if event_type == "loan.milestone.changed":
-                await _handle_milestone_change(db, los_loan_id, payload)
+                await _handle_milestone_change(db, los_loan_id, payload, organization_id)
             elif event_type in ("loan.created", "loan.updated"):
-                await _handle_loan_update(db, los_loan_id, payload)
+                await _handle_loan_update(db, los_loan_id, payload, organization_id)
             elif event_type.startswith("loan.document."):
-                await _handle_document_event(db, los_loan_id, event_type, payload)
+                await _handle_document_event(db, los_loan_id, event_type, payload, organization_id)
             elif event_type.startswith("loan.condition."):
-                await _handle_condition_event(db, los_loan_id, event_type, payload)
+                await _handle_condition_event(db, los_loan_id, event_type, payload, organization_id)
             elif event_type.startswith("loan.lock."):
-                await _handle_lock_event(db, los_loan_id, event_type, payload)
+                await _handle_lock_event(db, los_loan_id, event_type, payload, organization_id)
             elif event_type.startswith("loan.disclosure."):
-                await _handle_disclosure_event(db, los_loan_id, event_type, payload)
+                await _handle_disclosure_event(db, los_loan_id, event_type, payload, organization_id)
             else:
                 logger.info(f"Unhandled LOS webhook event type: {event_type}")
 
@@ -152,7 +198,9 @@ def register_los_webhook_routes(app, get_db, **kwargs):
     # Event Handlers
     # -----------------------------------------------------------------
 
-    async def _handle_milestone_change(db: Session, los_loan_id: str, payload: dict):
+    async def _handle_milestone_change(
+        db: Session, los_loan_id: str, payload: dict, organization_id: Optional[int] = None,
+    ):
         """Handle milestone/stage change from LOS."""
         from database.models.lead_loan import Loan
         from services.los_integration.encompass_client import ENCOMPASS_STAGE_MAP
@@ -164,8 +212,8 @@ def register_los_webhook_routes(app, get_db, **kwargs):
             logger.warning(f"Unknown LOS milestone: {new_milestone}")
             return
 
-        # Find CRM loan by LOS ID
-        loan = _find_loan_by_los_id(db, los_loan_id)
+        # Find CRM loan by LOS ID (tenant-scoped)
+        loan = _find_loan_by_los_id(db, los_loan_id, organization_id)
         if not loan:
             logger.warning(f"No CRM loan found for LOS loan {los_loan_id}")
             return
@@ -203,13 +251,15 @@ def register_los_webhook_routes(app, get_db, **kwargs):
             except Exception as e:
                 logger.warning(f"Workflow evaluation trigger failed for LOS loan {loan.id}: {e}")
 
-    async def _handle_loan_update(db: Session, los_loan_id: str, payload: dict):
+    async def _handle_loan_update(
+        db: Session, los_loan_id: str, payload: dict, organization_id: Optional[int] = None,
+    ):
         """Handle general loan update from LOS.
 
         If auto_pull_on_webhook is enabled for the loan's organization,
         performs a full pull from Encompass. Otherwise, just notes the event.
         """
-        loan = _find_loan_by_los_id(db, los_loan_id)
+        loan = _find_loan_by_los_id(db, los_loan_id, organization_id)
         if not loan:
             logger.info(f"LOS loan {los_loan_id} not linked to CRM - skipping update")
             return
@@ -266,27 +316,33 @@ def register_los_webhook_routes(app, get_db, **kwargs):
             db.flush()
             logger.info(f"Noted LOS update for loan {loan.loan_number} (auto-pull disabled)")
 
-    async def _handle_document_event(db: Session, los_loan_id: str, event_type: str, payload: dict):
+    async def _handle_document_event(
+        db: Session, los_loan_id: str, event_type: str, payload: dict, organization_id: Optional[int] = None,
+    ):
         """Handle document events from LOS."""
-        loan = _find_loan_by_los_id(db, los_loan_id)
+        loan = _find_loan_by_los_id(db, los_loan_id, organization_id)
         if not loan:
             return
 
         doc_title = payload.get("title") or payload.get("documentTitle", "Unknown")
         logger.info(f"LOS document event for loan {loan.loan_number}: {event_type} - {doc_title}")
 
-    async def _handle_condition_event(db: Session, los_loan_id: str, event_type: str, payload: dict):
+    async def _handle_condition_event(
+        db: Session, los_loan_id: str, event_type: str, payload: dict, organization_id: Optional[int] = None,
+    ):
         """Handle condition events from LOS."""
-        loan = _find_loan_by_los_id(db, los_loan_id)
+        loan = _find_loan_by_los_id(db, los_loan_id, organization_id)
         if not loan:
             return
 
         condition = payload.get("conditionName") or payload.get("description", "Unknown")
         logger.info(f"LOS condition event for loan {loan.loan_number}: {event_type} - {condition}")
 
-    async def _handle_lock_event(db: Session, los_loan_id: str, event_type: str, payload: dict):
+    async def _handle_lock_event(
+        db: Session, los_loan_id: str, event_type: str, payload: dict, organization_id: Optional[int] = None,
+    ):
         """Handle rate lock events from LOS."""
-        loan = _find_loan_by_los_id(db, los_loan_id)
+        loan = _find_loan_by_los_id(db, los_loan_id, organization_id)
         if not loan:
             return
 
@@ -312,9 +368,11 @@ def register_los_webhook_routes(app, get_db, **kwargs):
             db.flush()
             logger.info(f"Loan {loan.loan_number} lock expired (from LOS)")
 
-    async def _handle_disclosure_event(db: Session, los_loan_id: str, event_type: str, payload: dict):
+    async def _handle_disclosure_event(
+        db: Session, los_loan_id: str, event_type: str, payload: dict, organization_id: Optional[int] = None,
+    ):
         """Handle disclosure events from LOS."""
-        loan = _find_loan_by_los_id(db, los_loan_id)
+        loan = _find_loan_by_los_id(db, los_loan_id, organization_id)
         if not loan:
             return
 
@@ -334,22 +392,40 @@ def register_los_webhook_routes(app, get_db, **kwargs):
     # Helper Functions
     # -----------------------------------------------------------------
 
-    def _find_loan_by_los_id(db: Session, los_loan_id: str):
-        """Find a CRM loan by its LOS loan ID.
+    def _find_loan_by_los_id(
+        db: Session,
+        los_loan_id: str,
+        organization_id: Optional[int] = None,
+    ):
+        """Find a CRM loan by its LOS loan ID, scoped to an organization.
 
         Checks the dedicated encompass_loan_id column first (fast indexed query),
         then falls back to scanning user_metadata JSON for backward compatibility.
+
+        Args:
+            db: Database session
+            los_loan_id: The LOS/Encompass loan identifier
+            organization_id: Organization ID for tenant isolation. When provided,
+                all queries are scoped to this org. When None, queries are unscoped
+                (legacy behavior — callers should always provide this).
         """
         from database.models.lead_loan import Loan
 
         if not los_loan_id:
             return None
 
+        def _org_filter(query):
+            """Apply organization_id filter if available."""
+            if organization_id is not None:
+                return query.filter(Loan.organization_id == organization_id)
+            return query
+
         # Primary: query dedicated encompass_loan_id column (indexed)
         try:
-            loan = db.query(Loan).filter(
+            query = db.query(Loan).filter(
                 Loan.encompass_loan_id == los_loan_id
-            ).first()
+            )
+            loan = _org_filter(query).first()
             if loan:
                 return loan
         except Exception as e:
@@ -358,9 +434,10 @@ def register_los_webhook_routes(app, get_db, **kwargs):
         # Fallback: search in user_metadata JSON for backward compatibility
         try:
             # Try PostgreSQL JSON operator
-            loan = db.query(Loan).filter(
+            query = db.query(Loan).filter(
                 Loan.user_metadata["los_loan_id"].astext == los_loan_id
-            ).first()
+            )
+            loan = _org_filter(query).first()
             if loan:
                 # Migrate: set the dedicated column for future lookups
                 if hasattr(loan, "encompass_loan_id") and not loan.encompass_loan_id:
@@ -373,24 +450,32 @@ def register_los_webhook_routes(app, get_db, **kwargs):
         except Exception:
             pass
 
-        # Last resort: full scan of user_metadata
-        try:
-            loans = db.query(Loan).filter(
-                Loan.user_metadata.isnot(None)
-            ).limit(500).all()
-            for loan in loans:
-                meta = loan.user_metadata if isinstance(loan.user_metadata, dict) else {}
-                if meta.get("los_loan_id") == los_loan_id or meta.get("encompass_guid") == los_loan_id:
-                    # Migrate: set the dedicated column for future lookups
-                    if hasattr(loan, "encompass_loan_id") and not loan.encompass_loan_id:
-                        loan.encompass_loan_id = los_loan_id
-                        try:
-                            db.flush()
-                        except Exception:
-                            pass
-                    return loan
-        except Exception as e:
-            logger.error(f"Error searching for LOS loan ID in user_metadata: {e}")
+        # Last resort: scan user_metadata (org-scoped only, never cross-tenant)
+        if organization_id is not None:
+            try:
+                query = db.query(Loan).filter(
+                    Loan.organization_id == organization_id,
+                    Loan.user_metadata.isnot(None),
+                ).limit(200)
+                loans = query.all()
+                for loan in loans:
+                    meta = loan.user_metadata if isinstance(loan.user_metadata, dict) else {}
+                    if meta.get("los_loan_id") == los_loan_id or meta.get("encompass_guid") == los_loan_id:
+                        # Migrate: set the dedicated column for future lookups
+                        if hasattr(loan, "encompass_loan_id") and not loan.encompass_loan_id:
+                            loan.encompass_loan_id = los_loan_id
+                            try:
+                                db.flush()
+                            except Exception:
+                                pass
+                        return loan
+            except Exception as e:
+                logger.error(f"Error searching for LOS loan ID in user_metadata: {e}")
+        else:
+            logger.warning(
+                f"Skipping user_metadata full scan for LOS loan {los_loan_id}: "
+                "no organization_id provided (would be cross-tenant)"
+            )
 
         return None
 
@@ -491,6 +576,14 @@ def register_los_webhook_routes(app, get_db, **kwargs):
         import uuid
         event_id = str(uuid.uuid4())[:12].upper()
 
+        # Resolve organization from per-org webhook secret for tenant isolation
+        organization_id = _resolve_org_from_webhook_secret(db, body, signature)
+        if organization_id is None:
+            logger.warning(
+                "Could not resolve organization from webhook secret — "
+                "loan lookups will lack tenant scoping"
+            )
+
         # Log receipt
         _log_webhook_event(db, event_type, payload.get("loanId"), payload, status="received")
 
@@ -500,6 +593,7 @@ def register_los_webhook_routes(app, get_db, **kwargs):
             event_type=event_type,
             payload=payload,
             db=db,
+            organization_id=organization_id,
         )
 
         return WebhookEventResponse(

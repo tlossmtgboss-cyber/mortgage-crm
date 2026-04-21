@@ -52,6 +52,8 @@ async def import_from_retr(
     Supports:
     - Agents/Realtors → referral_partners table
     - Loan Officers → mm_candidates table
+
+    Payload must include organization_id for tenant isolation.
     """
     # Get raw body for signature verification
     body = await request.body()
@@ -71,24 +73,29 @@ async def import_from_retr(
         logger.error(f"Failed to parse webhook payload: {e}")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
 
+    # Require organization_id for tenant isolation
+    org_id = payload.get("organization_id")
+    if not org_id:
+        raise HTTPException(status_code=400, detail="organization_id is required for tenant isolation")
+
     import_type = payload.get("import_type", "").lower()
     records = payload.get("records", [])
 
     if not records:
         return {"success": True, "imported": 0, "updated": 0, "failed": 0, "errors": [], "message": "No records to import"}
 
-    logger.info(f"Processing RETR import: type={import_type}, records={len(records)}")
+    logger.info(f"Processing RETR import: type={import_type}, records={len(records)}, org_id={org_id}")
 
     if import_type in ["realtor", "agents/realtors", "agent", "realtors"]:
-        return await import_realtors(records, db)
+        return await import_realtors(records, db, org_id)
     elif import_type in ["loan_officer", "loan officers", "lo", "loan_officers"]:
-        return await import_loan_officers(records, db)
+        return await import_loan_officers(records, db, org_id)
     else:
         raise HTTPException(status_code=400, detail=f"Unknown import type: {import_type}")
 
 
-async def import_realtors(records: List[Dict], db: Session) -> Dict:
-    """Import realtors into referral_partners table"""
+async def import_realtors(records: List[Dict], db: Session, org_id: int) -> Dict:
+    """Import realtors into referral_partners table (tenant-scoped)"""
     imported = 0
     updated = 0
     failed = 0
@@ -109,16 +116,16 @@ async def import_realtors(records: List[Dict], db: Session) -> Dict:
                 failed += 1
                 continue
 
-            # Check for existing record by email
+            # Check for existing record by email within the same organization
             existing = None
             if email:
                 existing = db.execute(
-                    text("SELECT id FROM referral_partners WHERE LOWER(email) = :email"),
-                    {"email": email}
+                    text("SELECT id FROM referral_partners WHERE LOWER(email) = :email AND organization_id = :org_id"),
+                    {"email": email, "org_id": org_id}
                 ).fetchone()
 
             if existing:
-                # Update existing record
+                # Update existing record (scoped to org via the SELECT above)
                 db.execute(text("""
                     UPDATE referral_partners SET
                         name = :name,
@@ -128,9 +135,10 @@ async def import_realtors(records: List[Dict], db: Session) -> Dict:
                         phone = COALESCE(:phone, phone),
                         license_number = COALESCE(:license, license_number),
                         notes = COALESCE(:notes, notes)
-                    WHERE id = :id
+                    WHERE id = :id AND organization_id = :org_id
                 """), {
                     "id": existing[0],
+                    "org_id": org_id,
                     "name": name,
                     "contact_name": name,
                     "company": record.get("company") or record.get("business_name"),
@@ -140,18 +148,19 @@ async def import_realtors(records: List[Dict], db: Session) -> Dict:
                 })
                 updated += 1
             else:
-                # Insert new record with source='retr' to indicate RETR import
+                # Insert new record with source='retr' and organization_id
                 db.execute(text("""
                     INSERT INTO referral_partners (
-                        name, contact_name, business_name, company,
+                        organization_id, name, contact_name, business_name, company,
                         email, phone, license_number, notes,
                         category, type, status, source
                     ) VALUES (
-                        :name, :contact_name, :company, :company,
+                        :org_id, :name, :contact_name, :company, :company,
                         :email, :phone, :license, :notes,
                         'realtor', 'Realtor', 'active', 'retr'
                     )
                 """), {
+                    "org_id": org_id,
                     "name": name,
                     "contact_name": name,
                     "company": record.get("company") or record.get("business_name") or "",
@@ -179,8 +188,8 @@ async def import_realtors(records: List[Dict], db: Session) -> Dict:
     }
 
 
-async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
-    """Import loan officers into mm_candidates table"""
+async def import_loan_officers(records: List[Dict], db: Session, org_id: int) -> Dict:
+    """Import loan officers into mm_candidates table (tenant-scoped)"""
     imported = 0
     updated = 0
     failed = 0
@@ -206,12 +215,12 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
                 failed += 1
                 continue
 
-            # Check for existing record by email
+            # Check for existing record by email within the same organization
             existing = None
             if email:
                 existing = db.execute(
-                    text("SELECT id FROM mm_candidates WHERE LOWER(email) = :email"),
-                    {"email": email}
+                    text("SELECT id FROM mm_candidates WHERE LOWER(email) = :email AND organization_id = :org_id"),
+                    {"email": email, "org_id": org_id}
                 ).fetchone()
 
             if existing:
@@ -227,9 +236,10 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
                         previous_companies = COALESCE(CAST(:companies AS jsonb), previous_companies),
                         years_experience = COALESCE(:years_exp, years_experience),
                         linkedin_url = COALESCE(:linkedin, linkedin_url)
-                    WHERE id = :id
+                    WHERE id = :id AND organization_id = :org_id
                 """), {
                     "id": existing[0],
+                    "org_id": org_id,
                     "first_name": first_name,
                     "last_name": last_name,
                     "phone": record.get("phone"),
@@ -256,22 +266,23 @@ async def import_loan_officers(records: List[Dict], db: Session) -> Dict:
                 company = record.get("current_company") or record.get("company")
                 companies_json = json.dumps([company]) if company else "[]"
 
-                # Insert new record
+                # Insert new record with organization_id
                 db.execute(text("""
                     INSERT INTO mm_candidates (
-                        first_name, last_name, email, phone,
+                        organization_id, first_name, last_name, email, phone,
                         source, target_role_name,
                         years_experience, years_mortgage_experience, has_mortgage_experience,
                         previous_companies, linkedin_url, talent_profile,
                         status, applied_at, is_active
                     ) VALUES (
-                        :first_name, :last_name, :email, :phone,
+                        :org_id, :first_name, :last_name, :email, :phone,
                         'retr', 'Loan Officer',
                         :years_exp, :years_exp, true,
                         CAST(:companies AS jsonb), :linkedin, CAST(:profile AS jsonb),
                         'new', CURRENT_TIMESTAMP, true
                     )
                 """), {
+                    "org_id": org_id,
                     "first_name": first_name,
                     "last_name": last_name or "",
                     "email": email,
@@ -479,18 +490,33 @@ async def inbound_webhook(
 
 
 async def _handle_lead_status_changed(payload: Dict, db: Session) -> Dict:
-    """Handle lead.status_changed event — update lead stage."""
+    """Handle lead.status_changed event — update lead stage (tenant-scoped)."""
     lead_id = payload.get("lead_id")
     new_status = payload.get("new_status")
 
     if not lead_id or not new_status:
         raise HTTPException(status_code=400, detail="lead_id and new_status required")
 
+    # Look up the lead to get its organization_id for tenant-scoped update
+    lead_row = db.execute(
+        text("SELECT organization_id FROM leads WHERE id = :lead_id"),
+        {"lead_id": lead_id}
+    ).fetchone()
+    if not lead_row:
+        raise HTTPException(status_code=404, detail=f"Lead {lead_id} not found")
+    org_id = lead_row[0]
+
+    # If payload includes organization_id, verify it matches
+    payload_org_id = payload.get("organization_id")
+    if payload_org_id and int(payload_org_id) != org_id:
+        logger.warning(f"Webhook org_id mismatch: payload={payload_org_id}, lead={org_id}, lead_id={lead_id}")
+        raise HTTPException(status_code=403, detail="organization_id mismatch")
+
     db.execute(text("""
         UPDATE leads SET stage = CAST(:status AS leadstage),
         stage_changed_at = NOW(), updated_at = NOW()
-        WHERE id = :lead_id
-    """), {"lead_id": lead_id, "status": new_status})
+        WHERE id = :lead_id AND organization_id = :org_id
+    """), {"lead_id": lead_id, "status": new_status, "org_id": org_id})
     db.commit()
 
     # Event-driven workflow enrollment (eliminates 60s polling delay)
@@ -500,23 +526,38 @@ async def _handle_lead_status_changed(payload: Dict, db: Session) -> Dict:
     except Exception as e:
         logger.warning(f"Workflow evaluation trigger failed for lead {lead_id}: {e}")
 
-    logger.info(f"Webhook: lead {lead_id} status updated to {new_status}")
+    logger.info(f"Webhook: lead {lead_id} (org={org_id}) status updated to {new_status}")
     return {"lead_id": lead_id, "new_status": new_status}
 
 
 async def _handle_loan_stage_changed(payload: Dict, db: Session) -> Dict:
-    """Handle loan.stage_changed event — update loan stage."""
+    """Handle loan.stage_changed event — update loan stage (tenant-scoped)."""
     loan_id = payload.get("loan_id")
     new_stage = payload.get("new_stage")
 
     if not loan_id or not new_stage:
         raise HTTPException(status_code=400, detail="loan_id and new_stage required")
 
+    # Look up the loan to get its organization_id for tenant-scoped update
+    loan_row = db.execute(
+        text("SELECT organization_id FROM loans WHERE id = :loan_id"),
+        {"loan_id": loan_id}
+    ).fetchone()
+    if not loan_row:
+        raise HTTPException(status_code=404, detail=f"Loan {loan_id} not found")
+    org_id = loan_row[0]
+
+    # If payload includes organization_id, verify it matches
+    payload_org_id = payload.get("organization_id")
+    if payload_org_id and int(payload_org_id) != org_id:
+        logger.warning(f"Webhook org_id mismatch: payload={payload_org_id}, loan={org_id}, loan_id={loan_id}")
+        raise HTTPException(status_code=403, detail="organization_id mismatch")
+
     db.execute(text("""
         UPDATE loans SET stage = CAST(:stage AS loanstage),
         stage_changed_at = NOW(), updated_at = NOW()
-        WHERE id = :loan_id
-    """), {"loan_id": loan_id, "stage": new_stage})
+        WHERE id = :loan_id AND organization_id = :org_id
+    """), {"loan_id": loan_id, "stage": new_stage, "org_id": org_id})
     db.commit()
 
     # Event-driven workflow enrollment (eliminates 60s polling delay)
@@ -526,17 +567,32 @@ async def _handle_loan_stage_changed(payload: Dict, db: Session) -> Dict:
     except Exception as e:
         logger.warning(f"Workflow evaluation trigger failed for loan {loan_id}: {e}")
 
-    logger.info(f"Webhook: loan {loan_id} stage updated to {new_stage}")
+    logger.info(f"Webhook: loan {loan_id} (org={org_id}) stage updated to {new_stage}")
     return {"loan_id": loan_id, "new_stage": new_stage}
 
 
 async def _handle_document_received(payload: Dict, db: Session) -> Dict:
-    """Handle document.received event — mark document as received."""
+    """Handle document.received event — mark document as received (tenant-scoped)."""
     loan_id = payload.get("loan_id")
     document_type = payload.get("document_type")
 
     if not loan_id or not document_type:
         raise HTTPException(status_code=400, detail="loan_id and document_type required")
+
+    # Look up the loan to get its organization_id for tenant-scoped update
+    loan_row = db.execute(
+        text("SELECT organization_id FROM loans WHERE id = :loan_id"),
+        {"loan_id": loan_id}
+    ).fetchone()
+    if not loan_row:
+        raise HTTPException(status_code=404, detail=f"Loan {loan_id} not found")
+    org_id = loan_row[0]
+
+    # If payload includes organization_id, verify it matches
+    payload_org_id = payload.get("organization_id")
+    if payload_org_id and int(payload_org_id) != org_id:
+        logger.warning(f"Webhook org_id mismatch: payload={payload_org_id}, loan={org_id}, loan_id={loan_id}")
+        raise HTTPException(status_code=403, detail="organization_id mismatch")
 
     # Update the document tracking field on the loan if it exists
     field_map = {
@@ -552,30 +608,45 @@ async def _handle_document_received(payload: Dict, db: Session) -> Dict:
         try:
             update_sql = (
                 "UPDATE loans SET " + field + " = NOW(), updated_at = NOW()"
-                " WHERE id = :loan_id AND " + field + " IS NULL"
+                " WHERE id = :loan_id AND organization_id = :org_id AND " + field + " IS NULL"
             )
-            db.execute(text(update_sql), {"loan_id": loan_id})
+            db.execute(text(update_sql), {"loan_id": loan_id, "org_id": org_id})
             db.commit()
         except Exception as e:
             logger.warning(f"Could not update loan document field {field}: {e}")
             db.rollback()
 
-    logger.info(f"Webhook: document {document_type} received for loan {loan_id}")
+    logger.info(f"Webhook: document {document_type} received for loan {loan_id} (org={org_id})")
     return {"loan_id": loan_id, "document_type": document_type, "field_updated": field}
 
 
 async def _handle_task_completed(payload: Dict, db: Session) -> Dict:
-    """Handle task.completed event — mark task as completed."""
+    """Handle task.completed event — mark task as completed (tenant-scoped)."""
     task_id = payload.get("task_id")
 
     if not task_id:
         raise HTTPException(status_code=400, detail="task_id required")
 
+    # Look up the task to get its organization_id for tenant-scoped update
+    task_row = db.execute(
+        text("SELECT organization_id FROM tasks WHERE id = :task_id"),
+        {"task_id": task_id}
+    ).fetchone()
+    if not task_row:
+        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
+    org_id = task_row[0]
+
+    # If payload includes organization_id, verify it matches
+    payload_org_id = payload.get("organization_id")
+    if payload_org_id and int(payload_org_id) != org_id:
+        logger.warning(f"Webhook org_id mismatch: payload={payload_org_id}, task={org_id}, task_id={task_id}")
+        raise HTTPException(status_code=403, detail="organization_id mismatch")
+
     db.execute(text("""
         UPDATE tasks SET status = 'completed', completed_at = NOW(), updated_at = NOW()
-        WHERE id = :task_id AND status != 'completed'
-    """), {"task_id": task_id})
+        WHERE id = :task_id AND organization_id = :org_id AND status != 'completed'
+    """), {"task_id": task_id, "org_id": org_id})
     db.commit()
 
-    logger.info(f"Webhook: task {task_id} marked as completed")
+    logger.info(f"Webhook: task {task_id} (org={org_id}) marked as completed")
     return {"task_id": task_id}

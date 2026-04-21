@@ -40,7 +40,7 @@ This browser extension lets you extract guideline updates from **my.mortgageguid
 
 1. **Log into** https://my.mortgageguidelines.com
    - Username: `tloss@cmghomeloans.com`
-   - Password: `Woodwindow00!`
+   - Password: [SET VIA ENVIRONMENT VARIABLE]
 
 2. **Navigate to any update page:**
    - Fannie Mae Updates
@@ -157,7 +157,7 @@ https://app.perenniaai.com/api/v1/migrations/import-browser-guidelines
 ```
 Site: https://my.mortgageguidelines.com/account-login/
 Username: tloss@cmghomeloans.com
-Password: Woodwindow00!
+Password: [SET VIA ENVIRONMENT VARIABLE]
 ```
 
 ---

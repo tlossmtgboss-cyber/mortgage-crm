@@ -39,7 +39,13 @@ def get_notification_service():
 
 
 def get_db_session():
-    """Get database session using shared engine from database.py to avoid connection pool exhaustion."""
+    """Get database session using shared engine from database.py.
+
+    WARNING: Background scheduler tasks run outside the FastAPI request lifecycle,
+    so RLS tenant context is NOT set from middleware. Queries in scheduler jobs
+    MUST filter by organization_id explicitly. For tenant-scoped operations,
+    use get_db_with_tenant(org_id) from db.py instead.
+    """
     from database import SessionLocal
     return SessionLocal()
 

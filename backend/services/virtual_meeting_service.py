@@ -843,7 +843,14 @@ class PerenniaMeetProvider(MeetingProvider):
 
     async def create_meeting(self, details: MeetingDetails) -> MeetingResult:
         """Generate a Perennia Meet room link."""
-        salt = os.getenv("SECRET_KEY", "perennia-meet-salt")
+        salt = os.getenv("SECRET_KEY", "")
+        if not salt:
+            logger.critical(
+                "SECRET_KEY not set — cannot generate deterministic meeting room IDs securely"
+            )
+            raise RuntimeError(
+                "SECRET_KEY environment variable must be set for meeting link generation"
+            )
         appt_id = details.appointment_id or secrets.token_hex(4)
         hash_input = f"{appt_id}:{details.scheduled_start.isoformat()}:{salt}"
         room_hash = hashlib.sha256(hash_input.encode()).hexdigest()[:12]

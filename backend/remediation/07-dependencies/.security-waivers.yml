@@ -1,0 +1,22 @@
+# 07-dependencies/.security-waivers.yml
+# Drop-in: repo root
+#
+# Document and date-bound every security finding that CI is allowed to skip.
+# Each waiver MUST have a justification, a resolution plan, and an expiry date.
+# CI rejects any waiver past its expiry.
+#
+# Review monthly. This file is the artifact you hand the SOC 2 auditor.
+
+waivers:
+  # Example shape:
+  # - id: "GHSA-xxxx-xxxx-xxxx"
+  #   package: "some-package"
+  #   severity: "high"
+  #   justification: >
+  #     Not exploitable in our usage — we never pass user input to the
+  #     affected function. Upstream fix ETA Q2 2026.
+  #   expires: "2026-06-30"
+  #   owner: "tim"
+  #   ticket: "PERENNIA-1234"
+
+  # (empty on purpose — add entries only when you can't fix)

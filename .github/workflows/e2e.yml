@@ -9,6 +9,9 @@ on:
   schedule:
     - cron: "0 7 * * *"
 
+permissions:
+  contents: read
+
 env:
   PYTHON_VERSION: "3.11"
   NODE_VERSION: "22"

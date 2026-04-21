@@ -10,15 +10,9 @@ from typing import List, Optional
 import uuid
 from datetime import datetime
 
-# Lazy import for get_db to avoid circular dependency with main.py
-def get_db():
-    """Wrapper for get_db to avoid circular import with main.py."""
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+from db import get_db
+from auth.dependencies import require_auth, get_current_user
+
 from ai_models import (
     AgentConfig, ExecuteAgentRequest, ExecuteAgentResponse,
     DispatchEventRequest, SendMessageRequest, ProvideExecutionFeedbackRequest,
@@ -28,7 +22,11 @@ from ai_services import AgentOrchestrator, AgentRegistry, ToolRegistry, MessageB
 from ai_tool_handlers import TOOL_HANDLERS
 
 # Create router
-router = APIRouter(prefix="/api/ai", tags=["AI System"])
+router = APIRouter(
+    prefix="/api/ai",
+    tags=["AI System"],
+    dependencies=[Depends(require_auth)],
+)
 
 
 # ============================================================================
@@ -319,6 +317,7 @@ async def get_execution(
 @router.post("/feedback")
 async def provide_feedback(
     request: ProvideExecutionFeedbackRequest,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """Provide feedback on an agent execution"""
@@ -335,7 +334,7 @@ async def provide_feedback(
         "execution_id": request.execution_id,
         "feedback": request.feedback,
         "comment": request.comment,
-        "user_id": request.user_id
+        "user_id": current_user.id
     }).fetchone()
 
     db.commit()

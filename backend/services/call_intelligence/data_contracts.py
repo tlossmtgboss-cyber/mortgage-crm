@@ -20,6 +20,7 @@ class CallType(str, Enum):
     DOCUMENT_REVIEW = "document_review"
     RATE_LOCK = "rate_lock"
     CLOSING_PREP = "closing_prep"
+    URLA_INTAKE = "urla_intake"
     OTHER = "other"
 
 
@@ -215,6 +216,11 @@ class CallIntelligenceRequest:
     # Context from previous calls/data
     existing_borrower_data: Dict[str, Any] = field(default_factory=dict)
 
+    # URLA integration: structured data captured by voice agent via @function_tool
+    # When present, the diff comparator compares these against transcript extractions.
+    # Non-breaking for non-URLA call types — ignored when empty.
+    captured_structured_data: Dict[str, Any] = field(default_factory=dict)
+
     def __post_init__(self):
         """Validate field values after initialization."""
         # Validate call_id length
@@ -362,8 +368,15 @@ class ReviewQueueItem:
     final_value: Optional[Any] = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
+    # URLA side-by-side: value the voice agent captured via @function_tool.
+    # When set, the review UI shows both versions for comparison.
+    captured_value: Optional[Any] = None
+    # Source of disagreement: "mishear", "late_correction", "hallucination",
+    # "off_script_disclosure", "low_confidence", "extraction_only", "captured_only"
+    disagreement_reason: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
-        return {
+        d = {
             "review_id": self.review_id,
             "call_id": self.call_id,
             "loan_id": self.loan_id,
@@ -379,6 +392,11 @@ class ReviewQueueItem:
             "final_value": self.final_value,
             "created_at": self.created_at.isoformat(),
         }
+        if self.captured_value is not None:
+            d["captured_value"] = self.captured_value
+        if self.disagreement_reason:
+            d["disagreement_reason"] = self.disagreement_reason
+        return d
 
 
 @dataclass

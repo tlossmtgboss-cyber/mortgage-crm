@@ -10,7 +10,7 @@ Provides endpoints for:
 - Pinning/unpinning pages
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Optional, List, Callable, Any
@@ -953,7 +953,7 @@ async def get_access_log(
 
 @router.post("/admin/run-migration")
 async def run_page_permissions_migration(
-    admin_key: str = Query(..., description="Admin key for migration"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin key for migration"),
     db: Session = Depends(get_db),
 ):
     """

@@ -150,6 +150,21 @@ def is_impersonation_read_only(request: Request) -> bool:
     return getattr(request.state, 'impersonation_mode', None) == 'read_only'
 
 
+def revoke_manager_impersonation_sessions(manager_id: int, db_session) -> int:
+    """Revoke all active impersonation sessions for a manager (e.g., on logout)."""
+    from database.models.core import ImpersonationSession
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc)
+    count = db_session.query(ImpersonationSession).filter(
+        ImpersonationSession.manager_id == manager_id,
+        ImpersonationSession.is_active == True,
+    ).update({"is_active": False, "ended_at": now})
+    db_session.commit()
+    if count:
+        logger.info("Revoked %d impersonation session(s) for manager_id=%s on logout", count, manager_id)
+    return count
+
+
 def get_impersonation_info(request: Request) -> dict:
     """
     Get impersonation info from request state.

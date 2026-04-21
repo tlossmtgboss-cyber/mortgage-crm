@@ -18,21 +18,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/visitor-tracking", tags=["Visitor Tracking"])
 
-# Try to import database dependencies
-try:
-    from database import get_db, SessionLocal
-except ImportError:
-    from sqlalchemy import create_engine
-    from sqlalchemy.orm import sessionmaker
-    _engine = create_engine(os.getenv("DATABASE_URL", "sqlite:///./mortgage_crm.db"))
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
-
-    def get_db():
-        db = SessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
+# Import canonical RLS-aware get_db from db.py
+from db import get_db
 
 
 # =============================================================================

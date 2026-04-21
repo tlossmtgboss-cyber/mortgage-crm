@@ -677,10 +677,8 @@ async def get_integration_status():
     }
 
 
-# Placeholder imports - these need to be properly set up
-def get_db():
-    """Placeholder - should import from main"""
-    pass
+# Import canonical dependencies
+from db import get_db
 
 def get_current_user():
     """Placeholder - should import from main"""

@@ -2223,11 +2223,16 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         if not clean_phone.startswith("+"):
             clean_phone = f"+1{clean_phone}" if len(clean_phone) == 10 else f"+{clean_phone}"
 
+        # TCPA compliance: use verified sender with consent + DNC checks
         try:
-            message_sid = sms_client.send_sms(
+            from telephony.sms import send_sms_verified
+            result = send_sms_verified(
                 to_number=clean_phone,
-                message=message
+                message=message,
+                user_id=current_user.id,
+                org_id=org_id,
             )
+            message_sid = result.get("message_sid") if isinstance(result, dict) else result
 
             if message_sid:
                 # Log to database
@@ -2336,9 +2341,8 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 if user_result and user_result.booking_slug:
                     booking_link = f"\n\nBook a time here: https://perenniaai.com/book/{user_result.booking_slug}"
 
-            # Initialize SMS client
-            from integrations.sms_service import get_sms_client
-            sms_client = get_sms_client()
+            # TCPA compliance: use verified sender with consent + DNC checks
+            from telephony.sms import send_sms_verified
 
             for lead in leads:
                 lead_id, first_name, last_name, phone, email, stage = lead
@@ -2353,8 +2357,14 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 message += booking_link
 
                 try:
-                    # Send SMS
-                    sid = sms_client.send_sms(to_number=phone, message=message)
+                    # Send SMS via TCPA-compliant verified sender
+                    sms_result = send_sms_verified(
+                        to_number=phone,
+                        message=message,
+                        user_id=current_user.id,
+                        org_id=org_id,
+                    )
+                    sid = sms_result.get("message_sid") if isinstance(sms_result, dict) else sms_result
                     if sid:
                         results["texts_sent"] += 1
                         results["leads_contacted"].append({

@@ -120,6 +120,116 @@ def get_permission_functions():
 
 
 # ============================================================================
+# ECOA Adverse Action Auto-Trigger (SEC-ECOA-001)
+# ============================================================================
+
+def _trigger_ecoa_adverse_action(
+    db: Session,
+    loan,
+    user_id: int = None,
+    organization_id: int = None,
+):
+    """Auto-trigger ECOA adverse action notice requirement when a loan is DENIED.
+
+    Per Regulation B (12 CFR 1002.9), the creditor must provide an adverse
+    action notice within 30 days of the credit decision. This function:
+      1. Checks if an adverse action notice already exists for this loan
+      2. If not, creates a ComplianceAlert flagging the requirement
+      3. Logs the trigger to the audit trail
+
+    This is a trigger/flag, not the full adverse action system. It ensures the
+    requirement cannot be silently missed when a loan transitions to DENIED.
+    """
+    from datetime import timedelta
+
+    denial_date = datetime.now(timezone.utc)
+    notice_deadline = denial_date + timedelta(days=30)
+
+    # Check if an adverse action notice already exists for this loan
+    try:
+        from database.models.compliance import AdverseActionNotice
+        existing_notice = db.query(AdverseActionNotice).filter(
+            AdverseActionNotice.loan_id == loan.id,
+        ).first()
+        if existing_notice:
+            logger.info(
+                f"ECOA adverse action notice already exists for loan {loan.id} "
+                f"(notice ID: {existing_notice.id})"
+            )
+            return
+    except Exception as e:
+        # Model may not exist yet; proceed to create the alert
+        logger.debug(f"Could not check existing adverse action notices: {e}")
+
+    # Create a compliance alert to flag the adverse action requirement
+    try:
+        from sqlalchemy import text
+        db.execute(text("""
+            INSERT INTO compliance_alerts (
+                organization_id, alert_type, severity, entity_type, entity_id,
+                title, description, due_date, status, created_at
+            ) VALUES (
+                :org_id, 'ecoa_adverse_action', 'critical', 'loan', :loan_id,
+                :title, :description, :due_date, 'open', NOW()
+            )
+            ON CONFLICT DO NOTHING
+        """), {
+            "org_id": organization_id,
+            "loan_id": loan.id,
+            "title": f"ECOA Adverse Action Notice Required — Loan {getattr(loan, 'loan_number', loan.id)}",
+            "description": (
+                f"Loan {getattr(loan, 'loan_number', '')} was denied on "
+                f"{denial_date.strftime('%m/%d/%Y')}. Per ECOA Regulation B "
+                f"(12 CFR 1002.9), an adverse action notice must be sent to the "
+                f"applicant within 30 days (by {notice_deadline.strftime('%m/%d/%Y')}). "
+                f"Include specific reason(s) for denial, ECOA rights notice, and "
+                f"creditor/federal regulator information."
+            ),
+            "due_date": notice_deadline,
+        })
+    except Exception as alert_err:
+        # If the compliance_alerts table doesn't exist, fall through to audit log
+        logger.warning(f"Could not create compliance alert for ECOA adverse action: {alert_err}")
+
+    # Log to the hash-chained audit trail
+    try:
+        from services.audit_service import create_audit_entry
+        create_audit_entry(
+            db=db,
+            user_id=user_id or 0,
+            changed_by_id=user_id or 0,
+            change_type="compliance",
+            entity_type="loan",
+            entity_id=loan.id,
+            before_state=None,
+            after_state={
+                "stage": "DENIED",
+                "ecoa_adverse_action_required": True,
+                "denial_date": denial_date.isoformat(),
+                "notice_deadline": notice_deadline.isoformat(),
+                "borrower_name": getattr(loan, "borrower_name", None),
+                "loan_number": getattr(loan, "loan_number", None),
+            },
+            reason="ECOA adverse action notice auto-triggered on loan denial",
+            organization_id=organization_id,
+        )
+    except Exception as audit_err:
+        logger.warning(f"ECOA audit entry creation failed: {audit_err}")
+
+    logger.info(
+        "ECOA_ADVERSE_ACTION_REQUIRED",
+        extra={
+            "loan_id": loan.id,
+            "loan_number": getattr(loan, "loan_number", None),
+            "organization_id": organization_id,
+            "denial_date": denial_date.isoformat(),
+            "notice_deadline": notice_deadline.isoformat(),
+            "triggered_by_user_id": user_id,
+        },
+    )
+
+
+# ============================================================================
 # Ensure all Loan model columns exist in production DB
 # (Production skips Base.metadata.create_all; checkfirst only checks table
 # existence, not missing columns. This adds any columns the model defines
@@ -940,6 +1050,26 @@ async def update_loan(
                         logger.info(f"Calendar-Pipeline Bridge: {bridge_result}")
                 except Exception as e:
                     logger.warning(f"Calendar-Pipeline Bridge failed for loan {loan.id}: {e}")
+
+                # =============================================================
+                # ECOA Adverse Action Trigger (Finding SEC-ECOA-001)
+                # When a loan transitions to DENIED, auto-flag for adverse
+                # action notice per Regulation B (12 CFR 1002.9).
+                # The 30-day notice clock starts on the denial date.
+                # =============================================================
+                if new_stage.upper() == "DENIED":
+                    try:
+                        _trigger_ecoa_adverse_action(
+                            db=db,
+                            loan=loan,
+                            user_id=getattr(current_user, "id", None),
+                            organization_id=getattr(loan, "organization_id", None),
+                        )
+                    except Exception as ecoa_err:
+                        logger.error(
+                            f"ECOA adverse action trigger failed for loan {loan.id}: {ecoa_err}",
+                            exc_info=True,
+                        )
 
         result = _loan_to_dict(loan)
 

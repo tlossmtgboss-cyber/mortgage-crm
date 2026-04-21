@@ -10,7 +10,7 @@ Provides endpoints for:
 - Speed-to-lead metrics
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Query, BackgroundTasks, Header
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
@@ -1381,7 +1381,7 @@ async def list_blueprints(
 
 @router.post("/admin/run-migration")
 async def run_migration(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     db: Session = Depends(get_db),
 ):
     """

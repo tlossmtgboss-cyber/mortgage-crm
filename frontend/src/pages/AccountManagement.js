@@ -1770,7 +1770,6 @@ const UserPermissionsTab = ({ user, onPermissionChange }) => {
       pages: [
         { id: 'settings', label: 'Settings', description: 'System settings' },
         { id: 'team_management', label: 'Team Management', description: 'Manage team members' },
-        // { id: 'recruiting', label: 'Recruiting', description: 'Recruitment tools' },  // DEPRECATED: Premium feature deregistered — not yet launched
         { id: 'capacity', label: 'Capacity', description: 'Capacity planning' },
       ]
     }

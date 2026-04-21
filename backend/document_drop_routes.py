@@ -11,11 +11,54 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from db import get_db
+from auth.dependencies import get_current_user
 
 # Initialize router
 router = APIRouter(prefix="/api/v1/documents", tags=["documents"])
 
 logger = logging.getLogger(__name__)
+
+# Allowed file extensions for document uploads
+ALLOWED_EXTENSIONS = {
+    # Documents
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'rtf', 'odt', 'ods',
+    # Images
+    'jpg', 'jpeg', 'png', 'gif', 'bmp', 'tiff', 'tif', 'webp', 'heic', 'heif',
+    # Scanned docs
+    'svg',
+}
+
+# Blocked MIME type prefixes (defense in depth alongside extension check)
+BLOCKED_MIME_PREFIXES = (
+    'application/x-executable', 'application/x-msdos-program',
+    'application/x-msdownload', 'application/x-sh', 'application/x-csh',
+    'application/java', 'application/x-java',
+)
+
+
+def _validate_file_type(filename: str, content_type: Optional[str]) -> None:
+    """Validate that the uploaded file is an allowed document type.
+    Raises HTTPException 415 if the file type is not permitted.
+    """
+    ext = ''
+    if filename and '.' in filename:
+        ext = filename.rsplit('.', 1)[-1].lower()
+
+    if not ext or ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"File type '.{ext}' is not allowed. Accepted types: PDF, images, Office documents, CSV, TXT."
+        )
+
+    # Belt-and-suspenders: also reject dangerous MIME types
+    if content_type:
+        ct_lower = content_type.lower()
+        if any(ct_lower.startswith(prefix) for prefix in BLOCKED_MIME_PREFIXES):
+            raise HTTPException(
+                status_code=415,
+                detail=f"MIME type '{content_type}' is not allowed."
+            )
 
 # =============================================================================
 # Pydantic Schemas
@@ -37,20 +80,6 @@ class DocumentClassifyResponse(BaseModel):
     confidence: Optional[float] = None
     extracted_text: Optional[str] = None
     detected_entities: dict = {}
-
-
-# =============================================================================
-# Dependency Injection Setup
-# =============================================================================
-
-def get_db():
-    """Get database session"""
-    from database import SessionLocal
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 # =============================================================================
@@ -177,15 +206,20 @@ async def upload_document(
     borrower_id: Optional[int] = Form(None),
     loan_id: Optional[int] = Form(None),
     doc_type: str = Form("OTHER"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
     """
-    Upload a document and attach to borrower/loan
+    Upload a document and attach to borrower/loan.
+    Requires authentication. Documents are scoped to the user's organization.
     """
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
     try:
         from database.enums import DocumentType, DocumentCategory
         from database.models import Document
+
+        # Validate file type before reading content
+        _validate_file_type(file.filename, file.content_type)
 
         # Read file content with size limit
         content = await file.read(MAX_FILE_SIZE + 1)
@@ -256,8 +290,10 @@ async def upload_document(
             # Default to INCOME if not found
             doc_category = DocumentCategory.INCOME
 
-        # Create document record
+        # Create document record with tenant isolation and audit
         doc = Document(
+            organization_id=current_user.organization_id,
+            uploaded_by_user_id=current_user.id,
             doc_type=doc_type_enum,
             doc_category=doc_category,
             filename=unique_filename,
@@ -303,6 +339,8 @@ async def upload_document(
             message=f"Document uploaded successfully"
         )
 
+    except HTTPException:
+        raise  # Re-raise validation errors (415, 413) as-is
     except Exception as e:
         logger.error(f"Document upload error: {e}")
         import traceback
@@ -312,13 +350,18 @@ async def upload_document(
 
 @router.post("/classify", response_model=DocumentClassifyResponse)
 async def classify_document(
-    file: UploadFile = File(...)
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user)
 ):
     """
-    Classify a document using AI without uploading
+    Classify a document using AI without uploading.
+    Requires authentication.
     """
     MAX_FILE_SIZE = 50 * 1024 * 1024  # 50 MB
     try:
+        # Validate file type before processing
+        _validate_file_type(file.filename, file.content_type)
+
         content = await file.read(MAX_FILE_SIZE + 1)
         if len(content) > MAX_FILE_SIZE:
             raise HTTPException(status_code=413, detail="File too large. Maximum size is 50 MB.")
@@ -333,6 +376,8 @@ async def classify_document(
             detected_entities={}
         )
 
+    except HTTPException:
+        raise  # Re-raise validation errors (415, 413) as-is
     except Exception as e:
         logger.error(f"Document classification error: {e}")
         return DocumentClassifyResponse(
@@ -346,15 +391,20 @@ async def classify_document(
 async def get_documents(
     borrower_id: Optional[int] = None,
     loan_id: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
 ):
     """
-    Get documents for a borrower or loan
+    Get documents for a borrower or loan.
+    Requires authentication. Results are scoped to the user's organization.
     """
     try:
         from database.models import Document
 
-        query = db.query(Document).filter(Document.status == "active")
+        query = db.query(Document).filter(
+            Document.status == "active",
+            Document.organization_id == current_user.organization_id
+        )
 
         if borrower_id:
             query = query.filter(Document.borrower_id == borrower_id)

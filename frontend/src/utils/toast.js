@@ -5,6 +5,19 @@
  * Can be replaced with react-hot-toast or react-toastify if needed.
  */
 
+import DOMPurify from 'dompurify';
+
+/**
+ * Escape a string for safe insertion into HTML.
+ * Uses the browser's own text encoding to neutralize any HTML/script content.
+ */
+function escapeHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
 // Toast container element
 let toastContainer = null;
 
@@ -212,14 +225,25 @@ function createToast(message, type = 'info', options = {}) {
   const toastId = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   toastEl.id = toastId;
 
-  toastEl.innerHTML = `
-    <span class="toast-icon">${options.icon || config.icon}</span>
-    <span class="toast-message">${message}</span>
-    <button class="toast-close" aria-label="Close">&times;</button>
-  `;
+  // Build toast content safely using DOM APIs (no innerHTML with user data)
+  const iconSpan = document.createElement('span');
+  iconSpan.className = 'toast-icon';
+  iconSpan.textContent = options.icon || config.icon;
+
+  const messageSpan = document.createElement('span');
+  messageSpan.className = 'toast-message';
+  messageSpan.textContent = message;
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'toast-close';
+  closeBtn.setAttribute('aria-label', 'Close');
+  closeBtn.innerHTML = '&times;';
+
+  toastEl.appendChild(iconSpan);
+  toastEl.appendChild(messageSpan);
+  toastEl.appendChild(closeBtn);
 
   // Close handler
-  const closeBtn = toastEl.querySelector('.toast-close');
   const dismiss = () => {
     toastEl.classList.add('toast-exiting');
     setTimeout(() => {
@@ -327,14 +351,45 @@ export const toast = {
   },
 
   /**
+   * Show a toast with sanitized HTML content.
+   * Use ONLY when you need formatting (bold, links, etc.) in the message.
+   * The HTML is sanitized via DOMPurify before rendering.
+   *
+   * @param {string} htmlMessage - HTML string to sanitize and render
+   * @param {string} type - Toast type (success, error, warning, info)
+   * @param {object} options - Toast options
+   */
+  html(htmlMessage, type = 'info', options = {}) {
+    const result = createToast('', type, options);
+    if (result.id) {
+      const toastEl = document.getElementById(result.id);
+      if (toastEl) {
+        const msgEl = toastEl.querySelector('.toast-message');
+        if (msgEl) {
+          // Sanitize HTML: allow only safe formatting tags
+          const clean = DOMPurify.sanitize(htmlMessage, {
+            ALLOWED_TAGS: ['b', 'strong', 'i', 'em', 'a', 'br', 'span', 'code'],
+            ALLOWED_ATTR: ['href', 'target', 'rel', 'class'],
+          });
+          msgEl.innerHTML = clean;
+        }
+      }
+    }
+    return result;
+  },
+
+  /**
    * Dismiss all toasts
    */
   dismissAll() {
     const container = document.getElementById('toast-container');
     if (container) {
-      container.innerHTML = '';
+      while (container.firstChild) {
+        container.removeChild(container.firstChild);
+      }
     }
   },
 };
 
+export { escapeHtml };
 export default toast;

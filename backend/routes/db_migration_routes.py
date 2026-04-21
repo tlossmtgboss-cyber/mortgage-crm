@@ -17,6 +17,7 @@ from sqlalchemy import text
 from datetime import datetime, timezone
 import logging
 import os
+import secrets
 
 from database.models import (
     User, VerifiedCallerId, AgentTelephonySettings,
@@ -24,6 +25,15 @@ from database.models import (
 from database import engine
 
 logger = logging.getLogger(__name__)
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
+
+
+def _verify_admin_key(provided_key: str) -> None:
+    """Validate admin API key with timing-safe comparison. Fail-closed if not configured."""
+    if not _ADMIN_API_KEY:
+        raise HTTPException(status_code=503, detail="Admin key not configured")
+    if not provided_key or not secrets.compare_digest(provided_key, _ADMIN_API_KEY):
+        raise HTTPException(status_code=403, detail="Invalid admin key")
 
 
 def register_migration_routes(app, get_db, get_current_user, **kwargs):
@@ -2607,8 +2617,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
         db: Session = Depends(get_db)
     ):
         """Run the Follow Up Boss tables migration using existing db connection."""
-        if migration_key != "fub-migration-2026":
-            raise HTTPException(status_code=403, detail="Invalid migration key")
+        _verify_admin_key(migration_key)
 
         try:
             # Run migrations using the existing database session
@@ -2727,8 +2736,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
         db: Session = Depends(get_db)
     ):
         """Add organization_id column to loans table if it doesn't exist."""
-        if migration_key != "fix-loans-2026":
-            raise HTTPException(status_code=403, detail="Invalid migration key")
+        _verify_admin_key(migration_key)
 
         try:
             # Check if column exists
@@ -2762,8 +2770,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
         db: Session = Depends(get_db)
     ):
         """Associate orphaned loans with a user's organization."""
-        if migration_key != "fix-loans-2026":
-            raise HTTPException(status_code=403, detail="Invalid migration key")
+        _verify_admin_key(migration_key)
 
         try:
             # Find the user using raw SQL
@@ -2821,8 +2828,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
         db: Session = Depends(get_db)
     ):
         """Fix task assignments to match loan_officer_id for multi-tenancy."""
-        if migration_key != "fix-loans-2026":
-            raise HTTPException(status_code=403, detail="Invalid migration key")
+        _verify_admin_key(migration_key)
 
         try:
             results = {}
@@ -2895,8 +2901,7 @@ def register_migration_routes(app, get_db, get_current_user, **kwargs):
         db: Session = Depends(get_db)
     ):
         """Enforce organization_id NOT NULL on all recruiting tables."""
-        if migration_key != "recruit-org-2026":
-            raise HTTPException(status_code=403, detail="Invalid migration key")
+        _verify_admin_key(migration_key)
 
         try:
             from migrations.enforce_recruiting_org_id import run_migration

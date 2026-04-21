@@ -11,6 +11,8 @@ Endpoints:
 """
 
 import logging
+import os
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -26,6 +28,15 @@ from agents.utils.financial_calcs import (
 )
 
 logger = logging.getLogger(__name__)
+_ADMIN_API_KEY = os.getenv("ADMIN_API_KEY", "")
+
+
+def _verify_admin_key(provided_key: str) -> None:
+    """Validate admin API key with timing-safe comparison. Fail-closed if not configured."""
+    if not _ADMIN_API_KEY:
+        raise HTTPException(status_code=503, detail="Admin key not configured")
+    if not provided_key or not secrets.compare_digest(provided_key, _ADMIN_API_KEY):
+        raise HTTPException(status_code=403, detail="Invalid admin key")
 
 
 # ============================================================================
@@ -67,8 +78,7 @@ async def setup_mum_database(
     db: Session = Depends(get_db)
 ):
     """Create MUM tables and seed 100 clients (ONE-TIME SETUP)"""
-    if migration_key != "setup-mum-database-2025":
-        raise HTTPException(status_code=403, detail="Invalid migration key")
+    _verify_admin_key(migration_key)
 
     try:
         from migrations.create_mum_tables import upgrade as create_tables

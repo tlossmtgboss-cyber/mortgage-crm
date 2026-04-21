@@ -17,7 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 def get_db_session() -> Session:
-    """Get a database session from the shared pool"""
+    """Get a database session from the shared pool.
+
+    WARNING: Background jobs run outside the FastAPI request lifecycle,
+    so RLS tenant context is NOT set from middleware. Queries in this job
+    MUST filter by organization_id explicitly. For tenant-scoped operations,
+    use get_db_with_tenant(org_id) from db.py instead.
+    """
     return SessionLocal()
 
 

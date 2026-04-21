@@ -57,6 +57,7 @@ from .data_contracts import (
     CallIntelligenceRequest,
     CallIntelligenceResponse,
     CallOutcomeData,
+    CallType,
     ExtractionResult,
     ExtractedValue,
     TranscriptSegment,
@@ -72,6 +73,7 @@ from .agents import (
     FinancialExtractionAgent,
     ComplianceExtractionAgent,
     IntentExtractionAgent,
+    URLAExtractionAgent,
 )
 from .unified_extractor import UnifiedExtractionEngine, UnifiedExtractionResult
 from .metrics import (
@@ -175,6 +177,9 @@ class CallIntelligenceProcessor:
         self.compliance_agent = ComplianceExtractionAgent(llm_client)
         self.intent_agent = IntentExtractionAgent(llm_client)
 
+        # 7th agent: URLA-specific fields (military, declarations, co-borrower)
+        self.urla_agent = URLAExtractionAgent(llm_client)
+
         self._agents = {
             "identity": self.identity_agent,
             "property": self.property_agent,
@@ -182,6 +187,12 @@ class CallIntelligenceProcessor:
             "financial": self.financial_agent,
             "compliance": self.compliance_agent,
             "intent": self.intent_agent,
+        }
+
+        # Extended agent set for URLA intake calls
+        self._urla_agents = {
+            **self._agents,
+            "urla": self.urla_agent,
         }
 
     async def process_transcript(
@@ -235,6 +246,34 @@ class CallIntelligenceProcessor:
 
             # Calculate summary stats
             self._calculate_stats(response)
+
+            # URLA: run structured diff comparator when captured data is present
+            if request.captured_structured_data and request.call_type == CallType.URLA_INTAKE:
+                try:
+                    from .structured_diff import StructuredDiffComparator
+                    comparator = StructuredDiffComparator()
+                    diff = comparator.compare(
+                        call_id=request.call_id,
+                        captured=request.captured_structured_data,
+                        response=response,
+                    )
+                    # Queue disagreements for human review
+                    if diff.needs_review and self.db:
+                        review_items = comparator.to_review_queue_items(
+                            diff, loan_id=request.loan_id,
+                        )
+                        from .review_service import HumanReviewService
+                        review_svc = HumanReviewService(self.db)
+                        for item in review_items:
+                            await review_svc._save_review_item(item)
+                        response.pending_review_count = len(review_items)
+                        logger.info(
+                            "URLA diff: %d agree, %d disagree, %d queued for review",
+                            len(diff.agreements), len(diff.disagreements),
+                            len(review_items),
+                        )
+                except Exception as e:
+                    logger.warning("URLA structured diff failed: %s", e)
 
             # Save to database if session available
             if self.db:
@@ -298,10 +337,14 @@ class CallIntelligenceProcessor:
         Single LLM call extracts all domains at once.
         """
         try:
+            # URLA extractor independence: no captured data in the LLM prompt
+            is_urla = request.call_type == CallType.URLA_INTAKE
+            unified_context = {} if is_urla else request.existing_borrower_data
+
             unified_result = await self._unified_extractor.extract_all(
                 call_id=request.call_id,
                 segments=segments,
-                existing_data=request.existing_borrower_data,
+                existing_data=unified_context,
             )
 
             # Convert unified result to response format
@@ -330,17 +373,25 @@ class CallIntelligenceProcessor:
         Process transcript using parallel extraction agents.
 
         Legacy method with 6 parallel LLM calls.
+        For URLA_INTAKE calls, includes the 7th URLA-specific agent.
         """
-        # Determine which agents to run
-        agents_to_run = request.agents_to_run or list(self._agents.keys())
+        # Use extended agent set for URLA intake calls
+        is_urla = request.call_type == CallType.URLA_INTAKE
+        available_agents = self._urla_agents if is_urla else self._agents
+        agents_to_run = request.agents_to_run or list(available_agents.keys())
+
+        # URLA extractor independence: agents must NEVER see captured structured
+        # data. Passing it as existing_data would anchor the LLM, inflating
+        # agreement rates and hiding real disagreements.
+        agent_context = {} if is_urla else request.existing_borrower_data
 
         # Run agents in parallel
         agent_tasks = []
         for agent_name in agents_to_run:
-            if agent_name in self._agents:
-                agent = self._agents[agent_name]
+            if agent_name in available_agents:
+                agent = available_agents[agent_name]
                 task = asyncio.create_task(
-                    self._run_agent(agent, segments, request.existing_borrower_data)
+                    self._run_agent(agent, segments, agent_context)
                 )
                 agent_tasks.append((agent_name, task))
 
@@ -567,6 +618,23 @@ class CallIntelligenceProcessor:
             response.declarations_extractions.update(extractions_dict)
         elif agent_name == "intent":
             response.intent_extractions.update(extractions_dict)
+        elif agent_name == "urla":
+            # URLA agent extracts across multiple domains — route each field
+            for extraction in result.extractions:
+                fname = extraction.field_name
+                ev = {fname: extraction.value, f"{fname}_confidence": extraction.confidence}
+                if fname.startswith("is_veteran") or fname.startswith("military"):
+                    response.declarations_extractions.update(ev)
+                elif fname.startswith("declaration_"):
+                    response.declarations_extractions.update(ev)
+                elif fname.startswith("coborrower") or fname == "has_coborrower":
+                    response.identity_extractions.update(ev)
+                elif fname.startswith("gift") or fname == "has_gift_funds":
+                    response.assets_extractions.update(ev)
+                elif fname == "current_housing_status":
+                    response.address_extractions.update(ev)
+                else:
+                    response.declarations_extractions.update(ev)
 
     def _populate_call_outcome(self, response: CallIntelligenceResponse) -> None:
         """

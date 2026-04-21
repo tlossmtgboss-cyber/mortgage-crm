@@ -45,6 +45,8 @@ final class CarPlayAPIService: @unchecked Sendable {
     // MARK: - URL Session
 
     /// Dedicated URLSession with sensible timeouts for automotive use.
+    /// Uses certificate pinning via CertificatePinningDelegate to protect
+    /// all API requests against MITM attacks.
     private let session: URLSession = {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 15
@@ -53,7 +55,7 @@ final class CarPlayAPIService: @unchecked Sendable {
         // CarPlay may operate on cellular with variable latency
         config.allowsCellularAccess = true
         config.httpMaximumConnectionsPerHost = 4
-        return URLSession(configuration: config)
+        return createPinnedURLSession(configuration: config)
     }()
 
     // MARK: - Cache

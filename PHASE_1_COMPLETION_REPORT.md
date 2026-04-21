@@ -342,7 +342,7 @@ Changes:
 
 **Test Credentials:**
 - Email: tloss@cmgfi.com
-- Password: Woodwindow00! (⚠️ Change after testing)
+- Password: [SET VIA ENVIRONMENT VARIABLE]
 
 ---
 
@@ -414,7 +414,7 @@ While Phase 1 backend is complete, the following are needed for full functionali
 ✅ Bearer token validation enforced
 ✅ SQL injection protected (SQLAlchemy ORM)
 ✅ No sensitive data exposed in logs
-⚠️ Test password should be changed: Woodwindow00!
+⚠️ Password must be provided via environment variable
 
 ---
 

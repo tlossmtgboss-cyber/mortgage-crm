@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException, Depends, Header
 from typing import Any, Optional
 import logging
 import os
+import secrets
 
 from database import SessionLocal
 from sqlalchemy import text
@@ -29,7 +30,7 @@ async def verify_admin_access(
     admin_key = os.getenv("MIGRATION_ADMIN_KEY")
 
     # Option 1: Check admin key header
-    if admin_key and x_admin_key == admin_key:
+    if admin_key and x_admin_key and secrets.compare_digest(x_admin_key, admin_key):
         return True
 
     # Option 2: Check for authenticated admin user via JWT token

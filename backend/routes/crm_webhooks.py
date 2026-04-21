@@ -11,7 +11,8 @@ Handles webhook receivers for:
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Header, Request
 from sqlalchemy.orm import Session
-from typing import Optional, Dict, Any, List
+from sqlalchemy import text as sa_text
+from typing import Optional, Dict, Any, List, Tuple
 from datetime import datetime, date, timezone
 from pydantic import BaseModel, Field
 import logging
@@ -27,7 +28,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/crm-webhooks", tags=["CRM Webhooks"])
 
 # Webhook secret for signature verification
-WEBHOOK_SECRET = os.getenv("CRM_WEBHOOK_SECRET", "development-secret-key")
+WEBHOOK_SECRET = os.getenv("CRM_WEBHOOK_SECRET", "")
+IS_PRODUCTION = os.getenv("ENVIRONMENT", "development") != "development"
 
 
 # =============================================================================
@@ -104,6 +106,9 @@ def verify_webhook_signature(
     secret: str = WEBHOOK_SECRET
 ) -> bool:
     """Verify webhook signature for security."""
+    if not secret:
+        # No secret configured — cannot verify
+        return False
     expected_signature = hmac.new(
         secret.encode(),
         payload,
@@ -117,9 +122,13 @@ async def get_verified_payload(
     x_webhook_signature: Optional[str] = Header(None, alias="X-Webhook-Signature"),
 ) -> bool:
     """Dependency to verify webhook signatures in production."""
-    # Skip verification in development only
-    if os.getenv("ENVIRONMENT", "development") == "development":
+    if not IS_PRODUCTION:
+        logger.warning("Webhook signature verification SKIPPED in development mode")
         return True
+
+    if not WEBHOOK_SECRET:
+        logger.error("CRM_WEBHOOK_SECRET is not configured — rejecting webhook (fail-closed)")
+        raise HTTPException(status_code=500, detail="Webhook secret not configured")
 
     if not x_webhook_signature:
         raise HTTPException(status_code=401, detail="Missing webhook signature")
@@ -128,6 +137,30 @@ async def get_verified_payload(
     if not verify_webhook_signature(body, x_webhook_signature):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
     return True
+
+
+# =============================================================================
+# TENANT ISOLATION HELPER
+# =============================================================================
+
+def _resolve_org_from_loan(db: Session, loan_id: int) -> int:
+    """
+    Look up the organization_id for a loan from the main loans table.
+
+    Raises HTTPException 404 if the loan does not exist.
+    Returns the organization_id for use as a tenant filter in subsequent queries.
+    """
+    row = db.execute(
+        sa_text("SELECT organization_id FROM loans WHERE id = :loan_id"),
+        {"loan_id": loan_id},
+    ).fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Loan {loan_id} not found")
+    org_id = row[0]
+    if not org_id:
+        logger.error(f"Loan {loan_id} has NULL organization_id — tenant isolation cannot be enforced")
+        raise HTTPException(status_code=403, detail="Loan has no organization — access denied")
+    return org_id
 
 
 # =============================================================================
@@ -187,13 +220,16 @@ async def handle_milestone_update(
     the change to connected WebSocket clients.
     """
     try:
+        # Tenant isolation: verify loan exists and resolve org
+        org_id = _resolve_org_from_loan(db, payload.loan_id)
+
         # Import service
         from services.portal_milestone_service import PortalMilestoneService
         from models.portal_models import MilestoneStatus, MilestoneInstance, MilestoneTemplate
 
         service = PortalMilestoneService(db)
 
-        # Find the milestone instance
+        # Find the milestone instance (org validated via _resolve_org_from_loan above)
         milestone = db.query(MilestoneInstance).join(MilestoneTemplate).filter(
             MilestoneInstance.loan_id == payload.loan_id,
             MilestoneTemplate.code == payload.milestone_code
@@ -272,6 +308,9 @@ async def handle_bulk_milestone_update(
     Useful for syncing multiple milestones at once.
     """
     try:
+        # Tenant isolation: verify loan exists once for the batch
+        _resolve_org_from_loan(db, payload.loan_id)
+
         results = []
         for milestone_payload in payload.milestones:
             # Create individual payload with loan_id
@@ -323,12 +362,15 @@ async def handle_close_on_time_milestone(
     Updates the COT milestone and broadcasts to connected clients.
     """
     try:
+        # Tenant isolation: verify loan exists and resolve org
+        org_id = _resolve_org_from_loan(db, payload.loan_id)
+
         from services.portal_close_on_time_service import PortalCloseOnTimeService
         from models.portal_models import CloseOnTimeMilestone, CloseOnTimeSchedule
 
         service = PortalCloseOnTimeService(db)
 
-        # Find the schedule
+        # Find the schedule (org validated via _resolve_org_from_loan above)
         schedule = db.query(CloseOnTimeSchedule).filter(
             CloseOnTimeSchedule.loan_id == payload.loan_id
         ).first()
@@ -417,6 +459,9 @@ async def handle_close_schedule_update(
     Create or update Close On Time schedule for a loan.
     """
     try:
+        # Tenant isolation: verify loan exists and resolve org
+        org_id = _resolve_org_from_loan(db, loan_id)
+
         from services.portal_close_on_time_service import PortalCloseOnTimeService
 
         service = PortalCloseOnTimeService(db)
@@ -469,6 +514,9 @@ async def handle_lifecycle_change(
     Updates the portal loan lifecycle and broadcasts to clients.
     """
     try:
+        # Tenant isolation: verify loan exists and resolve org
+        org_id = _resolve_org_from_loan(db, payload.loan_id)
+
         from services.portal_lifecycle_service import PortalLifecycleService
         from models.portal_models import LifecycleStage
 
@@ -544,21 +592,24 @@ async def handle_document_upload(
     Updates document status and broadcasts to portal clients.
     """
     try:
+        # Tenant isolation: verify loan exists and resolve org
+        org_id = _resolve_org_from_loan(db, payload.loan_id)
+
         from models.portal_models import LoanActivityLog
 
         # Log the document activity
         activity = LoanActivityLog(
             loan_id=payload.loan_id,
             activity_type="document_uploaded",
-            description=f"Document '{payload.file_name}' uploaded",
-            metadata={
+            activity_title=f"Document uploaded: {payload.file_name}",
+            activity_description=f"Document '{payload.file_name}' uploaded",
+            extra_data={
                 "document_id": payload.document_id,
                 "document_type": payload.document_type,
                 "file_name": payload.file_name,
                 "status": payload.status,
                 "uploaded_by": payload.uploaded_by,
             },
-            actor=payload.uploaded_by,
             is_visible_to_borrower=True,
         )
         db.add(activity)
@@ -607,6 +658,9 @@ async def handle_document_status_change(
     Handle document status change from CRM.
     """
     try:
+        # Tenant isolation: verify loan exists and resolve org
+        org_id = _resolve_org_from_loan(db, loan_id)
+
         from services.portal_document_service import PortalDocumentService
 
         service = PortalDocumentService(db)
@@ -661,6 +715,9 @@ async def handle_full_sync(
     for the specified loan.
     """
     try:
+        # Tenant isolation: verify loan exists and resolve org
+        org_id = _resolve_org_from_loan(db, loan_id)
+
         # Broadcast sync start
         await broadcast_loan_update(
             loan_id=loan_id,
@@ -676,31 +733,36 @@ async def handle_full_sync(
             "documents_synced": 0,
         }
 
-        # Sync milestones from CRM
-        from sqlalchemy import text
-        milestones = db.execute(text("""
-            SELECT id FROM loan_milestones WHERE loan_id = :loan_id
-        """), {"loan_id": loan_id}).fetchall()
+        # Sync milestones from CRM (filtered by org via loan ownership)
+        milestones = db.execute(sa_text("""
+            SELECT lm.id FROM loan_milestones lm
+            JOIN loans l ON l.id = lm.loan_id
+            WHERE lm.loan_id = :loan_id AND l.organization_id = :org_id
+        """), {"loan_id": loan_id, "org_id": org_id}).fetchall()
         sync_results["milestones_synced"] = len(milestones)
 
-        # Sync lifecycle stage
-        loan = db.execute(text("""
-            SELECT lifecycle_stage FROM loans WHERE id = :loan_id
-        """), {"loan_id": loan_id}).fetchone()
+        # Sync lifecycle stage (filtered by org)
+        loan = db.execute(sa_text("""
+            SELECT lifecycle_stage FROM loans
+            WHERE id = :loan_id AND organization_id = :org_id
+        """), {"loan_id": loan_id, "org_id": org_id}).fetchone()
         if loan:
             sync_results["lifecycle_synced"] = True
             sync_results["current_stage"] = loan[0]
 
-        # Sync documents
-        documents = db.execute(text("""
-            SELECT id FROM loan_documents WHERE loan_id = :loan_id
-        """), {"loan_id": loan_id}).fetchall()
+        # Sync documents (filtered by org via loan ownership)
+        documents = db.execute(sa_text("""
+            SELECT ld.id FROM loan_documents ld
+            JOIN loans l ON l.id = ld.loan_id
+            WHERE ld.loan_id = :loan_id AND l.organization_id = :org_id
+        """), {"loan_id": loan_id, "org_id": org_id}).fetchall()
         sync_results["documents_synced"] = len(documents)
 
-        # Update last_synced timestamp
-        db.execute(text("""
-            UPDATE loans SET updated_at = CURRENT_TIMESTAMP WHERE id = :loan_id
-        """), {"loan_id": loan_id})
+        # Update last_synced timestamp (filtered by org)
+        db.execute(sa_text("""
+            UPDATE loans SET updated_at = CURRENT_TIMESTAMP
+            WHERE id = :loan_id AND organization_id = :org_id
+        """), {"loan_id": loan_id, "org_id": org_id})
         db.commit()
 
         # Broadcast sync complete

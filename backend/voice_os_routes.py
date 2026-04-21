@@ -19,19 +19,21 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/voice", tags=["voice-os"])
 
 # Auth dependency - lazy loaded to avoid circular imports
+# FAIL CLOSED - do not fall back to None
 _get_current_user = None
 
 def set_auth_dependency(get_current_user_func):
     """Set the auth dependency from main.py to avoid circular imports"""
     global _get_current_user
+    if get_current_user_func is None:
+        raise ValueError("Cannot set auth dependency to None")
     _get_current_user = get_current_user_func
 
 async def get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current user - raises 401 if not authenticated"""
+    """Get current user - raises 503 if auth not initialized, 401 if not authenticated"""
     if _get_current_user is None:
-        # Fallback: allow unauthenticated access if auth not configured
-        logger.warning("Voice OS auth dependency not configured - allowing unauthenticated access")
-        return None
+        logger.error("Voice OS auth dependency not initialized - rejecting request")
+        raise HTTPException(status_code=503, detail="Auth not initialized")
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
     if not token:

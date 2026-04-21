@@ -16,6 +16,7 @@ import os
 import uuid
 import logging
 import asyncio
+import secrets
 from datetime import datetime, timezone
 from typing import Optional, Dict, Any
 
@@ -359,7 +360,7 @@ async def initiate_amd_outbound_call(
     # Determine user
     user_id = None
     expected_admin_key = os.getenv("ADMIN_API_KEY")
-    if expected_admin_key and admin_key == expected_admin_key and user_email:
+    if expected_admin_key and admin_key and secrets.compare_digest(admin_key, expected_admin_key) and user_email:
         user_result = db.execute(text("SELECT id FROM users WHERE email = :email"), {"email": user_email}).fetchone()
         if not user_result:
             raise HTTPException(status_code=404, detail=f"User {user_email} not found")

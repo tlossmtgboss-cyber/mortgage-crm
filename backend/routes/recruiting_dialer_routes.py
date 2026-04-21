@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from datetime import datetime
 from sqlalchemy import text
 from database import SessionLocal
+from db import get_db as _get_db_canonical
 from auth.dependencies import get_current_user
 from database.models import User
 from contextlib import contextmanager
@@ -38,12 +39,16 @@ _verify_telnyx_webhook = require_telnyx_webhook
 
 @contextmanager
 def get_db_connection():
-    """Context manager for database connections."""
-    db = SessionLocal()
+    """Context manager for database connections using canonical RLS-aware get_db."""
+    gen = _get_db_canonical()
+    db = next(gen)
     try:
         yield db
     finally:
-        db.close()
+        try:
+            next(gen)
+        except StopIteration:
+            pass
 
 
 router = APIRouter(prefix="/api/v1/recruiting/dialer", tags=["Recruiting Dialer"])

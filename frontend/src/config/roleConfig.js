@@ -145,19 +145,6 @@ export const NAVIGATION_ITEMS = {
     label: 'Capacity',
     module: 'recruiting_suite'  // Premium: Recruiting Suite module
   },
-  // DEPRECATED: Premium feature deregistered — not yet launched
-  // recruiting: {
-  //   path: '/master-manager/recruiting',
-  //   label: 'Recruiting',
-  //   matchPaths: ['/master-manager/recruiting', '/master-manager'],
-  //   module: 'recruiting_suite'  // Premium: Recruiting Suite module
-  // },
-  // partnerRecruiting: {
-  //   path: '/partner-recruiting',
-  //   label: 'Partner Recruiting',
-  //   matchPaths: ['/partner-recruiting/'],
-  //   module: 'recruiting_suite'  // Premium: Recruiting Suite module
-  // },
   conversationIntelligence: {
     path: '/conversation-intelligence',
     label: 'Call Intelligence',
@@ -379,8 +366,6 @@ export const ROLE_NAVIGATION = {
     'opsManager',           // Ops Manager: Pipeline health & impediments
     'accounting',           // Accounting System
     'capacity',
-    // 'recruiting',  // DEPRECATED: Premium feature deregistered — not yet launched
-    // 'partnerRecruiting',  // DEPRECATED: Premium feature deregistered — not yet launched
     'integrations',         // Integrations
     'productionPredictor',
     'dealAlerts'
@@ -409,10 +394,8 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter',
     'market',
     'profitability',
-    // 'partnerRecruiting',  // DEPRECATED: Premium feature deregistered — not yet launched
     'integrations',
     'opsManager'            // Ops Manager: Pipeline health & impediments
-    // NOTE: No usageIntelligence, accounting, capacity, recruiting - these are platform admin only
   ],
 
   // Loan Officer - Full sales navigation
@@ -437,7 +420,6 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter',
     'market',
     'profitability',
-    // 'partnerRecruiting'  // DEPRECATED: Premium feature deregistered — not yet launched
   ],
 
   // Production Assistant - Support role navigation
@@ -527,7 +509,6 @@ export const ROLE_NAVIGATION = {
     'aiUnderwriter',
     'market',
     'accounting',       // Accounting System
-    // 'recruiting'  // DEPRECATED: Premium feature deregistered — not yet launched
   ],
 
   // Executive - Minimal high-level navigation
@@ -539,7 +520,6 @@ export const ROLE_NAVIGATION = {
     'calendar',
     'briefing',         // Morning Briefing page
     'accounting',       // Accounting System
-    // 'recruiting'  // DEPRECATED: Premium feature deregistered — not yet launched
   ]
 };
 
@@ -955,7 +935,6 @@ export const MASTER_ADMIN_NAVIGATION = [
       { path: '/portfolio', label: 'Portfolio', icon: 'fa-users' },
       { path: '/rate-monitor', label: 'Rate Monitor', icon: 'fa-chart-line' },
       { path: '/referral-partners', label: 'Partners', icon: 'fa-handshake' },
-      // { path: '/partner-recruiting', label: 'Partner Recruiting', icon: 'fa-user-tie' },  // DEPRECATED: Premium feature deregistered — not yet launched
       { path: '/marketing', label: 'Marketing', icon: 'fa-bullhorn' },
     ]
   },
@@ -991,7 +970,6 @@ export const MASTER_ADMIN_NAVIGATION = [
         ]
       },
       { path: '/master-manager', label: 'Capacity', icon: 'fa-chart-pie' },
-      // { path: '/master-manager/recruiting', label: 'Recruiting', icon: 'fa-user-plus' },  // DEPRECATED: Premium feature deregistered — not yet launched
       { path: '/usage-intelligence', label: 'Usage Intelligence', icon: 'fa-chart-bar' },
       { path: '/integrations', label: 'Integrations', icon: 'fa-plug' },
       {

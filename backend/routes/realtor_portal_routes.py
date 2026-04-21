@@ -50,6 +50,7 @@ def format_date(val):
 # =============================================================================
 
 from db import get_db
+from auth.dependencies import get_current_user
 
 _anthropic_client = None
 
@@ -125,16 +126,6 @@ class SMSWebhookPayload(BaseModel):
 class PartnerNoteRequest(BaseModel):
     """Request to add a partner note to a client/lead."""
     content: str = Field(..., min_length=1, max_length=2000)
-
-
-# =============================================================================
-# DEBUG ENDPOINT
-# =============================================================================
-
-@router.get("/debug/notes-version")
-async def debug_notes_version():
-    """Debug endpoint to verify deployment version."""
-    return {"version": "v3-jsonresponse", "timestamp": "2024-12-27T10:00:00Z"}
 
 
 # =============================================================================
@@ -614,28 +605,8 @@ async def download_letter_pdf(
     if not html_content:
         raise HTTPException(status_code=500, detail="Letter has no content")
 
-    # Try xhtml2pdf (pure Python), fallback to HTML
-    pdf_bytes = None
-    try:
-        from xhtml2pdf import pisa
-        from io import BytesIO
-
-        result_buffer = BytesIO()
-        pisa_status = pisa.CreatePDF(html_content, dest=result_buffer)
-
-        if pisa_status.err:
-            logger.warning(f"xhtml2pdf had errors: {pisa_status.err}")
-            pdf_bytes = html_content.encode("utf-8")
-        else:
-            pdf_bytes = result_buffer.getvalue()
-    except ImportError:
-        # xhtml2pdf not available - return HTML as downloadable file
-        logger.warning("xhtml2pdf not available, returning HTML")
-        pdf_bytes = html_content.encode("utf-8")
-    except Exception as e:
-        logger.error(f"PDF generation error: {e}")
-        # Return HTML as fallback
-        pdf_bytes = html_content.encode("utf-8")
+    # Return HTML as downloadable file (client-side PDF generation preferred)
+    pdf_bytes = html_content.encode("utf-8")
 
     # Record download
     try:
@@ -1941,7 +1912,7 @@ async def health_check():
 
 @router.post("/admin/create-test-realtor")
 async def create_test_realtor(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     db: Session = Depends(get_db)
 ):
     """
@@ -2071,138 +2042,9 @@ async def create_test_realtor(
         )
 
 
-@router.get("/debug/test-preapproval/{lead_id}")
-async def debug_test_preapproval(
-    lead_id: int,
-    full_test: bool = False,
-    db: Session = Depends(get_db)
-):
-    """Debug endpoint to test pre-approval letter generation"""
-    import traceback
-
-    result = {"steps": [], "error": None}
-
-    try:
-        # Step 1: Check if lead exists (with full columns like actual endpoint)
-        result["steps"].append("Checking lead with full columns...")
-        lead = db.execute(text("""
-            SELECT
-                l.id, l.name, l.email, l.phone, l.loan_amount, l.loan_type,
-                l.address, l.city, l.state, l.zip_code, l.credit_score,
-                l.property_type, l.ltv, l.down_payment, l.interest_rate,
-                l.stage, l.owner_id
-            FROM leads l
-            WHERE l.id = :lead_id
-        """), {"lead_id": lead_id}).fetchone()
-
-        if not lead:
-            result["error"] = f"Lead {lead_id} not found"
-            return result
-
-        result["steps"].append(f"Lead found: {lead[1]}, loan_amount={lead[4]}")
-        result["lead_data"] = {
-            "id": lead[0], "name": lead[1], "email": lead[2], "phone": lead[3],
-            "loan_amount": lead[4], "loan_type": lead[5], "owner_id": lead[16]
-        }
-
-        # Get organization_id from the lead's owner
-        org_id = 1  # Default
-        if lead[16]:  # owner_id
-            owner = db.execute(text("SELECT organization_id FROM users WHERE id = :uid"), {"uid": lead[16]}).fetchone()
-            if owner and owner[0]:
-                org_id = owner[0]
-        result["steps"].append(f"Using organization_id: {org_id}")
-        result["org_id"] = org_id
-
-        # Step 2: Get org info (only columns that exist)
-        result["steps"].append("Getting organization info...")
-        org = db.execute(text("""
-            SELECT id, name
-            FROM organizations
-            WHERE id = :org_id
-        """), {"org_id": org_id}).fetchone()
-        if org:
-            result["steps"].append(f"Organization: {org[1]}")
-            result["org"] = {"id": org[0], "name": org[1]}
-        else:
-            result["steps"].append("No organization found, using defaults")
-
-        # Step 3: Get LO info
-        result["steps"].append("Getting LO info...")
-        if lead[16]:
-            lo = db.execute(text("""
-                SELECT id, full_name, email, phone, nmls_id
-                FROM users
-                WHERE id = :user_id
-            """), {"user_id": lead[16]}).fetchone()
-            if lo:
-                result["steps"].append(f"LO: {lo[1]}")
-                result["lo"] = {"id": lo[0], "name": lo[1], "nmls": lo[4]}
-            else:
-                result["steps"].append("LO not found")
-        else:
-            result["steps"].append("No owner assigned")
-
-        # Step 4: Check table exists
-        result["steps"].append("Checking pre_approval_letters table...")
-        table_check = db.execute(text("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_name = 'pre_approval_letters'
-            ORDER BY ordinal_position
-        """)).fetchall()
-
-        result["table_columns"] = [row[0] for row in table_check]
-        result["steps"].append(f"Table has {len(table_check)} columns")
-
-        if full_test:
-            # Step 5: Try a full insert like the actual endpoint
-            result["steps"].append("Testing full insert...")
-            test_html = "<html><body>Test Letter</body></html>"
-            test_token = secrets.token_urlsafe(32)
-            test_variables = json.dumps({"borrower_name": lead[1] or "", "loan_amount": lead[4] or 300000})
-
-            insert_result = db.execute(text("""
-                INSERT INTO pre_approval_letters (
-                    organization_id, lead_id, letter_type, version,
-                    generated_html, variables_used, property_address, purchase_price,
-                    approved_amount, expires_at, generated_by_realtor, share_token
-                ) VALUES (
-                    :org_id, :lead_id, 'preapproval', 1,
-                    :html, :variables, :property_address, :purchase_price,
-                    :approved_amount, :expires_at, :partner_id, :share_token
-                )
-                RETURNING id
-            """), {
-                "org_id": org_id,
-                "lead_id": lead_id,
-                "html": test_html,
-                "variables": test_variables,
-                "property_address": None,
-                "purchase_price": None,
-                "approved_amount": lead[4] or 300000,
-                "expires_at": datetime.now(timezone.utc) + timedelta(days=90),
-                "partner_id": None,
-                "share_token": test_token
-            })
-            letter_id = insert_result.fetchone()[0]
-            db.commit()
-
-            result["steps"].append(f"Full insert successful! Letter ID: {letter_id}")
-            result["letter_id"] = letter_id
-
-        result["success"] = True
-
-    except SQLAlchemyError as e:
-        result["error"] = "Database error"
-        logger.error(f"Realtor portal DB error: {e}")
-        db.rollback()
-
-    return result
-
-
 @router.post("/admin/run-migration")
 async def run_realtor_portal_migration(
-    admin_key: str = Query(..., description="Admin API key"),
+    admin_key: str = Header(..., alias="X-Admin-Key", description="Admin API key"),
     db: Session = Depends(get_db)
 ):
     """
@@ -2507,11 +2349,13 @@ class AssignPartnerRequest(BaseModel):
 async def assign_partner_to_client(
     client_id: int,
     request: AssignPartnerRequest,
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Assign a referral partner to a client/lead.
     This creates the Buyer's Agent Portal access for the partner.
+    Requires CRM authentication.
 
     Args:
         client_id: The lead/client ID to assign the partner to

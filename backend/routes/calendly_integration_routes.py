@@ -77,6 +77,43 @@ def get_models():
     return User, Lead, Task, IntegrationCredential, CalendarMapping
 
 
+def _resolve_org_from_webhook(db, payload: dict) -> Optional[int]:
+    """Resolve organization_id from Calendly webhook payload.
+
+    Uses event_memberships[0].user URI to look up CalendlyIntegration,
+    which stores the org relationship. Returns None if unresolvable.
+    """
+    try:
+        from routes.calendly_routes import CalendlyIntegration
+    except ImportError:
+        logger.error("Cannot import CalendlyIntegration model for org resolution")
+        return None
+
+    event = payload.get("payload", {}).get("scheduled_event", {})
+    event_memberships = event.get("event_memberships", [])
+    if not event_memberships:
+        # Try alternate payload structure
+        event_memberships = payload.get("payload", {}).get("event_memberships", [])
+
+    if not event_memberships:
+        logger.warning("No event_memberships in Calendly webhook — cannot resolve org")
+        return None
+
+    calendly_user_uri = event_memberships[0].get("user")
+    if not calendly_user_uri:
+        return None
+
+    integration = db.query(CalendlyIntegration).filter(
+        CalendlyIntegration.calendly_user_uri == calendly_user_uri
+    ).first()
+
+    if integration:
+        return integration.organization_id
+
+    logger.warning(f"No CalendlyIntegration found for user URI: {calendly_user_uri}")
+    return None
+
+
 @router.post("/connect")
 async def connect_calendly(
     request: dict,
@@ -288,27 +325,28 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
     # Read body once for both signature validation and JSON parsing
     body = await request.body()
 
-    # Validate Calendly webhook signature
-    if CALENDLY_WEBHOOK_SECRET:
-        signature = request.headers.get("Calendly-Webhook-Signature", "")
-        # Calendly signature format: "t=timestamp,v1=signature"
-        sig_parts = {}
-        for part in signature.split(","):
-            if "=" in part:
-                k, v = part.split("=", 1)
-                sig_parts[k] = v
-        timestamp = sig_parts.get("t", "")
-        provided_sig = sig_parts.get("v1", "")
-        expected = hmac.new(
-            CALENDLY_WEBHOOK_SECRET.encode(),
-            f"{timestamp}.{body.decode()}".encode(),
-            hashlib.sha256
-        ).hexdigest()
-        if not hmac.compare_digest(provided_sig, expected):
-            logger.warning(f"Invalid Calendly webhook signature from {request.client.host}")
-            raise HTTPException(status_code=401, detail="Invalid webhook signature")
-    else:
-        logger.warning("CALENDLY_WEBHOOK_SECRET not configured — skipping webhook verification")
+    # Validate Calendly webhook signature (fail-closed: reject if secret not configured)
+    if not CALENDLY_WEBHOOK_SECRET:
+        logger.error("CALENDLY_WEBHOOK_SECRET not configured — rejecting webhook (fail-closed)")
+        return {"status": "error", "detail": "Webhook signature verification not configured"}
+
+    signature = request.headers.get("Calendly-Webhook-Signature", "")
+    # Calendly signature format: "t=timestamp,v1=signature"
+    sig_parts = {}
+    for part in signature.split(","):
+        if "=" in part:
+            k, v = part.split("=", 1)
+            sig_parts[k] = v
+    timestamp = sig_parts.get("t", "")
+    provided_sig = sig_parts.get("v1", "")
+    expected = hmac.new(
+        CALENDLY_WEBHOOK_SECRET.encode(),
+        f"{timestamp}.{body.decode()}".encode(),
+        hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(provided_sig, expected):
+        logger.warning(f"Invalid Calendly webhook signature from {request.client.host}")
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
 
     try:
         import json as _json
@@ -316,6 +354,12 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
         event_type = payload.get("event")
 
         logger.info(f"Calendly webhook received: {event_type}")
+
+        # Resolve organization from webhook payload (tenant isolation)
+        organization_id = _resolve_org_from_webhook(db, payload)
+        if not organization_id:
+            logger.error("Cannot resolve organization_id from Calendly webhook — skipping processing")
+            return {"status": "error", "detail": "Unable to resolve organization context"}
 
         if event_type == "invitee.created":
             # Extract invitee and event details
@@ -325,8 +369,11 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
             event_uri = invitee_data.get("event")
             scheduled_at = invitee_data.get("scheduled_event", {}).get("start_time")
 
-            # Try to find matching lead by email
-            lead = db.query(Lead).filter(Lead.email == invitee_email).first()
+            # Try to find matching lead by email within the same org
+            lead = db.query(Lead).filter(
+                Lead.email == invitee_email,
+                Lead.organization_id == organization_id
+            ).first()
 
             if lead:
                 # Update lead with appointment info
@@ -340,26 +387,28 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
                 # Move lead to "Meeting Scheduled" stage if applicable
                 lead.stage = "meeting_scheduled"
 
-                # Create a task for the user
+                # Create a task for the user (with org isolation)
                 task = Task(
                     title=f"Meeting scheduled with {invitee_name}",
                     description=f"Calendly meeting booked for {scheduled_at}",
                     due_date=datetime.fromisoformat(scheduled_at.replace('Z', '+00:00')) if scheduled_at else None,
                     priority="high",
                     status="pending",
-                    lead_id=lead.id
+                    lead_id=lead.id,
+                    organization_id=organization_id
                 )
                 db.add(task)
                 db.commit()
 
-                logger.info(f"Lead {lead.id} updated with Calendly appointment")
+                logger.info(f"Lead {lead.id} updated with Calendly appointment (org={organization_id})")
             else:
-                # Create new lead from Calendly booking
+                # Create new lead from Calendly booking (with org isolation)
                 new_lead = Lead(
                     name=invitee_name,
                     email=invitee_email,
                     stage="meeting_scheduled",
                     source="Calendly",
+                    organization_id=organization_id,
                     meta_data={
                         "calendly_booked": True,
                         "calendly_booked_at": scheduled_at,
@@ -370,21 +419,25 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
                 db.add(new_lead)
                 db.commit()
 
-                logger.info(f"New lead created from Calendly: {invitee_name}")
+                logger.info(f"New lead created from Calendly: {invitee_name} (org={organization_id})")
 
         elif event_type == "invitee.canceled":
             # Handle cancellation
             invitee_data = payload.get("payload", {})
             invitee_email = invitee_data.get("email")
 
-            lead = db.query(Lead).filter(Lead.email == invitee_email).first()
+            # Filter by org to prevent cross-tenant data access
+            lead = db.query(Lead).filter(
+                Lead.email == invitee_email,
+                Lead.organization_id == organization_id
+            ).first()
             if lead:
                 if lead.meta_data:
                     lead.meta_data["calendly_booked"] = False
                     lead.meta_data["calendly_canceled_at"] = datetime.now(timezone.utc).isoformat()
                     db.commit()
 
-                    logger.info(f"Lead {lead.id} Calendly appointment canceled")
+                    logger.info(f"Lead {lead.id} Calendly appointment canceled (org={organization_id})")
 
         return {"status": "success", "event": event_type}
 

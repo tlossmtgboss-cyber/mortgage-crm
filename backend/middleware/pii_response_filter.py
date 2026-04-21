@@ -261,13 +261,20 @@ def _extract_role_from_request(request: Request) -> Optional[str]:
         # actual auth verification already happened upstream.
         parts = token.split(".")
         if len(parts) != 3:
+            logger.warning(
+                "PII filter: malformed JWT (expected 3 parts, got %d) — "
+                "defaulting to masked mode", len(parts),
+            )
             return None
         # Add padding
         payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
         payload_bytes = base64.urlsafe_b64decode(payload_b64)
         payload = json.loads(payload_bytes)
         return payload.get("role") or payload.get("user_role")
-    except Exception:
+    except Exception as e:
+        logger.warning(
+            "PII filter: JWT payload decode failed (%s) — defaulting to masked mode", e,
+        )
         return None
 
 
@@ -281,7 +288,13 @@ def _should_mask(request: Request) -> bool:
     mask_header = request.headers.get("x-mask-pii", "").lower().strip()
     if mask_header == "false":
         role = _extract_role_from_request(request)
-        if role and role.lower() in _ADMIN_ROLES:
+        if role is None:
+            logger.warning(
+                "PII filter: X-Mask-PII=false requested but role extraction "
+                "failed — keeping PII masked (fail-closed) for %s %s",
+                request.method, request.url.path,
+            )
+        elif role.lower() in _ADMIN_ROLES:
             return False
     return True
 

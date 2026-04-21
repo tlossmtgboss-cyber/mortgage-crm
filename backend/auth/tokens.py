@@ -482,9 +482,9 @@ class TokenBlacklist:
 
     def __init__(self):
         self._redis = None
-        self._enabled = False
+        self._enabled = True  # Always enabled — in-memory fallback is the baseline
         self._fallback = _InMemoryBlacklist()
-        self._using_fallback = False
+        self._using_fallback = True  # Start in fallback mode until Redis is configured
 
     def _activate_fallback(self, operation: str, error: Exception):
         """Log and switch to in-memory fallback on Redis failure."""
@@ -550,11 +550,25 @@ class TokenBlacklist:
         return True
 
     def is_blacklisted(self, token: str) -> bool:
-        """Check if a token is blacklisted."""
+        """Check if a token is blacklisted (by full JWT token string)."""
         if not self._enabled:
             return False
 
         jti = get_token_jti(token)
+        if not jti:
+            return False
+
+        return self.is_blacklisted_by_jti(jti)
+
+    def is_blacklisted_by_jti(self, jti: str) -> bool:
+        """Check if a token is blacklisted by its JTI (token ID) directly.
+
+        This avoids re-decoding the JWT when the caller already has the JTI
+        extracted from the payload.
+        """
+        if not self._enabled:
+            return False
+
         if not jti:
             return False
 
@@ -564,7 +578,7 @@ class TokenBlacklist:
             try:
                 return self._redis.exists(key) > 0
             except Exception as e:
-                self._activate_fallback("is_blacklisted", e)
+                self._activate_fallback("is_blacklisted_by_jti", e)
 
         return self._fallback.exists(key) > 0
 
@@ -659,3 +673,22 @@ class TokenBlacklist:
 
 # Global blacklist instance
 token_blacklist = TokenBlacklist()
+
+
+def is_token_blacklisted(jti: str) -> bool:
+    """
+    Check if a token JTI has been blacklisted.
+
+    This is the convenience function that callers (middleware, route files) import
+    when they already have the JTI extracted from a decoded JWT payload.  It
+    delegates to the global TokenBlacklist singleton.
+
+    Args:
+        jti: The JWT token ID (jti claim) to check.
+
+    Returns:
+        True if the token has been blacklisted, False otherwise.
+    """
+    if not jti:
+        return False
+    return token_blacklist.is_blacklisted_by_jti(jti)

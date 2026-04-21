@@ -345,19 +345,27 @@ async def get_post_closing_calls(
     """Get post-closing calls"""
     try:
         if completed:
-            where_clause = "pc.completed_date IS NOT NULL"
+            query = """
+                SELECT pc.id, pc.loan_id, pc.scheduled_date, pc.completed_date,
+                       pc.experience_rating, l.borrower_name
+                FROM post_closing_calls pc
+                LEFT JOIN loans l ON pc.loan_id = l.id
+                WHERE pc.completed_date IS NOT NULL
+                ORDER BY pc.scheduled_date ASC
+                LIMIT :limit
+            """
         else:
-            where_clause = "pc.completed_date IS NULL AND pc.scheduled_date >= NOW()"
+            query = """
+                SELECT pc.id, pc.loan_id, pc.scheduled_date, pc.completed_date,
+                       pc.experience_rating, l.borrower_name
+                FROM post_closing_calls pc
+                LEFT JOIN loans l ON pc.loan_id = l.id
+                WHERE pc.completed_date IS NULL AND pc.scheduled_date >= NOW()
+                ORDER BY pc.scheduled_date ASC
+                LIMIT :limit
+            """
 
-        result = db.execute(text(f"""
-            SELECT pc.id, pc.loan_id, pc.scheduled_date, pc.completed_date,
-                   pc.experience_rating, l.borrower_name
-            FROM post_closing_calls pc
-            LEFT JOIN loans l ON pc.loan_id = l.id
-            WHERE {where_clause}
-            ORDER BY pc.scheduled_date ASC
-            LIMIT :limit
-        """), {"limit": limit}).fetchall()
+        result = db.execute(text(query), {"limit": limit}).fetchall()
 
         calls = [{
             "id": str(r[0]),

@@ -13,6 +13,7 @@ This module contains endpoints for:
 
 import os
 import logging
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -1005,10 +1006,12 @@ async def run_due_workflows(
         Lead = get_lead_model()
 
         # Get API key from header for scheduler authentication
-        api_key = request.headers.get("X-Scheduler-Key")
-        expected_key = os.getenv("SCHEDULER_API_KEY", "scheduler-secret-key")
+        api_key = request.headers.get("X-Scheduler-Key") or ""
+        expected_key = os.getenv("SCHEDULER_API_KEY", "")
 
-        if api_key != expected_key:
+        if not expected_key:
+            raise HTTPException(status_code=503, detail="Scheduler API key not configured")
+        if not secrets.compare_digest(api_key, expected_key):
             raise HTTPException(status_code=401, detail="Invalid scheduler key")
 
         now = datetime.now()

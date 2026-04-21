@@ -457,7 +457,7 @@ function DashboardTab({ partner, stats, categories, activities = [], partnerId, 
       case 'contact':
         // Open email to LO
         if (partner.assigned_lo_email) {
-          window.location.href = `mailto:${partner.assigned_lo_email}?subject=Partner Portal Message from ${partner.name}`;
+          window.location.href = `mailto:${encodeURIComponent(partner.assigned_lo_email)}?subject=${encodeURIComponent('Partner Portal Message from ' + (partner.name || ''))}`;
         } else {
           toast.error('Loan officer contact information not available. Please contact support.');
         }

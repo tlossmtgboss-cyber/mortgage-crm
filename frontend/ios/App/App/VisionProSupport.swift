@@ -177,7 +177,8 @@ final class PerenniaAPIService: ObservableObject {
         config.timeoutIntervalForRequest = 15
         config.timeoutIntervalForResource = 30
         config.waitsForConnectivity = true
-        self.session = URLSession(configuration: config)
+        // Use certificate pinning to protect API requests on visionOS
+        self.session = createPinnedURLSession(configuration: config)
 
         // If a token already exists in the keychain (e.g., app relaunch
         // with an active session), use it so data loads immediately rather

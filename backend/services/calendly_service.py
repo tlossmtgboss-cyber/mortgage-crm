@@ -36,12 +36,19 @@ AVAILABILITY_CACHE_TTL = 900  # 15 minutes
 
 
 def get_fernet():
-    """Get Fernet cipher for token encryption"""
+    """Get Fernet cipher for token encryption.
+
+    Raises RuntimeError if CALENDLY_ENCRYPTION_KEY is not set.
+    A temporary key would silently encrypt tokens that become
+    undecryptable after a restart — fail-closed instead.
+    """
     if not ENCRYPTION_KEY:
-        # Generate a temporary key for development
-        key = Fernet.generate_key()
-        logger.warning("Using temporary encryption key - set CALENDLY_ENCRYPTION_KEY in production")
-        return Fernet(key)
+        raise RuntimeError(
+            "CALENDLY_ENCRYPTION_KEY environment variable is not set. "
+            "Token encryption requires a persistent Fernet key. "
+            "Generate one with: python -c \"from cryptography.fernet import Fernet; "
+            "print(Fernet.generate_key().decode())\""
+        )
     return Fernet(ENCRYPTION_KEY.encode() if isinstance(ENCRYPTION_KEY, str) else ENCRYPTION_KEY)
 
 

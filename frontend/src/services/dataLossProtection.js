@@ -496,6 +496,7 @@ function _showBlurOverlay() {
   _blurOverlay = document.createElement('div');
   _blurOverlay.className = 'dlp-blur-overlay';
   _blurOverlay.setAttribute('aria-hidden', 'true');
+  // Safe: static HTML string with no user-controlled content
   _blurOverlay.innerHTML = '<div class="dlp-blur-message">Screen capture detected</div>';
   document.body.appendChild(_blurOverlay);
 }

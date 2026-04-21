@@ -170,23 +170,12 @@ async def voice_workflow_websocket(
         return
 
     try:
-        import jwt
-        SECRET_KEY = os.getenv("SECRET_KEY", "")
-        ALGORITHM = "HS256"
-
         user_id = None
 
-        # First try JWT token
+        # First try JWT token via centralized auth (handles RS256/HS256 + blacklist)
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
-            jti = payload.get("jti")
-            if jti:
-                try:
-                    from auth.tokens import is_token_blacklisted
-                    if is_token_blacklisted(jti):
-                        payload = None  # Treat as invalid
-                except ImportError:
-                    pass
+            from auth.tokens import verify_access_token
+            payload = verify_access_token(token)
             if payload:
                 email = payload.get("sub")
                 if email:
@@ -195,7 +184,9 @@ async def voice_workflow_websocket(
                     """), {"email": email}).fetchone()
                     if result:
                         user_id = result[0]
-        except jwt.PyJWTError:
+                if not user_id:
+                    user_id = payload.get("user_id")
+        except Exception:
             pass  # Not a valid JWT, try session token
 
         # Fall back to session token

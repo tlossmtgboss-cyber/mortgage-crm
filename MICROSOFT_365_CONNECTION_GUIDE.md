@@ -173,7 +173,7 @@ Your CRM is configured with:
 
 | Setting | Value |
 |---------|-------|
-| **Client ID** | `185b7101-9435-44da-87ab-b7582c4e4607` |
+| **Client ID** | `<set via MICROSOFT_CLIENT_ID env var in Railway>` |
 | **Tenant** | `common` (multi-tenant) |
 | **Redirect URI** | `https://app.perenniaai.com/api/v1/email/oauth/callback` |
 | **Scopes** | Mail.Read, Mail.ReadWrite, Mail.Send, User.Read, Contacts.Read |

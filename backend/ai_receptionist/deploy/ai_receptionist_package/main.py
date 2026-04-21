@@ -31,7 +31,12 @@ SessionLocal = sessionmaker(bind=engine)
 
 @contextmanager
 def get_db():
-    """Database session context manager."""
+    """Database session context manager.
+
+    WARNING: This is a standalone deployment package with its own engine.
+    RLS tenant context is NOT set because this runs outside the main app.
+    The AI receptionist uses organization-scoped queries explicitly.
+    """
     db = SessionLocal()
     try:
         yield db

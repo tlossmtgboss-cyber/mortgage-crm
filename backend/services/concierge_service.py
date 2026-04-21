@@ -17,6 +17,7 @@ APPLICATION_SCHEMA = {
         "fields": [
             "first_name", "last_name", "middle_name", "suffix",
             "email", "phone", "date_of_birth", "ssn",
+            # ECOA: marital_status collected for property rights only, NOT for credit decisioning
             "marital_status", "dependents_count", "dependents_ages",
             "citizenship_status"
         ],

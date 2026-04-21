@@ -1,13 +1,13 @@
 import { getToken } from '../utils/tokenStore';
 
 /**
- * DEPRECATED — Not imported by any active component.
- * Active scheduling uses api.js (schedulerAPI, calendarAPI).
- * Retained for reference only. Do NOT import.
- *
- * Original: Unified interface for booking appointments through either:
+ * Unified interface for booking appointments through either:
  * - Smart Scheduler (internal)
  * - Calendly (external integration)
+ *
+ * Note: Most scheduling now uses api.js (schedulerAPI, calendarAPI),
+ * but getCalendlySchedulingUrl is still used by EstimateComparison,
+ * and bookAppointment/getAvailability are used by ScheduleInterviewModal.
  */
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';

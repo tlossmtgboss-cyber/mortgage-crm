@@ -625,8 +625,8 @@ def require_data_scope(resource_type: str, action: str = 'view'):
 # ============================================================================
 
 def get_db():
-    """Get database session from canonical database module"""
-    from database import get_db as db_getter
+    """Get database session from canonical RLS-aware database module."""
+    from db import get_db as db_getter
     return db_getter()
 
 

@@ -1269,7 +1269,8 @@ async def reset_invitation(
         )
     except Exception as e:
         db.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to reset invitation %s", invite_id)
+        raise HTTPException(status_code=500, detail="Failed to reset invitation")
 
 
 @router.delete("/cleanup-test-account")
@@ -1365,5 +1366,5 @@ async def cleanup_test_account(
         raise
     except Exception as e:
         db.rollback()
-        logger.error(f"Cleanup error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Cleanup error for test account")
+        raise HTTPException(status_code=500, detail="Failed to clean up test account")

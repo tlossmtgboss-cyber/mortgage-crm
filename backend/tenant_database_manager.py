@@ -4,6 +4,7 @@ Manages dynamic database connections for multi-tenant architecture.
 Each organization/user gets their own PostgreSQL database.
 """
 import os
+import re as _re
 import logging
 from typing import Dict, Optional
 from contextlib import contextmanager
@@ -11,6 +12,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import QueuePool
 import psycopg2
+from psycopg2 import sql as psql
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 logger = logging.getLogger(__name__)
@@ -98,8 +100,14 @@ class TenantDatabaseManager:
             if cursor.fetchone():
                 logger.warning(f"Database {db_name} already exists")
             else:
-                # Create database
-                cursor.execute(f'CREATE DATABASE "{db_name}"')
+                # Validate db_name matches expected tenant DB pattern
+                if not _re.match(r'^[a-zA-Z0-9_-]+$', db_name):
+                    raise ValueError(f"Invalid database name: {db_name}")
+
+                # Create database using parameterized identifier (no f-string SQL)
+                cursor.execute(
+                    psql.SQL("CREATE DATABASE {}").format(psql.Identifier(db_name))
+                )
                 logger.info(f"Created database: {db_name}")
             
             cursor.close()
@@ -229,11 +237,8 @@ class TenantDatabaseManager:
             cursor = conn.cursor()
             
             # Validate db_name matches expected tenant DB pattern
-            import re as _re
             if not _re.match(r'^[a-zA-Z0-9_-]+$', db_name):
                 raise ValueError(f"Invalid database name: {db_name}")
-
-            from psycopg2 import sql as psql
 
             # Terminate existing connections
             cursor.execute(
