@@ -41,43 +41,6 @@ router = APIRouter(
 )
 
 
-# =============================================================================
-# Temporary Diagnostic — remove after fixing
-# =============================================================================
-
-@router.get("/diag/schema-check")
-async def diag_schema_check(db: Session = Depends(get_db)):
-    """Temporary diagnostic — check smart_document_requests schema in production."""
-    from sqlalchemy import text as _text, inspect as _inspect
-    result = {}
-    try:
-        inspector = _inspect(db.bind)
-        tables = inspector.get_table_names()
-        result["table_exists"] = "smart_document_requests" in tables
-
-        if result["table_exists"]:
-            cols = inspector.get_columns("smart_document_requests")
-            result["columns"] = {c["name"]: str(c["type"]) for c in cols}
-            result["column_count"] = len(cols)
-
-        # Test a simple INSERT + rollback
-        try:
-            db.execute(_text("""
-                INSERT INTO smart_document_requests
-                    (loan_id, doc_type, title, status, priority, required_count, applies_to)
-                VALUES (0, 'BANK_STATEMENT', '__diag_test__', 'OPEN', 'NORMAL', 1, 'BORROWER')
-            """))
-            db.rollback()
-            result["test_insert"] = "OK"
-        except Exception as e:
-            db.rollback()
-            result["test_insert"] = f"FAILED: {type(e).__name__}: {e}"
-
-    except Exception as e:
-        result["error"] = f"{type(e).__name__}: {e}"
-
-    return result
-
 
 # =============================================================================
 # Custom Request & Waive
