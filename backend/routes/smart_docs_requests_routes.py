@@ -59,7 +59,15 @@ async def add_custom_request(
     Optionally sends an email notification to the borrower if send_notification
     is set to True and borrower_email is provided.
     """
-    _verify_loan_tenant(db, loan_id, current_user)
+    import traceback as _tb
+
+    try:
+        _verify_loan_tenant(db, loan_id, current_user)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("custom-request: tenant verification failed for loan %s", loan_id)
+        return {"error": True, "stage": "tenant_verify", "detail": f"{type(e).__name__}: {e}"}
 
     if not borrower_id:
         from sqlalchemy import text as _text
@@ -68,18 +76,28 @@ async def add_custom_request(
         ).first()
         borrower_id = row[0] if row else 0
 
-    generator = NeedsListGenerator(db)
-    result = generator.add_custom_request(
-        loan_id=loan_id,
-        borrower_id=borrower_id,
-        title=body.title,
-        description=body.description,
-        instructions=body.instructions,
-        priority=body.priority,
-        due_date=body.due_date,
-        doc_type=body.doc_type,
-        requires_esign=body.requires_esign,
-    )
+    try:
+        generator = NeedsListGenerator(db)
+        result = generator.add_custom_request(
+            loan_id=loan_id,
+            borrower_id=borrower_id,
+            title=body.title,
+            description=body.description,
+            instructions=body.instructions,
+            priority=body.priority,
+            due_date=body.due_date,
+            doc_type=body.doc_type,
+            requires_esign=body.requires_esign,
+        )
+    except Exception as e:
+        db.rollback()
+        logger.exception("custom-request: add_custom_request failed for loan %s", loan_id)
+        return {
+            "error": True,
+            "stage": "create_request",
+            "detail": f"{type(e).__name__}: {e}",
+            "traceback": _tb.format_exc()[-500:],
+        }
 
     # Send notification if requested
     notification_sent = False
