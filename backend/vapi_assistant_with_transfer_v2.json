@@ -296,6 +296,6 @@
   "responseDelaySeconds": 0.4,
   "llmRequestDelaySeconds": 0.1,
   "numWordsToInterruptAssistant": 2,
-  "serverUrl": "https://app.perenniaai.com/api/vapi/webhook",
+  "serverUrl": "https://api.perenniaai.com/api/vapi/webhook",
   "serverUrlSecret": ""
 }

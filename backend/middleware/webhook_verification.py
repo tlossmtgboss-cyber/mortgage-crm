@@ -429,8 +429,8 @@ class WebhookVerifier:
         This method checks both header formats for maximum compatibility.
 
         Verification is **optional** when ``VAPI_WEBHOOK_SECRET`` is not
-        set (to allow development without configuring the secret).  When
-        the secret IS set, verification is fail-closed.
+        set — webhooks are allowed through with a warning.  When the
+        secret IS set, verification is fail-closed.
 
         Returns the raw request body bytes so the caller can parse JSON
         without reading the body a second time.
@@ -597,9 +597,9 @@ async def require_vapi_webhook(request: Request) -> bytes:
     Returns the raw request body bytes.  The caller should parse JSON
     from these bytes instead of calling ``request.json()`` again.
 
-    Verification is **skipped** when ``VAPI_WEBHOOK_SECRET`` is not set,
-    allowing local development without the secret.  In ``production`` /
-    ``staging`` it is fail-closed.
+    Verification is **skipped** when ``VAPI_WEBHOOK_SECRET`` is not set
+    (webhooks allowed through with a warning).  When the secret IS set,
+    verification is fail-closed.
 
     Usage:
         @router.post("/webhook/vapi")
