@@ -119,6 +119,8 @@ EXEMPT_PREFIXES_AUTH = (
 EXEMPT_PREFIXES = (
     "/api/v1/webhook/",
     "/api/v1/public/",
+    "/api/vapi/",
+    "/api/v1/telephony/",
     "/internal/",
 )
 

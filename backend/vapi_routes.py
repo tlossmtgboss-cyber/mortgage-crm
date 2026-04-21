@@ -164,30 +164,216 @@ async def vapi_webhook(
     _: bool = Depends(verify_vapi_request)
 ):
     """
-    Main Vapi webhook endpoint
-    Handles all webhook events from Vapi (calls, transcripts, etc.)
+    Main Vapi webhook endpoint.
+    Handles all webhook events from Vapi including assistant-request,
+    function-call, status-update, and end-of-call-report.
     """
     try:
         payload = await request.json()
-        logger.info(f"Vapi webhook received: {payload.get('message', {}).get('type')}")
+        message = payload.get("message", {})
+        message_type = message.get("type", "")
+        logger.info(f"Vapi webhook received: {message_type}")
 
-        # Process webhook in background to return 200 quickly
-        # Note: Don't pass db session to background task - it creates its own
+        if message_type == "assistant-request":
+            return _build_assistant_response(db, message)
+
         background_tasks.add_task(process_webhook_background, payload)
 
-        # Vapi expects 200 OK response quickly
         return JSONResponse(
             status_code=200,
             content={"status": "received"}
         )
 
     except Exception as e:
-        # Log error but still return 200 to Vapi
         logger.error(f"Webhook error: {str(e)}")
         return JSONResponse(
             status_code=200,
             content={"status": "error", "message": "Webhook processing error"}
         )
+
+
+def _build_assistant_response(db: Session, message: dict) -> dict:
+    """Build a full assistant config response for Vapi assistant-request."""
+    call_data = message.get("call", {})
+    customer_phone = call_data.get("customer", {}).get("number", "")
+    first_message = "Thank you for calling The Tim Loss Team. This is Sam. How may I help you today?"
+    system_content = _SAM_SYSTEM_PROMPT
+
+    try:
+        from database.models import Lead
+        org_id = _resolve_org_id_from_assistant(db, message)
+        query = db.query(Lead).filter(Lead.phone == customer_phone)
+        if org_id:
+            query = query.filter(Lead.organization_id == org_id)
+        lead = query.first()
+        if lead:
+            first_message = f"Hello {lead.first_name}! Thanks for calling back. How can I help you today?"
+            system_content += f"\n\nCALLER CONTEXT: You are speaking with {lead.first_name} {lead.last_name}, an existing customer."
+    except Exception as e:
+        logger.warning(f"Could not fetch lead data for assistant-request: {e}")
+
+    server_base = os.getenv("API_BASE_URL", "https://api.perenniaai.com")
+
+    return {
+        "assistant": {
+            "firstMessage": first_message,
+            "model": {
+                "model": "gpt-4o",
+                "provider": "openai",
+                "temperature": 0.7,
+                "messages": [{"role": "system", "content": system_content}],
+                "tools": _build_tools(server_base),
+            },
+            "voice": {
+                "provider": "playht",
+                "voiceId": "jennifer",
+            },
+            "transcriber": {
+                "provider": "deepgram",
+                "model": "nova-2",
+                "language": "en",
+                "endpointing": 255,
+            },
+            "endCallMessage": "Thank you for calling. Have a great day!",
+            "recordingEnabled": True,
+            "silenceTimeoutSeconds": 30,
+            "maxDurationSeconds": 1800,
+            "responseDelaySeconds": 0.4,
+            "llmRequestDelaySeconds": 0.1,
+            "numWordsToInterruptAssistant": 2,
+            "serverUrl": f"{server_base}/api/vapi/webhook",
+        }
+    }
+
+
+def _build_tools(server_base: str) -> list:
+    """Build the Vapi tool definitions with correct server URLs."""
+    def _tool(name, description, params, required=None):
+        return {
+            "type": "function",
+            "async": False,
+            "function": {
+                "name": name,
+                "description": description,
+                "parameters": {
+                    "type": "object",
+                    "properties": params,
+                    "required": required or [],
+                },
+            },
+            "server": {"url": f"{server_base}/api/vapi/functions/{name.replace('_', '-')}"},
+        }
+
+    return [
+        _tool("identify_caller",
+              "Identify caller by phone number to check if they're an existing customer. Call at START of every call.",
+              {"phone_number": {"type": "string", "description": "The caller's phone number"}},
+              ["phone_number"]),
+        _tool("transfer_to_production_assistant",
+              "Transfer call to Production Assistant. Use for new leads, active loans, and general inquiries.",
+              {
+                  "vapi_call_id": {"type": "string", "description": "Current Vapi call ID"},
+                  "caller_name": {"type": "string", "description": "Caller's full name"},
+                  "caller_phone": {"type": "string", "description": "Caller's phone number"},
+                  "reason": {"type": "string", "description": "Reason for call"},
+                  "caller_type": {"type": "string", "enum": ["new_lead", "active_loan", "existing_client", "prospect"]},
+                  "additional_context": {"type": "string", "description": "Additional context"},
+              },
+              ["vapi_call_id", "caller_name", "caller_phone", "reason", "caller_type"]),
+        _tool("transfer_to_loan_officer",
+              "Transfer to Loan Officer. ONLY for CRITICAL emergencies.",
+              {
+                  "vapi_call_id": {"type": "string"},
+                  "caller_name": {"type": "string"},
+                  "caller_phone": {"type": "string"},
+                  "urgency_reason": {"type": "string"},
+                  "additional_context": {"type": "string"},
+              },
+              ["vapi_call_id", "caller_name", "caller_phone", "urgency_reason"]),
+        _tool("transfer_to_processor",
+              "Transfer to Processor for processing/documentation questions.",
+              {
+                  "vapi_call_id": {"type": "string"},
+                  "caller_name": {"type": "string"},
+                  "caller_phone": {"type": "string"},
+                  "reason": {"type": "string"},
+                  "loan_number": {"type": "string", "description": "Loan number if mentioned"},
+                  "additional_context": {"type": "string"},
+              },
+              ["vapi_call_id", "caller_name", "caller_phone", "reason"]),
+        _tool("create_task",
+              "Create a callback task when caller requests follow-up.",
+              {
+                  "phone_number": {"type": "string"},
+                  "title": {"type": "string"},
+                  "description": {"type": "string"},
+                  "priority": {"type": "string", "enum": ["low", "medium", "high"]},
+              },
+              ["phone_number", "title"]),
+        _tool("schedule_appointment",
+              "Book a PHONE appointment. We only offer phone appointments.",
+              {
+                  "phone_number": {"type": "string"},
+                  "type": {"type": "string", "enum": ["Call"]},
+                  "appointment_time": {"type": "string"},
+                  "notes": {"type": "string"},
+              },
+              ["phone_number", "type"]),
+        _tool("get_available_time_slots",
+              "Check available phone appointment times.",
+              {"date": {"type": "string", "description": "YYYY-MM-DD"}}),
+        _tool("submit_preapproval_application",
+              "Submit a pre-approval application collected over the phone.",
+              {
+                  "phone_number": {"type": "string"},
+                  "first_name": {"type": "string"},
+                  "last_name": {"type": "string"},
+                  "email": {"type": "string"},
+                  "location": {"type": "string"},
+                  "price_target": {"type": "string"},
+                  "down_payment": {"type": "string"},
+                  "household_income": {"type": "string"},
+                  "credit_range": {"type": "string", "enum": ["760+", "740-759", "700-739", "660-699", "620-659", "<620", "Unsure"]},
+                  "employment_type": {"type": "string"},
+                  "first_time_buyer": {"type": "string"},
+                  "timeframe": {"type": "string"},
+              },
+              ["phone_number", "first_name", "last_name"]),
+        _tool("schedule_calendly_appointment",
+              "Provide Calendly scheduling link for discovery call.",
+              {
+                  "phone_number": {"type": "string"},
+                  "name": {"type": "string"},
+                  "email": {"type": "string"},
+              },
+              ["phone_number"]),
+    ]
+
+
+_SAM_SYSTEM_PROMPT = (
+    "You are Sam, the AI receptionist for The Tim Loss Team mortgage company.\n\n"
+    "CRITICAL CONVERSATION RULES - FOLLOW EXACTLY:\n"
+    "- Ask ONLY ONE question at a time. NEVER ask two questions in the same response.\n"
+    "- After asking a question, STOP talking immediately and wait for the caller to answer.\n"
+    "- Keep responses SHORT - maximum 2-3 sentences.\n"
+    "- Be conversational and friendly, not robotic.\n\n"
+    "Your job:\n"
+    "- Greet callers warmly\n"
+    "- Identify and route calls to the appropriate team member\n"
+    "- Help with pre-approval applications over the phone\n"
+    "- Schedule PHONE appointments only (never video or in-person)\n"
+    "- Answer questions about mortgage products\n"
+    "- Create callback tasks when needed\n\n"
+    "Mortgage products: Conventional, FHA, VA, USDA, Jumbo, Refinancing, Home equity lines.\n\n"
+    "ROUTING RULES:\n"
+    "1. At call start: get name and phone, call identify_caller\n"
+    "2. New leads / active loans: transfer_to_production_assistant\n"
+    "3. Loan Officer requests: LO is ALWAYS in appointments — offer Production Assistant or schedule callback\n"
+    "4. Processing/doc questions: transfer_to_processor\n"
+    "5. Appointments: get_available_time_slots then schedule_appointment (phone only)\n"
+    "6. Pre-approval: collect info one question at a time, then submit_preapproval_application\n\n"
+    "Conversation style: one question at a time, natural, patient, no jargon."
+)
 
 
 async def process_webhook_background(payload: Dict[str, Any]):
@@ -2113,6 +2299,63 @@ async def diagnose_phone_numbers(admin: Any = Depends(verify_admin_access)):
     except Exception as e:
         logger.error(f"Phone diagnostic error: {str(e)}")
         return {"error": "Internal server error"}
+
+
+@router.post("/diagnostic/restore-phone-config")
+async def restore_phone_config(admin: Any = Depends(verify_admin_access)):
+    """
+    Restore the Vapi phone number to use assistantId (not serverUrl).
+    Fixes the case where configure-phone-routing removed the assistantId.
+    """
+    import httpx
+
+    vapi_api_key = os.getenv("VAPI_API_KEY")
+    assistant_id = os.getenv("VAPI_ASSISTANT_ID", "120e239e-4d19-4e43-ad92-1f8b07d08c8c")
+    phone_number_id = "6adaf897-34d7-42d5-bc34-f1a17162a453"
+
+    if not vapi_api_key:
+        return {"error": "VAPI_API_KEY not configured"}
+
+    headers = {"Authorization": f"Bearer {vapi_api_key}", "Content-Type": "application/json"}
+
+    try:
+        async with httpx.AsyncClient() as client:
+            current = await client.get(
+                f"https://api.vapi.ai/phone-number/{phone_number_id}",
+                headers=headers, timeout=10,
+            )
+            if current.status_code != 200:
+                return {"error": f"Could not fetch phone number: {current.status_code}", "body": current.text}
+
+            phone_data = current.json()
+            current_assistant = phone_data.get("assistantId")
+            current_server_url = phone_data.get("serverUrl")
+
+            if current_assistant == assistant_id:
+                return {
+                    "status": "already_correct",
+                    "assistant_id": current_assistant,
+                    "server_url": current_server_url,
+                }
+
+            resp = await client.patch(
+                f"https://api.vapi.ai/phone-number/{phone_number_id}",
+                headers=headers,
+                json={"assistantId": assistant_id, "serverUrl": None},
+                timeout=15,
+            )
+
+            if resp.status_code == 200:
+                return {
+                    "status": "restored",
+                    "previous_assistant_id": current_assistant,
+                    "previous_server_url": current_server_url,
+                    "new_assistant_id": assistant_id,
+                }
+            return {"error": f"Vapi API error: {resp.status_code}", "body": resp.text}
+    except Exception as e:
+        logger.error(f"restore-phone-config error: {e}")
+        return {"error": str(e)}
 
 
 @router.get("/diagnostic/account")

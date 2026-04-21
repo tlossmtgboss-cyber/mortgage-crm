@@ -176,6 +176,8 @@ PUBLIC_PATHS = [
     "/api/v1/migrations/convert-lead-stage-to-enum-names",  # Key-protected migration
     "/api/v1/migrations/fix-lead-stage-values",  # Key-protected migration
     "/api/v1/webhook/",  # Webhooks must be accessible from external services (SendGrid, Telnyx, etc.)
+    "/api/vapi/",  # Vapi AI receptionist webhooks — verified by require_vapi_webhook
+    "/api/v1/telephony/",  # Telephony webhooks (Vapi inbound, call routing) — verified by require_vapi_webhook
     "/api/v1/referral-partners",  # May need public access for integrations
     "/api/v1/admin/account-management/cleanup/",  # Admin-key protected cleanup endpoints
     "/api/v1/admin/account-management/run-migration",  # Admin-key protected migration
@@ -533,6 +535,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             "/openapi.json",
             "/api/v1/public/",
             "/api/v1/webhook/",
+            "/api/vapi/",
+            "/api/v1/telephony/",
             "/api/v1/borrower/",
             "/lo/",
             "/portal/",
@@ -1074,6 +1078,8 @@ class RequestValidationMiddleware(BaseHTTPMiddleware):
             skip_validation_paths = [
                 "/api/v1/documents/upload",
                 "/api/v1/webhook/",
+                "/api/vapi/",
+                "/api/v1/telephony/",
                 "/api/v1/voice/",
                 "/api/v1/smart-docs/",
                 "/api/portal/",
