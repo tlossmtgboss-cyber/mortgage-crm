@@ -7,7 +7,8 @@ Auth: X-Internal-API-Key header (shared secret, no user JWT).
 import os
 import json
 import logging
-from typing import Any, Dict, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -384,3 +385,177 @@ async def find_referral_partners_endpoint(
         ],
         "count": len(partners),
     }
+
+
+class EmailReportRequest(BaseModel):
+    user_id: int
+    email: str
+    organization_id: Optional[int] = None
+    report_type: str = "daily"  # daily, pipeline, tasks
+
+
+@router.post("/email-report")
+async def email_daily_report(
+    req: EmailReportRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Compile a pipeline + leads + tasks report and email it to the LO."""
+    _verify_internal_key(request)
+
+    from database.models.lead_loan import Lead, Loan
+    from database.models.core import User
+    from database.models.task import Task
+    from sqlalchemy import func
+
+    org_filter = []
+    if req.organization_id:
+        org_filter_lead = [Lead.organization_id == req.organization_id]
+        org_filter_loan = [Loan.organization_id == req.organization_id]
+    else:
+        org_filter_lead = []
+        org_filter_loan = []
+
+    # ── Pipeline summary ──
+    active_stages = [
+        "APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED",
+        "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL",
+        "APPROVED", "SUSPENDED", "CTC", "CLEAR_TO_CLOSE",
+        "CLOSING", "DOCS", "DOCS_OUT",
+    ]
+    pipeline_rows = (
+        db.query(
+            func.upper(Loan.stage).label("stage"),
+            func.count(Loan.id).label("cnt"),
+            func.coalesce(func.sum(Loan.loan_amount), 0).label("volume"),
+        )
+        .filter(
+            func.upper(Loan.stage).in_(active_stages),
+            Loan.loan_officer_id == req.user_id,
+            *org_filter_loan,
+        )
+        .group_by(func.upper(Loan.stage))
+        .all()
+    )
+    total_loans = sum(r.cnt for r in pipeline_rows)
+    total_volume = sum(float(r.volume or 0) for r in pipeline_rows)
+
+    # ── Leads by stage ──
+    lead_rows = (
+        db.query(
+            func.coalesce(Lead.stage, "New").label("stage"),
+            func.count(Lead.id).label("cnt"),
+        )
+        .filter(Lead.owner_id == req.user_id, *org_filter_lead)
+        .group_by(func.coalesce(Lead.stage, "New"))
+        .all()
+    )
+    total_leads = sum(r.cnt for r in lead_rows)
+
+    # ── Tasks due today or overdue ──
+    today = datetime.now(timezone.utc).date()
+    tasks = (
+        db.query(Task)
+        .filter(
+            Task.owner_id == req.user_id,
+            Task.status.in_(["pending", "in_progress"]),
+        )
+        .order_by(Task.due_date.asc().nullslast(), Task.priority.desc())
+        .limit(30)
+        .all()
+    )
+
+    overdue = [t for t in tasks if t.due_date and t.due_date.date() < today]
+    due_today = [t for t in tasks if t.due_date and t.due_date.date() == today]
+    upcoming = [t for t in tasks if not t.due_date or t.due_date.date() > today]
+
+    # ── Compose HTML email ──
+    def fmt_currency(val):
+        try:
+            return f"${float(val):,.0f}"
+        except (TypeError, ValueError):
+            return "$0"
+
+    def task_row(t, label=""):
+        title = t.title or "Untitled"
+        due = t.due_date.strftime("%b %d") if t.due_date else "No date"
+        pri = (t.priority or "normal").capitalize()
+        badge = f' <span style="color:#dc2626;font-weight:bold;">({label})</span>' if label else ""
+        return f'<tr><td style="padding:6px 12px;">{title}{badge}</td><td style="padding:6px 12px;">{due}</td><td style="padding:6px 12px;">{pri}</td></tr>'
+
+    pipeline_html = ""
+    for r in sorted(pipeline_rows, key=lambda x: active_stages.index(x.stage) if x.stage in active_stages else 99):
+        stage_display = r.stage.replace("_", " ").title()
+        pipeline_html += f'<tr><td style="padding:6px 12px;">{stage_display}</td><td style="padding:6px 12px;text-align:center;">{r.cnt}</td><td style="padding:6px 12px;text-align:right;">{fmt_currency(r.volume)}</td></tr>'
+
+    leads_html = ""
+    for r in sorted(lead_rows, key=lambda x: x.cnt, reverse=True):
+        leads_html += f'<tr><td style="padding:6px 12px;">{r.stage}</td><td style="padding:6px 12px;text-align:center;">{r.cnt}</td></tr>'
+
+    tasks_html = ""
+    for t in overdue:
+        tasks_html += task_row(t, "OVERDUE")
+    for t in due_today:
+        tasks_html += task_row(t, "TODAY")
+    for t in upcoming[:10]:
+        tasks_html += task_row(t)
+
+    user = db.query(User).filter(User.id == req.user_id).first()
+    first_name = user.first_name if user else "there"
+
+    subject = f"Your Daily Briefing — {datetime.now(timezone.utc).strftime('%b %d, %Y')}"
+    body = f"""\
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:680px;margin:0 auto;color:#1a1a2e;">
+<h2 style="color:#6366f1;">Good morning, {first_name}!</h2>
+<p>Here's your daily pipeline, leads, and task briefing from Aria.</p>
+
+<h3 style="border-bottom:2px solid #6366f1;padding-bottom:6px;">Active Pipeline — {total_loans} Loans ({fmt_currency(total_volume)})</h3>
+<table style="width:100%;border-collapse:collapse;font-size:14px;">
+<tr style="background:#f1f5f9;"><th style="padding:8px 12px;text-align:left;">Stage</th><th style="padding:8px 12px;text-align:center;">Count</th><th style="padding:8px 12px;text-align:right;">Volume</th></tr>
+{pipeline_html}
+</table>
+
+<h3 style="border-bottom:2px solid #6366f1;padding-bottom:6px;margin-top:24px;">Leads — {total_leads} Total</h3>
+<table style="width:100%;border-collapse:collapse;font-size:14px;">
+<tr style="background:#f1f5f9;"><th style="padding:8px 12px;text-align:left;">Stage</th><th style="padding:8px 12px;text-align:center;">Count</th></tr>
+{leads_html}
+</table>
+
+<h3 style="border-bottom:2px solid #6366f1;padding-bottom:6px;margin-top:24px;">Tasks — {len(overdue)} Overdue, {len(due_today)} Due Today</h3>
+<table style="width:100%;border-collapse:collapse;font-size:14px;">
+<tr style="background:#f1f5f9;"><th style="padding:8px 12px;text-align:left;">Task</th><th style="padding:8px 12px;">Due</th><th style="padding:8px 12px;">Priority</th></tr>
+{tasks_html if tasks_html else '<tr><td colspan="3" style="padding:12px;text-align:center;color:#64748b;">No pending tasks — nice work!</td></tr>'}
+</table>
+
+<p style="margin-top:24px;font-size:13px;color:#64748b;">— Aria, your AI assistant at Perennia</p>
+</div>"""
+
+    # ── Send via tool registry (Microsoft Graph) ──
+    try:
+        from agents.tools import tool_registry
+        send_tool = tool_registry.get("send_email")
+        if send_tool:
+            import inspect
+            result = send_tool.func(
+                to_email=req.email,
+                subject=subject,
+                body=body,
+                user_id=req.user_id,
+            )
+            return {
+                "sent": True,
+                "to": req.email,
+                "subject": subject,
+                "summary": {
+                    "total_loans": total_loans,
+                    "total_volume": fmt_currency(total_volume),
+                    "total_leads": total_leads,
+                    "overdue_tasks": len(overdue),
+                    "due_today_tasks": len(due_today),
+                },
+            }
+        else:
+            return {"error": "send_email tool not found in registry"}
+    except Exception as e:
+        logger.error("Email report send failed: %s", e)
+        return {"error": f"Failed to send email: {e}"}

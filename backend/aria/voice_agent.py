@@ -724,6 +724,50 @@ class AriaVoiceAgent(Agent):
             return f"No {category} partners found in the CRM."
         return json.dumps(result, default=str)
 
+    # ─── Report / Briefing Tools ───────────────────────────────────────
+
+    @function_tool()
+    async def email_me_report(
+        self,
+        context: RunContext,
+        report_type: str = "daily",
+    ):
+        """Send the user an email with their daily briefing — pipeline summary, leads audit, active loans by stage, and today's task list.
+        Use when the user says things like 'send me my daily report', 'email me the pipeline', 'send me my tasks', or 'give me a rundown of my loans'.
+        Report types: daily (full briefing), pipeline (loans only), tasks (tasks only)."""
+        if self._mode != "lo_assistant":
+            return json.dumps({"error": "Reports can only be sent in LO assistant mode."})
+        email = self._session_data.get("email")
+        user_id = self._session_data.get("user_id")
+        if not email or not user_id:
+            return json.dumps({"error": "I don't have your email on file. What email should I send it to?"})
+        result = await self._call_backend(
+            "/internal/aria/email-report",
+            {
+                "user_id": user_id,
+                "email": email,
+                "report_type": report_type,
+            },
+        )
+        if result.get("sent"):
+            summary = result.get("summary", {})
+            loans = summary.get("total_loans", 0)
+            volume = summary.get("total_volume", "$0")
+            leads = summary.get("total_leads", 0)
+            overdue = summary.get("overdue_tasks", 0)
+            due_today = summary.get("due_today_tasks", 0)
+            parts = [f"Sent your briefing to {email}."]
+            parts.append(f"Pipeline: {loans} active loans, {volume} total volume.")
+            parts.append(f"Leads: {leads} total.")
+            if overdue:
+                parts.append(f"Heads up — you have {overdue} overdue tasks.")
+            elif due_today:
+                parts.append(f"You have {due_today} tasks due today.")
+            else:
+                parts.append("No urgent tasks — you're all caught up.")
+            return " ".join(parts)
+        return json.dumps(result, default=str)
+
     # ─── Existing Tools (Inbound/Transfer) ───────────────────────────
 
     @function_tool()
