@@ -3624,7 +3624,7 @@ function App() {
             element={
               <PrivateRoute>
                 <div className="app-layout">
-                  <Sidebar
+                  <Navigation
                     onToggleAssistant={() => setAssistantOpen(!assistantOpen)}
                     onToggleCoach={() => setCoachOpen(!coachOpen)}
                     coachOpen={coachOpen}
