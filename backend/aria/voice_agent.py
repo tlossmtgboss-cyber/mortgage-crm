@@ -265,7 +265,7 @@ class AriaVoiceAgent(Agent):
         phone_number: str,
         message: str,
     ):
-        """Send an SMS text message to a phone number."""
+        """Send an SMS text message to a phone number. If you only have a name, use find_contact first to get the phone number."""
         if self._mode == "inbound_receptionist":
             caller_phone = self._session_data.get("from_number", "")
             if phone_number.replace("+1", "").replace("+", "") != caller_phone.replace("+1", "").replace("+", ""):
@@ -450,6 +450,61 @@ class AriaVoiceAgent(Agent):
         })
         return json.dumps(result, default=str)
 
+    # ─── Contact Lookup Tools ────────────────────────────────────────
+
+    @function_tool()
+    async def find_contact(
+        self,
+        context: RunContext,
+        name: str,
+    ):
+        """Look up a person in the CRM by name. Returns their phone number, email, lead ID, and loan stage.
+        Use this FIRST whenever the user refers to someone by name before sending a text, email, or making a call.
+        Searches leads, borrowers, team members, and partners."""
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "find_contact_phone", "params": {
+                "name": name,
+                "user_id": self._session_data.get("user_id"),
+            }},
+        )
+        email_result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "find_contact_email", "params": {
+                "name": name,
+                "user_id": self._session_data.get("user_id"),
+            }},
+        )
+        phone_matches = result.get("result", {}).get("data", {}).get("results", []) if isinstance(result.get("result"), dict) else []
+        email_matches = email_result.get("result", {}).get("data", {}).get("results", []) if isinstance(email_result.get("result"), dict) else []
+
+        merged = {}
+        for m in phone_matches + email_matches:
+            key = (m.get("type", ""), m.get("id", ""))
+            if key not in merged:
+                merged[key] = dict(m)
+            else:
+                merged[key].update({k: v for k, v in m.items() if v})
+
+        contacts = sorted(merged.values(), key=lambda x: x.get("match_score", 0), reverse=True)[:5]
+        if not contacts:
+            return f"I couldn't find anyone named '{name}' in the CRM."
+        if len(contacts) == 1:
+            c = contacts[0]
+            parts = [f"Found {c.get('name', name)}"]
+            if c.get("phone"):
+                parts.append(f"phone: {c['phone']}")
+            if c.get("email"):
+                parts.append(f"email: {c['email']}")
+            if c.get("type"):
+                parts.append(f"type: {c['type']}")
+            if c.get("id"):
+                parts.append(f"ID: {c['id']}")
+            if c.get("stage"):
+                parts.append(f"stage: {c['stage']}")
+            return ", ".join(parts)
+        return json.dumps({"contacts": contacts, "count": len(contacts)}, default=str)
+
     # ─── Email Tools ────────────────────────────────────────────────
 
     @function_tool()
@@ -460,7 +515,7 @@ class AriaVoiceAgent(Agent):
         subject: str,
         body: str,
     ):
-        """Send an email to a contact. The email is sent from the LO's connected Outlook account via Microsoft Graph."""
+        """Send an email to a contact. If you only have a name, use find_contact first to get the email address. Sent from the LO's connected Outlook via Microsoft Graph."""
         if self._mode != "lo_assistant":
             return json.dumps({"error": "Emails can only be sent in LO assistant mode."})
         result = await self._call_backend(
@@ -551,7 +606,7 @@ class AriaVoiceAgent(Agent):
         contact_id: str,
         purpose: str,
     ):
-        """Initiate an outbound phone call to a contact via the dialer.
+        """Initiate an outbound phone call to a contact via the dialer. If you only have a name, use find_contact first to get the phone number and contact ID.
         TCPA and DNC compliance checks are enforced automatically.
         Purpose: follow_up, rate_lock, application, closing, or general."""
         if self._mode != "lo_assistant":
