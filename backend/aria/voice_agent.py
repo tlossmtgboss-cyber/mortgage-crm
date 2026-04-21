@@ -544,7 +544,8 @@ class AriaVoiceAgent(Agent):
         body_template: str,
     ):
         """Send a personalized email to multiple clients. Use {first_name} in the body for personalization.
-        Provide client_ids as a comma-separated list of lead IDs."""
+        IMPORTANT: Do NOT call this until the user has told you the subject and body AND confirmed the message.
+        Flow: 1) find the group, 2) ask what they want to say, 3) repeat it back, 4) wait for confirmation, 5) then call this."""
         if self._mode != "lo_assistant":
             return json.dumps({"error": "Mass emails can only be sent in LO assistant mode."})
         result = await self._call_backend(
@@ -575,7 +576,8 @@ class AriaVoiceAgent(Agent):
         campaign_name: str,
     ):
         """Send a personalized SMS to multiple clients. Use {first_name} in the message for personalization.
-        Provide client_ids as a comma-separated list of lead IDs. Max 200 per batch."""
+        IMPORTANT: Do NOT call this until the user has told you what to say AND confirmed the message.
+        Flow: 1) find the group, 2) ask what they want to say, 3) repeat it back, 4) wait for confirmation, 5) then call this."""
         if self._mode != "lo_assistant":
             return json.dumps({"error": "Mass SMS can only be sent in LO assistant mode."})
         result = await self._call_backend(
@@ -719,8 +721,9 @@ class AriaVoiceAgent(Agent):
         voicemail_template: str,
     ):
         """Drop voicemails to multiple contacts at once. Provide client_ids as comma-separated lead IDs.
-        Use find_clients_for_outreach first if you need to build the list (e.g. 'all realtors' or 'all funded clients').
-        Templates: follow_up, rate_update, document_reminder, closing_update, or a custom message."""
+        IMPORTANT: Do NOT call this until the user has told you what to say AND confirmed the message.
+        Flow: 1) find the group, 2) ask what they want to say, 3) repeat it back, 4) wait for 'send' confirmation, 5) then call this.
+        The voicemail_template can be a template name (follow_up, rate_update) OR the user's custom spoken message."""
         if self._mode != "lo_assistant":
             return json.dumps({"error": "Mass voicemail drops can only be sent in LO assistant mode."})
         ids = [x.strip() for x in client_ids.split(",") if x.strip()]
