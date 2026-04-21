@@ -628,6 +628,197 @@ class AriaVoiceAgent(Agent):
         })
         return json.dumps(result, default=str)
 
+    # ─── Pipeline & Tasks Tools ────────────────────────────────────
+
+    @function_tool()
+    async def get_pipeline_summary(
+        self,
+        context: RunContext,
+    ):
+        """Get a summary of the current loan pipeline — counts by stage, total volume, average days in stage.
+        Use when the user asks about pipeline health, how many loans are in processing, what's closing soon, etc."""
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "get_pipeline_metrics", "params": {}},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def get_my_tasks(
+        self,
+        context: RunContext,
+        status: str = "",
+        priority: str = "",
+    ):
+        """Get the user's task list from the CRM. Can filter by status (pending, in_progress, overdue, completed) and priority (high, medium, low).
+        Use when the user asks about their to-do list, what they need to work on, overdue items, etc."""
+        params: Dict[str, Any] = {
+            "user_id": str(self._session_data.get("user_id", "")),
+            "limit": 25,
+        }
+        if status:
+            params["status"] = status
+        if priority:
+            params["priority"] = priority
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "get_task_queue", "params": params},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def get_loans_by_stage(
+        self,
+        context: RunContext,
+        stage: str,
+    ):
+        """Get loans in a specific pipeline stage. Stage can be: processing, submitted, underwriting, approved, ctc, closing, funded, etc.
+        Use when the user asks things like 'what do I have in underwriting' or 'how many loans are clear to close'."""
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "get_loans_by_status", "params": {"status": stage}},
+        )
+        return json.dumps(result, default=str)
+
+    # ─── Voicemail Drop Tool ─────────────────────────────────────────
+
+    @function_tool()
+    async def drop_voicemail(
+        self,
+        context: RunContext,
+        phone_number: str,
+        voicemail_template: str,
+        contact_id: str,
+    ):
+        """Drop a pre-recorded voicemail to a contact's phone without ringing. TCPA/DNC compliance is enforced automatically.
+        If you only have a name, use find_contact first to get the phone number.
+        Templates: follow_up, rate_update, document_reminder, closing_update, or a custom message."""
+        if self._mode != "lo_assistant":
+            return json.dumps({"error": "Voicemail drops can only be sent in LO assistant mode."})
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "drop_voicemail", "params": {
+                "phone_number": phone_number,
+                "voicemail_template": voicemail_template,
+                "contact_id": contact_id,
+            }},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "drop_voicemail",
+            "phone": phone_number,
+            "template": voicemail_template,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def mass_voicemail_drop(
+        self,
+        context: RunContext,
+        client_ids: str,
+        voicemail_template: str,
+    ):
+        """Drop voicemails to multiple contacts at once. Provide client_ids as comma-separated lead IDs.
+        Use find_clients_for_outreach first if you need to build the list (e.g. 'all realtors' or 'all funded clients').
+        Templates: follow_up, rate_update, document_reminder, closing_update, or a custom message."""
+        if self._mode != "lo_assistant":
+            return json.dumps({"error": "Mass voicemail drops can only be sent in LO assistant mode."})
+        ids = [x.strip() for x in client_ids.split(",") if x.strip()]
+        sent = 0
+        failed = 0
+        for cid in ids:
+            result = await self._call_backend(
+                "/internal/aria/tool/execute",
+                {"tool_name": "find_contact_phone", "params": {"name": cid}},
+            )
+            phone = None
+            matches = result.get("result", {}).get("data", {}).get("results", []) if isinstance(result.get("result"), dict) else []
+            if matches:
+                phone = matches[0].get("phone")
+            if not phone:
+                result2 = await self._call_backend(
+                    "/internal/aria/lead-lookup", {"lead_id": int(cid) if cid.isdigit() else None},
+                )
+                lead = result2.get("lead", {})
+                phone = lead.get("phone", "")
+            if phone:
+                vm_result = await self._call_backend(
+                    "/internal/aria/tool/execute",
+                    {"tool_name": "drop_voicemail", "params": {
+                        "phone_number": phone,
+                        "voicemail_template": voicemail_template,
+                        "contact_id": cid,
+                    }},
+                )
+                if not vm_result.get("error"):
+                    sent += 1
+                else:
+                    failed += 1
+            else:
+                failed += 1
+        return json.dumps({"sent": sent, "failed": failed, "total": len(ids)})
+
+    # ─── Outreach List Builder ───────────────────────────────────────
+
+    @function_tool()
+    async def find_clients_for_outreach(
+        self,
+        context: RunContext,
+        loan_stage: str = "all",
+        days_since_contact: int = 0,
+        limit: int = 50,
+    ):
+        """Find clients matching criteria for outreach campaigns (SMS blasts, voicemail drops, email campaigns).
+        Loan stage: funded, active, processing, closed, all.
+        Returns client IDs, names, and phone numbers you can pass to send_mass_sms, mass_voicemail_drop, or send_mass_email.
+        For realtors specifically, use find_referral_partners instead."""
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "find_clients_for_outreach", "params": {
+                "loan_stage": loan_stage,
+                "days_since_contact": days_since_contact,
+                "limit": min(limit, 200),
+                "has_phone": "true",
+                "has_email": "true",
+            }},
+        )
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def find_referral_partners(
+        self,
+        context: RunContext,
+        category: str = "realtor",
+    ):
+        """Find referral partners (realtors, financial advisors, attorneys, etc.) in the CRM.
+        Returns their names, phone numbers, and emails so you can send voicemail drops, texts, or emails to them.
+        Category: realtor, financial_advisor, attorney, insurance, builder, or all."""
+        from database import SessionLocal
+        from sqlalchemy import text as sa_text
+        try:
+            db = SessionLocal()
+            q = """SELECT id, name, contact_name, phone, email, category, company, status
+                   FROM referral_partners
+                   WHERE status = 'active'"""
+            params: Dict[str, Any] = {}
+            if category and category.lower() != "all":
+                q += " AND LOWER(category) = :category"
+                params["category"] = category.lower()
+            org_id = self._session_data.get("organization_id")
+            if org_id:
+                q += " AND organization_id = :org_id"
+                params["org_id"] = int(org_id)
+            q += " ORDER BY name LIMIT 200"
+            rows = db.execute(sa_text(q), params).mappings().all()
+            db.close()
+            partners = [dict(r) for r in rows]
+            if not partners:
+                return f"No {category} partners found in the CRM."
+            return json.dumps({"partners": partners, "count": len(partners)}, default=str)
+        except Exception as e:
+            logger.error("[AriaVoice] find_referral_partners failed: %s", e)
+            return json.dumps({"error": str(e)})
+
     # ─── Existing Tools (Inbound/Transfer) ───────────────────────────
 
     @function_tool()
