@@ -67,7 +67,7 @@ export async function registerDeviceToken(token) {
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const response = await api.post('/api/v1/notifications/register-device', {
+      const response = await api.post('/api/v1/push/register', {
         device_token: token,
         platform: getPlatformName(),
         // Include subscription details for web push
@@ -435,7 +435,7 @@ export async function teardownPushNotifications() {
   // Tell backend to forget this device
   if (_deviceToken && isAuthenticated()) {
     try {
-      await api.post('/api/v1/notifications/unregister-device', {
+      await api.post('/api/v1/push/unregister', {
         device_token: _deviceToken,
         platform: getPlatformName(),
       });

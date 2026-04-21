@@ -81,7 +81,7 @@ def set_dependencies(get_db_func, get_current_user_func):
 def get_db():
     if _get_db is None:
         raise RuntimeError("briefing_routes: dependencies not initialized")
-    return _get_db()
+    yield from _get_db()
 
 
 def get_current_user():

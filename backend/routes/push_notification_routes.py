@@ -67,6 +67,20 @@ def setup_push_routes(app, get_current_user):
     """
 
     # -----------------------------------------------------------------
+    # GET /api/v1/notifications/vapid-key — VAPID public key for web push
+    # -----------------------------------------------------------------
+    @app.get("/api/v1/notifications/vapid-key")
+    async def get_vapid_key():
+        """Return VAPID public key for web push subscriptions.
+
+        Returns null key when VAPID is not configured — frontend falls
+        back to basic web notifications.
+        """
+        import os
+        vapid_key = os.getenv("VAPID_PUBLIC_KEY")
+        return {"vapid_public_key": vapid_key}
+
+    # -----------------------------------------------------------------
     # POST /api/v1/push/register — Register device token
     # -----------------------------------------------------------------
     @app.post("/api/v1/push/register")

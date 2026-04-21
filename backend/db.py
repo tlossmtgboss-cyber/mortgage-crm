@@ -254,7 +254,7 @@ _tenant_connection_counts: Dict[int, int] = {}
 _tenant_conn_lock = threading.Lock()
 
 # Max concurrent DB connections per tenant (configurable via env)
-MAX_CONNECTIONS_PER_TENANT = int(os.getenv("MAX_DB_CONNECTIONS_PER_TENANT", "3"))
+MAX_CONNECTIONS_PER_TENANT = int(os.getenv("MAX_DB_CONNECTIONS_PER_TENANT", "5"))
 
 
 def get_db(request: Request = None):

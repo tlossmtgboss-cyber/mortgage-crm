@@ -67,7 +67,7 @@ def get_db():
     """Get database session."""
     if _get_db is None:
         raise RuntimeError("Database dependency not configured. Call set_dependencies first.")
-    return _get_db()
+    yield from _get_db()
 
 
 def get_current_user():
