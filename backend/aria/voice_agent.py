@@ -648,56 +648,91 @@ class AriaVoiceAgent(Agent):
         context: RunContext,
         first_name: str,
         last_name: str,
-        email: str,
-        loan_purpose: str,
-        property_type: str,
-        timeline: str,
-        notes: str,
+        phone: str = "",
+        email: str = "",
+        loan_purpose: str = "",
+        property_type: str = "",
+        timeline: str = "",
+        notes: str = "",
     ):
-        """Create a new lead profile in the CRM for a first-time caller.
-        Use this when the caller is new and you've gathered their basic info during the conversation.
-        You already have their phone number — never ask for it."""
-        from_number = self._session_data.get("from_number", "")
-        result = await self._call_backend(
-            "/internal/aria/tool/execute",
-            {"tool_name": "create_lead", "params": {
-                "first_name": first_name,
-                "last_name": last_name,
-                "phone": from_number,
-                "email": email,
-                "source": "inbound_call",
-                "loan_purpose": loan_purpose,
-                "property_type": property_type,
-                "timeline": timeline,
-                "notes": f"Created from inbound call. {notes}".strip(),
-            }},
-        )
-        self._session_data["tools_executed"].append({
-            "tool": "create_lead",
-            "name": f"{first_name} {last_name}",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
-        return json.dumps(result, default=str)
+        """Create a new lead in the CRM. Only first_name and last_name are required — call this right away with the name, then ask follow-up questions one at a time to fill in details.
 
-    async def update_lead(
-        self,
-        context: RunContext,
-        lead_id: int,
-        notes: str,
-        email: str,
-        loan_purpose: str,
-        property_type: str,
-    ):
-        """Update an existing lead's profile with new information gathered during the call."""
-        params: Dict[str, Any] = {"lead_id": lead_id}
-        if notes:
-            params["notes"] = notes
+        After creating the lead, ask these follow-ups naturally in conversation (one at a time, not all at once):
+        1. What's a good phone number for them?
+        2. What's their email?
+        3. Are they looking to purchase or refinance?
+        4. What type of property — single family, condo, multi-unit?
+        5. What's their timeline — are they actively shopping or just exploring?
+
+        As you get each answer, use update_lead to add the details."""
+        from_number = self._session_data.get("from_number", "")
+        params: Dict[str, Any] = {
+            "first_name": first_name,
+            "last_name": last_name,
+            "source": "voice_assistant",
+            "organization_id": str(self._session_data.get("organization_id", "")),
+            "user_id": str(self._session_data.get("user_id", "")),
+        }
+        if phone:
+            params["phone"] = phone
+        elif from_number:
+            params["phone"] = from_number
         if email:
             params["email"] = email
         if loan_purpose:
             params["loan_purpose"] = loan_purpose
         if property_type:
             params["property_type"] = property_type
+        if timeline:
+            params["timeline"] = timeline
+        if notes:
+            params["notes"] = notes
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "create_lead", "params": params},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "create_lead",
+            "name": f"{first_name} {last_name}",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        lead_data = result.get("result", {})
+        lead_id = lead_data.get("id") or lead_data.get("lead_id")
+        if lead_id:
+            self._session_data["last_created_lead_id"] = lead_id
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def update_lead(
+        self,
+        context: RunContext,
+        lead_id: str = "",
+        phone: str = "",
+        email: str = "",
+        loan_purpose: str = "",
+        property_type: str = "",
+        timeline: str = "",
+        notes: str = "",
+    ):
+        """Update an existing lead with new info gathered during conversation.
+        If lead_id is not provided, uses the most recently created lead from this session.
+        Call this after each follow-up answer to save the detail immediately."""
+        resolved_id = lead_id or str(self._session_data.get("last_created_lead_id", ""))
+        if not resolved_id:
+            return json.dumps({"error": "No lead_id provided and no lead was created in this session."})
+        params: Dict[str, Any] = {"lead_id": resolved_id}
+        if phone:
+            params["phone"] = phone
+        if email:
+            params["email"] = email
+        if loan_purpose:
+            params["loan_purpose"] = loan_purpose
+        if property_type:
+            params["property_type"] = property_type
+        if timeline:
+            params["timeline"] = timeline
+        if notes:
+            params["notes"] = notes
         result = await self._call_backend(
             "/internal/aria/tool/execute",
             {"tool_name": "update_lead", "params": params},
