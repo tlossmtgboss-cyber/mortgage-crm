@@ -1393,13 +1393,13 @@ def register_health_routes(app, get_db, **kwargs):
         try:
             # Step 4: Find a test loan
             loan_row = db.execute(_text(
-                "SELECT id, lead_id FROM loans ORDER BY id DESC LIMIT 1"
+                "SELECT id FROM loans ORDER BY id DESC LIMIT 1"
             )).first()
             if not loan_row:
                 steps["4_find_loan"] = "FAIL: no loans in DB"
                 return {"steps": steps, "failed_at": "find_loan"}
             loan_id = loan_row[0]
-            borrower_id = loan_row[1] or 0
+            borrower_id = 0
             steps["4_find_loan"] = f"ok (loan_id={loan_id}, borrower_id={borrower_id})"
 
             # Step 5: Import NeedsListGenerator

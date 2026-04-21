@@ -108,11 +108,7 @@ async def add_custom_request(
         return {"error": True, "stage": "tenant_verify", "detail": f"{type(e).__name__}: {e}"}
 
     if not borrower_id:
-        from sqlalchemy import text as _text
-        row = db.execute(
-            _text("SELECT lead_id FROM loans WHERE id = :lid"), {"lid": loan_id}
-        ).first()
-        borrower_id = row[0] if row else 0
+        borrower_id = 0
 
     try:
         generator = NeedsListGenerator(db)
