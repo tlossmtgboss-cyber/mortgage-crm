@@ -1346,6 +1346,19 @@ def register_health_routes(app, get_db, **kwargs):
         """
         import traceback as _tb
         import json as _json
+
+        try:
+            return await _smart_docs_post_test_inner(request, _tb, _json)
+        except Exception as e:
+            return JSONResponse(
+                status_code=200,
+                content={
+                    "UNCAUGHT_ERROR": f"{type(e).__name__}: {e}",
+                    "traceback": _tb.format_exc()[-1500:],
+                },
+            )
+
+    async def _smart_docs_post_test_inner(request, _tb, _json):
         steps = {}
 
         # Step 1: Read request body
