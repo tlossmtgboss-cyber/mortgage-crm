@@ -1334,6 +1334,69 @@ def register_health_routes(app, get_db, **kwargs):
             return {"error": "Error handling module not available"}
 
     # ========================================================================
+    # Smart Docs POST diagnostic — tests middleware + DB INSERT
+    # ========================================================================
+
+    @app.post("/health/smart-docs-post-test")
+    async def smart_docs_post_test(request: Request):
+        """
+        Diagnostic POST endpoint that tests:
+        1. Middleware lets a POST through without 500
+        2. JSON body is accessible after middleware chain
+        3. DB INSERT into smart_document_requests works
+        """
+        import traceback as _tb
+        results = {"method": request.method, "path": str(request.url.path)}
+
+        # Step 1: Read the request body
+        try:
+            body_bytes = await request.body()
+            results["body_size"] = len(body_bytes)
+            if body_bytes:
+                import json as _json
+                results["body_parsed"] = _json.loads(body_bytes)
+            else:
+                results["body_parsed"] = None
+        except Exception as e:
+            results["body_error"] = f"{type(e).__name__}: {e}"
+
+        # Step 2: Test DB connection + INSERT
+        try:
+            from db import SessionLocal
+            from sqlalchemy import text as _text, inspect as _insp
+
+            db = SessionLocal()
+            try:
+                db.execute(_text("SELECT 1")).fetchone()
+                results["db_connection"] = "ok"
+
+                inspector = _insp(db.bind)
+                tables = inspector.get_table_names()
+                results["table_exists"] = "smart_document_requests" in tables
+
+                if results["table_exists"]:
+                    cols = inspector.get_columns("smart_document_requests")
+                    results["columns"] = sorted(c["name"] for c in cols)
+
+                    db.execute(_text("""
+                        INSERT INTO smart_document_requests
+                            (loan_id, doc_type, title, status, priority, required_count, applies_to)
+                        VALUES (0, 'BANK_STATEMENT', '__post_diag__', 'OPEN', 'NORMAL', 1, 'BORROWER')
+                    """))
+                    db.rollback()
+                    results["test_insert"] = "ok"
+            except Exception as e:
+                db.rollback()
+                results["db_error"] = f"{type(e).__name__}: {e}"
+                results["db_traceback"] = _tb.format_exc()[-500:]
+            finally:
+                db.close()
+        except Exception as e:
+            results["db_import_error"] = f"{type(e).__name__}: {e}"
+
+        return results
+
+    # ========================================================================
     # Admin-only: DB Pool Stats (detailed monitoring for operations)
     # ========================================================================
 

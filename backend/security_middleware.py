@@ -1116,7 +1116,7 @@ class SecurityLoggingMiddleware(BaseHTTPMiddleware):
             logger.info(f"WebSocket connection: {request.url.path}")
             return await call_next(request)
 
-        client_ip = request.headers.get("X-Forwarded-For", request.client.host)
+        client_ip = request.headers.get("X-Forwarded-For") or (request.client.host if request.client else "unknown")
 
         # Log authentication attempts
         if request.url.path in ["/token", "/api/v1/auth/login", "/register", "/api/v1/users/login"]:

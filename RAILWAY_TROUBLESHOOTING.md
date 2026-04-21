@@ -162,7 +162,7 @@ python3 create_production_user.py
 
 This will create:
 - Email: tloss@cmgfi.com
-- Password: Woodwindow00!
+- Password: [SET VIA ENVIRONMENT VARIABLE]
 
 ## Additional Resources
 

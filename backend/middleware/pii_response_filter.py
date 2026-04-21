@@ -317,7 +317,12 @@ class PIIResponseFilterMiddleware(BaseHTTPMiddleware):
         if any(request.url.path.startswith(p) for p in _SKIP_PATHS):
             return await call_next(request)
 
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception as exc:
+            logger.error("PII filter: inner middleware exception on %s %s: %s",
+                         request.method, request.url.path, exc, exc_info=True)
+            raise
 
         # Only inspect JSON-like responses
         content_type = response.headers.get("content-type", "")
@@ -326,11 +331,21 @@ class PIIResponseFilterMiddleware(BaseHTTPMiddleware):
 
         # Read body -- requires consuming the response stream
         body_bytes = b""
-        async for chunk in response.body_iterator:  # type: ignore[union-attr]
-            if isinstance(chunk, str):
-                body_bytes += chunk.encode("utf-8")
-            else:
-                body_bytes += chunk
+        try:
+            async for chunk in response.body_iterator:  # type: ignore[union-attr]
+                if isinstance(chunk, str):
+                    body_bytes += chunk.encode("utf-8")
+                else:
+                    body_bytes += chunk
+        except Exception as exc:
+            logger.error("PII filter: body read failed on %s %s: %s",
+                         request.method, request.url.path, exc, exc_info=True)
+            return Response(
+                content=b'{"detail":"Internal server error"}',
+                status_code=response.status_code,
+                headers=dict(response.headers),
+                media_type="application/json",
+            )
 
         # Skip oversized payloads to avoid latency
         if len(body_bytes) > _MAX_BODY_SIZE:

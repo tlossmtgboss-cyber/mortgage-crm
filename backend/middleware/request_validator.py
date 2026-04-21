@@ -362,7 +362,8 @@ class RequestValidatorMiddleware(BaseHTTPMiddleware):
         # ------------------------------------------------------------------
         # 6. SQL injection & XSS detection in JSON request bodies
         # ------------------------------------------------------------------
-        if request.method in _BODY_METHODS:
+        _body_scan_skip = any(path.startswith(p) for p in _CONTENT_TYPE_SKIP_PREFIXES)
+        if request.method in _BODY_METHODS and not _body_scan_skip:
             ct = request.headers.get("content-type", "").lower()
             if ct.startswith("application/json"):
                 should_scan = True
