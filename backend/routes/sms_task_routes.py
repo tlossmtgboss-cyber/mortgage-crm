@@ -81,7 +81,7 @@ def _require_org(current_user) -> int:
     return org_id
 
 
-@router.get("/")
+@router.get("")
 async def list_sms_tasks(
     status: str = Query("pending"),
     category: Optional[str] = Query(None),

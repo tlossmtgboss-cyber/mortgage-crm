@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 class RegisterTokenRequest(BaseModel):
     device_token: str = Field(..., min_length=10, max_length=500)
-    platform: str = Field(default="ios", pattern="^(ios|android)$")
+    platform: str = Field(default="ios", pattern="^(ios|android|web)$")
     device_name: Optional[str] = Field(default=None, max_length=200)
     app_version: Optional[str] = Field(default=None, max_length=50)
 

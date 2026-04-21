@@ -357,21 +357,43 @@ async def handle_amd_event(event: TelnyxAMDEvent, db: Session):
     """Handle AMD event from main webhook"""
     call_control_id = event.call_control_id
 
-    # Look up tracking ID by call_control_id
+    # Look up tracking ID and resolve tenant from amd_outbound_calls.
+    # Note: amd_outbound_calls has user_id but no organization_id column;
+    # resolve org via the user record for logging context.
     result = db.execute(sa_text("""
-        SELECT id, organization_id FROM amd_outbound_calls
+        SELECT id, user_id FROM amd_outbound_calls
         WHERE call_sid = :call_id
     """), {"call_id": call_control_id}).fetchone()
 
     if not result:
-        logger.warning(f"No tracking record for call {call_control_id}")
+        logger.warning("AMD event: no tracking record for call_control_id=%s", call_control_id)
         return {"status": "ignored"}
 
     tracking_id = result[0]
-    # After fetching call record, capture org_id for downstream operations
-    if result[1]:
-        org_id = result[1]
-        logger.info(f"AMD event for org_id={org_id}, tracking_id={tracking_id}")
+    amd_user_id = result[1]
+
+    # Resolve organization_id from user for tenant context logging
+    _amd_org_id = None
+    if amd_user_id:
+        try:
+            _org_row = db.execute(sa_text(
+                "SELECT organization_id FROM users WHERE id = :uid"
+            ), {"uid": amd_user_id}).fetchone()
+            if _org_row:
+                _amd_org_id = _org_row[0]
+        except Exception as e:
+            logger.debug("AMD event: org lookup from user_id=%s failed: %s", amd_user_id, e)
+
+    if _amd_org_id:
+        logger.info(
+            "AMD event: tenant resolved org_id=%s, tracking_id=%s, user_id=%s",
+            _amd_org_id, tracking_id, amd_user_id,
+        )
+    else:
+        logger.warning(
+            "AMD event: could not resolve org_id, tracking_id=%s, user_id=%s — proceeding without tenant context",
+            tracking_id, amd_user_id,
+        )
 
     return await process_amd_result(str(tracking_id), event, db)
 
@@ -451,9 +473,26 @@ async def handle_call_answered(event: TelnyxCallEvent, db: Session):
     """Handle call answered event"""
     call_control_id = event.call_control_id
 
-    logger.info(f"Call answered: {call_control_id}")
+    # Resolve tenant context from the call record for structured logging
+    _ans_org_id = None
+    try:
+        _ans_row = db.execute(sa_text("""
+            SELECT u.organization_id
+            FROM amd_outbound_calls a
+            JOIN users u ON u.id = a.user_id
+            WHERE a.call_sid = :call_id
+        """), {"call_id": call_control_id}).fetchone()
+        if _ans_row:
+            _ans_org_id = _ans_row[0]
+    except Exception:
+        pass  # Best-effort tenant resolution
 
-    # Update call status (amd_outbound_calls only has id, call_sid, status columns)
+    if _ans_org_id:
+        logger.info("Call answered: call_control_id=%s, org_id=%s", call_control_id, _ans_org_id)
+    else:
+        logger.info("Call answered: call_control_id=%s (org unresolved)", call_control_id)
+
+    # Update call status
     try:
         db.execute(sa_text("""
             UPDATE amd_outbound_calls
@@ -463,7 +502,7 @@ async def handle_call_answered(event: TelnyxCallEvent, db: Session):
         db.commit()
     except Exception as e:
         db.rollback()
-        logger.debug(f"amd_outbound_calls update skipped: {e}")
+        logger.debug("amd_outbound_calls update skipped: %s", e)
 
     return {"status": "acknowledged", "call_id": call_control_id}
 
@@ -473,9 +512,32 @@ async def handle_call_hangup(event: TelnyxCallEvent, db: Session):
     call_control_id = event.call_control_id
     hangup_cause = event.hangup_cause
 
-    logger.info(f"Call hangup: {call_control_id}, cause: {hangup_cause}")
+    # Resolve tenant context for structured logging
+    _hup_org_id = None
+    try:
+        _hup_row = db.execute(sa_text("""
+            SELECT u.organization_id
+            FROM amd_outbound_calls a
+            JOIN users u ON u.id = a.user_id
+            WHERE a.call_sid = :call_id
+        """), {"call_id": call_control_id}).fetchone()
+        if _hup_row:
+            _hup_org_id = _hup_row[0]
+    except Exception:
+        pass  # Best-effort tenant resolution
 
-    # Update call status (amd_outbound_calls only has id, call_sid, status columns)
+    if _hup_org_id:
+        logger.info(
+            "Call hangup: call_control_id=%s, cause=%s, org_id=%s",
+            call_control_id, hangup_cause, _hup_org_id,
+        )
+    else:
+        logger.info(
+            "Call hangup: call_control_id=%s, cause=%s (org unresolved)",
+            call_control_id, hangup_cause,
+        )
+
+    # Update call status
     try:
         db.execute(sa_text("""
             UPDATE amd_outbound_calls
@@ -485,7 +547,7 @@ async def handle_call_hangup(event: TelnyxCallEvent, db: Session):
         db.commit()
     except Exception as e:
         db.rollback()
-        logger.debug(f"amd_outbound_calls update skipped: {e}")
+        logger.debug("amd_outbound_calls update skipped: %s", e)
 
     return {"status": "acknowledged", "call_id": call_control_id, "cause": hangup_cause}
 
@@ -503,12 +565,38 @@ async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
 
     When a bulk campaign message is delivered/failed, also increments the
     campaign-level delivered_count or failed_count counter.
+
+    Note: sms_messages and bulk_sms_sends are matched by provider_message_id /
+    telnyx_message_id which are globally unique, so cross-tenant contamination
+    is not possible. Tenant context is resolved for logging only.
     """
     message_id = event.message_id
     status = event.status
     is_terminal = status in ("delivered", "sent", "failed", "sending_failed", "delivery_failed")
 
-    logger.info(f"SMS status update: {message_id} -> {status}")
+    # Resolve tenant context from sms_messages for structured logging
+    _sms_status_org_id = None
+    try:
+        _org_row = db.execute(sa_text("""
+            SELECT organization_id FROM sms_messages
+            WHERE provider_message_id = :message_id
+            LIMIT 1
+        """), {"message_id": message_id}).fetchone()
+        if _org_row:
+            _sms_status_org_id = _org_row[0]
+    except Exception:
+        pass  # Best-effort
+
+    if _sms_status_org_id:
+        logger.info(
+            "SMS status update: message_id=%s, status=%s, org_id=%s",
+            message_id, status, _sms_status_org_id,
+        )
+    else:
+        logger.info(
+            "SMS status update: message_id=%s, status=%s (org unresolved)",
+            message_id, status,
+        )
 
     # Normalize Telnyx status values to our internal statuses
     # Telnyx sends: queued, sending, sent, delivered, sending_failed, delivery_failed, etc.
@@ -565,6 +653,8 @@ async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
                 counter_col = None
 
             if counter_col:
+                # counter_col is always a hardcoded literal ("delivered_count"
+                # or "failed_count") — safe for f-string SQL construction
                 db.execute(sa_text(f"""
                     UPDATE bulk_sms_campaigns
                     SET {counter_col} = COALESCE({counter_col}, 0) + 1,
@@ -602,7 +692,12 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     normalized_from = _normalize_phone(from_number)
     normalized_to = _normalize_phone(to_number)
 
-    logger.info("Inbound SMS from ...%s: %s...", from_number[-4:] if from_number else "?", message_body[:50])
+    logger.info(
+        "Inbound SMS from ...%s to ...%s: %s...",
+        from_number[-4:] if from_number else "?",
+        to_number[-4:] if to_number else "?",
+        (message_body or "")[:50],
+    )
 
     # ======================================================================
     # Voice Workflow Scheduling Intercept
@@ -719,12 +814,22 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     # Check if this SMS belongs to an active AI conversation BEFORE
     # normal SMS intelligence processing. If handled, still store the
     # raw SMS for audit trail but skip the intelligence queue.
+    # Note: ProspectReEngagementService.handle_reply() queries
+    # ai_prospect_conversations by phone and active state. That table
+    # has organization_id, but the service resolves context internally
+    # via the conversation record itself (lead_id -> org_id). The phone
+    # lookup is globally scoped because the same phone number should not
+    # have active conversations in multiple orgs simultaneously.
     # ======================================================================
     try:
         from services.prospect_reengagement_service import ProspectReEngagementService
         reengagement_svc = ProspectReEngagementService(db)
         reengagement_result = reengagement_svc.handle_reply(normalized_from, message_body)
         if reengagement_result is not None:
+            logger.info(
+                "re_engagement_intercept: handled reply from ...%s, result_keys=%s",
+                normalized_from[-4:], list(reengagement_result.keys()),
+            )
             # Store raw SMS for audit trail
             try:
                 db.execute(sa_text("""
@@ -757,13 +862,48 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     # and sends it back via Telnyx.
     # ======================================================================
     try:
-        _aria_conv = db.execute(sa_text("""
-            SELECT id, organization_id, current_stage, context_data
-            FROM sms_ai_conversations
-            WHERE phone_number = :phone AND status = 'active'
-            ORDER BY last_message_at DESC NULLS LAST
-            LIMIT 1
-        """), {"phone": normalized_from}).fetchone()
+        # Resolve org from the receiving number for tenant-scoped lookup
+        _aria_intercept_org_id = None
+        try:
+            _aria_org_row = db.execute(sa_text("""
+                SELECT organization_id FROM verified_caller_ids
+                WHERE phone_number = :to_phone AND organization_id IS NOT NULL
+                LIMIT 1
+            """), {"to_phone": normalized_to}).fetchone()
+            if _aria_org_row:
+                _aria_intercept_org_id = _aria_org_row[0]
+                logger.debug(
+                    "aria_sms_intercept: tenant resolved org_id=%s from receiving number ...%s",
+                    _aria_intercept_org_id, normalized_to[-4:],
+                )
+            else:
+                logger.warning(
+                    "aria_sms_intercept: no org mapping for receiving number ...%s — "
+                    "querying sms_ai_conversations without tenant filter",
+                    normalized_to[-4:],
+                )
+        except Exception as e:
+            db.rollback()
+            logger.warning("aria_sms_intercept: org lookup failed: %s", e)
+
+        # Query with org scope when available for tenant isolation
+        if _aria_intercept_org_id:
+            _aria_conv = db.execute(sa_text("""
+                SELECT id, organization_id, current_stage, context_data
+                FROM sms_ai_conversations
+                WHERE phone_number = :phone AND status = 'active'
+                AND organization_id = :org_id
+                ORDER BY last_message_at DESC NULLS LAST
+                LIMIT 1
+            """), {"phone": normalized_from, "org_id": _aria_intercept_org_id}).fetchone()
+        else:
+            _aria_conv = db.execute(sa_text("""
+                SELECT id, organization_id, current_stage, context_data
+                FROM sms_ai_conversations
+                WHERE phone_number = :phone AND status = 'active'
+                ORDER BY last_message_at DESC NULLS LAST
+                LIMIT 1
+            """), {"phone": normalized_from}).fetchone()
 
         if _aria_conv:
             _aria_conv_id = _aria_conv[0]
@@ -1267,27 +1407,61 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     # Store inbound SMS in sms_panel_messages for Archive visibility
     # ==========================================================================
     _inbound_org_id = None
+    _to_digits = re.sub(r'\D', '', normalized_to)
+    _to_pattern = f"%{_to_digits[-10:]}" if len(_to_digits) >= 10 else f"%{_to_digits}"
     try:
+        # Try exact match first, then fall back to last-10-digit pattern
         _org_row = db.execute(sa_text("""
             SELECT organization_id FROM verified_caller_ids
             WHERE phone_number = :to_phone AND organization_id IS NOT NULL
             LIMIT 1
         """), {"to_phone": normalized_to}).fetchone()
+        if not _org_row:
+            _org_row = db.execute(sa_text("""
+                SELECT organization_id FROM verified_caller_ids
+                WHERE REGEXP_REPLACE(phone_number, '[^0-9]', '', 'g') LIKE :pattern
+                  AND organization_id IS NOT NULL
+                LIMIT 1
+            """), {"pattern": _to_pattern}).fetchone()
+        if not _org_row:
+            # Final fallback: use the default (first) organization
+            _org_row = db.execute(sa_text("""
+                SELECT id FROM organizations ORDER BY id LIMIT 1
+            """)).fetchone()
+            if _org_row:
+                logger.info(
+                    "Inbound SMS tenant resolved via fallback to default org_id=%s",
+                    _org_row[0],
+                )
         if _org_row:
             _inbound_org_id = _org_row[0]
+            logger.info(
+                "Inbound SMS tenant resolved: org_id=%s from receiving number ...%s",
+                _inbound_org_id, normalized_to[-4:],
+            )
+        else:
+            logger.warning(
+                "Inbound SMS tenant unresolved: no org mapping for receiving number ...%s — "
+                "panel storage, auto-responder, and notification will run without tenant scope",
+                normalized_to[-4:],
+            )
     except Exception as e:
         db.rollback()
-        logger.warning(f"Org lookup for inbound SMS panel storage failed: {e}")
+        logger.warning("Org lookup for inbound SMS panel storage failed: %s", e)
 
     # Resolve contact_id (lead) from the sender's phone number for attribution
+    # Use last-10-digit pattern matching to handle format variations (E.164, dashes, parens)
     _inbound_contact_id = None
+    _from_digits = re.sub(r'\D', '', normalized_from)
+    _from_pattern = f"%{_from_digits[-10:]}" if len(_from_digits) >= 10 else f"%{_from_digits}"
     if _inbound_org_id:
         try:
             _lead_row = db.execute(sa_text("""
                 SELECT id FROM leads
-                WHERE phone = :phone AND organization_id = :org_id
+                WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') LIKE :pattern
+                  AND organization_id = :org_id
                 ORDER BY updated_at DESC LIMIT 1
-            """), {"phone": normalized_from, "org_id": _inbound_org_id}).fetchone()
+            """), {"pattern": _from_pattern, "org_id": _inbound_org_id}).fetchone()
             if _lead_row:
                 _inbound_contact_id = str(_lead_row[0])
         except Exception as e:
@@ -1332,9 +1506,10 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             try:
                 _lead_name_row = db.execute(sa_text("""
                     SELECT first_name || ' ' || last_name FROM leads
-                    WHERE phone = :phone AND organization_id = :org_id
+                    WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') LIKE :pattern
+                      AND organization_id = :org_id
                     ORDER BY updated_at DESC LIMIT 1
-                """), {"phone": normalized_from, "org_id": _inbound_org_id}).fetchone()
+                """), {"pattern": _from_pattern, "org_id": _inbound_org_id}).fetchone()
                 if _lead_name_row:
                     _contact_name = _lead_name_row[0]
             except Exception:
@@ -1425,7 +1600,30 @@ async def handle_recording_saved(event: TelnyxCallEvent, db: Session):
     call_control_id = event.call_control_id
     recording_url = event.payload.get("recording_urls", {}).get("mp3")
 
-    logger.info(f"Recording saved for {call_control_id}: {recording_url}")
+    # Resolve tenant context for structured logging
+    _rec_org_id = None
+    try:
+        _rec_row = db.execute(sa_text("""
+            SELECT u.organization_id
+            FROM amd_outbound_calls a
+            JOIN users u ON u.id = a.user_id
+            WHERE a.call_sid = :call_id
+        """), {"call_id": call_control_id}).fetchone()
+        if _rec_row:
+            _rec_org_id = _rec_row[0]
+    except Exception:
+        pass  # Best-effort
+
+    if _rec_org_id:
+        logger.info(
+            "Recording saved: call_control_id=%s, org_id=%s, url=%s",
+            call_control_id, _rec_org_id, recording_url,
+        )
+    else:
+        logger.info(
+            "Recording saved: call_control_id=%s (org unresolved), url=%s",
+            call_control_id, recording_url,
+        )
 
     if recording_url:
         # Store recording URL
@@ -1546,13 +1744,15 @@ async def _transcribe_and_process_recording(
 
         # -----------------------------------------------------------------
         # 2b. Resolve organization_id (and optional loan_id) from call record
+        #     Note: amd_outbound_calls has NO organization_id column.
+        #     We resolve org via user_id -> users.organization_id.
         # -----------------------------------------------------------------
         org_id: Optional[int] = None
         loan_id: Optional[int] = None
 
         # Try amd_outbound_calls first (AMD / voicemail-drop calls)
         row = db.execute(sa_text("""
-            SELECT organization_id, user_id, to_number
+            SELECT user_id, to_number
             FROM amd_outbound_calls
             WHERE call_sid = :call_id
             LIMIT 1
@@ -1561,9 +1761,19 @@ async def _transcribe_and_process_recording(
         user_id = None
         to_number = None
         if row:
-            org_id = row[0]
-            user_id = row[1]
-            to_number = row[2]
+            user_id = row[0]
+            to_number = row[1]
+            # Resolve org from user_id immediately
+            if user_id:
+                _user_org_row = db.execute(sa_text(
+                    "SELECT organization_id FROM users WHERE id = :uid"
+                ), {"uid": user_id}).fetchone()
+                if _user_org_row:
+                    org_id = _user_org_row[0]
+                    logger.info(
+                        "CI org resolution: amd_outbound_calls -> user_id=%s -> org_id=%s for call %s",
+                        user_id, org_id, call_control_id,
+                    )
 
         # Fallback: try call_attempts -> call_targets for dialer calls
         if not org_id:
@@ -1586,14 +1796,24 @@ async def _transcribe_and_process_recording(
                     """), {"lead_id": lead_id_val}).fetchone()
                     if org_row:
                         org_id = org_row[0]
+                        logger.info(
+                            "CI org resolution: call_targets -> lead_id=%s -> org_id=%s for call %s",
+                            lead_id_val, org_id, call_control_id,
+                        )
 
-        # Fallback: resolve org from user_id
+        # Fallback: resolve org from user_id (already resolved above for
+        # amd_outbound_calls path; this handles the case where
+        # call_attempts path found user_id but no lead)
         if not org_id and user_id:
             user_row = db.execute(sa_text("""
                 SELECT organization_id FROM users WHERE id = :uid
             """), {"uid": user_id}).fetchone()
             if user_row:
                 org_id = user_row[0]
+                logger.info(
+                    "CI org resolution: user fallback -> user_id=%s -> org_id=%s for call %s",
+                    user_id, org_id, call_control_id,
+                )
 
         # Fallback: resolve org from to_number via leads
         if not org_id and to_number:
@@ -1613,10 +1833,14 @@ async def _transcribe_and_process_recording(
                 org_id = lead_row[1]
                 if loan_id_lookup:
                     loan_id = loan_id_lookup[0]
+                logger.info(
+                    "CI org resolution: to_number -> lead phone=%s -> org_id=%s for call %s",
+                    to_number[-4:] if to_number else "?", org_id, call_control_id,
+                )
 
         if not org_id:
             logger.warning(
-                "Could not resolve organization_id for recording %s — skipping CI",
+                "CI org resolution: FAILED all fallbacks for recording %s — skipping CI",
                 call_control_id,
             )
             return
