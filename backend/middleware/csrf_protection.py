@@ -54,6 +54,8 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/webhooks",
         "/api/v1/voicemail/webhook",  # RVM provider delivery callbacks
         "/api/v1/telnyx",  # Telnyx Call Control webhooks — signed with Ed25519
+        "/api/v1/telephony",  # Telephony webhooks (Vapi inbound, call routing) — verified by require_vapi_webhook
+        "/api/vapi",  # Vapi AI receptionist webhooks — verified by require_vapi_webhook
         "/api/v1/zapier",
         "/api/v1/borrower",  # Borrower portal uses JWT auth
         "/api/v1/csrf-token",  # Token endpoint itself
