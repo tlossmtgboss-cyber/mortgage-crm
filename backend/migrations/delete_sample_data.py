@@ -180,6 +180,19 @@ def delete_sample_data():
         print("11. Cleaning up Account Management related tables...")
 
         # Delete related tables first (due to foreign key constraints)
+        _ACCOUNT_SAFE_TABLES = frozenset({
+            'subscription_events',
+            'account_subscriptions',
+            'account_invoices',
+            'cost_ledger_monthly',
+            'usage_events',
+            'login_events',
+            'admin_audit_log',
+            'impersonation_sessions',
+            'user_activity_stats',
+            'account_kpi_snapshots',
+            'account_user_roles',
+        })
         account_tables = [
             'subscription_events',
             'account_subscriptions',
@@ -195,6 +208,8 @@ def delete_sample_data():
         ]
 
         for table in account_tables:
+            if table not in _ACCOUNT_SAFE_TABLES:
+                raise ValueError(f"Blocked SQL on non-whitelisted table: {table}")
             try:
                 result = session.execute(text(f"DELETE FROM {table}"))
                 if result.rowcount > 0:

@@ -18,6 +18,15 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional, List
 from datetime import datetime, timezone
 import json
+
+# ── Table whitelist for dynamic SQL (prevent injection) ──
+_PURGE_SAFE_TABLES = frozenset({
+    "sms_messages", "email_messages", "activities", "stage_history",
+    "notes", "documents", "tasks", "contacts", "clients",
+    "loans", "leads", "notifications", "workflows",
+    "ai_conversation_memory", "ai_action_history",
+    "feature_usage", "organization_subscriptions",
+})
 import logging
 import secrets
 
@@ -369,6 +378,8 @@ def register_tenant_lifecycle_routes(app, get_db, get_current_user, **kwargs):
 
             purge_results = {}
             for table in PURGE_TABLES:
+                if table not in _PURGE_SAFE_TABLES:
+                    raise ValueError(f"Blocked SQL on non-whitelisted table: {table}")
                 try:
                     result = db.execute(text(
                         f"DELETE FROM {table} WHERE organization_id = :org_id"

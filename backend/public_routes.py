@@ -18,6 +18,36 @@ except ImportError:
     mask_phone = lambda x: x[:3] + "***" + x[-2:] if x and len(x) > 5 else "***"
 
 from db import get_db
+
+# ── Table / column / enum whitelists for dynamic SQL (prevent injection) ──
+_ENUM_FIX_TABLES = frozenset({
+    "leads", "loans", "documents", "disclosure_events", "loan_fees",
+    "availability_slots", "scheduler_appointments", "scheduler_configs",
+    "appointment_types", "tasks", "compliance_alerts", "referral_partners",
+    "mum_clients",
+})
+_ENUM_FIX_COLUMNS = frozenset({
+    "stage", "purpose", "match_status", "classification_status",
+    "classified_doc_type", "classified_doc_category", "disclosure_type",
+    "tolerance_category", "day_of_week", "priority", "meeting_mode",
+    "meeting_type", "status", "default_meeting_mode", "routing_strategy",
+    "default_mode", "type", "severity", "category",
+})
+_ENUM_FIX_TYPES = frozenset({
+    "leadstage", "loanstage", "loanpurpose", "emailintakematchstatus",
+    "attachmentclassificationstatus", "disclosuretype", "tolerancecategory",
+    "dayofweek", "slotpriority", "meetingmode", "meetingtype",
+    "appointmentstatus", "tasktype",
+})
+_DEMO_CLEANUP_TABLES = frozenset({
+    "morning_briefings", "stage_history", "disclosure_events", "loan_fees",
+    "compliance_alerts", "scheduler_appointments", "availability_slots",
+    "appointment_types", "scheduler_configs",
+    "loan_team_members", "mum_clients",
+    "ai_tasks", "tasks", "activities", "documents",
+    "email_intakes", "attachment_intakes",
+    "loans", "leads", "referral_partners",
+})
 # from integrations.stripe_service import StripeService  # Disabled for now
 from integrations.email_service import EmailService, VerificationTokenService
 
@@ -266,6 +296,10 @@ async def seed_demo_data(
             ("mum_clients", "status", None),
         ]
         for tbl, col, enum_name in enum_fixes:
+            if tbl not in _ENUM_FIX_TABLES:
+                raise ValueError(f"Blocked SQL on non-whitelisted table: {tbl}")
+            if col not in _ENUM_FIX_COLUMNS:
+                raise ValueError(f"Blocked SQL on non-whitelisted column: {col}")
             try:
                 nested = db.begin_nested()
                 db.execute(_text(f"""
@@ -275,6 +309,8 @@ async def seed_demo_data(
             except Exception:
                 nested.rollback()
             if enum_name:
+                if enum_name not in _ENUM_FIX_TYPES:
+                    raise ValueError(f"Blocked SQL on non-whitelisted enum type: {enum_name}")
                 try:
                     nested2 = db.begin_nested()
                     db.execute(_text(f"DROP TYPE IF EXISTS {enum_name}"))
@@ -294,6 +330,8 @@ async def seed_demo_data(
             "email_intakes", "attachment_intakes",
             "loans", "leads", "referral_partners",
         ]:
+            if table not in _DEMO_CLEANUP_TABLES:
+                raise ValueError(f"Blocked SQL on non-whitelisted table: {table}")
             try:
                 sp = db.begin_nested()
                 db.execute(_text(f"DELETE FROM {table} WHERE organization_id = :oid"), {"oid": org_id})

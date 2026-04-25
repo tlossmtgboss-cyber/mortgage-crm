@@ -20,6 +20,10 @@ from .salesforce_models import ALLOWED_LOAN_COLUMNS
 
 logger = logging.getLogger(__name__)
 
+# ── Table whitelist for dynamic SQL (prevent injection) ──
+_SF_SAFE_TABLES = frozenset({"loans", "leads"})
+_SF_SAFE_CONFLICT_COLUMNS = frozenset({"salesforce_id", "id"})
+
 # Import Salesforce API version constant for consistency
 try:
     from integrations.salesforce_service import SALESFORCE_API_VERSION
@@ -157,6 +161,8 @@ def build_safe_update_sql(loan_data: dict, table: str = "loans") -> tuple:
     Build a safe UPDATE SQL statement using only whitelisted column names.
     Returns (sql_string, filtered_data_dict)
     """
+    if table not in _SF_SAFE_TABLES:
+        raise ValueError(f"Blocked SQL on non-whitelisted table: {table}")
     safe_data = sanitize_loan_data(loan_data)
     if not safe_data:
         raise ValueError("No valid columns to update")
@@ -172,6 +178,8 @@ def build_safe_insert_sql(loan_data: dict, table: str = "loans") -> tuple:
     Build a safe INSERT SQL statement using only whitelisted column names.
     Returns (sql_string, filtered_data_dict)
     """
+    if table not in _SF_SAFE_TABLES:
+        raise ValueError(f"Blocked SQL on non-whitelisted table: {table}")
     safe_data = sanitize_loan_data(loan_data)
     if not safe_data:
         raise ValueError("No valid columns to insert")
@@ -190,6 +198,10 @@ def build_safe_upsert_sql(loan_data: dict, conflict_column: str = "salesforce_id
 
     Note: Requires a unique constraint on conflict_column.
     """
+    if table not in _SF_SAFE_TABLES:
+        raise ValueError(f"Blocked SQL on non-whitelisted table: {table}")
+    if conflict_column not in _SF_SAFE_CONFLICT_COLUMNS:
+        raise ValueError(f"Blocked SQL on non-whitelisted conflict column: {conflict_column}")
     safe_data = sanitize_loan_data(loan_data)
     if not safe_data:
         raise ValueError("No valid columns to upsert")

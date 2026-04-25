@@ -650,6 +650,18 @@ def main():
         db.close()
 
 
+_NUKE_SAFE_TABLES = frozenset({
+    "morning_briefings", "stage_history", "disclosure_events", "loan_fees",
+    "compliance_alerts", "appointments", "availability_slots",
+    "scheduler_appointment_types", "scheduler_configs",
+    "loan_team_members", "mum_clients",
+    "ai_tasks", "tasks", "activities", "documents",
+    "email_intakes", "attachment_intakes",
+    "loans", "leads", "referral_partners",
+    "subscriptions", "api_keys", "branches",
+})
+
+
 def _nuke_demo_org(db, org_id):
     """Delete all data for the demo org (clean slate)."""
     # Order matters for FK constraints
@@ -664,6 +676,8 @@ def _nuke_demo_org(db, org_id):
         "subscriptions", "api_keys", "branches",
     ]
     for table in tables:
+        if table not in _NUKE_SAFE_TABLES:
+            raise ValueError(f"Blocked SQL on non-whitelisted table: {table}")
         try:
             db.execute(text(f"DELETE FROM {table} WHERE organization_id = :oid"), {"oid": org_id})
         except Exception:
