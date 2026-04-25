@@ -78,6 +78,15 @@ RAILWAY_CREDENTIALS_SETUP.md
 landing-page/
 .vercel
 
+# Credential and key files
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+credentials*.json
+id_rsa*
+
 # Playwright
 frontend/playwright-report/
 frontend/test-results/

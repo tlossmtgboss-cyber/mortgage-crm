@@ -53,5 +53,11 @@ Thumbs.db
 # Claude
 .claude/
 
+# Admin utility scripts (contain PII)
+reset_*_password.py
+setup_*_organization.py
+setup_*_tenant.py
+check_user_emails.py
+
 # Node modules
 node_modules/
