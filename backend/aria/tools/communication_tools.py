@@ -35,12 +35,13 @@ class CommunicationTools:
                 "40019bed-2fa1-4407-a0c6-fe4c6b222c93"
             )
 
+            _org_id_int = int(org_id) if org_id else None
             result = await sms_service.send_sms_with_retry(
                 to_phone=to_phone,
                 from_phone=from_phone,
                 message=message,
                 messaging_profile_id=messaging_profile,
-                organization_id=org_id,
+                organization_id=_org_id_int,
                 workflow_id=None,
                 metadata={"source": "aria", "user_id": str(from_user.get("id", ""))},
             )
@@ -64,7 +65,7 @@ class CommunicationTools:
                     """), {
                         "id": panel_id,
                         "phone": to_phone,
-                        "org_id": org_id,
+                        "org_id": _org_id_int,
                         "body": message[:2000],
                         "telnyx_id": result.get("message_id", ""),
                     })

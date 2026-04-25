@@ -1118,7 +1118,8 @@ Be concise - you're texting!"""
         if len(ai_response) > 300:
             ai_response = ai_response[:297] + "..."
 
-        # Send SMS via telephony provider
+        # Send SMS via the chokepoint
+        from telephony.sms import send_sms_verified
         sms_phone = os.getenv("TELNYX_PHONE_NUMBER")
         messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID")
 
@@ -1126,17 +1127,18 @@ Be concise - you're texting!"""
             logger.error("No phone number or messaging profile configured for SMS")
             return
 
-        provider = get_telephony_provider()
-
-        sent_message = provider.send_sms(
+        sms_result = send_sms_verified(
             to=from_number,
             from_=sms_phone,
-            body=ai_response,
+            text=ai_response,
             messaging_profile_id=messaging_profile_id,
+            user_id=user_id,
+            lead_id=lead_id or (conversation.lead_id if conversation else None),
+            organization_id=getattr(current_user, 'organization_id', None) if 'current_user' in dir() else None,
         )
 
         # Store outbound message
-        provider_msg_id = sent_message.sid if hasattr(sent_message, 'sid') else str(sent_message)
+        provider_msg_id = sms_result.get("id") or ""
         outbound_sms = SMSMessage(
             user_id=user_id,
             lead_id=lead_id or conversation.lead_id,
@@ -1283,7 +1285,7 @@ async def send_sms_in_conversation(
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     try:
-        from telephony.provider import get_telephony_provider
+        from telephony.sms import send_sms_verified
 
         sms_phone = os.getenv("TELNYX_PHONE_NUMBER")
         messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID")
@@ -1291,16 +1293,17 @@ async def send_sms_in_conversation(
         if not sms_phone and not messaging_profile_id:
             raise HTTPException(status_code=500, detail="SMS service not configured")
 
-        provider = get_telephony_provider()
-
-        sent_message = provider.send_sms(
+        sms_result = send_sms_verified(
             to=conversation.phone_number,
             from_=sms_phone,
-            body=message,
+            text=message,
             messaging_profile_id=messaging_profile_id,
+            user_id=current_user.id,
+            lead_id=conversation.lead_id,
+            organization_id=getattr(current_user, 'organization_id', None),
         )
 
-        provider_msg_id = sent_message.sid if hasattr(sent_message, 'sid') else str(sent_message)
+        provider_msg_id = sms_result.get("id") or ""
 
         sms_message = SMSMessage(
             user_id=current_user.id,
@@ -1575,21 +1578,22 @@ async def debug_send_test_sms(
         elif len(clean_number) == 11 and clean_number.startswith('1'):
             to_number = f"+{clean_number}"
 
-        provider = get_telephony_provider()
-        sent_msg = provider.send_sms(
+        from telephony.sms import send_sms_verified
+        sms_result = send_sms_verified(
             to=to_number,
             from_=sms_phone,
-            body=message,
+            text=message,
+            organization_id=getattr(current_user, 'organization_id', None),
         )
 
-        msg_sid = sent_msg.sid if hasattr(sent_msg, 'sid') else str(sent_msg)
+        msg_sid = sms_result.get("id") or ""
 
         return {
-            "success": True,
+            "success": sms_result.get("status") == "sent",
             "message_sid": msg_sid,
             "from_number": sms_phone,
             "to_number": to_number,
-            "status": getattr(sent_msg, 'status', 'sent'),
+            "status": sms_result.get("status", "unknown"),
         }
     except Exception as e:
         logger.error(f"Debug send-test-sms error: {e}", exc_info=True)

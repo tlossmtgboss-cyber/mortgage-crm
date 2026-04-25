@@ -176,6 +176,49 @@ async def _send_sms_raw_async(
 
 
 # ---------------------------------------------------------------------------
+# Archive helper — writes to delivery log + SMS panel (best-effort)
+# ---------------------------------------------------------------------------
+
+def _record_to_panel(
+    msg_id: str,
+    to_phone: str,
+    from_phone: str,
+    message_body: str,
+    lead_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+) -> None:
+    """Best-effort write to sms_delivery_log + sms_panel_messages.
+
+    Called by send_sms_verified() and send_sms_verified_async() after a
+    successful send.  Callers that already write via record_message_sent()
+    will hit ON CONFLICT (id) DO NOTHING — no duplicates.
+    """
+    try:
+        from db import SessionLocal
+        _db = SessionLocal()
+        try:
+            from integrations.sms_delivery_tracker import record_message_sent
+            record_message_sent(
+                _db, str(msg_id), to_phone, from_phone,
+                message_body,
+                lead_id=lead_id,
+                user_id=user_id,
+                organization_id=organization_id,
+            )
+            _db.commit()
+        except Exception:
+            try:
+                _db.rollback()
+            except Exception:
+                pass
+        finally:
+            _db.close()
+    except Exception as e:
+        logger.debug("SMS archive record skipped: %s", e)
+
+
+# ---------------------------------------------------------------------------
 # Public API — VERIFIED (compliance-enforcing chokepoint)
 # ---------------------------------------------------------------------------
 
@@ -331,6 +374,15 @@ def send_sms_verified(
         media_urls=media_urls,
         api_key=api_key,
     )
+
+    # --- Archive: write to delivery log + SMS panel (best-effort) ---
+    if result.get("status") == "sent":
+        _record_to_panel(
+            result.get("id", ""), normalized, from_, text,
+            lead_id=lead_id, user_id=user_id,
+            organization_id=organization_id,
+        )
+
     return result
 
 
@@ -445,6 +497,15 @@ async def send_sms_verified_async(
         media_urls=media_urls,
         api_key=api_key,
     )
+
+    # --- Archive: write to delivery log + SMS panel (best-effort) ---
+    if result.get("status") == "sent":
+        _record_to_panel(
+            result.get("id", ""), normalized, from_, text,
+            lead_id=lead_id, user_id=user_id,
+            organization_id=organization_id,
+        )
+
     return result
 
 
