@@ -683,8 +683,8 @@ async def delegate_task(
                 return {"success": True, "message": "Task delegated successfully"}
             raise HTTPException(status_code=404, detail="Task not found or not owned by you")
 
-        # Get the new owner's info for logging
-        new_owner = db.query(User).filter(User.id == new_owner_id).first()
+        # Get the new owner's info for logging — must be in same org
+        new_owner = db.query(User).filter(User.id == new_owner_id, User.organization_id == current_user.organization_id).first()
         new_owner_name = new_owner.full_name if new_owner else f"User {new_owner_id}"
 
         # Update the task assignment
@@ -839,13 +839,13 @@ async def delete_task(
             task = db.query(Task).filter(Task.id == task_id, Task.owner_id == current_user.id).first()
             task_type = "Task"
 
-        # If still not found, try without user filter (for admin cleanup)
+        # If still not found, try without user filter (for admin cleanup) — still scoped to org
         if not task:
-            task = db.query(AITask).filter(AITask.id == task_id).first()
+            task = db.query(AITask).filter(AITask.id == task_id, AITask.organization_id == current_user.organization_id).first()
             task_type = "AITask (any user)"
 
         if not task:
-            task = db.query(Task).filter(Task.id == task_id).first()
+            task = db.query(Task).filter(Task.id == task_id, Task.organization_id == current_user.organization_id).first()
             task_type = "Task (any user)"
 
         if not task:
@@ -1197,7 +1197,7 @@ async def apply_disposition_task(
     Task = main.Task
     Loan = main.Loan
 
-    task = db.query(Task).filter(Task.id == task_id).first()
+    task = db.query(Task).filter(Task.id == task_id, Task.organization_id == current_user.organization_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     if not task.sf_proposed_stage:
@@ -1205,7 +1205,7 @@ async def apply_disposition_task(
     if task.status != "pending":
         raise HTTPException(status_code=400, detail=f"Task already {task.status}")
 
-    loan = db.query(Loan).filter(Loan.id == task.loan_id).first()
+    loan = db.query(Loan).filter(Loan.id == task.loan_id, Loan.organization_id == current_user.organization_id).first()
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 
@@ -1336,7 +1336,7 @@ async def dismiss_disposition_task(
     main = get_main_module()
     Task = main.Task
 
-    task = db.query(Task).filter(Task.id == task_id).first()
+    task = db.query(Task).filter(Task.id == task_id, Task.organization_id == current_user.organization_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     if not task.sf_proposed_stage:
@@ -2040,6 +2040,11 @@ async def get_loan_team_members(
     Loan = main.Loan
 
     try:
+        # Verify loan exists and belongs to current user's org before querying related data
+        loan = db.query(Loan).filter(Loan.id == loan_id, Loan.organization_id == current_user.organization_id).first()
+        if not loan:
+            raise HTTPException(status_code=404, detail="Loan not found")
+
         # Get custom team members from the table
         result = db.execute(text("""
             SELECT ltm.*,
@@ -2056,10 +2061,7 @@ async def get_loan_team_members(
 
         team_members = [dict(row._mapping) for row in result.fetchall()]
 
-        # Also get standard loan team members from loan record
-        loan = db.query(Loan).filter(Loan.id == loan_id).first()
-        if not loan:
-            raise HTTPException(status_code=404, detail="Loan not found")
+        # Get standard loan team members from loan record
 
         standard_members = []
         if loan.loan_officer_name or loan.loan_officer_email:
@@ -2127,8 +2129,8 @@ async def create_loan_team_member(
         if not isinstance(member, main.LoanTeamMemberCreate):
             member = LoanTeamMemberCreate(**member)
 
-        # Verify loan exists
-        loan = db.query(Loan).filter(Loan.id == loan_id).first()
+        # Verify loan exists and belongs to current user's org
+        loan = db.query(Loan).filter(Loan.id == loan_id, Loan.organization_id == current_user.organization_id).first()
         if not loan:
             raise HTTPException(status_code=404, detail="Loan not found")
 
