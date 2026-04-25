@@ -91,9 +91,12 @@ class ConnectionManager:
 manager = ConnectionManager()
 
 
-async def get_agent_metrics_data(db: Session, agent_id: int) -> dict:
-    """Get latest metrics for an agent"""
-    agent = db.query(AgentProfile).filter(AgentProfile.id == agent_id).first()
+async def get_agent_metrics_data(db: Session, agent_id: int, org_id: int = None) -> dict:
+    """Get latest metrics for an agent, scoped to organization"""
+    query = db.query(AgentProfile).filter(AgentProfile.id == agent_id)
+    if org_id:
+        query = query.filter(AgentProfile.organization_id == org_id)
+    agent = query.first()
     if not agent:
         return None
 
@@ -127,42 +130,53 @@ async def get_agent_metrics_data(db: Session, agent_id: int) -> dict:
     }
 
 
-async def get_system_health_data(db: Session) -> dict:
-    """Get system-wide health metrics"""
-    total_agents = db.query(AgentProfile).count()
+async def get_system_health_data(db: Session, org_id: int = None) -> dict:
+    """Get system-wide health metrics, scoped to organization"""
+    base_query = db.query(AgentProfile)
+    if org_id:
+        base_query = base_query.filter(AgentProfile.organization_id == org_id)
 
-    healthy = db.query(AgentProfile).filter(
+    total_agents = base_query.count()
+
+    healthy = base_query.filter(
         AgentProfile.health_status == "healthy"
     ).count()
 
-    warning = db.query(AgentProfile).filter(
+    warning = base_query.filter(
         AgentProfile.health_status == "warning"
     ).count()
 
-    critical = db.query(AgentProfile).filter(
+    critical = base_query.filter(
         AgentProfile.health_status == "critical"
     ).count()
 
     # 24h execution stats
     one_day_ago = datetime.now(timezone.utc) - timedelta(hours=24)
-    recent_metrics = db.query(AgentMetricsTimeseries).filter(
+    # Get org-scoped agent IDs for sub-queries
+    org_agent_ids = None
+    if org_id:
+        org_agent_ids = [a.id for a in base_query.with_entities(AgentProfile.id).all()]
+
+    metrics_query = db.query(AgentMetricsTimeseries).filter(
         AgentMetricsTimeseries.timestamp >= one_day_ago
-    ).all()
+    )
+    if org_id and org_agent_ids:
+        metrics_query = metrics_query.filter(AgentMetricsTimeseries.agent_id.in_(org_agent_ids))
+    recent_metrics = metrics_query.all()
 
     total_executions = sum(m.execution_count or 0 for m in recent_metrics)
     total_success = sum(m.success_count or 0 for m in recent_metrics)
 
     success_rate = (total_success / total_executions * 100) if total_executions > 0 else 0
 
-    # Active alerts
-    active_alerts = db.query(AgentAlert).filter(
-        AgentAlert.status == "active"
-    ).count()
+    # Active alerts — scope to org's agents
+    alerts_query = db.query(AgentAlert).filter(AgentAlert.status == "active")
+    if org_id and org_agent_ids:
+        alerts_query = alerts_query.filter(AgentAlert.agent_id.in_(org_agent_ids))
+    active_alerts = alerts_query.count()
 
-    critical_alerts = db.query(AgentAlert).filter(
-        AgentAlert.status == "active",
-        AgentAlert.severity == "critical"
-    ).count()
+    critical_query = alerts_query.filter(AgentAlert.severity == "critical")
+    critical_alerts = critical_query.count()
 
     return {
         "total_agents": total_agents,
@@ -208,7 +222,7 @@ async def agent_metrics_websocket(websocket: WebSocket, agent_id: int):
             # Get fresh database session
             db = next(get_db())
             try:
-                metrics_data = await get_agent_metrics_data(db, agent_id)
+                metrics_data = await get_agent_metrics_data(db, agent_id, org_id=org_id)
 
                 if metrics_data:
                     await websocket.send_json({
@@ -257,7 +271,7 @@ async def system_health_websocket(websocket: WebSocket):
             # Get fresh database session
             db = next(get_db())
             try:
-                health_data = await get_system_health_data(db)
+                health_data = await get_system_health_data(db, org_id=org_id)
 
                 await websocket.send_json({
                     "type": "system_health_update",

@@ -138,6 +138,9 @@ class AgentProfile(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
+    # Multi-tenant isolation
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+
     # Agent identification
     agent_name = Column(String(100), unique=True, nullable=False, index=True)
     display_name = Column(String(200))
