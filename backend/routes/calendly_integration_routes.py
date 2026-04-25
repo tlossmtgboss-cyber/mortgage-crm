@@ -262,8 +262,12 @@ async def create_scheduling_link(
     if not lead_id or not event_type_uuid:
         raise HTTPException(status_code=400, detail="lead_id and event_type_uuid required")
 
-    # Get lead details
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Get lead details (defense-in-depth: org_id filter)
+    org_id = getattr(current_user, "organization_id", None)
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    if org_id:
+        query = query.filter(Lead.organization_id == org_id)
+    lead = query.first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 
@@ -596,8 +600,12 @@ async def ai_schedule_conversation(
     if not lead_id or not message:
         raise HTTPException(status_code=400, detail="lead_id and message required")
 
-    # Get lead details
-    lead = db.query(Lead).filter(Lead.id == lead_id).first()
+    # Get lead details (defense-in-depth: org_id filter)
+    org_id = getattr(current_user, "organization_id", None)
+    query = db.query(Lead).filter(Lead.id == lead_id)
+    if org_id:
+        query = query.filter(Lead.organization_id == org_id)
+    lead = query.first()
     if not lead:
         raise HTTPException(status_code=404, detail="Lead not found")
 

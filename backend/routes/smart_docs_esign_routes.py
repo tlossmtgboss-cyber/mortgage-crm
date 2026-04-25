@@ -2017,14 +2017,12 @@ async def create_envelope_from_template(
     user_org = getattr(current_user, "organization_id", None)
     is_platform_admin = getattr(current_user, "permission_role", "") == "admin"
 
-    template = db.query(ESignatureTemplate).filter(ESignatureTemplate.id == template_id).first()
+    query = db.query(ESignatureTemplate).filter(ESignatureTemplate.id == template_id)
+    if user_org and not is_platform_admin:
+        query = query.filter(ESignatureTemplate.organization_id == user_org)
+    template = query.first()
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
-
-    # Tenant check
-    if user_org and not is_platform_admin:
-        if template.organization_id is not None and template.organization_id != user_org:
-            raise HTTPException(status_code=404, detail="Template not found")
 
     if not template.is_active:
         raise HTTPException(status_code=400, detail="Template is inactive")
