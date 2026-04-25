@@ -320,6 +320,7 @@ def _store_panel_inbound(
     telnyx_msg_id: str,
     media_urls: list = None,
     media_s3_keys: list = None,
+    organization_id: int = None,
 ):
     """Store inbound message in the sms_panel_messages table for the two-way panel.
 
@@ -334,18 +335,31 @@ def _store_panel_inbound(
         media_urls_json = json.dumps(media_urls) if media_urls else "[]"
         s3_keys_json = json.dumps(media_s3_keys) if media_s3_keys else "[]"
 
+        org_id = organization_id
+        if not org_id:
+            try:
+                row = db.execute(
+                    _text("SELECT organization_id FROM verified_caller_ids WHERE phone_number = :phone AND organization_id IS NOT NULL LIMIT 1"),
+                    {"phone": from_phone},
+                ).fetchone()
+                if row:
+                    org_id = row[0]
+            except Exception:
+                pass
+
         db.execute(
             _text("""
                 INSERT INTO sms_panel_messages
-                  (id, phone, direction, body, sender_name, status,
+                  (id, phone, organization_id, direction, body, sender_name, status,
                    telnyx_message_id, media_urls, media_s3_keys, created_at)
-                VALUES (:id, :phone, 'inbound', :body, 'Customer', 'delivered',
+                VALUES (:id, :phone, :org_id, 'inbound', :body, 'Customer', 'delivered',
                         :msg_id, :media_urls::jsonb, :s3_keys::jsonb, NOW())
                 ON CONFLICT (id) DO NOTHING
             """),
             {
                 "id": telnyx_msg_id or str(uuid.uuid4()),
                 "phone": from_phone,
+                "org_id": org_id,
                 "body": body[:2000],
                 "msg_id": telnyx_msg_id,
                 "media_urls": media_urls_json,

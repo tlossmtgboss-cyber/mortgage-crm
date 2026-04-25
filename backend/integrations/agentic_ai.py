@@ -277,12 +277,12 @@ Context:
                 sms_client = integrations.get("sms")
                 if sms_client:
                     result = sms_client.send_sms(
-                        to_number=params["to"],
+                        to_phone=params["to"],
                         message=params["message"]
                     )
                     return {
                         "action": action_type.value,
-                        "status": "success" if result else "failed",
+                        "status": "success" if result.get("success") else "failed",
                         "result": result
                     }
 

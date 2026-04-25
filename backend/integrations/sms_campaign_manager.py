@@ -407,9 +407,8 @@ class SMSCampaignManager:
         if self.sms_service:
             try:
                 result = self.sms_service.send_sms(
-                    to=phone,
-                    body=body,
-                    tenant_id=campaign.tenant_id,
+                    to_phone=phone,
+                    message=body,
                 )
                 if result.get("success"):
                     campaign.stats["sent"] += 1

@@ -314,15 +314,15 @@ class ConversionOrchestrator:
             try:
                 from integrations.sms_service import get_sms_client
 
-                sms_client = get_sms_client()
+                sms_client = get_sms_client(db=self.db)
                 message = f"Hi {lead_info.get('first_name', 'there')}! Thanks for your interest. I'll be in touch shortly to discuss your options. Reply STOP to opt out."
 
                 if lead_info.get("phone"):
-                    sid = sms_client.send_sms(
-                        to_number=lead_info["phone"],
+                    send_result = sms_client.send_sms(
+                        to_phone=lead_info["phone"],
                         message=message,
                     )
-                    return {"sent": bool(sid), "sid": sid, "channel": "sms"}
+                    return {"sent": send_result.get("success", False), "message_id": send_result.get("message_id", ""), "channel": "sms"}
                 return {"skipped": "no phone"}
 
             except Exception as e:

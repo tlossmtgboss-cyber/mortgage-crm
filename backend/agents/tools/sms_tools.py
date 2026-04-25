@@ -129,17 +129,18 @@ def send_sms_message(
         with db_session() as db:
             db.execute(
                 sa_text("""INSERT INTO sms_panel_messages
-                   (id, phone, contact_id, direction, body,
+                   (id, phone, contact_id, organization_id, direction, body,
                     sender_name, sender_role, status,
                     telnyx_message_id, created_at)
-                   VALUES (:id, :phone, :contact_id, 'outbound', :body,
+                   VALUES (:id, :phone, :contact_id, :org_id, 'outbound', :body,
                            'Aria', 'ai_assistant', 'sent',
                            :msg_id, NOW())
                    ON CONFLICT DO NOTHING"""),
                 {
-                    "id": str(uuid.uuid4()),
+                    "id": result.get("message_id", "") or str(uuid.uuid4()),
                     "phone": phone_digits,
                     "contact_id": lead_id or "",
+                    "org_id": int(organization_id) if organization_id else None,
                     "body": message,
                     "msg_id": result.get("message_id", ""),
                 },
@@ -336,15 +337,16 @@ def start_scheduling_sms(
         with db_session() as db:
             db.execute(
                 sa_text("""INSERT INTO sms_panel_messages
-                   (id, phone, contact_id, direction, body,
+                   (id, phone, contact_id, organization_id, direction, body,
                     sender_name, sender_role, status, telnyx_message_id, created_at)
-                   VALUES (:id, :phone, :contact_id, 'outbound', :body,
+                   VALUES (:id, :phone, :contact_id, :org_id, 'outbound', :body,
                            'Aria', 'ai_assistant', 'sent', :msg_id, NOW())
                    ON CONFLICT DO NOTHING"""),
                 {
-                    "id": str(uuid.uuid4()),
-                    "phone": phone_digits,
+                    "id": result.get("message_id", "") or str(uuid.uuid4()),
+                    "phone": to_e164,
                     "contact_id": lead_id or "",
+                    "org_id": int(organization_id) if organization_id else None,
                     "body": body,
                     "msg_id": result.get("message_id", ""),
                 },

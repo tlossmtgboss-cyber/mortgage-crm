@@ -557,8 +557,8 @@ class ClickToCallService:
                     f"We'll reach out soon to schedule a time that works for you."
                 )
 
-            sms_client = get_sms_client()
-            sms_client.send_sms(borrower_phone, message)
+            sms_client = get_sms_client(db=self.db)
+            sms_client.send_sms(to_phone=borrower_phone, message=message)
 
             logger.info(f"Sent unavailability SMS to {borrower_phone}")
 

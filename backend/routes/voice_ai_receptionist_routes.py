@@ -769,7 +769,7 @@ async def vapi_voicemail_status_webhook(
             if voicemail_drop.status == "delivered" and voicemail_drop.phone_number:
                 try:
                     from integrations.sms_service import get_sms_client
-                    sms_client = get_sms_client()
+                    sms_client = get_sms_client(db=db)
                     if sms_client.enabled:
                         contact_name = voicemail_drop.contact_name or "there"
                         sms_body = (
@@ -777,7 +777,7 @@ async def vapi_voicemail_status_webhook(
                             f"Feel free to call or text me back at your convenience!"
                         )
                         sms_client.send_sms(
-                            to_number=voicemail_drop.phone_number,
+                            to_phone=voicemail_drop.phone_number,
                             message=sms_body,
                         )
                         logger.info(f"Post-call SMS sent to {voicemail_drop.phone_number} for voicemail {voicemail_id}")

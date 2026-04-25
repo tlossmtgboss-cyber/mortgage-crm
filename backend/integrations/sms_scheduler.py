@@ -354,9 +354,8 @@ class SMSScheduler:
         try:
             if self.sms_service:
                 result = self.sms_service.send_sms(
-                    to=job.to,
-                    body=job.body,
-                    tenant_id=job.tenant_id,
+                    to_phone=job.to,
+                    message=job.body,
                 )
                 if result.get("success"):
                     job.status = JobStatus.COMPLETED
@@ -365,10 +364,25 @@ class SMSScheduler:
                 else:
                     raise Exception(result.get("error", "Send failed"))
             else:
-                # Dry-run
-                job.status = JobStatus.COMPLETED
-                job.sent_at = datetime.now(timezone.utc)
-                logger.debug(f"[DRY RUN] Job {job.job_id} to {job.to}: {job.body[:40]}...")
+                # No sms_service provided — send through chokepoint directly
+                from telephony.sms import send_sms_verified
+                org_id = None
+                if job.tenant_id:
+                    try:
+                        org_id = int(job.tenant_id)
+                    except (ValueError, TypeError):
+                        pass
+                result = send_sms_verified(
+                    to=job.to,
+                    text=job.body,
+                    organization_id=org_id,
+                )
+                if result.get("status") == "sent":
+                    job.status = JobStatus.COMPLETED
+                    job.sent_at = datetime.now(timezone.utc)
+                    logger.info(f"Scheduled SMS job {job.job_id} sent via chokepoint")
+                else:
+                    raise Exception(result.get("reason", "Send failed"))
         except Exception as e:
             job.error = str(e)
             if job.attempts < self.MAX_RETRIES:

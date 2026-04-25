@@ -154,6 +154,7 @@ class SMSClient:
                         consent_record_id=consent_record_id,
                         consent_verified_at=consent_verified_at,
                         consent_method=consent_method,
+                        organization_id=organization_id,
                     )
                     record_send_attempt(self.db, to_phone, user_id=user_id, lead_id=lead_id)
 

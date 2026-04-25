@@ -936,6 +936,23 @@ class NotificationService:
             logger.info("SMS sent to %s: %s", self._mask_phone(to_phone), msg_id)
             _telnyx_circuit_breaker.record_success()
 
+            try:
+                from db import SessionLocal
+                _panel_db = SessionLocal()
+                try:
+                    from integrations.sms_delivery_tracker import record_message_sent
+                    record_message_sent(
+                        _panel_db, str(msg_id), to_phone, telnyx_from,
+                        message, organization_id=organization_id,
+                    )
+                    _panel_db.commit()
+                except Exception:
+                    _panel_db.rollback()
+                finally:
+                    _panel_db.close()
+            except Exception as _rec_err:
+                logger.debug("SMS delivery/panel record skipped: %s", _rec_err)
+
             return {
                 "success": True,
                 "message_sid": msg_id,

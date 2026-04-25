@@ -36,6 +36,7 @@ def record_message_sent(
     consent_record_id: Optional[int] = None,
     consent_verified_at: Optional[datetime] = None,
     consent_method: Optional[str] = None,
+    organization_id: Optional[int] = None,
 ) -> int:
     """Record a newly sent SMS message with TCPA consent proof. Returns tracking record ID.
 
@@ -76,7 +77,41 @@ def record_message_sent(
         )
         db.flush()
         row = result.fetchone()
-        return row[0] if row else 0
+        tracking_id = row[0] if row else 0
+
+        # Also write to sms_panel_messages so every sent SMS appears in the Archive tab.
+        # Uses telnyx_message_id as the row id so callers who also write panel records
+        # with the same id will hit ON CONFLICT and avoid duplicates.
+        try:
+            import uuid as _uuid
+            panel_id = telnyx_message_id or str(_uuid.uuid4())
+            db.execute(
+                text("""
+                    INSERT INTO sms_panel_messages
+                        (id, phone, contact_id, organization_id, direction, body,
+                         sender_name, sender_user_id, status,
+                         telnyx_message_id, created_at)
+                    VALUES
+                        (:id, :phone, :contact_id, :org_id, 'outbound', :body,
+                         'System', :sender_user_id, 'sent',
+                         :telnyx_id, NOW())
+                    ON CONFLICT (id) DO NOTHING
+                """),
+                {
+                    "id": panel_id,
+                    "phone": to_phone,
+                    "contact_id": str(lead_id or ""),
+                    "org_id": organization_id,
+                    "body": message_body[:500],
+                    "sender_user_id": user_id,
+                    "telnyx_id": telnyx_message_id,
+                },
+            )
+            db.flush()
+        except Exception as panel_err:
+            logger.debug(f"Panel message insert skipped (may already exist): {panel_err}")
+
+        return tracking_id
     except Exception as e:
         logger.error(f"Failed to record message sent: {e}")
         return 0

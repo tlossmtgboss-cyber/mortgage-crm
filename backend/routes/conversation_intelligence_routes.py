@@ -732,25 +732,30 @@ async def send_sms_response(
     """Send SMS response via telephony provider."""
     try:
         from integrations.sms_service import get_sms_client
-        sms_client = get_sms_client()
+        from database import SessionLocal
+        _db = SessionLocal()
+        try:
+            sms_client = get_sms_client(db=_db)
 
-        if sms_client.enabled:
-            message_sid = sms_client.send_sms(
-                to_number=to_number,
-                message=message
-            )
-            logger.info(f"SMS sent to {to_number} for conversation {conversation_id}, SID: {message_sid}")
-            return message_sid
-        else:
-            # Fallback to NotificationService which may have alternative SMS provider
-            from services.notification_service import NotificationService
-            notification_service = NotificationService()
-            result = notification_service.send_sms(
-                to_phone=to_number,
-                message=message
-            )
-            logger.info(f"SMS sent via NotificationService to {to_number} for conversation {conversation_id}")
-            return result
+            if sms_client.enabled:
+                send_result = sms_client.send_sms(
+                    to_phone=to_number,
+                    message=message
+                )
+                msg_id = send_result.get("message_id", "") if isinstance(send_result, dict) else send_result
+                logger.info(f"SMS sent to {to_number} for conversation {conversation_id}, ID: {msg_id}")
+                return send_result
+            else:
+                from services.notification_service import NotificationService
+                notification_service = NotificationService()
+                result = notification_service.send_sms(
+                    to_phone=to_number,
+                    message=message
+                )
+                logger.info(f"SMS sent via NotificationService to {to_number} for conversation {conversation_id}")
+                return result
+        finally:
+            _db.close()
     except Exception as e:
         logger.error(f"Error sending SMS to {to_number}: {e}")
         raise

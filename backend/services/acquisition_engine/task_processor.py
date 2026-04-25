@@ -315,11 +315,14 @@ class TaskProcessor:
         try:
             from integrations.sms_service import get_sms_client
 
-            client = get_sms_client()
+            client = get_sms_client(db=self.db)
             result = client.send_sms(
-                to=task.payload.get("phone"),
+                to_phone=task.payload.get("phone"),
                 message=task.payload.get("message"),
+                lead_id=task.lead_id,
             )
+            if not result.get("success"):
+                raise ValueError(f"SMS retry failed: {result.get('error', 'Unknown')}")
             logger.info(f"SMS retry success for lead {task.lead_id}")
         except Exception as e:
             logger.error(f"SMS retry failed: {e}")

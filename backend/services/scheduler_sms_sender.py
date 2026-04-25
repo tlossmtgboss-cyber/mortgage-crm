@@ -44,6 +44,24 @@ def _send_sms_with_retry(from_number: str, to_number: str, text: str,
                 organization_id=organization_id,
             )
             msg_id = result.get("id", "unknown")
+
+            try:
+                from db import SessionLocal
+                _panel_db = SessionLocal()
+                try:
+                    from integrations.sms_delivery_tracker import record_message_sent
+                    record_message_sent(
+                        _panel_db, str(msg_id), to_number, from_number,
+                        text, organization_id=organization_id,
+                    )
+                    _panel_db.commit()
+                except Exception:
+                    _panel_db.rollback()
+                finally:
+                    _panel_db.close()
+            except Exception as _rec_err:
+                logger.debug("SMS delivery/panel record skipped: %s", _rec_err)
+
             return True, msg_id, None
         except Exception as e:
             last_error = str(e)

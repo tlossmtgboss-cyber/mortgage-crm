@@ -151,7 +151,7 @@ class AssistantConfigRequest(BaseModel):
     name: str
     first_message: str
     system_prompt: str
-    voice_id: Optional[str] = "jennifer-playht"
+    voice_id: Optional[str] = "b7d50908-b17c-442d-ad8d-810c63997ed9"
     language: Optional[str] = "en"
 
 
@@ -196,8 +196,8 @@ def _build_assistant_response(db: Session, message: dict) -> dict:
     """Build a full assistant config response for Vapi assistant-request."""
     call_data = message.get("call", {})
     customer_phone = call_data.get("customer", {}).get("number", "")
-    first_message = "Thank you for calling The Tim Loss Team. This is Sam. How may I help you today?"
-    system_content = _SAM_SYSTEM_PROMPT
+    first_message = "Thank you for calling The Tim Loss Team. This is Aria. How may I help you today?"
+    system_content = _ARIA_RECEPTIONIST_PROMPT
 
     try:
         from database.models import Lead
@@ -225,8 +225,8 @@ def _build_assistant_response(db: Session, message: dict) -> dict:
                 "tools": _build_tools(server_base),
             },
             "voice": {
-                "provider": "playht",
-                "voiceId": "jennifer",
+                "provider": "cartesia",
+                "voiceId": "b7d50908-b17c-442d-ad8d-810c63997ed9",
             },
             "transcriber": {
                 "provider": "deepgram",
@@ -350,8 +350,8 @@ def _build_tools(server_base: str) -> list:
     ]
 
 
-_SAM_SYSTEM_PROMPT = (
-    "You are Sam, the AI receptionist for The Tim Loss Team mortgage company.\n\n"
+_ARIA_RECEPTIONIST_PROMPT = (
+    "You are Aria, the AI receptionist for The Tim Loss Team mortgage company.\n\n"
     "CRITICAL CONVERSATION RULES - FOLLOW EXACTLY:\n"
     "- Ask ONLY ONE question at a time. NEVER ask two questions in the same response.\n"
     "- After asking a question, STOP talking immediately and wait for the caller to answer.\n"
@@ -703,23 +703,23 @@ async def create_task_function(
                     if owner_phone:
                         # Initialize SMS client
                         from integrations.sms_service import get_sms_client
-                        sms_client = get_sms_client()
+                        sms_client = get_sms_client(db=db)
 
                         # Create urgent notification message
                         caller_name = lead.name or "Unknown caller"
                         sms_message = f"🚨 URGENT: {caller_name} needs immediate callback.\n\nReason: {title}\n\n{description}\n\nView task in CRM: https://perenniaai.com/tasks"
 
                         # Send SMS
-                        message_sid = sms_client.send_sms(
-                            to_number=owner_phone,
+                        send_result = sms_client.send_sms(
+                            to_phone=owner_phone,
                             message=sms_message
                         )
 
-                        if message_sid:
+                        if send_result.get("success"):
                             sms_sent = True
-                            logger.info(f"Urgent task SMS sent. SID: {message_sid}")
+                            logger.info(f"Urgent task SMS sent. ID: {send_result.get('message_id')}")
                         else:
-                            logger.warning("Failed to send urgent task SMS")
+                            logger.warning(f"Failed to send urgent task SMS: {send_result.get('error')}")
             except Exception as sms_error:
                 # Log error but don't fail the task creation
                 logger.error(f"Error sending urgent task SMS: {sms_error}")
@@ -2107,7 +2107,7 @@ async def diagnose_vapi_assistant(admin: Any = Depends(verify_admin_access), ful
 
 @router.post("/diagnostic/fix-greeting")
 async def fix_vapi_greeting(
-    greeting: str = "Hello! Thank you for calling CMG Home Loans. I'm Sam, your AI assistant. How can I help you today?",
+    greeting: str = "Hello! Thank you for calling The Tim Loss Team. I'm Aria, your AI assistant. How can I help you today?",
     admin: Any = Depends(verify_admin_access)
 ):
     """

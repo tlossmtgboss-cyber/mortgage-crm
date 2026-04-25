@@ -55,7 +55,7 @@ class AIReceptionistSMSService:
         if self._sms_client is None:
             try:
                 from integrations.sms_service import get_sms_client
-                self._sms_client = get_sms_client()
+                self._sms_client = get_sms_client(db=self.db)
             except Exception as e:
                 logger.error(f"Failed to initialize SMS client: {e}")
                 return None
@@ -121,12 +121,13 @@ Or just reply to this text with any questions!
 - {self._lo_name} at {self._business_name}"""
 
         try:
-            message_sid = client.send_sms(
-                to_number=phone_number,
+            send_result = client.send_sms(
+                to_phone=phone_number,
                 message=message
             )
+            message_sid = send_result.get("message_id") if isinstance(send_result, dict) else send_result
 
-            if message_sid:
+            if send_result.get("success") if isinstance(send_result, dict) else message_sid:
                 # Log to activity feed
                 await self._log_sms_activity(
                     phone_number=phone_number,
@@ -188,12 +189,13 @@ Pick a time that works best for you!
 - {self._lo_name} at {self._business_name}"""
 
         try:
-            message_sid = client.send_sms(
-                to_number=phone_number,
+            send_result = client.send_sms(
+                to_phone=phone_number,
                 message=message
             )
+            message_sid = send_result.get("message_id") if isinstance(send_result, dict) else send_result
 
-            if message_sid:
+            if send_result.get("success") if isinstance(send_result, dict) else message_sid:
                 await self._log_sms_activity(
                     phone_number=phone_number,
                     caller_name=caller_name,
@@ -250,12 +252,13 @@ We'll call you at this number at the scheduled time.
 - {self._lo_name} at {self._business_name}"""
 
         try:
-            message_sid = client.send_sms(
-                to_number=phone_number,
+            send_result = client.send_sms(
+                to_phone=phone_number,
                 message=message
             )
+            message_sid = send_result.get("message_id") if isinstance(send_result, dict) else send_result
 
-            if message_sid:
+            if send_result.get("success") if isinstance(send_result, dict) else message_sid:
                 await self._log_sms_activity(
                     phone_number=phone_number,
                     caller_name=caller_name,
@@ -326,10 +329,11 @@ We'll call you at this number at the scheduled time.
             if response and response.get("should_respond"):
                 client = self._get_sms_client()
                 if client:
-                    message_sid = client.send_sms(
-                        to_number=from_number,
+                    _result = client.send_sms(
+                        to_phone=from_number,
                         message=response.get("message")
                     )
+                    message_sid = _result.get("message_id") if isinstance(_result, dict) else _result
 
                     # Log the activity
                     await self._log_sms_activity(
@@ -566,7 +570,7 @@ class VapiService:
         name: str,
         first_message: str,
         system_prompt: str,
-        voice_id: str = "jennifer-playht",
+        voice_id: str = "b7d50908-b17c-442d-ad8d-810c63997ed9",
         model: str = "gpt-4",
         **kwargs
     ) -> Dict[str, Any]:
@@ -585,7 +589,7 @@ class VapiService:
                     ]
                 },
                 "voice": {
-                    "provider": "playht",
+                    "provider": "cartesia",
                     "voiceId": voice_id
                 },
                 "firstMessage": first_message,

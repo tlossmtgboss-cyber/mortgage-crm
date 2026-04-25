@@ -27,7 +27,7 @@ class WorkflowActionExecutor:
         """Initialize communication services"""
         try:
             from integrations.sms_service import get_sms_client
-            self.sms_client = get_sms_client()
+            self.sms_client = get_sms_client(db=self.db)
         except Exception as e:
             logger.warning(f"SMS client not available: {e}")
             self.sms_client = None
@@ -112,13 +112,13 @@ class WorkflowActionExecutor:
             if not to_number or not message:
                 return {"success": False, "error": "Missing phone or message"}
 
-            sid = self.sms_client.send_sms(to_number, message)
+            send_result = self.sms_client.send_sms(to_phone=to_number, message=message)
 
-            if sid:
+            if send_result.get("success"):
                 logger.info(f"SMS sent to {to_number}: {message[:50]}...")
-                return {"success": True, "sid": sid}
+                return {"success": True, "message_id": send_result.get("message_id", "")}
             else:
-                return {"success": False, "error": "SMS send failed"}
+                return {"success": False, "error": send_result.get("error", "SMS send failed")}
 
         except Exception as e:
             logger.error(f"SMS error: {e}")

@@ -484,6 +484,24 @@ class SMSConfirmationService:
 
             msg_id = result.get("id", "unknown")
             logger.info(f"SMS sent to {clean_number}, message_id: {msg_id}")
+
+            try:
+                from db import SessionLocal
+                _panel_db = SessionLocal()
+                try:
+                    from integrations.sms_delivery_tracker import record_message_sent
+                    record_message_sent(
+                        _panel_db, str(msg_id), clean_number, self.from_number,
+                        message, organization_id=organization_id,
+                    )
+                    _panel_db.commit()
+                except Exception:
+                    _panel_db.rollback()
+                finally:
+                    _panel_db.close()
+            except Exception as _rec_err:
+                logger.debug("SMS delivery/panel record skipped: %s", _rec_err)
+
             return {"sent": True, "message_id": str(msg_id), "error": None}
 
         except ImportError:

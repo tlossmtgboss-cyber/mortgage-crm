@@ -1000,7 +1000,7 @@ async def send_interview_notifications(
             try:
                 sms_message = f"Your interview is scheduled for {formatted_date} at {formatted_time}. Check your email for details."
                 result = notification_service.send_sms(
-                    to_number=interview.candidate_phone,
+                    to_phone=interview.candidate_phone,
                     message=sms_message
                 )
                 if result.get("success"):

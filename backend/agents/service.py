@@ -1220,14 +1220,14 @@ SECURITY RULES (non-negotiable):
         if "create_referral_partner" in self._tool_functions:
             definitions.append({
                 "name": "create_referral_partner",
-                "description": "Create a new referral partner in the CRM (realtor, financial advisor, etc.).",
+                "description": "Add a realtor, attorney, or other referral partner to the CRM. Use this when the LO mentions a partner who isn't in the system yet. Requires name plus at least phone or email. After creating, send them an SMS with the portal link (app.perenniaai.com/realtor-portal).",
                 "input_schema": {
                     "type": "object",
                     "properties": {
                         "name": {"type": "string", "description": "Partner's full name"},
                         "company": {"type": "string", "description": "Company name"},
-                        "email": {"type": "string", "description": "Partner's email"},
-                        "phone": {"type": "string", "description": "Partner's phone number"},
+                        "email": {"type": "string", "description": "Partner's email (optional if phone provided)"},
+                        "phone": {"type": "string", "description": "Partner's phone number (optional if email provided)"},
                         "partner_type": {"type": "string", "description": "Type: realtor, financial_advisor, attorney, insurance, builder, other"}
                     },
                     "required": ["name"]
@@ -2358,7 +2358,7 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         """
         from integrations.sms_service import get_sms_client
 
-        sms_client = get_sms_client()
+        sms_client = get_sms_client(db=db, user_id=current_user.id)
         phone_number = args.get("phone_number") or args.get("to_number")
         message = args.get("message")
 

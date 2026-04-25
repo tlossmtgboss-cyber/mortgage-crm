@@ -446,14 +446,18 @@ class WorkflowAIExecutor:
 
             # Send via SMS service
             from integrations.sms_service import get_sms_client
-
-            sms_client = get_sms_client(db=None, user_id=task.get("assigned_user_id"))
-            result = sms_client.send_sms(
-                to_phone=task["phone"],
-                message=message_content,
-                lead_id=task.get("lead_id"),
-                user_id=task.get("assigned_user_id")
-            )
+            from db import SessionLocal
+            _sms_db = SessionLocal()
+            try:
+                sms_client = get_sms_client(db=_sms_db, user_id=task.get("assigned_user_id"))
+                result = sms_client.send_sms(
+                    to_phone=task["phone"],
+                    message=message_content,
+                    lead_id=task.get("lead_id"),
+                    user_id=task.get("assigned_user_id")
+                )
+            finally:
+                _sms_db.close()
 
             if result.get("success"):
                 return {

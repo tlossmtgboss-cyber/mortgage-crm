@@ -892,7 +892,7 @@ class ChannelAdapterService:
         try:
             from services.notification_service import NotificationService
             svc = NotificationService()
-            svc.send_sms(to_phone=phone, body=body)
+            svc.send_sms(to_phone=phone, message=body)
 
             return ChannelDeliveryResult(
                 channel=ChannelType.SMS,
