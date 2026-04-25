@@ -3,6 +3,7 @@
 Webhook endpoints for external system integrations, cache invalidation,
 and Microsoft Graph email notifications.
 """
+import hmac
 import os
 import logging
 import httpx
@@ -99,9 +100,14 @@ async def handle_graph_webhook(
             logger.warning("[GRAPH WEBHOOK] Empty notification received")
             return PlainTextResponse(content="OK", status_code=202)
 
-        # Validate client state if secret is configured
+        # Reject all notifications if secret is not configured
+        if not expected_secret:
+            logger.critical("[GRAPH WEBHOOK] GRAPH_WEBHOOK_SECRET not configured — skipping ALL notifications")
+            return PlainTextResponse(content="OK", status_code=202)
+
+        # Validate client state for each notification
         for notification in payload.value:
-            if expected_secret and notification.clientState != expected_secret:
+            if notification.clientState != expected_secret:
                 logger.warning(f"[GRAPH WEBHOOK] Invalid clientState for subscription {notification.subscriptionId}")
                 # Still return 202 to avoid Microsoft retrying with invalid notifications
                 continue
@@ -1395,7 +1401,7 @@ async def handle_cache_invalidation(
         logger.warning("WEBHOOK_SECRET not configured - webhook disabled")
         raise HTTPException(503, "Webhook not configured")
 
-    if x_webhook_secret != expected_secret:
+    if not hmac.compare_digest(x_webhook_secret or "", expected_secret):
         logger.warning(f"Invalid webhook secret attempt for event: {payload.event}")
         raise HTTPException(403, "Invalid webhook secret")
 
@@ -1511,7 +1517,7 @@ async def handle_data_sync(
     multiple records.
     """
     expected_secret = os.getenv("WEBHOOK_SECRET")
-    if not expected_secret or x_webhook_secret != expected_secret:
+    if not expected_secret or not hmac.compare_digest(x_webhook_secret or "", expected_secret):
         raise HTTPException(403, "Invalid webhook secret")
 
     try:
@@ -1701,20 +1707,27 @@ async def handle_retr_webhook(
 
     # Validate webhook secret
     expected_secret = os.getenv("RETR_WEBHOOK_SECRET", os.getenv("WEBHOOK_SECRET"))
-    if expected_secret:
-        if x_webhook_secret != expected_secret and x_retr_signature != expected_secret:
-            logger.warning(f"[RETR WEBHOOK] Invalid secret for import {import_id}")
-            # Still return 202 to prevent RETR from retrying with bad credentials
-            # but don't process the data
-            return PlainTextResponse(
-                content=json.dumps({
-                    "import_id": import_id,
-                    "status": "rejected",
-                    "error": "Invalid webhook secret"
-                }),
-                status_code=202,
-                media_type="application/json"
-            )
+    if not expected_secret:
+        logger.warning("[RETR WEBHOOK] RETR_WEBHOOK_SECRET not configured — rejecting webhook")
+        raise HTTPException(status_code=401, detail="Webhook secret not configured")
+
+    secret_match = (
+        (x_webhook_secret and hmac.compare_digest(x_webhook_secret, expected_secret))
+        or (x_retr_signature and hmac.compare_digest(x_retr_signature, expected_secret))
+    )
+    if not secret_match:
+        logger.warning(f"[RETR WEBHOOK] Invalid secret for import {import_id}")
+        # Still return 202 to prevent RETR from retrying with bad credentials
+        # but don't process the data
+        return PlainTextResponse(
+            content=json.dumps({
+                "import_id": import_id,
+                "status": "rejected",
+                "error": "Invalid webhook secret"
+            }),
+            status_code=202,
+            media_type="application/json"
+        )
 
     try:
         # Parse the request body

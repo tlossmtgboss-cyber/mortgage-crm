@@ -364,8 +364,8 @@ def _verify_eclosing_webhook(raw_body: bytes, signature: str) -> bool:
     """Verify eClosing webhook HMAC-SHA256 signature."""
     secret = os.environ.get("ECLOSING_WEBHOOK_SECRET", "")
     if not secret:
-        logger.warning("ECLOSING_WEBHOOK_SECRET not configured — skipping webhook verification")
-        return True  # Fail-open in dev, should be set in production
+        logger.warning("ECLOSING_WEBHOOK_SECRET not configured — rejecting webhook (set ECLOSING_WEBHOOK_SECRET to enable)")
+        return False
     expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
     return hmac.compare_digest(expected, signature)
 

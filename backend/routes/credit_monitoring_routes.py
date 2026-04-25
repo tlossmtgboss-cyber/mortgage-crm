@@ -350,8 +350,8 @@ def _verify_webhook_signature(body: bytes, signature_header: Optional[str]) -> b
     If no webhook secret is configured, skip verification (development mode).
     """
     if not _WEBHOOK_SECRET:
-        logger.warning("CREDIT_BUREAU_WEBHOOK_SECRET not set — skipping webhook signature verification.")
-        return True
+        logger.warning("CREDIT_BUREAU_WEBHOOK_SECRET not set — rejecting webhook (set CREDIT_BUREAU_WEBHOOK_SECRET to enable)")
+        return False
     if not signature_header:
         return False
     expected = "sha256=" + hmac.new(

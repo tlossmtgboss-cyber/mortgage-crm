@@ -428,9 +428,9 @@ class WebhookVerifier:
 
         This method checks both header formats for maximum compatibility.
 
-        Verification is **optional** when ``VAPI_WEBHOOK_SECRET`` is not
-        set — webhooks are allowed through with a warning.  When the
-        secret IS set, verification is fail-closed.
+        Verification is **fail-closed** in production/staging when
+        ``VAPI_WEBHOOK_SECRET`` is not set — webhooks are rejected.
+        In development, webhooks are allowed through without verification.
 
         Returns the raw request body bytes so the caller can parse JSON
         without reading the body a second time.
@@ -441,10 +441,18 @@ class WebhookVerifier:
 
         if not secret:
             env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
-            logger.warning(
-                "VAPI_WEBHOOK_SECRET not configured in %s — allowing Vapi webhook "
-                "without verification (set VAPI_WEBHOOK_SECRET to enable)",
-                env or "unknown",
+            if env in ("production", "staging"):
+                logger.error(
+                    "VAPI_WEBHOOK_SECRET not configured in %s — rejecting Vapi webhook",
+                    env,
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="Vapi webhook verification not configured",
+                )
+            logger.debug(
+                "VAPI_WEBHOOK_SECRET not configured — skipping Vapi webhook "
+                "verification (dev mode)"
             )
             return body
 
