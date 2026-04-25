@@ -301,15 +301,18 @@ async def initiate_cold_transfer(
 
         # Create transfer record
         transfer_uuid = str(uuid.uuid4())[:8].upper()
+        org_id = getattr(current_user, 'organization_id', None) if current_user else None
         result = db.execute(text("""
             INSERT INTO call_transfers
             (original_call_sid, transfer_type, initiator_user_id,
              from_user_id, to_user_id, to_phone, status,
-             announce_to_recipient, transfer_reason, initiated_at)
+             announce_to_recipient, transfer_reason, initiated_at,
+             organization_id)
             VALUES
             (:call_sid, :transfer_type, :initiator_id,
              :from_user_id, :to_user_id, :to_phone, :status,
-             :announce, :reason, CURRENT_TIMESTAMP)
+             :announce, :reason, CURRENT_TIMESTAMP,
+             :org_id)
             RETURNING id
         """), {
             "call_sid": request.call_sid,
@@ -320,7 +323,8 @@ async def initiate_cold_transfer(
             "to_phone": to_phone,
             "status": "initiated",
             "announce": request.announce_caller,
-            "reason": request.transfer_reason
+            "reason": request.transfer_reason,
+            "org_id": org_id
         })
 
         try:
@@ -495,16 +499,18 @@ async def initiate_warm_transfer(
         conference_name = f"warm-transfer-{uuid.uuid4().hex[:8]}"
 
         # Create transfer record
+        org_id = getattr(current_user, 'organization_id', None) if current_user else None
         result = db.execute(text("""
             INSERT INTO call_transfers
             (original_call_sid, transfer_type, initiator_user_id,
              from_user_id, to_user_id, to_phone, status,
              announce_to_recipient, whisper_message, transfer_reason,
-             initiated_at, extra_data)
+             initiated_at, extra_data, organization_id)
             VALUES
             (:call_sid, :transfer_type, :initiator_id,
              :from_user_id, :to_user_id, :to_phone, :status,
-             :announce, :whisper, :reason, CURRENT_TIMESTAMP, :extra)
+             :announce, :whisper, :reason, CURRENT_TIMESTAMP, :extra,
+             :org_id)
             RETURNING id
         """), {
             "call_sid": request.call_sid,
@@ -521,7 +527,8 @@ async def initiate_warm_transfer(
                 "conference_name": conference_name,
                 "hold_music_id": request.hold_music_id,
                 "to_user_name": to_user_name
-            })
+            }),
+            "org_id": org_id
         })
 
         try:
@@ -619,11 +626,17 @@ async def complete_warm_transfer(
         if not provider:
             raise HTTPException(status_code=500, detail="Telephony provider not configured")
 
-        # Get transfer details
-        transfer = db.execute(text("""
+        # Get transfer details (with tenant isolation)
+        org_id = getattr(current_user, 'organization_id', None) if current_user else None
+        org_filter = "AND organization_id = :org_id" if org_id else ""
+        wt_params = {"id": request.transfer_id}
+        if org_id:
+            wt_params["org_id"] = org_id
+
+        transfer = db.execute(text(f"""
             SELECT id, original_call_sid, consultation_call_sid, extra_data, status
-            FROM call_transfers WHERE id = :id
-        """), {"id": request.transfer_id}).fetchone()
+            FROM call_transfers WHERE id = :id {org_filter}
+        """), wt_params).fetchone()
 
         if not transfer:
             raise HTTPException(status_code=404, detail="Transfer not found")
@@ -1145,6 +1158,12 @@ async def list_transfers(
         params = {"limit": limit, "offset": offset}
         conditions = ["1=1"]
 
+        # Tenant isolation
+        org_id = getattr(current_user, 'organization_id', None) if current_user else None
+        if org_id:
+            conditions.append("ct.organization_id = :org_id")
+            params["org_id"] = org_id
+
         if status:
             conditions.append("ct.status = :status")
             params["status"] = status
@@ -1206,13 +1225,19 @@ async def get_available_recipients(
 ):
     """Get list of users available for transfer"""
     try:
-        results = db.execute(text("""
+        # Tenant isolation - only show recipients in same org
+        org_id = getattr(current_user, 'organization_id', None) if current_user else None
+        org_filter = "AND organization_id = :org_id" if org_id else ""
+        params = {"org_id": org_id} if org_id else {}
+
+        results = db.execute(text(f"""
             SELECT id, full_name, email, phone, role, is_active
             FROM users
             WHERE is_active = TRUE
                 AND phone IS NOT NULL
+                {org_filter}
             ORDER BY full_name
-        """)).fetchall()
+        """), params).fetchall()
 
         recipients = []
         for row in results:
@@ -1242,13 +1267,20 @@ async def get_transfer(
 ):
     """Get transfer details"""
     try:
-        result = db.execute(text("""
+        # Tenant isolation
+        org_id = getattr(current_user, 'organization_id', None) if current_user else None
+        org_filter = "AND ct.organization_id = :org_id" if org_id else ""
+        params = {"id": transfer_id}
+        if org_id:
+            params["org_id"] = org_id
+
+        result = db.execute(text(f"""
             SELECT ct.*, fu.full_name as from_user_name, tu.full_name as to_user_name
             FROM call_transfers ct
             LEFT JOIN users fu ON fu.id = ct.from_user_id
             LEFT JOIN users tu ON tu.id = ct.to_user_id
-            WHERE ct.id = :id
-        """), {"id": transfer_id}).fetchone()
+            WHERE ct.id = :id {org_filter}
+        """), params).fetchone()
 
         if not result:
             raise HTTPException(status_code=404, detail="Transfer not found")
