@@ -8,7 +8,9 @@ Provides REST API for:
 - Webhook handling
 """
 
+import hmac
 import logging
+import os
 
 from fastapi import APIRouter, HTTPException, Request, Depends
 from pydantic import BaseModel, Field
@@ -297,7 +299,17 @@ async def handle_webhook(
     Receives notifications for:
     - Avatar training complete/failed
     - Video generation complete/failed
+
+    Requires VIDYARD_WEBHOOK_SECRET env var. Fails closed when not configured.
     """
+    expected = os.environ.get("VIDYARD_WEBHOOK_SECRET", "")
+    provided = (
+        request.headers.get("X-Webhook-Secret", "")
+        or request.headers.get("Authorization", "").removeprefix("Bearer ")
+    )
+    if not expected or not hmac.compare_digest(expected, provided):
+        raise HTTPException(status_code=401, detail="Unauthorized webhook")
+
     try:
         payload = await request.json()
     except Exception as e:

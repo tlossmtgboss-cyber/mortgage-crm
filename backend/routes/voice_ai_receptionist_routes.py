@@ -9,11 +9,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text, or_, func
 from typing import Optional, Dict, Any
 from datetime import datetime, timezone, timedelta
+import json
 import logging
 import os
 
 from database import get_db
-from middleware.webhook_verification import require_telnyx_webhook
+from middleware.webhook_verification import require_telnyx_webhook, require_vapi_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -711,14 +712,18 @@ webhook_router = APIRouter(prefix="/api/v1/webhooks", tags=["Voice Webhooks"])
 async def vapi_voicemail_status_webhook(
     request: Request,
     voicemail_id: int,
+    raw_body: bytes = Depends(require_vapi_webhook),
     db: Session = Depends(get_db)
 ):
-    """Handle Vapi webhook for voicemail drop status updates"""
+    """Handle Vapi webhook for voicemail drop status updates.
+
+    Signature verification is handled by the require_vapi_webhook dependency.
+    """
     try:
         main = get_models()
         VoicemailDrop = main.VoicemailDrop
 
-        payload = await request.json()
+        payload = json.loads(raw_body)
         logger.info(f"Vapi voicemail webhook received for voicemail_id={voicemail_id}: {payload}")
 
         # Find the voicemail drop record

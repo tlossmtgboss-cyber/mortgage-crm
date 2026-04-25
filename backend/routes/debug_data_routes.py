@@ -1829,7 +1829,14 @@ def register_debug_data_routes(
         2. Add your domain (e.g., reply.perenniaai.com)
         3. Set the webhook URL to: https://your-server.com/api/v1/webhook/sendgrid-inbound
         4. Enable "POST the raw, full MIME message"
+        5. Set SENDGRID_WEBHOOK_SECRET env var and configure matching X-Webhook-Secret header
         """
+        import hmac
+        expected = os.environ.get("SENDGRID_WEBHOOK_SECRET", "")
+        provided = request.headers.get("X-Webhook-Secret", "")
+        if not expected or not hmac.compare_digest(expected, provided):
+            raise HTTPException(status_code=401, detail="Unauthorized webhook")
+
         try:
             from agents.qualification_agent import process_qualification_message
             from email_service import email_service
