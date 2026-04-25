@@ -102,24 +102,34 @@ class TransferResponse(BaseModel):
 # HELPER FUNCTIONS
 # ============================================================================
 
-def get_user_phone(db: Session, user_id: int) -> Optional[str]:
-    """Get user's phone number from database"""
-    result = db.execute(text("""
+def get_user_phone(db: Session, user_id: int, org_id: Optional[int] = None) -> Optional[str]:
+    """Get user's phone number from database (tenant-isolated when org_id provided)"""
+    query = """
         SELECT phone, work_phone, mobile_phone
         FROM users WHERE id = :user_id
-    """), {"user_id": user_id}).fetchone()
+    """
+    params = {"user_id": user_id}
+    if org_id is not None:
+        query += " AND organization_id = :org_id"
+        params["org_id"] = org_id
+    result = db.execute(text(query), params).fetchone()
 
     if result:
         return result.mobile_phone or result.work_phone or result.phone
     return None
 
 
-def get_user_name(db: Session, user_id: int) -> Optional[str]:
-    """Get user's name from database"""
-    result = db.execute(text("""
-        SELECT name FROM users WHERE id = :user_id
-    """), {"user_id": user_id}).fetchone()
-    return result.name if result else None
+def get_user_name(db: Session, user_id: int, org_id: Optional[int] = None) -> Optional[str]:
+    """Get user's name from database (tenant-isolated when org_id provided)"""
+    query = """
+        SELECT full_name FROM users WHERE id = :user_id
+    """
+    params = {"user_id": user_id}
+    if org_id is not None:
+        query += " AND organization_id = :org_id"
+        params["org_id"] = org_id
+    result = db.execute(text(query), params).fetchone()
+    return result.full_name if result else None
 
 
 def format_phone(phone: str) -> str:
@@ -283,6 +293,8 @@ async def initiate_cold_transfer(
         if not provider:
             raise HTTPException(status_code=500, detail="Telephony provider not configured")
 
+        org_id = getattr(current_user, 'organization_id', None)
+
         # Determine destination
         to_phone = None
         to_user_id = request.to_user_id
@@ -290,7 +302,7 @@ async def initiate_cold_transfer(
         if request.to_phone:
             to_phone = format_phone(request.to_phone)
         elif request.to_user_id:
-            to_phone = get_user_phone(db, request.to_user_id)
+            to_phone = get_user_phone(db, request.to_user_id, org_id=org_id)
             if not to_phone:
                 raise HTTPException(status_code=400, detail="User has no phone number")
             to_phone = format_phone(to_phone)
@@ -477,6 +489,8 @@ async def initiate_warm_transfer(
         if not provider:
             raise HTTPException(status_code=500, detail="Telephony provider not configured")
 
+        org_id = getattr(current_user, 'organization_id', None)
+
         # Determine destination
         to_phone = None
         to_user_id = request.to_user_id
@@ -485,8 +499,8 @@ async def initiate_warm_transfer(
         if request.to_phone:
             to_phone = format_phone(request.to_phone)
         elif request.to_user_id:
-            to_phone = get_user_phone(db, request.to_user_id)
-            to_user_name = get_user_name(db, request.to_user_id)
+            to_phone = get_user_phone(db, request.to_user_id, org_id=org_id)
+            to_user_name = get_user_name(db, request.to_user_id, org_id=org_id)
             if not to_phone:
                 raise HTTPException(status_code=400, detail="User has no phone number")
             to_phone = format_phone(to_phone)
@@ -626,17 +640,12 @@ async def complete_warm_transfer(
         if not provider:
             raise HTTPException(status_code=500, detail="Telephony provider not configured")
 
-        # Get transfer details (with tenant isolation)
-        org_id = getattr(current_user, 'organization_id', None) if current_user else None
-        org_filter = "AND organization_id = :org_id" if org_id else ""
-        wt_params = {"id": request.transfer_id}
-        if org_id:
-            wt_params["org_id"] = org_id
-
-        transfer = db.execute(text(f"""
+        # Get transfer details (tenant-isolated via organization_id)
+        org_id = getattr(current_user, 'organization_id', None)
+        transfer = db.execute(text("""
             SELECT id, original_call_sid, consultation_call_sid, extra_data, status
-            FROM call_transfers WHERE id = :id {org_filter}
-        """), wt_params).fetchone()
+            FROM call_transfers WHERE id = :id AND organization_id = :org_id
+        """), {"id": request.transfer_id, "org_id": org_id}).fetchone()
 
         if not transfer:
             raise HTTPException(status_code=404, detail="Transfer not found")
@@ -1155,8 +1164,9 @@ async def list_transfers(
 ):
     """List call transfers"""
     try:
-        params = {"limit": limit, "offset": offset}
-        conditions = ["1=1"]
+        org_id = getattr(current_user, 'organization_id', None)
+        params = {"limit": limit, "offset": offset, "org_id": org_id}
+        conditions = ["fu.organization_id = :org_id"]
 
         # Tenant isolation
         org_id = getattr(current_user, 'organization_id', None) if current_user else None
@@ -1180,7 +1190,7 @@ async def list_transfers(
                    ct.from_user_id, ct.transfer_reason, ct.initiated_at, ct.completed_at,
                    fu.full_name as from_user_name, tu.full_name as to_user_name
             FROM call_transfers ct
-            LEFT JOIN users fu ON fu.id = ct.from_user_id
+            JOIN users fu ON fu.id = ct.from_user_id
             LEFT JOIN users tu ON tu.id = ct.to_user_id
             WHERE """ + where_clause + """
             ORDER BY ct.initiated_at DESC
@@ -1225,19 +1235,15 @@ async def get_available_recipients(
 ):
     """Get list of users available for transfer"""
     try:
-        # Tenant isolation - only show recipients in same org
-        org_id = getattr(current_user, 'organization_id', None) if current_user else None
-        org_filter = "AND organization_id = :org_id" if org_id else ""
-        params = {"org_id": org_id} if org_id else {}
-
-        results = db.execute(text(f"""
+        org_id = getattr(current_user, 'organization_id', None)
+        results = db.execute(text("""
             SELECT id, full_name, email, phone, role, is_active
             FROM users
             WHERE is_active = TRUE
                 AND phone IS NOT NULL
-                {org_filter}
+                AND organization_id = :org_id
             ORDER BY full_name
-        """), params).fetchall()
+        """), {"org_id": org_id}).fetchall()
 
         recipients = []
         for row in results:
@@ -1267,20 +1273,14 @@ async def get_transfer(
 ):
     """Get transfer details"""
     try:
-        # Tenant isolation
-        org_id = getattr(current_user, 'organization_id', None) if current_user else None
-        org_filter = "AND ct.organization_id = :org_id" if org_id else ""
-        params = {"id": transfer_id}
-        if org_id:
-            params["org_id"] = org_id
-
-        result = db.execute(text(f"""
+        org_id = getattr(current_user, 'organization_id', None)
+        result = db.execute(text("""
             SELECT ct.*, fu.full_name as from_user_name, tu.full_name as to_user_name
             FROM call_transfers ct
-            LEFT JOIN users fu ON fu.id = ct.from_user_id
+            JOIN users fu ON fu.id = ct.from_user_id
             LEFT JOIN users tu ON tu.id = ct.to_user_id
-            WHERE ct.id = :id {org_filter}
-        """), params).fetchone()
+            WHERE ct.id = :id AND ct.organization_id = :org_id
+        """), {"id": transfer_id, "org_id": org_id}).fetchone()
 
         if not result:
             raise HTTPException(status_code=404, detail="Transfer not found")
