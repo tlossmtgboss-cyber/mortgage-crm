@@ -1396,17 +1396,18 @@ async def debug_imports(
 
 
 # =============================================================================
-# PUBLIC DIAGNOSTIC ENDPOINT (NO AUTH REQUIRED)
+# DIAGNOSTIC ENDPOINTS (AUTH REQUIRED FOR TENANT ISOLATION)
 # =============================================================================
 
 @router.get("/diagnostic/instance/{instance_id}")
 async def workflow_instance_diagnostic(
     instance_id: int,
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Public diagnostic endpoint - shows why tasks are/aren't generating.
-    No authentication required for debugging purposes.
+    Diagnostic endpoint - shows why tasks are/aren't generating.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
     from datetime import datetime, timezone
@@ -1440,8 +1441,8 @@ async def workflow_instance_diagnostic(
                 next_task_due_at,
                 created_at
             FROM workflow_instances
-            WHERE id = :id
-        """), {"id": instance_id}).fetchone()
+            WHERE id = :id AND organization_id = :org_id
+        """), {"id": instance_id, "org_id": current_user.organization_id}).fetchone()
 
         if not instance_query:
             return {"error": f"Workflow instance {instance_id} not found", "issues_found": ["Instance does not exist"]}
@@ -1492,8 +1493,8 @@ async def workflow_instance_diagnostic(
         config_query = db.execute(text("""
             SELECT id, workflow_key, workflow_name, is_active
             FROM workflow_configurations
-            WHERE id = :id
-        """), {"id": config_id}).fetchone()
+            WHERE id = :id AND (organization_id = :org_id OR organization_id IS NULL)
+        """), {"id": config_id, "org_id": current_user.organization_id}).fetchone()
 
         if not config_query:
             results["issues_found"].append(f"WORKFLOW_CONFIG_NOT_FOUND: No workflow_configurations record with id={config_id}")
@@ -1587,8 +1588,8 @@ async def workflow_instance_diagnostic(
         # Count existing tasks
         task_count = db.execute(text("""
             SELECT COUNT(*) FROM workflow_task_instances
-            WHERE workflow_instance_id = :id
-        """), {"id": instance_id}).scalar()
+            WHERE workflow_instance_id = :id AND organization_id = :org_id
+        """), {"id": instance_id, "org_id": current_user.organization_id}).scalar()
 
         results["existing_task_count"] = task_count
 
@@ -1623,6 +1624,7 @@ async def workflow_instance_diagnostic(
 @router.post("/init/fix-day-semantics")
 async def fix_workflow_day_semantics(
     backdate_instance_id: Optional[int] = Query(None, description="Instance ID to backdate for testing"),
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -1633,7 +1635,7 @@ async def fix_workflow_day_semantics(
 
     Optionally backdates a test instance for immediate task generation.
 
-    NO AUTHENTICATION required for debugging/deployment.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
     from datetime import datetime, timezone
@@ -1657,11 +1659,12 @@ async def fix_workflow_day_semantics(
                 wdc.day_label
             FROM workflow_day_configs wdc
             JOIN workflow_configurations wc ON wdc.workflow_id = wc.id
-            WHERE wdc.day_label ILIKE '%24 Hour%'
+            WHERE (wdc.day_label ILIKE '%24 Hour%'
                OR wdc.day_label ILIKE '%First%'
-               OR wdc.day_value IN (0, 1)
+               OR wdc.day_value IN (0, 1))
+              AND (wc.organization_id = :org_id OR wc.organization_id IS NULL)
             ORDER BY wc.workflow_name, wdc.day_value
-        """))
+        """), {"org_id": current_user.organization_id})
 
         results["before_state"] = [
             {"workflow": row[0], "config_id": row[1], "day_value": row[2], "day_label": row[3]}
@@ -1669,13 +1672,18 @@ async def fix_workflow_day_semantics(
         ]
 
         # Step 2: Fix "First 24 Hours" to day_value=0
+        # NOTE: workflow_day_configs has no organization_id; scoped via workflow_configurations parent
         fix_result = db.execute(text("""
             UPDATE workflow_day_configs
             SET day_value = 0,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE day_label ILIKE '%First 24 Hour%'
-               OR day_label ILIKE '%First%24%Hour%'
-        """))
+            WHERE (day_label ILIKE '%First 24 Hour%'
+               OR day_label ILIKE '%First%24%Hour%')
+              AND workflow_id IN (
+                  SELECT id FROM workflow_configurations
+                  WHERE organization_id = :org_id OR organization_id IS NULL
+              )
+        """), {"org_id": current_user.organization_id})
         db.commit()
 
         results["rows_updated"] = fix_result.rowcount
@@ -1689,7 +1697,8 @@ async def fix_workflow_day_semantics(
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = :id
                   AND status = 'active'
-            """), {"id": backdate_instance_id})
+                  AND organization_id = :org_id
+            """), {"id": backdate_instance_id, "org_id": current_user.organization_id})
             db.commit()
 
             results["instance_backdated"] = backdate_result.rowcount > 0
@@ -1704,11 +1713,12 @@ async def fix_workflow_day_semantics(
                 wdc.day_label
             FROM workflow_day_configs wdc
             JOIN workflow_configurations wc ON wdc.workflow_id = wc.id
-            WHERE wdc.day_label ILIKE '%24 Hour%'
+            WHERE (wdc.day_label ILIKE '%24 Hour%'
                OR wdc.day_label ILIKE '%First%'
-               OR wdc.day_value IN (0, 1)
+               OR wdc.day_value IN (0, 1))
+              AND (wc.organization_id = :org_id OR wc.organization_id IS NULL)
             ORDER BY wc.workflow_name, wdc.day_value
-        """))
+        """), {"org_id": current_user.organization_id})
 
         results["after_state"] = [
             {"workflow": row[0], "config_id": row[1], "day_value": row[2], "day_label": row[3]}
@@ -1725,8 +1735,8 @@ async def fix_workflow_day_semantics(
                     status,
                     NOW() - trigger_milestone_entered_at as time_elapsed
                 FROM workflow_instances
-                WHERE id = :id
-            """), {"id": backdate_instance_id}).fetchone()
+                WHERE id = :id AND organization_id = :org_id
+            """), {"id": backdate_instance_id, "org_id": current_user.organization_id}).fetchone()
 
             if instance_check:
                 results["instance_details"] = {
@@ -1756,14 +1766,15 @@ async def fix_workflow_day_semantics(
 @router.post("/init/generate-tasks")
 async def generate_tasks_public(
     instance_id: Optional[int] = Query(None, description="Specific instance ID to generate tasks for"),
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Generate tasks for workflow instances - PUBLIC endpoint for debugging.
+    Generate tasks for workflow instances.
     If instance_id provided, generates for that instance only.
-    Otherwise generates for all active instances.
+    Otherwise generates for all active instances in the user's org.
 
-    NO AUTHENTICATION required for debugging/deployment.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
     from datetime import datetime, timezone
@@ -1786,7 +1797,8 @@ async def generate_tasks_public(
                     wi.organization_id
                 FROM workflow_instances wi
                 WHERE wi.id = :id AND wi.status = 'active'
-            """), {"id": instance_id}).fetchall()
+                  AND wi.organization_id = :org_id
+            """), {"id": instance_id, "org_id": current_user.organization_id}).fetchall()
         else:
             instances = db.execute(text("""
                 SELECT
@@ -1795,7 +1807,8 @@ async def generate_tasks_public(
                     wi.organization_id
                 FROM workflow_instances wi
                 WHERE wi.status = 'active'
-            """)).fetchall()
+                  AND wi.organization_id = :org_id
+            """), {"org_id": current_user.organization_id}).fetchall()
 
         for inst in instances:
             inst_id = inst[0]
@@ -1889,8 +1902,8 @@ async def generate_tasks_public(
                 db.execute(text("""
                     UPDATE workflow_instances
                     SET last_task_generated_day = :day, updated_at = NOW()
-                    WHERE id = :id
-                """), {"day": max_day_generated, "id": inst_id})
+                    WHERE id = :id AND organization_id = :org_id
+                """), {"day": max_day_generated, "id": inst_id, "org_id": current_user.organization_id})
 
             db.commit()
 
@@ -1915,18 +1928,19 @@ async def generate_tasks_public(
 
 @router.get("/init/verify-day-semantics")
 async def verify_day_semantics(
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Verify the day semantics fix was applied correctly.
     Shows all day configs and their current values.
 
-    NO AUTHENTICATION required for debugging.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
 
     try:
-        # Get all day configs
+        # Get all day configs (workflow_day_configs has no org_id; scoped via workflow_configurations)
         configs = db.execute(text("""
             SELECT
                 wc.workflow_name as workflow_name,
@@ -1937,8 +1951,9 @@ async def verify_day_semantics(
                 wdc.text_enabled
             FROM workflow_day_configs wdc
             JOIN workflow_configurations wc ON wdc.workflow_id = wc.id
+            WHERE wc.organization_id = :org_id OR wc.organization_id IS NULL
             ORDER BY wc.workflow_name, wdc.day_value
-        """))
+        """), {"org_id": current_user.organization_id})
 
         by_workflow = {}
         for row in configs:
@@ -1977,11 +1992,12 @@ async def verify_day_semantics(
 
 @router.get("/diagnostic/summary")
 async def workflow_diagnostic_summary(
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
-    Public diagnostic endpoint - shows overall workflow system health.
-    No authentication required for debugging purposes.
+    Diagnostic endpoint - shows overall workflow system health.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
 
@@ -1993,29 +2009,34 @@ async def workflow_diagnostic_summary(
         instances = db.execute(text("""
             SELECT status, COUNT(*) as count
             FROM workflow_instances
+            WHERE organization_id = :org_id
             GROUP BY status
-        """)).fetchall()
+        """), {"org_id": current_user.organization_id}).fetchall()
         summary["workflow_instances"] = {row[0]: row[1] for row in instances}
         summary["total_instances"] = sum(row[1] for row in instances)
 
         # Workflow configurations
         configs = db.execute(text("""
             SELECT COUNT(*) FROM workflow_configurations
-        """)).scalar()
+            WHERE organization_id = :org_id OR organization_id IS NULL
+        """), {"org_id": current_user.organization_id}).scalar()
         summary["workflow_configurations"] = configs
 
-        # Day configs
+        # Day configs — scoped via workflow_configurations parent
         day_configs = db.execute(text("""
-            SELECT COUNT(*) FROM workflow_day_configs
-        """)).scalar()
+            SELECT COUNT(*) FROM workflow_day_configs wdc
+            JOIN workflow_configurations wc ON wdc.workflow_id = wc.id
+            WHERE wc.organization_id = :org_id OR wc.organization_id IS NULL
+        """), {"org_id": current_user.organization_id}).scalar()
         summary["workflow_day_configs"] = day_configs
 
         # Task instances
         tasks = db.execute(text("""
             SELECT status, COUNT(*) as count
             FROM workflow_task_instances
+            WHERE organization_id = :org_id
             GROUP BY status
-        """)).fetchall()
+        """), {"org_id": current_user.organization_id}).fetchall()
         summary["workflow_task_instances"] = {row[0]: row[1] for row in tasks} if tasks else {}
         summary["total_tasks"] = sum(row[1] for row in tasks) if tasks else 0
 
@@ -2023,9 +2044,10 @@ async def workflow_diagnostic_summary(
         recent = db.execute(text("""
             SELECT id, workflow_instance_id, task_type, status, created_at
             FROM workflow_task_instances
+            WHERE organization_id = :org_id
             ORDER BY created_at DESC
             LIMIT 5
-        """)).fetchall()
+        """), {"org_id": current_user.organization_id}).fetchall()
         summary["recent_tasks"] = [
             {"id": r[0], "instance_id": r[1], "type": r[2], "status": r[3], "created": str(r[4])}
             for r in recent
@@ -2047,7 +2069,8 @@ async def workflow_diagnostic_summary(
         linked_tasks = db.execute(text("""
             SELECT COUNT(*) FROM tasks
             WHERE workflow_task_instance_id IS NOT NULL
-        """)).scalar() or 0
+              AND organization_id = :org_id
+        """), {"org_id": current_user.organization_id}).scalar() or 0
         summary["linked_tasks_in_main_table"] = linked_tasks
 
         return summary
@@ -2059,11 +2082,13 @@ async def workflow_diagnostic_summary(
 
 @router.post("/diagnostic/test-linked-task")
 async def test_create_linked_task(
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Test creating a linked task using EXACT same INSERT as _create_linked_task.
     This helps debug why linked tasks aren't being created.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
     import traceback
@@ -2076,12 +2101,14 @@ async def test_create_linked_task(
                 due_date, owner_id, lead_id, loan_id,
                 related_contact_name, related_type,
                 workflow_task_instance_id, task_group_key,
+                organization_id,
                 created_at, updated_at
             ) VALUES (
                 :title, :description, 'pending', :priority,
                 :due_date, :owner_id, :lead_id, :loan_id,
                 :contact_name, :related_type,
                 :task_instance_id, :group_key,
+                :org_id,
                 NOW(), NOW()
             )
         """), {
@@ -2089,13 +2116,14 @@ async def test_create_linked_task(
             "description": "Test task to debug linked task creation",
             "priority": "medium",
             "due_date": "2025-12-28",
-            "owner_id": 1,  # Test with user ID 1
+            "owner_id": current_user.id,
             "lead_id": None,
             "loan_id": None,
             "contact_name": "Test Contact",
             "related_type": "lead",
             "task_instance_id": -999,
-            "group_key": "test_group_diagnostic"
+            "group_key": "test_group_diagnostic",
+            "org_id": current_user.organization_id
         })
         db.commit()
 
@@ -2104,11 +2132,12 @@ async def test_create_linked_task(
             SELECT id, title, workflow_task_instance_id
             FROM tasks
             WHERE workflow_task_instance_id = -999
-        """)).fetchone()
+              AND organization_id = :org_id
+        """), {"org_id": current_user.organization_id}).fetchone()
 
         if result:
             # Clean up
-            db.execute(text("DELETE FROM tasks WHERE id = :id"), {"id": result[0]})
+            db.execute(text("DELETE FROM tasks WHERE id = :id AND organization_id = :org_id"), {"id": result[0], "org_id": current_user.organization_id})
             db.commit()
             return {
                 "success": True,
@@ -2132,11 +2161,13 @@ async def test_create_linked_task(
 @router.get("/diagnostic/linked-tasks")
 async def get_linked_tasks_diagnostic(
     limit: int = Query(20, le=100),
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Check linked tasks in the main tasks table.
     Shows workflow tasks that appear in the task list UI.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
 
@@ -2149,9 +2180,10 @@ async def get_linked_tasks_diagnostic(
                    t.created_at
             FROM tasks t
             WHERE t.workflow_task_instance_id IS NOT NULL
+              AND t.organization_id = :org_id
             ORDER BY t.created_at DESC
             LIMIT :limit
-        """), {"limit": limit}).fetchall()
+        """), {"limit": limit, "org_id": current_user.organization_id}).fetchall()
 
         tasks = [
             {
@@ -2189,11 +2221,13 @@ async def get_linked_tasks_diagnostic(
 @router.get("/diagnostic/task-instance-data/{instance_id}")
 async def get_task_instance_data(
     instance_id: int,
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Debug endpoint to see what data is available for a workflow task instance.
     Shows the data that would be passed to _create_linked_task.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
 
@@ -2204,8 +2238,8 @@ async def get_task_instance_data(
                    wti.task_type, wti.scheduled_date, wti.status,
                    wti.assigned_user_id, wti.linked_task_id, wti.route
             FROM workflow_task_instances wti
-            WHERE wti.id = :id
-        """), {"id": instance_id}).fetchone()
+            WHERE wti.id = :id AND wti.organization_id = :org_id
+        """), {"id": instance_id, "org_id": current_user.organization_id}).fetchone()
 
         if not task_instance:
             return {"error": f"Task instance {instance_id} not found"}
@@ -2214,15 +2248,17 @@ async def get_task_instance_data(
         workflow_instance = db.execute(text("""
             SELECT wi.id, wi.lead_id, wi.loan_id, wi.organization_id, wi.started_at
             FROM workflow_instances wi
-            WHERE wi.id = :id
-        """), {"id": task_instance[1]}).fetchone()
+            WHERE wi.id = :id AND wi.organization_id = :org_id
+        """), {"id": task_instance[1], "org_id": current_user.organization_id}).fetchone()
 
         # Get day config
+        # NOTE: workflow_day_configs has no organization_id column; scoped via parent workflow_configurations
         day_config = db.execute(text("""
             SELECT wdc.id, wdc.day_label, wdc.day_value, wdc.task_description
             FROM workflow_day_configs wdc
-            WHERE wdc.id = :id
-        """), {"id": task_instance[2]}).fetchone()
+            JOIN workflow_configurations wc ON wdc.workflow_id = wc.id
+            WHERE wdc.id = :id AND (wc.organization_id = :org_id OR wc.organization_id IS NULL)
+        """), {"id": task_instance[2], "org_id": current_user.organization_id}).fetchone()
 
         # Get contact info and lead owner
         contact_info = {}
@@ -2231,8 +2267,8 @@ async def get_task_instance_data(
         if workflow_instance and workflow_instance[1]:  # lead_id
             lead = db.execute(text("""
                 SELECT first_name, last_name, email, phone, owner_id
-                FROM leads WHERE id = :id
-            """), {"id": workflow_instance[1]}).fetchone()
+                FROM leads WHERE id = :id AND organization_id = :org_id
+            """), {"id": workflow_instance[1], "org_id": current_user.organization_id}).fetchone()
             if lead:
                 contact_info = {
                     "name": f"{lead[0] or ''} {lead[1] or ''}".strip(),
@@ -2243,8 +2279,8 @@ async def get_task_instance_data(
 
         if workflow_instance and workflow_instance[2]:  # loan_id
             loan = db.execute(text("""
-                SELECT loan_officer_id FROM loans WHERE id = :id
-            """), {"id": workflow_instance[2]}).fetchone()
+                SELECT loan_officer_id FROM loans WHERE id = :id AND organization_id = :org_id
+            """), {"id": workflow_instance[2], "org_id": current_user.organization_id}).fetchone()
             if loan:
                 loan_officer_id = loan[0]
 
@@ -2294,16 +2330,18 @@ async def get_task_instance_data(
 
 @router.post("/init/create-missing-linked-tasks")
 async def create_missing_linked_tasks(
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Create linked tasks in the main tasks table for all workflow task instances
     that don't have a linked_task_id yet.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
 
     try:
-        # Get all workflow task instances without linked tasks
+        # Get all workflow task instances without linked tasks (scoped to current org)
         instances = db.execute(text("""
             SELECT wti.id, wti.workflow_instance_id, wti.day_config_id,
                    wti.task_type, wti.scheduled_date, wti.assigned_user_id,
@@ -2313,7 +2351,8 @@ async def create_missing_linked_tasks(
             JOIN workflow_instances wi ON wi.id = wti.workflow_instance_id
             JOIN workflow_day_configs wdc ON wdc.id = wti.day_config_id
             WHERE wti.linked_task_id IS NULL
-        """)).fetchall()
+              AND wi.organization_id = :org_id
+        """), {"org_id": current_user.organization_id}).fetchall()
 
         created = 0
         skipped = 0
@@ -2333,11 +2372,11 @@ async def create_missing_linked_tasks(
             # Get owner_id
             owner_id = assigned_user_id
             if not owner_id and lead_id:
-                lead = db.execute(text("SELECT owner_id FROM leads WHERE id = :id"), {"id": lead_id}).fetchone()
+                lead = db.execute(text("SELECT owner_id FROM leads WHERE id = :id AND organization_id = :org_id"), {"id": lead_id, "org_id": current_user.organization_id}).fetchone()
                 if lead and lead[0]:
                     owner_id = lead[0]
             if not owner_id and loan_id:
-                loan = db.execute(text("SELECT loan_officer_id FROM loans WHERE id = :id"), {"id": loan_id}).fetchone()
+                loan = db.execute(text("SELECT loan_officer_id FROM loans WHERE id = :id AND organization_id = :org_id"), {"id": loan_id, "org_id": current_user.organization_id}).fetchone()
                 if loan and loan[0]:
                     owner_id = loan[0]
 
@@ -2348,7 +2387,7 @@ async def create_missing_linked_tasks(
             # Get contact name
             contact_name = "Contact"
             if lead_id:
-                lead = db.execute(text("SELECT first_name, last_name FROM leads WHERE id = :id"), {"id": lead_id}).fetchone()
+                lead = db.execute(text("SELECT first_name, last_name FROM leads WHERE id = :id AND organization_id = :org_id"), {"id": lead_id, "org_id": current_user.organization_id}).fetchone()
                 if lead:
                     contact_name = f"{lead[0] or ''} {lead[1] or ''}".strip() or "Contact"
 
@@ -2395,14 +2434,14 @@ async def create_missing_linked_tasks(
 
                 # Get the new task ID
                 result = db.execute(text("""
-                    SELECT id FROM tasks WHERE workflow_task_instance_id = :id ORDER BY id DESC LIMIT 1
-                """), {"id": task_instance_id}).fetchone()
+                    SELECT id FROM tasks WHERE workflow_task_instance_id = :id AND organization_id = :org_id ORDER BY id DESC LIMIT 1
+                """), {"id": task_instance_id, "org_id": current_user.organization_id}).fetchone()
 
                 if result:
                     # Update the workflow task instance with the linked task ID
                     db.execute(text("""
-                        UPDATE workflow_task_instances SET linked_task_id = :task_id WHERE id = :id
-                    """), {"task_id": result[0], "id": task_instance_id})
+                        UPDATE workflow_task_instances SET linked_task_id = :task_id WHERE id = :id AND organization_id = :org_id
+                    """), {"task_id": result[0], "id": task_instance_id, "org_id": current_user.organization_id})
                     created += 1
 
             except SQLAlchemyError as e:
@@ -2427,11 +2466,13 @@ async def create_missing_linked_tasks(
 async def test_create_workflow_instance(
     lead_id: int = Query(..., description="Lead ID to enroll"),
     workflow_key: str = Query("prospect", description="Workflow key (prospect, prequal, etc.)"),
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     TEST ENDPOINT: Create a new workflow instance and generate tasks.
     Verifies the complete workflow → task → linked task flow.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
     from datetime import datetime, timezone
@@ -2448,8 +2489,8 @@ async def test_create_workflow_instance(
     try:
         # Step 1: Verify lead exists and get owner
         lead = db.execute(text("""
-            SELECT id, name, owner_id FROM leads WHERE id = :id
-        """), {"id": lead_id}).fetchone()
+            SELECT id, name, owner_id FROM leads WHERE id = :id AND organization_id = :org_id
+        """), {"id": lead_id, "org_id": current_user.organization_id}).fetchone()
 
         if not lead:
             return {"success": False, "error": f"Lead {lead_id} not found"}
@@ -2461,8 +2502,9 @@ async def test_create_workflow_instance(
             SELECT id, workflow_key, workflow_name
             FROM workflow_configurations
             WHERE workflow_key = :key AND is_active = true
+              AND (organization_id = :org_id OR organization_id IS NULL)
             LIMIT 1
-        """), {"key": workflow_key}).fetchone()
+        """), {"key": workflow_key, "org_id": current_user.organization_id}).fetchone()
 
         if not config:
             return {"success": False, "error": f"Workflow '{workflow_key}' not found"}
@@ -2476,19 +2518,20 @@ async def test_create_workflow_instance(
                 workflow_type, status, started_at, trigger_milestone_entered_at,
                 last_task_generated_day, created_at
             ) VALUES (
-                1, :config_id, :lead_id,
+                :org_id, :config_id, :lead_id,
                 :workflow_key, 'active', NOW(), NOW(),
                 -1, NOW()
             )
-        """), {"config_id": config[0], "lead_id": lead_id, "workflow_key": workflow_key})
+        """), {"org_id": current_user.organization_id, "config_id": config[0], "lead_id": lead_id, "workflow_key": workflow_key})
         db.flush()
 
         # Get the new instance ID
         instance = db.execute(text("""
             SELECT id FROM workflow_instances
             WHERE lead_id = :lead_id AND workflow_configuration_id = :config_id
+              AND organization_id = :org_id
             ORDER BY id DESC LIMIT 1
-        """), {"lead_id": lead_id, "config_id": config[0]}).fetchone()
+        """), {"lead_id": lead_id, "config_id": config[0], "org_id": current_user.organization_id}).fetchone()
 
         if not instance:
             return {"success": False, "error": "Failed to create workflow instance"}
@@ -2513,9 +2556,10 @@ async def test_create_workflow_instance(
             SELECT COUNT(*) FROM tasks
             WHERE workflow_task_instance_id IN (
                 SELECT id FROM workflow_task_instances
-                WHERE workflow_instance_id = :id
+                WHERE workflow_instance_id = :id AND organization_id = :org_id
             )
-        """), {"id": instance_id}).scalar()
+            AND organization_id = :org_id
+        """), {"id": instance_id, "org_id": current_user.organization_id}).scalar()
 
         results["linked_tasks_created"] = linked or 0
         results["steps"].append(f"5. Created {results['linked_tasks_created']} linked tasks in main table")
@@ -2526,10 +2570,11 @@ async def test_create_workflow_instance(
             FROM tasks t
             WHERE t.workflow_task_instance_id IN (
                 SELECT id FROM workflow_task_instances
-                WHERE workflow_instance_id = :id
+                WHERE workflow_instance_id = :id AND organization_id = :org_id
             )
+            AND t.organization_id = :org_id
             LIMIT 1
-        """), {"id": instance_id}).fetchone()
+        """), {"id": instance_id, "org_id": current_user.organization_id}).fetchone()
 
         if sample_task:
             results["sample_linked_task"] = {
@@ -2556,11 +2601,13 @@ async def test_create_workflow_instance(
 async def get_tasks_for_user_diagnostic(
     user_id: int,
     limit: int = Query(100, le=500),
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Debug endpoint to check what tasks would appear for a specific user.
     This simulates the unified-tasks query.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
 
@@ -2574,14 +2621,15 @@ async def get_tasks_for_user_diagnostic(
             FROM tasks t
             WHERE t.owner_id = :user_id
               AND t.status IN ('pending', 'in_progress')
+              AND t.organization_id = :org_id
             ORDER BY t.due_date ASC
             LIMIT :limit
-        """), {"user_id": user_id, "limit": limit}).fetchall()
+        """), {"user_id": user_id, "limit": limit, "org_id": current_user.organization_id}).fetchall()
 
         # Get user info
         user = db.execute(text("""
-            SELECT id, email, full_name FROM users WHERE id = :id
-        """), {"id": user_id}).fetchone()
+            SELECT id, email, full_name FROM users WHERE id = :id AND organization_id = :org_id
+        """), {"id": user_id, "org_id": current_user.organization_id}).fetchone()
 
         workflow_tasks = [t for t in tasks if t[8] is not None]  # workflow_task_instance_id at index 8
 
@@ -2618,11 +2666,13 @@ async def get_tasks_for_user_diagnostic(
 @router.delete("/test/cleanup-test-instances")
 async def cleanup_test_workflow_instances(
     keep_count: int = Query(1, description="Number of instances to keep per lead"),
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Clean up test workflow instances, keeping only the specified number per lead.
     Also removes orphaned linked tasks.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy import text
     import traceback
@@ -2641,9 +2691,10 @@ async def cleanup_test_workflow_instances(
                        ROW_NUMBER() OVER (PARTITION BY COALESCE(lead_id, 0), COALESCE(loan_id, 0)
                                           ORDER BY created_at DESC) as rn
                 FROM workflow_instances
+                WHERE organization_id = :org_id
             )
             SELECT id FROM ranked WHERE rn > :keep_count
-        """), {"keep_count": keep_count}).fetchall()
+        """), {"keep_count": keep_count, "org_id": current_user.organization_id}).fetchall()
 
         instance_ids = [row[0] for row in instances_to_delete]
 
@@ -2655,23 +2706,24 @@ async def cleanup_test_workflow_instances(
             DELETE FROM tasks
             WHERE workflow_task_instance_id IN (
                 SELECT id FROM workflow_task_instances
-                WHERE workflow_instance_id = ANY(:ids)
+                WHERE workflow_instance_id = ANY(:ids) AND organization_id = :org_id
             )
-        """), {"ids": instance_ids})
+            AND organization_id = :org_id
+        """), {"ids": instance_ids, "org_id": current_user.organization_id})
         results["linked_tasks_deleted"] = linked_deleted.rowcount
 
         # Delete workflow task instances
         task_instances_deleted = db.execute(text("""
             DELETE FROM workflow_task_instances
-            WHERE workflow_instance_id = ANY(:ids)
-        """), {"ids": instance_ids})
+            WHERE workflow_instance_id = ANY(:ids) AND organization_id = :org_id
+        """), {"ids": instance_ids, "org_id": current_user.organization_id})
         results["task_instances_deleted"] = task_instances_deleted.rowcount
 
         # Delete workflow instances
         instances_deleted = db.execute(text("""
             DELETE FROM workflow_instances
-            WHERE id = ANY(:ids)
-        """), {"ids": instance_ids})
+            WHERE id = ANY(:ids) AND organization_id = :org_id
+        """), {"ids": instance_ids, "org_id": current_user.organization_id})
         results["instances_deleted"] = instances_deleted.rowcount
 
         db.commit()
@@ -2693,11 +2745,13 @@ async def cleanup_test_workflow_instances(
 @router.get("/diagnostic/verify-unified-tasks/{user_id}")
 async def verify_unified_tasks_for_user(
     user_id: int,
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Verify what unified-tasks endpoint would return for a user.
     This mimics the exact query used by /api/v1/unified-tasks.
+    Requires authentication for tenant isolation.
     """
     from sqlalchemy.orm import joinedload
     from database.models import Task
@@ -2706,6 +2760,7 @@ async def verify_unified_tasks_for_user(
         # Same query as unified-tasks endpoint (with updated 200 limit)
         workflow_tasks = db.query(Task).filter(
             Task.owner_id == user_id,
+            Task.organization_id == current_user.organization_id,
             Task.status.in_(["pending", "in_progress"])
         ).order_by(Task.due_date.asc()).limit(200).all()
 
