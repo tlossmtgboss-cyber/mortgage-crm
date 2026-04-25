@@ -179,8 +179,8 @@ try:
         # No Redis — blacklist uses in-memory fallback (already active by default)
         _env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
         if _env in ("production", "staging"):
-            logger.warning(
-                "REDIS_URL not set — token blacklist using in-memory fallback. "
+            logger.critical(
+                "CRITICAL: REDIS_URL not set in production — token blacklist using in-memory fallback. "
                 "Blacklisted tokens will not persist across restarts or sync across processes."
             )
         else:
@@ -875,6 +875,12 @@ async def get_current_user(
             # Legacy fallback
             try:
                 payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
+                # Issuer validation (backward compatible — tokens without iss are allowed)
+                _expected_issuer = os.getenv("JWT_ISSUER", "perennia-api")
+                _token_issuer = payload.get("iss")
+                if _token_issuer and _token_issuer != _expected_issuer:
+                    logger.warning(f"JWT issuer mismatch: expected={_expected_issuer}, got={_token_issuer}")
+                    raise credentials_exception
                 email: str = payload.get("sub")
                 if email is None:
                     raise credentials_exception
@@ -1154,6 +1160,12 @@ async def get_current_user_flexible(
         # Legacy fallback
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
+            # Issuer validation (backward compatible — tokens without iss are allowed)
+            _expected_issuer = os.getenv("JWT_ISSUER", "perennia-api")
+            _token_issuer = payload.get("iss")
+            if _token_issuer and _token_issuer != _expected_issuer:
+                logger.warning(f"JWT issuer mismatch: expected={_expected_issuer}, got={_token_issuer}")
+                raise credentials_exception
             email: str = payload.get("sub")
             if email is None:
                 raise credentials_exception

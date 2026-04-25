@@ -29,6 +29,7 @@ Usage:
 
 import logging
 import math
+import re
 from datetime import datetime, timezone
 from typing import Optional, Dict, List
 
@@ -36,6 +37,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
+
+_ALLOWED_SMS_CONFIDENCE_COLUMNS = frozenset({
+    "accepted_count", "edited_count", "rejected_count",
+    "total_recommendations", "confidence_score",
+    "auto_respond_enabled", "auto_respond_threshold", "updated_at",
+})
+_COLUMN_NAME_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 # ---------------------------------------------------------------------------
 # Defaults
@@ -109,6 +117,8 @@ def record_outcome(
         raise ValueError(f"outcome must be accepted/edited/rejected, got {outcome!r}")
 
     col = f"{outcome}_count"  # accepted_count | edited_count | rejected_count
+    if col not in _ALLOWED_SMS_CONFIDENCE_COLUMNS or not _COLUMN_NAME_RE.match(col):
+        raise ValueError(f"Invalid column name derived from outcome: {col!r}")
 
     try:
         now = datetime.now(timezone.utc)

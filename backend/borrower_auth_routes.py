@@ -91,7 +91,7 @@ def _verify_borrower_state(signed_state: str) -> str:
     if len(signed_state) > 4096:
         raise ValueError("State parameter too large")
     if "|" not in signed_state:
-        return signed_state  # Legacy unsigned state — don't break existing flows
+        raise ValueError("Unsigned state parameter rejected")
     data, sig = signed_state.rsplit("|", 1)
     key = os.getenv("SECRET_KEY", "").encode()
     expected = hmac.new(key, data.encode(), hashlib.sha256).hexdigest()[:16]
@@ -214,6 +214,8 @@ def generate_borrower_token(borrower_id: str, email: str) -> str:
         "sub": borrower_id,
         "email": email,
         "type": "borrower",
+        "aud": "borrower-portal",
+        "jti": str(uuid.uuid4()),
         "exp": datetime.now(timezone.utc) + timedelta(days=BORROWER_TOKEN_EXPIRY_DAYS),
         "iat": datetime.now(timezone.utc),
     }
@@ -223,9 +225,20 @@ def generate_borrower_token(borrower_id: str, email: str) -> str:
 def verify_borrower_token(token: str) -> Optional[dict]:
     """Verify and decode a borrower JWT token."""
     try:
+        # verify_aud=False for backward compat with tokens issued before aud claim was added
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM], options={"verify_aud": False})
         if payload.get("type") != "borrower":
             return None
+        # Check token blacklist (requires jti claim — older tokens without jti skip this check)
+        jti = payload.get("jti")
+        if jti:
+            try:
+                from auth.tokens import token_blacklist
+                if token_blacklist.is_blacklisted(token):
+                    logger.warning(f"Rejected blacklisted borrower token: {jti[:8]}...")
+                    return None
+            except Exception:
+                pass
         return payload
     except jwt.ExpiredSignatureError:
         return None
@@ -353,7 +366,7 @@ def generate_state_token() -> str:
 
 def send_magic_link_email(to_email: str, first_name: str, magic_link: str) -> bool:
     """Send magic link login email to borrower."""
-    subject = "🔐 Your Secure Login Link - Perennia Mortgage"
+    subject = "🔐 Your Secure Login Link - The Tim Loss Team"
 
     html_body = f"""
 <!DOCTYPE html>
@@ -438,7 +451,7 @@ def send_magic_link_email(to_email: str, first_name: str, magic_link: str) -> bo
 <body>
     <div class="container">
         <div class="logo">
-            <h1>Perennia Mortgage</h1>
+            <h1>The Tim Loss Team</h1>
         </div>
 
         <h2>Hi {first_name},</h2>
@@ -464,7 +477,7 @@ def send_magic_link_email(to_email: str, first_name: str, magic_link: str) -> bo
 
         <div class="footer">
             <p>If you didn't request this email, you can safely ignore it.</p>
-            <p>This email was sent by Perennia Mortgage</p>
+            <p>This email was sent by The Tim Loss Team</p>
         </div>
     </div>
 </body>
@@ -482,7 +495,7 @@ This is a secure, one-time login link that expires in 24 hours.
 
 If you didn't request this email, you can safely ignore it.
 
-- Perennia Mortgage
+- The Tim Loss Team
 """
 
     try:
@@ -552,8 +565,8 @@ async def google_callback(
         verified = _verify_borrower_state(state)
         state_data = json.loads(verified)
     except (json.JSONDecodeError, TypeError, ValueError) as e:
-        logger.warning(f"Google OAuth invalid state: {e}")
-        state_data = {}
+        logger.warning(f"Google OAuth invalid state (possible CSRF): {e}")
+        return JSONResponse(status_code=400, content={"error": "Invalid OAuth state parameter"})
 
     try:
         # Exchange code for tokens
@@ -685,8 +698,8 @@ async def facebook_callback(
         verified = _verify_borrower_state(state)
         state_data = json.loads(verified)
     except (json.JSONDecodeError, TypeError, ValueError) as e:
-        logger.warning(f"OAuth callback invalid state: {e}")
-        state_data = {}
+        logger.warning(f"Facebook OAuth invalid state (possible CSRF): {e}")
+        return JSONResponse(status_code=400, content={"error": "Invalid OAuth state parameter"})
 
     try:
         # Exchange code for token
@@ -822,8 +835,8 @@ async def linkedin_callback(
         verified = _verify_borrower_state(state)
         state_data = json.loads(verified)
     except (json.JSONDecodeError, TypeError, ValueError) as e:
-        logger.warning(f"OAuth callback invalid state: {e}")
-        state_data = {}
+        logger.warning(f"LinkedIn OAuth invalid state (possible CSRF): {e}")
+        return JSONResponse(status_code=400, content={"error": "Invalid OAuth state parameter"})
 
     try:
         # Exchange code for token
@@ -981,8 +994,8 @@ async def apple_callback(
         verified = _verify_borrower_state(state)
         state_data = json.loads(verified)
     except (json.JSONDecodeError, TypeError, ValueError) as e:
-        logger.warning(f"OAuth callback invalid state: {e}")
-        state_data = {}
+        logger.warning(f"Apple OAuth invalid state (possible CSRF): {e}")
+        return JSONResponse(status_code=400, content={"error": "Invalid OAuth state parameter"})
 
     try:
         # Generate client secret
@@ -1021,7 +1034,7 @@ async def apple_callback(
         id_token_payload = jwt.decode(
             tokens["id_token"],
             key=apple_public_key,
-            algorithms=["RS256"],
+            algorithms=[token_header.get("alg", "RS256")],
             audience=APPLE_CLIENT_ID,
             issuer="https://appleid.apple.com",
         )

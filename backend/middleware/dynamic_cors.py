@@ -91,11 +91,11 @@ class DynamicCORSMiddleware(BaseHTTPMiddleware):
         # Capacitor iOS/Android app origins (used in production builds)
         "capacitor://localhost",
         "ionic://localhost",
-        "http://localhost",
     }
 
     # Development-only origins (never allowed in production)
     _DEV_ORIGINS: Set[str] = {
+        "http://localhost",
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:5173",

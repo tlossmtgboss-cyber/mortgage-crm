@@ -103,6 +103,7 @@ else:
         echo=False,                   # Set True for SQL debugging
         connect_args={
             "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}",
+            "sslmode": os.environ.get("DB_SSLMODE", "require"),
             "connect_timeout": "5",   # 5s TCP connect timeout
             "keepalives": 1,          # Enable TCP keepalives
             "keepalives_idle": 15,    # Start keepalives after 15s idle (detect dead faster)
@@ -186,13 +187,17 @@ def cleanup_idle_connections():
     Uses raw psycopg2 (bypassing SQLAlchemy pool) since the pool itself may be
     unable to connect during exhaustion.
     """
-    import re
-    m = re.match(r'postgresql://([^:]+):([^@]+)@([^:]+):(\d+)/(.+)', DATABASE_URL)
-    if not m:
+    from urllib.parse import urlparse
+    parsed = urlparse(DATABASE_URL)
+    if not parsed.hostname or not parsed.path:
         logger.warning("Connection cleanup skipped: cannot parse DATABASE_URL")
         return
 
-    user, password, host, port, dbname = m.groups()
+    host = parsed.hostname
+    port = parsed.port or 5432
+    user = parsed.username
+    password = parsed.password
+    dbname = parsed.path.lstrip("/")
 
     for attempt in range(5):
         try:

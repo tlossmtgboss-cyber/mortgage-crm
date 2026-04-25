@@ -323,24 +323,27 @@ def get_request_id(request: Request) -> str:
 # GLOBAL EXCEPTION HANDLER
 # ============================================================================
 
+_CORS_ALLOWED_ORIGINS = {
+    "https://perenniaai.com",
+    "https://www.perenniaai.com",
+    "https://app.perenniaai.com",
+    "https://api.perenniaai.com",
+    "capacitor://localhost",
+    "ionic://localhost",
+}
+
+
 def _get_cors_headers(request: Request) -> dict:
-    """Get CORS headers for the request origin."""
+    """Get CORS headers for the request origin (strict exact-match)."""
     origin = request.headers.get("origin", "")
-    headers = {}
-
-    # Add CORS headers if origin is from allowed domains
-    if origin and (
-        origin.endswith("perenniaai.com") or
-        "localhost" in origin or
-        origin.endswith(".railway.app") or
-        origin.endswith(".vercel.app")
-    ):
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "*"
-        headers["Access-Control-Allow-Headers"] = "*"
-
-    return headers
+    if origin and origin in _CORS_ALLOWED_ORIGINS:
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, X-CSRF-Token, X-Request-ID, X-API-Key",
+        }
+    return {}
 
 
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
