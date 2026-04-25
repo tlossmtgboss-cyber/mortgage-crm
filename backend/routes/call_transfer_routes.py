@@ -17,6 +17,7 @@ import uuid
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
 from utils.pii_mask import mask_phone
+from middleware.webhook_verification import require_telnyx_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -1098,14 +1099,14 @@ async def transfer_status_twiml(
 @router.post("/webhook/consult-status")
 async def consultation_status_webhook(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    raw_body: bytes = Depends(require_telnyx_webhook),
 ):
     """
     Webhook for consultation call status updates.
+    Webhook signature is verified by the require_telnyx_webhook dependency.
     """
-    # Webhook security: Telnyx webhook validation is handled in telnyx_webhook_routes.py.
-    # Legacy webhook_security module removed. Telnyx webhook validation is handled in telnyx_webhook_routes.py.
-    logger.info("Consultation status webhook received (legacy signature validation removed)")
+    logger.info("Consultation status webhook received")
 
     try:
         form_data = await request.form()

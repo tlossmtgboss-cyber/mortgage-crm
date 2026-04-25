@@ -16,6 +16,7 @@ import asyncio
 
 from database import get_db
 from sqlalchemy.exc import SQLAlchemyError
+from middleware.webhook_verification import require_telnyx_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -978,14 +979,14 @@ async def handle_queue_overflow(queue, db: Session):
 @router.post("/webhook/dequeue")
 async def dequeue_webhook(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    raw_body: bytes = Depends(require_telnyx_webhook),
 ):
     """
-    Webhook when caller leaves queue (connected or abandoned)
+    Webhook when caller leaves queue (connected or abandoned).
+    Webhook signature is verified by the require_telnyx_webhook dependency.
     """
-    # Webhook security: Legacy webhook_security module removed.
-    # Telnyx webhook validation is handled in telnyx_webhook_routes.py.
-    logger.info("Queue webhook received (legacy signature validation removed)")
+    logger.info("Dequeue webhook received")
 
     try:
         query_params = request.query_params
@@ -1159,14 +1160,14 @@ async def connect_agent_twiml(
 @router.post("/webhook/connect-status")
 async def connect_status_webhook(
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    raw_body: bytes = Depends(require_telnyx_webhook),
 ):
     """
     Webhook for agent connection status.
+    Webhook signature is verified by the require_telnyx_webhook dependency.
     """
-    # Webhook security: Legacy webhook_security module removed.
-    # Telnyx webhook validation is handled in telnyx_webhook_routes.py.
-    logger.info("Queue webhook received (legacy signature validation removed)")
+    logger.info("Connect status webhook received")
 
     try:
         query_params = request.query_params

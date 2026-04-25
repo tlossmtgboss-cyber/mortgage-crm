@@ -28,6 +28,7 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
 from database import get_db
+from middleware.webhook_verification import require_telnyx_webhook
 from services.call_intelligence.recording_consent_config import (
     ConsentStatus,
     RecordingConsentConfig,
@@ -451,8 +452,16 @@ async def ci_websocket_stream(websocket: WebSocket, session_id: str):
 # -----------------------------------------------------------------
 
 @router.post("/webhooks/telnyx")
-async def handle_telnyx_webhook(request: Request, db: Session = Depends(get_db)):
-    payload = await request.json()
+async def handle_telnyx_webhook(
+    request: Request,
+    db: Session = Depends(get_db),
+    raw_body: bytes = Depends(require_telnyx_webhook),
+):
+    """
+    Telnyx webhook for recording consent playback events.
+    Webhook signature is verified by the require_telnyx_webhook dependency.
+    """
+    payload = json.loads(raw_body)
     event_type = payload.get("data", {}).get("event_type", "")
     event_payload = payload.get("data", {}).get("payload", {})
     call_control_id = event_payload.get("call_control_id", "")

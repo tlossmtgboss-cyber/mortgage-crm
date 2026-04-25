@@ -13,6 +13,7 @@ import logging
 import os
 
 from database import get_db
+from middleware.webhook_verification import require_telnyx_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -795,11 +796,13 @@ async def vapi_voicemail_status_webhook(
 async def telephony_sms_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    raw_body: bytes = Depends(require_telnyx_webhook),
 ):
     """
     Webhook for incoming SMS messages.
     Processes incoming texts, identifies the sender, and generates AI responses.
+    Webhook signature is verified by the require_telnyx_webhook dependency.
 
     Configure in Telnyx Mission Control:
     - Messaging > Messaging Profiles > [Your Profile]

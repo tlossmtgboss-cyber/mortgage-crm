@@ -15,6 +15,7 @@ Auth: Every endpoint requires a valid JWT token via get_current_user.
 Tenant isolation: All loan-based endpoints verify organization_id ownership.
 """
 
+import json
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -26,6 +27,7 @@ from sqlalchemy import text as sa_text
 
 from database import get_db
 from auth.dependencies import get_current_user
+from middleware.webhook_verification import require_telnyx_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -777,6 +779,7 @@ async def send_intro_sequence(
 async def inbound_sms_webhook(
     request: Request,
     db: Session = Depends(get_db),
+    raw_body: bytes = Depends(require_telnyx_webhook),
 ):
     """
     Webhook for incoming SMS from borrower (Telnyx payload).
@@ -785,11 +788,10 @@ async def inbound_sms_webhook(
     and message body, matches to an active review, and routes to
     the orchestrator's handle_borrower_response method.
 
-    This endpoint does NOT require user auth -- it is authenticated
-    via Telnyx webhook signature verification.
+    Webhook signature is verified by the require_telnyx_webhook dependency.
     """
     try:
-        payload = await request.json()
+        payload = json.loads(raw_body)
     except Exception as e:
         logger.exception("Failed to parse inbound SMS webhook payload")
         raise HTTPException(status_code=400, detail="Invalid JSON payload")
