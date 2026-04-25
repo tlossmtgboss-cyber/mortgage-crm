@@ -1014,6 +1014,10 @@ async def update_user_roles(
 
         db.commit()
 
+        # Revoke existing tokens so stale role claims cannot be reused
+        from auth.tokens import token_blacklist
+        token_blacklist.revoke_on_privilege_change(int(user_id), reason="role_changed")
+
         log_admin_action(db, current_user, 'user.role_changed', 'user',
                         user_id, user[1] or user[2],
                         old_values={'role': old_role},
@@ -1194,6 +1198,10 @@ async def update_user_permissions(
             })
 
         db.commit()
+
+        # Revoke existing tokens so stale permission claims cannot be reused
+        from auth.tokens import token_blacklist
+        token_blacklist.revoke_on_privilege_change(int(user_id), reason="permissions_changed")
 
         # Log the action
         log_admin_action(

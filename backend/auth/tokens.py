@@ -649,6 +649,11 @@ class TokenBlacklist:
 
         return True
 
+    def revoke_on_privilege_change(self, user_id: int, reason: str = "privilege_change"):
+        """Revoke all tokens when user's role/permissions change."""
+        self.revoke_all_for_user(user_id)
+        logger.info(f"Revoked all tokens for user {user_id} due to: {reason}")
+
     def clear_user_revocation(self, user_id: int) -> bool:
         """
         Clear the revocation flag for a user (after successful re-authentication).

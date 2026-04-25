@@ -484,6 +484,10 @@ async def assign_user_roles(
 
     db.commit()
 
+    # Revoke existing tokens so stale role claims cannot be reused
+    from auth.tokens import token_blacklist
+    token_blacklist.revoke_on_privilege_change(user_id, reason="roles_assigned")
+
     logger.info(f"Admin {current_user.id} assigned roles {request.role_ids} to user {user_id}")
 
     # Build response
@@ -609,6 +613,10 @@ async def remove_user_role(
             """), {"user_id": user_id, "new_role_id": new_role.role_id, "now": now})
 
     db.commit()
+
+    # Revoke existing tokens so stale role claims cannot be reused
+    from auth.tokens import token_blacklist
+    token_blacklist.revoke_on_privilege_change(user_id, reason="role_removed")
 
     logger.info(f"Admin {current_user.id} removed role {role_id} from user {user_id}")
 

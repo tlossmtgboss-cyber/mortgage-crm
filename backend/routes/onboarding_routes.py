@@ -1176,12 +1176,21 @@ async def update_team_member(
 
         if email is not None:
             user.email = email
+
+        # Track whether role actually changes for token revocation
+        role_changed = role is not None and role != user.role
         if role is not None:
             user.role = role
 
         user.user_metadata = user_metadata
 
         db.commit()
+
+        # Revoke existing tokens when role changes so stale claims cannot be reused
+        if role_changed:
+            from auth.tokens import token_blacklist
+            token_blacklist.revoke_on_privilege_change(member_id, reason="role_changed")
+
         db.refresh(user)
 
         return {
