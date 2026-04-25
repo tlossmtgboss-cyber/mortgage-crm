@@ -407,6 +407,9 @@ class _TelnyxSMSMixin:
             logger.error("SMS send failed: TELNYX_API_KEY or TELNYX_FROM_NUMBER not configured")
             return {"message_id": None, "status": "failed", "error": "SMS not configured"}
 
+        org_id = getattr(self, "org_id", None)
+        _org_id_int = int(org_id) if org_id else None
+
         def _blocking_send() -> Dict[str, Any]:
             from telephony.sms import send_sms as telnyx_send_sms
 
@@ -418,6 +421,7 @@ class _TelnyxSMSMixin:
                     messaging_profile_id=messaging_profile or None,
                     media_urls=media_urls,
                     api_key=telnyx_api_key,
+                    organization_id=_org_id_int,
                 )
                 msg_id = result.get("id") or str(uuid.uuid4())
                 return {"message_id": str(msg_id), "status": "sent", "error": None}

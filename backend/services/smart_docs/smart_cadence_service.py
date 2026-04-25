@@ -66,13 +66,70 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-# US federal holidays (month, day) -- simplified; production should use a
-# calendar API or database table for year-specific dates.
-_FEDERAL_HOLIDAYS_FIXED = {
-    (1, 1),    # New Year's Day
-    (7, 4),    # Independence Day
-    (12, 25),  # Christmas Day
-}
+# ---------------------------------------------------------------------------
+# Dynamic US Federal Holiday Calculator
+# ---------------------------------------------------------------------------
+
+def _nth_weekday_of_month(year: int, month: int, weekday: int, n: int) -> date:
+    """Return the nth occurrence of a weekday in a given month.
+
+    Args:
+        year: Calendar year.
+        month: Month (1-12).
+        weekday: Day of week (0=Monday, 6=Sunday).
+        n: Which occurrence (1-based). Use -1 for last.
+
+    Returns:
+        The matching date.
+    """
+    import calendar
+    if n == -1:
+        last_day = calendar.monthrange(year, month)[1]
+        d = date(year, month, last_day)
+        while d.weekday() != weekday:
+            d -= timedelta(days=1)
+        return d
+    first_day = date(year, month, 1)
+    days_ahead = (weekday - first_day.weekday()) % 7
+    first_occurrence = first_day + timedelta(days=days_ahead)
+    return first_occurrence + timedelta(weeks=n - 1)
+
+
+def _get_federal_holidays(year: int) -> set[date]:
+    """Compute US federal holidays for a given year.
+
+    Covers the 10 standard federal holidays:
+      - New Year's Day (Jan 1)
+      - MLK Day (3rd Monday of January)
+      - Presidents' Day (3rd Monday of February)
+      - Memorial Day (last Monday of May)
+      - Independence Day (Jul 4)
+      - Labor Day (1st Monday of September)
+      - Columbus Day (2nd Monday of October)
+      - Veterans Day (Nov 11)
+      - Thanksgiving (4th Thursday of November)
+      - Christmas Day (Dec 25)
+
+    Returns:
+        Set of date objects for all federal holidays in the given year.
+    """
+    holidays: set[date] = set()
+
+    # Fixed-date holidays
+    holidays.add(date(year, 1, 1))    # New Year's Day
+    holidays.add(date(year, 7, 4))    # Independence Day
+    holidays.add(date(year, 11, 11))  # Veterans Day
+    holidays.add(date(year, 12, 25))  # Christmas Day
+
+    # Floating holidays (weekday 0=Monday, 3=Thursday)
+    holidays.add(_nth_weekday_of_month(year, 1, 0, 3))    # MLK Day: 3rd Monday of Jan
+    holidays.add(_nth_weekday_of_month(year, 2, 0, 3))    # Presidents' Day: 3rd Monday of Feb
+    holidays.add(_nth_weekday_of_month(year, 5, 0, -1))   # Memorial Day: last Monday of May
+    holidays.add(_nth_weekday_of_month(year, 9, 0, 1))    # Labor Day: 1st Monday of Sep
+    holidays.add(_nth_weekday_of_month(year, 10, 0, 2))   # Columbus Day: 2nd Monday of Oct
+    holidays.add(_nth_weekday_of_month(year, 11, 3, 4))   # Thanksgiving: 4th Thursday of Nov
+
+    return holidays
 
 # Status constants (match FollowupExecution.status values)
 _STATUS_ACTIVE = "ACTIVE"
@@ -1951,11 +2008,11 @@ class SmartCadenceService:
         return dt + timedelta(days=days_ahead)
 
     def _is_holiday(self, dt: datetime) -> bool:
-        """Check if a date is a US federal holiday (simplified).
+        """Check if a date is a US federal holiday.
 
-        Uses fixed-date holidays. Floating holidays (MLK Day, Presidents Day,
-        Memorial Day, Labor Day, Thanksgiving, etc.) are not covered by this
-        simplified check. Production should use a proper holiday calendar.
+        Dynamically computes all 10 standard US federal holidays for the
+        year of the given datetime, including floating holidays (MLK Day,
+        Presidents Day, Memorial Day, Labor Day, Columbus Day, Thanksgiving).
 
         Args:
             dt: DateTime to check.
@@ -1963,7 +2020,7 @@ class SmartCadenceService:
         Returns:
             True if the date is a recognized holiday.
         """
-        return (dt.month, dt.day) in _FEDERAL_HOLIDAYS_FIXED
+        return dt.date() in _get_federal_holidays(dt.year)
 
     def _check_tcpa_compliance(
         self, phone: str, channel: str,

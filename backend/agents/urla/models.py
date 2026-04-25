@@ -717,10 +717,19 @@ class URLAApplication(URLABase):
             return True
         return False
 
+    _TRACKABLE_SECTIONS = [
+        "SECTION_1A", "SECTION_1B", "SECTION_1C", "SECTION_1D", "SECTION_1E",
+        "SECTION_2", "SECTION_3",
+        "SECTION_4A", "SECTION_4B", "SECTION_4C", "SECTION_4D",
+        "SECTION_5A", "SECTION_5B",
+        "SECTION_7", "SECTION_8",
+        "COBORROWER_CHECK", "SECTION_6",
+    ]
+
     def progress_summary(self) -> Dict[str, Any]:
         """Human-readable progress snapshot for voice read-backs and get_urla_status."""
         primary = self.primary_borrower()
-        total_sections = 9
+        total_sections = len(self._TRACKABLE_SECTIONS)
         completed = len(self.completed_sections)
         return {
             "loan_id": self.loan_id,

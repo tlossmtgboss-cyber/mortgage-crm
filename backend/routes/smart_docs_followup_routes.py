@@ -979,7 +979,7 @@ async def complete_appointment(
     }
 
 
-@router.get("/followup/appointments/{appointment_id}/no-show")
+@router.post("/followup/appointments/{appointment_id}/no-show")
 async def mark_no_show(
     appointment_id: int,
     db: Session = Depends(get_db),

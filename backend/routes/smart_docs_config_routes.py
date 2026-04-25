@@ -20,11 +20,12 @@ import logging
 from datetime import date, datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from db import get_db
+from database import get_db
+from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
 
@@ -81,21 +82,6 @@ class RuleResponse(BaseModel):
 # AUTH HELPERS
 # =============================================================================
 
-async def _get_current_user(request: Request, db: Session = Depends(get_db)):
-    """Get current authenticated user, raising 401 if not authenticated."""
-    try:
-        from auth.dependencies import get_current_user_flexible
-        user = await get_current_user_flexible(request, db)
-        if not user:
-            raise HTTPException(status_code=401, detail="Not authenticated")
-        return user
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.exception(f"Auth error: {e}")
-        raise HTTPException(status_code=401, detail="Not authenticated")
-
-
 def _require_admin(user) -> None:
     """Verify the user is a Platform Admin or Site Admin.
 
@@ -120,16 +106,15 @@ def _get_org_id(user) -> Optional[int]:
 
 @router.get("/rules")
 async def list_rules(
-    request: Request,
     category: Optional[str] = Query(None, description="Filter by rule category"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """List all business rules for the current organization.
 
     Returns system defaults merged with any org-specific overrides.
     """
-    user = await _get_current_user(request, db)
-    org_id = _get_org_id(user)
+    org_id = _get_org_id(current_user)
 
     from services.smart_docs.business_rules_service import (
         BusinessRulesService,
@@ -175,15 +160,14 @@ async def list_rules(
 @router.get("/rules/{category}")
 async def list_rules_by_category(
     category: str,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """List all business rules in a specific category.
 
     Categories: income, fraud, document, followup, esign, compliance, ai
     """
-    user = await _get_current_user(request, db)
-    org_id = _get_org_id(user)
+    org_id = _get_org_id(current_user)
 
     from services.smart_docs.business_rules_service import (
         BusinessRulesService,
@@ -226,18 +210,17 @@ async def list_rules_by_category(
 async def update_rule(
     rule_key: str,
     body: RuleUpdateRequest,
-    request: Request,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Update a business rule value. Admin only.
 
     Creates a new time-versioned entry if effective_date differs from
     any existing entry, or updates the existing entry if dates match.
     """
-    user = await _get_current_user(request, db)
-    _require_admin(user)
-    org_id = _get_org_id(user)
-    user_id = getattr(user, "id", None)
+    _require_admin(current_user)
+    org_id = _get_org_id(current_user)
+    user_id = getattr(current_user, "id", None)
 
     from services.smart_docs.business_rules_service import BusinessRulesService, RULE_DEFAULTS
 
@@ -308,17 +291,16 @@ async def update_rule(
 @router.get("/rules/{rule_key}/history")
 async def get_rule_history(
     rule_key: str,
-    request: Request,
     scope: str = Query("org", description="'org' for org-specific, 'system' for system defaults"),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Get the full version history of a business rule.
 
     Returns all versions (active and inactive), ordered by effective_date desc.
     Useful for auditing when and why a rule changed.
     """
-    user = await _get_current_user(request, db)
-    org_id = _get_org_id(user) if scope == "org" else None
+    org_id = _get_org_id(current_user) if scope == "org" else None
 
     from services.smart_docs.business_rules_service import BusinessRulesService
 
@@ -337,18 +319,17 @@ async def get_rule_history(
 
 @router.post("/rules/seed-defaults")
 async def seed_defaults(
-    request: Request,
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     """Seed default business rules for the current organization.
 
     Creates DB rows for all known rules from RULE_DEFAULTS, skipping
     any that already exist. Admin only.
     """
-    user = await _get_current_user(request, db)
-    _require_admin(user)
-    org_id = _get_org_id(user)
-    user_id = getattr(user, "id", None)
+    _require_admin(current_user)
+    org_id = _get_org_id(current_user)
+    user_id = getattr(current_user, "id", None)
 
     from services.smart_docs.business_rules_service import BusinessRulesService
 

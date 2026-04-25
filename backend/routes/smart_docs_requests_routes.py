@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from database import get_db
 from auth.dependencies import get_current_user
 from models.smart_docs_models import (
-    DocumentRequest, SmartDocument, DocPolicyEvent,
+    DocumentRequest, SmartDocument, DocPolicyEvent, DocPolicyEventType,
     DocType, RequestStatus, RequestPriority,
 )
 from services.smart_docs.needs_list_generator import NeedsListGenerator
@@ -60,15 +60,13 @@ async def add_custom_request(
     Optionally sends an email notification to the borrower if send_notification
     is set to True and borrower_email is provided.
     """
-    import traceback as _tb
-
     try:
         _verify_loan_tenant(db, loan_id, current_user)
     except HTTPException:
         raise
     except Exception as e:
         logger.exception("custom-request: tenant verification failed for loan %s", loan_id)
-        return {"error": True, "stage": "tenant_verify", "detail": f"{type(e).__name__}: {e}"}
+        raise HTTPException(status_code=400, detail="Tenant verification failed")
 
     if not borrower_id:
         borrower_id = 0
@@ -89,12 +87,7 @@ async def add_custom_request(
     except Exception as e:
         db.rollback()
         logger.exception("custom-request: add_custom_request failed for loan %s", loan_id)
-        return {
-            "error": True,
-            "stage": "create_request",
-            "detail": f"{type(e).__name__}: {e}",
-            "traceback": _tb.format_exc()[-500:],
-        }
+        raise HTTPException(status_code=500, detail="Failed to create custom document request")
 
     # Send notification if requested
     notification_sent = False
@@ -336,9 +329,9 @@ async def send_to_portal_for_signature(
         if request:
             request.status = RequestStatus.OPEN
             request.is_active = True
-            if not request.metadata:
-                request.metadata = {}
-            request.metadata['portal_docusign'] = {
+            if not request.request_metadata:
+                request.request_metadata = {}
+            request.request_metadata['portal_docusign'] = {
                 'type': body.type,
                 'loe_subject': body.loe_subject,
                 'loe_instructions': body.loe_instructions,
@@ -367,15 +360,15 @@ async def send_to_portal_for_signature(
 
     # Log event
     event = DocPolicyEvent(
-        event_type="PORTAL_DOCUSIGN_REQUEST",
+        event_type=DocPolicyEventType.PORTAL_DOCUSIGN_REQUEST,
         loan_id=smart_docs_loan_id,
         request_id=request.id,
-        message=f"Document request sent to portal for {body.type}: {title}",
-        data={
+        payload={
             "type": body.type,
             "title": title,
             "loe_subject": body.loe_subject,
             "workspace_id": workspace_id,
+            "message": f"Document request sent to portal for {body.type}: {title}",
         }
     )
     db.add(event)

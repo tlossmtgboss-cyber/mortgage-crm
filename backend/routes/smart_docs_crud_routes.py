@@ -21,6 +21,7 @@ from auth.dependencies import get_current_user
 from models.smart_docs_models import (
     DocumentRequest, SmartDocument, DocPolicyEvent, NeedsListTemplate,
     DocType, RequestStatus, RequestPriority, AppliesTo, PayrollFrequency,
+    DocumentStatus,
 )
 from services.smart_docs.needs_list_generator import NeedsListGenerator
 from services.smart_docs.document_review_pipeline import DocumentReviewPipeline
@@ -453,19 +454,45 @@ async def upload_document(
         organization_id=org_id,
     )
 
-    # Create document record
-    document = SmartDocument(
-        request_id=request_id,
-        loan_id=loan_id,
-        borrower_id=borrower_id,
-        file_name=safe_filename,
-        mime_type=mime_type,
-        file_size=file_size,
-        storage_key=storage_key,
-        doc_type=parsed_doc_type,
-        status="UPLOADED",
-    )
-    db.add(document)
+    # Check for a prior UPLOAD_FAILED document for the same request so we can
+    # recover instead of leaving orphaned records (SD-STATE-003).
+    document = None
+    if request_id:
+        document = db.query(SmartDocument).filter(
+            SmartDocument.request_id == request_id,
+            SmartDocument.loan_id == loan_id,
+            SmartDocument.borrower_id == borrower_id,
+            SmartDocument.status == DocumentStatus.UPLOAD_FAILED.value,
+        ).first()
+
+    if document:
+        # Re-use the failed record: update it with the new upload details
+        document.file_name = safe_filename
+        document.mime_type = mime_type
+        document.file_size = file_size
+        document.storage_key = storage_key
+        document.doc_type = parsed_doc_type
+        document.status = DocumentStatus.UPLOADED.value
+        document.uploaded_at = datetime.now(timezone.utc)
+        logger.info(
+            "Recovering UPLOAD_FAILED document %d for request %d",
+            document.id, request_id,
+        )
+    else:
+        # Create new document record
+        document = SmartDocument(
+            request_id=request_id,
+            loan_id=loan_id,
+            borrower_id=borrower_id,
+            file_name=safe_filename,
+            mime_type=mime_type,
+            file_size=file_size,
+            storage_key=storage_key,
+            doc_type=parsed_doc_type,
+            status=DocumentStatus.UPLOADED.value,
+        )
+        db.add(document)
+
     db.commit()
     db.refresh(document)
 
@@ -485,7 +512,7 @@ async def upload_document(
     if not upload_result.get("success"):
         logger.error(f"S3 upload failed for document {document.id}: {upload_result.get('error')}")
         # Mark document as upload failed so it's not served with a missing file
-        document.status = "UPLOAD_FAILED"
+        document.status = DocumentStatus.UPLOAD_FAILED.value
         db.commit()
         raise HTTPException(
             status_code=502,
@@ -1309,10 +1336,8 @@ async def get_applicants_with_pending_review(
             "applicants": applicants,
         }
     except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.error(f"Error fetching pending review applicants: {e}")
-        return default_response
+        logger.exception("Error fetching applicants with pending review")
+        raise HTTPException(status_code=500, detail="Failed to fetch pending review data")
 
 
 @router.get("/applicants/outstanding-docs")
@@ -1738,33 +1763,18 @@ async def get_document_queue(
     """
     from services.smart_docs.queue_service import QueueService
 
-    # Tenant isolation
+    # Tenant isolation — organization_id filtering is enforced inside QueueService
     org_id = getattr(current_user, 'organization_id', None)
-    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
 
-    queue_service = QueueService(db)
+    queue_service = QueueService(db, organization_id=org_id)
     result = queue_service.get_queue(
         page=page,
         limit=limit,
         filter_sla_status=sla_status,
         search_query=search,
     )
-
-    # Post-filter by tenant if not platform admin
-    if not is_platform_admin and org_id:
-        from sqlalchemy import text as sa_text
-        tenant_loan_ids = {
-            row[0] for row in db.execute(
-                sa_text("SELECT id FROM loans WHERE organization_id = :org_id"),
-                {"org_id": org_id}
-            ).fetchall()
-        }
-        if isinstance(result, dict) and "items" in result:
-            result["items"] = [item for item in result["items"] if item.get("loan_id") in tenant_loan_ids]
-            result["total"] = len(result["items"])
-        elif isinstance(result, dict) and "queue" in result:
-            result["queue"] = [item for item in result["queue"] if item.get("loan_id") in tenant_loan_ids]
-            result["total"] = len(result["queue"])
 
     return result
 
@@ -1778,27 +1788,17 @@ async def get_queue_summary(
     try:
         from services.smart_docs.queue_service import QueueService
 
-        # Tenant isolation
+        # Tenant isolation — organization_id filtering is enforced inside QueueService
         org_id = getattr(current_user, 'organization_id', None)
-        is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
 
-        queue_service = QueueService(db)
+        queue_service = QueueService(db, organization_id=org_id)
         result = queue_service.get_queue_summary()
 
-        # Post-filter: if the summary includes per-loan data, restrict to tenant
-        if not is_platform_admin and org_id and isinstance(result, dict):
-            from sqlalchemy import text as sa_text
-            tenant_loan_ids = {
-                row[0] for row in db.execute(
-                    sa_text("SELECT id FROM loans WHERE organization_id = :org_id"),
-                    {"org_id": org_id}
-                ).fetchall()
-            }
-            for key in ("items", "queue", "loans"):
-                if key in result and isinstance(result[key], list):
-                    result[key] = [item for item in result[key] if item.get("loan_id") in tenant_loan_ids]
-
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Queue summary error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Queue service error")
@@ -1814,7 +1814,11 @@ async def get_client_queue_detail(
     _verify_loan_tenant(db, loan_id, current_user)
     from services.smart_docs.queue_service import QueueService
 
-    queue_service = QueueService(db)
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+
+    queue_service = QueueService(db, organization_id=org_id)
     result = queue_service.get_client_queue_detail(loan_id)
 
     if not result:
@@ -1999,9 +2003,8 @@ async def send_reminder(
             borrower_name=loan_info.borrower_name or "Borrower",
         )
     except Exception as e:
-        logger.warning(f"Failed to send reminder notification: {e}")
-        # Still update tracking even if notification fails
-        sent = True  # Mark as sent for tracking purposes
+        logger.exception("Failed to send reminder notification for loan %s", loan_id)
+        sent = False
 
     if sent:
         settings.last_reminder_sent_at = datetime.now(timezone.utc)

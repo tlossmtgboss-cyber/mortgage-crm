@@ -41,6 +41,7 @@ from .models import CallTranscriptEntry
 from .state import URLAStateManager
 from .bytepro_adapter import LoanOfficer
 from .prompts import GREETING_NEW_CALLER, GREETING_RETURNING_CALLER_TEMPLATE
+from .transcript_scrubber import scrub_realtime
 
 
 logger = logging.getLogger("urla.entrypoint")
@@ -197,8 +198,9 @@ async def urla_entrypoint(ctx: JobContext) -> None:
     await session.start(room=ctx.room, agent=agent)
 
     # Transcript capture callback (C3)
-    async def _on_transcription(segments, participant, agent_ref=agent, state_ref=state, tenant=tenant_id):
+    async def _on_transcription(segments, participant, agent_ref=agent, state_ref=state, tenant=tenant_id, activity_ref=last_activity_ref):
         """Capture transcription segments for compliance audit trail."""
+        activity_ref[0] = time.monotonic()
         if not agent_ref._active_loan_id:
             return
         try:
@@ -207,9 +209,10 @@ async def urla_entrypoint(ctx: JobContext) -> None:
                 for seg in segments:
                     if seg.final and seg.text.strip():
                         speaker = "borrower" if participant and not participant.is_agent else "agent"
+                        scrubbed = scrub_realtime(seg.text.strip())
                         app.transcript.append(CallTranscriptEntry(
                             speaker=speaker,
-                            text=seg.text.strip(),
+                            text=scrubbed,
                             timestamp=datetime.now(timezone.utc),
                         ))
                 await state_ref.save_application(app)
@@ -218,8 +221,11 @@ async def urla_entrypoint(ctx: JobContext) -> None:
 
     session.on("transcription_received", _on_transcription)
 
+    # Shared mutable reference for inactivity tracking
+    last_activity_ref = [time.monotonic()]
+
     # Start inactivity watchdog (I7)
-    asyncio.create_task(_inactivity_watchdog(agent, state, tenant_id))
+    asyncio.create_task(_inactivity_watchdog(agent, state, tenant_id, last_activity_ref=last_activity_ref))
 
     # Decide greeting: resume or new
     existing = await state.get_active_application(tenant_id, caller_phone)
@@ -251,13 +257,15 @@ async def _inactivity_watchdog(
     state_ref: URLAStateManager,
     tenant_id: str,
     timeout: int = INACTIVITY_TIMEOUT,
+    last_activity_ref: Optional[list] = None,
 ) -> None:
     """Auto-pause application after extended silence."""
-    last_activity = time.monotonic()
+    if last_activity_ref is None:
+        last_activity_ref = [time.monotonic()]
 
     while True:
-        await asyncio.sleep(30)  # Check every 30 seconds
-        if time.monotonic() - last_activity > timeout:
+        await asyncio.sleep(30)
+        if time.monotonic() - last_activity_ref[0] > timeout:
             if agent_ref._active_loan_id:
                 try:
                     app = await state_ref.load_application(tenant_id, agent_ref._active_loan_id)

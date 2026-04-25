@@ -911,7 +911,7 @@ def _generate_conversion_recommendations(avg_engagement: Dict, avg_days: float) 
 @mortgage_tool(
     name="get_optimal_contact_time",
     description="Determine the best time to contact a lead based on their history and patterns",
-    agent_roles=["lead_nurturer", "sales"],
+    agent_roles=["lead_nurturer", "sales", "voice_os", "ai_receptionist"],
     risk_level="low",
     examples=[
         "When should I call this lead?",

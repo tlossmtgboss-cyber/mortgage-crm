@@ -39,7 +39,7 @@ def register_ai_chat_routes(app, get_db, get_current_user_flexible, **kwargs):
             import time
             from datetime import datetime
             from integrations.sms_service import get_sms_client
-            sms_client = get_sms_client()
+            sms_client = get_sms_client(db=db, user_id=current_user.id)
             from database.models import SMSMessage, Task
 
             client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -263,15 +263,20 @@ When scheduling appointments, confirm the time first via SMS before creating the
                                 else:
                                     to_num = function_args["to_number"]
                                     sms_body = function_args["message"]
-                                    message_sid = sms_client.send_sms(
-                                        to_number=to_num,
-                                        message=sms_body
+                                    send_result = sms_client.send_sms(
+                                        to_phone=to_num,
+                                        message=sms_body,
+                                        lead_id=int(lead_id) if lead_id else None,
+                                        user_id=current_user.id,
+                                        organization_id=current_user.organization_id,
                                     )
 
-                                    if not message_sid:
-                                        tool_result = {"success": False, "error": f"SMS send failed — check {sms_client.provider} logs"}
-                                        logger.error(f"SMS send returned None for to={to_num}")
+                                    if not send_result.get("success"):
+                                        tool_result = {"success": False, "error": send_result.get("error", f"SMS send failed")}
+                                        logger.error(f"SMS send failed for to={to_num}: {send_result.get('error')}")
                                     else:
+                                        msg_id = send_result.get("message_id", "")
+
                                         # Log to SMSMessage table
                                         try:
                                             sms_record = SMSMessage(
@@ -282,7 +287,7 @@ When scheduling appointments, confirm the time first via SMS before creating the
                                                 message=sms_body,
                                                 direction="outbound",
                                                 status="sent",
-                                                provider_message_id=message_sid,
+                                                provider_message_id=msg_id,
                                                 ai_generated=True
                                             )
                                             db.add(sms_record)
@@ -306,14 +311,14 @@ When scheduling appointments, confirm the time first via SMS before creating the
                                                      '[]'::jsonb, :telnyx_id, NOW())
                                                 ON CONFLICT (id) DO NOTHING
                                             """), {
-                                                "id": message_sid or str(_uuid.uuid4()),
+                                                "id": msg_id or str(_uuid.uuid4()),
                                                 "phone": to_num,
                                                 "contact_id": str(lead_id or ""),
                                                 "org_id": current_user.organization_id,
                                                 "body": sms_body,
                                                 "sender_name": sender_name,
                                                 "sender_user_id": current_user.id,
-                                                "telnyx_id": message_sid,
+                                                "telnyx_id": msg_id,
                                             })
                                             db.commit()
                                         except Exception as panel_err:
@@ -322,7 +327,7 @@ When scheduling appointments, confirm the time first via SMS before creating the
 
                                         tool_result = {
                                             "success": True,
-                                            "message_sid": message_sid,
+                                            "message_sid": msg_id,
                                             "message": "SMS sent successfully"
                                         }
 

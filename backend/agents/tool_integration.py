@@ -447,8 +447,6 @@ AGENT_CONFIGS = {
             "get_profitability_trends",
             "predict_closing_timeline",
             "calculate_conversion_rates",
-            "get_historical_close_rates",
-            "project_monthly_volume",
         ],
         recommended_model="sonnet",
     ),

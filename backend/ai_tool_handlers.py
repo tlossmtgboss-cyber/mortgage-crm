@@ -325,17 +325,25 @@ async def handle_send_sms(input_data: Dict[str, Any], context: ToolContext) -> D
         message = input_data["message"]
         lead_id = input_data.get("lead_id")
 
-        sms_client = get_sms_client()
+        from database import SessionLocal
+        _db = SessionLocal()
+        try:
+            sms_client = get_sms_client(db=_db)
 
-        # Check if SMS is enabled
-        if not sms_client.enabled:
-            return {
-                "success": False,
-                "error": "SMS service not configured"
-            }
+            # Check if SMS is enabled
+            if not sms_client.enabled:
+                return {
+                    "success": False,
+                    "error": "SMS service not configured"
+                }
 
-        # Send SMS
-        provider_message_id = sms_client.send_sms(to_number=to_number, message=message)
+            # Send SMS
+            send_result = sms_client.send_sms(to_phone=to_number, message=message, lead_id=int(lead_id) if lead_id else None)
+            if not send_result.get("success"):
+                return {"success": False, "error": send_result.get("error", "SMS send failed")}
+            provider_message_id = send_result.get("message_id", "")
+        finally:
+            _db.close()
 
         # Log communication
         if lead_id:

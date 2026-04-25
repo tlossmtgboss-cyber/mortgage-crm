@@ -2513,12 +2513,9 @@ except Exception as e:
     logger.warning(f"App completion routes failed to load: {e}")
 
 # --- Smart Docs enterprise (Wave 3 enterprise document routes) ---
-try:
-    from routes.smart_docs_enterprise_registration import register_smart_docs_enterprise_routes
-    register_smart_docs_enterprise_routes(app=app)
-    logger.info("Smart Docs enterprise routes loaded")
-except Exception as e:
-    logger.warning(f"Smart Docs enterprise routes failed to load: {e}")
+# NOTE: register_smart_docs_enterprise_routes is already called by
+# register_smart_docs_v2_routes() in smart_docs_v2_registration.py (line ~286).
+# Do NOT call it again here to avoid duplicate route registration.
 
 # --- Debug status & diagnostics (PURL testing, cache stats, admin tools) ---
 try:

@@ -42,17 +42,17 @@ except ImportError:
     )
 
     class URLACallScore(BaseModel):  # type: ignore[no-redef]
-        """Stub: replaced when call_scoring.py is created."""
-        overall: float = Field(0.0, ge=0, le=100, description="Composite score 0-100")
-        completeness: float = Field(0.0, ge=0, le=100)
-        compliance: float = Field(0.0, ge=0, le=100)
-        efficiency: float = Field(0.0, ge=0, le=100)
+        """Stub: field names align with call_scoring.py's real URLACallScore."""
+        overall_score: float = Field(0.0, ge=0, le=100)
+        compliance_score: float = Field(0.0, ge=0, le=100)
+        data_quality_score: float = Field(0.0, ge=0, le=100)
+        conversation_quality_score: float = Field(0.0, ge=0, le=100)
         notes: List[str] = Field(default_factory=list)
 
-    async def score_urla_call(app: URLAApplication) -> URLACallScore:  # type: ignore[misc]
+    def score_urla_call(app: URLAApplication) -> URLACallScore:  # type: ignore[misc]
         """Stub scorer — returns zeroes until the real module is wired up."""
         completed = len(app.completed_sections)
-        total = 9
+        total = 17
         completeness = min(100.0, (completed / total) * 100) if total else 0.0
 
         has_consent = bool(
@@ -61,10 +61,10 @@ except ImportError:
         compliance = 100.0 if has_consent else 50.0
 
         return URLACallScore(
-            overall=round((completeness + compliance) / 2, 1),
-            completeness=round(completeness, 1),
-            compliance=compliance,
-            efficiency=0.0,
+            overall_score=round((completeness + compliance) / 2, 1),
+            data_quality_score=round(completeness, 1),
+            compliance_score=compliance,
+            conversation_quality_score=0.0,
             notes=["Stub scorer — install call_scoring module for full analysis"],
         )
 
@@ -376,7 +376,7 @@ def _build_fallback_call_notes(app: URLAApplication) -> CallNotes:
 
     # Completeness
     completed = app.completed_sections
-    total_sections = 9
+    total_sections = 17
     pct = int((len(completed) / total_sections) * 100) if total_sections else 0
 
     # Red flags from structured data
@@ -508,16 +508,36 @@ async def analyze_call(
     )
 
     # Steps 2-4: Run concurrently since they are independent
+    # Real modules may be sync — wrap with asyncio.to_thread if needed
+    import inspect
+
+    _score_coro = (
+        score_urla_call(app)
+        if inspect.iscoroutinefunction(score_urla_call)
+        else asyncio.to_thread(score_urla_call, app)
+    )
     score_task = asyncio.create_task(
-        score_urla_call(app),
+        _score_coro,
         name=f"score:{app.loan_id}",
     )
+
+    _briefing_coro = (
+        generate_lo_briefing(app)
+        if inspect.iscoroutinefunction(generate_lo_briefing)
+        else asyncio.to_thread(generate_lo_briefing, app)
+    )
     briefing_task = asyncio.create_task(
-        generate_lo_briefing(app, call_notes),
+        _briefing_coro,
         name=f"briefing:{app.loan_id}",
     )
+
+    _tasks_coro = (
+        generate_urla_tasks(app)
+        if inspect.iscoroutinefunction(generate_urla_tasks)
+        else asyncio.to_thread(generate_urla_tasks, app)
+    )
     tasks_task = asyncio.create_task(
-        generate_urla_tasks(app, call_notes),
+        _tasks_coro,
         name=f"tasks:{app.loan_id}",
     )
 
@@ -529,7 +549,7 @@ async def analyze_call(
         "Post-call intelligence analysis complete",
         extra={
             "loan_id": app.loan_id,
-            "score": score.overall,
+            "score": getattr(score, "overall_score", getattr(score, "overall", 0.0)),
             "task_count": len(tasks),
         },
     )
@@ -681,7 +701,7 @@ async def _run_post_finalize_pipeline(
             "Post-finalize intelligence pipeline complete",
             extra={
                 "loan_id": app.loan_id,
-                "score": result.score.overall,
+                "score": getattr(result.score, "overall_score", 0.0),
                 "task_count": len(result.tasks),
                 "red_flags": len(result.call_notes.red_flags),
             },

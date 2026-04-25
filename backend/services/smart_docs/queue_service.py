@@ -24,9 +24,27 @@ logger = logging.getLogger(__name__)
 class QueueService:
     """Service for managing the document queue view."""
 
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, organization_id: int):
+        if not organization_id:
+            raise ValueError("organization_id is required for QueueService")
         self.db = db
+        self.organization_id = organization_id
         self.sla_service = SLAService(db)
+
+    def _get_tenant_loan_ids(self) -> List[int]:
+        """Get loan IDs belonging to this organization.
+
+        Used to scope all queries to the current tenant since DocumentRequest
+        and SmartDocument tables do not have an organization_id column.
+        """
+        try:
+            rows = self.db.execute(text(
+                "SELECT id FROM loans WHERE organization_id = :org_id"
+            ), {"org_id": self.organization_id}).fetchall()
+            return [row[0] for row in rows]
+        except Exception as e:
+            logger.warning("Failed to fetch tenant loan IDs for org %s: %s", self.organization_id, e)
+            return []
 
     def get_queue(
         self,
@@ -52,11 +70,24 @@ class QueueService:
         Returns:
             Dict with queue items and pagination info
         """
-        # Get unique loan_ids with active document requests
+        # Get loan IDs scoped to this organization
+        tenant_loan_ids = self._get_tenant_loan_ids()
+        if not tenant_loan_ids:
+            return {
+                "queue": [],
+                "total": 0,
+                "page": page,
+                "limit": limit,
+                "total_pages": 1,
+                "summary": {"total_clients": 0, "with_breaches": 0, "at_risk": 0},
+            }
+
+        # Get unique loan_ids with active document requests, scoped to tenant
         loan_ids_query = self.db.query(
             DocumentRequest.loan_id
         ).filter(
-            DocumentRequest.is_active == True
+            DocumentRequest.is_active == True,
+            DocumentRequest.loan_id.in_(tenant_loan_ids),
         ).distinct()
 
         loan_ids = [row.loan_id for row in loan_ids_query.all()]
@@ -231,12 +262,22 @@ class QueueService:
         Returns:
             Dict with counts by SLA status
         """
-        # Get all unique loan_ids with active requests
+        # Get loan IDs scoped to this organization
+        tenant_loan_ids = self._get_tenant_loan_ids()
+        if not tenant_loan_ids:
+            return {
+                "total_clients_in_queue": 0,
+                "by_sla_status": {"breached": 0, "at_risk": 0, "good": 0},
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+            }
+
+        # Get all unique loan_ids with active requests, scoped to tenant
         all_loan_ids = self.db.query(
             DocumentRequest.loan_id
         ).filter(
             DocumentRequest.is_active == True,
-            DocumentRequest.status.in_([RequestStatus.OPEN, RequestStatus.PENDING_REVIEW])
+            DocumentRequest.status.in_([RequestStatus.OPEN, RequestStatus.PENDING_REVIEW]),
+            DocumentRequest.loan_id.in_(tenant_loan_ids),
         ).distinct().all()
 
         breached = 0
@@ -272,6 +313,10 @@ class QueueService:
         Returns:
             Dict with detailed queue information or None if not found
         """
+        # Verify this loan belongs to the current tenant
+        if loan_id not in self._get_tenant_loan_ids():
+            return None
+
         item = self._build_queue_item(loan_id)
         if not item:
             return None

@@ -368,13 +368,13 @@ class DocumentUploadPipeline:
             try:
                 from services.smart_docs.ai_classifier_service import get_ai_classifier_service
                 classifier = get_ai_classifier_service()
-                classification_result = classifier.classify(
+                classification_result = classifier.classify_document(
                     file_content=file_bytes,
-                    filename=filename,
                     mime_type=mime_type,
+                    filename=filename,
                 )
-                if classification_result and classification_result.get("doc_type"):
-                    classification_status = classification_result["doc_type"]
+                if classification_result and classification_result.success and classification_result.predicted_type:
+                    classification_status = classification_result.predicted_type
             except Exception as e:
                 logger.warning("AI classification failed (non-blocking): %s", e)
                 classification_status = "classification_pending"

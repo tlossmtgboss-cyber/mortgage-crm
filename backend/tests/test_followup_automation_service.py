@@ -1354,10 +1354,10 @@ class TestCampaignTypeEnumMapping:
         result = FollowupAutomationService._resolve_campaign_type_enum("urgent_reminder")
         assert result == CampaignType.URGENT_REMINDER
 
-    def test_resolve_document_rejected_maps_to_gentle_reminder(self):
-        """document_rejected maps to GENTLE_REMINDER enum (fewer enum values than config keys)."""
+    def test_resolve_document_rejected_maps_to_document_rejected(self):
+        """document_rejected maps to DOCUMENT_REJECTED enum."""
         result = FollowupAutomationService._resolve_campaign_type_enum("document_rejected")
-        assert result == CampaignType.GENTLE_REMINDER
+        assert result == CampaignType.DOCUMENT_REJECTED
 
     def test_resolve_unknown_defaults_to_initial_request(self):
         result = FollowupAutomationService._resolve_campaign_type_enum("unknown_type")

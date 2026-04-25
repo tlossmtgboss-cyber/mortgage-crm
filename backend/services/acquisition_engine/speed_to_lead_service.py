@@ -166,7 +166,7 @@ class SpeedToLeadService:
         if self._sms_client is None:
             try:
                 from integrations.sms_service import get_sms_client
-                self._sms_client = get_sms_client()
+                self._sms_client = get_sms_client(db=self.db)
             except ImportError:
                 logger.warning("SMS client not available")
                 self._sms_client = False
@@ -408,18 +408,18 @@ class SpeedToLeadService:
             message = template.format(**context)
 
             # Send SMS
-            sid = self.sms_client.send_sms(
-                to_number=lead_info["phone"],
+            send_result = self.sms_client.send_sms(
+                to_phone=lead_info["phone"],
                 message=message,
             )
 
-            if sid:
+            if send_result and send_result.get("success"):
                 result.actions_completed.append(SpeedToLeadAction.SMS_SENT)
-                action["sid"] = sid
+                action["message_id"] = send_result.get("message_id", "")
                 action["success"] = True
-                logger.info(f"SMS sent to lead {lead_info['id']}: {sid}")
+                logger.info(f"SMS sent to lead {lead_info['id']}: {send_result.get('message_id')}")
             else:
-                raise Exception("SMS send returned no SID")
+                raise Exception(f"SMS send failed: {send_result.get('error', 'Unknown') if send_result else 'No client'}")
 
         except Exception as e:
             action["success"] = False

@@ -36,6 +36,11 @@ logger = logging.getLogger(__name__)
 SECRET_KEY = os.environ.get("SECRET_KEY")
 if not SECRET_KEY:
     raise SystemExit("FATAL: SECRET_KEY environment variable is required but not set")
+
+# Dedicated signing key for portal JWTs. Falls back to the shared SECRET_KEY
+# when PORTAL_JWT_SECRET is not set, but production deployments SHOULD set a
+# separate value to limit blast radius if any key is compromised.
+PORTAL_JWT_SECRET = os.getenv("PORTAL_JWT_SECRET", SECRET_KEY)
 PORTAL_TOKEN_ALGORITHM = "HS256"
 PORTAL_TOKEN_ISSUER = "perennia-portal"
 DEFAULT_EXPIRY_HOURS = int(os.getenv("PORTAL_TOKEN_EXPIRY_HOURS", "72"))
@@ -46,6 +51,8 @@ MAX_TOKEN_GENERATIONS_PER_HOUR = 5
 
 # In-memory rate limit store (keyed by email, values are timestamps)
 # In production with multiple workers, replace with Redis.
+# TODO (SD-SEC-11): Migrate to Redis-backed rate limiting so limits are shared
+# across multiple Uvicorn workers / Railway replicas.
 _token_generation_timestamps: Dict[str, list] = defaultdict(list)
 
 
@@ -102,7 +109,7 @@ def generate_portal_access_token(
         "exp": int(expires_at.timestamp()),
     }
 
-    token = jwt.encode(payload, SECRET_KEY, algorithm=PORTAL_TOKEN_ALGORITHM)
+    token = jwt.encode(payload, PORTAL_JWT_SECRET, algorithm=PORTAL_TOKEN_ALGORITHM)
 
     logger.info(
         f"Portal token generated for {_mask_email(email_lower)}, "
@@ -139,7 +146,7 @@ def verify_portal_access_token(token: str) -> Dict[str, Any]:
     try:
         payload = jwt.decode(
             token,
-            SECRET_KEY,
+            PORTAL_JWT_SECRET,
             algorithms=[PORTAL_TOKEN_ALGORITHM],
             issuer=PORTAL_TOKEN_ISSUER,
             options={"require": ["exp", "iss", "sub", "loan_id", "org_id", "scope"]},
@@ -311,6 +318,8 @@ def require_write_scope(portal_user: Dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 # In-memory upload count tracking (keyed by token sub, values are timestamps)
+# TODO (SD-SEC-11): Migrate to Redis-backed rate limiting so limits are shared
+# across multiple Uvicorn workers / Railway replicas.
 _upload_timestamps: Dict[str, list] = defaultdict(list)
 
 MAX_UPLOADS_PER_HOUR = 10

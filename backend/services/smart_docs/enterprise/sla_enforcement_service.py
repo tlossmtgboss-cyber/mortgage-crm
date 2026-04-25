@@ -144,19 +144,73 @@ DEFAULT_SLA_TARGETS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-# US federal holidays (month, day) — static; org-specific holidays stored in config
-FEDERAL_HOLIDAYS_2026 = [
-    (1, 1),    # New Year's Day
-    (1, 19),   # MLK Day
-    (2, 16),   # Presidents' Day
-    (5, 25),   # Memorial Day
-    (7, 3),    # Independence Day (observed)
-    (9, 7),    # Labor Day
-    (10, 12),  # Columbus Day
-    (11, 11),  # Veterans Day
-    (11, 26),  # Thanksgiving
-    (12, 25),  # Christmas
-]
+# ---------------------------------------------------------------------------
+# Dynamic US Federal Holiday Calculator
+# ---------------------------------------------------------------------------
+
+def _nth_weekday_of_month(year: int, month: int, weekday: int, n: int) -> date:
+    """Return the nth occurrence of a weekday in a given month.
+
+    Args:
+        year: Calendar year.
+        month: Month (1-12).
+        weekday: Day of week (0=Monday, 6=Sunday).
+        n: Which occurrence (1-based). Use -1 for last.
+
+    Returns:
+        The matching date.
+    """
+    import calendar
+    if n == -1:
+        # Last occurrence: start from last day of month and walk back
+        last_day = calendar.monthrange(year, month)[1]
+        d = date(year, month, last_day)
+        while d.weekday() != weekday:
+            d -= timedelta(days=1)
+        return d
+    # nth occurrence: find first occurrence, then skip (n-1) weeks
+    first_day = date(year, month, 1)
+    # Days until the target weekday
+    days_ahead = (weekday - first_day.weekday()) % 7
+    first_occurrence = first_day + timedelta(days=days_ahead)
+    return first_occurrence + timedelta(weeks=n - 1)
+
+
+def _get_federal_holidays(year: int) -> set[date]:
+    """Compute US federal holidays for a given year.
+
+    Covers the 10 standard federal holidays:
+      - New Year's Day (Jan 1)
+      - MLK Day (3rd Monday of January)
+      - Presidents' Day (3rd Monday of February)
+      - Memorial Day (last Monday of May)
+      - Independence Day (Jul 4)
+      - Labor Day (1st Monday of September)
+      - Columbus Day (2nd Monday of October)
+      - Veterans Day (Nov 11)
+      - Thanksgiving (4th Thursday of November)
+      - Christmas Day (Dec 25)
+
+    Returns:
+        Set of date objects for all federal holidays in the given year.
+    """
+    holidays: set[date] = set()
+
+    # Fixed-date holidays
+    holidays.add(date(year, 1, 1))    # New Year's Day
+    holidays.add(date(year, 7, 4))    # Independence Day
+    holidays.add(date(year, 11, 11))  # Veterans Day
+    holidays.add(date(year, 12, 25))  # Christmas Day
+
+    # Floating holidays (weekday 0=Monday, 3=Thursday)
+    holidays.add(_nth_weekday_of_month(year, 1, 0, 3))    # MLK Day: 3rd Monday of Jan
+    holidays.add(_nth_weekday_of_month(year, 2, 0, 3))    # Presidents' Day: 3rd Monday of Feb
+    holidays.add(_nth_weekday_of_month(year, 5, 0, -1))   # Memorial Day: last Monday of May
+    holidays.add(_nth_weekday_of_month(year, 9, 0, 1))    # Labor Day: 1st Monday of Sep
+    holidays.add(_nth_weekday_of_month(year, 10, 0, 2))   # Columbus Day: 2nd Monday of Oct
+    holidays.add(_nth_weekday_of_month(year, 11, 3, 4))   # Thanksgiving: 4th Thursday of Nov
+
+    return holidays
 
 
 # =============================================================================
@@ -273,12 +327,8 @@ class BusinessHoursCalculator:
         self._holidays: set[date] = set()
         if exclude_holidays:
             current_year = datetime.now(timezone.utc).year
-            for month, day in FEDERAL_HOLIDAYS_2026:
-                try:
-                    self._holidays.add(date(current_year, month, day))
-                    self._holidays.add(date(current_year + 1, month, day))
-                except ValueError:
-                    pass
+            self._holidays.update(_get_federal_holidays(current_year))
+            self._holidays.update(_get_federal_holidays(current_year + 1))
         if org_holidays:
             self._holidays.update(org_holidays)
 
@@ -1315,11 +1365,8 @@ class SLAEnforcementService:
                     "SLA BREACH: %s (id=%s) loan=%s elapsed=%.2fh target=%.2fh",
                     config.sla_type, tracking.id, tracking.loan_id, elapsed, target,
                 )
-                continue  # Breached — skip further escalation in this cycle
-
-            # --- Escalation thresholds (150%, 200%, etc.) ---
-            # Only for already-breached records that haven't been completed yet
-            # (handled on future cycles if we change design; for now breach is terminal)
+                # Fall through to escalation checks — post-breach escalation
+                # (150%, 200%) must still fire for senior management notification
 
             # --- Warning detection ---
             if pct >= warning_pct and current_level == 0:

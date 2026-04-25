@@ -1934,7 +1934,7 @@ async def send_sms(
     try:
         from integrations.sms_service import SMSClient
 
-        sms_client = SMSClient(db)
+        sms_client = SMSClient(db, user_id=current_user.id)
         if not sms_client.enabled:
             raise HTTPException(
                 status_code=503,
@@ -1946,9 +1946,9 @@ async def send_sms(
         # Check opt-out status (scoped to current user)
         opt_out_check = db.execute(text("""
             SELECT phone_number FROM sms_opt_outs
-            WHERE phone_number = :phone AND user_id = :user_id
+            WHERE phone_number = :phone AND organization_id = :org_id AND active = true
             LIMIT 1
-        """), {"phone": normalized_phone, "user_id": current_user.id}).fetchone()
+        """), {"phone": normalized_phone, "org_id": current_user.organization_id}).fetchone()
 
         if opt_out_check:
             return {
@@ -2236,7 +2236,7 @@ async def send_bulk_sms(
     try:
         from integrations.sms_service import SMSClient
 
-        sms_client = SMSClient(db)
+        sms_client = SMSClient(db, user_id=current_user.id)
         if not sms_client.enabled:
             raise HTTPException(
                 status_code=503,

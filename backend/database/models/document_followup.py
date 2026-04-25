@@ -56,6 +56,8 @@ class CampaignType(str, enum.Enum):
     URGENT_REMINDER = "urgent_reminder"
     ESCALATION = "escalation"
     APPOINTMENT_OFFER = "appointment_offer"
+    DOCUMENT_REJECTED = "document_rejected"
+    DOCUMENT_EXPIRED = "document_expired"
 
 
 class CampaignStatus(str, enum.Enum):

@@ -149,7 +149,7 @@ def get_active_telnyx_config(db: Session, user_id: Optional[int] = None) -> dict
     return {
         "api_key": api_key,
         "public_key": os.environ.get("TELNYX_PUBLIC_KEY"),
-        "phone_number": os.environ.get("TELNYX_PHONE_NUMBER"),
+        "phone_number": os.environ.get("TELNYX_PHONE_NUMBER") or os.environ.get("TELNYX_FROM_NUMBER"),
         "messaging_profile_id": os.environ.get("TELNYX_MESSAGING_PROFILE_ID"),
     }
 

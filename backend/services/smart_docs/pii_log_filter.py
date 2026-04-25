@@ -54,12 +54,12 @@ class SmartDocsPIIFilter(logging.Filter):
         # SSN: 123-45-6789, 123 45 6789
         (
             re.compile(r"\b(\d{3})[-\s](\d{2})[-\s](\d{4})\b"),
-            r"***-**-\3",
+            "[SSN_REDACTED]",
         ),
         # SSN: 9 consecutive digits (best-effort -- anchored to avoid timestamps)
         (
             re.compile(r"(?<![0-9\-])(\d{3})(\d{2})(\d{4})(?![0-9\-])"),
-            r"***-**-\3",
+            "[SSN_REDACTED]",
         ),
         # Email addresses
         (

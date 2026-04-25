@@ -177,6 +177,12 @@ class PlaidIntegrationService:
         """Encrypt an access token for storage."""
         if self._pii_service:
             return self._pii_service.encrypt(raw_token)
+        # In production, PIIEncryptionService is mandatory -- never fall back
+        # to plaintext-equivalent base64 encoding with real credentials.
+        if os.getenv("ENVIRONMENT", "").lower() == "production":
+            raise RuntimeError(
+                "PIIEncryptionService is required in production for Plaid token storage"
+            )
         logger.warning(
             "PII encryption service unavailable -- storing token with "
             "basic obfuscation. This is NOT secure for production."

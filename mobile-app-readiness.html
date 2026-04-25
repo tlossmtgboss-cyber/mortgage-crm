@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Perennia AI — Mobile App Readiness Challenge</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Cormorant+Garamond:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #060A10;
+  --surface: #0D1520;
+  --surface2: #111D2E;
+  --border: #1E3050;
+  --blue: #7EB8F7;
+  --blue-dim: #2A4A7F;
+  --blue-glow: #4A8FD4;
+  --text: #E8F0FF;
+  --muted: #5A7AAA;
+  --dim: #2A3F60;
+  --green: #4ADE80;
+  --red: #F87171;
+  --amber: #FBBF24;
+  --purple: #A78BFA;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  line-height: 1.5;
+  min-height: 100vh;
+  padding: 0 0 80px 0;
+}
+.container { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+
+/* Header */
+.header { text-align: center; margin-bottom: 28px; }
+.header .brand {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--blue);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.header .title {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 16px;
+}
+.header .pct {
+  font-family: 'DM Mono', monospace;
+  font-size: 48px;
+  font-weight: 500;
+  color: var(--blue);
+  margin-bottom: 8px;
+}
+.progress-bar-track {
+  width: 100%;
+  height: 6px;
+  background: var(--dim);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), var(--blue-glow));
+  border-radius: 3px;
+  transition: width 0.4s ease;
+  width: 0%;
+}
+
+/* Stats Row */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 10px;
+  text-align: center;
+}
+.stat-card .stat-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 28px;
+  font-weight: 500;
+}
+.stat-card .stat-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.stat-tested .stat-value { color: var(--blue); }
+.stat-pass .stat-value { color: var(--green); }
+.stat-fail .stat-value { color: var(--red); }
+.stat-untested .stat-value { color: var(--amber); }
+
+/* Verdict Banner */
+.verdict {
+  display: none;
+  border-radius: 10px;
+  padding: 14px 20px;
+  margin-bottom: 20px;
+  font-weight: 600;
+  font-size: 15px;
+  text-align: center;
+  letter-spacing: 1px;
+}
+.verdict.visible { display: block; }
+.verdict.ready { background: rgba(74,222,128,0.12); color: var(--green); border: 1px solid rgba(74,222,128,0.3); }
+.verdict.issues { background: rgba(251,191,36,0.12); color: var(--amber); border: 1px solid rgba(251,191,36,0.3); }
+.verdict.blocked { background: rgba(248,113,113,0.12); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+
+/* Section Accordions */
+.section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+.section.featured { border-color: var(--blue-dim); border-width: 2px; }
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+.section-header:hover { background: var(--surface2); }
+.section-header .section-title {
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.section-header .section-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(90,122,170,0.12);
+  padding: 3px 8px;
+  border-radius: 8px;
+}
+.section-header .chevron {
+  font-size: 18px;
+  color: var(--muted);
+  transition: transform 0.25s;
+}
+.section.open .chevron { transform: rotate(90deg); }
+.section-body {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s ease;
+}
+.section.open .section-body { max-height: 5000px; }
+
+/* Test Rows */
+.test-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 18px;
+  border-top: 1px solid rgba(30,48,80,0.5);
+  gap: 10px;
+  transition: background 0.2s;
+}
+.test-row.pass { background: rgba(74,222,128,0.06); }
+.test-row.fail { background: rgba(248,113,113,0.06); }
+.test-info { flex: 1; min-width: 0; }
+.test-name { font-size: 13px; font-weight: 500; color: var(--text); }
+.test-desc { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.test-tags { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+.tag {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.tag-critical { background: rgba(248,113,113,0.15); color: var(--red); }
+.tag-ai { background: rgba(167,139,250,0.15); color: var(--purple); }
+.tag-live { background: rgba(126,184,247,0.15); color: var(--blue); }
+.tag-default { background: rgba(90,122,170,0.1); color: var(--muted); }
+.test-actions { display: flex; gap: 6px; flex-shrink: 0; padding-top: 2px; }
+.test-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.test-btn:hover { border-color: var(--blue); color: var(--text); }
+.test-btn.active-pass { background: rgba(74,222,128,0.2); border-color: var(--green); color: var(--green); }
+.test-btn.active-fail { background: rgba(248,113,113,0.2); border-color: var(--red); color: var(--red); }
+
+/* Sticky Action Bar */
+.action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  z-index: 100;
+  backdrop-filter: blur(12px);
+}
+.action-btn {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.action-btn:hover { background: var(--surface2); border-color: var(--blue); }
+.action-btn.primary { background: linear-gradient(135deg, var(--blue-dim), var(--blue-glow)); border-color: var(--blue); color: #fff; }
+.action-btn.primary:hover { opacity: 0.9; }
+.action-btn.danger { border-color: rgba(248,113,113,0.3); color: var(--red); }
+.action-btn.danger:hover { background: rgba(248,113,113,0.1); }
+
+@media (max-width: 600px) {
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+  .header .pct { font-size: 36px; }
+  .test-row { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="brand">Perennia AI</div>
+    <div class="title">Mobile App Readiness Challenge</div>
+    <div class="pct" id="pctDisplay">0%</div>
+    <div class="progress-bar-track"><div class="progress-bar-fill" id="progressFill"></div></div>
+  </div>
+  <div class="stats-row">
+    <div class="stat-card stat-tested"><div class="stat-value" id="statTested">0</div><div class="stat-label">Tested</div></div>
+    <div class="stat-card stat-pass"><div class="stat-value" id="statPass">0</div><div class="stat-label">Pass</div></div>
+    <div class="stat-card stat-fail"><div class="stat-value" id="statFail">0</div><div class="stat-label">Fail</div></div>
+    <div class="stat-card stat-untested"><div class="stat-value" id="statUntested">0</div><div class="stat-label">Untested</div></div>
+  </div>
+  <div class="verdict" id="verdict"></div>
+  <div id="sections"></div>
+</div>
+<div class="action-bar">
+  <button class="action-btn danger" onclick="resetAll()">Reset All</button>
+  <button class="action-btn" onclick="markAllPass()">Mark All Pass</button>
+  <button class="action-btn primary" onclick="exportReport()">Export Report</button>
+</div>
+<script>
+const DATA = [
+  {
+    id: "call_intelligence", emoji: "\u{1F4DE}", title: "Call Intelligence Platform", featured: true,
+    tests: [
+      { name: "Live call detection triggers correctly", desc: "Incoming/outgoing calls auto-detected via Telnyx webhook", tags: ["critical","live"] },
+      { name: "5 parallel AI agents initialize on call start", desc: "Deal Radar, Objection Handler, Next Steps, Compliance, Sentiment agents all spawn", tags: ["critical","ai"] },
+      { name: "Real-time transcript streams to UI", desc: "Whisper transcription appears in <3s delay on mobile screen", tags: ["critical","live"] },
+      { name: "Sentiment gauge updates live", desc: "Positive/neutral/negative indicator animates during call", tags: ["live"] },
+      { name: "Objection detection fires correctly", desc: "Objection cards appear with suggested rebuttals during call", tags: ["ai"] },
+      { name: "Deal Breaker Radar alerts display", desc: "Risk flags surface inline with call context", tags: ["critical","ai"] },
+      { name: "Next-best-action cards shown", desc: "Recommended talking points appear contextually", tags: ["ai"] },
+      { name: "Compliance monitoring active", desc: "TCPA/RESPA flags trigger visual alerts on screen", tags: ["critical"] },
+      { name: "Call recording indicator visible", desc: "Clear UI signal that recording is in progress", tags: ["critical"] },
+      { name: "Post-call summary generated", desc: "AI summary with key points, action items within 30s of hang-up", tags: ["ai"] },
+      { name: "Call notes auto-sync to CRM", desc: "Transcript + summary write to loan file and contact record", tags: ["critical"] },
+      { name: "Silent coaching mode functions", desc: "Agent receives live whispers without caller hearing", tags: ["live"] },
+      { name: "Call transfer works", desc: "Warm and cold transfer to team members functional", tags: [] },
+      { name: "Call recording playback in-app", desc: "Past calls can be played back with transcript sync", tags: [] },
+      { name: "Call intelligence works on 3G/4G", desc: "Core features stable on weak mobile connection, graceful degradation", tags: ["critical"] }
+    ]
+  },
+  {
+    id: "auth_session", emoji: "\u{1F510}", title: "Authentication & Session", featured: false,
+    tests: [
+      { name: "Login with email/password", desc: "JWT issued, stored securely in keychain", tags: ["critical"] },
+      { name: "Biometric login (Face ID / fingerprint)", desc: "Re-auth after background with biometrics", tags: ["critical"] },
+      { name: "Session persistence across restarts", desc: "User stays logged in after force-close", tags: [] },
+      { name: "Session timeout + re-auth prompt", desc: "Idle timeout triggers lock screen, not silent logout", tags: ["critical"] },
+      { name: "RBAC roles enforce correctly", desc: "LO vs Manager vs Admin see different nav and features", tags: ["critical"] },
+      { name: "Password reset flow", desc: "Email sent, deep link opens app on reset screen", tags: [] },
+      { name: "Multi-tenant isolation", desc: "User sees only their org's data, never bleeds across", tags: ["critical"] }
+    ]
+  },
+  {
+    id: "pipeline", emoji: "\u{1F4CA}", title: "Pipeline & Loan Management", featured: false,
+    tests: [
+      { name: "Pipeline view loads with live data", desc: "Loan cards render with correct stage, status, borrower name", tags: ["critical"] },
+      { name: "Stage drag-and-drop functional", desc: "Moving loan across Kanban board persists to backend", tags: [] },
+      { name: "Loan detail screen loads completely", desc: "All 20+ data fields visible, no missing sections", tags: ["critical"] },
+      { name: "SLA countdown timers display", desc: "Days remaining shown, red when past threshold", tags: [] },
+      { name: "Quick-action buttons work", desc: "Call, SMS, Email, Task buttons all trigger correct flows", tags: ["critical"] },
+      { name: "Filter and sort pipeline", desc: "By LO, stage, date, loan type all functional", tags: [] },
+      { name: "New loan entry creates record", desc: "Form submits, appears in pipeline immediately", tags: ["critical"] },
+      { name: "BytePro sync reflects in real-time", desc: "LOS status changes appear within acceptable sync window", tags: [] }
+    ]
+  },
+  {
+    id: "sms_mms", emoji: "\u{1F4AC}", title: "SMS / MMS Messaging", featured: false,
+    tests: [
+      { name: "SMS sends successfully via Telnyx", desc: "Message delivered, delivery receipt returned", tags: ["critical"] },
+      { name: "MMS with media attachment sends", desc: "Image/doc attaches, S3/R2 URL generated, delivered", tags: ["critical"] },
+      { name: "Conversation thread UI renders", desc: "iMessage-style thread with timestamps and read receipts", tags: [] },
+      { name: "Inbound SMS appears in thread", desc: "Real-time receipt via webhook pushes to conversation", tags: ["critical","live"] },
+      { name: "SMS Accordion Panel expands/collapses", desc: "Panel state persists across navigation", tags: [] },
+      { name: "TCPA opt-in status enforced", desc: "Cannot send to opted-out numbers, warning shown", tags: ["critical"] },
+      { name: "AI-suggested reply appears", desc: "Tapping suggestion populates compose field", tags: ["ai"] },
+      { name: "Bulk SMS broadcast works", desc: "Mass message to filtered list sends without errors", tags: [] }
+    ]
+  },
+  {
+    id: "ai_agents", emoji: "\u{1F916}", title: "AI Agents & Aria", featured: false,
+    tests: [
+      { name: "Aria chat responds in <3s", desc: "First token appears under 3 seconds on mobile", tags: ["critical","ai"] },
+      { name: "Correct agent routes to query", desc: "Pipeline questions go to Pipeline Agent, not wrong agent", tags: ["ai"] },
+      { name: "Tool calls execute without hang", desc: "Agents calling CRM tools complete and return results", tags: ["critical","ai"] },
+      { name: "Hallucination detector active", desc: "Confident wrong answers are flagged, not served silently", tags: ["ai"] },
+      { name: "Context window carries conversation", desc: "Follow-up questions reference prior turns correctly", tags: ["ai"] },
+      { name: "Mortgage guidelines RAG answers", desc: "FHA/VA/Conv questions return accurate guideline citations", tags: ["ai"] },
+      { name: "AI Operations Manager surfaces tasks", desc: "Proactive nudges for overdue SLAs, follow-ups", tags: ["ai"] },
+      { name: "Agent error state handled gracefully", desc: "Timeout or failure shows user-friendly fallback, not crash", tags: ["critical"] }
+    ]
+  },
+  {
+    id: "borrower_portal", emoji: "\u{1F3E0}", title: "Borrower Portal & PURL", featured: false,
+    tests: [
+      { name: "PURL link opens borrower view", desc: "Personalized URL loads correct borrower's portal", tags: ["critical"] },
+      { name: "Borrower document upload works", desc: "File picker, upload progress, confirmation all functional", tags: ["critical"] },
+      { name: "Document freshness validation", desc: "Screenshots and expired docs rejected with clear message", tags: [] },
+      { name: "Borrower status tracker visible", desc: "Lead/Active/Post-Close stages shown correctly", tags: [] },
+      { name: "Co-borrower access functions", desc: "Secondary borrower link works independently", tags: [] },
+      { name: "Push notification to borrower", desc: "Trigger from LO side reaches borrower device", tags: ["critical"] }
+    ]
+  },
+  {
+    id: "infra_perf", emoji: "\u{26A1}", title: "Infrastructure & Performance", featured: false,
+    tests: [
+      { name: "Cold start under 3 seconds", desc: "App fully interactive from launch within 3s on mid-tier device", tags: ["critical"] },
+      { name: "Redis cache hit on pipeline load", desc: "Second visit to pipeline loads noticeably faster", tags: [] },
+      { name: "Offline mode graceful degradation", desc: "No crash on lost connection, cached data shows with indicator", tags: ["critical"] },
+      { name: "Background refresh works", desc: "Data updates when app returns from background", tags: [] },
+      { name: "Memory usage stable over 30 min", desc: "No progressive slowdown or crash on extended session", tags: ["critical"] },
+      { name: "Railway backend health check passes", desc: "/health endpoint returns 200 with all services green", tags: ["critical"] },
+      { name: "PostgreSQL query latency <200ms", desc: "P95 of common queries under threshold", tags: [] },
+      { name: "Push notification delivery rate", desc: ">98% of sent notifications reach device within 10s", tags: ["critical"] }
+    ]
+  },
+  {
+    id: "compliance", emoji: "\u{1F512}", title: "Compliance & Security", featured: false,
+    tests: [
+      { name: "SOC 2 controls visible in audit log", desc: "All user actions recorded in immutable audit trail", tags: ["critical"] },
+      { name: "PII fields masked appropriately", desc: "SSN, DOB, income shown with proper masking", tags: ["critical"] },
+      { name: "Data export triggers audit event", desc: "Downloading any report writes to compliance log", tags: ["critical"] },
+      { name: "NMLS number validation on LO profile", desc: "Invalid NMLS format rejected at input", tags: [] },
+      { name: "ECOA adverse action notice accessible", desc: "Denial workflow surfaces required notice", tags: ["critical"] },
+      { name: "Screen recording blocked on sensitive screens", desc: "OS-level restriction on SSN/income entry screens", tags: ["critical"] }
+    ]
+  }
+];
+
+// State: keyed by "sectionId.testIndex" -> "pass" | "fail" | null
+const state = {};
+let totalTests = 0;
+
+function init() {
+  const container = document.getElementById('sections');
+  totalTests = 0;
+  DATA.forEach(section => {
+    section.tests.forEach((_, i) => {
+      state[section.id + '.' + i] = null;
+      totalTests++;
+    });
+    container.appendChild(buildSection(section));
+  });
+  recalc();
+}
+
+function buildSection(section) {
+  const div = document.createElement('div');
+  div.className = 'section' + (section.featured ? ' featured' : '') + (section.featured ? ' open' : '');
+  div.id = 'section-' + section.id;
+
+  const header = document.createElement('div');
+  header.className = 'section-header';
+  header.innerHTML = `
+    <div class="section-title">${section.emoji} ${section.title}</div>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <span class="section-badge" id="badge-${section.id}">0/${section.tests.length} passed</span>
+      <span class="chevron">\u{25B6}</span>
+    </div>`;
+  header.addEventListener('click', () => div.classList.toggle('open'));
+  div.appendChild(header);
+
+  const body = document.createElement('div');
+  body.className = 'section-body';
+  section.tests.forEach((test, i) => {
+    body.appendChild(buildTestRow(section.id, i, test));
+  });
+  div.appendChild(body);
+  return div;
+}
+
+function buildTestRow(sectionId, idx, test) {
+  const row = document.createElement('div');
+  row.className = 'test-row';
+  row.id = 'row-' + sectionId + '.' + idx;
+
+  const info = document.createElement('div');
+  info.className = 'test-info';
+
+  const name = document.createElement('div');
+  name.className = 'test-name';
+  name.textContent = test.name;
+  info.appendChild(name);
+
+  const desc = document.createElement('div');
+  desc.className = 'test-desc';
+  desc.textContent = test.desc;
+  info.appendChild(desc);
+
+  if (test.tags && test.tags.length > 0) {
+    const tags = document.createElement('div');
+    tags.className = 'test-tags';
+    test.tags.forEach(t => {
+      const tag = document.createElement('span');
+      const cls = t === 'critical' ? 'tag-critical' : t === 'ai' ? 'tag-ai' : t === 'live' ? 'tag-live' : 'tag-default';
+      tag.className = 'tag ' + cls;
+      tag.textContent = t;
+      tags.appendChild(tag);
+    });
+    info.appendChild(tags);
+  } else {
+    const tags = document.createElement('div');
+    tags.className = 'test-tags';
+    const tag = document.createElement('span');
+    tag.className = 'tag tag-default';
+    tag.textContent = 'standard';
+    tags.appendChild(tag);
+    info.appendChild(tags);
+  }
+
+  const actions = document.createElement('div');
+  actions.className = 'test-actions';
+
+  const passBtn = document.createElement('button');
+  passBtn.className = 'test-btn';
+  passBtn.id = 'pass-' + sectionId + '.' + idx;
+  passBtn.innerHTML = '\u2713';
+  passBtn.title = 'Mark as pass';
+  passBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleState(sectionId, idx, 'pass'); });
+
+  const failBtn = document.createElement('button');
+  failBtn.className = 'test-btn';
+  failBtn.id = 'fail-' + sectionId + '.' + idx;
+  failBtn.innerHTML = '\u2717';
+  failBtn.title = 'Mark as fail';
+  failBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleState(sectionId, idx, 'fail'); });
+
+  actions.appendChild(passBtn);
+  actions.appendChild(failBtn);
+
+  row.appendChild(info);
+  row.appendChild(actions);
+  return row;
+}
+
+function toggleState(sectionId, idx, action) {
+  const key = sectionId + '.' + idx;
+  if (state[key] === action) {
+    state[key] = null;
+  } else {
+    state[key] = action;
+  }
+  updateRow(sectionId, idx);
+  recalc();
+}
+
+function updateRow(sectionId, idx) {
+  const key = sectionId + '.' + idx;
+  const row = document.getElementById('row-' + key);
+  const passBtn = document.getElementById('pass-' + key);
+  const failBtn = document.getElementById('fail-' + key);
+
+  row.classList.remove('pass', 'fail');
+  passBtn.classList.remove('active-pass');
+  failBtn.classList.remove('active-fail');
+
+  if (state[key] === 'pass') {
+    row.classList.add('pass');
+    passBtn.classList.add('active-pass');
+  } else if (state[key] === 'fail') {
+    row.classList.add('fail');
+    failBtn.classList.add('active-fail');
+  }
+}
+
+function recalc() {
+  let tested = 0, pass = 0, fail = 0;
+  const sectionStats = {};
+  DATA.forEach(s => { sectionStats[s.id] = { pass: 0, total: s.tests.length }; });
+
+  Object.entries(state).forEach(([key, val]) => {
+    const sid = key.split('.')[0];
+    if (val === 'pass') { tested++; pass++; sectionStats[sid].pass++; }
+    else if (val === 'fail') { tested++; fail++; }
+  });
+
+  const untested = totalTests - tested;
+  const pct = totalTests > 0 ? Math.round((tested / totalTests) * 100) : 0;
+
+  document.getElementById('pctDisplay').textContent = pct + '%';
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('statTested').textContent = tested;
+  document.getElementById('statPass').textContent = pass;
+  document.getElementById('statFail').textContent = fail;
+  document.getElementById('statUntested').textContent = untested;
+
+  // Section badges
+  Object.entries(sectionStats).forEach(([sid, s]) => {
+    const badge = document.getElementById('badge-' + sid);
+    if (badge) badge.textContent = s.pass + '/' + s.total + ' passed';
+  });
+
+  // Verdict
+  const verdict = document.getElementById('verdict');
+  if (tested / totalTests >= 0.5) {
+    const passRate = tested > 0 ? (pass / tested) * 100 : 0;
+    // Check critical failures
+    let hasCriticalFail = false;
+    DATA.forEach(section => {
+      section.tests.forEach((test, i) => {
+        const key = section.id + '.' + i;
+        if (state[key] === 'fail' && test.tags && test.tags.includes('critical')) {
+          hasCriticalFail = true;
+        }
+      });
+    });
+
+    verdict.classList.add('visible');
+    verdict.classList.remove('ready', 'issues', 'blocked');
+
+    if (hasCriticalFail) {
+      verdict.classList.add('blocked');
+      verdict.textContent = '\u{1F6D1} BLOCKED — Critical test failures detected';
+    } else if (passRate >= 90 && fail === 0) {
+      verdict.classList.add('ready');
+      verdict.textContent = '\u{1F680} READY TO LAUNCH — All systems go';
+    } else if (passRate >= 70 || fail > 0) {
+      verdict.classList.add('issues');
+      verdict.textContent = '\u{26A0}\u{FE0F} ISSUES DETECTED — Review failures before launch';
+    } else {
+      verdict.classList.add('blocked');
+      verdict.textContent = '\u{1F6D1} BLOCKED — Pass rate below 70%';
+    }
+  } else {
+    verdict.classList.remove('visible');
+  }
+}
+
+function resetAll() {
+  Object.keys(state).forEach(k => { state[k] = null; });
+  DATA.forEach(section => {
+    section.tests.forEach((_, i) => updateRow(section.id, i));
+  });
+  recalc();
+}
+
+function markAllPass() {
+  Object.keys(state).forEach(k => { state[k] = 'pass'; });
+  DATA.forEach(section => {
+    section.tests.forEach((_, i) => updateRow(section.id, i));
+  });
+  recalc();
+}
+
+function exportReport() {
+  // Build report text
+  let report = 'PERENNIA AI — MOBILE APP READINESS REPORT\n';
+  report += '==========================================\n';
+  report += 'Generated: ' + new Date().toISOString() + '\n\n';
+
+  let totalPass = 0, totalFail = 0, totalUntested = 0;
+  const failures = [];
+  const untested = [];
+
+  DATA.forEach(section => {
+    let sp = 0, sf = 0, su = 0;
+    report += section.emoji + ' ' + section.title + '\n';
+    report += '-'.repeat(40) + '\n';
+    section.tests.forEach((test, i) => {
+      const key = section.id + '.' + i;
+      const st = state[key];
+      const icon = st === 'pass' ? '\u2705' : st === 'fail' ? '\u274C' : '\u{1F7E1}';
+      report += icon + ' ' + test.name;
+      if (test.tags && test.tags.length) report += '  [' + test.tags.join(', ') + ']';
+      report += '\n';
+      if (st === 'pass') { sp++; totalPass++; }
+      else if (st === 'fail') { sf++; totalFail++; failures.push({ section: section.title, test: test.name, tags: test.tags }); }
+      else { su++; totalUntested++; untested.push({ section: section.title, test: test.name }); }
+    });
+    report += 'Result: ' + sp + ' pass, ' + sf + ' fail, ' + su + ' untested\n\n';
+  });
+
+  report += '==========================================\n';
+  report += 'SUMMARY: ' + totalPass + ' pass / ' + totalFail + ' fail / ' + totalUntested + ' untested\n';
+  report += 'Pass rate: ' + (totalPass + totalFail > 0 ? Math.round(totalPass / (totalPass + totalFail) * 100) : 0) + '%\n\n';
+
+  if (failures.length > 0) {
+    report += 'FAILURES:\n';
+    failures.forEach(f => {
+      report += '  - [' + f.section + '] ' + f.test;
+      if (f.tags && f.tags.includes('critical')) report += ' (CRITICAL)';
+      report += '\n';
+    });
+  }
+
+  // Try sendPrompt if available, otherwise copy to clipboard
+  if (typeof sendPrompt === 'function') {
+    sendPrompt('Generate a detailed readiness report based on my current test results:\n\n' + report);
+  } else {
+    navigator.clipboard.writeText(report).then(() => {
+      alert('Report copied to clipboard!');
+    }).catch(() => {
+      // Fallback: open in new window
+      const w = window.open('', '_blank');
+      w.document.write('<pre>' + report.replace(/</g, '&lt;') + '</pre>');
+    });
+  }
+}
+
+init();
+</script>
+</body>
+</html>

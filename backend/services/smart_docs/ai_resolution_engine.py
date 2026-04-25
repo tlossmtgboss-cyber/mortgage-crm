@@ -1499,13 +1499,19 @@ class AIResolutionEngine:
         try:
             # Try direct column first (e.g. "borrower_email" -> loans.borrower_email)
             top_level_field = field_path.split(".")[-1]
+            # Whitelist column name against the Loan model to prevent SQL injection
+            from database.models import Loan
+            allowed_columns = {c.name for c in Loan.__table__.columns}
+            if top_level_field not in allowed_columns:
+                # Not a valid column — skip to JSON fallback
+                raise ValueError(f"Invalid field: {top_level_field}")
+            # Column name is validated; safe to interpolate as an identifier
             result = self.db.execute(
                 text(
-                    "SELECT :col_name FROM loans "
+                    f"SELECT {top_level_field} FROM loans "
                     "WHERE id = :loan_id AND organization_id = :org_id"
                 ),
                 {
-                    "col_name": top_level_field,
                     "loan_id": loan_id,
                     "org_id": self.org_id,
                 },
@@ -1548,11 +1554,16 @@ class AIResolutionEngine:
         """
         try:
             top_level_field = field_path.split(".")[-1]
-            # Parameterized update on direct column
+            # Whitelist column name against the Loan model to prevent SQL injection
+            from database.models import Loan
+            allowed_columns = {c.name for c in Loan.__table__.columns}
+            if top_level_field not in allowed_columns:
+                raise ValueError(f"Invalid field: {top_level_field}")
+            # Column name is validated; safe to interpolate as an identifier
             self.db.execute(
                 text(
                     f"UPDATE loans SET {top_level_field} = :value "
-                    f"WHERE id = :loan_id AND organization_id = :org_id"
+                    "WHERE id = :loan_id AND organization_id = :org_id"
                 ),
                 {
                     "value": value,

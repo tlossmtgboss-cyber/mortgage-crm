@@ -89,6 +89,7 @@ from .smart_calendar_adapter import (
     BookingResult,
 )
 from .models import LOKickoffBooking
+from .sanitizer import sanitize_text, sanitize_name, sanitize_address, sanitize_description
 
 
 logger = logging.getLogger("urla.agent")
@@ -161,18 +162,6 @@ class URLAAgent(Agent):
                 f"Rate limit exceeded: {tool_name} called {self._tool_call_counts[tool_name]} "
                 f"times (max {max_calls}). This may indicate a loop."
             )
-
-    def _assert_section_reachable(self, target_section: str) -> None:
-        """
-        Ensure the target section is reachable from the current position.
-        Allows going back to completed sections (corrections) or advancing
-        to the current/next section, but not skipping ahead.
-        """
-        if not self._active_loan_id:
-            return  # No app loaded yet; lifecycle tools handle this
-        # Will be checked against the live app state
-        # Deferred to actual call so we don't need async here
-        pass
 
     async def _assert_section_reachable_async(self, target_section: str) -> None:
         """Async version that loads app state to validate section ordering."""
@@ -358,9 +347,9 @@ class URLAAgent(Agent):
         )
 
         section = borrower.section_1a or Section1a_PersonalInformation()
-        section.first_name = first_name
-        section.middle_name = middle_name
-        section.last_name = last_name
+        section.first_name = sanitize_name(first_name, "first_name")
+        section.middle_name = sanitize_name(middle_name, "middle_name")
+        section.last_name = sanitize_name(last_name, "last_name")
         section.date_of_birth = V.parse_date(date_of_birth)
 
         # Age validation (Fix I18)
@@ -382,8 +371,8 @@ class URLAAgent(Agent):
 
         section.current_address = ResidenceHistory(
             address=Address(
-                street=current_street,
-                city=current_city,
+                street=sanitize_address(current_street, "street"),
+                city=sanitize_name(current_city, "city"),
                 state=V.parse_state(current_state),
                 zip_code=current_zip,
             ),
@@ -474,12 +463,12 @@ class URLAAgent(Agent):
             return f"Borrower {borrower_id} not found."
 
         section = Section1b_CurrentEmployment(
-            employer_name=employer_name,
-            position_title=position_title,
+            employer_name=sanitize_name(employer_name, "employer_name"),
+            position_title=sanitize_text(position_title, "position_title"),
             start_date=V.parse_date(start_date),
             employer_address=Address(
-                street=employer_street,
-                city=employer_city,
+                street=sanitize_address(employer_street, "employer_street"),
+                city=sanitize_name(employer_city, "employer_city"),
                 state=V.parse_state(employer_state),
                 zip_code=employer_zip,
             ),
@@ -724,11 +713,17 @@ class URLAAgent(Agent):
         app = await self._load()
         if not app.section_2:
             app.section_2 = Section2_AssetsAndLiabilities()
+        amt = Decimal(str(amount))
+        for existing in app.section_2.other_credits:
+            if existing.credit_type == credit_type and existing.amount == amt:
+                existing.description = description
+                await self.state.save_application(app)
+                return f"Updated {credit_type} of ${amount:,.0f}."
         app.section_2.other_credits.append(
             OtherCredit(
                 credit_type=credit_type,
-                amount=Decimal(str(amount)),
-                description=description,
+                amount=amt,
+                description=sanitize_description(description, "other_credit_description"),
             )
         )
         await self.state.save_application(app)
@@ -771,7 +766,7 @@ class URLAAgent(Agent):
         app.section_2.liabilities.append(
             Liability(
                 liability_type=normalized_type,
-                creditor_name=creditor_name,
+                creditor_name=sanitize_name(creditor_name, "creditor_name"),
                 account_number_last_4=(account_number_last_4[-4:] if account_number_last_4 else None),
                 unpaid_balance=bal,
                 monthly_payment=pmt,
@@ -842,11 +837,20 @@ class URLAAgent(Agent):
         app = await self._load()
         if not app.section_3:
             app.section_3 = Section3_RealEstate()
+        parsed_state = V.parse_state(state)
+        for existing in app.section_3.properties:
+            if (existing.address.street == street
+                    and existing.address.zip_code == zip_code):
+                existing.property_value = Decimal(str(property_value))
+                existing.status = PropertyStatus(_norm_enum(status, PropertyStatus))
+                existing.intended_occupancy = PropertyOccupancy(_norm_enum(intended_occupancy, PropertyOccupancy))
+                await self.state.save_application(app)
+                return f"Updated property at {street}, {city}."
         app.section_3.properties.append(
             PropertyOwned(
                 address=Address(
                     street=street, city=city,
-                    state=V.parse_state(state), zip_code=zip_code,
+                    state=parsed_state, zip_code=zip_code,
                 ),
                 property_value=Decimal(str(property_value)),
                 status=PropertyStatus(_norm_enum(status, PropertyStatus)),
@@ -882,11 +886,20 @@ class URLAAgent(Agent):
         if not app.section_3 or property_index >= len(app.section_3.properties):
             return "That property hasn't been saved yet. Add the property first."
         lt = LoanType(_norm_enum(loan_type, LoanType)) if loan_type else None
-        app.section_3.properties[property_index].mortgages.append(
+        bal = Decimal(str(unpaid_balance))
+        prop = app.section_3.properties[property_index]
+        for existing in prop.mortgages:
+            if existing.creditor_name == creditor_name and existing.unpaid_balance == bal:
+                existing.monthly_payment = Decimal(str(monthly_payment))
+                existing.to_be_paid_off = to_be_paid_off
+                existing.loan_type = lt
+                await self.state.save_application(app)
+                return f"Updated mortgage with {creditor_name}."
+        prop.mortgages.append(
             REOMortgage(
-                creditor_name=creditor_name,
+                creditor_name=sanitize_name(creditor_name, "reo_creditor"),
                 monthly_payment=Decimal(str(monthly_payment)),
-                unpaid_balance=Decimal(str(unpaid_balance)),
+                unpaid_balance=bal,
                 to_be_paid_off=to_be_paid_off,
                 loan_type=lt,
             )
@@ -939,7 +952,8 @@ class URLAAgent(Agent):
             loan_purpose=LoanPurpose(_norm_enum(loan_purpose, LoanPurpose)),
             loan_purpose_other_description=loan_purpose_other_description,
             subject_property_address=Address(
-                street=subject_street, city=subject_city,
+                street=sanitize_address(subject_street, "subject_street"),
+                city=sanitize_name(subject_city, "subject_city"),
                 state=V.parse_state(subject_state), zip_code=subject_zip,
             ),
             number_of_units=number_of_units,

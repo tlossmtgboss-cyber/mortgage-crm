@@ -27,8 +27,9 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-# Lazy SMS client instance (replaces old module-level sms_client)
-sms_client = get_sms_client()
+def _get_sms_client(db: Session = None, user_id: int = None):
+    """Create SMS client per-request instead of stale module-level singleton."""
+    return get_sms_client(db=db, user_id=user_id)
 
 
 async def _validate_webhook_signature(request: Request, form_data: dict) -> bool:
@@ -167,26 +168,28 @@ async def send_sms(
     current_user = Depends(get_current_user)
 ):
     """Send SMS message to client"""
+    sms_client = _get_sms_client(db=db, user_id=current_user.id)
 
     if not sms_client.enabled:
-        logger.error(f"SMS not enabled. API key set: {bool(sms_client._telnyx_api_key)}, from_number: {sms_client.from_number}")
+        logger.error(f"SMS not enabled. API key set: {bool(sms_client._api_key)}, from_number: {sms_client.from_number}")
         raise HTTPException(status_code=503, detail="SMS service not configured. Check TELNYX_API_KEY and TELNYX_PHONE_NUMBER env vars.")
 
     try:
         # Send SMS
         result = sms_client.send_sms(
-            to_number=request.to_number,
-            message=request.message
+            to_phone=request.to_number,
+            message=request.message,
+            lead_id=request.lead_id,
+            user_id=current_user.id,
         )
 
-        # send_sms returns message_id string on success, None on failure
-        if not result:
+        if not result.get("success"):
             raise HTTPException(
                 status_code=502,
-                detail=f"Telnyx API failed to send SMS. Check TELNYX_API_KEY and TELNYX_PHONE_NUMBER. From: {sms_client.from_number}"
+                detail=result.get("error", f"Telnyx API failed to send SMS. From: {sms_client.from_number}"),
             )
 
-        message_sid = result
+        message_sid = result.get("message_id", "unknown")
 
         # Log SMS in database
         try:
@@ -392,14 +395,16 @@ async def sms_webhook(
         # Process with AI and send response
         ai_response = await process_sms_with_ai(from_number, to_number, body, db)
 
-        if ai_response and sms_client.enabled:
+        reply_client = _get_sms_client(db=db)
+        if ai_response and reply_client.enabled:
             # Send AI response via Telnyx
-            response_sid = sms_client.send_sms(
-                to_number=from_number,
-                message=ai_response
+            reply_result = reply_client.send_sms(
+                to_phone=from_number,
+                message=ai_response,
             )
 
-            if response_sid:
+            if reply_result.get("success"):
+                response_sid = reply_result.get("message_id", "unknown")
                 # Store outbound SMS
                 outbound_record = SMSMessage(
                     to_number=from_number,
@@ -654,9 +659,9 @@ async def get_integration_status():
 
     return {
         "sms": {
-            "enabled": sms_client.enabled,
+            "enabled": bool(os.getenv("TELNYX_API_KEY")) and bool(os.getenv("TELNYX_PHONE_NUMBER") or os.getenv("TELNYX_FROM_NUMBER")),
             "provider": "Telnyx",
-            "from_number": sms_client.from_number if sms_client.enabled else None
+            "from_number": os.getenv("TELNYX_PHONE_NUMBER") or os.getenv("TELNYX_FROM_NUMBER"),
         },
         "email": {
             "enabled": graph_client.enabled,

@@ -1603,27 +1603,9 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Email Drop routes not loaded: {e}")
 
-    # Include Document Drop routes (drag-and-drop document upload)
-    try:
-        from document_drop_routes import router as document_drop_router
-        app.include_router(document_drop_router, tags=["Document Drop"])
-    except Exception as e:
-        logger.warning(f"⚠️ Document Drop routes not loaded: {e}")
-
-    # Include Smart Documents routes (intelligent document collection)
-    try:
-        from routes.smart_docs_routes import router as smart_docs_router
-        app.include_router(smart_docs_router, tags=["Smart Documents"])
-    except Exception as e:
-        logger.warning(f"Could not load smart docs routes: {e}")
-
-    # Include Portal Smart Documents routes (borrower-facing document requirements)
-    try:
-        from routes.portal_smart_docs_routes import router as portal_smart_docs_router
-        app.include_router(portal_smart_docs_router, tags=["Portal Smart Documents"])
-        logger.info("✅ Portal Smart Documents routes loaded")
-    except Exception as e:
-        logger.warning(f"Could not load portal smart docs routes: {e}")
+    # NOTE: Document Drop, Smart Documents, and Portal Smart Documents routes
+    # are registered via _register_documents_income.py (called from main.py).
+    # Do NOT include them here to avoid duplicate route registration.
 
     # Include Platform Contracts routes (admin licensing agreements)
     try:

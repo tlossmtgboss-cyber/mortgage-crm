@@ -124,7 +124,7 @@ def send_sms_message(
     try:
         import uuid
         to_e164 = _normalize_e164(to_phone)
-        phone_digits = "".join(c for c in to_e164 if c.isdigit())[-10:]
+        phone_digits = to_e164
 
         with db_session() as db:
             db.execute(

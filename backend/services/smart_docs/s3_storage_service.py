@@ -205,6 +205,7 @@ class SmartDocsS3Service:
                 'Key': storage_key,
                 'Body': body,
                 'ContentType': content_type,
+                'ServerSideEncryption': 'AES256',
             }
 
             if metadata:

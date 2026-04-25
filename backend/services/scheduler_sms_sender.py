@@ -25,6 +25,7 @@ _SMS_BASE_DELAY = float(os.getenv("SMS_BASE_DELAY", "1.0"))  # seconds
 
 
 def _send_sms_with_retry(from_number: str, to_number: str, text: str,
+                          organization_id: int = None,
                           max_retries: int = _SMS_MAX_RETRIES,
                           base_delay: float = _SMS_BASE_DELAY):
     """Send an SMS via Telnyx with exponential backoff retry.
@@ -40,6 +41,7 @@ def _send_sms_with_retry(from_number: str, to_number: str, text: str,
                 to=to_number,
                 from_=from_number,
                 text=text,
+                organization_id=organization_id,
             )
             msg_id = result.get("id", "unknown")
             return True, msg_id, None
@@ -85,7 +87,7 @@ def send_appointment_confirmation_sms(
             logger.info("SMS consent check blocked confirmation to %s: %s", _mask_phone(attendee_phone), reason)
             return False
 
-        from_number = os.getenv("TELNYX_PHONE_NUMBER")
+        from_number = os.getenv("TELNYX_PHONE_NUMBER") or os.getenv("TELNYX_FROM_NUMBER")
 
         if not from_number:
             logger.warning("TELNYX_PHONE_NUMBER not configured - skipping SMS confirmation")
@@ -97,7 +99,7 @@ def send_appointment_confirmation_sms(
         if len(message_body) > 160:
             logger.warning(f"SMS body is {len(message_body)} chars (>160), will be sent as multi-segment")
 
-        success, msg_id, error = _send_sms_with_retry(from_number, attendee_phone, message_body)
+        success, msg_id, error = _send_sms_with_retry(from_number, attendee_phone, message_body, organization_id=organization_id)
         if success:
             logger.info("Appointment confirmation SMS sent to %s, ID: %s", _mask_phone(attendee_phone), msg_id)
         return success
@@ -123,7 +125,7 @@ def send_appointment_update_sms(
             logger.info("SMS consent check blocked update to %s: %s", _mask_phone(attendee_phone), reason)
             return False
 
-        from_number = os.getenv("TELNYX_PHONE_NUMBER")
+        from_number = os.getenv("TELNYX_PHONE_NUMBER") or os.getenv("TELNYX_FROM_NUMBER")
 
         if not from_number:
             logger.warning("TELNYX_PHONE_NUMBER not configured - skipping SMS update")
@@ -132,7 +134,7 @@ def send_appointment_update_sms(
         team_member_text = f" with {team_member_name}" if team_member_name else ""
         message_body = f"Hi {attendee_name}! Your appointment{team_member_text} has been UPDATED to {appointment_date} at {appointment_time}. Please check your email for the updated calendar invite."
 
-        success, msg_id, error = _send_sms_with_retry(from_number, attendee_phone, message_body)
+        success, msg_id, error = _send_sms_with_retry(from_number, attendee_phone, message_body, organization_id=organization_id)
         if success:
             logger.info("Appointment update SMS sent to %s, ID: %s", _mask_phone(attendee_phone), msg_id)
         return success
@@ -160,7 +162,7 @@ def send_appointment_reminder_sms(
             logger.info("SMS consent check blocked reminder to %s: %s", _mask_phone(attendee_phone), reason)
             return {"success": False, "error": f"Consent blocked: {reason}"}
 
-        from_number = os.getenv("TELNYX_PHONE_NUMBER")
+        from_number = os.getenv("TELNYX_PHONE_NUMBER") or os.getenv("TELNYX_FROM_NUMBER")
         if not from_number:
             logger.warning("TELNYX_PHONE_NUMBER not configured - skipping reminder SMS")
             return {"success": False, "error": "SMS not configured"}
@@ -179,7 +181,7 @@ def send_appointment_reminder_sms(
             f"Reply HELP for assistance."
         )
 
-        success, msg_id, error = _send_sms_with_retry(from_number, attendee_phone, message_body)
+        success, msg_id, error = _send_sms_with_retry(from_number, attendee_phone, message_body, organization_id=organization_id)
         if success:
             logger.info("Appointment reminder SMS sent to %s, ID: %s", _mask_phone(attendee_phone), msg_id)
             return {"success": True, "message_id": msg_id}

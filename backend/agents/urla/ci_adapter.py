@@ -246,28 +246,36 @@ def flatten_urla_application(app: URLAApplication) -> Dict[str, Any]:
     # Section 1a — Primary borrower
     if app.borrowers:
         b = app.borrowers[0]
-        _set(data, "borrower.first_name", b.first_name)
-        _set(data, "borrower.last_name", b.last_name)
-        _set(data, "borrower.middle_name", b.middle_name)
-        _set(data, "borrower.suffix", b.suffix)
-        if b.ssn:
-            _set(data, "borrower.ssn_last_four", b.ssn[-4:] if len(b.ssn) >= 4 else None)
-        _set(data, "borrower.date_of_birth", _date_str(b.date_of_birth))
-        _set(data, "borrower.email", b.email)
-        _set(data, "borrower.phone", b.phone)
-        _set(data, "borrower.marital_status", _enum_val(b.marital_status))
-        _set(data, "borrower.citizenship_status", _enum_val(b.citizenship_type))
+        s1a = b.section_1a
+        if s1a:
+            _set(data, "borrower.first_name", s1a.first_name)
+            _set(data, "borrower.last_name", s1a.last_name)
+            _set(data, "borrower.middle_name", s1a.middle_name)
+            _set(data, "borrower.suffix", s1a.suffix)
+            if s1a.ssn:
+                _set(data, "borrower.ssn_last_four", s1a.ssn[-4:] if len(s1a.ssn) >= 4 else None)
+            _set(data, "borrower.date_of_birth", _date_str(s1a.date_of_birth))
+            _set(data, "borrower.email", s1a.email)
+            _set(data, "borrower.phone", s1a.cell_phone)
+            _set(data, "borrower.marital_status", _enum_val(s1a.marital_status))
+            _set(data, "borrower.citizenship_status", _enum_val(s1a.citizenship))
 
         # Employment
-        if b.current_employment:
-            emp = b.current_employment
-            _set(data, "borrower.employer_name", emp.employer_name)
-            _set(data, "borrower.position", emp.position_title)
-            _set(data, "borrower.self_employed", emp.self_employed)
-            _set(data, "borrower.years_at_job", emp.years_on_job)
-            if emp.monthly_income is not None:
-                _set(data, "borrower.monthly_income", float(emp.monthly_income))
-                _set(data, "borrower.monthly_income_total", float(emp.monthly_income) * 12)
+        s1b = b.section_1b
+        if s1b:
+            _set(data, "borrower.employer_name", s1b.employer_name)
+            _set(data, "borrower.position", s1b.position_title)
+            _set(data, "borrower.self_employed", s1b.self_employed)
+            _set(data, "borrower.years_at_job", s1b.years_in_profession)
+            income_parts = [
+                s1b.base_monthly, s1b.overtime_monthly, s1b.bonus_monthly,
+                s1b.commission_monthly, s1b.military_entitlements_monthly,
+                s1b.other_monthly,
+            ]
+            total_monthly = sum(float(p) for p in income_parts if p is not None)
+            if total_monthly > 0:
+                _set(data, "borrower.monthly_income", total_monthly)
+                _set(data, "borrower.monthly_income_total", total_monthly * 12)
 
     # Section 4 — Loan and property
     if app.section_4:
@@ -277,7 +285,7 @@ def flatten_urla_application(app: URLAApplication) -> Dict[str, Any]:
             _set(data, "section_4.loan_amount", _decimal_float(s4a.loan_amount))
             _set(data, "section_4.loan_purpose", _enum_val(s4a.loan_purpose))
             _set(data, "section_4.property_value", _decimal_float(s4a.property_value))
-            _set(data, "section_4.property_type", _enum_val(s4a.property_type))
+            _set(data, "section_4.number_of_units", s4a.number_of_units)
             _set(data, "section_4.occupancy", _enum_val(s4a.occupancy))
             if s4a.subject_property_address:
                 addr = s4a.subject_property_address
@@ -286,26 +294,30 @@ def flatten_urla_application(app: URLAApplication) -> Dict[str, Any]:
                 _set(data, "section_4.subject_property_address.state", addr.state)
                 _set(data, "section_4.subject_property_address.zip_code", addr.zip_code)
 
-    # Section 5 — Declarations
-    if app.section_5:
-        s5 = app.section_5
-        _set(data, "section_5.bankruptcy", s5.bankruptcy)
-        _set(data, "section_5.foreclosure", s5.foreclosure)
-        _set(data, "section_5.outstanding_judgments", s5.outstanding_judgments)
-        _set(data, "section_5.party_to_lawsuit", s5.party_to_lawsuit)
-        _set(data, "section_5.federal_debt_delinquent", s5.federal_debt_delinquent)
-        _set(data, "section_5.alimony_child_support_obligation", s5.alimony_child_support_obligation)
-        _set(data, "section_5.borrowed_down_payment", s5.borrowed_down_payment)
-        _set(data, "section_5.co_maker_endorser", s5.co_maker_endorser)
-        _set(data, "section_5.delinquent_on_any_debt", s5.delinquent_on_any_debt)
-        _set(data, "section_5.ownership_interest_last_3_years", s5.ownership_interest_last_3_years)
+    # Section 5 — Declarations (per-borrower)
+    if app.borrowers:
+        b = app.borrowers[0]
+        if b.section_5:
+            s5a = b.section_5.section_5a
+            if s5a:
+                _set(data, "section_5.ownership_interest_last_3_years", s5a.had_ownership_interest_last_3_years)
+                _set(data, "section_5.borrowed_down_payment", s5a.borrowing_money_for_transaction)
+            s5b = b.section_5.section_5b
+            if s5b:
+                _set(data, "section_5.bankruptcy", s5b.declared_bankruptcy_last_7_years)
+                _set(data, "section_5.foreclosure", s5b.foreclosed_last_7_years)
+                _set(data, "section_5.outstanding_judgments", s5b.outstanding_judgments)
+                _set(data, "section_5.party_to_lawsuit", s5b.party_to_lawsuit)
+                _set(data, "section_5.federal_debt_delinquent", s5b.currently_delinquent_on_federal_debt)
+                _set(data, "section_5.co_maker_endorser", s5b.co_signer_on_undisclosed_debt)
+                _set(data, "section_5.delinquent_on_any_debt", s5b.currently_delinquent_on_federal_debt)
 
-    # Section 7 — Military
-    if app.section_7:
-        s7 = app.section_7
-        _set(data, "section_7.is_veteran", s7.ever_served)
-        if s7.service_branch:
-            _set(data, "section_7.military_branch", _enum_val(s7.service_branch))
+    # Section 7 — Military (per-borrower)
+    if app.borrowers:
+        b = app.borrowers[0]
+        if b.section_7:
+            s7 = b.section_7
+            _set(data, "section_7.is_veteran", s7.served_in_military)
 
     # Section 8 — Demographics (voluntary — not extracted from transcript)
     # Intentionally omitted: ECOA/Reg B prohibits using demographics in
@@ -316,11 +328,11 @@ def flatten_urla_application(app: URLAApplication) -> Dict[str, Any]:
 
 def _build_transcript_text(app: URLAApplication) -> str:
     """Build a speaker-attributed transcript string from call entries."""
-    if not hasattr(app, "transcript_entries") or not app.transcript_entries:
+    if not app.transcript:
         return ""
 
     lines = []
-    for entry in app.transcript_entries:
+    for entry in app.transcript:
         speaker = getattr(entry, "speaker", "unknown")
         text = getattr(entry, "text", "")
         if text:

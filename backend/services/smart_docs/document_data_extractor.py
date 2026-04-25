@@ -45,6 +45,7 @@ except ImportError:
     HAS_PDFPLUMBER = False
 
 from models.smart_docs_models import DocType
+from services.smart_docs.ai_resilience import resilient_ai_call
 
 logger = logging.getLogger(__name__)
 
@@ -496,11 +497,19 @@ RESPONSE FORMAT (JSON):
 Respond with ONLY the JSON object, no additional text."""
 
         try:
-            response = self.anthropic.messages.create(
+            response = resilient_ai_call(
+                client=self.anthropic,
                 model=self.model,
                 max_tokens=4096,
-                messages=[{"role": "user", "content": prompt}]
+                messages=[{"role": "user", "content": prompt}],
+                operation_name="extract_document_data",
             )
+
+            if response is None:
+                return ExtractionResult(
+                    success=False,
+                    error="AI call failed after retries or circuit breaker open",
+                )
 
             response_text = response.content[0].text.strip()
 

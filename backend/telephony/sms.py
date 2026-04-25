@@ -113,8 +113,9 @@ def _send_sms_raw(
 
     response = client.messages.send(**kwargs)
 
-    # The v2 SDK returns a MessageSendResponse object.  Extract the id.
-    msg_id = getattr(response, "id", None) or "unknown"
+    # The v4.x SDK returns MessageSendResponse with .data.id (not .id)
+    data = getattr(response, "data", None)
+    msg_id = getattr(data, "id", None) or "unknown"
     return {"id": str(msg_id), "status": "sent"}
 
 

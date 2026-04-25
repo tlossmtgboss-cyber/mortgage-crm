@@ -323,6 +323,90 @@ class SmartDocsServiceRegistry:
         return self._cache["document_chat"]
 
     @property
+    def needs_list_generator(self):
+        """Needs list generator service."""
+        if "needs_list_generator" not in self._cache:
+            from services.smart_docs.needs_list_generator import NeedsListGenerator
+            self._cache["needs_list_generator"] = NeedsListGenerator(self.db)
+        return self._cache["needs_list_generator"]
+
+    @property
+    def merge_intelligence(self):
+        """Merge intelligence service (org-scoped)."""
+        if "merge_intelligence" not in self._cache:
+            from services.smart_docs.merge_intelligence_service import MergeIntelligenceService
+            self._cache["merge_intelligence"] = MergeIntelligenceService(
+                db=self.db, org_id=self.org_id, user_id=self.user_id,
+            )
+        return self._cache["merge_intelligence"]
+
+    @property
+    def template_engine(self):
+        """Template engine service."""
+        if "template_engine" not in self._cache:
+            from services.smart_docs.template_engine_service import TemplateEngineService
+            self._cache["template_engine"] = TemplateEngineService(self.db)
+        return self._cache["template_engine"]
+
+    @property
+    def date_extractor(self):
+        """Date extractor service (singleton, no db required)."""
+        if "date_extractor" not in self._cache:
+            from services.smart_docs.date_extractor import DateExtractor
+            self._cache["date_extractor"] = DateExtractor()
+        return self._cache["date_extractor"]
+
+    @property
+    def document_comparison(self):
+        """Document comparison service."""
+        if "document_comparison" not in self._cache:
+            from services.smart_docs.document_comparison_service import DocumentComparisonService
+            self._cache["document_comparison"] = DocumentComparisonService(self.db)
+        return self._cache["document_comparison"]
+
+    @property
+    def document_search(self):
+        """Document search service (stateless, no db in constructor)."""
+        if "document_search" not in self._cache:
+            from services.smart_docs.document_search_service import DocumentSearchService
+            self._cache["document_search"] = DocumentSearchService()
+        return self._cache["document_search"]
+
+    @property
+    def document_staging(self):
+        """Document staging service (org-scoped)."""
+        if "document_staging" not in self._cache:
+            from services.smart_docs.document_staging_service import DocumentStagingService
+            self._cache["document_staging"] = DocumentStagingService(
+                db=self.db, org_id=self.org_id,
+            )
+        return self._cache["document_staging"]
+
+    @property
+    def document_review_pipeline(self):
+        """Document review pipeline service."""
+        if "document_review_pipeline" not in self._cache:
+            from services.smart_docs.document_review_pipeline import DocumentReviewPipeline
+            self._cache["document_review_pipeline"] = DocumentReviewPipeline(self.db)
+        return self._cache["document_review_pipeline"]
+
+    @property
+    def document_data_extractor(self):
+        """Document data extractor service (singleton, no db required)."""
+        if "document_data_extractor" not in self._cache:
+            from services.smart_docs.document_data_extractor import DocumentDataExtractor
+            self._cache["document_data_extractor"] = DocumentDataExtractor()
+        return self._cache["document_data_extractor"]
+
+    @property
+    def ocr_enhancement(self):
+        """OCR enhancement service (org-scoped)."""
+        if "ocr_enhancement" not in self._cache:
+            from services.smart_docs.ocr_enhancement_service import OCREnhancementService
+            self._cache["ocr_enhancement"] = OCREnhancementService(org_id=self.org_id)
+        return self._cache["ocr_enhancement"]
+
+    @property
     def decision_audit(self):
         """Decision audit service (module-level functions, not a class).
 

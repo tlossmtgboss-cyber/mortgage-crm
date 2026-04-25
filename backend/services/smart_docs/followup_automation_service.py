@@ -661,6 +661,28 @@ class FollowupAutomationService:
             result = {"status": "failed", "error": str(e)}
             delivery_status = DeliveryStatus.FAILED
 
+        # Determine whether to advance or retry on failure.
+        # If the step failed, check how many consecutive failures have occurred
+        # for the current step. Only advance past the step after 3 failures.
+        _MAX_STEP_RETRIES = 3
+        should_advance = True
+        retry_count = 0
+
+        if delivery_status == DeliveryStatus.FAILED:
+            retry_count = self._count_consecutive_step_failures(campaign_id, step_number)
+            # retry_count is the count BEFORE recording the current failure
+            if retry_count + 1 < _MAX_STEP_RETRIES:
+                should_advance = False
+                logger.warning(
+                    "Step %d of campaign %d failed (attempt %d/%d), will retry",
+                    step_number, campaign_id, retry_count + 1, _MAX_STEP_RETRIES,
+                )
+            else:
+                logger.warning(
+                    "Step %d of campaign %d failed %d times, advancing past it",
+                    step_number, campaign_id, retry_count + 1,
+                )
+
         # Record the event + advance campaign atomically
         from services.smart_docs.db_transaction import atomic_operation
 
@@ -678,23 +700,34 @@ class FollowupAutomationService:
                     message_preview=(result.get("body", "") or "")[:500],
                     delivery_status=delivery_status,
                     delivery_error=result.get("error"),
-                    metadata={"step_config": step, "result_summary": result.get("status")},
+                    metadata={
+                        "step_config": step,
+                        "result_summary": result.get("status"),
+                        "retry_count": retry_count + 1 if delivery_status == DeliveryStatus.FAILED else 0,
+                    },
                 )
                 self.db.add(event)
 
-                # Advance campaign
-                campaign.current_step = next_step_index + 1
-                campaign.reminders_sent = (campaign.reminders_sent or 0) + 1
                 campaign.updated_at = now
 
-                # Set next action time or complete
-                if campaign.current_step >= len(steps):
-                    self._complete_campaign(campaign)
-                    campaign_completed = True
+                if should_advance:
+                    # Advance campaign to next step
+                    campaign.current_step = next_step_index + 1
+                    campaign.reminders_sent = (campaign.reminders_sent or 0) + 1
+
+                    # Set next action time or complete
+                    if campaign.current_step >= len(steps):
+                        self._complete_campaign(campaign)
+                        campaign_completed = True
+                    else:
+                        next_step = steps[campaign.current_step]
+                        delay_hours = next_step.get("delay_hours", 24)
+                        campaign.next_action_at = now + timedelta(hours=delay_hours)
+                        campaign_completed = False
                 else:
-                    next_step = steps[campaign.current_step]
-                    delay_hours = next_step.get("delay_hours", 24)
-                    campaign.next_action_at = now + timedelta(hours=delay_hours)
+                    # Retry: keep current_step, schedule retry after a backoff delay
+                    retry_delay_hours = min(1 * (2 ** retry_count), 24)  # 1h, 2h, 4h... capped at 24h
+                    campaign.next_action_at = now + timedelta(hours=retry_delay_hours)
                     campaign_completed = False
                 # atomic_operation commits here
         except Exception as e:
@@ -711,6 +744,8 @@ class FollowupAutomationService:
             "channel": step.get("channel"),
             "delivery_status": delivery_status.value,
             "campaign_completed": campaign_completed,
+            "retried": not should_advance,
+            "retry_count": retry_count + 1 if delivery_status == DeliveryStatus.FAILED else 0,
             "next_action_at": campaign.next_action_at.isoformat() if campaign.next_action_at else None,
             "result": result,
         }
@@ -1527,6 +1562,46 @@ class FollowupAutomationService:
     # INTERNAL HELPERS
     # =========================================================================
 
+    def _count_consecutive_step_failures(self, campaign_id: int, step_number: int) -> int:
+        """Count consecutive FAILED delivery events for a given step.
+
+        Looks at the most recent events for this campaign and step number,
+        counting how many consecutive failures have occurred. Stops counting
+        at the first non-FAILED event or when events are exhausted.
+
+        Args:
+            campaign_id: The campaign to check.
+            step_number: The step number to check failures for.
+
+        Returns:
+            Number of consecutive failures for this step (0 if none).
+        """
+        try:
+            recent_events = (
+                self.db.query(FollowupEvent)
+                .filter(
+                    FollowupEvent.campaign_id == campaign_id,
+                    FollowupEvent.step_number == step_number,
+                )
+                .order_by(FollowupEvent.created_at.desc())
+                .limit(10)
+                .all()
+            )
+
+            count = 0
+            for event in recent_events:
+                if event.delivery_status == DeliveryStatus.FAILED:
+                    count += 1
+                else:
+                    break
+            return count
+        except Exception as e:
+            logger.warning(
+                "Failed to count step failures for campaign %d step %d: %s",
+                campaign_id, step_number, e,
+            )
+            return 0
+
     def _get_campaign(self, campaign_id: int) -> Optional[FollowupCampaign]:
         """Fetch a campaign by ID."""
         return (
@@ -1779,19 +1854,15 @@ class FollowupAutomationService:
 
     @staticmethod
     def _resolve_campaign_type_enum(campaign_type: str) -> CampaignType:
-        """Map a string campaign_type to the CampaignType enum.
-
-        The CampaignType enum has fewer values than our step config keys,
-        so we map the extras to the closest match.
-        """
+        """Map a string campaign_type to the CampaignType enum."""
         mapping = {
             "initial_request": CampaignType.INITIAL_REQUEST,
             "gentle_reminder": CampaignType.GENTLE_REMINDER,
             "urgent_reminder": CampaignType.URGENT_REMINDER,
             "escalation": CampaignType.ESCALATION,
             "appointment_offer": CampaignType.APPOINTMENT_OFFER,
-            "document_rejected": CampaignType.GENTLE_REMINDER,
-            "document_expired": CampaignType.GENTLE_REMINDER,
+            "document_rejected": CampaignType.DOCUMENT_REJECTED,
+            "document_expired": CampaignType.DOCUMENT_EXPIRED,
         }
         return mapping.get(campaign_type, CampaignType.INITIAL_REQUEST)
 

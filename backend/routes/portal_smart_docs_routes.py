@@ -6,6 +6,13 @@ These endpoints allow borrowers to:
 - View their document requirements (needs list)
 - See document status and freshness
 - Upload documents directly to fulfill requirements
+
+Auth model (SD-AUTH-003):
+- All endpoints require a valid portal JWT token via:
+  Authorization: Bearer <token>, X-Portal-Token header, or ?token= query param.
+- Tokens are issued by portal_auth_service.py (HS256, 72h default expiry).
+- Upload endpoint additionally requires write scope.
+- IP rate limiting is retained as defense-in-depth.
 """
 
 import logging
@@ -25,6 +32,11 @@ from models.purl import PURLWorkspace, PURLLoan
 from services.smart_docs.needs_list_generator import NeedsListGenerator
 from services.smart_docs.document_review_pipeline import DocumentReviewPipeline
 from services.smart_docs.s3_storage_service import get_smart_docs_s3_service
+from services.smart_docs.portal_auth_service import (
+    verify_portal_access_token,
+    require_write_scope,
+    _extract_portal_token,
+)
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
@@ -62,6 +74,8 @@ _UNSAFE_FILENAME_RE = re.compile(r'[/\\:\*\?"<>\|\x00]')
 
 # Structure: { ip: [(window_start, request_count), ...] }
 # Each entry is a (window_start_epoch, count) pair for a 1-minute window.
+# TODO (SD-SEC-001): Migrate to Redis-backed rate limiting so limits are shared
+# across multiple Uvicorn workers / Railway replicas.
 _rate_limit_store: dict = defaultdict(list)
 
 
@@ -108,12 +122,21 @@ def _check_rate_limit(ip: str) -> tuple[bool, int]:
 # PORTAL ACCESS VERIFICATION
 # =============================================================================
 
-def verify_portal_access(workspace_slug: str, request: Request, response: Response) -> None:
-    """Enforce rate limiting and slug entropy on every portal request.
+def verify_portal_access(workspace_slug: str, request: Request, response: Response) -> dict:
+    """Enforce authentication, rate limiting, and slug entropy on every portal request.
+
+    Authentication is checked via portal JWT token from:
+    1. Authorization: Bearer <token> header
+    2. X-Portal-Token header
+    3. ?token= query parameter
 
     Adds ``X-RateLimit-Remaining`` and ``X-Robots-Tag`` to *response*.
 
+    Returns:
+        Dict with verified token claims (loan_id, borrower_email, org_id, scope).
+
     Raises:
+        HTTPException 401  — no valid portal token provided
         HTTPException 400  — slug is too short / obviously guessable
         HTTPException 429  — caller has exceeded the per-IP rate limit
     """
@@ -127,7 +150,7 @@ def verify_portal_access(workspace_slug: str, request: Request, response: Respon
             detail="Invalid workspace identifier.",
         )
 
-    # Rate-limit by IP
+    # Rate-limit by IP (defense-in-depth, stays even with auth)
     client_ip = _get_client_ip(request)
     allowed, remaining = _check_rate_limit(client_ip)
     response.headers["X-RateLimit-Remaining"] = str(remaining)
@@ -139,6 +162,20 @@ def verify_portal_access(workspace_slug: str, request: Request, response: Respon
             detail="Too many requests. Please wait before trying again.",
             headers={"Retry-After": str(RATE_LIMIT_WINDOW_SECONDS)},
         )
+
+    # --- SD-AUTH-003 FIX: Require portal JWT authentication ---
+    token = _extract_portal_token(request)
+
+    if not token:
+        raise HTTPException(
+            status_code=401,
+            detail="Portal authentication required. Please use your portal access link.",
+        )
+
+    # verify_portal_access_token raises HTTPException(401) on invalid/expired tokens
+    claims = verify_portal_access_token(token)
+
+    return claims
 
 
 # =============================================================================
@@ -273,8 +310,9 @@ async def get_portal_requirements(
     Get document requirements for a borrower's loan.
 
     Returns the needs list with status, due dates, and uploaded documents.
+    Requires a valid portal access token.
     """
-    verify_portal_access(workspace_slug, request, response)
+    portal_user = verify_portal_access(workspace_slug, request, response)
 
     workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 
@@ -322,8 +360,11 @@ async def get_requirement_detail(
     response: Response,
     db: Session = Depends(get_db)
 ):
-    """Get detailed information about a specific document requirement."""
-    verify_portal_access(workspace_slug, request, response)
+    """Get detailed information about a specific document requirement.
+
+    Requires a valid portal access token.
+    """
+    portal_user = verify_portal_access(workspace_slug, request, response)
 
     workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 
@@ -356,8 +397,10 @@ async def upload_document_for_requirement(
     Upload a document to fulfill a requirement.
 
     The document will be validated and linked to the specific requirement.
+    Requires a valid portal access token with write scope.
     """
-    verify_portal_access(workspace_slug, request, response)
+    portal_user = verify_portal_access(workspace_slug, request, response)
+    require_write_scope(portal_user)
 
     workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 
@@ -516,8 +559,10 @@ async def get_document_summary(
 ):
     """
     Get a summary of document collection progress for the portal dashboard.
+
+    Requires a valid portal access token.
     """
-    verify_portal_access(workspace_slug, request, response)
+    portal_user = verify_portal_access(workspace_slug, request, response)
 
     workspace, loan, main_loan_id = get_workspace_loan(db, workspace_slug)
 

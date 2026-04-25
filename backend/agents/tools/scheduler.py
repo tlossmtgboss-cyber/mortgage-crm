@@ -751,12 +751,12 @@ def sync_external_calendar(
 )
 def optimize_schedule(
     user_id: str,
-    date_str: Optional[str] = None,
+    date: Optional[str] = None,
     optimization_goals: Optional[List[str]] = None,
 ) -> ToolResult:
     """Analyze and suggest schedule optimizations."""
-    if not date_str:
-        date_str = datetime.now().strftime("%Y-%m-%d")
+    if not date:
+        date = datetime.now().strftime("%Y-%m-%d")
 
     goals = optimization_goals or ["reduce_gaps", "batch_similar"]
 
@@ -768,7 +768,7 @@ def optimize_schedule(
         AND DATE(start_time) = :date
         AND status != 'cancelled'
         ORDER BY start_time
-    """, {"user_id": user_id, "date": date_str})
+    """, {"user_id": user_id, "date": date})
 
     # Analyze gaps
     gaps = []
@@ -830,7 +830,7 @@ def optimize_schedule(
     efficiency = (total_scheduled / business_hours) if business_hours > 0 else 0
 
     data = {
-        "date": date_str,
+        "date": date,
         "user_id": user_id,
         "optimization_goals": goals,
         "current_state": {

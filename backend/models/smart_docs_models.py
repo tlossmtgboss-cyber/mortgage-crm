@@ -17,6 +17,7 @@ from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Date,
     Text, JSON, Enum as SQLEnum, Numeric, Index, func
 )
+from sqlalchemy.orm import validates
 # Note: relationship import removed - using ID-based queries instead of ORM relationships
 
 from database import Base
@@ -100,6 +101,21 @@ class RejectionCategory(str, enum.Enum):
     OTHER = "OTHER"
 
 
+class DocumentStatus(str, enum.Enum):
+    """Valid statuses for SmartDocument lifecycle."""
+    UPLOADED = "UPLOADED"
+    SCANNING = "SCANNING"
+    PROCESSING = "PROCESSING"
+    PENDING_REVIEW = "PENDING_REVIEW"
+    NEEDS_REVIEW = "NEEDS_REVIEW"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    EXPIRED = "EXPIRED"
+    DELETED = "DELETED"
+    SUPERSEDED = "SUPERSEDED"
+    UPLOAD_FAILED = "UPLOAD_FAILED"
+
+
 class DocPolicyEventType(str, enum.Enum):
     """Types of policy events"""
     NEEDS_LIST_GENERATED = "NEEDS_LIST_GENERATED"
@@ -109,6 +125,7 @@ class DocPolicyEventType(str, enum.Enum):
     EXPIRATION_REMINDER_SENT = "EXPIRATION_REMINDER_SENT"
     SCREENSHOT_REJECTED = "SCREENSHOT_REJECTED"
     FRESHNESS_REJECTED = "FRESHNESS_REJECTED"
+    PORTAL_DOCUSIGN_REQUEST = "PORTAL_DOCUSIGN_REQUEST"
 
 
 # =============================================================================
@@ -154,6 +171,10 @@ class DocumentRequest(Base):
 
     # E-sign
     requires_esign = Column(Boolean, default=False, server_default="false")
+
+    # Portal metadata (e.g., DocuSign details, LOE instructions)
+    # "metadata" is reserved by SQLAlchemy DeclarativeBase — use request_metadata
+    request_metadata = Column("request_metadata", JSON, nullable=True)
 
     # SLA Tracking
     sla_due_at = Column(DateTime, nullable=True)  # 3 business days from created_at
@@ -261,6 +282,15 @@ class SmartDocument(Base):
         Index("ix_smart_documents_doc_expires_at", "doc_expires_at"),
         Index("ix_smart_documents_is_screenshot", "detected_is_screenshot"),
     )
+
+    @validates('status')
+    def validate_status(self, key, value):
+        """Warn on invalid document status values without raising to avoid breaking existing data."""
+        valid = {s.value for s in DocumentStatus}
+        if value not in valid:
+            import logging
+            logging.getLogger(__name__).warning(f"Invalid document status: {value}")
+        return value
 
 
 class DocPolicyEvent(Base):

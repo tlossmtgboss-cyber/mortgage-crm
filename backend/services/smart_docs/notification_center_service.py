@@ -1752,9 +1752,8 @@ class NotificationCenterService:
                 from services.smart_docs.notification_templates import send_notification as _send
 
                 return _send(
-                    db=self.db,
                     template_name="doc_status_update",
-                    to_email=email_addr,
+                    recipient_email=email_addr,
                     variables={
                         "borrower_name": first_name,
                         "document_title": title,
@@ -1763,6 +1762,7 @@ class NotificationCenterService:
                         "action_url": action_url or "",
                         "action_label": action_label or "View Details",
                     },
+                    db=self.db,
                 )
             except Exception as e:
                 logger.warning(

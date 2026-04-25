@@ -403,8 +403,10 @@ class TaskProcessor:
         template_id = task.payload.get("template_id")
         message = f"Hi {lead.first_name}, following up on your mortgage inquiry. Reply to connect!"
 
-        client = get_sms_client()
-        client.send_sms(to_number=lead.phone, message=message)
+        client = get_sms_client(db=self.db)
+        send_result = client.send_sms(to_phone=lead.phone, message=message, lead_id=task.lead_id)
+        if not send_result.get("success"):
+            raise ValueError(f"SMS failed: {send_result.get('error', 'Unknown')}")
 
     async def _execute_email_step(self, task: ScheduledTask):
         """Execute email sequence step"""

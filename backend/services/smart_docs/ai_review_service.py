@@ -609,7 +609,7 @@ class AIDocumentReviewService:
                 })
                 needs_review += 1
 
-        self.db.commit()
+        self.db.flush()
 
         return BatchReviewResult(
             total=len(documents),

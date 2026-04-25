@@ -363,15 +363,21 @@ async def handle_send_sms(args: Dict[str, Any], request: Request) -> Dict[str, A
         return {"success": False, "error": "Either to_phone or recipient_name is required"}
 
     try:
-        # Defer import to avoid circular dependencies
         from integrations.sms_service import get_sms_client
-        client = get_sms_client()
-        sid = client.send_sms(to_number=to_phone, message=message)
+        from database import SessionLocal
+        _db = SessionLocal()
+        try:
+            client = get_sms_client(db=_db)
+            send_result = client.send_sms(to_phone=to_phone, message=message)
+        finally:
+            _db.close()
+        if not send_result.get("success"):
+            return {"success": False, "error": send_result.get("error", "SMS send failed")}
         return {
             "success": True,
             "data": {
-                "sid": sid,
-                "status": "queued",
+                "message_id": send_result.get("message_id", ""),
+                "status": "sent",
                 "to_phone": to_phone
             }
         }

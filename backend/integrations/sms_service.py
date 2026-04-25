@@ -32,14 +32,18 @@ class SMSClient:
 
         # Load credentials: prefer DB-stored (per-user), fall back to env vars
         config = get_active_telnyx_config(db, user_id=user_id) if db else {}
-        # Clean session after credential lookup (sms_credentials table may not exist)
-        if db:
+        # Clean session only if credential lookup dirtied it (sms_credentials table may not exist)
+        if db and not config.get("api_key"):
             try:
                 db.rollback()
             except Exception:
                 pass
         self._api_key = config.get("api_key") or os.getenv("TELNYX_API_KEY", "")
-        self.from_number = config.get("phone_number") or os.getenv("TELNYX_PHONE_NUMBER", "")
+        self.from_number = (
+            config.get("phone_number")
+            or os.getenv("TELNYX_PHONE_NUMBER", "")
+            or os.getenv("TELNYX_FROM_NUMBER", "")
+        )
         self.profile_id = config.get("messaging_profile_id") or os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
 
         if self._api_key and self.from_number:
@@ -195,14 +199,14 @@ def get_sms_client(db: Session = None, user_id: Optional[int] = None) -> SMSClie
 def check_sms_configuration() -> Dict[str, Any]:
     """Check SMS configuration and return diagnostic information."""
     api_key = os.getenv("TELNYX_API_KEY", "")
-    phone_number = os.getenv("TELNYX_PHONE_NUMBER", "")
+    phone_number = os.getenv("TELNYX_PHONE_NUMBER", "") or os.getenv("TELNYX_FROM_NUMBER", "")
     messaging_profile_id = os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
     
     issues = []
     if not api_key:
         issues.append("TELNYX_API_KEY environment variable not set")
     if not phone_number:
-        issues.append("TELNYX_PHONE_NUMBER environment variable not set")
+        issues.append("TELNYX_PHONE_NUMBER or TELNYX_FROM_NUMBER environment variable not set")
     if not messaging_profile_id:
         issues.append("TELNYX_MESSAGING_PROFILE_ID environment variable not set")
     

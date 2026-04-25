@@ -482,7 +482,7 @@ async def send_sms(
             ON CONFLICT (id) DO NOTHING
         """), {
             "id": msg_id,
-            "phone": req.to,
+            "phone": normalize_phone(req.to) or req.to,
             "contact_id": req.contactId,
             "org_id": org_id,
             "body": req.message.strip(),

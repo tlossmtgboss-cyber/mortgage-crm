@@ -1085,6 +1085,155 @@ SECURITY RULES (non-negotiable):
                 }
             })
 
+        # Communication tools
+        if "send_sms" in self._tool_functions:
+            definitions.append({
+                "name": "send_sms",
+                "description": "Send an SMS text message to a phone number. Use search_leads first to find the contact's phone number if not provided.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "phone_number": {"type": "string", "description": "Recipient phone number (any format)"},
+                        "message": {"type": "string", "description": "Text message to send"},
+                        "lead_id": {"type": "integer", "description": "Associated lead ID for CRM tracking"}
+                    },
+                    "required": ["phone_number", "message"]
+                }
+            })
+
+        if "click_to_dial" in self._tool_functions:
+            definitions.append({
+                "name": "click_to_dial",
+                "description": "Initiate an outbound phone call to a contact. Use search_leads first to find the contact's phone number if not provided.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "phone_number": {"type": "string", "description": "Phone number to call"},
+                        "contact_name": {"type": "string", "description": "Name of the person being called"},
+                        "lead_id": {"type": "integer", "description": "Associated lead ID"}
+                    },
+                    "required": ["phone_number"]
+                }
+            })
+
+        if "send_email" in self._tool_functions:
+            definitions.append({
+                "name": "send_email",
+                "description": "Send an email via Microsoft Graph (from the LO's Outlook). Auto-injects calendar availability for scheduling emails.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "to_email": {"type": "string", "description": "Recipient email address"},
+                        "subject": {"type": "string", "description": "Email subject line"},
+                        "body": {"type": "string", "description": "Email body content"},
+                        "skip_availability": {"type": "boolean", "description": "Skip auto-injecting calendar availability"}
+                    },
+                    "required": ["to_email", "body"]
+                }
+            })
+
+        # Lead insight tools
+        if "lead_status_insights" in self._tool_functions:
+            definitions.append({
+                "name": "lead_status_insights",
+                "description": "Get detailed insights about leads in a specific stage including count, recent activity, and aging stats.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {"type": "string", "description": "Lead stage to analyze (e.g., New, Contacted, Qualified)"}
+                    },
+                    "required": ["status"]
+                }
+            })
+
+        if "get_leads_by_status" in self._tool_functions:
+            definitions.append({
+                "name": "get_leads_by_status",
+                "description": "Get a list of leads filtered by pipeline stage with contact info and last activity.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "status": {"type": "string", "description": "Lead stage to filter by"},
+                        "limit": {"type": "integer", "description": "Max results (default 20)", "default": 20}
+                    },
+                    "required": ["status"]
+                }
+            })
+
+        if "get_top_leads" in self._tool_functions:
+            definitions.append({
+                "name": "get_top_leads",
+                "description": "Get highest-scoring leads ranked by AI score, engagement, and conversion potential.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "limit": {"type": "integer", "description": "Number of top leads to return (default 10)", "default": 10}
+                    }
+                }
+            })
+
+        if "get_stale_leads" in self._tool_functions:
+            definitions.append({
+                "name": "get_stale_leads",
+                "description": "Get leads that haven't been contacted recently and need follow-up attention.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "days_threshold": {"type": "integer", "description": "Days since last contact to consider stale (default 7)", "default": 7},
+                        "limit": {"type": "integer", "description": "Max results (default 20)", "default": 20}
+                    }
+                }
+            })
+
+        # Bulk outreach
+        if "bulk_lead_outreach" in self._tool_functions:
+            definitions.append({
+                "name": "bulk_lead_outreach",
+                "description": "Send personalized SMS to multiple leads by stage and create follow-up tasks for non-responders.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "lead_status": {"type": "string", "description": "Stage of leads to contact (e.g., NEW, ATTEMPTED_CONTACT)"},
+                        "message_template": {"type": "string", "description": "Message to send. Use {name} for personalization."},
+                        "include_calendar_link": {"type": "boolean", "description": "Include booking link in message"},
+                        "create_followup_tasks": {"type": "boolean", "description": "Create follow-up tasks for non-responders"}
+                    },
+                    "required": ["lead_status"]
+                }
+            })
+
+        # Email and partner tools
+        if "search_email_inbox" in self._tool_functions:
+            definitions.append({
+                "name": "search_email_inbox",
+                "description": "Search the user's email inbox for messages matching a query. Returns subject, from, date, and preview.",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query (name, subject, keyword)"},
+                        "limit": {"type": "integer", "description": "Max results (default 10)", "default": 10}
+                    },
+                    "required": ["query"]
+                }
+            })
+
+        if "create_referral_partner" in self._tool_functions:
+            definitions.append({
+                "name": "create_referral_partner",
+                "description": "Create a new referral partner in the CRM (realtor, financial advisor, etc.).",
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string", "description": "Partner's full name"},
+                        "company": {"type": "string", "description": "Company name"},
+                        "email": {"type": "string", "description": "Partner's email"},
+                        "phone": {"type": "string", "description": "Partner's phone number"},
+                        "partner_type": {"type": "string", "description": "Type: realtor, financial_advisor, attorney, insurance, builder, other"}
+                    },
+                    "required": ["name"]
+                }
+            })
+
         return definitions
 
     async def _execute_tool(self, tool_name: str, args: Dict) -> Dict[str, Any]:
@@ -2227,14 +2376,14 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
         try:
             from telephony.sms import send_sms_verified
             result = send_sms_verified(
-                to_number=clean_phone,
-                message=message,
+                to=clean_phone,
+                text=message,
                 user_id=current_user.id,
-                org_id=org_id,
+                organization_id=org_id,
             )
-            message_sid = result.get("message_sid") if isinstance(result, dict) else result
+            message_sid = result.get("id") if isinstance(result, dict) else result
 
-            if message_sid:
+            if message_sid and result.get("status") == "sent":
                 # Log to database
                 try:
                     from database.models import SMSMessage
@@ -2333,11 +2482,11 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
 
             # Get calendar booking link for user if available
             booking_link = ""
-            if include_calendar_link and user_id:
+            if include_calendar_link and current_user and hasattr(current_user, 'id'):
                 booking_query = text("""
                     SELECT booking_slug FROM users WHERE id = :user_id
                 """)
-                user_result = db.execute(booking_query, {"user_id": user_id}).fetchone()
+                user_result = db.execute(booking_query, {"user_id": current_user.id}).fetchone()
                 if user_result and user_result.booking_slug:
                     booking_link = f"\n\nBook a time here: https://perenniaai.com/book/{user_result.booking_slug}"
 
@@ -2359,12 +2508,12 @@ def create_tool_functions_from_main(db: Session, current_user: Any) -> Dict[str,
                 try:
                     # Send SMS via TCPA-compliant verified sender
                     sms_result = send_sms_verified(
-                        to_number=phone,
-                        message=message,
+                        to=phone,
+                        text=message,
                         user_id=current_user.id,
-                        org_id=org_id,
+                        organization_id=org_id,
                     )
-                    sid = sms_result.get("message_sid") if isinstance(sms_result, dict) else sms_result
+                    sid = sms_result.get("id") if isinstance(sms_result, dict) else sms_result
                     if sid:
                         results["texts_sent"] += 1
                         results["leads_contacted"].append({

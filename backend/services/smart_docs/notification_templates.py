@@ -1420,6 +1420,77 @@ def _template_appointment_cancelled(v: Dict[str, Any]) -> RenderedTemplate:
     )
 
 
+# ---- Generic Document Status Update ----
+
+def _template_doc_status_update(v: Dict[str, Any]) -> RenderedTemplate:
+    """Generic document status update notification.
+
+    Used by NotificationCenterService for email delivery of in-app
+    notifications. Handles various status transitions (uploaded, approved,
+    rejected, needs_review, expiring, etc.) via template variables.
+    """
+    borrower = v.get("borrower_name", "Team Member")
+    document_title = v.get("document_title", "Document Update")
+    status = v.get("status", "info")
+    status_message = v.get("status_message", "A document status has changed.")
+    action_url = v.get("action_url", "")
+    action_label = v.get("action_label", "View Details")
+    loan_number = v.get("loan_number", "")
+    company_name = v.get("company_name", _DEFAULT_COMPANY_NAME)
+    company_logo_url = v.get("company_logo_url", "")
+
+    # Map severity to color
+    severity_colors = {
+        "info": _COLOR_INFO,
+        "warning": _COLOR_WARNING,
+        "urgent": _COLOR_DANGER,
+        "critical": _COLOR_DANGER,
+    }
+    status_color = severity_colors.get(status, _COLOR_INFO)
+
+    loan_html = ""
+    if loan_number:
+        loan_html = (
+            f'<p style="margin:0 0 16px;color:{_COLOR_MUTED};font-size:13px;">'
+            f'Loan: {_esc(loan_number)}</p>'
+        )
+
+    body = (
+        f'<p style="margin:0 0 16px;color:#374151;">Hi {_esc(borrower)},</p>'
+        f'{loan_html}'
+        f'<div style="margin:16px 0;padding:14px;border-left:4px solid {status_color};'
+        f'background:#f9fafb;border-radius:0 8px 8px 0;">'
+        f'<h3 style="margin:0 0 8px;color:#1f2937;font-size:16px;">'
+        f'{_esc(document_title)}</h3>'
+        f'<p style="margin:0;color:#4b5563;font-size:14px;line-height:1.6;">'
+        f'{_esc(status_message)}</p>'
+        f'</div>'
+        f'{_cta_button(action_label, action_url, status_color) if action_url else ""}'
+    )
+
+    plain = (
+        f"Hi {borrower},\n\n"
+        f"{'Loan: ' + loan_number + chr(10) + chr(10) if loan_number else ''}"
+        f"{document_title}\n\n"
+        f"{status_message}\n\n"
+        f"{'View details: ' + action_url + chr(10) + chr(10) if action_url else ''}"
+    )
+
+    return RenderedTemplate(
+        subject=f"[Smart Docs] {_safe(document_title)}",
+        html_body=_html_scaffold(
+            document_title, "", body,
+            header_bg=status_color,
+            company_name=company_name, company_logo_url=company_logo_url,
+        ),
+        plain_text=plain,
+        template_name="doc_status_update",
+        variables_used=["borrower_name", "document_title", "status",
+                        "status_message", "action_url", "action_label",
+                        "loan_number"],
+    )
+
+
 # =============================================================================
 # TEMPLATE REGISTRY
 # =============================================================================
@@ -1448,6 +1519,8 @@ _TEMPLATE_REGISTRY: Dict[str, Any] = {
     "appointment_scheduled": _template_appointment_scheduled,
     "appointment_reminder": _template_appointment_reminder,
     "appointment_cancelled": _template_appointment_cancelled,
+    # Generic status update (used by NotificationCenterService for email delivery)
+    "doc_status_update": _template_doc_status_update,
 }
 
 

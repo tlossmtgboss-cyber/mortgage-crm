@@ -53,6 +53,8 @@ try:
 except ImportError:
     HAS_ANTHROPIC = False
 
+from services.smart_docs.ai_resilience import resilient_ai_call
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -802,11 +804,17 @@ Rules:
 - If balance after transaction is shown, include it
 - Respond with ONLY the JSON array, no explanation"""
 
-            response = client.messages.create(
+            response = resilient_ai_call(
+                client=client,
                 model=self._model,
                 max_tokens=8192,
                 messages=[{"role": "user", "content": prompt}],
+                operation_name="extract_bank_transactions",
             )
+
+            if response is None:
+                logger.warning("AI transaction extraction failed after retries")
+                return []
 
             response_text = response.content[0].text.strip()
 
@@ -1691,11 +1699,17 @@ Analysis findings:
 Write the summary as if speaking directly to the loan officer. Be professional
 and specific. Do not use bullet points -- write flowing sentences."""
 
-        response = client.messages.create(
+        response = resilient_ai_call(
+            client=client,
             model=self._model,
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
+            operation_name="generate_bank_statement_summary",
         )
+
+        if response is None:
+            logger.warning("AI summary generation failed after retries")
+            return self._generate_template_summary(analysis)
 
         return response.content[0].text.strip()
 
