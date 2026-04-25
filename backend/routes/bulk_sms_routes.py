@@ -38,9 +38,9 @@ router = APIRouter(prefix="/api/v1/sms", tags=["Bulk SMS"])
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-TELNYX_FROM_NUMBER = os.getenv("TELNYX_FROM_NUMBER", "+18438838956")
+TELNYX_FROM_NUMBER = os.getenv("TELNYX_FROM_NUMBER", "")
 TELNYX_MESSAGING_PROFILE_ID = os.getenv(
-    "TELNYX_MESSAGING_PROFILE_ID", "40019bed-2fa1-4407-a0c6-fe4c6b222c93"
+    "TELNYX_MESSAGING_PROFILE_ID", ""
 )
 TELNYX_API_KEY = os.getenv("TELNYX_API_KEY", "")
 

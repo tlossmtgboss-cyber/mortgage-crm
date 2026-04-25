@@ -29,10 +29,10 @@ class CommunicationTools:
             from services.sms_retry_service import SMSRetryService
             sms_service = SMSRetryService()
 
-            from_phone = os.environ.get("TELNYX_FROM_NUMBER", "+18438838956")
+            from_phone = os.environ.get("TELNYX_FROM_NUMBER", "")
             messaging_profile = os.environ.get(
                 "TELNYX_MESSAGING_PROFILE_ID",
-                "40019bed-2fa1-4407-a0c6-fe4c6b222c93"
+                ""
             )
 
             _org_id_int = int(org_id) if org_id else None

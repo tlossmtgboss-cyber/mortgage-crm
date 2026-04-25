@@ -14,8 +14,8 @@ Integrates with:
 
 Uses the existing Telnyx credentials:
 - TELNYX_API_KEY (env)
-- TELNYX_PHONE_NUMBER (env, default +18438838956)
-- TELNYX_MESSAGING_PROFILE_ID (env, default 40019bed-2fa1-4407-a0c6-fe4c6b222c93)
+- TELNYX_PHONE_NUMBER (env, required)
+- TELNYX_MESSAGING_PROFILE_ID (env, required)
 """
 
 import os
@@ -36,9 +36,9 @@ class SMSConfirmationService:
 
     def __init__(self):
         self.api_key = os.getenv("TELNYX_API_KEY")
-        self.from_number = os.getenv("TELNYX_PHONE_NUMBER", "+18438838956")
+        self.from_number = os.getenv("TELNYX_PHONE_NUMBER", "")
         self.messaging_profile_id = os.getenv(
-            "TELNYX_MESSAGING_PROFILE_ID", "40019bed-2fa1-4407-a0c6-fe4c6b222c93"
+            "TELNYX_MESSAGING_PROFILE_ID", ""
         )
         if not self.api_key:
             logger.warning("TELNYX_API_KEY not configured, SMS will use HTTP fallback")

@@ -34,8 +34,8 @@ def _send_sms(to_phone: str, message: str, user_id=None, lead_id=None, organizat
     from telephony.sms import send_sms_verified
     import os
 
-    from_number = os.environ.get("TELNYX_FROM_NUMBER", os.environ.get("TELNYX_PHONE_NUMBER", "+18438838956"))
-    profile_id = os.environ.get("TELNYX_MESSAGING_PROFILE_ID", "40019bed-2fa1-4407-a0c6-fe4c6b222c93")
+    from_number = os.environ.get("TELNYX_FROM_NUMBER", os.environ.get("TELNYX_PHONE_NUMBER", ""))
+    profile_id = os.environ.get("TELNYX_MESSAGING_PROFILE_ID", "")
 
     return send_sms_verified(
         to=to_phone,

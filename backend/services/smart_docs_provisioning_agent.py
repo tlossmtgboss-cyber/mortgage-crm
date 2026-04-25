@@ -39,9 +39,9 @@ logger = logging.getLogger(__name__)
 PORTAL_BASE_URL = os.getenv(
     "PORTAL_BASE_URL", "https://app.perenniaai.com/portal"
 )
-TELNYX_FROM_NUMBER = os.getenv("TELNYX_FROM_NUMBER", "+18438838956")
+TELNYX_FROM_NUMBER = os.getenv("TELNYX_FROM_NUMBER", "")
 TELNYX_MESSAGING_PROFILE = os.getenv(
-    "TELNYX_MESSAGING_PROFILE_ID", "40019bed-2fa1-4407-a0c6-fe4c6b222c93"
+    "TELNYX_MESSAGING_PROFILE_ID", ""
 )
 
 # Provisioning SLA — warn if exceeded

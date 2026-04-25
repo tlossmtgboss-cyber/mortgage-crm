@@ -24,8 +24,8 @@ from .base import (
 logger = logging.getLogger(__name__)
 
 # Telnyx config — matches CommunicationTools and SMSClient
-TELNYX_FROM_NUMBER = os.environ.get("TELNYX_FROM_NUMBER", os.environ.get("TELNYX_PHONE_NUMBER", "+18438838956"))
-TELNYX_MESSAGING_PROFILE = os.environ.get("TELNYX_MESSAGING_PROFILE_ID", "40019bed-2fa1-4407-a0c6-fe4c6b222c93")
+TELNYX_FROM_NUMBER = os.environ.get("TELNYX_FROM_NUMBER", os.environ.get("TELNYX_PHONE_NUMBER", ""))
+TELNYX_MESSAGING_PROFILE = os.environ.get("TELNYX_MESSAGING_PROFILE_ID", "")
 
 
 def _normalize_e164(phone: str) -> str:
