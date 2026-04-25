@@ -38,6 +38,18 @@ _BORROWER_RATE_WINDOW = 3600  # 1 hour
 _BORROWER_RATE_MAX = 5  # max requests per window per IP
 _BORROWER_RATE_MAX_KEYS = 10000
 
+# Per-email rate limiting for OAuth/login attempts
+_borrower_email_rate_store: Dict[str, list] = defaultdict(list)
+_BORROWER_EMAIL_RATE_MAX = 10  # max 10 OAuth attempts per email per hour
+
+
+def _get_client_ip(request) -> str:
+    """Extract real client IP, accounting for reverse proxy."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
 
 def _check_borrower_rate_limit(client_ip: str) -> bool:
     """Check if client IP is within rate limit for borrower auth endpoints."""
@@ -51,6 +63,17 @@ def _check_borrower_rate_limit(client_ip: str) -> bool:
     if len(_borrower_rate_store[key]) >= _BORROWER_RATE_MAX:
         return False
     _borrower_rate_store[key].append(now)
+    return True
+
+
+def _check_email_rate_limit(email: str) -> bool:
+    """Check if email has exceeded OAuth attempt limit."""
+    now = time.time()
+    key = f"email:{email.lower()}"
+    _borrower_email_rate_store[key] = [t for t in _borrower_email_rate_store[key] if now - t < 3600]
+    if len(_borrower_email_rate_store[key]) >= _BORROWER_EMAIL_RATE_MAX:
+        return False
+    _borrower_email_rate_store[key].append(now)
     return True
 import hmac
 import hashlib
@@ -480,10 +503,15 @@ If you didn't request this email, you can safely ignore it.
 
 @router.get("/google/connect")
 async def google_connect(
+    request: Request,
     redirect_to: Optional[str] = Query(None, description="Where to redirect after auth"),
     lo_id: Optional[str] = Query(None, description="Loan officer ID for attribution"),
 ):
     """Initiate Google OAuth flow for borrower."""
+    client_ip = _get_client_ip(request)
+    if not _check_borrower_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
     if not GOOGLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Google OAuth not configured")
 
@@ -610,10 +638,15 @@ async def google_callback(
 
 @router.get("/facebook/connect")
 async def facebook_connect(
+    request: Request,
     redirect_to: Optional[str] = Query(None),
     lo_id: Optional[str] = Query(None),
 ):
     """Initiate Facebook OAuth flow for borrower."""
+    client_ip = _get_client_ip(request)
+    if not _check_borrower_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
     if not FACEBOOK_APP_ID:
         raise HTTPException(status_code=500, detail="Facebook OAuth not configured")
 
@@ -742,10 +775,15 @@ async def facebook_callback(
 
 @router.get("/linkedin/connect")
 async def linkedin_connect(
+    request: Request,
     redirect_to: Optional[str] = Query(None),
     lo_id: Optional[str] = Query(None),
 ):
     """Initiate LinkedIn OAuth flow for borrower."""
+    client_ip = _get_client_ip(request)
+    if not _check_borrower_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
     if not LINKEDIN_CLIENT_ID:
         raise HTTPException(status_code=500, detail="LinkedIn OAuth not configured")
 
@@ -889,10 +927,15 @@ def generate_apple_client_secret():
 
 @router.get("/apple/connect")
 async def apple_connect(
+    request: Request,
     redirect_to: Optional[str] = Query(None),
     lo_id: Optional[str] = Query(None),
 ):
     """Initiate Apple Sign In flow for borrower."""
+    client_ip = _get_client_ip(request)
+    if not _check_borrower_rate_limit(client_ip):
+        raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
     if not APPLE_CLIENT_ID:
         raise HTTPException(status_code=500, detail="Apple Sign In not configured")
 
@@ -1049,11 +1092,16 @@ async def request_email_login(
 ):
     """Request email-based login (sends magic link)."""
 
-    # Rate limit magic link requests
-    client_ip = http_request.client.host if http_request.client else "unknown"
+    # Rate limit magic link requests by IP
+    client_ip = _get_client_ip(http_request)
     if not _check_borrower_rate_limit(client_ip):
-        logger.warning(f"Magic link rate limit exceeded for {client_ip}")
+        logger.warning(f"Magic link rate limit exceeded for IP {client_ip}")
         raise HTTPException(status_code=429, detail="Too many requests. Please try again later.")
+
+    # Rate limit by email to prevent abuse targeting a single address
+    if not _check_email_rate_limit(request.email):
+        logger.warning(f"Magic link rate limit exceeded for email {request.email}")
+        raise HTTPException(status_code=429, detail="Too many requests for this email. Please try again later.")
 
     # Generate magic link token
     magic_token = secrets.token_urlsafe(32)
