@@ -175,12 +175,11 @@ async def extend_rate_lock(
         Loan = main.Loan
 
     # Query loan scoped to user's organisation
-    query = db.query(Loan).filter(Loan.id == loan_id)
     org_id = getattr(current_user, "organization_id", None)
-    if org_id:
-        query = query.filter(Loan.organization_id == org_id)
-
-    loan = query.first()
+    loan = db.query(Loan).filter(
+        Loan.id == loan_id,
+        Loan.organization_id == org_id
+    ).first()
     if not loan:
         raise HTTPException(status_code=404, detail="Loan not found")
 

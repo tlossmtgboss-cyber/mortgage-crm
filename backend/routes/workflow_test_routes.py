@@ -73,22 +73,22 @@ def _org_scoped_lead(db, lead_id, current_user):
     """Query Lead by ID scoped to the current user's organization."""
     import main
     Lead = main.Lead
-    query = db.query(Lead).filter(Lead.id == lead_id)
     org_id = getattr(current_user, 'organization_id', None)
-    if org_id:
-        query = query.filter(Lead.organization_id == org_id)
-    return query.first()
+    return db.query(Lead).filter(
+        Lead.id == lead_id,
+        Lead.organization_id == org_id
+    ).first()
 
 
 def _org_scoped_loan(db, loan_id, current_user):
     """Query Loan by ID scoped to the current user's organization."""
     import main
     Loan = main.Loan
-    query = db.query(Loan).filter(Loan.id == loan_id)
     org_id = getattr(current_user, 'organization_id', None)
-    if org_id:
-        query = query.filter(Loan.organization_id == org_id)
-    return query.first()
+    return db.query(Loan).filter(
+        Loan.id == loan_id,
+        Loan.organization_id == org_id
+    ).first()
 
 
 def _org_scoped_document_filter(current_user):
@@ -1699,7 +1699,11 @@ async def get_email_intake(
     Lead = main.Lead
     Loan = main.Loan
 
-    intake = db.query(EmailIntake).filter(EmailIntake.id == intake_id).options(
+    org_id = getattr(current_user, 'organization_id', None)
+    intake = db.query(EmailIntake).filter(
+        EmailIntake.id == intake_id,
+        EmailIntake.organization_id == org_id
+    ).options(
         selectinload(EmailIntake.attachments),
         selectinload(EmailIntake.matched_borrower),
         selectinload(EmailIntake.matched_loan),
@@ -1708,18 +1712,6 @@ async def get_email_intake(
 
     if not intake:
         raise HTTPException(status_code=404, detail="Email intake not found")
-
-    # Org-scope: verify matched borrower/loan belongs to user's organization
-    org_id = getattr(current_user, 'organization_id', None)
-    if org_id:
-        if intake.matched_borrower_id:
-            borrower = db.query(Lead).filter(Lead.id == intake.matched_borrower_id, Lead.organization_id == org_id).first()
-            if not borrower:
-                raise HTTPException(status_code=404, detail="Email intake not found")
-        if intake.matched_loan_id:
-            loan = db.query(Loan).filter(Loan.id == intake.matched_loan_id, Loan.organization_id == org_id).first()
-            if not loan:
-                raise HTTPException(status_code=404, detail="Email intake not found")
 
     return {
         "id": intake.id,
@@ -1788,22 +1780,14 @@ async def update_intake_match(
     Loan = main.Loan
     EmailIntakeMatchStatus = main.EmailIntakeMatchStatus
 
-    intake = db.query(EmailIntake).filter(EmailIntake.id == intake_id).first()
+    org_id = getattr(current_user, 'organization_id', None)
+    intake = db.query(EmailIntake).filter(
+        EmailIntake.id == intake_id,
+        EmailIntake.organization_id == org_id
+    ).first()
 
     if not intake:
         raise HTTPException(status_code=404, detail="Email intake not found")
-
-    # Org-scope: verify existing matched entities belong to user's organization
-    org_id = getattr(current_user, 'organization_id', None)
-    if org_id:
-        if intake.matched_borrower_id:
-            existing_borrower = db.query(Lead).filter(Lead.id == intake.matched_borrower_id, Lead.organization_id == org_id).first()
-            if not existing_borrower:
-                raise HTTPException(status_code=404, detail="Email intake not found")
-        if intake.matched_loan_id:
-            existing_loan = db.query(Loan).filter(Loan.id == intake.matched_loan_id, Loan.organization_id == org_id).first()
-            if not existing_loan:
-                raise HTTPException(status_code=404, detail="Email intake not found")
 
     if match_data.borrower_id is not None:
         # Verify borrower exists (org-scoped)

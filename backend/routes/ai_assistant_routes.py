@@ -846,12 +846,18 @@ async def ai_chat(
     context_loan = None
 
     if conversation.lead_id:
-        context_lead = db.query(Lead).filter(Lead.id == conversation.lead_id).first()
+        context_lead = db.query(Lead).filter(
+            Lead.id == conversation.lead_id,
+            Lead.organization_id == current_user.organization_id
+        ).first()
         if context_lead:
             context_info = f"Lead: {context_lead.name}, Stage: {context_lead.stage.value}, Score: {context_lead.ai_score}, Credit: {context_lead.credit_score}"
 
     if conversation.loan_id:
-        context_loan = db.query(Loan).filter(Loan.id == conversation.loan_id).first()
+        context_loan = db.query(Loan).filter(
+            Loan.id == conversation.loan_id,
+            Loan.organization_id == current_user.organization_id
+        ).first()
         if context_loan:
             context_info = f"Loan: {context_loan.loan_number}, Borrower: {context_loan.borrower_name}, Stage: {str(context_loan.stage)}, Amount: ${context_loan.amount:,.0f}"
 
