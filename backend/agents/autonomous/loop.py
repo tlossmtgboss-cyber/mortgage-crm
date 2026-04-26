@@ -13,6 +13,8 @@ The loop handles scheduling, error recovery, execution logging, and tenant isola
 
 import asyncio
 import logging
+import os
+import threading
 import time
 import traceback
 from datetime import datetime, timezone
@@ -24,6 +26,11 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
+
+# Cap concurrent agent executions to avoid exhausting Railway's ~20 DB connections.
+# API requests, Aria voice tools, and scheduler tasks all share the same pool.
+_MAX_CONCURRENT_AGENTS = int(os.getenv("MAX_CONCURRENT_AGENTS", "2"))
+_agent_semaphore = threading.Semaphore(_MAX_CONCURRENT_AGENTS)
 
 
 class AgentFrequency(str, Enum):
@@ -195,6 +202,14 @@ def run_agent_for_org(
         started_at=datetime.now(timezone.utc),
     )
 
+    acquired = _agent_semaphore.acquire(timeout=30)
+    if not acquired:
+        result.success = False
+        result.error = "Skipped: too many agents running concurrently"
+        result.completed_at = datetime.now(timezone.utc)
+        logger.warning(f"Agent {agent_def.name} skipped for org {org['id']}: semaphore timeout (max {_MAX_CONCURRENT_AGENTS} concurrent)")
+        return result
+
     db = SessionLocal()
     try:
         # Set RLS tenant context
@@ -229,6 +244,7 @@ def run_agent_for_org(
             pass
     finally:
         db.close()
+        _agent_semaphore.release()
 
     return result
 
@@ -302,17 +318,21 @@ def register_all_autonomous_agents(scheduler):
         logger.warning(f"Core autonomous agents failed to import: {e}")
 
     # Fleet agents (40 additional agents across 8 modules)
-    try:
-        from agents.autonomous import daily_ops  # noqa: F401  (5 agents)
-        from agents.autonomous import engagement  # noqa: F401  (5 agents)
-        from agents.autonomous import risk_compliance  # noqa: F401  (5 agents)
-        from agents.autonomous import analytics  # noqa: F401  (5 agents)
-        from agents.autonomous import loan_lifecycle  # noqa: F401  (5 agents)
-        from agents.autonomous import infrastructure  # noqa: F401  (5 agents)
-        from agents.autonomous import nurture  # noqa: F401  (5 agents)
-        from agents.autonomous import queue_ops  # noqa: F401  (5 agents)
-    except ImportError as e:
-        logger.warning(f"Fleet autonomous agents failed to import: {e}")
+    # Disabled by default — enable via ENABLE_FLEET_AGENTS=true when DB can handle the load
+    if os.getenv("ENABLE_FLEET_AGENTS", "false").lower() == "true":
+        try:
+            from agents.autonomous import daily_ops  # noqa: F401  (5 agents)
+            from agents.autonomous import engagement  # noqa: F401  (5 agents)
+            from agents.autonomous import risk_compliance  # noqa: F401  (5 agents)
+            from agents.autonomous import analytics  # noqa: F401  (5 agents)
+            from agents.autonomous import loan_lifecycle  # noqa: F401  (5 agents)
+            from agents.autonomous import infrastructure  # noqa: F401  (5 agents)
+            from agents.autonomous import nurture  # noqa: F401  (5 agents)
+            from agents.autonomous import queue_ops  # noqa: F401  (5 agents)
+        except ImportError as e:
+            logger.warning(f"Fleet autonomous agents failed to import: {e}")
+    else:
+        logger.info("Fleet agents disabled (ENABLE_FLEET_AGENTS != true). Only core 5 agents active.")
 
     registered = 0
     for name, agent_def in _agent_registry.items():

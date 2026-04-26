@@ -96,6 +96,9 @@ class SchedulerService:
     def __init__(self):
         self.scheduler = BackgroundScheduler(
             timezone="America/New_York",
+            executors={
+                "default": {"type": "threadpool", "max_workers": 3},
+            },
             job_defaults={
                 "coalesce": True,
                 "max_instances": 1,
