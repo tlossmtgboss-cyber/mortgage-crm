@@ -1890,7 +1890,7 @@ async def get_team_dashboard(
         team_filter = ""
 
         if team_id:
-            team_filter = " AND u.team_id = :team_id"
+            team_filter = " AND u.branch_id = :team_id"
             params["team_id"] = team_id
 
         # Get overall metrics
@@ -2557,7 +2557,7 @@ async def get_summary_feed(
         params = {"limit": limit, "offset": offset}
 
         if team_id:
-            filters.append("u.team_id = :team_id")
+            filters.append("u.branch_id = :team_id")
             params["team_id"] = team_id
         if outcome:
             filters.append("s.call_outcome = :outcome")

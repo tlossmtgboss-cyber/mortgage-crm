@@ -367,12 +367,12 @@ def aggregate_daily_team_usage(
     # Get all teams with user activity
     # Join with users table to get team assignments
     teams = db.execute(text("""
-        SELECT DISTINCT u.team_id
+        SELECT DISTINCT u.branch_id
         FROM user_usage_snapshots uus
         JOIN users u ON u.id = uus.user_id
         WHERE uus.organization_id = :organization_id
         AND uus.snapshot_date = :snapshot_date
-        AND u.team_id IS NOT NULL
+        AND u.branch_id IS NOT NULL
     """), {
         "organization_id": organization_id,
         "snapshot_date": snapshot_date
@@ -402,7 +402,7 @@ def aggregate_daily_team_usage(
                 JOIN users u ON u.id = uus.user_id
                 WHERE uus.organization_id = :organization_id
                 AND uus.snapshot_date = :snapshot_date
-                AND u.team_id = :team_id
+                AND u.branch_id = :team_id
             """), {
                 "organization_id": organization_id,
                 "snapshot_date": snapshot_date,
@@ -420,7 +420,7 @@ def aggregate_daily_team_usage(
                 LEFT JOIN email_signatures es ON es.user_id = u.id
                 WHERE uus.organization_id = :organization_id
                 AND uus.snapshot_date = :snapshot_date
-                AND u.team_id = :team_id
+                AND u.branch_id = :team_id
                 ORDER BY uus.total_cost DESC
                 LIMIT 5
             """), {

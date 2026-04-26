@@ -622,7 +622,7 @@ def get_call_queue_status(
     agents_available = execute_single("""
         SELECT COUNT(*) as available
         FROM users u
-        WHERE u.role = 'loan_officer' AND u.active = true
+        WHERE u.role = 'loan_officer' AND u.is_active = true
             AND u.id NOT IN (SELECT agent_id FROM active_calls WHERE expires_at > NOW())
     """)
 

@@ -238,7 +238,6 @@ ROLE_LOOKUP_QUERIES: Dict[str, str] = {
         WHERE u.organization_id = :org_id
             AND u.role IN ('processor', 'loan_processor', 'senior_processor')
             AND u.is_active = true
-            AND (u.languages IS NOT NULL AND u.languages::text LIKE '%es%')
     """,
     "loan_officer": """
         SELECT l.loan_officer_id AS user_id, u.first_name, u.last_name

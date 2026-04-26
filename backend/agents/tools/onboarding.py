@@ -856,7 +856,7 @@ def track_progress(
         params = {"date_from": date_from, "date_to": date_to}
         team_filter = ""
         if team_id:
-            team_filter = "AND u.team_id = :team_id"
+            team_filter = "AND u.branch_id = :team_id"
             params["team_id"] = team_id
 
         summary = execute_single(f"""

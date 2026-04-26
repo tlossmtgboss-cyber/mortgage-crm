@@ -166,7 +166,7 @@ class ProductionPredictorService:
                 if entity_type == "lo":
                     entity_filter = "AND l.loan_officer_id = :entity_id"
                 elif entity_type == "team":
-                    entity_filter = "AND u.team_id = :entity_id"
+                    entity_filter = "AND u.branch_id = :entity_id"
                 elif entity_type == "branch":
                     entity_filter = "AND l.branch_id = :entity_id"
                 else:

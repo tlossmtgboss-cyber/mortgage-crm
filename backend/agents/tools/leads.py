@@ -55,11 +55,12 @@ def get_lead_details(
                 l.estimated_loan_amount, l.estimated_down_payment,
                 l.credit_score_range, l.property_type_interest,
                 l.timeline, l.notes, l.assigned_to,
-                lo.name as assigned_lo_name,
+                COALESCE(es.full_name, lo.email) as assigned_lo_name,
                 l.last_contact_date, l.next_followup_date,
                 l.lead_score
             FROM leads l
-            LEFT JOIN loan_officers lo ON l.assigned_to = lo.id
+            LEFT JOIN users lo ON l.assigned_to = lo.id
+            LEFT JOIN email_signatures es ON es.user_id = lo.id
             WHERE l.id = :lead_id
         """
         lead = execute_single(lead_query, {"lead_id": lead_id})
@@ -1050,7 +1051,7 @@ def get_stale_leads(
                     l.last_contact_date,
                     l.lead_score,
                     l.assigned_to,
-                    lo.name as assigned_lo_name,
+                    COALESCE(es.full_name, lo.email) as assigned_lo_name,
                     COALESCE(
                         EXTRACT(DAY FROM NOW() - l.last_contact_date),
                         EXTRACT(DAY FROM NOW() - l.created_at)
@@ -1060,7 +1061,8 @@ def get_stale_leads(
                         ELSE false
                     END as never_contacted
                 FROM leads l
-                LEFT JOIN loan_officers lo ON l.assigned_to = lo.id
+                LEFT JOIN users lo ON l.assigned_to = lo.id
+                LEFT JOIN email_signatures es ON es.user_id = lo.id
                 WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify', 'Converted')
                     AND l.status NOT IN ('dead', 'unqualified', 'converted')
                     AND (
@@ -1087,11 +1089,12 @@ def get_stale_leads(
                     l.last_contact_date,
                     l.lead_score,
                     l.assigned_to,
-                    lo.name as assigned_lo_name,
+                    COALESCE(es.full_name, lo.email) as assigned_lo_name,
                     EXTRACT(DAY FROM NOW() - l.last_contact_date) as days_stale,
                     false as never_contacted
                 FROM leads l
-                LEFT JOIN loan_officers lo ON l.assigned_to = lo.id
+                LEFT JOIN users lo ON l.assigned_to = lo.id
+                LEFT JOIN email_signatures es ON es.user_id = lo.id
                 WHERE l.stage NOT IN ('Withdrawn', 'Does Not Qualify', 'Converted')
                     AND l.status NOT IN ('dead', 'unqualified', 'converted')
                     AND l.last_contact_date IS NOT NULL

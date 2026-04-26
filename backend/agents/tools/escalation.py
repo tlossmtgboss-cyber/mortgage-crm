@@ -400,7 +400,7 @@ def execute_warm_handoff(
             LEFT JOIN email_signatures es ON es.user_id = u.id
             JOIN user_roles ur ON ur.user_id = u.id
             WHERE ur.role_name = :role AND u.is_active = true
-            ORDER BY u.last_login_at DESC
+            ORDER BY u.last_activity_at DESC NULLS LAST
             LIMIT 1
         """, {"role": target_role})
 

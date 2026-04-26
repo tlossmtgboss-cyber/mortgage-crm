@@ -408,9 +408,6 @@ class MockDatabase:
             return [self.factory.condition("PTD"), self.factory.condition("PTF")]
 
         # LO/User queries
-        if "from loan_officers" in query_lower:
-            return [self.factory.loan_officer()]
-
         if "from users" in query_lower:
             return [self.factory.loan_officer()]
 

@@ -56,7 +56,7 @@ def calculate_loan_profitability(loan_id: str) -> ToolResult:
             l.*,
             lt.name as loan_type_name,
             COALESCE(loes.full_name, lo.email) as lo_name,
-            lo.commission_rate as lo_commission_rate,
+            NULL::numeric as lo_commission_rate,
             b.name as branch_name
         FROM loans l
         LEFT JOIN loan_types lt ON lt.id = l.loan_type_id
@@ -237,7 +237,7 @@ def analyze_margins_by_segment(
                 COALESCE(
                     (SELECT SUM(amount) FROM loan_fees WHERE loan_id = l.id), 0
                 ) + COALESCE(ls.srp_amount, 0) as gross_revenue,
-                l.loan_amount * COALESCE(lo.commission_rate, 0.0075) as lo_cost
+                l.loan_amount * COALESCE(NULL::numeric, 0.0075) as lo_cost
             FROM loans l
             LEFT JOIN users lo ON lo.id = l.loan_officer_id
             LEFT JOIN email_signatures loes ON loes.user_id = lo.id
@@ -510,7 +510,7 @@ def compare_lo_profitability(
                     (SELECT SUM(amount) FROM loan_fees WHERE loan_id = l.id), 0
                 )) as total_fees,
                 SUM(COALESCE(ls.srp_amount, 0)) as total_srp,
-                lo.commission_rate
+                0.0075::numeric as commission_rate
             FROM loans l
             JOIN users lo ON lo.id = l.loan_officer_id
             LEFT JOIN email_signatures loes ON loes.user_id = lo.id
@@ -518,7 +518,7 @@ def compare_lo_profitability(
             WHERE l.funded_date >= CURRENT_DATE - :date_range
                 AND l.stage = 'Funded'
                 {branch_filter}
-            GROUP BY l.loan_officer_id, COALESCE(loes.full_name, lo.email), lo.commission_rate
+            GROUP BY l.loan_officer_id, COALESCE(loes.full_name, lo.email)
             HAVING COUNT(*) >= :min_loans
         )
         SELECT

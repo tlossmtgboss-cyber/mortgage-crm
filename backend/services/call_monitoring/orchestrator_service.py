@@ -808,7 +808,7 @@ class CallMonitoringOrchestrator:
                 lo_params["org_id"] = self.organization_id
             query = f"""
                 SELECT
-                    lo.id, COALESCE(loes.full_name, lo.email) AS name, lo.email, NULL as phone, lo.calendar_link,
+                    lo.id, COALESCE(loes.full_name, lo.email) AS name, lo.email, NULL as phone, NULL as calendar_link,
                     pa.id as pa_id, COALESCE(paes.full_name, pa.email) as pa_name, pa.email as pa_email, NULL as pa_phone
                 FROM users lo
                 LEFT JOIN email_signatures loes ON loes.user_id = lo.id

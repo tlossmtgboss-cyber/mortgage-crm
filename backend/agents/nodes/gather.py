@@ -497,9 +497,10 @@ def _fetch_active_entity_data(
                           l.estimated_loan_amount, l.credit_score_range,
                           l.property_type_interest, l.timeline, l.notes,
                           l.last_contact_date, l.next_followup_date, l.lead_score,
-                          lo.name as assigned_lo_name
+                          COALESCE(es.full_name, lo.email) as assigned_lo_name
                    FROM leads l
-                   LEFT JOIN loan_officers lo ON l.assigned_to = lo.id
+                   LEFT JOIN users lo ON l.assigned_to = lo.id
+                   LEFT JOIN email_signatures es ON es.user_id = lo.id
                    WHERE l.id = :lead_id""",
                 {"lead_id": active_lead_id}
             )
@@ -528,9 +529,10 @@ def _fetch_active_entity_data(
                           ln.loan_amount, ln.loan_type, ln.interest_rate, ln.stage,
                           ln.property_address, ln.closing_date, ln.lock_expiration_date,
                           ln.created_at, ln.updated_at,
-                          lo.name as assigned_lo_name
+                          COALESCE(es.full_name, lo.email) as assigned_lo_name
                    FROM loans ln
-                   LEFT JOIN loan_officers lo ON ln.loan_officer_id = lo.id
+                   LEFT JOIN users lo ON ln.loan_officer_id = lo.id
+                   LEFT JOIN email_signatures es ON es.user_id = lo.id
                    WHERE ln.id = :loan_id""",
                 {"loan_id": active_loan_id}
             )
