@@ -628,7 +628,7 @@ class ImportTelephonyNumberRequest(BaseModel):
     phone_number: str = Field(..., description="Phone number to import")
     twilio_account_sid: str = Field(..., description="Telephony provider Account SID (required by ElevenLabs API)")
     twilio_auth_token: str = Field(..., description="Telephony provider Auth Token (required by ElevenLabs API)")
-    label: str = Field("Perennia AI", description="Label for this number")
+    label: str = Field("The Tim Loss Team", description="Label for this number")
 
 
 # Route path matches ElevenLabs API naming convention (external requirement)
@@ -696,7 +696,7 @@ async def make_outbound_call(
     Optional:
     - use_amd=true: Enable AMD (Answering Machine Detection) to detect voicemail vs human
       - Human answers: Connects to AI conversation
-      - Voicemail detected: Plays TTS message using Sam's voice
+      - Voicemail detected: Plays TTS message using Aria's voice
     """
     # If AMD is enabled, redirect to AMD flow
     if request.use_amd:

@@ -18,7 +18,7 @@ Design principles:
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from enum import Enum
-from typing import List, Optional, Dict, Any
+from typing import ClassVar, List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field, EmailStr, field_validator, ConfigDict
 
@@ -496,6 +496,9 @@ class Section6_Acknowledgments(URLABase):
     verbal_consent_given: bool = False
     verbal_consent_timestamp: Optional[datetime] = None
     verbal_consent_recording_url: Optional[str] = None
+    # GLBA Privacy Notice — separate from application consent
+    privacy_notice_consent_given: bool = False
+    privacy_notice_consent_timestamp: Optional[datetime] = None
 
 
 # =============================================================================
@@ -522,6 +525,8 @@ class Section8_Demographics(URLABase):
     The agent MUST read the government monitoring notice before asking these
     questions. See prompts.DEMOGRAPHICS_NOTICE.
     """
+    # ECOA audit trail — timestamp proving notice was read before questions
+    demographics_notice_read_at: Optional[datetime] = None
     ethnicity: Optional[List[EthnicityCategory]] = None
     ethnicity_hispanic_subcategory: Optional[List[str]] = None  # Mexican, PR, Cuban, Other
     ethnicity_other_origin: Optional[str] = None
@@ -647,6 +652,9 @@ class URLAApplication(URLABase):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    # Session lock — prevents concurrent callers from colliding on the same loan
+    session_lock_token: Optional[str] = None
+
     # Progress tracking
     current_section: str = "START"
     completed_sections: List[str] = Field(default_factory=list)
@@ -717,7 +725,7 @@ class URLAApplication(URLABase):
             return True
         return False
 
-    _TRACKABLE_SECTIONS = [
+    TRACKABLE_SECTIONS: ClassVar[List[str]] = [
         "SECTION_1A", "SECTION_1B", "SECTION_1C", "SECTION_1D", "SECTION_1E",
         "SECTION_2", "SECTION_3",
         "SECTION_4A", "SECTION_4B", "SECTION_4C", "SECTION_4D",
@@ -729,7 +737,7 @@ class URLAApplication(URLABase):
     def progress_summary(self) -> Dict[str, Any]:
         """Human-readable progress snapshot for voice read-backs and get_urla_status."""
         primary = self.primary_borrower()
-        total_sections = len(self._TRACKABLE_SECTIONS)
+        total_sections = len(self.TRACKABLE_SECTIONS)
         completed = len(self.completed_sections)
         return {
             "loan_id": self.loan_id,

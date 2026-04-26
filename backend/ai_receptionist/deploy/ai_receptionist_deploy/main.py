@@ -76,8 +76,8 @@ async def lifespan(app: FastAPI):
 
     if AI_RECEPTIONIST_AVAILABLE:
         receptionist = create_receptionist(
-            company_name=os.getenv("COMPANY_NAME", "Perennia Mortgage"),
-            receptionist_name=os.getenv("RECEPTIONIST_NAME", "Sarah"),
+            company_name=os.getenv("COMPANY_NAME", "The Tim Loss Team"),
+            receptionist_name=os.getenv("RECEPTIONIST_NAME", "Aria"),
         )
         logger.info("AI Receptionist initialized")
 

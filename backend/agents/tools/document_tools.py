@@ -88,7 +88,7 @@ def generate_pre_approval_letter(
     org_id = lead.get("organization_id") or lo.get("organization_id")
 
     # Look up org branding
-    org_name = "Perennia AI"
+    org_name = "The Tim Loss Team"
     if org_id:
         org = execute_single(
             "SELECT name FROM organizations WHERE id = :oid",

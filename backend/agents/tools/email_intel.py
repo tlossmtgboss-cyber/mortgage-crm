@@ -1463,9 +1463,9 @@ def find_contact_email(
     # Search users/team members first (most likely for internal emails)
     try:
         users = execute_query("""
-            SELECT id, name, email, role, phone
+            SELECT id, full_name AS name, email, role, phone
             FROM users
-            WHERE LOWER(name) LIKE :search
+            WHERE LOWER(full_name) LIKE :search
             OR LOWER(email) LIKE :search
             LIMIT 10
         """, {"search": f"%{search_name}%"})
@@ -1533,14 +1533,14 @@ def find_contact_email(
     except Exception as e:
         pass
 
-    # Search partners/referral sources
+    # Search referral partners
     try:
         partners = execute_query("""
-            SELECT id, name, email, phone, company, partner_type
-            FROM partners
+            SELECT id, name, email, phone, company, type AS partner_type
+            FROM referral_partners
             WHERE LOWER(name) LIKE :search
             OR LOWER(email) LIKE :search
-            OR LOWER(company) LIKE :search
+            OR LOWER(COALESCE(company, '')) LIKE :search
             LIMIT 10
         """, {"search": f"%{search_name}%"})
 
@@ -1625,9 +1625,9 @@ def find_contact_phone(
     # Search users/team members first
     try:
         users = execute_query("""
-            SELECT id, name, email, phone, role
+            SELECT id, full_name AS name, email, phone, role
             FROM users
-            WHERE LOWER(name) LIKE :search
+            WHERE LOWER(full_name) LIKE :search
             OR LOWER(email) LIKE :search
             LIMIT 10
         """, {"search": f"%{search_name}%"})
@@ -1695,14 +1695,14 @@ def find_contact_phone(
     except Exception as e:
         logger.error(f"Error searching loan borrowers in find_contact_phone: {e}")
 
-    # Search partners/referral sources
+    # Search referral partners
     try:
         partners = execute_query("""
-            SELECT id, name, email, phone, company, partner_type
-            FROM partners
+            SELECT id, name, email, phone, company, type AS partner_type
+            FROM referral_partners
             WHERE LOWER(name) LIKE :search
             OR LOWER(email) LIKE :search
-            OR LOWER(company) LIKE :search
+            OR LOWER(COALESCE(company, '')) LIKE :search
             LIMIT 10
         """, {"search": f"%{search_name}%"})
 

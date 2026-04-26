@@ -256,7 +256,7 @@ class ClickToCallService:
         response = VoiceResponseBuilder()
 
         greeting = (
-            f"Hi {borrower_name}! {lo_name} from Perennia Mortgage is ready "
+            f"Hi {borrower_name}! {lo_name} from The Tim Loss Team is ready "
             f"to speak with you about your mortgage options."
         )
 

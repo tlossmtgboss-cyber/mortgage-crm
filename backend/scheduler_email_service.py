@@ -37,6 +37,21 @@ from services.pii_masking import mask_email as _mask_email
 from routes.scheduler.constants import DEFAULT_ORGANIZER_EMAIL
 
 
+def _resolve_organizer_name(team_member_name: Optional[str], organization_id: Optional[int] = None) -> str:
+    """Resolve organizer/company name: team member → org branding → fallback."""
+    if team_member_name:
+        return team_member_name
+    if organization_id:
+        try:
+            from database import SessionLocal
+            from services.company_name_resolver import resolve_company_name
+            with SessionLocal() as db:
+                return resolve_company_name(db, organization_id)
+        except Exception:
+            pass
+    return os.getenv("COMPANY_NAME", "The Tim Loss Team")
+
+
 def _is_email_suppressed(email: str) -> bool:
     """Lazy wrapper to avoid circular import with routes.scheduler.email_events."""
     try:
@@ -439,7 +454,7 @@ def send_appointment_confirmation_email(
             header_color=_HEADER_COLOR_TEAL,
             heading="Appointment Confirmed!",
             body_content=body_content,
-            footer_text="Sent from Perennia AI",
+            footer_text="Sent from The Tim Loss Team",
         )
 
         video_link_text = f"\nJoin Video Call: {video_link}" if video_link else ""
@@ -462,7 +477,7 @@ We'll send you a reminder before your appointment.{f" To reschedule, visit: {res
 
 Looking forward to speaking with you!
 
-- Perennia AI Team
+- The Tim Loss Team
         """
 
         # Generate ICS attachment if we have the scheduled_start datetime
@@ -470,7 +485,7 @@ Looking forward to speaking with you!
         if scheduled_start:
             try:
                 organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL)
-                organizer_name = team_member_name or "Perennia AI"
+                organizer_name = _resolve_organizer_name(team_member_name, organization_id)
 
                 ics_content = generate_ics_content(
                     appointment_title=appointment_title,
@@ -611,7 +626,7 @@ Meeting Type: {meeting_mode}
 
 An updated calendar invite is attached to this email.
 
-- Perennia AI Team
+- The Tim Loss Team
         """
 
         # Generate ICS attachment
@@ -619,7 +634,7 @@ An updated calendar invite is attached to this email.
         if scheduled_start:
             try:
                 organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL)
-                organizer_name = team_member_name or "Perennia AI"
+                organizer_name = _resolve_organizer_name(team_member_name, organization_id)
 
                 ics_content = generate_ics_content(
                     appointment_title=appointment_title,
@@ -729,7 +744,7 @@ def send_team_member_notification_email(
             header_color=_HEADER_COLOR_TEAL,
             heading="New Appointment Scheduled",
             body_content=body_content,
-            footer_text="Sent from Perennia AI",
+            footer_text="Sent from The Tim Loss Team",
         )
 
         video_link_text = f"\nVideo Call Link: {video_link}" if video_link else ""
@@ -750,7 +765,7 @@ Meeting Type: {meeting_mode}{video_link_text}
 
 A calendar invite is attached to this email.
 
-- Perennia AI Team
+- The Tim Loss Team
         """
 
         # Generate ICS attachment if we have the scheduled_start datetime
@@ -764,7 +779,7 @@ A calendar invite is attached to this email.
                     attendee_email=team_member_email,
                     attendee_name=team_member_name,
                     organizer_email=os.getenv("SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL),
-                    organizer_name="Perennia AI",
+                    organizer_name=os.getenv("COMPANY_NAME", "The Tim Loss Team"),
                     description=f"Meeting with {attendee_name}\nEmail: {attendee_email}\nPhone: {attendee_phone or 'N/A'}",
                     video_link=video_link
                 )
@@ -857,7 +872,7 @@ def send_appointment_cancellation_email(
             header_color=_HEADER_COLOR_RED,
             heading="Appointment Cancelled",
             body_content=body_content,
-            footer_text="Sent from Perennia AI",
+            footer_text="Sent from The Tim Loss Team",
         )
 
         text_content = f"""
@@ -877,7 +892,7 @@ If you would like to reschedule, please contact us or book a new appointment.
 
 We apologize for any inconvenience.
 
-- Perennia AI Team
+- The Tim Loss Team
         """
 
         result = notification_service.send_email(
@@ -949,7 +964,7 @@ def send_team_member_cancellation_email(
             header_color=_HEADER_COLOR_RED,
             heading="Appointment Cancelled",
             body_content=body_content,
-            footer_text="Sent from Perennia AI",
+            footer_text="Sent from The Tim Loss Team",
         )
 
         text_content = f"""
@@ -969,7 +984,7 @@ Time: {appointment_time}
 
 This time slot is now available in your calendar.
 
-- Perennia AI Team
+- The Tim Loss Team
         """
 
         result = notification_service.send_email(
@@ -1071,7 +1086,7 @@ Meeting Type: {meeting_mode}
 
 If you need to reschedule or cancel, please contact us as soon as possible.
 
-- Perennia AI Team
+- The Tim Loss Team
         """
 
         # Generate ICS attachment if we have the scheduled_start datetime
@@ -1079,7 +1094,7 @@ If you need to reschedule or cancel, please contact us as soon as possible.
         if scheduled_start:
             try:
                 organizer_email = team_member_email or os.getenv("SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL)
-                organizer_name = team_member_name or "Perennia AI"
+                organizer_name = _resolve_organizer_name(team_member_name, organization_id)
 
                 ics_content = generate_ics_content(
                     appointment_title=appointment_title,
@@ -1146,7 +1161,7 @@ def send_ai_booking_confirmation_email(
     """Send confirmation email for an AI-booked appointment.
 
     Similar to send_appointment_confirmation_email but includes messaging
-    that the appointment was intelligently scheduled by Perennia AI and
+    that the appointment was intelligently scheduled by The Tim Loss Team and
     optionally includes AI context (e.g., why this time was chosen).
     """
     try:
@@ -1201,7 +1216,7 @@ def send_ai_booking_confirmation_email(
                         <p style="font-size: 16px; color: #374151;">Hi {safe_attendee_name},</p>
 
                         <p style="font-size: 16px; color: #374151;">
-                            Great news! Perennia AI has scheduled your appointment.
+                            Great news! The Tim Loss Team has scheduled your appointment.
                             Here are the details:
                         </p>
 
@@ -1229,7 +1244,7 @@ def send_ai_booking_confirmation_email(
             header_color=_HEADER_COLOR_BLUE,
             heading="AI-Scheduled Appointment Confirmed!",
             body_content=body_content,
-            footer_text="Intelligently scheduled by Perennia AI",
+            footer_text="Intelligently scheduled by The Tim Loss Team",
         )
 
         video_link_text = f"\nJoin Video Call: {video_link}" if video_link else ""
@@ -1239,7 +1254,7 @@ AI-Scheduled Appointment Confirmed!
 
 Hi {attendee_name},
 
-Perennia AI has scheduled your appointment. Here are the details:
+The Tim Loss Team has scheduled your appointment. Here are the details:
 
 Date: {appointment_date}
 Time: {appointment_time}
@@ -1253,7 +1268,7 @@ We'll send you a reminder before your appointment.{f" To reschedule, visit: {res
 
 Looking forward to speaking with you!
 
-- Perennia AI Team
+- The Tim Loss Team
         """
 
         attachments = []
@@ -1262,7 +1277,7 @@ Looking forward to speaking with you!
                 organizer_email = team_member_email or os.getenv(
                     "SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL
                 )
-                organizer_name = team_member_name or "Perennia AI"
+                organizer_name = _resolve_organizer_name(team_member_name, organization_id)
 
                 ics_content = generate_ics_content(
                     appointment_title=appointment_title,
@@ -1400,7 +1415,7 @@ def send_pre_appointment_prep_email(
             header_color=_HEADER_COLOR_GREEN,
             heading="Prepare for Your Appointment",
             body_content=body_content,
-            footer_text="Sent from Perennia AI",
+            footer_text="Sent from The Tim Loss Team",
         )
 
         checklist_text = ""
@@ -1425,7 +1440,7 @@ Duration: {duration_minutes} minutes ({meeting_mode})
 
 Having these items ready will help us make the most of our time together.
 
-- Perennia AI Team
+- The Tim Loss Team
         """
 
         attachments = []
@@ -1434,7 +1449,7 @@ Having these items ready will help us make the most of our time together.
                 organizer_email = team_member_email or os.getenv(
                     "SENDGRID_FROM_EMAIL", DEFAULT_ORGANIZER_EMAIL
                 )
-                organizer_name = team_member_name or "Perennia AI"
+                organizer_name = _resolve_organizer_name(team_member_name, organization_id)
 
                 ics_content = generate_ics_content(
                     appointment_title=appointment_title,
@@ -1556,7 +1571,7 @@ def send_no_show_recovery_email(
             header_color=_HEADER_COLOR_AMBER,
             heading="We Missed You!",
             body_content=body_content,
-            footer_text="Sent from Perennia AI",
+            footer_text="Sent from The Tim Loss Team",
         )
 
         text_team = f" with {team_member_name}" if team_member_name else ""
@@ -1577,7 +1592,7 @@ Life happens, and we completely understand. We would love to find a time that wo
 
 If you are no longer interested or have any questions, just reply to this email.
 
-- Perennia AI Team
+- The Tim Loss Team
         """
 
         result = notification_service.send_email(

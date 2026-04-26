@@ -102,19 +102,19 @@ async def voice_stream_websocket(websocket: WebSocket):
 
                         # Known caller - personalized greeting based on category
                         if caller_category == 'client':
-                            greeting = f"Hi {first_name}! This is Sam with CMG Home Loans. Great to hear from you! How can I help you today?"
+                            greeting = f"Hi {first_name}! This is Aria with CMG Home Loans. Great to hear from you! How can I help you today?"
                         elif caller_category == 'lead':
-                            greeting = f"Hi {first_name}! This is Sam with CMG Home Loans. Thanks for calling! How can I help you today?"
+                            greeting = f"Hi {first_name}! This is Aria with CMG Home Loans. Thanks for calling! How can I help you today?"
                         elif caller_category == 'team':
-                            greeting = f"Hey {first_name}! This is Sam. What can I do for you?"
+                            greeting = f"Hey {first_name}! This is Aria. What can I do for you?"
                         elif caller_category == 'realtor':
-                            greeting = f"Hi {first_name}! This is Sam with CMG Home Loans. Thanks for calling! How can I help you today?"
+                            greeting = f"Hi {first_name}! This is Aria with CMG Home Loans. Thanks for calling! How can I help you today?"
                         else:
-                            greeting = f"Hi {first_name}! This is Sam with CMG Home Loans. Thanks for calling. How can I help you today?"
+                            greeting = f"Hi {first_name}! This is Aria with CMG Home Loans. Thanks for calling. How can I help you today?"
                         logger.info(f"Using personalized greeting ({caller_category})")
                     else:
                         # Unknown caller - generic greeting
-                        greeting = "Hi, this is Sam with CMG Home Loans! Thanks for calling. How can I help you today?"
+                        greeting = "Hi, this is Aria with CMG Home Loans! Thanks for calling. How can I help you today?"
                         logger.info("Using generic greeting for unknown caller")
 
                     # Request a response with the greeting

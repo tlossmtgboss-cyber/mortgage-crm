@@ -200,7 +200,7 @@ class TelnyxStreamHandler:
                     logger.warning(f"Failed to initialize OpenAI: {e}")
 
         # AI receptionist configuration
-        self._receptionist_name = os.getenv("AI_RECEPTIONIST_NAME", "Sam")
+        self._receptionist_name = os.getenv("AI_RECEPTIONIST_NAME", "Aria")
         self._business_name = os.getenv("BUSINESS_NAME", "CMG Home Loans")
         self._lo_name = os.getenv("LO_NAME", "a loan officer")
 
@@ -427,7 +427,7 @@ class TelnyxStreamHandler:
         """Get greeting text based on config."""
         business_name = os.getenv("BUSINESS_NAME", "CMG Home Loans")
         return (
-            f"Hi, this is Sam with {business_name}. "
+            f"Hi, this is Aria with {business_name}. "
             "How can I help you today?"
         )
 

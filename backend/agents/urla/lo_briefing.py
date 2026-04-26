@@ -83,11 +83,7 @@ class LOBriefing(BaseModel):
 # CONSTANTS
 # =============================================================================
 
-_ALL_SECTIONS = [
-    "SECTION_1A", "SECTION_1B", "SECTION_1C", "SECTION_1D", "SECTION_1E",
-    "SECTION_2", "SECTION_3", "SECTION_4", "SECTION_5",
-    "SECTION_6", "SECTION_7", "SECTION_8", "SECTION_9",
-]
+_ALL_SECTIONS = URLAApplication.TRACKABLE_SECTIONS
 
 # DTI thresholds
 _DTI_WARNING = Decimal("43")   # QM threshold

@@ -61,7 +61,7 @@ class AIConfig:
 
     def __post_init__(self):
         if not self.business_name:
-            self.business_name = os.getenv("BUSINESS_NAME", "Perennia AI")
+            self.business_name = os.getenv("BUSINESS_NAME", "The Tim Loss Team")
 
 
 ai_config = AIConfig()

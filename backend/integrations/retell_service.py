@@ -442,7 +442,7 @@ class RetellAPIError(Exception):
 
 # ==================== AI Receptionist Prompt Templates ====================
 
-AI_RECEPTIONIST_PROMPT = """You are Sam, the AI receptionist for {company_name}, a mortgage company.
+AI_RECEPTIONIST_PROMPT = """You are Aria, the AI receptionist for {company_name}, a mortgage company.
 
 Your role is to:
 1. Greet callers warmly and professionally
@@ -539,7 +539,7 @@ async def create_ai_receptionist_agent(
 
     llm = await client.create_retell_llm(
         general_prompt=prompt,
-        begin_message=f"Hello, thank you for calling {company_name}. This is Sam, how may I help you today?",
+        begin_message=f"Hello, thank you for calling {company_name}. This is Aria, how may I help you today?",
     )
 
     # Create the agent

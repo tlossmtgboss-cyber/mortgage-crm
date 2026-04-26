@@ -580,7 +580,7 @@ async def download_ics_file(
         raise HTTPException(status_code=403, detail="Token does not match this appointment")
 
     # Get LO info for organizer fields
-    organizer_name = "Perennia AI"
+    organizer_name = "The Tim Loss Team"
     organizer_email = "noreply@perenniaai.com"
     if appointment.assigned_user_id:
         try:

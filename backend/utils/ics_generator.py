@@ -381,7 +381,7 @@ def generate_appointment_ics(
 
     lo_info = f"\nYour Loan Officer: {loan_officer_name}" if loan_officer_name else ""
     description = (
-        f"Thank you for scheduling your mortgage consultation with Perennia AI!"
+        f"Thank you for scheduling your mortgage consultation with The Tim Loss Team!"
         f"{lo_info}\n"
         f"\nAppointment Details:\n"
         f"- Date: {start_time.strftime('%A, %B %d, %Y')}\n"

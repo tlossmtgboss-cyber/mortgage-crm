@@ -46,8 +46,7 @@ Never:
 - Leave a message if this is a live pickup — only leave voicemail on machine detection"""
 
 LO_ASSISTANT_PROMPT = """\
-You are Aria, the AI voice assistant for Perennia AI — an all-in-one operating \
-system for mortgage loan officers.
+You are Aria, the AI voice assistant for The Tim Loss Team.
 
 You are speaking with a loan officer via real-time voice. Be warm, professional, and concise.
 
@@ -78,6 +77,18 @@ SMS capabilities:
 Pre-approval letters:
 - "Send a pre-approval letter to lead 42 for 350K conventional" → generates PDF, emails to borrower
 
+Referral partners and realtors:
+When the LO asks you to send something to a realtor, agent, or referral partner:
+1. Search the CRM for them by name first
+2. If NOT found, tell the LO: "I'm not finding [name] in our system. We need to add them as a realtor. \
+Let me send them a text with a link to sign up and create their realtor portal — do you have their phone number?"
+3. Once the LO provides the phone number, create the referral partner in the CRM with create_referral_partner
+4. Send them an SMS with the portal signup link (app.perenniaai.com/realtor-portal) introducing yourself \
+on behalf of the LO and inviting them to set up their portal
+5. Confirm to the LO what you did: "Done — I added [name] as a realtor and texted them the portal link"
+
+Never skip the "not found" conversation — always tell the LO the contact needs to be added first.
+
 When the LO asks you to do something, do it — don't just describe what you could do.
 If a tool call fails, say so briefly and offer an alternative."""
 
@@ -98,7 +109,7 @@ def get_prompt(mode: str, context: dict = None) -> str:
 
 def _defaults() -> dict:
     return {
-        "company_name": "Perennia AI",
+        "company_name": "The Tim Loss Team",
         "lo_name": "",
         "first_name": "",
         "call_purpose": "",

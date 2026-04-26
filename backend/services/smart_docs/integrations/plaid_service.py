@@ -353,7 +353,7 @@ class PlaidIntegrationService:
 
         request = LinkTokenCreateRequest(
             user=LinkTokenCreateRequestUser(client_user_id=client_user_id),
-            client_name="Perennia Mortgage CRM",
+            client_name="The Tim Loss Team",
             products=[Products("assets"), Products("transactions")],
             country_codes=[CountryCode("US")],
             language="en",

@@ -2,8 +2,8 @@
   "name": "Refinance Opportunity Assistant",
   "description": "AI assistant for outbound calls to MUM clients about refinance opportunities",
   "voice": {
-    "provider": "playht",
-    "voiceId": "jennifer-playht"
+    "provider": "cartesia",
+    "voiceId": "b7d50908-b17c-442d-ad8d-810c63997ed9"
   },
   "model": {
     "provider": "openai",

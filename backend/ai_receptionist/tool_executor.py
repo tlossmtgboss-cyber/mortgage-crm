@@ -891,7 +891,7 @@ class AIReceptionist:
 
     Usage:
         receptionist = AIReceptionist.create(
-            company_name="Perennia Mortgage",
+            company_name="The Tim Loss Team",
         )
 
         # Handle incoming call
@@ -924,8 +924,8 @@ class AIReceptionist:
     @classmethod
     def create(
         cls,
-        company_name: str = "Perennia Mortgage",
-        receptionist_name: str = "Sarah",
+        company_name: str = "The Tim Loss Team",
+        receptionist_name: str = "Aria",
         tool_registry: Any = None,
         stt_provider: str = "deepgram",
         tts_provider: str = "elevenlabs",
@@ -979,8 +979,8 @@ class AIReceptionist:
         }
 
         # Generate greeting
-        name = self.config.get("receptionist_name", "Sarah")
-        company = self.config.get("company_name", "Perennia Mortgage")
+        name = self.config.get("receptionist_name", "Aria")
+        company = self.config.get("company_name", "The Tim Loss Team")
 
         if caller_info and caller_info.data.get("found"):
             first_name = caller_info.data.get("first_name", "")
@@ -1215,7 +1215,7 @@ class ReceptionistTester:
 # =============================================================================
 
 def create_receptionist(
-    company_name: str = "Perennia Mortgage",
+    company_name: str = "The Tim Loss Team",
     **kwargs,
 ) -> AIReceptionist:
     """Quick way to create a receptionist."""

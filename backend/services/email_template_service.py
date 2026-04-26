@@ -26,9 +26,9 @@ TEMPLATES_DIR = Path(__file__).parent.parent / "templates" / "email"
 # ---------------------------------------------------------------------------
 DEFAULT_BRANDING = {
     "primary_color": "#217F8D",
-    "org_name": "Perennia AI",
+    "org_name": "The Tim Loss Team",
     "org_address": "",
-    "footer_text": "Sent from Perennia AI",
+    "footer_text": "Sent from The Tim Loss Team",
 }
 
 # Header gradients keyed by semantic purpose

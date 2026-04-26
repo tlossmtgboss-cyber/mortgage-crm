@@ -1451,12 +1451,12 @@ def get_market_comparison(
     name="create_referral_partner",
     description="Create or add a referral partner to the CRM. Use when user wants to add a realtor, attorney, "
                 "financial advisor, or other professional as a referral partner.",
-    agent_roles=["customer_intelligence", "lead_nurturer", "all"],
+    agent_roles=["customer_intelligence", "lead_nurturer", "voice_os", "ai_receptionist", "all"],
     risk_level="MEDIUM",
     parameters={
         "name": "Full name of the referral partner",
-        "email": "Email address",
-        "phone": "Phone number (optional)",
+        "email": "Email address (optional if phone provided)",
+        "phone": "Phone number (optional if email provided)",
         "company": "Company/firm name (optional)",
         "partner_type": "Type: realtor, attorney, financial_advisor, builder, insurance, other",
         "notes": "Notes about the partner (optional)",
@@ -1465,7 +1465,7 @@ def get_market_comparison(
 )
 def create_referral_partner(
     name: str,
-    email: str,
+    email: Optional[str] = None,
     phone: Optional[str] = None,
     company: Optional[str] = None,
     partner_type: str = "realtor",
@@ -1480,12 +1480,14 @@ def create_referral_partner(
     """
     import uuid
 
-    if not name or not email:
-        raise ToolError("Name and email are required for creating a referral partner")
+    if not name:
+        raise ToolError("Name is required for creating a referral partner")
+    if not email and not phone:
+        raise ToolError("At least one of email or phone is required")
 
-    # Validate email format
+    # Validate email format if provided
     import re
-    if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
+    if email and not re.match(r"[^@]+@[^@]+\.[^@]+", email):
         raise ToolError(f"Invalid email format: {email}")
 
     # Validate partner type
@@ -1499,13 +1501,24 @@ def create_referral_partner(
 
         db = SessionLocal()
         try:
-            # Check if partner already exists
-            existing = db.execute(text("""
-                SELECT id, name, email, type, category
-                FROM referral_partners
-                WHERE LOWER(email) = LOWER(:email)
-                LIMIT 1
-            """), {"email": email}).fetchone()
+            # Check if partner already exists (by email or phone)
+            existing = None
+            if email:
+                existing = db.execute(text("""
+                    SELECT id, name, email, phone, type, category
+                    FROM referral_partners
+                    WHERE LOWER(email) = LOWER(:email)
+                    LIMIT 1
+                """), {"email": email}).fetchone()
+            if not existing and phone:
+                clean_phone = re.sub(r"[^\d]", "", phone)
+                if len(clean_phone) >= 10:
+                    existing = db.execute(text("""
+                        SELECT id, name, email, phone, type, category
+                        FROM referral_partners
+                        WHERE REPLACE(REPLACE(REPLACE(REPLACE(phone, '-', ''), ' ', ''), '(', ''), ')', '') LIKE :phone
+                        LIMIT 1
+                    """), {"phone": f"%{clean_phone[-10:]}"}).fetchone()
 
             if existing:
                 return ToolResult.success(
@@ -1544,9 +1557,14 @@ def create_referral_partner(
             db.commit()
 
             # Get the created ID
-            result = db.execute(text("""
-                SELECT id FROM referral_partners WHERE email = :email ORDER BY created_at DESC LIMIT 1
-            """), {"email": email}).fetchone()
+            if email:
+                result = db.execute(text("""
+                    SELECT id FROM referral_partners WHERE LOWER(email) = LOWER(:email) ORDER BY created_at DESC LIMIT 1
+                """), {"email": email}).fetchone()
+            else:
+                result = db.execute(text("""
+                    SELECT id FROM referral_partners WHERE name = :name ORDER BY created_at DESC LIMIT 1
+                """), {"name": name}).fetchone()
 
             partner_id = result.id if result else None
 

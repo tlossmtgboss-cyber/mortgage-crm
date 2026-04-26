@@ -85,7 +85,7 @@ QUALIFICATION_FLOW = {
 DEFAULT_PERSONA = {
     "name": "Sarah",
     "role": "Senior Mortgage Consultant",
-    "company": "Perennia AI",
+    "company": "The Tim Loss Team",
     "tone": "friendly_professional",
     "signature_email": "Best regards,\nSarah",
     "signature_sms": "- Sarah"

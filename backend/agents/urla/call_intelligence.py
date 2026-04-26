@@ -30,124 +30,9 @@ from .models import CallNotes, CallTranscriptEntry, URLAApplication
 logger = logging.getLogger("urla.call_intelligence")
 
 
-# =========================================================================
-# Sibling module imports — graceful fallback to stubs when not yet created
-# =========================================================================
-
-try:
-    from .call_scoring import URLACallScore, score_urla_call
-except ImportError:
-    logger.info(
-        "call_scoring module not available — using stub implementation"
-    )
-
-    class URLACallScore(BaseModel):  # type: ignore[no-redef]
-        """Stub: field names align with call_scoring.py's real URLACallScore."""
-        overall_score: float = Field(0.0, ge=0, le=100)
-        compliance_score: float = Field(0.0, ge=0, le=100)
-        data_quality_score: float = Field(0.0, ge=0, le=100)
-        conversation_quality_score: float = Field(0.0, ge=0, le=100)
-        notes: List[str] = Field(default_factory=list)
-
-    def score_urla_call(app: URLAApplication) -> URLACallScore:  # type: ignore[misc]
-        """Stub scorer — returns zeroes until the real module is wired up."""
-        completed = len(app.completed_sections)
-        total = 17
-        completeness = min(100.0, (completed / total) * 100) if total else 0.0
-
-        has_consent = bool(
-            app.section_6 and app.section_6.verbal_consent_given
-        )
-        compliance = 100.0 if has_consent else 50.0
-
-        return URLACallScore(
-            overall_score=round((completeness + compliance) / 2, 1),
-            data_quality_score=round(completeness, 1),
-            compliance_score=compliance,
-            conversation_quality_score=0.0,
-            notes=["Stub scorer — install call_scoring module for full analysis"],
-        )
-
-
-try:
-    from .lo_briefing import LOBriefing, generate_lo_briefing
-except ImportError:
-    logger.info(
-        "lo_briefing module not available — using stub implementation"
-    )
-
-    class LOBriefing(BaseModel):  # type: ignore[no-redef]
-        """Stub: replaced when lo_briefing.py is created."""
-        headline: str = ""
-        key_facts: List[str] = Field(default_factory=list)
-        risk_factors: List[str] = Field(default_factory=list)
-        recommended_actions: List[str] = Field(default_factory=list)
-        borrower_sentiment: str = "unknown"
-
-    async def generate_lo_briefing(  # type: ignore[misc]
-        app: URLAApplication,
-        call_notes: Optional[CallNotes] = None,
-    ) -> LOBriefing:
-        """Stub briefing — returns minimal data until lo_briefing.py exists."""
-        primary = app.primary_borrower()
-        name = "Unknown"
-        if primary and primary.section_1a:
-            first = primary.section_1a.first_name or ""
-            last = primary.section_1a.last_name or ""
-            name = f"{first} {last}".strip() or "Unknown"
-
-        return LOBriefing(
-            headline=f"URLA intake completed for {name}",
-            key_facts=[f"Loan ID: {app.loan_id}"],
-            risk_factors=[],
-            recommended_actions=["Review application in BytePro"],
-            borrower_sentiment="unknown",
-        )
-
-
-try:
-    from .task_generator import URLATask, generate_urla_tasks
-except ImportError:
-    logger.info(
-        "task_generator module not available — using stub implementation"
-    )
-
-    class URLATask(BaseModel):  # type: ignore[no-redef]
-        """Stub: replaced when task_generator.py is created."""
-        title: str
-        description: str = ""
-        priority: str = "medium"  # low / medium / high / urgent
-        due_in_hours: Optional[int] = None
-        category: str = "general"
-
-    async def generate_urla_tasks(  # type: ignore[misc]
-        app: URLAApplication,
-        call_notes: Optional[CallNotes] = None,
-    ) -> List[URLATask]:
-        """Stub task generator — returns baseline tasks."""
-        tasks = [
-            URLATask(
-                title="Review URLA application",
-                description=f"Review finalized URLA for loan {app.loan_id}",
-                priority="high",
-                due_in_hours=4,
-                category="review",
-            ),
-        ]
-        if app.bytepro_loan_number:
-            tasks.append(
-                URLATask(
-                    title="Verify BytePro submission",
-                    description=(
-                        f"Confirm BytePro loan {app.bytepro_loan_number} "
-                        f"imported correctly from URLA {app.loan_id}"
-                    ),
-                    priority="medium",
-                    due_in_hours=8,
-                    category="verification",
-                )
-            )
-        return tasks
+from .call_scoring import URLACallScore, score_urla_call
+from .lo_briefing import LOBriefing, generate_lo_briefing
+from .task_generator import URLATask, generate_urla_tasks
 
 
 # =========================================================================
@@ -172,7 +57,7 @@ class URLACallIntelligenceResult(BaseModel):
 # =========================================================================
 
 _ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-_ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+_ANTHROPIC_MODEL = "claude-sonnet-4-6"
 _ANTHROPIC_MAX_TOKENS = 2048
 
 _CALL_NOTES_SYSTEM_PROMPT = """\

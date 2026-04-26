@@ -324,7 +324,7 @@ class QualityAnalyzer:
     def _get_example(self, check_id: str) -> Optional[str]:
         """Get example for a check"""
         examples = {
-            "has_name": "You are Sarah, a Mortgage Specialist at Perennia AI.",
+            "has_name": "You are Sarah, a Mortgage Specialist at The Tim Loss Team.",
             "not_ai_statement": "You are NOT an AI assistant - you are a real person doing your job.",
             "one_question_rule": "Only ask ONE question at a time to find out one piece of information.",
             "no_conciliatory": 'Do NOT use conciliatory phrases ("I understand," "I hear you") when the user expresses disinterest.',

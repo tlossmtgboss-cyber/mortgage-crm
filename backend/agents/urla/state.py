@@ -122,10 +122,12 @@ class URLAStateManager:
                     return existing
 
         loan_id = self.generate_loan_id()
+        lock_token = uuid.uuid4().hex
         app = URLAApplication(
             loan_id=loan_id,
             tenant_id=tenant_id,
             caller_phone=caller_phone,
+            session_lock_token=lock_token,
             current_section="SECTION_1A",
             borrowers=[Borrower(borrower_id="borrower_1", is_primary=True)],
         )
@@ -159,7 +161,8 @@ class URLAStateManager:
         """
         key = os.getenv("URLA_ENCRYPTION_KEY", "")
         if not key:
-            is_prod = bool(
+            enforce = os.getenv("URLA_ENFORCE_ENCRYPTION", "").lower() in ("true", "1", "yes")
+            is_prod = enforce or bool(
                 os.getenv("RAILWAY_ENVIRONMENT")
                 or os.getenv("RAILWAY_SERVICE_NAME")
                 or os.getenv("ENV", "").lower() == "production"

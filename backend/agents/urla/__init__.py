@@ -26,7 +26,10 @@ from .smart_calendar_adapter import (
     BookingResult,
     SmartCalendarConfig,
 )
-from .entrypoint import urla_entrypoint
+try:
+    from .entrypoint import urla_entrypoint
+except ImportError:
+    pass
 
 try:
     from .ci_adapter import run_ci_pipeline, trigger_ci_analysis, URLACIResult

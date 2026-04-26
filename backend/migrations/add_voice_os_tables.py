@@ -244,13 +244,13 @@ def run_migration():
                 tools_allowed
             )
             SELECT
-                'Sam - AI Receptionist',
+                'Aria - AI Receptionist',
                 'Friendly and professional AI receptionist for inbound calls',
                 'active',
                 'alloy',
                 0.50,
                 0.75,
-                'You are Sam, a friendly and professional AI receptionist for a mortgage company.
+                'You are Aria, a friendly and professional AI receptionist for a mortgage company.
 
 Your role is to:
 - Greet callers warmly and professionally
@@ -274,10 +274,10 @@ Guidelines:
                 true,
                 '["get_contact_by_phone", "create_lead", "update_lead_stage", "schedule_appointment", "check_availability", "create_task", "log_call_note", "get_loan_status", "escalate_to_human"]'::jsonb
             WHERE NOT EXISTS (
-                SELECT 1 FROM voice_os_agents WHERE name = 'Sam - AI Receptionist'
+                SELECT 1 FROM voice_os_agents WHERE name = 'Aria - AI Receptionist'
             )
         """))
-        logger.info("Seeded default Sam - AI Receptionist agent")
+        logger.info("Seeded default Aria - AI Receptionist agent")
 
         db.commit()
         db.close()

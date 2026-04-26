@@ -373,7 +373,7 @@ class SpeedToLeadService:
             "lo_name": lo_info.get("name", "Your Loan Officer") if lo_info else "Your Loan Officer",
             "lo_email": lo_info.get("email", "") if lo_info else "",
             "lo_phone": lo_info.get("phone", "") if lo_info else "",
-            "company_name": "Perennia AI",
+            "company_name": "The Tim Loss Team",
             "loan_purpose": lead_info.get("loan_purpose", "home loan"),
             "loan_amount": lead_info.get("loan_amount", ""),
             "event_type": event.event_type,

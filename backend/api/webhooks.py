@@ -698,7 +698,7 @@ async def execute_email_response_pattern(
                         "senderName": sender_name,
                         "senderEmail": sender_email_addr,
                         "originalSubject": original_subject,
-                        "companyName": os.getenv("COMPANY_NAME", "Perennia AI"),
+                        "companyName": os.getenv("COMPANY_NAME", "The Tim Loss Team"),
                         "supportEmail": os.getenv("SUPPORT_EMAIL", "support@perenniaai.com"),
                     }
 
@@ -850,7 +850,7 @@ async def handle_internal_user_email(
 
 <p>Best regards,<br>
 <b>Sarah</b><br>
-<span style="color: #666666;">AI Assistant | Perennia AI</span></p>
+<span style="color: #666666;">AI Assistant | The Tim Loss Team</span></p>
 </div>
 </body>
 </html>"""
@@ -861,7 +861,7 @@ async def handle_internal_user_email(
 
 Best regards,
 Sarah
-AI Assistant | Perennia AI"""
+AI Assistant | The Tim Loss Team"""
 
         # Determine reply subject
         reply_subject = subject if subject.lower().startswith('re:') else f"Re: {subject}"
@@ -922,7 +922,7 @@ async def generate_internal_user_response(
 
         client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-        system_prompt = f"""You are Sarah, an AI assistant for Perennia AI, a mortgage CRM company.
+        system_prompt = f"""You are Sarah, an AI assistant for The Tim Loss Team, a mortgage lending team.
 
 IMPORTANT: The person emailing you is an INTERNAL TEAM MEMBER, not a lead or prospect:
 - Name: {user_name}
@@ -1139,7 +1139,7 @@ async def process_ai_conversation_reply(
 
 <p>Best regards,<br>
 <b>Sarah</b><br>
-<span style="color: #666666;">AI Mortgage Assistant | Perennia AI</span></p>
+<span style="color: #666666;">AI Mortgage Assistant | The Tim Loss Team</span></p>
 </div>
 </body>
 </html>"""
@@ -1150,7 +1150,7 @@ async def process_ai_conversation_reply(
 
 Best regards,
 Sarah
-AI Mortgage Assistant | Perennia AI"""
+AI Mortgage Assistant | The Tim Loss Team"""
 
             # Determine reply subject
             reply_subject = subject if subject.lower().startswith('re:') else f"Re: {subject}"

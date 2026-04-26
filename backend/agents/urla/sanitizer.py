@@ -63,17 +63,19 @@ def sanitize_text(value: Optional[str], field_name: str = "field", max_length: i
     if len(cleaned) > max_length:
         cleaned = cleaned[:max_length]
 
-    # Log suspicious patterns (don't block — could be legitimate business names)
+    # Block and log suspicious patterns (defense-in-depth)
     if _SQL_INJECTION_PATTERNS.search(cleaned):
         logger.warning(
-            "Potential SQL injection in URLA input",
+            "SQL injection blocked in URLA input",
             extra={"field": field_name, "value_prefix": cleaned[:50]},
         )
+        cleaned = _SQL_INJECTION_PATTERNS.sub("", cleaned)
     if _SCRIPT_PATTERNS.search(cleaned):
         logger.warning(
-            "Potential XSS in URLA input",
+            "XSS blocked in URLA input",
             extra={"field": field_name, "value_prefix": cleaned[:50]},
         )
+        cleaned = _SCRIPT_PATTERNS.sub("", cleaned)
 
     return cleaned.strip()
 

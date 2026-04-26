@@ -1076,7 +1076,7 @@ class NoShowRecoveryService:
                 header_color=header_color,
                 heading=heading,
                 body_content=body_html,
-                footer_text="Sent from Perennia AI",
+                footer_text="Sent by The Tim Loss Team",
             )
         except ImportError:
             # Fallback: wrap in basic HTML

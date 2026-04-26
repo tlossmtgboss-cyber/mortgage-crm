@@ -71,7 +71,7 @@ if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
     echo ""
     echo "🎉 Your AI receptionist now has:"
     echo "  • Better background noise handling"
-    echo "  • Interruption support (caller can say 'wait' or 'Sam')"
+    echo "  • Interruption support (caller can say 'wait' or 'Aria')"
     echo "  • Phone appointments only"
     echo "  • One question at a time enforcement"
     echo ""

@@ -828,7 +828,7 @@ async def inbound_call_webhook(
     config = _get_inbound_config(db, org_id)
     ring_timeout = config.get("lo_ring_timeout", DEFAULT_LO_RING_TIMEOUT)
     ai_enabled = config.get("ai_answering_enabled", True)
-    company_name = config.get("company_name") or lo_info.get("org_name") or "Perennia AI"
+    company_name = config.get("company_name") or lo_info.get("org_name") or "The Tim Loss Team"
 
     # Step 3: Check availability
     lo_available = _is_lo_available(db, lo_user_id)
@@ -1320,7 +1320,7 @@ async def vapi_inbound_webhook(
                         {
                             "role": "system",
                             "content": (
-                                "You are Aria, an AI assistant for Perennia AI. "
+                                "You are Aria, an AI assistant for The Tim Loss Team. "
                                 "You're a mortgage loan officer's virtual receptionist.\n\n"
                                 "Your role:\n"
                                 "- Greet callers warmly and professionally\n"

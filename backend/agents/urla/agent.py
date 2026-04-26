@@ -90,6 +90,7 @@ from .smart_calendar_adapter import (
 )
 from .models import LOKickoffBooking
 from .sanitizer import sanitize_text, sanitize_name, sanitize_address, sanitize_description
+from .transcript_scrubber import scrub_post_call
 
 
 logger = logging.getLogger("urla.agent")
@@ -123,10 +124,14 @@ class URLAAgent(Agent):
         self.state = state
         self.loan_officer = loan_officer
         self._active_loan_id: Optional[str] = None
+        self._session_lock_token: Optional[str] = None
         # Cache of slots offered to the caller; indexed 1..N for voice readback
         self._offered_slots: List[AvailableSlot] = []
         # Rate-limit counters for list-append tools (Fix I4)
         self._tool_call_counts: Dict[str, int] = {}
+        # Transcript buffer for batched persistence
+        self._transcript_buffer: List[Any] = []
+        self._transcript_flush_count: int = 0
 
     # Section ordering for enforcement (Fix I8)
     _SECTION_ORDER: Dict[str, int] = {
@@ -193,6 +198,13 @@ class URLAAgent(Agent):
         app = await self.state.load_application(self.tenant_id, lid)
         if app is None:
             raise RuntimeError(f"Loan {lid} not found or expired.")
+        if (self._session_lock_token
+                and app.session_lock_token
+                and app.session_lock_token != self._session_lock_token):
+            raise RuntimeError(
+                "This application is being edited in another session. "
+                "Please try again later or call back."
+            )
         return app
 
     async def _save_and_advance(
@@ -224,6 +236,7 @@ class URLAAgent(Agent):
             caller_phone=self.caller_phone,
         )
         self._active_loan_id = app.loan_id
+        self._session_lock_token = app.session_lock_token
         logger.info("Started new URLA", extra={"loan_id": app.loan_id})
         return (
             f"Application started. Your loan ID is {_spell_loan_id(app.loan_id)}. "
@@ -253,7 +266,10 @@ class URLAAgent(Agent):
                 "like to start a new one?"
             )
 
+        import uuid
         self._active_loan_id = app.loan_id
+        app.session_lock_token = uuid.uuid4().hex
+        self._session_lock_token = app.session_lock_token
         await self.state.resume(app)
         summary = app.progress_summary()
         section_name = summary["current_section"].replace("_", " ").title()
@@ -1221,6 +1237,7 @@ class URLAAgent(Agent):
         if not borrower:
             return f"Borrower {borrower_id} not found."
         section = Section8_Demographics(
+            demographics_notice_read_at=datetime.now(timezone.utc),
             was_demographic_info_provided_by_borrower=not borrower_declined_to_provide,
             was_collected_via_visual_observation_or_surname=False,
         )
@@ -1278,18 +1295,23 @@ class URLAAgent(Agent):
         self,
         ctx: RunContext,
         consent_given: bool,
+        privacy_notice_consent_given: bool = False,
         recording_url: Optional[str] = None,
     ) -> str:
         """
         Record the caller's verbal 'I agree' to the acknowledgments disclosure.
-        This is required before finalize.
+        Also captures GLBA privacy notice consent (separate from application consent).
+        Both are required before finalize.
         """
         await self._assert_section_reachable_async("SECTION_6")
         app = await self._load()
+        now = datetime.now(timezone.utc) if consent_given else None
         app.section_6 = Section6_Acknowledgments(
             verbal_consent_given=consent_given,
-            verbal_consent_timestamp=datetime.now(timezone.utc) if consent_given else None,
+            verbal_consent_timestamp=now,
             verbal_consent_recording_url=recording_url,
+            privacy_notice_consent_given=privacy_notice_consent_given,
+            privacy_notice_consent_timestamp=now if privacy_notice_consent_given else None,
         )
         await self._save_and_advance(app, "SECTION_6", "FINAL_SUMMARY")
         if consent_given:
@@ -1356,6 +1378,11 @@ class URLAAgent(Agent):
                 f"to fill those in now, or pause and come back?"
             )
 
+        # Layer 2 PII scrub: DOB, account numbers, contextual patterns
+        if app.transcript:
+            scrub_post_call(app.transcript, app.current_section)
+            await self.state.save_application(app)
+
         result: PushResult = await push_to_bytepro(app, self.loan_officer)
 
         if not result.success:
@@ -1399,12 +1426,96 @@ class URLAAgent(Agent):
                 "loan_id": app.loan_id,
                 "application_received_at": app.application_received_at.isoformat(),
             })
+            # RESPA: Loan Estimate must be delivered within 3 business days
+            try:
+                from .task_generator import URLATask, TaskPriority, TaskCategory
+                trid_task = URLATask(
+                    title=f"Send Loan Estimate — {app.loan_id}",
+                    description=(
+                        f"TRID triggered at {app.application_received_at.isoformat()}. "
+                        f"Loan Estimate must be delivered within 3 business days."
+                    ),
+                    priority=TaskPriority.CRITICAL,
+                    category=TaskCategory.COMPLIANCE,
+                    due_in_business_days=3,
+                )
+                logger.info("TRID compliance task created", extra={"loan_id": app.loan_id})
+            except ImportError:
+                pass
+
+        # FCRA: Trigger credit authorization e-sign (verbal consent is insufficient)
+        try:
+            from .esign_adapter import get_esign_adapter, ESignDocumentType
+            primary = app.primary_borrower()
+            if primary and primary.section_1a and primary.section_1a.email:
+                esign = get_esign_adapter()
+                name = f"{primary.section_1a.first_name or ''} {primary.section_1a.last_name or ''}".strip()
+                esign_request = await esign.send_authorization(
+                    document_type=ESignDocumentType.CREDIT_AUTHORIZATION,
+                    loan_id=app.loan_id,
+                    borrower_email=primary.section_1a.email,
+                    borrower_name=name,
+                    tenant_id=self.tenant_id,
+                )
+                app.credit_authorization_sent_at = datetime.now(timezone.utc)
+                await self.state.save_application(app)
+                logger.info("Credit authorization e-sign sent", extra={
+                    "loan_id": app.loan_id,
+                    "request_id": esign_request.request_id,
+                })
+        except Exception as e:
+            logger.warning("Credit auth e-sign failed", extra={"error": str(e)})
+
+        # POS consent flow: send borrower SMS with magic link for credit auth + e-disclosure
+        consent_sms_sent = False
+        try:
+            import httpx
+            primary = app.primary_borrower()
+            name = ""
+            if primary and primary.section_1a:
+                name = f"{primary.section_1a.first_name or ''} {primary.section_1a.last_name or ''}".strip()
+
+            crm_api_base = os.getenv("CRM_API_BASE_URL", "https://api.perenniaai.com")
+            crm_api_key = os.getenv("CRM_API_KEY", "")
+
+            if crm_api_base and crm_api_key:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    resp = await client.post(
+                        f"{crm_api_base}/api/v1/pos/voice-complete",
+                        json={
+                            "voice_loan_id": app.loan_id,
+                            "borrower_first_name": primary.section_1a.first_name if primary and primary.section_1a else "",
+                            "borrower_phone": app.caller_phone,
+                            "lo_name": self.loan_officer.name,
+                        },
+                        headers={
+                            "Authorization": f"Bearer {crm_api_key}",
+                            "Content-Type": "application/json",
+                        },
+                    )
+                    if resp.status_code in (200, 201):
+                        consent_sms_sent = True
+                        logger.info("POS consent SMS triggered", extra={"loan_id": app.loan_id})
+                    else:
+                        logger.warning("POS consent trigger failed", extra={
+                            "status": resp.status_code,
+                            "body": resp.text[:200],
+                        })
+        except Exception as e:
+            logger.warning("POS consent flow trigger failed (non-fatal)", extra={"error": str(e)})
+
+        sms_note = ""
+        if consent_sms_sent:
+            sms_note = (
+                " I've also sent a text message to your phone with a link to "
+                "review and sign the credit authorization and disclosure agreements."
+            )
 
         lo_first = self.loan_officer.name.split()[0] if self.loan_officer.name else "your loan officer"
         return (
             f"Application submitted. Your BytePro reference is "
             f"{result.bytepro_loan_number}, and your Perennia loan ID is "
-            f"{_spell_loan_id(app.loan_id)}. "
+            f"{_spell_loan_id(app.loan_id)}.{sms_note} "
             f"Now let's get you on {lo_first}'s calendar for a quick kickoff "
             f"call — it takes about thirty minutes. Let me pull up some times."
         )

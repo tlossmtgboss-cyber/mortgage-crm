@@ -39,8 +39,8 @@ _COLOR_DANGER = "#dc2626"
 _COLOR_INFO = "#3b82f6"
 _COLOR_MUTED = "#6b7280"
 
-_DEFAULT_COMPANY_NAME = "Perennia AI"
-_DEFAULT_FROM_NAME = "Sarah from Perennia AI"
+_DEFAULT_COMPANY_NAME = "The Tim Loss Team"
+_DEFAULT_FROM_NAME = "Sarah from The Tim Loss Team"
 
 _APP_URL = os.getenv("APP_URL", "https://app.perenniaai.com")
 _UNSUBSCRIBE_URL = f"{_APP_URL}/settings/notifications"

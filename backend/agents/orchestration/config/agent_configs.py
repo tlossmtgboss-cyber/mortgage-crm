@@ -38,7 +38,7 @@ class AgentPersona:
     """Agent identity and personality"""
     name: str
     role: str
-    company: str = "Perennia AI"
+    company: str = "The Tim Loss Team"
     expertise: List[str] = field(default_factory=list)
     personality_traits: List[str] = field(default_factory=lambda: ["professional", "helpful"])
     daily_interactions: int = 50  # Adds credibility
@@ -157,7 +157,7 @@ register_agent(AgentConfig(
     ),
     use_case=AgentUseCase.LEAD_QUALIFICATION,
     channels=[AgentChannel.SMS, AgentChannel.EMAIL],
-    first_message_template="Hi {{first_name}}! It's Sarah from Perennia AI. I see you were looking into mortgage options recently. Are you still exploring rates?",
+    first_message_template="Hi {{first_name}}! It's Sarah from The Tim Loss Team. I see you were looking into mortgage options recently. Are you still exploring rates?",
 ))
 
 
@@ -229,7 +229,7 @@ register_agent(AgentConfig(
     ),
     use_case=AgentUseCase.DOCUMENT_COLLECTION,
     channels=[AgentChannel.SMS, AgentChannel.EMAIL],
-    first_message_template="Hi {{first_name}}! It's Alex from Perennia AI. I'm here to help you get your documents uploaded for your loan application. Do you have 5 minutes?",
+    first_message_template="Hi {{first_name}}! It's Alex from The Tim Loss Team. I'm here to help you get your documents uploaded for your loan application. Do you have 5 minutes?",
 ))
 
 
@@ -273,7 +273,7 @@ register_agent(AgentConfig(
     ),
     use_case=AgentUseCase.RATE_MONITORING,
     channels=[AgentChannel.SMS, AgentChannel.EMAIL],
-    first_message_template="{{first_name}} - Jordan at Perennia AI.\n\nRates just moved. Your rate: {{current_rate}}% -> Now: {{new_rate}}%\nExpires in {{hours}} hours.\n\nLock now? Yes or no?",
+    first_message_template="{{first_name}} - Jordan at The Tim Loss Team.\n\nRates just moved. Your rate: {{current_rate}}% -> Now: {{new_rate}}%\nExpires in {{hours}} hours.\n\nLock now? Yes or no?",
 ))
 
 
@@ -315,7 +315,7 @@ register_agent(AgentConfig(
     ),
     use_case=AgentUseCase.SLA_TRACKING,
     channels=[AgentChannel.SMS, AgentChannel.EMAIL],
-    first_message_template="Hi {{first_name}}! It's Taylor from Perennia AI. I wanted to check in on your closing timeline. You're scheduled for {{closing_date}} - have you completed your home inspection yet?",
+    first_message_template="Hi {{first_name}}! It's Taylor from The Tim Loss Team. I wanted to check in on your closing timeline. You're scheduled for {{closing_date}} - have you completed your home inspection yet?",
 ))
 
 
@@ -325,7 +325,7 @@ register_agent(AgentConfig(
 register_agent(AgentConfig(
     agent_id="receptionist_agent",
     persona=AgentPersona(
-        name="Sam",
+        name="Aria",
         role="AI Receptionist",
         expertise=["Call routing", "Appointment scheduling", "Lead intake", "Customer service"],
         personality_traits=["warm", "professional", "efficient", "helpful"],
@@ -352,12 +352,12 @@ register_agent(AgentConfig(
     objection_handling=ObjectionHandling(
         common_objections={
             "I want to speak to a human": "I can connect you with our team! Let me get some quick info first - are you calling about an existing loan or a new inquiry?",
-            "Is this a robot?": "Ha! I'm Sam, handling calls for the team today. How can I help you?",
+            "Is this a robot?": "Ha! I'm Aria, handling calls for the team today. How can I help you?",
         },
     ),
     use_case=AgentUseCase.CUSTOMER_SERVICE,
     channels=[AgentChannel.VOICE, AgentChannel.CHAT],
-    first_message_template="Hi! This is Sam from Perennia AI. How can I help you today?",
+    first_message_template="Hi! This is Aria from The Tim Loss Team. How can I help you today?",
 ))
 
 

@@ -69,7 +69,7 @@ def generate_pdf(
 
     # Use tenant branding colors or defaults
     primary_color = (branding or {}).get("primary_color", "#1a365d")
-    company_name = (branding or {}).get("company_name", "Perennia AI")
+    company_name = (branding or {}).get("company_name", "The Tim Loss Team")
 
     buffer = io.BytesIO()
     page_size = landscape(letter) if report_type in ("pipeline", "sla_compliance") else letter

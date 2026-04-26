@@ -752,7 +752,7 @@ def _load_org_email_config(db: Session, organization_id: int) -> Dict[str, Any]:
         """), {"org_id": organization_id}).fetchone()
         if row:
             return {
-                "company_name": row.name or "Perennia AI",
+                "company_name": row.name or "The Tim Loss Team",
                 "address": row.address or "",
                 "city": row.city or "",
                 "state": row.state or "",
@@ -763,7 +763,7 @@ def _load_org_email_config(db: Session, organization_id: int) -> Dict[str, Any]:
     except Exception as e:
         logger.debug("Failed to load org email config: %s", e)
 
-    return {"company_name": "Perennia AI"}
+    return {"company_name": "The Tim Loss Team"}
 
 
 # ---------------------------------------------------------------------------

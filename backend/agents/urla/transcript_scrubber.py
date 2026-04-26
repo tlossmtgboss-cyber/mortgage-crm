@@ -31,9 +31,11 @@ _SSN_FULL = re.compile(
 )
 
 # Spoken SSN: "one two three, four five, six seven eight nine" etc.
+# Tolerates filler words (uh, um, and, like), punctuation, and pauses between digits
+_DIGIT_WORD = r"(?:zero|one|two|three|four|five|six|seven|eight|nine)"
+_SEP = r"(?:[\s,\-]+(?:(?:uh|um|and|like|pause)\s+)*)"
 _SSN_SPOKEN_DIGITS = re.compile(
-    r"(?:(?:zero|one|two|three|four|five|six|seven|eight|nine)[\s,\-]+){8,9}"
-    r"(?:zero|one|two|three|four|five|six|seven|eight|nine)",
+    rf"(?:{_DIGIT_WORD}{_SEP}){{8,9}}{_DIGIT_WORD}",
     re.IGNORECASE,
 )
 

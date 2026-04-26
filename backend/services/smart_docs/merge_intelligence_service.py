@@ -802,7 +802,7 @@ class MergeIntelligenceService(OrgAwareService):
         user_id: Optional[int] = None,
     ):
         super().__init__(db=db, org_id=org_id, user_id=user_id)
-        self._company_name = os.getenv("COMPANY_NAME", "Perennia AI")
+        self._company_name = os.getenv("COMPANY_NAME", "The Tim Loss Team")
 
     # ------------------------------------------------------------------
     # Public API

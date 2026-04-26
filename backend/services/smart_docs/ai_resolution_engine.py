@@ -31,7 +31,7 @@ Usage:
     # Generate intro SMS sequence
     msgs = await engine.generate_intro_sequence(
         loan_id="100", borrower_name="Jane",
-        lo_name="Sarah Miller", company_name="Perennia AI",
+        lo_name="Sarah Miller", company_name="The Tim Loss Team",
     )
 
     # Parse a borrower's free-text reply

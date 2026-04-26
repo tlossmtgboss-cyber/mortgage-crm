@@ -20,6 +20,9 @@ def get_organization_for_agent(
     """
     Get organization details for agent white-labeling.
 
+    Uses the central company_name_resolver for the customer-facing name,
+    ensuring consistency across voice, email, docs, and agent prompts.
+
     Args:
         db: Database session
         organization_id: Organization ID (primary lookup)
@@ -38,12 +41,15 @@ def get_organization_for_agent(
             "custom_prompts": dict,   # Org-specific prompt overrides
         }
     """
+    from services.company_name_resolver import resolve_company_name
+
     # Default organization fallback
+    fallback_name = resolve_company_name(db, organization_id)
     default_org = {
         "id": None,
-        "name": "Perennia AI",
-        "brand_name": "Perennia AI",
-        "display_name": "Perennia AI",
+        "name": fallback_name,
+        "brand_name": fallback_name,
+        "display_name": fallback_name,
         "website": None,
         "phone": None,
         "agent_personas": {},
@@ -75,24 +81,21 @@ def get_organization_for_agent(
             logger.warning(f"Organization not found: org_id={organization_id}, user_id={user_id}")
             return default_org
 
+        # Resolve the canonical customer-facing name via central resolver
+        company_name = resolve_company_name(db, org.id)
+
         # Extract branding info from organization
-        # These can come from the settings JSON or dedicated columns
         settings = org.settings or {}
 
         return {
             "id": org.id,
-            "name": org.name,
-            # Brand name: check settings first, then fall back to org name
-            "brand_name": settings.get("brand_name") or settings.get("brandName") or org.name,
-            # Display name: check settings first, then fall back to org name
-            "display_name": settings.get("display_name") or settings.get("displayName") or org.name,
-            # Website and phone from settings
+            "name": company_name,
+            "brand_name": company_name,
+            "display_name": company_name,
             "website": settings.get("website"),
             "phone": settings.get("phone") or settings.get("support_phone"),
-            # Agent customization
             "agent_personas": settings.get("agent_personas", {}),
             "custom_prompts": settings.get("custom_prompts", {}),
-            # Additional branding
             "logo_url": settings.get("logo_url"),
             "primary_color": settings.get("primary_color"),
         }

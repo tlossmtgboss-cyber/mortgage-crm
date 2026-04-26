@@ -34,8 +34,8 @@ def get_current_user_flexible():
 # ============================================================================
 ASSISTANT_CONFIG = {
     "receptionist": {
-        "id": "120e239e-4d19-4e43-ad92-1f8b07d08c8c",  # Sam
-        "name": "Sam (Receptionist)",
+        "id": "120e239e-4d19-4e43-ad92-1f8b07d08c8c",  # Aria
+        "name": "Aria (Receptionist)",
         "description": "Handles unrecognized callers and general inquiries",
         "stages": []  # Fallback for unknown callers
     },

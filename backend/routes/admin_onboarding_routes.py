@@ -534,6 +534,26 @@ async def save_company_profile(
             'tenant_id': str(user.tenant_account_id)
         })
 
+        # Also seed organization_branding so voice/email/docs resolve the company name
+        # Uses org_id from the organizations table linked to this tenant
+        org_row = db.execute(text("""
+            SELECT id FROM organizations
+            WHERE tenant_account_id = CAST(:tenant_id AS uuid)
+            LIMIT 1
+        """), {'tenant_id': str(user.tenant_account_id)}).fetchone()
+
+        if org_row:
+            db.execute(text("""
+                INSERT INTO organization_branding (organization_id, company_name)
+                VALUES (:org_id, :company_name)
+                ON CONFLICT (organization_id)
+                DO UPDATE SET company_name = :company_name
+            """), {'org_id': org_row[0], 'company_name': profile.company_name})
+
+            # Invalidate cached company name
+            from services.company_name_resolver import invalidate_cache
+            invalidate_cache(org_row[0])
+
         db.commit()
 
         return success_response(

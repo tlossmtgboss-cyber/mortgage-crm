@@ -196,12 +196,20 @@ def _build_assistant_response(db: Session, message: dict) -> dict:
     """Build a full assistant config response for Vapi assistant-request."""
     call_data = message.get("call", {})
     customer_phone = call_data.get("customer", {}).get("number", "")
-    first_message = "Thank you for calling The Tim Loss Team. This is Aria. How may I help you today?"
-    system_content = _ARIA_RECEPTIONIST_PROMPT
+
+    # Resolve company name dynamically from the org that owns this phone number
+    from services.company_name_resolver import resolve_company_name
+    org_id = _resolve_org_id_from_assistant(db, message)
+    company_name = resolve_company_name(db, org_id)
+
+    first_message = f"Thank you for calling {company_name}. This is Aria. How may I help you today?"
+    system_content = (
+        f"You are Aria, the AI receptionist for {company_name} mortgage company.\n\n"
+        + _ARIA_RECEPTIONIST_PROMPT_BODY
+    )
 
     try:
         from database.models import Lead
-        org_id = _resolve_org_id_from_assistant(db, message)
         query = db.query(Lead).filter(Lead.phone == customer_phone)
         if org_id:
             query = query.filter(Lead.organization_id == org_id)
@@ -350,8 +358,7 @@ def _build_tools(server_base: str) -> list:
     ]
 
 
-_ARIA_RECEPTIONIST_PROMPT = (
-    "You are Aria, the AI receptionist for The Tim Loss Team mortgage company.\n\n"
+_ARIA_RECEPTIONIST_PROMPT_BODY = (
     "CRITICAL CONVERSATION RULES - FOLLOW EXACTLY:\n"
     "- Ask ONLY ONE question at a time. NEVER ask two questions in the same response.\n"
     "- After asking a question, STOP talking immediately and wait for the caller to answer.\n"
@@ -373,6 +380,11 @@ _ARIA_RECEPTIONIST_PROMPT = (
     "5. Appointments: get_available_time_slots then schedule_appointment (phone only)\n"
     "6. Pre-approval: collect info one question at a time, then submit_preapproval_application\n\n"
     "Conversation style: one question at a time, natural, patient, no jargon."
+)
+
+_ARIA_RECEPTIONIST_PROMPT = (
+    "You are Aria, the AI receptionist for The Tim Loss Team mortgage company.\n\n"
+    + _ARIA_RECEPTIONIST_PROMPT_BODY
 )
 
 

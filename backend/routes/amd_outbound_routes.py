@@ -8,7 +8,7 @@ Flow:
 1. Initiate call with AMD enabled
 2. Provider detects human vs machine
 3. AMD callback routes to appropriate handler:
-   - Human: Connect to Sam (WebSocket stream)
+   - Human: Connect to Aria (WebSocket stream)
    - Machine: Play voicemail message (ElevenLabs TTS)
 """
 
@@ -58,7 +58,7 @@ if not API_BASE_URL:
 
 # ElevenLabs configuration
 ELEVENLABS_API_URL = "https://api.elevenlabs.io/v1"
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL")  # Sam's voice ID
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL")  # Aria's voice ID
 
 
 # =============================================================================
@@ -273,7 +273,7 @@ def build_default_voicemail_message(client_name: str, lo_name: str, purpose: str
     greeting = f"Hi {first_name}" if first_name else "Hi"
 
     return (
-        f"{greeting}, this is Sam calling on behalf of {lo_name or 'your loan officer'} "
+        f"{greeting}, this is Aria calling on behalf of {lo_name or 'your loan officer'} "
         f"at CMG Home Loans regarding {purpose}. "
         f"Please give us a call back at your earliest convenience. "
         f"Thank you and have a great day!"
@@ -679,7 +679,7 @@ async def connect_to_ai(
 ):
     """
     TwiML to connect call to AI via WebSocket stream.
-    Uses the existing voice-stream endpoint that powers Sam.
+    Uses the existing voice-stream endpoint that powers Aria.
     """
     # Get call info
     result = db.execute(text("""

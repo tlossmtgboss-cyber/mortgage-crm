@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Default branding — returned when no WhiteLabelConfig exists for the org
 _DEFAULTS = {
-    "company_name": "Perennia AI",
+    "company_name": "The Tim Loss Team",
     "logo_url": None,
     "favicon_url": None,
     "primary_color": "#218d8d",

@@ -1262,7 +1262,7 @@ class TemplateEngineService:
             topMargin=0.75 * inch,
             bottomMargin=0.75 * inch,
             title=render_result["template_name"],
-            author=org_ctx.get("name", "Perennia AI"),
+            author=org_ctx.get("name", "The Tim Loss Team"),
         )
 
         styles = getSampleStyleSheet()

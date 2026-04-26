@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 # Default organization for fallback
 DEFAULT_ORGANIZATION = {
     "id": None,
-    "name": "Perennia AI",
-    "brand_name": "Perennia AI",
-    "display_name": "Perennia AI",
+    "name": "The Tim Loss Team",
+    "brand_name": "The Tim Loss Team",
+    "display_name": "The Tim Loss Team",
     "website": None,
     "phone": None,
     "agent_personas": {},
@@ -241,7 +241,7 @@ class ContextManager:
             organization.get('brand_name') or
             organization.get('display_name') or
             organization.get('name') or
-            'Perennia AI'
+            'The Tim Loss Team'
         )
 
         # Get custom agent persona for this organization (if set)

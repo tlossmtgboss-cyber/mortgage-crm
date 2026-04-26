@@ -104,6 +104,9 @@ from . import sms_tools
 from . import document_tools
 from . import outreach_tools
 
+# Smart Docs Bridge Tools
+from . import smart_documents
+
 
 # =============================================================================
 # Agent Configuration
@@ -400,6 +403,20 @@ OUTREACH_TOOLS = [
     "send_calendar_invite_email",
 ]
 
+# Smart Documents Bridge Tools
+SMART_DOCUMENT_TOOLS = [
+    "get_smart_doc_status",
+    "check_document_freshness",
+    "get_document_decisions",
+    "get_needs_list",
+    "check_document_sla",
+    "get_screenshot_flags",
+    "get_document_extraction",
+    "track_portal_activity",
+    "get_followup_campaign_status",
+    "get_policy_events",
+]
+
 # Analytics Tools
 HISTORICAL_TOOLS = [
     "get_performance_by_period",
@@ -442,6 +459,8 @@ ALL_TOOLS = {
     "refinance": REFINANCE_TOOLS,
     # Outreach & Campaigns
     "outreach": OUTREACH_TOOLS,
+    # Smart Documents Bridge
+    "smart_documents": SMART_DOCUMENT_TOOLS,
     # Analytics
     "historical": HISTORICAL_TOOLS,
 }
@@ -470,7 +489,7 @@ AGENT_CONFIGS = {
     },
     "document_tracker": {
         "description": "Tracks documents, conditions, and third-party orders",
-        "tools": DOCUMENT_TOOLS,
+        "tools": DOCUMENT_TOOLS + SMART_DOCUMENT_TOOLS,
         "category": "crm",
     },
     "profitability_analyst": {
@@ -698,6 +717,9 @@ __all__ = [
     # Outreach Modules
     "outreach_tools",
 
+    # Smart Documents Bridge Module
+    "smart_documents",
+
     # Analytics Modules
     "historical",
 
@@ -740,6 +762,9 @@ __all__ = [
 
     # Outreach Tool Lists
     "OUTREACH_TOOLS",
+
+    # Smart Documents Bridge Tool Lists
+    "SMART_DOCUMENT_TOOLS",
 
     # Analytics Tool Lists
     "HISTORICAL_TOOLS",

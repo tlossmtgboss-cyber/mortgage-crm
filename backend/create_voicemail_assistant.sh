@@ -9,8 +9,8 @@ RESPONSE=$(curl -s -X POST "https://api.vapi.ai/assistant" \
   -d '{
     "name": "Voicemail Drop Only",
     "voice": {
-      "provider": "playht",
-      "voiceId": "jennifer"
+      "provider": "cartesia",
+      "voiceId": "b7d50908-b17c-442d-ad8d-810c63997ed9"
     },
     "model": {
       "provider": "openai",

@@ -257,7 +257,7 @@ def generate_user_briefing(self, user_id: int, briefing_date_str: str, briefing_
                 ).first()
                 if wl_config:
                     branding = {
-                        "company_name": wl_config.company_name or "Perennia AI",
+                        "company_name": wl_config.company_name or "The Tim Loss Team",
                         "logo_url": wl_config.logo_url,
                         "primary_color": wl_config.primary_color or "#218d8d",
                         "secondary_color": wl_config.secondary_color,
@@ -360,7 +360,7 @@ def _send_briefing_email(
     subject = f"Your Morning Briefing — {short_date} — {level_labels.get(level, '')}"
 
     from_email = from_email_override or os.getenv("BRIEFING_FROM_EMAIL", "briefing@perenniaai.com")
-    from_name = from_name_override or os.getenv("SENDGRID_FROM_NAME", "Perennia AI")
+    from_name = from_name_override or os.getenv("SENDGRID_FROM_NAME", "The Tim Loss Team")
 
     message = Mail(
         from_email=Email(from_email, from_name),

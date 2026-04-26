@@ -297,8 +297,8 @@ class SocialMedia(BaseModel):
 
 _DEFAULTS = {
     "company": {
-        "company_name": "Perennia Mortgage",
-        "legal_name": "Perennia Financial Services LLC",
+        "company_name": "The Tim Loss Team",
+        "legal_name": "CMG Home Loans",
         "nmls_id": "123456",
         "tax_id": "",
         "address_line1": "123 Main Street",
@@ -353,11 +353,11 @@ _DEFAULTS = {
         "watermark_url": None
     },
     "email": {
-        "from_name": "Perennia Mortgage",
+        "from_name": "The Tim Loss Team",
         "from_email": "noreply@perennia.com",
         "reply_to_email": "support@perennia.com",
         "email_signature": "",
-        "email_footer_text": "This email was sent by Perennia Mortgage. NMLS# 123456",
+        "email_footer_text": "This email was sent by The Tim Loss Team. NMLS# 123456",
         "include_social_links": True,
         "social_links": {},
         "unsubscribe_text": "Click here to manage your email preferences"
@@ -593,6 +593,11 @@ async def update_company_info(
         settings = data.dict()
         settings["updated_at"] = datetime.now(timezone.utc).isoformat()
         BrandingStore.put(db, org_id, "company", settings)
+
+        # Invalidate company name cache so voice/email pick up the new name
+        from services.company_name_resolver import invalidate_cache
+        invalidate_cache(org_id)
+
         return success_response(settings, "Company information updated successfully")
     except Exception as e:
         raise HTTPException(status_code=500, detail="Internal server error")

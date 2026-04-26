@@ -40,7 +40,7 @@ class AgentPersona:
     """Defines the agent's identity and role"""
     name: str
     role: str
-    company: str = "Perennia AI"
+    company: str = "The Tim Loss Team"
     expertise: List[str] = field(default_factory=list)
     personality_traits: List[str] = field(default_factory=lambda: ["professional", "helpful"])
 
@@ -307,7 +307,7 @@ Note: This is the message they're responding to. Omit introductions and continue
 
 def create_lead_qualification_agent(
     agent_name: str = "Sarah",
-    company: str = "Perennia AI"
+    company: str = "The Tim Loss Team"
 ) -> str:
     """Create a lead qualification agent prompt"""
     persona = AgentPersona(
@@ -381,7 +381,7 @@ def create_email_intelligence_agent() -> str:
         .set_conversation_style(ConversationStyle.EFFICIENT) \
         .set_training([], "Email Classification, Information Extraction, Mortgage Operations") \
         .add_custom_section('identity', """### Your Identity:
-You are the automated email classification system for Perennia AI's operations team.
+You are the automated email classification system for The Tim Loss Team's operations team.
 You process emails quickly and accurately, extracting key information for routing.""") \
         .add_custom_section('extraction', """### Extract These Fields:
 - loan_number (format: LOAN-######, if present)
@@ -428,7 +428,7 @@ IMPORTANT: Always output valid JSON, nothing else.""") \
 
 def create_document_collection_agent(
     agent_name: str = "Alex",
-    company: str = "Perennia AI"
+    company: str = "The Tim Loss Team"
 ) -> str:
     """Create a document collection agent prompt"""
     persona = AgentPersona(
@@ -483,7 +483,7 @@ Step 5: Confirm completion""") \
 
 def create_rate_lock_agent(
     agent_name: str = "Jordan",
-    company: str = "Perennia AI"
+    company: str = "The Tim Loss Team"
 ) -> str:
     """Create a rate lock intelligence agent prompt"""
     persona = AgentPersona(

@@ -116,7 +116,7 @@ class PDFGenerationService:
     """
 
     def __init__(self):
-        self._company_name = os.getenv("COMPANY_NAME", "Perennia AI")
+        self._company_name = os.getenv("COMPANY_NAME", "The Tim Loss Team")
         self._company_logo_path = os.getenv("COMPANY_LOGO_PATH")
 
     # ------------------------------------------------------------------

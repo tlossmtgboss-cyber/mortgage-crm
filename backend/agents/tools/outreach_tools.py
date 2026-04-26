@@ -566,7 +566,7 @@ def send_bulk_email_outreach(
     parameters={
         "emails": "Comma-separated email addresses to send the invite to",
         "date": "Appointment date in YYYY-MM-DD format",
-        "time": "Appointment time in HH:MM format (24-hour)",
+        "appointment_time": "Appointment time in HH:MM format (24-hour)",
         "appointment_type": "Type: consultation, mortgage_review, document_review, closing_prep, callback",
         "borrower_name": "Name of the borrower/attendee",
         "lo_name": "Loan officer's name",
@@ -576,17 +576,14 @@ def send_bulk_email_outreach(
 def send_calendar_invite_email(
     emails: str,
     date: str,
-    time_str: str = "",
+    appointment_time: str = "",
     appointment_type: str = "consultation",
     borrower_name: str = "there",
     lo_name: str = "your loan officer",
     duration_minutes: int = 30,
-    # Handle the parameter name collision with built-in 'time'
-    **kwargs,
 ) -> ToolResult:
     """Send calendar invite email with ICS attachment."""
-    # Handle 'time' parameter (may come as kwarg due to name collision)
-    appt_time = time_str or kwargs.get("time", "")
+    appt_time = appointment_time
     if not emails or not date or not appt_time:
         return ToolResult.error("emails, date, and time are required")
 

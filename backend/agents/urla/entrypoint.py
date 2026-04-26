@@ -42,6 +42,7 @@ from .state import URLAStateManager
 from .bytepro_adapter import LoanOfficer
 from .prompts import GREETING_NEW_CALLER, GREETING_RETURNING_CALLER_TEMPLATE
 from .transcript_scrubber import scrub_realtime
+from .logging_context import set_session_context, URLALogFilter, URLA_LOG_FORMAT
 
 
 logger = logging.getLogger("urla.entrypoint")
@@ -86,7 +87,7 @@ def _loan_officer_from_env() -> LoanOfficer:
         nmlsr_id=os.getenv("URLA_DEFAULT_LO_NMLSR", "0000000"),
         email=os.getenv("URLA_DEFAULT_LO_EMAIL", "loans@perennia.ai"),
         phone=os.getenv("URLA_DEFAULT_LO_PHONE", "+18005551212"),
-        organization_name=os.getenv("URLA_ORG_NAME", "Perennia AI"),
+        organization_name=os.getenv("URLA_ORG_NAME", "The Tim Loss Team"),
         organization_nmlsr_id=os.getenv("URLA_ORG_NMLSR", "0000000"),
     )
 
@@ -128,6 +129,9 @@ async def urla_entrypoint(ctx: JobContext) -> None:
     tenant_id = os.getenv("URLA_TENANT_ID", "perennia")
     caller_phone = _extract_caller_phone(ctx)
     loan_officer = _loan_officer_from_env()
+
+    # Set structured logging context for this session
+    set_session_context(tenant_id=tenant_id, caller_phone=caller_phone)
 
     # Build LLM (C6 — prefer Claude, fall back to OpenAI)
     if _HAS_ANTHROPIC:
@@ -184,9 +188,23 @@ async def urla_entrypoint(ctx: JobContext) -> None:
         loan_officer=loan_officer,
     )
 
-    # Graceful shutdown: close Redis on room disconnect
+    # Graceful shutdown: auto-pause + close Redis on room disconnect
     async def _on_shutdown():
         logger.info("URLA session ending", extra={"room": ctx.room.name})
+        try:
+            # Auto-pause if the app exists and isn't finalized
+            if agent._active_loan_id:
+                app = await state.load_application(tenant_id, agent._active_loan_id)
+                if app and not app.is_finalized and not app.current_section.startswith("PAUSED:"):
+                    # Flush any buffered transcript entries
+                    if agent._transcript_buffer:
+                        for entry in agent._transcript_buffer:
+                            app.transcript.append(entry)
+                        agent._transcript_buffer.clear()
+                    await state.pause(app)
+                    logger.info("Auto-paused on disconnect", extra={"loan_id": app.loan_id})
+        except Exception as e:
+            logger.warning("Error auto-pausing", extra={"error": str(e)})
         try:
             await state.close()
         except Exception as e:
@@ -197,32 +215,41 @@ async def urla_entrypoint(ctx: JobContext) -> None:
     # Start the session
     await session.start(room=ctx.room, agent=agent)
 
-    # Transcript capture callback (C3)
+    # Shared mutable reference for inactivity tracking
+    last_activity_ref = [time.monotonic()]
+
+    # Transcript buffer flush threshold
+    _TRANSCRIPT_FLUSH_EVERY = 10
+
+    # Transcript capture callback (C3) — buffers entries and flushes in batches
     async def _on_transcription(segments, participant, agent_ref=agent, state_ref=state, tenant=tenant_id, activity_ref=last_activity_ref):
         """Capture transcription segments for compliance audit trail."""
         activity_ref[0] = time.monotonic()
         if not agent_ref._active_loan_id:
             return
         try:
-            app = await state_ref.load_application(tenant, agent_ref._active_loan_id)
-            if app:
-                for seg in segments:
-                    if seg.final and seg.text.strip():
-                        speaker = "borrower" if participant and not participant.is_agent else "agent"
-                        scrubbed = scrub_realtime(seg.text.strip())
-                        app.transcript.append(CallTranscriptEntry(
-                            speaker=speaker,
-                            text=scrubbed,
-                            timestamp=datetime.now(timezone.utc),
-                        ))
-                await state_ref.save_application(app)
+            for seg in segments:
+                if seg.final and seg.text.strip():
+                    speaker = "borrower" if participant and not participant.is_agent else "agent"
+                    scrubbed = scrub_realtime(seg.text.strip())
+                    agent_ref._transcript_buffer.append(CallTranscriptEntry(
+                        speaker=speaker,
+                        text=scrubbed,
+                        timestamp=datetime.now(timezone.utc),
+                    ))
+            agent_ref._transcript_flush_count += 1
+            if agent_ref._transcript_flush_count >= _TRANSCRIPT_FLUSH_EVERY:
+                agent_ref._transcript_flush_count = 0
+                if agent_ref._transcript_buffer:
+                    app = await state_ref.load_application(tenant, agent_ref._active_loan_id)
+                    if app:
+                        app.transcript.extend(agent_ref._transcript_buffer)
+                        agent_ref._transcript_buffer.clear()
+                        await state_ref.save_application(app)
         except Exception as e:
             logger.warning("Transcript capture error", extra={"error": str(e)})
 
     session.on("transcription_received", _on_transcription)
-
-    # Shared mutable reference for inactivity tracking
-    last_activity_ref = [time.monotonic()]
 
     # Start inactivity watchdog (I7)
     asyncio.create_task(_inactivity_watchdog(agent, state, tenant_id, last_activity_ref=last_activity_ref))
@@ -302,8 +329,9 @@ async def _health_check() -> dict:
 if __name__ == "__main__":
     logging.basicConfig(
         level=os.getenv("URLA_LOG_LEVEL", "INFO"),
-        format="%(asctime)s %(levelname)s %(name)s %(message)s",
+        format=URLA_LOG_FORMAT,
     )
+    logging.getLogger("urla").addFilter(URLALogFilter())
     cli.run_app(
         WorkerOptions(
             entrypoint_fnc=urla_entrypoint,

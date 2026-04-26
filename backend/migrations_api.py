@@ -1272,7 +1272,7 @@ async def run_voice_os_migration(
     - voice_os_agent_performance: Real-time agent metrics view
 
     Also creates triggers for auto-updating agent stats and seeds
-    the default "Sam - AI Receptionist" agent.
+    the default "Aria - AI Receptionist" agent.
     """
     try:
         from migrations.add_voice_os_tables import run_migration
@@ -1295,7 +1295,7 @@ async def run_voice_os_migration(
                 "triggers_created": [
                     "trigger_update_voice_os_agent_stats"
                 ],
-                "default_agent": "Sam - AI Receptionist"
+                "default_agent": "Aria - AI Receptionist"
             }
         else:
             raise HTTPException(

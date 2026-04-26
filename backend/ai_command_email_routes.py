@@ -273,7 +273,7 @@ async def send_composed_email(
             raise HTTPException(status_code=401, detail="Authentication required")
 
         # Get sender info
-        sender_name = current_user.full_name if hasattr(current_user, 'full_name') else "Perennia AI"
+        sender_name = current_user.full_name if hasattr(current_user, 'full_name') else "The Tim Loss Team"
         sender_email = current_user.email if hasattr(current_user, 'email') else ""
 
         # Process the email body: detect video and calendar markers
@@ -350,7 +350,7 @@ async def send_composed_email(
 <body>
     <div class="email-content">{body_html_content}</div>
     <div class="footer">
-        <p>Sent via Perennia AI CRM</p>
+        <p>Sent via The Tim Loss Team</p>
     </div>
 </body>
 </html>

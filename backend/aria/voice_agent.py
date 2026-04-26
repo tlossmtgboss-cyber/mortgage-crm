@@ -163,17 +163,18 @@ class AriaVoiceAgent(Agent):
         if self._mode == "inbound_receptionist":
             caller_name = self._session_data.get("caller_name", "")
             is_existing = self._session_data.get("is_existing_client", False)
+            biz = self._session_data.get("company_name", "The Tim Loss Team")
             if is_existing and caller_name:
                 first = caller_name.split()[0]
                 greeting = (
                     f"Greet the caller by name — you already know who they are. "
-                    f"Say something like 'Hi {first}, thanks for calling Perennia, "
+                    f"Say something like 'Hi {first}, thanks for calling {biz}, "
                     f"this is Aria. How can I help you today?'"
                 )
             else:
                 greeting = (
                     "Greet the caller warmly. "
-                    "Say 'Thanks for calling Perennia, this is Aria. "
+                    f"Say 'Thanks for calling {biz}, this is Aria. "
                     "How can I help you today?'"
                 )
             await self.session.generate_reply(instructions=greeting)
@@ -1167,6 +1168,9 @@ async def aria_voice_session(ctx: agents.JobContext):
         trigger = "inbound_call"
         logger.info(f"[AriaVoice] Detected inbound SIP call from room name: {room_name}")
 
+    # Resolve company name from metadata (set by the dispatching route)
+    company_name = metadata.get("company_name", "The Tim Loss Team")
+
     if trigger == "inbound_call":
         mode = "inbound_receptionist"
         caller_name = metadata.get("caller_name", "")
@@ -1180,6 +1184,7 @@ async def aria_voice_session(ctx: agents.JobContext):
             "is_existing_client": is_existing,
             "stage": metadata.get("stage", ""),
             "organization_id": metadata.get("organization_id"),
+            "company_name": company_name,
         }
         _fn = metadata.get("from_number", "")
         logger.info(
@@ -1198,6 +1203,7 @@ async def aria_voice_session(ctx: agents.JobContext):
             "organization_id": metadata.get("organization_id") or metadata.get("org_id"),
             "user_id": metadata.get("user_id"),
             "lead_id": metadata.get("lead_id"),
+            "company_name": company_name,
         }
         logger.info(
             f"[AriaVoice] Outbound follow-up mode: "
@@ -1209,6 +1215,7 @@ async def aria_voice_session(ctx: agents.JobContext):
             "user_id": metadata.get("user_id"),
             "organization_id": metadata.get("org_id") or metadata.get("organization_id"),
             "email": metadata.get("email", ""),
+            "company_name": company_name,
         }
         logger.info(
             "[AriaVoice] LO assistant mode (WebRTC): user=%s org=%s",

@@ -311,7 +311,7 @@ class NotificationService:
                 </div>
 
                 <p style="text-align: center; color: #9ca3af; font-size: 12px; margin-top: 24px;">
-                    This is an automated message from Perennia Mortgage.
+                    This is an automated message from The Tim Loss Team.
                 </p>
             </div>
         </body>
@@ -1445,7 +1445,7 @@ View application: {dashboard_link}"""
             Formatted SMS message string
         """
         templates = {
-            "welcome": "Hi {name}! Welcome to Perennia Mortgage. We've received your application and will be in touch soon.",
+            "welcome": "Hi {name}! Welcome to The Tim Loss Team. We've received your application and will be in touch soon.",
             "submission_confirmation": "Your mortgage application ({ref}) has been submitted! We'll review it within 24 hours.",
             "reminder": "Hi {name}, your mortgage application is waiting. Continue where you left off at {link}",
             "document_received": "Thanks {name}! We received your {doc_type}. We'll let you know if we need anything else.",

@@ -213,7 +213,7 @@ async def execute_pre_approval_letter(
         # Create default settings
         settings = PreApprovalLetterSettings(
             user_id=user_id,
-            company_name="Perennia Mortgage",
+            company_name="The Tim Loss Team",
             company_address="123 Main Street, San Francisco, CA 94105",
             company_phone="(555) 123-4567",
             company_nmls="123456",

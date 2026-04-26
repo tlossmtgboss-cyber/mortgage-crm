@@ -118,11 +118,17 @@ async def create_voice_token(
         )
         token.with_ttl(timedelta(hours=1))
 
+        # Resolve company name for voice agent greeting
+        from services.company_name_resolver import resolve_company_name
+        org_id = getattr(current_user, "organization_id", None)
+        company_name = resolve_company_name(db, org_id)
+
         # Add metadata so the agent knows who it's talking to
         metadata = {
             "user_id": str(user_id),
-            "org_id": str(getattr(current_user, "organization_id", "")),
+            "org_id": str(org_id or ""),
             "email": getattr(current_user, "email", ""),
+            "company_name": company_name,
             "agent": AGENT_NAME,
         }
         token.with_metadata(json.dumps(metadata))

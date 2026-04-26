@@ -1,6 +1,6 @@
 """
 PURL Email Service
-Perennia AI - Mortgage CRM
+The Tim Loss Team - Mortgage CRM
 
 Handles email notifications for PURL system events:
 - Welcome emails with portal links
@@ -54,8 +54,8 @@ class PURLEmailService:
         except ImportError:
             DEFAULT_ORGANIZER_EMAIL = os.environ.get("SCHEDULER_ORGANIZER_EMAIL", "sarah@reply.perenniaai.com")
         self.from_email = os.getenv("EMAIL_FROM", DEFAULT_ORGANIZER_EMAIL)
-        self.from_name = os.getenv("EMAIL_FROM_NAME", "Sarah from Perennia AI")
-        self.company_name = os.getenv("COMPANY_NAME", "Perennia AI")
+        self.from_name = os.getenv("EMAIL_FROM_NAME", "Sarah from The Tim Loss Team")
+        self.company_name = os.getenv("COMPANY_NAME", "The Tim Loss Team")
         self.purl_domain = os.getenv("PURL_BASE_DOMAIN", "perenniaai.com")
 
     # =========================================================================

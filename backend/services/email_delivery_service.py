@@ -376,7 +376,7 @@ class EmailDeliveryService:
         effective_from_name = (
             message.from_name
             or config.from_name
-            or os.getenv("SENDGRID_FROM_NAME", "Perennia AI")
+            or os.getenv("SENDGRID_FROM_NAME", "The Tim Loss Team")
         )
         message = message.model_copy(
             update={
@@ -1231,7 +1231,7 @@ class EmailDeliveryService:
 
             def _do_smtp_send():
                 msg = _MMP("mixed")
-                from_display = message.from_name or "Perennia AI"
+                from_display = message.from_name or "The Tim Loss Team"
                 from_addr = message.from_email or smtp_user
                 msg["From"] = f"{from_display} <{from_addr}>"
                 msg["To"] = ", ".join(message.to)

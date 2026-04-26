@@ -34,7 +34,7 @@ def render_briefing_email(
     team: Optional[Dict[str, Any]] = None,
     app_url: str = "https://app.perenniaai.com",
     # Branding params:
-    company_name: str = "Perennia AI",
+    company_name: str = "The Tim Loss Team",
     logo_url: Optional[str] = None,
     primary_color: str = "#218d8d",
     secondary_color: Optional[str] = None,

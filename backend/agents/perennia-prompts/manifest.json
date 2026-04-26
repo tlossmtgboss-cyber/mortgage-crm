@@ -222,7 +222,7 @@
     },
     {
       "id": "ai_receptionist_sam",
-      "title": "AI Receptionist (Sam)",
+      "title": "AI Receptionist (Aria)",
       "priority": "conditional",
       "capabilities": [
         "identity",

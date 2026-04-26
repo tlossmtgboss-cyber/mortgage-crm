@@ -1339,7 +1339,7 @@ if __name__ == "__main__":
         try:
             async with create_audio_processor() as processor:
                 audio = await processor.tts.synthesize(
-                    "Hello! Thank you for calling Perennia Mortgage. How can I help you today?"
+                    "Hello! Thank you for calling The Tim Loss Team. How can I help you today?"
                 )
                 print(f"✓ Generated {len(audio)} bytes of audio")
 

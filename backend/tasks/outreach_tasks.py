@@ -76,7 +76,7 @@ async def process_drip_campaigns(db_session):
 
                     success = await email_service.send_html_email_sf(
                         to_email=assignment["email"],
-                        subject=subject or "Message from Perennia AI",
+                        subject=subject or "Message from The Tim Loss Team",
                         html_body=html_body,
                         plain_text_body=message,
                         from_email=ai_from_email,

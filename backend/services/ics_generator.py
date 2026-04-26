@@ -164,7 +164,7 @@ def generate_appointment_ics(appointment_data: dict) -> bytes:
         attendee_email=appointment_data.get("attendee_email", ""),
         attendee_name=appointment_data.get("attendee_name", ""),
         organizer_email=appointment_data.get("organizer_email", DEFAULT_ORGANIZER_EMAIL),
-        organizer_name=appointment_data.get("organizer_name", "Perennia AI"),
+        organizer_name=appointment_data.get("organizer_name", "The Tim Loss Team"),
         description=appointment_data.get("description", ""),
         location=appointment_data.get("location", "") or appointment_data.get("video_link", ""),
         video_link=appointment_data.get("video_link"),

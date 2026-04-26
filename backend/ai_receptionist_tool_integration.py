@@ -290,7 +290,7 @@ class AIReceptionist:
 # =============================================================================
 
 def create_receptionist(
-    company_name: str = "Perennia Mortgage",
+    company_name: str = "The Tim Loss Team",
     default_lo_id: Optional[str] = None,
 ) -> AIReceptionist:
     """
@@ -300,7 +300,7 @@ def create_receptionist(
         from backend.ai_receptionist_tool_integration import create_receptionist
 
         receptionist = create_receptionist(
-            company_name="Perennia Mortgage",
+            company_name="The Tim Loss Team",
             default_lo_id="LO123",
         )
 

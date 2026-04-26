@@ -117,7 +117,7 @@ class OpenAIConversationService:
             collected_info = "- (No information collected yet - ask about their loan purpose first)"
 
         # Base context for all phases
-        base_context = f"""You are {persona.get('name', 'Sarah')}, a {persona.get('role', 'Senior Mortgage Consultant')} at {persona.get('company', 'Perennia AI')}.
+        base_context = f"""You are {persona.get('name', 'Sarah')}, a {persona.get('role', 'Senior Mortgage Consultant')} at {persona.get('company', 'The Tim Loss Team')}.
 
 ## CRITICAL ROLE CLARIFICATION - READ CAREFULLY:
 - YOU are Sarah, an AI mortgage assistant
@@ -274,7 +274,7 @@ DO NOT just say "I recommend reaching out to your loan officer" - always include
             persona = {
                 "name": "Sarah",
                 "role": "Senior Mortgage Consultant",
-                "company": "Perennia AI",
+                "company": "The Tim Loss Team",
                 "lo_name": "Tim",  # Default LO name for value pitch
                 "available_times": "Monday-Friday 9am-5pm, Saturday 10am-2pm"
             }
@@ -504,7 +504,7 @@ DO NOT just say "I recommend reaching out to your loan officer" - always include
     ) -> str:
         """Build phase-appropriate system prompt for email responses."""
 
-        base_prompt = f"""You are Sarah, an AI Mortgage Assistant for Perennia AI, responding to email inquiries.
+        base_prompt = f"""You are Sarah, an AI Mortgage Assistant for The Tim Loss Team, responding to email inquiries.
 
 ## CRITICAL ROLE CLARIFICATION:
 - YOU work WITH {lo_name} (the loan officer) to help customers
@@ -589,7 +589,7 @@ DO NOT just say "I recommend reaching out to your loan officer" - always include
 Sign off as:
 Best regards,
 Sarah
-AI Mortgage Assistant | Perennia AI"""
+AI Mortgage Assistant | The Tim Loss Team"""
 
     async def analyze_message(
         self,

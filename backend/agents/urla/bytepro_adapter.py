@@ -37,7 +37,7 @@ class LoanOfficer:
     nmlsr_id: str
     email: str
     phone: str
-    organization_name: str = "Perennia AI"
+    organization_name: str = "The Tim Loss Team"
     organization_nmlsr_id: str = ""
 
 

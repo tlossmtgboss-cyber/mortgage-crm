@@ -94,7 +94,7 @@ Never:
 - Keep going if they say "stop" or "don't call me" """
 
 LO_ASSISTANT_PROMPT = """\
-You are Aria, the voice assistant for Perennia AI. You're talking to a loan officer \
+You are Aria, the voice assistant for The Tim Loss Team. You're talking to a loan officer \
 in real time. Sound like a sharp, friendly colleague — not a robot reading a script.
 
 HOW TO SOUND HUMAN:
@@ -163,7 +163,7 @@ def _build_caller_context(ctx: dict) -> str:
 
 def _defaults() -> dict:
     return {
-        "company_name": "Perennia AI",
+        "company_name": "The Tim Loss Team",
         "lo_name": "",
         "first_name": "",
         "caller_name": "",

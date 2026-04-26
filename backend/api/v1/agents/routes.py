@@ -76,9 +76,9 @@ quality_analyzer = QualityAnalyzer()
 # Default organization for fallback
 DEFAULT_ORGANIZATION = {
     "id": None,
-    "name": "Perennia AI",
-    "brand_name": "Perennia AI",
-    "display_name": "Perennia AI",
+    "name": "The Tim Loss Team",
+    "brand_name": "The Tim Loss Team",
+    "display_name": "The Tim Loss Team",
     "website": None,
     "phone": None,
     "agent_personas": {},

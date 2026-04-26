@@ -289,7 +289,7 @@ async def handle_outbound_script(request: Request):
             # Simple test TwiML without WebSocket
             twiml = """<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-    <Say voice="Polly.Matthew">Hello! This is Sam from Perennia AI. I'm calling to follow up on your mortgage inquiry. How can I help you today?</Say>
+    <Say voice="Polly.Joanna">Hello! This is Aria from The Tim Loss Team. I'm calling to follow up on your mortgage inquiry. How can I help you today?</Say>
     <Pause length="3"/>
     <Say voice="Polly.Matthew">If you'd like to schedule an appointment with a loan officer, please let me know your availability.</Say>
     <Pause length="5"/>
@@ -316,7 +316,7 @@ async def make_outbound_call(
 ):
     """
     Initiate an outbound call to a phone number.
-    The AI receptionist (Sam) will handle the call and try to schedule an appointment.
+    The AI receptionist (Aria) will handle the call and try to schedule an appointment.
     """
     try:
         # Normalize phone number

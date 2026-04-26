@@ -1962,7 +1962,7 @@ async def texml_voicemail(
         first_name = client_name.split()[0] if client_name else ""
         greeting = f"Hi {first_name}" if first_name else "Hi"
         message = voicemail_message or (
-            f"{greeting}, this is Sam calling on behalf of {lo_name or 'your loan officer'} "
+            f"{greeting}, this is Aria calling on behalf of {lo_name or 'your loan officer'} "
             f"at CMG Home Loans regarding {purpose or 'your loan'}. "
             f"Please give us a call back at your earliest convenience. "
             f"Thank you and have a great day!"

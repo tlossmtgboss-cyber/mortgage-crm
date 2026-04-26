@@ -445,7 +445,7 @@ class UserProvisioningAgent:
             raise ValueError(f"User {user_id} not found")
 
         org = self.db.query(Organization).filter(Organization.id == org_id).first()
-        org_name = org.name if org else "Perennia AI"
+        org_name = org.name if org else "The Tim Loss Team"
 
         portal_link = PORTAL_DEEP_LINK_TEMPLATE.format(slug=user.slug or "dashboard")
         login_link = f"{APP_BASE_URL}/login"
@@ -465,7 +465,7 @@ class UserProvisioningAgent:
                 sms_body = (
                     f"Welcome to {org_name}, {first_name}! "
                     f"Your account is ready. Log in at {login_link} to get started. "
-                    f"— Powered by Perennia AI"
+                    f"— Powered by The Tim Loss Team"
                 )
                 svc = NotificationService()
                 sms_result = svc.send_sms(
@@ -505,7 +505,7 @@ class UserProvisioningAgent:
                         f"Welcome to {org_name}, {first_name}!\n\n"
                         f"Your account is ready. Log in at {login_link}\n"
                         f"Access your portal: {portal_link}\n\n"
-                        f"— Perennia AI"
+                        f"— The Tim Loss Team"
                     ),
                 )
                 result["email_sent"] = email_result.get("success", False)
@@ -905,7 +905,7 @@ def _build_welcome_email_html(
       <p>If you have any questions, reach out to your manager or use the AI chat assistant in the platform.</p>
     </div>
     <div class="footer">
-      <p>Powered by Perennia AI &mdash; The AI-first operating system for loan officers.</p>
+      <p>Powered by The Tim Loss Team &mdash; The AI-first operating system for loan officers.</p>
     </div>
   </div>
 </body>

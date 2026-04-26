@@ -111,7 +111,7 @@ class CallScriptEngine:
             return CallScript(
                 system_prompt=self._new_lead_warm_prompt(tokens),
                 first_message=(
-                    f"Hey {first_name}! This is Sam calling on behalf of {lo_name} "
+                    f"Hey {first_name}! This is Aria calling on behalf of {lo_name} "
                     f"at {company}. How are you doing today?"
                 ),
                 end_call_message=(
@@ -133,7 +133,7 @@ class CallScriptEngine:
             return CallScript(
                 system_prompt=self._new_lead_direct_prompt(tokens),
                 first_message=(
-                    f"Hi {first_name}, this is Sam from {company}. "
+                    f"Hi {first_name}, this is Aria from {company}. "
                     f"I'm calling because we have some excellent {loan_purpose} "
                     f"options available right now, and {lo_name} wanted me to "
                     f"reach out before rates move. Do you have a quick minute?"
@@ -156,7 +156,7 @@ class CallScriptEngine:
         return CallScript(
             system_prompt=self._new_lead_default_prompt(tokens),
             first_message=(
-                f"Hi {first_name}, this is Sam calling on behalf of {lo_name} "
+                f"Hi {first_name}, this is Aria calling on behalf of {lo_name} "
                 f"at {company}. {lo_name} asked me to reach out because you "
                 f"recently expressed interest in a {loan_purpose}. "
                 f"Is this a good time to chat for just a couple minutes?"
@@ -177,7 +177,7 @@ class CallScriptEngine:
         )
 
     def _new_lead_default_prompt(self, tokens: Dict[str, str]) -> str:
-        return f"""You are Sam, a friendly and professional AI assistant calling on behalf of \
+        return f"""You are Aria, a friendly and professional AI assistant calling on behalf of \
 {tokens['lo_name']} at {tokens['company']}.
 
 YOUR GOAL: Schedule a consultation appointment between {tokens['first_name']} and {tokens['lo_name']}.
@@ -202,13 +202,13 @@ IMPORTANT RULES:
 - Do NOT quote specific rates or provide financial advice
 - If they ask about rates, say "{tokens['lo_name']} can provide personalized rate quotes during your consultation"
 - If they're not interested, thank them graciously and ask if they'd like to be contacted in the future
-- If it goes to voicemail, leave a brief message: "Hi {tokens['first_name']}, this is Sam calling on behalf of {tokens['lo_name']} at {tokens['company']} regarding your home loan inquiry. Please call us back at your convenience."
+- If it goes to voicemail, leave a brief message: "Hi {tokens['first_name']}, this is Aria calling on behalf of {tokens['lo_name']} at {tokens['company']} regarding your home loan inquiry. Please call us back at your convenience."
 - Respect if they say they're busy -- offer to call back at a better time
 - Never pressure or use high-pressure sales tactics
 - Keep the call under 3 minutes unless the contact wants to talk longer"""
 
     def _new_lead_warm_prompt(self, tokens: Dict[str, str]) -> str:
-        return f"""You are Sam, a warm and personable AI assistant calling on behalf of \
+        return f"""You are Aria, a warm and personable AI assistant calling on behalf of \
 {tokens['lo_name']} at {tokens['company']}.
 
 YOUR GOAL: Build rapport and schedule a consultation with {tokens['lo_name']}.
@@ -233,7 +233,7 @@ RULES:
 - If voicemail, leave a warm message with callback info"""
 
     def _new_lead_direct_prompt(self, tokens: Dict[str, str]) -> str:
-        return f"""You are Sam, a professional and efficient AI assistant calling on behalf of \
+        return f"""You are Aria, a professional and efficient AI assistant calling on behalf of \
 {tokens['lo_name']} at {tokens['company']}.
 
 YOUR GOAL: Quickly communicate value and schedule a consultation.
@@ -269,7 +269,7 @@ RULES:
             return CallScript(
                 system_prompt=self._active_client_milestone_prompt(tokens),
                 first_message=(
-                    f"Hi {first_name}! This is Sam calling on behalf of {lo_name}. "
+                    f"Hi {first_name}! This is Aria calling on behalf of {lo_name}. "
                     f"Great news -- your loan is progressing well and I wanted to give "
                     f"you a quick update. Do you have a minute?"
                 ),
@@ -294,7 +294,7 @@ RULES:
             return CallScript(
                 system_prompt=self._active_client_proactive_prompt(tokens),
                 first_message=(
-                    f"Hi {first_name}, this is Sam from {tokens['company']}. "
+                    f"Hi {first_name}, this is Aria from {tokens['company']}. "
                     f"{lo_name} wanted me to check in with you about your loan. "
                     f"Everything is on track, and I wanted to see if you have "
                     f"any questions before the next step. Got a minute?"
@@ -316,7 +316,7 @@ RULES:
         return CallScript(
             system_prompt=self._active_client_default_prompt(tokens),
             first_message=(
-                f"Hi {first_name}, this is Sam calling on behalf of {lo_name} "
+                f"Hi {first_name}, this is Aria calling on behalf of {lo_name} "
                 f"at {tokens['company']}. I'm calling with a quick update on "
                 f"your loan. Is this a good time?"
             ),
@@ -342,7 +342,7 @@ RULES:
         loan_stage = tokens.get("loan_stage", "processing")
         stage_context = self._get_stage_context(loan_stage)
 
-        return f"""You are Sam, a professional AI assistant calling on behalf of \
+        return f"""You are Aria, a professional AI assistant calling on behalf of \
 {tokens['lo_name']} at {tokens['company']}.
 
 YOUR GOAL: Provide a loan progress update and schedule a review appointment if needed.
@@ -372,7 +372,7 @@ RULES:
 - If they seem stressed, acknowledge it and reassure them"""
 
     def _active_client_milestone_prompt(self, tokens: Dict[str, str]) -> str:
-        return f"""You are Sam, a friendly AI assistant celebrating loan progress with {tokens['first_name']}.
+        return f"""You are Aria, a friendly AI assistant celebrating loan progress with {tokens['first_name']}.
 
 YOUR GOAL: Share positive progress update and ensure they're comfortable with next steps.
 
@@ -393,7 +393,7 @@ RULES:
 - Schedule a review with {tokens['lo_name']} if they have detailed questions"""
 
     def _active_client_proactive_prompt(self, tokens: Dict[str, str]) -> str:
-        return f"""You are Sam, a proactive AI assistant reaching out to {tokens['first_name']} \
+        return f"""You are Aria, a proactive AI assistant reaching out to {tokens['first_name']} \
 about their loan with {tokens['lo_name']}.
 
 YOUR GOAL: Proactively address common concerns and ensure nothing is blocking progress.
@@ -427,7 +427,7 @@ RULES:
             return CallScript(
                 system_prompt=self._mum_refi_prompt(tokens),
                 first_message=(
-                    f"Hi {first_name}! This is Sam calling on behalf of {lo_name} "
+                    f"Hi {first_name}! This is Aria calling on behalf of {lo_name} "
                     f"at {tokens['company']}. {lo_name} has been monitoring rates for you "
                     f"and wanted me to reach out because there may be an opportunity "
                     f"to lower your monthly payment. Do you have a couple minutes?"
@@ -454,7 +454,7 @@ RULES:
             return CallScript(
                 system_prompt=self._mum_referral_prompt(tokens),
                 first_message=(
-                    f"Hi {first_name}! This is Sam calling on behalf of {lo_name} "
+                    f"Hi {first_name}! This is Aria calling on behalf of {lo_name} "
                     f"at {tokens['company']}. {lo_name} just wanted to check in "
                     f"and see how you and the house are doing! Got a minute?"
                 ),
@@ -479,7 +479,7 @@ RULES:
         return CallScript(
             system_prompt=self._mum_default_prompt(tokens),
             first_message=(
-                f"Hi {first_name}! This is Sam calling on behalf of {lo_name} "
+                f"Hi {first_name}! This is Aria calling on behalf of {lo_name} "
                 f"at {tokens['company']}. It's been a while since we connected, "
                 f"and {lo_name} wanted to check in on how things are going with "
                 f"your home. Do you have a quick moment?"
@@ -503,7 +503,7 @@ RULES:
         )
 
     def _mum_default_prompt(self, tokens: Dict[str, str]) -> str:
-        return f"""You are Sam, a friendly AI assistant doing an annual check-in on behalf of \
+        return f"""You are Aria, a friendly AI assistant doing an annual check-in on behalf of \
 {tokens['lo_name']} at {tokens['company']}.
 
 YOUR GOAL: Reconnect with a past client, schedule an annual mortgage review, and gently ask for referrals.
@@ -532,7 +532,7 @@ RULES:
 - Always thank them for being a valued client"""
 
     def _mum_refi_prompt(self, tokens: Dict[str, str]) -> str:
-        return f"""You are Sam, an AI assistant reaching out about a potential refinance opportunity \
+        return f"""You are Aria, an AI assistant reaching out about a potential refinance opportunity \
 on behalf of {tokens['lo_name']} at {tokens['company']}.
 
 YOUR GOAL: Discuss potential refinance savings and schedule a detailed analysis appointment.
@@ -556,7 +556,7 @@ RULES:
 - If they say no, respect it and offer to keep monitoring"""
 
     def _mum_referral_prompt(self, tokens: Dict[str, str]) -> str:
-        return f"""You are Sam, a friendly AI assistant doing a client appreciation check-in \
+        return f"""You are Aria, a friendly AI assistant doing a client appreciation check-in \
 on behalf of {tokens['lo_name']} at {tokens['company']}.
 
 YOUR GOAL: Reconnect with a valued past client and ask for referrals.

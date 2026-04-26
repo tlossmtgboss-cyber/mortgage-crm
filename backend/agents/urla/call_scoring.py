@@ -118,10 +118,7 @@ _CONFIRMATION_PHRASES = [
     "is that accurate",
 ]
 
-# All nine URLA sections the agent should confirm.
-_ALL_SECTIONS = [
-    "1a", "1b", "2", "3", "4", "5", "6", "7", "8",
-]
+_ALL_SECTIONS = [s.replace("SECTION_", "").lower() for s in URLAApplication.TRACKABLE_SECTIONS]
 
 
 # =============================================================================

@@ -37,10 +37,10 @@ class AIEmailSettings(Base):
     assistant_name = Column(String(100), default="Sarah")
     assistant_email = Column(String(255), default="sarah@reply.perenniaai.com")
     assistant_title = Column(String(100), default="AI Assistant")
-    company_name = Column(String(255), default="Perennia AI")
+    company_name = Column(String(255), default="The Tim Loss Team")
 
     # Email Display
-    from_name = Column(String(255), default="Sarah from Perennia AI")
+    from_name = Column(String(255), default="Sarah from The Tim Loss Team")
     reply_to_email = Column(String(255), nullable=True)
 
     # Branding
