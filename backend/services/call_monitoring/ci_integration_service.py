@@ -304,7 +304,9 @@ class CIIntegrationService:
 
                 # Get agent name
                 agent = self.db.execute(text("""
-                    SELECT name FROM users WHERE id = :id
+                    SELECT COALESCE(es.full_name, u.email) AS name
+                    FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id
+                    WHERE u.id = :id
                 """), {"id": recording["agent_user_id"]}).fetchone()
                 if agent:
                     participant["name"] = agent[0]

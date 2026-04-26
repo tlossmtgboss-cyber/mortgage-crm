@@ -418,9 +418,10 @@ class PipelineProbabilityService:
                 l.approval_date, l.clear_to_close_at, l.expected_close_date,
                 l.lock_expiration_date, l.status_changed_at,
                 l.loan_officer_id, l.processor_id,
-                u.name as lo_name
+                COALESCE(es.full_name, u.email) as lo_name
             FROM loans l
             LEFT JOIN users u ON u.id = l.loan_officer_id
+            LEFT JOIN email_signatures es ON es.user_id = u.id
             WHERE l.id = :loan_id
         """), {"loan_id": loan_id})
 

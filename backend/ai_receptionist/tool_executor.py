@@ -482,10 +482,11 @@ class ReceptionistToolExecutor:
             result = execute_single("""
                 SELECT
                     c.id, c.first_name, c.last_name, c.email,
-                    c.assigned_to, u.name as assigned_lo_name,
+                    c.assigned_to, COALESCE(es.full_name, u.email) as assigned_lo_name,
                     EXISTS(SELECT 1 FROM loans l WHERE l.borrower_id = c.id) as is_customer
                 FROM contacts c
                 LEFT JOIN users u ON u.id = c.assigned_to
+                LEFT JOIN email_signatures es ON es.user_id = u.id
                 WHERE c.phone = :phone OR c.mobile = :phone
                 LIMIT 1
             """, {"phone": phone_number})

@@ -119,9 +119,10 @@ def get_customer_360(
             l.created_at,
             l.funded_at,
             l.expected_close_date,
-            lo.name as loan_officer_name
+            COALESCE(loes.full_name, lo.email) as loan_officer_name
         FROM loans l
         LEFT JOIN users lo ON lo.id = l.loan_officer_id
+        LEFT JOIN email_signatures loes ON loes.user_id = lo.id
         WHERE l.borrower_id = :customer_id OR l.co_borrower_id = :customer_id
         ORDER BY l.created_at DESC
     """

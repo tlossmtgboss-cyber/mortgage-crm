@@ -285,11 +285,12 @@ async def get_queue(
         # Get members
         members = db.execute(text("""
             SELECT qm.id, qm.user_id, qm.priority, qm.wrap_up_time, qm.is_active,
-                   u.name as user_name, u.phone as user_phone
+                   COALESCE(es.full_name, u.email) as user_name
             FROM queue_members qm
             JOIN users u ON u.id = qm.user_id
+            LEFT JOIN email_signatures es ON es.user_id = u.id
             WHERE qm.queue_id = :queue_id
-            ORDER BY qm.priority DESC, u.name
+            ORDER BY qm.priority DESC, COALESCE(es.full_name, u.email)
         """), {"queue_id": queue_id}).fetchall()
 
         # Get waiting entries

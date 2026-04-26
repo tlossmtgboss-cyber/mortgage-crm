@@ -497,7 +497,7 @@ def generate_milestone_calendar(
         from models import User
         lo = db.query(User).filter(User.id == loan.assigned_lo_id).first()
         if lo:
-            loan_officer_name = lo.name
+            loan_officer_name = lo.full_name
 
     # Get close-on-time schedule and milestones
     schedule = db.query(CloseOnTimeSchedule).filter(

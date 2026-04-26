@@ -771,9 +771,10 @@ class ContentCollaborationService:
     def get_comments(self, brief_id: str) -> List[Any]:
         """Get comments for a brief."""
         result = self.db.execute(text("""
-            SELECT c.*, u.name as user_name
+            SELECT c.*, COALESCE(es.full_name, u.email) as user_name
             FROM content_comments c
             LEFT JOIN users u ON u.id = c.user_id
+            LEFT JOIN email_signatures es ON es.user_id = u.id
             WHERE c.brief_id = :brief_id
             ORDER BY c.created_at
         """), {"brief_id": brief_id})

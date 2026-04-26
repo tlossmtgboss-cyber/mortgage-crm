@@ -55,12 +55,13 @@ def calculate_loan_profitability(loan_id: str) -> ToolResult:
         SELECT
             l.*,
             lt.name as loan_type_name,
-            lo.name as lo_name,
+            COALESCE(loes.full_name, lo.email) as lo_name,
             lo.commission_rate as lo_commission_rate,
             b.name as branch_name
         FROM loans l
         LEFT JOIN loan_types lt ON lt.id = l.loan_type_id
         LEFT JOIN users lo ON lo.id = l.loan_officer_id
+        LEFT JOIN email_signatures loes ON loes.user_id = lo.id
         LEFT JOIN branches b ON b.id = l.branch_id
         WHERE l.id = :loan_id
     """, {"loan_id": loan_id})
@@ -500,7 +501,7 @@ def compare_lo_profitability(
         WITH lo_metrics AS (
             SELECT
                 l.loan_officer_id,
-                lo.name as lo_name,
+                COALESCE(loes.full_name, lo.email) as lo_name,
                 COUNT(*) as funded_count,
                 SUM(l.loan_amount) as total_volume,
                 AVG(l.loan_amount) as avg_loan_size,
@@ -511,11 +512,12 @@ def compare_lo_profitability(
                 lo.commission_rate
             FROM loans l
             JOIN users lo ON lo.id = l.loan_officer_id
+            LEFT JOIN email_signatures loes ON loes.user_id = lo.id
             LEFT JOIN loan_sales ls ON ls.loan_id = l.id
             WHERE l.funded_date >= CURRENT_DATE - :date_range
                 AND l.stage = 'Funded'
                 {branch_filter}
-            GROUP BY l.loan_officer_id, lo.name, lo.commission_rate
+            GROUP BY l.loan_officer_id, COALESCE(loes.full_name, lo.email), lo.commission_rate
             HAVING COUNT(*) >= :min_loans
         )
         SELECT

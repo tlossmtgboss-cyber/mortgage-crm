@@ -398,8 +398,9 @@ def register_regulatory_report_routes(app, get_db, get_current_user, **kwargs):
 
         # Get LO license info for this state
         los = db.execute(text("""
-            SELECT u.id, u.name, u.nmls_id, u.email
+            SELECT u.id, COALESCE(es.full_name, u.email) AS name, u.nmls_id, u.email
             FROM users u
+            LEFT JOIN email_signatures es ON es.user_id = u.id
             WHERE u.organization_id = :org_id
               AND u.permission_role IN ('loan_officer', 'branch_manager')
               AND u.is_active = true

@@ -413,10 +413,11 @@ def aggregate_daily_team_usage(
             top_users = db.execute(text("""
                 SELECT
                     uus.user_id,
-                    u.name,
+                    COALESCE(es.full_name, u.email) AS name,
                     uus.total_cost
                 FROM user_usage_snapshots uus
                 JOIN users u ON u.id = uus.user_id
+                LEFT JOIN email_signatures es ON es.user_id = u.id
                 WHERE uus.organization_id = :organization_id
                 AND uus.snapshot_date = :snapshot_date
                 AND u.team_id = :team_id
@@ -596,10 +597,11 @@ def aggregate_daily_org_usage(
     top_users = db.execute(text("""
         SELECT
             uus.user_id,
-            u.name,
+            COALESCE(es.full_name, u.email) AS name,
             uus.total_cost
         FROM user_usage_snapshots uus
         JOIN users u ON u.id = uus.user_id
+        LEFT JOIN email_signatures es ON es.user_id = u.id
         WHERE uus.organization_id = :organization_id
         AND uus.snapshot_date = :snapshot_date
         ORDER BY uus.total_cost DESC

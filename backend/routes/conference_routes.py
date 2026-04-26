@@ -573,7 +573,7 @@ async def add_participant(
             phone = format_phone(phone)
 
             if not name:
-                user = db.execute(text("SELECT name FROM users WHERE id = :id"), {"id": user_id}).fetchone()
+                user = db.execute(text("SELECT COALESCE(es.full_name, u.email) AS name FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id WHERE u.id = :id"), {"id": user_id}).fetchone()
                 if user:
                     name = user.name
         else:

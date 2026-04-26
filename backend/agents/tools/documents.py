@@ -460,9 +460,10 @@ def send_document_reminder(
     loan = execute_single("""
         SELECT
             l.*,
-            lo.name as lo_name, lo.email as lo_email, lo.phone as lo_phone
+            COALESCE(loes.full_name, lo.email) as lo_name, lo.email as lo_email
         FROM loans l
         LEFT JOIN users lo ON lo.id = l.loan_officer_id
+        LEFT JOIN email_signatures loes ON loes.user_id = lo.id
         WHERE l.id = :loan_id
     """, {"loan_id": loan_id})
 
@@ -590,7 +591,7 @@ def send_document_reminder(
         "loan_officer": {
             "name": loan["lo_name"],
             "email": loan["lo_email"],
-            "phone": loan["lo_phone"],
+            "phone": loan.get("lo_phone"),
         },
         "reminder_type": reminder_type,
         "documents_requested": doc_names_requested,
@@ -635,13 +636,16 @@ def escalate_issue(
     loan = execute_single("""
         SELECT
             l.*,
-            lo.id as lo_id, lo.name as lo_name, lo.email as lo_email,
-            p.id as processor_id, p.name as processor_name, p.email as processor_email,
-            m.id as manager_id, m.name as manager_name, m.email as manager_email
+            lo.id as lo_id, COALESCE(loes.full_name, lo.email) as lo_name, lo.email as lo_email,
+            p.id as processor_id, COALESCE(pes.full_name, p.email) as processor_name, p.email as processor_email,
+            m.id as manager_id, COALESCE(mes.full_name, m.email) as manager_name, m.email as manager_email
         FROM loans l
         LEFT JOIN users lo ON lo.id = l.loan_officer_id
+        LEFT JOIN email_signatures loes ON loes.user_id = lo.id
         LEFT JOIN users p ON p.id = l.processor_id
+        LEFT JOIN email_signatures pes ON pes.user_id = p.id
         LEFT JOIN users m ON m.id = lo.manager_id
+        LEFT JOIN email_signatures mes ON mes.user_id = m.id
         WHERE l.id = :loan_id
     """, {"loan_id": loan_id})
 

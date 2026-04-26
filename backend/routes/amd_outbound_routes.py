@@ -398,7 +398,7 @@ async def initiate_amd_outbound_call(
     # Get LO name if not provided
     lo_name = request.lo_name
     if not lo_name:
-        user_info = db.execute(text("SELECT name FROM users WHERE id = :user_id"), {"user_id": user_id}).fetchone()
+        user_info = db.execute(text("SELECT COALESCE(es.full_name, u.email) AS name FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id WHERE u.id = :user_id"), {"user_id": user_id}).fetchone()
         lo_name = user_info[0] if user_info else "your loan officer"
 
     # Generate tracking ID

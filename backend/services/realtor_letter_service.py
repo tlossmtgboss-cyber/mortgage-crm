@@ -403,9 +403,10 @@ class LetterGenerationService:
 
         # Get loan officer info from loan
         lo_info = self.db.execute(text("""
-            SELECT u.name, u.email, u.phone, u.nmls_number, u.title
+            SELECT COALESCE(es.full_name, u.email) AS name, u.email, NULL as phone, u.nmls_number, u.title
             FROM loans l
             JOIN users u ON u.id = l.loan_officer_id
+            LEFT JOIN email_signatures es ON es.user_id = u.id
             WHERE l.id = :loan_id
         """), {"loan_id": loan_id}).fetchone()
 

@@ -559,9 +559,10 @@ def monitor_float_position(
             l.rate,
             l.expected_close_date,
             l.borrower_first_name || ' ' || l.borrower_last_name as borrower,
-            lo.name as lo_name
+            COALESCE(loes.full_name, lo.email) as lo_name
         FROM loans l
         LEFT JOIN users lo ON lo.id = l.loan_officer_id
+        LEFT JOIN email_signatures loes ON loes.user_id = lo.id
         WHERE {' AND '.join(filters)}
         ORDER BY l.expected_close_date ASC
     """, params)

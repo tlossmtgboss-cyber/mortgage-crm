@@ -234,7 +234,7 @@ def route_call(
         if user:
             dest_info = {
                 "name": user.get("name"),
-                "extension": user.get("phone_extension"),
+                "extension": None,
             }
         else:
             dest_info = {"name": "Unknown", "extension": None}
@@ -283,7 +283,7 @@ def get_lo_availability(
 ) -> ToolResult:
     """Get LO availability."""
     params = {}
-    filters = ["u.role = 'loan_officer'", "u.active = true"]
+    filters = ["u.role = 'loan_officer'", "u.is_active = true"]
 
     if lo_id:
         filters.append("u.id = :lo_id")
@@ -292,8 +292,7 @@ def get_lo_availability(
     # Query available LOs
     los = execute_query(f"""
         SELECT
-            u.id, COALESCE(es.full_name, u.email) AS name,
-            u.specialties, u.languages, u.current_status
+            u.id, COALESCE(es.full_name, u.email) AS name, u.email
         FROM users u
         LEFT JOIN email_signatures es ON es.user_id = u.id
         WHERE {" AND ".join(filters)}
@@ -306,29 +305,11 @@ def get_lo_availability(
 
     available_los = []
     for lo in los:
-        status = lo.get("current_status", "unknown")
-        is_available = status in ["available", "online", None]
-
-        # Filter by specialty
-        if specialty:
-            specialties = lo.get("specialties", "").split(",")
-            if specialty.lower() not in [s.lower().strip() for s in specialties]:
-                continue
-
-        # Filter by language
-        if language:
-            languages = lo.get("languages", "english").split(",")
-            if language.lower() not in [l.lower().strip() for l in languages]:
-                continue
-
         available_los.append({
             "id": lo.get("id"),
             "name": lo.get("name"),
-            "extension": lo.get("phone_extension"),
-            "status": status,
-            "available": is_available,
-            "specialties": lo.get("specialties", "").split(",") if lo.get("specialties") else [],
-            "languages": lo.get("languages", "english").split(",") if lo.get("languages") else ["english"],
+            "email": lo.get("email"),
+            "available": True,
         })
 
     # Sort available first

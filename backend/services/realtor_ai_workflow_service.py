@@ -663,11 +663,12 @@ SCHEDULE [loan_id] - Schedule meeting"""
                 l.status, l.loan_amount, l.loan_type,
                 l.expected_close_date, l.property_address,
                 CONCAT(c.first_name, ' ', c.last_name) as borrower_name,
-                u.name as lo_name
+                COALESCE(es.full_name, u.email) as lo_name
             FROM loans l
             JOIN realtor_loan_associations rla ON rla.loan_id = l.id
             LEFT JOIN contacts c ON c.id = l.borrower_id
             LEFT JOIN users u ON u.id = l.loan_officer_id
+            LEFT JOIN email_signatures es ON es.user_id = u.id
             WHERE l.id = :loan_id AND rla.realtor_id = :realtor_id
         """), {"loan_id": loan_id, "realtor_id": realtor_id}).fetchone()
 

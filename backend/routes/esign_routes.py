@@ -316,11 +316,12 @@ async def list_envelopes(
     where_clause = "WHERE " + " AND ".join(filters) if filters else ""
 
     sql = (
-        "SELECT e.*, u.name as created_by_name,"
+        "SELECT e.*, COALESCE(es.full_name, u.email) as created_by_name,"
         " (SELECT COUNT(*) FROM esign_signers WHERE envelope_id = e.id) as signer_count,"
         " (SELECT COUNT(*) FROM esign_fields WHERE envelope_id = e.id) as field_count"
         " FROM esign_envelopes e"
         " LEFT JOIN users u ON u.id = e.created_by_user_id"
+        " LEFT JOIN email_signatures es ON es.user_id = u.id"
         " " + where_clause +
         " ORDER BY e.created_at DESC"
         " LIMIT :limit OFFSET :offset"

@@ -48,7 +48,7 @@ def get_lo_metrics(
     # Get LO info
     lo = execute_single("""
         SELECT
-            u.id, COALESCE(es.full_name, u.email) AS name, u.email, u.hire_date,
+            u.id, COALESCE(es.full_name, u.email) AS name, u.email, u.created_at AS hire_date,
             b.name as branch_name,
             COALESCE(ms.full_name, m.email) as manager_name
         FROM users u

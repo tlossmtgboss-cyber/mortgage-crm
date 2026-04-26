@@ -3092,9 +3092,10 @@ class SalesforceSyncService:
 
         # Get loan data
         loan = db.execute(text("""
-            SELECT l.*, u.email as lo_email, u.name as lo_name
+            SELECT l.*, u.email as lo_email, COALESCE(es.full_name, u.email) as lo_name
             FROM loans l
             LEFT JOIN users u ON u.id = l.loan_officer_id
+            LEFT JOIN email_signatures es ON es.user_id = u.id
             WHERE l.id = :loan_id
         """), {"loan_id": loan_id}).fetchone()
 

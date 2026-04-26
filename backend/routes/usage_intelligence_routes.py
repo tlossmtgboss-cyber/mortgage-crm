@@ -255,7 +255,9 @@ async def get_user_cost_detail(
 
     # Get user info
     user_info = db.execute(text("""
-        SELECT id, name, email, role FROM users WHERE id = :user_id
+        SELECT u.id, COALESCE(es.full_name, u.email) AS name, u.email, u.role
+        FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id
+        WHERE u.id = :user_id
     """), {"user_id": user_id}).fetchone()
 
     if not user_info:

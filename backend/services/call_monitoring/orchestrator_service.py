@@ -808,11 +808,13 @@ class CallMonitoringOrchestrator:
                 lo_params["org_id"] = self.organization_id
             query = f"""
                 SELECT
-                    lo.id, lo.name, lo.email, lo.phone, lo.calendar_link,
-                    pa.id as pa_id, pa.name as pa_name, pa.email as pa_email, pa.phone as pa_phone
+                    lo.id, COALESCE(loes.full_name, lo.email) AS name, lo.email, NULL as phone, lo.calendar_link,
+                    pa.id as pa_id, COALESCE(paes.full_name, pa.email) as pa_name, pa.email as pa_email, NULL as pa_phone
                 FROM users lo
+                LEFT JOIN email_signatures loes ON loes.user_id = lo.id
                 LEFT JOIN user_assignments ua ON ua.loan_officer_id = lo.id AND ua.role = 'production_assistant'
                 LEFT JOIN users pa ON pa.id = ua.assistant_id
+                LEFT JOIN email_signatures paes ON paes.user_id = pa.id
                 WHERE lo.id = :id {lo_org_filter}
             """
             lo_pa_data = self.db.execute(text(query), lo_params).fetchone()
