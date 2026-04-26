@@ -228,7 +228,7 @@ def route_call(
     # Get destination info
     if destination_id:
         user = execute_single(
-            "SELECT id, name, phone_extension FROM users WHERE id = :id",
+            "SELECT u.id, COALESCE(es.full_name, u.email) AS name FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id WHERE u.id = :id",
             {"id": destination_id}
         )
         if user:
@@ -292,11 +292,12 @@ def get_lo_availability(
     # Query available LOs
     los = execute_query(f"""
         SELECT
-            u.id, u.name, u.phone_extension, u.specialties,
-            u.languages, u.current_status
+            u.id, COALESCE(es.full_name, u.email) AS name,
+            u.specialties, u.languages, u.current_status
         FROM users u
+        LEFT JOIN email_signatures es ON es.user_id = u.id
         WHERE {" AND ".join(filters)}
-        ORDER BY u.name
+        ORDER BY COALESCE(es.full_name, u.email)
         LIMIT 10
     """, params)
 
@@ -614,9 +615,10 @@ def get_call_queue_status(
     active_sessions = execute_query("""
         SELECT
             ds.id, ds.status, ds.total_tasks, ds.completed_tasks,
-            u.name as agent_name
+            COALESCE(es.full_name, u.email) as agent_name
         FROM dialer_sessions ds
         JOIN users u ON u.id = ds.agent_id
+        LEFT JOIN email_signatures es ON es.user_id = u.id
         WHERE ds.status IN ('active', 'in_progress', 'paused')
         ORDER BY ds.created_at DESC
         LIMIT 20

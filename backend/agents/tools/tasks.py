@@ -326,11 +326,12 @@ def get_task_queue(
             t.loan_id, t.lead_id, t.created_at,
             l.first_name, l.last_name,
             ln.loan_number, ln.borrower_name,
-            u.name as assigned_name
+            COALESCE(es.full_name, u.email) as assigned_name
         FROM tasks t
         LEFT JOIN leads l ON t.lead_id = l.id::text
         LEFT JOIN loans ln ON t.loan_id = ln.id::text
         LEFT JOIN users u ON t.assigned_to = u.id::text
+        LEFT JOIN email_signatures es ON es.user_id = u.id
         WHERE {where_sql}
         ORDER BY
             CASE t.priority
@@ -499,14 +500,15 @@ def assign_task(
         # Get team workloads for auto-assignment
         workloads = execute_query("""
             SELECT
-                u.id, u.name,
+                u.id, COALESCE(es.full_name, u.email) AS name,
                 COUNT(t.id) as open_tasks,
                 COUNT(CASE WHEN t.priority = 'urgent' THEN 1 END) as urgent_tasks
             FROM users u
+            LEFT JOIN email_signatures es ON es.user_id = u.id
             LEFT JOIN tasks t ON t.assigned_to = u.id::text
                 AND t.status NOT IN ('completed', 'cancelled')
-            WHERE u.role = 'loan_officer' AND u.status = 'active'
-            GROUP BY u.id, u.name
+            WHERE u.role = 'loan_officer' AND u.is_active = true
+            GROUP BY u.id, COALESCE(es.full_name, u.email)
             ORDER BY open_tasks ASC, urgent_tasks ASC
             LIMIT 5
         """)
@@ -522,7 +524,7 @@ def assign_task(
 
     # Get assignee info
     assignee = execute_single(
-        "SELECT id, name, email FROM users WHERE id = :id",
+        "SELECT u.id, COALESCE(es.full_name, u.email) AS name, u.email FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id WHERE u.id = :id",
         {"id": assigned_user}
     ) if assigned_user else None
 

@@ -184,16 +184,17 @@ def generate_production_report(
     production = execute_query(f"""
         SELECT
             u.id as lo_id,
-            u.name as lo_name,
+            COALESCE(es.full_name, u.email) as lo_name,
             COUNT(CASE WHEN l.funded_at IS NOT NULL THEN 1 END) as funded_count,
             COALESCE(SUM(CASE WHEN l.funded_at IS NOT NULL THEN l.loan_amount ELSE 0 END), 0) as funded_volume,
             COUNT(*) as total_pipeline,
             COALESCE(SUM(l.loan_amount), 0) as total_volume
         FROM loans l
         JOIN users u ON u.id = l.loan_officer_id
+        LEFT JOIN email_signatures es ON es.user_id = u.id
         WHERE l.created_at >= :date_from AND l.created_at <= :date_to
             {branch_filter}
-        GROUP BY u.id, u.name
+        GROUP BY u.id, COALESCE(es.full_name, u.email)
         ORDER BY funded_volume DESC
     """, params)
 
@@ -274,7 +275,9 @@ def generate_lo_performance_report(
 
     # Get LO info
     lo = execute_single("""
-        SELECT id, name, email, branch_id FROM users WHERE id = :lo_id
+        SELECT u.id, COALESCE(es.full_name, u.email) AS name, u.email, u.branch_id
+        FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id
+        WHERE u.id = :lo_id
     """, {"lo_id": lo_id})
 
     if not lo:

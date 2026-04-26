@@ -200,8 +200,9 @@ def create_escalation(
     target_user = None
     if loan_id and target_role != "auto_route":
         target_user = execute_single("""
-            SELECT u.id, u.name, u.email
+            SELECT u.id, COALESCE(es.full_name, u.email) AS name, u.email
             FROM users u
+            LEFT JOIN email_signatures es ON es.user_id = u.id
             JOIN user_roles ur ON ur.user_id = u.id
             WHERE ur.role_name = :role
             LIMIT 1
@@ -387,13 +388,16 @@ def execute_warm_handoff(
     target = None
     if target_user_id:
         target = execute_single("""
-            SELECT id, name, email, phone FROM users WHERE id = :id
+            SELECT u.id, COALESCE(es.full_name, u.email) AS name, u.email
+            FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id
+            WHERE u.id = :id
         """, {"id": target_user_id})
     elif target_role:
         # Find available user with the role
         target = execute_single("""
-            SELECT u.id, u.name, u.email, u.phone
+            SELECT u.id, COALESCE(es.full_name, u.email) AS name, u.email
             FROM users u
+            LEFT JOIN email_signatures es ON es.user_id = u.id
             JOIN user_roles ur ON ur.user_id = u.id
             WHERE ur.role_name = :role AND u.is_active = true
             ORDER BY u.last_login_at DESC

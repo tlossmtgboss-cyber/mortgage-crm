@@ -820,7 +820,9 @@ def track_progress(
         completed = [p["step_id"] for p in progress] if progress else []
 
         user = execute_single("""
-            SELECT name, created_at FROM users WHERE id = :user_id
+            SELECT COALESCE(es.full_name, u.email) AS name, u.created_at
+            FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id
+            WHERE u.id = :user_id
         """, {"user_id": user_id})
 
         days_to_complete = {}

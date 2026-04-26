@@ -557,10 +557,12 @@ def escalate_sla_breach(
 
     # Get LO and manager info
     lo_info = execute_single("""
-        SELECT u.id, u.name as lo_name, u.email as lo_email,
-               m.id as manager_id, m.name as manager_name, m.email as manager_email
+        SELECT u.id, COALESCE(es.full_name, u.email) as lo_name, u.email as lo_email,
+               m.id as manager_id, COALESCE(ms.full_name, m.email) as manager_name, m.email as manager_email
         FROM users u
+        LEFT JOIN email_signatures es ON es.user_id = u.id
         LEFT JOIN users m ON u.manager_id = m.id
+        LEFT JOIN email_signatures ms ON ms.user_id = m.id
         WHERE u.id = :lo_id
     """, {"lo_id": loan.get("loan_officer_id")})
 

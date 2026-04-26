@@ -250,11 +250,13 @@ def get_loan_conditions(
     conditions = execute_query(f"""
         SELECT
             c.*,
-            u.name as assigned_to_name,
-            r.name as responsible_party_name
+            COALESCE(ues.full_name, u.email) as assigned_to_name,
+            COALESCE(res.full_name, r.email) as responsible_party_name
         FROM loan_conditions c
         LEFT JOIN users u ON u.id = c.assigned_to
+        LEFT JOIN email_signatures ues ON ues.user_id = u.id
         LEFT JOIN users r ON r.id = c.responsible_party
+        LEFT JOIN email_signatures res ON res.user_id = r.id
         WHERE {' AND '.join(filters)}
         ORDER BY
             CASE c.condition_type
@@ -728,10 +730,11 @@ def get_document_timeline(
             d.document_type,
             d.uploaded_at as event_date,
             d.status,
-            u.name as actor_name,
+            COALESCE(es.full_name, u.email) as actor_name,
             NULL as notes
         FROM loan_documents d
         LEFT JOIN users u ON u.id = d.uploaded_by
+        LEFT JOIN email_signatures es ON es.user_id = u.id
         WHERE d.loan_id = :loan_id
             AND d.uploaded_at >= CURRENT_DATE - :days_back
 

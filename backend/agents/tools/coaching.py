@@ -48,12 +48,14 @@ def get_lo_metrics(
     # Get LO info
     lo = execute_single("""
         SELECT
-            u.id, u.name, u.email, u.hire_date,
+            u.id, COALESCE(es.full_name, u.email) AS name, u.email, u.hire_date,
             b.name as branch_name,
-            m.name as manager_name
+            COALESCE(ms.full_name, m.email) as manager_name
         FROM users u
+        LEFT JOIN email_signatures es ON es.user_id = u.id
         LEFT JOIN branches b ON b.id = u.branch_id
         LEFT JOIN users m ON m.id = u.manager_id
+        LEFT JOIN email_signatures ms ON ms.user_id = m.id
         WHERE u.id = :lo_id
     """, {"lo_id": lo_id})
 
@@ -253,7 +255,9 @@ def compare_to_peers(
     """
     # Get LO's branch for filtering
     lo = execute_single("""
-        SELECT branch_id, u.name FROM users u WHERE id = :lo_id
+        SELECT u.branch_id, COALESCE(es.full_name, u.email) AS name
+        FROM users u LEFT JOIN email_signatures es ON es.user_id = u.id
+        WHERE u.id = :lo_id
     """, {"lo_id": lo_id})
 
     if not lo:
@@ -270,19 +274,20 @@ def compare_to_peers(
     peers = execute_query(f"""
         SELECT
             u.id as lo_id,
-            u.name as lo_name,
+            COALESCE(es.full_name, u.email) as lo_name,
             COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END) as funded,
             SUM(CASE WHEN l.stage = 'Funded' THEN l.loan_amount END) as volume,
             COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END)::float /
                 NULLIF(COUNT(*), 0) * 100 as conversion,
             AVG(EXTRACT(EPOCH FROM l.first_contact_at - l.created_at) / 60) as speed_to_lead
         FROM users u
+        LEFT JOIN email_signatures es ON es.user_id = u.id
         LEFT JOIN loans l ON l.loan_officer_id = u.id
             AND l.created_at >= CURRENT_DATE - :date_range
         WHERE u.role = 'loan_officer'
             AND u.is_active = true
             {peer_filter}
-        GROUP BY u.id, u.name
+        GROUP BY u.id, COALESCE(es.full_name, u.email)
         HAVING COUNT(*) > 0
         ORDER BY volume DESC NULLS LAST
     """, params)
@@ -750,7 +755,7 @@ def get_best_practices(
     top_performers = execute_query(f"""
         SELECT
             l.loan_officer_id,
-            u.name,
+            COALESCE(es.full_name, u.email) AS name,
             COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END) as funded,
             SUM(CASE WHEN l.stage = 'Funded' THEN l.loan_amount END) as volume,
             COUNT(CASE WHEN l.stage = 'Funded' THEN 1 END)::float /
@@ -758,9 +763,10 @@ def get_best_practices(
             AVG(EXTRACT(EPOCH FROM l.first_contact_at - l.created_at) / 60) as avg_stl
         FROM loans l
         JOIN users u ON u.id = l.loan_officer_id
+        LEFT JOIN email_signatures es ON es.user_id = u.id
         WHERE l.created_at >= CURRENT_DATE - :date_range
             {branch_filter}
-        GROUP BY l.loan_officer_id, u.name
+        GROUP BY l.loan_officer_id, COALESCE(es.full_name, u.email)
         HAVING COUNT(*) >= 10
         ORDER BY {metric_order}
         LIMIT 5

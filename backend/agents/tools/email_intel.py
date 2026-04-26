@@ -1460,13 +1460,15 @@ def find_contact_email(
 
     results = []
 
-    # Search users/team members first (most likely for internal emails)
+    # Search users/team members (names are encrypted — join email_signatures for searchable full_name)
     try:
         users = execute_query("""
-            SELECT id, full_name AS name, email, role, phone
-            FROM users
-            WHERE LOWER(full_name) LIKE :search
-            OR LOWER(email) LIKE :search
+            SELECT u.id, COALESCE(es.full_name, u.email) AS name, u.email, u.role
+            FROM users u
+            LEFT JOIN email_signatures es ON es.user_id = u.id
+            WHERE LOWER(COALESCE(es.full_name, '')) LIKE :search
+            OR LOWER(u.email) LIKE :search
+            OR LOWER(COALESCE(u.team_name, '')) LIKE :search
             LIMIT 10
         """, {"search": f"%{search_name}%"})
 
@@ -1478,11 +1480,10 @@ def find_contact_email(
                     "name": u.get("name"),
                     "email": u.get("email"),
                     "role": u.get("role"),
-                    "phone": u.get("phone"),
                     "match_score": 100 if search_name in (u.get("name") or "").lower() else 80,
                 })
     except Exception as e:
-        pass  # Continue searching other sources
+        pass
 
     # Search leads
     try:
@@ -1622,27 +1623,27 @@ def find_contact_phone(
     search_name = name.strip().lower()
     results = []
 
-    # Search users/team members first
+    # Search users/team members (names are encrypted — join email_signatures for searchable full_name)
     try:
         users = execute_query("""
-            SELECT id, full_name AS name, email, phone, role
-            FROM users
-            WHERE LOWER(full_name) LIKE :search
-            OR LOWER(email) LIKE :search
+            SELECT u.id, COALESCE(es.full_name, u.email) AS name, u.email, u.role
+            FROM users u
+            LEFT JOIN email_signatures es ON es.user_id = u.id
+            WHERE LOWER(COALESCE(es.full_name, '')) LIKE :search
+            OR LOWER(u.email) LIKE :search
+            OR LOWER(COALESCE(u.team_name, '')) LIKE :search
             LIMIT 10
         """, {"search": f"%{search_name}%"})
 
         for u in users:
-            if u.get("phone"):
-                results.append({
-                    "type": "team_member",
-                    "id": u.get("id"),
-                    "name": u.get("name"),
-                    "phone": u.get("phone"),
-                    "email": u.get("email"),
-                    "role": u.get("role"),
-                    "match_score": 100 if search_name in (u.get("name") or "").lower() else 80,
-                })
+            results.append({
+                "type": "team_member",
+                "id": u.get("id"),
+                "name": u.get("name"),
+                "email": u.get("email"),
+                "role": u.get("role"),
+                "match_score": 100 if search_name in (u.get("name") or "").lower() else 80,
+            })
     except Exception as e:
         logger.error(f"Error searching team members in find_contact_phone: {e}")
 
