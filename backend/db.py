@@ -296,7 +296,18 @@ def get_db(request: Request = None):
                 )
             _tenant_connection_counts[org_id] = current + 1
 
-    db = SessionLocal()
+    try:
+        db = SessionLocal()
+    except Exception as e:
+        _maybe_heal_pool()
+        if _enforce_tenant_limits:
+            with _tenant_conn_lock:
+                current = _tenant_connection_counts.get(org_id, 1)
+                if current <= 1:
+                    _tenant_connection_counts.pop(org_id, None)
+                else:
+                    _tenant_connection_counts[org_id] = current - 1
+        raise
     try:
         # Set RLS tenant context if available from middleware
         if org_id and DATABASE_URL.startswith("postgresql"):
@@ -610,15 +621,54 @@ def get_pool_status():
                 "note": "Connection pooling handled by PgBouncer"
             }
 
+        max_overflow = getattr(pool, '_max_overflow', -1)
+        total = pool.checkedout() + pool.checkedin()
+        max_conn = pool.size() + max_overflow if max_overflow >= 0 else -1
         return {
             "pool_type": "QueuePool (SQLAlchemy)",
             "pool_size": pool.size(),
             "checked_in": pool.checkedin(),
             "checked_out": pool.checkedout(),
             "overflow": pool.overflow(),
-            "total_connections": pool.checkedout() + pool.checkedin(),
-            "max_connections": pool.size() + pool._max_overflow,
-            "status": "healthy" if pool.checkedout() < (pool.size() + pool._max_overflow) else "saturated"
+            "total_connections": total,
+            "max_connections": max_conn,
+            "status": "healthy" if max_conn < 0 or total < max_conn else "saturated"
         }
     except Exception as e:
         return {"error": "Internal server error", "status": "unknown"}
+
+
+_POOL_HEAL_THRESHOLD = int(os.getenv("POOL_HEAL_THRESHOLD", "8"))
+_pool_heal_lock = threading.Lock()
+_last_pool_heal = 0.0
+
+
+def _maybe_heal_pool():
+    """Auto-reset the pool if total connections exceed the heal threshold.
+
+    Called from get_db() on connection checkout failure. Prevents multi-day
+    connection leaks from making the server unrecoverable without a restart.
+    """
+    global _last_pool_heal
+    now = time.time()
+    if now - _last_pool_heal < 60:
+        return
+    if not _pool_heal_lock.acquire(blocking=False):
+        return
+    try:
+        pool = engine.pool
+        if isinstance(pool, NullPool):
+            return
+        total = pool.checkedin() + pool.checkedout()
+        if total >= _POOL_HEAL_THRESHOLD:
+            logger.warning(
+                f"Pool self-heal: {total} connections detected (threshold={_POOL_HEAL_THRESHOLD}). "
+                f"Disposing pool and running idle cleanup."
+            )
+            engine.dispose()
+            cleanup_idle_connections()
+            _last_pool_heal = now
+    except Exception as e:
+        logger.warning(f"Pool self-heal failed: {e}")
+    finally:
+        _pool_heal_lock.release()
