@@ -219,7 +219,7 @@ def analyze_margins_by_segment(
                 ELSE 'small_balance'
             END
         """,
-        "lo": "lo.name",
+        "lo": "COALESCE(loes.full_name, lo.email)",
     }[segment_by]
 
     params = {"date_range": date_range}
@@ -240,6 +240,7 @@ def analyze_margins_by_segment(
                 l.loan_amount * COALESCE(lo.commission_rate, 0.0075) as lo_cost
             FROM loans l
             LEFT JOIN users lo ON lo.id = l.loan_officer_id
+            LEFT JOIN email_signatures loes ON loes.user_id = lo.id
             LEFT JOIN loan_sales ls ON ls.loan_id = l.id
             WHERE l.funded_date >= CURRENT_DATE - :date_range
                 AND l.stage = 'Funded'
