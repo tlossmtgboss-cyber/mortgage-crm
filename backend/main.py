@@ -2941,6 +2941,13 @@ async def startup_event():
     except Exception as e:
         logger.error(f"Enterprise migration FAILED: {e}", exc_info=True)
 
+    # POS consent tables + voice-complete columns on borrower_applications
+    try:
+        from migrations.add_pos_consent_tables import run_migration as _run_pos_consent_migration
+        _run_pos_consent_migration()
+    except Exception as e:
+        logger.error(f"POS consent migration FAILED: {e}", exc_info=True)
+
     # Run critical schema migrations (missing columns that break page loads)
     try:
         _run_critical_schema_migrations()

@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>POS Consent Flow — Perennia AI Voice-to-Submit Pipeline</title>
+<style>
+  :root {
+    --teal: #217F8D;
+    --teal-light: #e8f4f6;
+    --cream: #FCFCF9;
+    --cream-dark: #f5f3ee;
+    --text: #1a1a1a;
+    --text-secondary: #555;
+    --border: rgba(139, 92, 68, 0.12);
+    --green: #38a169;
+    --amber: #d69e2e;
+    --red: #c0152f;
+    --blue: #3182ce;
+    --purple: #805ad5;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .page { max-width: 1100px; margin: 0 auto; padding: 3rem 2rem 4rem; }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
+    border-bottom: 2px solid var(--border);
+  }
+  .header-brand {
+    font-size: 0.875rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--teal);
+    margin-bottom: 0.5rem;
+  }
+  .header h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+  }
+  .header p {
+    font-size: 1.05rem;
+    color: var(--text-secondary);
+    max-width: 700px;
+    margin: 0 auto;
+  }
+  .header-meta {
+    margin-top: 1rem;
+    font-size: 0.8rem;
+    color: #999;
+  }
+
+  /* Summary box */
+  .summary-box {
+    background: var(--teal-light);
+    border: 1px solid rgba(33, 127, 141, 0.2);
+    border-radius: 12px;
+    padding: 1.5rem 2rem;
+    margin-bottom: 3rem;
+  }
+  .summary-box h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--teal);
+    margin-bottom: 0.75rem;
+  }
+  .summary-box p {
+    font-size: 0.95rem;
+    color: var(--text);
+  }
+
+  /* Timeline */
+  .timeline { position: relative; margin: 2rem 0; }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 28px;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: linear-gradient(to bottom, var(--teal), var(--green));
+    border-radius: 2px;
+  }
+
+  .phase {
+    position: relative;
+    margin-bottom: 2.5rem;
+    padding-left: 72px;
+  }
+
+  .phase-dot {
+    position: absolute;
+    left: 16px;
+    top: 4px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #fff;
+    z-index: 1;
+  }
+
+  .phase-dot.voice { background: var(--teal); }
+  .phase-dot.db { background: var(--blue); }
+  .phase-dot.sms { background: var(--purple); }
+  .phase-dot.consent { background: var(--amber); }
+  .phase-dot.crm { background: var(--green); }
+  .phase-dot.pdf { background: var(--red); }
+
+  .phase-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+
+  .phase-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+  }
+  .phase-label.voice { color: var(--teal); }
+  .phase-label.db { color: var(--blue); }
+  .phase-label.sms { color: var(--purple); }
+  .phase-label.consent { color: var(--amber); }
+  .phase-label.crm { color: var(--green); }
+  .phase-label.pdf { color: var(--red); }
+
+  .phase-card h3 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 0.75rem;
+  }
+
+  .phase-card p {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+  }
+
+  .detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem 1.5rem;
+    margin-top: 0.75rem;
+  }
+
+  .detail-item {
+    font-size: 0.82rem;
+    padding: 0.4rem 0;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+  }
+  .detail-item .label {
+    font-weight: 600;
+    color: var(--text);
+    display: block;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 0.15rem;
+  }
+  .detail-item .value {
+    color: var(--text-secondary);
+  }
+
+  code {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.8rem;
+    background: var(--cream-dark);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    color: var(--teal);
+  }
+
+  .endpoint {
+    display: inline-block;
+    font-family: 'SF Mono', monospace;
+    font-size: 0.78rem;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    margin: 0.2rem 0;
+  }
+  .endpoint .method {
+    color: #a6e3a1;
+    font-weight: 700;
+  }
+  .endpoint .path { color: #89b4fa; }
+
+  /* Data residence table */
+  .data-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+  }
+  .data-table th {
+    background: var(--cream-dark);
+    padding: 0.6rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-secondary);
+    border-bottom: 2px solid var(--border);
+  }
+  .data-table td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    vertical-align: top;
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .badge-teal { background: var(--teal-light); color: var(--teal); }
+  .badge-green { background: #e6f7ed; color: var(--green); }
+  .badge-amber { background: #fefce8; color: #92400e; }
+  .badge-red { background: #fef2f2; color: var(--red); }
+  .badge-blue { background: #eff6ff; color: var(--blue); }
+  .badge-purple { background: #f5f3ff; color: var(--purple); }
+
+  /* Compliance section */
+  .compliance-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .compliance-card {
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.25rem;
+  }
+  .compliance-card h4 {
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .compliance-card ul {
+    list-style: none;
+    padding: 0;
+  }
+  .compliance-card li {
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+    padding: 0.25rem 0;
+    padding-left: 1.2rem;
+    position: relative;
+  }
+  .compliance-card li::before {
+    content: '\2713';
+    position: absolute;
+    left: 0;
+    color: var(--green);
+    font-weight: 700;
+  }
+
+  /* File reference */
+  .file-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem;
+    margin: 1rem 0;
+  }
+  .file-ref {
+    font-size: 0.78rem;
+    padding: 0.5rem 0.75rem;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .file-ref .fname {
+    font-family: 'SF Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--teal);
+    font-weight: 600;
+    display: block;
+  }
+  .file-ref .fdesc {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+  }
+
+  /* Status flow */
+  .status-flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 1rem 0;
+    flex-wrap: wrap;
+  }
+  .status-node {
+    padding: 0.4rem 0.9rem;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .status-arrow {
+    font-size: 1.2rem;
+    color: #ccc;
+    padding: 0 0.3rem;
+  }
+
+  /* Section dividers */
+  .section-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin: 3rem 0 1.5rem;
+    padding-bottom: 0.75rem;
+    border-bottom: 2px solid var(--border);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .page { padding: 1.5rem 1rem; }
+    .header h1 { font-size: 1.5rem; }
+    .detail-grid, .compliance-grid, .file-list { grid-template-columns: 1fr; }
+    .status-flow { flex-direction: column; align-items: flex-start; gap: 0.25rem; }
+    .status-arrow { transform: rotate(90deg); }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-brand">Perennia AI</div>
+    <h1>Voice-to-Submit POS Consent Flow</h1>
+    <p>Complete data flow from Aria voice agent completing a URLA 1003 through borrower consent capture, CRM promotion, and Fannie Mae 3.4 generation.</p>
+    <div class="header-meta">April 27, 2026 &middot; Architecture Reference</div>
+  </div>
+
+  <!-- TL;DR -->
+  <div class="summary-box">
+    <h2>How it works in one paragraph</h2>
+    <p>Aria completes the 1003 over the phone. The voice agent triggers <code>POST /api/v1/pos/voice-complete</code>, which creates a <strong>BorrowerApplication</strong> record, generates a 7-day magic link, and texts it to the borrower. The borrower taps the link, reviews their data, signs the FCRA credit authorization and E-SIGN disclosure (typed legal name), and submits. On submission, the data promotes into the CRM as a <strong>Lead + Loan</strong> (stage: APPLICATION), a MISMO 3.4 XML is generated, PDFs are emailed to the loan officer, and a high-priority task is created in their pipeline. Every step writes to the audit trail.</p>
+  </div>
+
+  <!-- Application Status Flow -->
+  <h2 class="section-title">Application Status Lifecycle</h2>
+  <div class="status-flow">
+    <span class="status-node badge badge-blue">DRAFT</span>
+    <span class="status-arrow">&rarr;</span>
+    <span class="status-node badge badge-amber">PENDING_CONSENT</span>
+    <span class="status-arrow">&rarr;</span>
+    <span class="status-node badge badge-green">SUBMITTED</span>
+    <span class="status-arrow">&rarr;</span>
+    <span class="status-node badge badge-teal">APPLICATION (Loan stage)</span>
+  </div>
+  <p style="font-size:0.85rem;color:var(--text-secondary);margin-top:0.5rem;">If the borrower doesn't act within 7 days, the Day 7 reminder marks the application <span class="badge badge-red">EXPIRED</span>.</p>
+
+  <!-- Timeline -->
+  <h2 class="section-title">End-to-End Pipeline</h2>
+  <div class="timeline">
+
+    <!-- Phase 1 -->
+    <div class="phase">
+      <div class="phase-dot voice">1</div>
+      <div class="phase-card">
+        <div class="phase-label voice">Voice Agent</div>
+        <h3>Aria Completes the 1003 Over the Phone</h3>
+        <p>The URLA voice agent collects all 9 sections of the Fannie Mae Uniform Residential Loan Application during a phone conversation with the borrower. Data is stored in Redis as an encrypted <code>URLAApplication</code> object.</p>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="label">Storage</span>
+            <span class="value">Redis &mdash; <code>urla:{tenant}:loan:{id}</code></span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Encryption</span>
+            <span class="value">Fernet symmetric (AES-128-CBC)</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">TTL</span>
+            <span class="value">30 days</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Sections</span>
+            <span class="value">9 sections: Personal, Employment, Assets, Liabilities, Property, Loan, Declarations, Demographics, LO Info</span>
+          </div>
+        </div>
+        <p style="margin-top:0.75rem;">When the agent finishes, it triggers:</p>
+        <div class="endpoint"><span class="method">POST</span> <span class="path">/api/v1/pos/voice-complete</span></div>
+        <p style="font-size:0.82rem;color:var(--text-secondary);margin-top:0.25rem;">Payload: <code>voice_loan_id</code>, <code>borrower_first_name</code>, <code>borrower_phone</code>, <code>lo_name</code></p>
+      </div>
+    </div>
+
+    <!-- Phase 2 -->
+    <div class="phase">
+      <div class="phase-dot db">2</div>
+      <div class="phase-card">
+        <div class="phase-label db">Database</div>
+        <h3>BorrowerApplication Created, Magic Link Generated</h3>
+        <p>The consent service finds or creates a <code>BorrowerApplication</code> record, generates a PURL magic link token (7-day expiry), and transitions the application to <strong>PENDING_CONSENT</strong>.</p>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="label">DB Record</span>
+            <span class="value"><code>borrower_applications</code> table</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Status</span>
+            <span class="value">DRAFT &rarr; PENDING_CONSENT</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Token System</span>
+            <span class="value">PURL tokens &mdash; <code>purl_access_tokens</code> + <code>purl_workspaces</code></span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Token Scope</span>
+            <span class="value"><code>VOICE_REVIEW_SUBMIT</code> (7-day expiry)</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Workspace Slug</span>
+            <span class="value"><code>voice-consent-app-{application_id}</code></span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Audit Event</span>
+            <span class="value"><code>voice_complete_triggered</code></span>
+          </div>
+        </div>
+        <p style="margin-top:0.75rem;font-size:0.85rem;">Magic link format: <code>https://app.perenniaai.com/apply/voice-review/{token}</code></p>
+      </div>
+    </div>
+
+    <!-- Phase 3 -->
+    <div class="phase">
+      <div class="phase-dot sms">3</div>
+      <div class="phase-card">
+        <div class="phase-label sms">SMS Delivery</div>
+        <h3>Magic Link Texted to Borrower</h3>
+        <p>The borrower receives an SMS with the review link. TCPA consent is verified before sending. Three follow-up reminders are scheduled.</p>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="label">Provider</span>
+            <span class="value">Telnyx (from +18438838956)</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">TCPA Gate</span>
+            <span class="value">SMS consent checked before send</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Day 1 Reminder</span>
+            <span class="value">"Your application is ready for review..."</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Day 3 Reminder</span>
+            <span class="value">"Still needs your signature. Only takes 2 min..."</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Day 7 Final</span>
+            <span class="value">"Application will expire soon..." &rarr; marks EXPIRED if no action</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Tracking</span>
+            <span class="value"><code>sms_delivery_tracker</code> + <code>application_notifications</code></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 4 -->
+    <div class="phase">
+      <div class="phase-dot consent">4</div>
+      <div class="phase-card">
+        <div class="phase-label consent">Borrower Consent</div>
+        <h3>Borrower Reviews, Signs Credit Auth &amp; E-Disclosure</h3>
+        <p>The borrower taps the link, reviews their application data, then completes two legally required consent captures. Each requires typing their full legal name.</p>
+
+        <div style="margin:1rem 0;">
+          <div class="endpoint"><span class="method">GET</span> <span class="path">/api/v1/pos/consent/{token}/status</span></div>
+          <span style="font-size:0.78rem;color:var(--text-secondary);margin-left:0.5rem;">Check completion state + load form data</span>
+        </div>
+        <div style="margin:0.5rem 0;">
+          <div class="endpoint"><span class="method">GET</span> <span class="path">/api/v1/pos/consent/{token}/disclosures</span></div>
+          <span style="font-size:0.78rem;color:var(--text-secondary);margin-left:0.5rem;">Fetch legal text for both consent blocks</span>
+        </div>
+        <div style="margin:0.5rem 0;">
+          <div class="endpoint"><span class="method">POST</span> <span class="path">/api/v1/pos/consent/{token}/credit-auth</span></div>
+          <span style="font-size:0.78rem;color:var(--text-secondary);margin-left:0.5rem;">FCRA credit pull authorization</span>
+        </div>
+        <div style="margin:0.5rem 0;">
+          <div class="endpoint"><span class="method">POST</span> <span class="path">/api/v1/pos/consent/{token}/e-disclosure</span></div>
+          <span style="font-size:0.78rem;color:var(--text-secondary);margin-left:0.5rem;">E-SIGN Act electronic disclosure consent</span>
+        </div>
+        <div style="margin:0.5rem 0;">
+          <div class="endpoint"><span class="method">POST</span> <span class="path">/api/v1/pos/consent/{token}/submit</span></div>
+          <span style="font-size:0.78rem;color:var(--text-secondary);margin-left:0.5rem;">Final submission (requires both consents)</span>
+        </div>
+
+        <table class="data-table" style="margin-top:1rem;">
+          <thead>
+            <tr><th>Consent</th><th>Regulation</th><th>DB Table</th><th>Captured Fields</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Credit Authorization</strong></td>
+              <td>FCRA &sect; 604(a)(3)(A)</td>
+              <td><code>credit_authorizations</code></td>
+              <td>typed_full_name, IP, user_agent, consent_text_hash (SHA-256), consent_text_version, timestamp</td>
+            </tr>
+            <tr>
+              <td><strong>E-Disclosure</strong></td>
+              <td>E-SIGN Act (15 USC &sect; 7001)</td>
+              <td><code>econsent_agreements</code></td>
+              <td>typed_full_name, IP, user_agent, consent_text_hash, hw/sw requirements shown, right to withdraw shown, paper copy info shown, timestamp</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Phase 5 -->
+    <div class="phase">
+      <div class="phase-dot crm">5</div>
+      <div class="phase-card">
+        <div class="phase-label crm">CRM Promotion</div>
+        <h3>Lead + Loan Created in Pipeline</h3>
+        <p>On submission, an event subscriber promotes the application into the CRM as first-class records. The loan officer sees it in their pipeline immediately.</p>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="label">Lead Record</span>
+            <span class="value">Created/updated with name, email, phone, employment, income</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Loan Record</span>
+            <span class="value">Created with loan amount, purpose, property, type, term</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Loan Number</span>
+            <span class="value"><code>POS-{uuid[:8]}</code> (auto-generated)</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Loan Stage</span>
+            <span class="value">Promoted to <strong>APPLICATION</strong></span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Task Created</span>
+            <span class="value">"Review submitted 1003 application" (high priority, assigned to LO)</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Foreign Keys</span>
+            <span class="value"><code>BorrowerApplication.lead_id</code> &rarr; Lead, <code>.loan_id</code> &rarr; Loan</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 6 -->
+    <div class="phase">
+      <div class="phase-dot pdf">6</div>
+      <div class="phase-card">
+        <div class="phase-label pdf">Documents &amp; Delivery</div>
+        <h3>MISMO 3.4 XML + PDFs Generated &amp; Emailed</h3>
+        <p>The URLA data is serialized to Fannie Mae MISMO 3.4 format. PDFs are generated for the consent records and application summary, then emailed to the loan officer with all attachments.</p>
+        <div class="detail-grid">
+          <div class="detail-item">
+            <span class="label">MISMO Version</span>
+            <span class="value">3.4.032420210307 (ULAD Extension)</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Namespace</span>
+            <span class="value"><code>mismo.org/residential/2009/schemas</code></span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Attachments</span>
+            <span class="value">Fannie_Mae_3.4.xml, E-Consent.pdf, Credit_Auth.pdf, Application_Summary.pdf</span>
+          </div>
+          <div class="detail-item">
+            <span class="label">Storage</span>
+            <span class="value"><code>documents</code> table (category: APPLICATION)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /timeline -->
+
+  <!-- Data Residence -->
+  <h2 class="section-title">Where Data Lives at Each Stage</h2>
+  <table class="data-table">
+    <thead>
+      <tr><th>Stage</th><th>Data Store</th><th>Key/Table</th><th>Retention</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="badge badge-teal">Voice Call Active</span></td>
+        <td>Redis</td>
+        <td><code>urla:{tenant}:loan:{id}</code></td>
+        <td>30-day TTL, Fernet encrypted</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-blue">Voice Complete</span></td>
+        <td>PostgreSQL</td>
+        <td><code>borrower_applications</code></td>
+        <td>Permanent (status: PENDING_CONSENT)</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-purple">Magic Link Sent</span></td>
+        <td>PostgreSQL</td>
+        <td><code>purl_access_tokens</code> + <code>purl_workspaces</code></td>
+        <td>7-day token expiry</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-amber">Credit Auth Signed</span></td>
+        <td>PostgreSQL</td>
+        <td><code>credit_authorizations</code></td>
+        <td>Permanent (regulatory audit record)</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-amber">E-Consent Signed</span></td>
+        <td>PostgreSQL</td>
+        <td><code>econsent_agreements</code></td>
+        <td>Permanent (regulatory audit record)</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-green">Submitted</span></td>
+        <td>PostgreSQL</td>
+        <td><code>leads</code> + <code>loans</code></td>
+        <td>Permanent (CRM pipeline records)</td>
+      </tr>
+      <tr>
+        <td><span class="badge badge-red">Documents</span></td>
+        <td>PostgreSQL + Email</td>
+        <td><code>documents</code> table + LO inbox</td>
+        <td>Permanent</td>
+      </tr>
+      <tr>
+        <td>Audit Trail</td>
+        <td>PostgreSQL</td>
+        <td><code>application_events</code></td>
+        <td>Permanent (every state change logged)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- Compliance -->
+  <h2 class="section-title">Compliance Coverage</h2>
+  <div class="compliance-grid">
+    <div class="compliance-card">
+      <h4><span style="color:var(--green);">&#9679;</span> FCRA (Credit Reporting)</h4>
+      <ul>
+        <li>Full authorization text displayed before signature</li>
+        <li>Typed legal name captured (click-to-sign)</li>
+        <li>SHA-256 hash of exact text shown preserved</li>
+        <li>IP address + user agent + timestamp recorded</li>
+        <li>Consent text version tracked for audit</li>
+      </ul>
+    </div>
+    <div class="compliance-card">
+      <h4><span style="color:var(--green);">&#9679;</span> E-SIGN Act (Electronic Consent)</h4>
+      <ul>
+        <li>Hardware/software requirements disclosed</li>
+        <li>Right to withdraw consent explained</li>
+        <li>Paper copy availability stated</li>
+        <li>Typed legal name captured</li>
+        <li>Separate audit record with full provenance</li>
+      </ul>
+    </div>
+    <div class="compliance-card">
+      <h4><span style="color:var(--green);">&#9679;</span> TCPA (Telephone Consumer Protection)</h4>
+      <ul>
+        <li>SMS consent verified before every send</li>
+        <li>Delivery tracking via <code>sms_delivery_tracker</code></li>
+        <li>Opt-out respected at send time</li>
+      </ul>
+    </div>
+    <div class="compliance-card">
+      <h4><span style="color:var(--green);">&#9679;</span> ECOA / HMDA (Fair Lending)</h4>
+      <ul>
+        <li>Demographics collected voluntarily (Section 8)</li>
+        <li>Ethnicity, race, sex fields encrypted</li>
+        <li>Government monitoring info per HMDA requirements</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Key Files -->
+  <h2 class="section-title">Key Source Files</h2>
+  <div class="file-list">
+    <div class="file-ref">
+      <span class="fname">backend/agents/urla/agent.py</span>
+      <span class="fdesc">Voice agent &mdash; triggers voice-complete on call end</span>
+    </div>
+    <div class="file-ref">
+      <span class="fname">backend/agents/urla/models.py</span>
+      <span class="fdesc">URLAApplication model &mdash; 9 URLA 1003 sections</span>
+    </div>
+    <div class="file-ref">
+      <span class="fname">backend/agents/urla/state.py</span>
+      <span class="fdesc">Redis state manager (encrypted, TTL, serialization)</span>
+    </div>
+    <div class="file-ref">
+      <span class="fname">backend/agents/urla/mismo_serializer.py</span>
+      <span class="fdesc">MISMO 3.4 XML serialization for Fannie Mae</span>
+    </div>
+    <div class="file-ref">
+      <span class="fname">backend/routes/pos_consent_routes.py</span>
+      <span class="fdesc">All consent endpoints (status, auth, e-consent, submit)</span>
+    </div>
+    <div class="file-ref">
+      <span class="fname">backend/services/pos_consent_service.py</span>
+      <span class="fdesc">voice_complete(), consent capture, SMS dispatch</span>
+    </div>
+    <div class="file-ref">
+      <span class="fname">backend/services/pos_consent_reminder_service.py</span>
+      <span class="fdesc">Day 1/3/7 reminders, abandonment handling</span>
+    </div>
+    <div class="file-ref">
+      <span class="fname">backend/services/purl_token_service.py</span>
+      <span class="fdesc">Magic link token generation &amp; verification</span>
+    </div>
+    <div class="file-ref">
+      <span class="fname">backend/database/models/pos_consent.py</span>
+      <span class="fdesc">CreditAuthorization &amp; EConsentAgreement models</span>
+    </div>
+    <div class="file-ref">
+      <span class="fname">backend/database/models/borrower.py</span>
+      <span class="fdesc">BorrowerApplication model</span>
+    </div>
+    <div class="file-ref">
+      <span class="fname">backend/services/event_subscribers.py</span>
+      <span class="fdesc">Lead/Loan promotion on submission</span>
+    </div>
+    <div class="file-ref">
+      <span class="fname">frontend/src/pages/VoiceReviewPage.js</span>
+      <span class="fdesc">Borrower-facing review &amp; consent page</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="margin-top:3rem;padding-top:1.5rem;border-top:2px solid var(--border);text-align:center;">
+    <p style="font-size:0.8rem;color:#999;">Perennia AI &middot; Voice-to-Submit POS Consent Flow &middot; Generated April 27, 2026</p>
+  </div>
+
+</div>
+</body>
+</html>
