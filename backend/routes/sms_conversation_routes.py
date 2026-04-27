@@ -759,6 +759,152 @@ async def notify_status_update(
 
 
 
+@router.get("/diag/full-trace/{phone}")
+async def diag_full_trace(phone: str, request: Request, db: Session = Depends(get_db)):
+    """TEMPORARY: Traces the exact GET /conversations pipeline with evidence at every step."""
+    if request.query_params.get("t") != "smstrace2026":
+        raise HTTPException(status_code=403, detail="token required")
+
+    import traceback as _tb
+    evidence = {}
+
+    # Step 0: Input normalization
+    normalized = _normalize_phone(phone)
+    like_pattern = f"%{normalized[-10:]}"
+    evidence["input"] = {"raw": phone, "normalized": normalized, "pattern": like_pattern}
+
+    # Step 1: Look up user's org_id (simulate what auth would provide)
+    try:
+        user_row = db.execute(text(
+            "SELECT id, email, organization_id FROM users LIMIT 3"
+        )).fetchall()
+        evidence["users_sample"] = [
+            {"id": r[0], "email": r[1], "org_id": r[2]} for r in user_row
+        ]
+    except Exception as e:
+        evidence["users_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # Step 2: Check sms_delivery_log existence
+    try:
+        row = db.execute(text(
+            "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'sms_delivery_log'"
+        )).fetchone()
+        evidence["delivery_log_exists"] = bool(row and row[0] > 0)
+    except Exception as e:
+        evidence["delivery_log_check_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # Step 3: Query sms_panel_messages — NO FILTERS (just phone match)
+    try:
+        rows = db.execute(text("""
+            SELECT id, phone, organization_id, direction, body, sender_name, status,
+                   created_at, telnyx_message_id
+            FROM sms_panel_messages
+            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+            ORDER BY created_at DESC LIMIT 10
+        """), {"pattern": like_pattern}).fetchall()
+        evidence["panel_no_filter"] = [
+            {"id": str(r[0])[:20], "phone": r[1], "org_id": r[2], "dir": r[3],
+             "body": (r[4] or "")[:40], "sender": r[5], "status": r[6],
+             "at": r[7].isoformat() if r[7] else None, "telnyx_id": str(r[8])[:20] if r[8] else None}
+            for r in rows
+        ]
+        evidence["panel_no_filter_count"] = len(rows)
+    except Exception as e:
+        evidence["panel_no_filter_error"] = f"{e}\n{_tb.format_exc()}"
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # Step 4: Query sms_panel_messages — WITH org_id=1 filter (most likely user org)
+    try:
+        rows = db.execute(text("""
+            SELECT id, direction, body, status, created_at
+            FROM sms_panel_messages
+            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+              AND (organization_id = :org_id OR organization_id IS NULL)
+            ORDER BY created_at DESC LIMIT 10
+        """), {"pattern": like_pattern, "org_id": 1}).fetchall()
+        evidence["panel_with_org1"] = len(rows)
+    except Exception as e:
+        evidence["panel_with_org1_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # Step 5: Query sms_panel_messages — WITH org_id=NULL (my latest fix path)
+    try:
+        rows = db.execute(text("""
+            SELECT id, direction, body, status, created_at
+            FROM sms_panel_messages
+            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+            ORDER BY created_at DESC LIMIT 10
+        """), {"pattern": like_pattern}).fetchall()
+        evidence["panel_no_org_filter"] = len(rows)
+    except Exception as e:
+        evidence["panel_no_org_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # Step 6: Check sms_delivery_log query
+    try:
+        rows = db.execute(text("""
+            SELECT telnyx_message_id, to_phone, organization_id, status, sent_at
+            FROM sms_delivery_log
+            WHERE REPLACE(REPLACE(REPLACE(to_phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+            ORDER BY sent_at DESC LIMIT 5
+        """), {"pattern": like_pattern}).fetchall()
+        evidence["delivery_log_rows"] = len(rows)
+    except Exception as e:
+        evidence["delivery_log_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # Step 7: Total rows in sms_panel_messages
+    try:
+        row = db.execute(text("SELECT COUNT(*) FROM sms_panel_messages")).fetchone()
+        evidence["panel_total_rows"] = row[0] if row else 0
+    except Exception as e:
+        evidence["panel_total_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # Step 8: Check what phone numbers exist in the panel table
+    try:
+        rows = db.execute(text("""
+            SELECT DISTINCT phone, organization_id, direction, COUNT(*) as cnt
+            FROM sms_panel_messages
+            GROUP BY phone, organization_id, direction
+            ORDER BY cnt DESC LIMIT 10
+        """)).fetchall()
+        evidence["panel_phone_summary"] = [
+            {"phone": r[0], "org_id": r[1], "dir": r[2], "count": r[3]} for r in rows
+        ]
+    except Exception as e:
+        evidence["panel_summary_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    return evidence
+
+
 def update_panel_message_status(db: Session, telnyx_message_id: str, status: str):
     """Update status in sms_panel_messages when delivery webhook arrives."""
     try:
