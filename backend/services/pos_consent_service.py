@@ -150,26 +150,36 @@ def voice_complete(
     # Generate PURL token (stores application.id for reliable lookup)
     magic_link, token = _generate_magic_link(db, application, organization_id)
 
-    # Send SMS
-    sms_result = _send_consent_sms(
-        to_phone=borrower_phone,
-        first_name=borrower_first_name,
-        lo_name=lo_name,
-        magic_link=magic_link,
-        organization_id=organization_id,
-    )
-
-    if sms_result.get("success"):
-        application.consent_sms_sent_at = datetime.now(timezone.utc)
-
-    # Write audit event
-    _write_application_event(db, application.id, "voice_complete_triggered", {
-        "voice_loan_id": voice_loan_id,
-        "sms_sent": sms_result.get("success", False),
-        "magic_link_generated": True,
-    })
-
+    # Commit core state (status + token) before SMS send — SMS logging
+    # can fail due to missing columns and we don't want to lose the application.
     db.commit()
+
+    # Send SMS (non-fatal — if DB logging of SMS fails, we still return success)
+    sms_result = {"success": False, "error": "not_attempted"}
+    try:
+        sms_result = _send_consent_sms(
+            to_phone=borrower_phone,
+            first_name=borrower_first_name,
+            lo_name=lo_name,
+            magic_link=magic_link,
+            organization_id=organization_id,
+        )
+    except Exception as e:
+        logger.warning("SMS send failed: %s", e)
+        db.rollback()
+
+    try:
+        if sms_result.get("success"):
+            application.consent_sms_sent_at = datetime.now(timezone.utc)
+        _write_application_event(db, application.id, "voice_complete_triggered", {
+            "voice_loan_id": voice_loan_id,
+            "sms_sent": sms_result.get("success", False),
+            "magic_link_generated": True,
+        })
+        db.commit()
+    except Exception as e:
+        logger.warning("Post-SMS commit failed (non-fatal): %s", e)
+        db.rollback()
 
     # Schedule reminder notifications (day 1, 3, 7)
     try:
