@@ -308,6 +308,9 @@ from .ai_prospect_conversation import (
     ConversationState,
 )
 
+# Device token & push notification models (mobile app infrastructure)
+from .device_token import DeviceToken, PushNotificationPreference
+
 # SSO configuration models (SAML, OIDC)
 from .sso import SSOConfig
 
