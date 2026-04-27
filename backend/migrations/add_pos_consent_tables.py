@@ -154,6 +154,17 @@ def run_migration():
             logger.info("purl_access_tokens scope constraint update skipped: %s", e)
             conn.rollback()
 
+        # Allow NULL organization_id on purl_access_tokens for API-key auth flows
+        try:
+            conn.execute(text(
+                "ALTER TABLE purl_access_tokens ALTER COLUMN organization_id DROP NOT NULL"
+            ))
+            conn.commit()
+            logger.info("Relaxed purl_access_tokens.organization_id to nullable")
+        except Exception as e:
+            logger.info("purl_access_tokens nullable org_id skipped: %s", e)
+            conn.rollback()
+
     logger.info("POS consent migration complete")
 
 

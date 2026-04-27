@@ -200,7 +200,7 @@ def _generate_magic_link(
     workspace_id = _get_or_create_workspace(db, app, organization_id)
 
     token_id, full_token = token_service.create_token(
-        organization_id=organization_id or app.organization_id or 0,
+        organization_id=organization_id or app.organization_id or None,
         workspace_id=workspace_id,
         scope=TokenScope.VOICE_REVIEW_SUBMIT,
         expires_in_days=7,
