@@ -389,8 +389,8 @@ class AriaVoiceAgent(Agent):
                 "user_id": str(self._session_data.get("user_id", "")),
             }},
         )
-        phone_matches = result.get("result", {}).get("data", {}).get("results", []) if isinstance(result.get("result"), dict) else []
-        email_matches = email_result.get("result", {}).get("data", {}).get("results", []) if isinstance(email_result.get("result"), dict) else []
+        phone_matches = result.get("result", {}).get("data", {}).get("contacts", []) if isinstance(result.get("result"), dict) else []
+        email_matches = email_result.get("result", {}).get("data", {}).get("contacts", []) if isinstance(email_result.get("result"), dict) else []
 
         merged = {}
         for m in phone_matches + email_matches:
