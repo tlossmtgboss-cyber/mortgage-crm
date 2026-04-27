@@ -669,7 +669,7 @@ async def diagnose_call_routing():
         })
 
     if phone_config:
-        current_server_url = phone_config.get("serverUrl")
+        current_server_url = phone_config.get("serverUrl") or (phone_config.get("server") or {}).get("url")
         current_assistant_id = phone_config.get("assistantId")
         phone_number = phone_config.get("number")
 
