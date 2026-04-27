@@ -2950,6 +2950,13 @@ async def startup_event():
     except Exception as e:
         logger.error(f"POS consent migration FAILED: {e}", exc_info=True)
 
+    # Application events table + missing sms_messages/notifications columns
+    try:
+        from migrations.add_application_events_table import run_migration as _run_app_events_migration
+        _run_app_events_migration()
+    except Exception as e:
+        logger.error(f"Application events migration FAILED: {e}", exc_info=True)
+
     # Run critical schema migrations (missing columns that break page loads)
     try:
         _run_critical_schema_migrations()
