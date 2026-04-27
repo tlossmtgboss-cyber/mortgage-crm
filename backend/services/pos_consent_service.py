@@ -232,10 +232,10 @@ def _get_or_create_workspace(db, app, organization_id) -> int:
         return result[0]
 
     result = db.execute(text("""
-        INSERT INTO purl_workspaces (organization_id, name, slug, created_at)
-        VALUES (:org_id, :name, :slug, NOW())
+        INSERT INTO purl_workspaces (organization_id, display_name, slug, created_at)
+        VALUES (:org_id, :display_name, :slug, NOW())
         RETURNING id
-    """), {"org_id": org_id, "name": f"Voice Consent — App #{app.id}", "slug": slug})
+    """), {"org_id": org_id, "display_name": f"Voice Consent — App #{app.id}", "slug": slug})
     db.flush()
     return result.fetchone()[0]
 
