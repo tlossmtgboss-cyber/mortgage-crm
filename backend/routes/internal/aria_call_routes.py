@@ -25,8 +25,14 @@ TELNYX_CONNECTION_ID = os.environ.get("TELNYX_CONNECTION_ID", "")
 
 try:
     from db import engine as _engine
+    from sqlalchemy import text as _text
     from database.models.voice_call_session import VoiceCallSession
     VoiceCallSession.__table__.create(_engine, checkfirst=True)
+    with _engine.connect() as _conn:
+        _conn.execute(_text(
+            "ALTER TABLE voice_call_sessions ALTER COLUMN user_id DROP NOT NULL"
+        ))
+        _conn.commit()
 except Exception:
     pass
 
@@ -160,7 +166,7 @@ async def log_call(
         session = VoiceCallSession(
             session_uuid=str(uuid.uuid4()),
             organization_id=req.organization_id,
-            user_id=req.user_id or 0,
+            user_id=req.user_id if req.user_id else None,
             lead_id=req.lead_id,
             direction=req.direction,
             status="completed",

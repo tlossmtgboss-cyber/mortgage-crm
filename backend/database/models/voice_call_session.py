@@ -59,7 +59,7 @@ class VoiceCallSession(Base):
         Integer, ForeignKey("organizations.id"), nullable=True, index=True
     )
     user_id = Column(
-        Integer, ForeignKey("users.id"), nullable=False, index=True
+        Integer, ForeignKey("users.id"), nullable=True, index=True
     )
 
     # Session metadata
