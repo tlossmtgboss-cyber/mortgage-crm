@@ -720,3 +720,91 @@ def update_panel_message_status(db: Session, telnyx_message_id: str, status: str
         db.flush()
     except Exception as e:
         logger.debug(f"Panel message status update skipped: {e}")
+
+
+# ─── Diagnostic endpoint (temporary) ────────────────────────────────────────
+
+@router.get("/diag/inbound-check")
+async def diag_inbound_check(db: Session = Depends(get_db)):
+    """Temporary diagnostic: check if inbound SMS pipeline is working."""
+    results = {}
+
+    # 1. Check if webhook_idempotency table exists and has recent records
+    try:
+        row = db.execute(text("""
+            SELECT COUNT(*) AS total,
+                   SUM(CASE WHEN event_type = 'message.received' THEN 1 ELSE 0 END) AS inbound_count,
+                   MAX(created_at) AS last_webhook
+            FROM webhook_idempotency_records
+            WHERE provider = 'telnyx' AND created_at > NOW() - INTERVAL '1 hour'
+        """)).fetchone()
+        results["webhooks_last_hour"] = {
+            "total": row[0], "inbound": row[1],
+            "last_at": row[2].isoformat() if row[2] else None,
+        }
+    except Exception as e:
+        results["webhooks_last_hour"] = {"error": str(e)}
+
+    # 2. Check inbound records in sms_panel_messages
+    try:
+        row = db.execute(text("""
+            SELECT COUNT(*) AS total, MAX(created_at) AS last_at
+            FROM sms_panel_messages
+            WHERE direction = 'inbound' AND created_at > NOW() - INTERVAL '1 hour'
+        """)).fetchone()
+        results["inbound_panel_messages_last_hour"] = {
+            "total": row[0], "last_at": row[1].isoformat() if row[1] else None,
+        }
+    except Exception as e:
+        results["inbound_panel_messages_last_hour"] = {"error": str(e)}
+
+    # 3. Check sms_messages table (legacy)
+    try:
+        row = db.execute(text("""
+            SELECT COUNT(*) AS total, MAX(created_at) AS last_at
+            FROM sms_messages
+            WHERE direction = 'inbound' AND created_at > NOW() - INTERVAL '1 hour'
+        """)).fetchone()
+        results["inbound_sms_messages_last_hour"] = {
+            "total": row[0], "last_at": row[1].isoformat() if row[1] else None,
+        }
+    except Exception as e:
+        results["inbound_sms_messages_last_hour"] = {"error": str(e)}
+
+    # 4. Check recent inbound panel messages (show last 3)
+    try:
+        rows = db.execute(text("""
+            SELECT id, phone, body, sender_name, status, created_at
+            FROM sms_panel_messages
+            WHERE direction = 'inbound'
+            ORDER BY created_at DESC
+            LIMIT 3
+        """)).fetchall()
+        results["recent_inbound"] = [
+            {
+                "id": r[0][:20] if r[0] else None,
+                "phone_last4": r[1][-4:] if r[1] else None,
+                "body": (r[2] or "")[:30],
+                "sender": r[3],
+                "status": r[4],
+                "at": r[5].isoformat() if r[5] else None,
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        results["recent_inbound"] = {"error": str(e)}
+
+    # 5. Check verified_caller_ids for our Telnyx number
+    try:
+        row = db.execute(text("""
+            SELECT phone_number, organization_id FROM verified_caller_ids
+            WHERE REPLACE(REPLACE(phone_number, '+', ''), '-', '') LIKE '%8438838956'
+            LIMIT 3
+        """)).fetchall()
+        results["telnyx_number_mapping"] = [
+            {"phone": r[0], "org_id": r[1]} for r in row
+        ] if row else "NOT FOUND — org resolution will fail for inbound"
+    except Exception as e:
+        results["telnyx_number_mapping"] = {"error": str(e)}
+
+    return results
