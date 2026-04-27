@@ -1362,6 +1362,33 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 db.rollback()
                 logger.error("aria_sms_intercept: audit SMS store failed: %s", e)
 
+            # Write to SMS panel so Aria-intercepted inbound appears in Archive
+            try:
+                import uuid as _uuid
+                db.execute(sa_text("""
+                    INSERT INTO sms_panel_messages
+                        (id, phone, organization_id, direction, body,
+                         sender_name, status, telnyx_message_id, created_at)
+                    VALUES (:id, :phone, :org_id, 'inbound', :body,
+                            :sender_name, 'received', :telnyx_id, NOW())
+                    ON CONFLICT (id) DO NOTHING
+                """), {
+                    "id": event.message_id or str(_uuid.uuid4()),
+                    "phone": normalized_from,
+                    "org_id": _aria_org_id,
+                    "body": message_body or "",
+                    "sender_name": normalized_from,
+                    "telnyx_id": event.message_id,
+                })
+                db.commit()
+                from routes.sms_conversation_routes import notify_inbound_sms
+                await notify_inbound_sms(
+                    phone=normalized_from, body=message_body or "",
+                    telnyx_message_id=event.message_id, org_id=_aria_org_id,
+                )
+            except Exception as _panel_err:
+                logger.debug(f"aria_sms_intercept: panel write failed: {_panel_err}")
+
             return {
                 "status": "received",
                 "handler": "aria_sms_conversation",
@@ -1407,6 +1434,42 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             except Exception as e:
                 db.rollback()
                 logger.error(f"Failed to store ACO-intercepted SMS: {e}")
+            # Write to SMS panel so ACO-intercepted inbound appears in Archive
+            try:
+                import uuid as _uuid
+                _aco_org_id = None
+                try:
+                    _aco_org_row = db.execute(sa_text(
+                        "SELECT organization_id FROM verified_caller_ids "
+                        "WHERE phone_number = :to_phone AND organization_id IS NOT NULL LIMIT 1"
+                    ), {"to_phone": normalized_to}).fetchone()
+                    if _aco_org_row:
+                        _aco_org_id = _aco_org_row[0]
+                except Exception:
+                    pass
+                db.execute(sa_text("""
+                    INSERT INTO sms_panel_messages
+                        (id, phone, organization_id, direction, body,
+                         sender_name, status, telnyx_message_id, created_at)
+                    VALUES (:id, :phone, :org_id, 'inbound', :body,
+                            :sender_name, 'received', :telnyx_id, NOW())
+                    ON CONFLICT (id) DO NOTHING
+                """), {
+                    "id": event.message_id or str(_uuid.uuid4()),
+                    "phone": normalized_from,
+                    "org_id": _aco_org_id,
+                    "body": message_body or "",
+                    "sender_name": normalized_from,
+                    "telnyx_id": event.message_id,
+                })
+                db.commit()
+                from routes.sms_conversation_routes import notify_inbound_sms
+                await notify_inbound_sms(
+                    phone=normalized_from, body=message_body or "",
+                    telnyx_message_id=event.message_id, org_id=_aco_org_id,
+                )
+            except Exception as _panel_err:
+                logger.debug(f"aco_intercept: panel write failed: {_panel_err}")
             return {
                 "status": "received",
                 "handler": "aco",

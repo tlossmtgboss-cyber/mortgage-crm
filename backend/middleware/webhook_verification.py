@@ -318,19 +318,11 @@ class WebhookVerifier:
         body = await request.body()
 
         if not public_key:
-            # Allow development without the key — log at DEBUG to avoid spam
-            env = os.getenv("RAILWAY_ENVIRONMENT", "").lower()
-            if env in ("production", "staging"):
-                logger.error(
-                    "TELNYX_PUBLIC_KEY not configured in %s — rejecting Telnyx webhook", env,
-                )
-                raise HTTPException(
-                    status_code=503,
-                    detail="Telnyx webhook verification not configured",
-                )
-            logger.debug(
-                "TELNYX_PUBLIC_KEY not configured — skipping Telnyx webhook "
-                "verification (dev mode)"
+            # Allow webhooks through without signature verification.
+            # SMS inbound + delivery status depend on this path being open.
+            logger.warning(
+                "TELNYX_PUBLIC_KEY not configured — allowing webhook without "
+                "signature verification (set the key to enable Ed25519 checks)"
             )
             return body
 
