@@ -308,6 +308,7 @@ const PURLDashboard = lazyRetry(() => import('./pages/PURLDashboard'));
 const PURLApplication = lazyRetry(() => import('./pages/PURLApplication'));
 const PortalContainer = lazyRetry(() => import('./pages/portal/PortalContainer'));
 const POSApplication = lazyRetry(() => import('./pages/portal/POSApplication'));
+const POSTestPage = lazyRetry(() => import('./pages/portal/POSTestPage'));
 const LoanPortalRedirect = lazyRetry(() => import('./components/Portal/LoanPortalRedirect'));
 const AdminDocumentReviewQueue = lazyRetry(() => import('./pages/AdminDocumentReviewQueue'));
 const MemoryStaging = lazyRetry(() => import('./pages/MemoryStaging'));
@@ -740,6 +741,7 @@ function App() {
               : <ExternalRedirect to="https://www.perenniaai.com" />
           } />
           <Route path="/aria-test" element={<LazyPage><AriaTestPage /></LazyPage>} />
+          <Route path="/pos-test" element={<LazyPage><POSTestPage /></LazyPage>} />
           <Route path="/apply" element={<BuyerIntake />} />
           <Route path="/apply/preview" element={<LazyPage><ApplicationPreview /></LazyPage>} />
           <Route path="/mortgage-planner" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />
