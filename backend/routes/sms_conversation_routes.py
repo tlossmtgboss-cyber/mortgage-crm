@@ -14,7 +14,7 @@ import os
 import uuid
 import logging
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Dict, Optional
 
 from fastapi import (
     APIRouter, WebSocket, WebSocketDisconnect,
@@ -341,7 +341,7 @@ async def get_conversation(
             FROM sms_panel_messages
             WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '')
                   LIKE :pattern
-              AND organization_id = :org_id
+              AND (organization_id = :org_id OR organization_id IS NULL)
             {before_filter_panel}
             ORDER BY created_at DESC
             LIMIT :lim
@@ -389,21 +389,37 @@ async def get_conversation(
     except Exception as e:
         logger.debug(f"sms_panel_messages query skipped: {e}")
 
-    # Deduplicate: panel outbound messages share telnyx_message_id with delivery_log
-    seen_ids = set()
+    # Deduplicate: panel messages share telnyx_message_id with delivery_log.
+    # Panel rows have richer metadata (sender name, role, media), so when a
+    # delivery_log row and a panel row share the same telnyx_message_id we
+    # keep the panel version.
+    seen: Dict[str, int] = {}  # dedup_key -> index in unique
     unique = []
     for m in messages:
-        # Use telnyx_message_id for dedup when available
-        dedup_key = m.get("_telnyx_id") or m["id"]
-        if dedup_key not in seen_ids:
-            seen_ids.add(dedup_key)
-            # Also add the message id itself to avoid showing both entries
-            seen_ids.add(m["id"])
+        telnyx_id = m.get("_telnyx_id") or ""
+        msg_id = m["id"] or ""
+        dedup_key = telnyx_id or msg_id
+        if not dedup_key:
+            m.pop("_telnyx_id", None)
+            unique.append(m)
+            continue
+        if dedup_key not in seen and msg_id not in seen:
+            idx = len(unique)
+            seen[dedup_key] = idx
+            if msg_id and msg_id != dedup_key:
+                seen[msg_id] = idx
             m.pop("_telnyx_id", None)
             unique.append(m)
         else:
-            # If duplicate, prefer the panel version (has sender name)
-            pass
+            existing_idx = seen.get(dedup_key) or seen.get(msg_id)
+            if existing_idx is not None:
+                existing = unique[existing_idx]
+                # Prefer whichever has a real sender name (panel version)
+                new_sender = m.get("senderName") or ""
+                old_sender = existing.get("senderName") or ""
+                if new_sender and new_sender != "System" and (not old_sender or old_sender == "System"):
+                    m.pop("_telnyx_id", None)
+                    unique[existing_idx] = m
 
     unique.sort(key=lambda x: x["timestamp"])
 
@@ -479,7 +495,14 @@ async def send_sms(
                 (:id, :phone, :contact_id, :org_id, 'outbound', :body,
                  :sender_name, :sender_user_id, 'sent',
                  :media_urls::jsonb, :page_type, :borrower_type, :telnyx_id, :now)
-            ON CONFLICT (id) DO NOTHING
+            ON CONFLICT (id) DO UPDATE SET
+                sender_name = EXCLUDED.sender_name,
+                sender_user_id = EXCLUDED.sender_user_id,
+                contact_id = EXCLUDED.contact_id,
+                organization_id = EXCLUDED.organization_id,
+                page_type = EXCLUDED.page_type,
+                borrower_type = EXCLUDED.borrower_type,
+                media_urls = EXCLUDED.media_urls
         """), {
             "id": msg_id,
             "phone": normalize_phone(req.to) or req.to,

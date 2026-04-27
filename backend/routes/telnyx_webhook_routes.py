@@ -1424,6 +1424,21 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 LIMIT 1
             """), {"pattern": _to_pattern}).fetchone()
         if not _org_row:
+            # Fallback: resolve org from sender's lead record
+            _from_digits = re.sub(r'\D', '', normalized_from)
+            _from_pat = f"%{_from_digits[-10:]}" if len(_from_digits) >= 10 else f"%{_from_digits}"
+            _org_row = db.execute(sa_text("""
+                SELECT organization_id FROM leads
+                WHERE REGEXP_REPLACE(phone, '[^0-9]', '', 'g') LIKE :pattern
+                  AND organization_id IS NOT NULL
+                ORDER BY updated_at DESC LIMIT 1
+            """), {"pattern": _from_pat}).fetchone()
+            if _org_row:
+                logger.info(
+                    "Inbound SMS tenant resolved via lead lookup org_id=%s",
+                    _org_row[0],
+                )
+        if not _org_row:
             # Final fallback: use the default (first) organization
             _org_row = db.execute(sa_text("""
                 SELECT id FROM organizations ORDER BY id LIMIT 1
