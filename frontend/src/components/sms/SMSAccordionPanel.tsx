@@ -211,7 +211,8 @@ function MessageBubble({ msg }: { msg: SmsMessage }) {
 
       <span style={styles.msgMeta}>
         {formatTime(msg.timestamp)}
-        {msg.status && msg.direction === 'outbound' && ` · ${msg.status.charAt(0).toUpperCase() + msg.status.slice(1)}`}
+        {msg.direction === 'outbound' && msg.status !== 'failed' && ' · Sent'}
+        {msg.direction === 'outbound' && msg.status === 'failed' && ' · Failed'}
         {msg.status === 'unread' && msg.direction === 'inbound' && ' · Unread'}
       </span>
     </div>
@@ -635,23 +636,27 @@ export default function SMSAccordionPanel({
     return () => { cancelled = true }
   }, [open, activePhone])
 
-  // Fetch history on open
+  // Fetch history when panel opens or phone changes
   useEffect(() => {
-    if (!open) return
-    if (messages.length === 0) fetchHistory()
+    if (!open || !activePhone) return
+    fetchHistory()
     scrollToBottom()
     setUnreadCount(0)
     connectWS()
     return () => wsRef.current?.close()
-  }, [open])
+  }, [open, activePhone])
 
   async function fetchHistory() {
+    if (!activePhone) return
     try {
       const phoneParam = encodeURIComponent(activePhone)
       const res = await fetch(`${resolvedApiBase}/api/v1/sms/conversations/${phoneParam}`, {
         headers: getAuthHeaders(),
       })
-      if (!res.ok) return
+      if (!res.ok) {
+        console.warn(`[SMS] History fetch failed: ${res.status} ${res.statusText}`)
+        return
+      }
       const data: SmsMessage[] = await res.json()
       setMessages(data)
     } catch (e) {

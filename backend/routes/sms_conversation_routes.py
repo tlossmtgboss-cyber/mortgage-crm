@@ -212,6 +212,22 @@ def _ensure_tables(db: Session):
             UPDATE sms_panel_messages SET sender_name = ''
             WHERE sender_name ~ '^[0-9]+$'
         """))
+        # Ensure sms_delivery_log has organization_id column (older tables may lack it)
+        try:
+            db.execute(text("""
+                ALTER TABLE sms_delivery_log ADD COLUMN IF NOT EXISTS organization_id INTEGER
+            """))
+            db.execute(text("""
+                ALTER TABLE sms_delivery_log ADD COLUMN IF NOT EXISTS consent_record_id INTEGER
+            """))
+            db.execute(text("""
+                ALTER TABLE sms_delivery_log ADD COLUMN IF NOT EXISTS consent_verified_at TIMESTAMPTZ
+            """))
+            db.execute(text("""
+                ALTER TABLE sms_delivery_log ADD COLUMN IF NOT EXISTS consent_method VARCHAR(50)
+            """))
+        except Exception:
+            pass
         db.commit()
     except Exception as e:
         db.rollback()
@@ -328,7 +344,7 @@ async def get_conversation(
                 "mediaUrls": [],
             })
     except Exception as e:
-        logger.debug(f"sms_delivery_log query skipped: {e}")
+        logger.warning(f"sms_delivery_log query failed (messages may be incomplete): {e}")
 
     # 2. Messages from sms_panel_messages (two-way table, tenant-isolated)
     before_filter_panel = ""
@@ -388,7 +404,7 @@ async def get_conversation(
                 "_telnyx_id": r[8],  # for dedup
             })
     except Exception as e:
-        logger.debug(f"sms_panel_messages query skipped: {e}")
+        logger.warning(f"sms_panel_messages query failed (messages may be incomplete): {e}")
 
     # Deduplicate: panel messages share telnyx_message_id with delivery_log.
     # Panel rows have richer metadata (sender name, role, media), so when a

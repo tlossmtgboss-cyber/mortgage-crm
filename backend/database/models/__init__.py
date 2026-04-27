@@ -628,6 +628,9 @@ from .morning_briefing import MorningBriefing
 # Security Training Records (SOC 2 CC1.4 training evidence)
 from .security_training import SecurityTrainingRecord
 
+from .sms_delivery import SMSDeliveryLog
+from .sms_panel_message import SMSPanelMessage
+
 
 __all__ = [
     # =====================
@@ -1272,4 +1275,10 @@ __all__ = [
     # Security Training (SOC 2 CC1.4)
     # =====================
     "SecurityTrainingRecord",
+
+    # =====================
+    # SMS Delivery & Panel
+    # =====================
+    "SMSDeliveryLog",
+    "SMSPanelMessage",
 ]
