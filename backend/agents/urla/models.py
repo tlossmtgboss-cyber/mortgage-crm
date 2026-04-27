@@ -195,6 +195,19 @@ class ApplicationChannel(str, Enum):
     INTERNET = "INTERNET"
 
 
+class BankruptcyType(str, Enum):
+    CHAPTER_7 = "CHAPTER_7"
+    CHAPTER_11 = "CHAPTER_11"
+    CHAPTER_12 = "CHAPTER_12"
+    CHAPTER_13 = "CHAPTER_13"
+
+
+class PriorPropertyType(str, Enum):
+    PRIMARY = "PRIMARY"
+    SECOND_HOME = "SECOND_HOME"
+    INVESTMENT = "INVESTMENT"
+
+
 # =============================================================================
 # BASE — shared config for JSON-safe Redis persistence
 # =============================================================================
@@ -457,7 +470,7 @@ class Section5a_DeclarationsPropertyMoney(URLABase):
     """5a: About this Property and Your Money for this Loan."""
     will_occupy_as_primary_residence: Optional[bool] = None
     had_ownership_interest_last_3_years: Optional[bool] = None
-    property_type_last_3_years: Optional[str] = None  # PRIMARY / SECOND_HOME / INVESTMENT
+    property_type_last_3_years: Optional[PriorPropertyType] = None
     how_held_title_last_3_years: Optional[str] = None  # SOLE / JOINT_WITH_SPOUSE / JOINT_WITH_OTHER
 
     family_business_relationship_with_seller: Optional[bool] = None
@@ -467,6 +480,16 @@ class Section5a_DeclarationsPropertyMoney(URLABase):
     applying_for_other_mortgage_before_closing: Optional[bool] = None
     applying_for_new_credit_before_closing: Optional[bool] = None
     property_subject_to_lien: Optional[bool] = None
+
+    @field_validator("property_type_last_3_years", mode="before")
+    @classmethod
+    def coerce_prior_property_type(cls, v: Any) -> Any:
+        if isinstance(v, str) and v not in PriorPropertyType.__members__:
+            # Attempt case-insensitive match for backward compatibility
+            upper = v.upper().replace(" ", "_")
+            if upper in PriorPropertyType.__members__:
+                return upper
+        return v
 
 
 class Section5b_DeclarationsFinances(URLABase):
@@ -479,7 +502,21 @@ class Section5b_DeclarationsFinances(URLABase):
     short_sale_or_pre_foreclosure_last_7_years: Optional[bool] = None
     foreclosed_last_7_years: Optional[bool] = None
     declared_bankruptcy_last_7_years: Optional[bool] = None
-    bankruptcy_types: Optional[List[str]] = None  # CHAPTER_7, CHAPTER_11, CHAPTER_12, CHAPTER_13
+    bankruptcy_types: Optional[List[BankruptcyType]] = None
+
+    @field_validator("bankruptcy_types", mode="before")
+    @classmethod
+    def coerce_bankruptcy_types(cls, v: Any) -> Any:
+        if isinstance(v, list):
+            coerced = []
+            for item in v:
+                if isinstance(item, str) and item not in BankruptcyType.__members__:
+                    upper = item.upper().replace(" ", "_")
+                    coerced.append(upper if upper in BankruptcyType.__members__ else item)
+                else:
+                    coerced.append(item)
+            return coerced
+        return v
 
 
 class Section5_Declarations(URLABase):
@@ -784,9 +821,13 @@ class URLAApplication(URLABase):
         if not primary.section_1b and not (primary.section_1e and primary.section_1e.sources):
             errors.append("No income source on file (employment or other income).")
 
-        # Section 2 essentials
-        if not self.section_2 or not self.section_2.assets:
-            errors.append("No assets listed in Section 2.")
+        # Section 2 essentials — $0-asset borrowers are legitimate if gifts/grants exist
+        has_assets = self.section_2 and self.section_2.assets
+        has_gifts = (self.section_4 and self.section_4.section_4d
+                     and not self.section_4.section_4d.does_not_apply
+                     and self.section_4.section_4d.gifts)
+        if not has_assets and not has_gifts:
+            errors.append("No assets listed in Section 2 and no gifts/grants in Section 4d.")
 
         # Section 4a essentials
         s4a = self.section_4.section_4a if self.section_4 else None
@@ -802,9 +843,39 @@ class URLAApplication(URLABase):
             if not s4a.occupancy:
                 errors.append("Property occupancy is missing.")
 
-        # Section 5 — declarations required
+        # Section 5 — declarations required with field-level checks
         if not primary.section_5 or not primary.section_5.section_5a or not primary.section_5.section_5b:
             errors.append("Declarations (Section 5) are incomplete.")
+        else:
+            # Section 5a field-level validation
+            s5a = primary.section_5.section_5a
+            _5a_fields = {
+                "will_occupy_as_primary_residence": "Will you occupy as primary residence?",
+                "had_ownership_interest_last_3_years": "Have you had ownership interest in the last 3 years?",
+                "family_business_relationship_with_seller": "Family/business relationship with seller?",
+                "borrowing_money_for_transaction": "Are you borrowing money for this transaction?",
+                "applying_for_other_mortgage_before_closing": "Are you applying for other mortgage before closing?",
+                "applying_for_new_credit_before_closing": "Are you applying for new credit before closing?",
+                "property_subject_to_lien": "Is the property subject to a lien?",
+            }
+            for field_name, question in _5a_fields.items():
+                if getattr(s5a, field_name) is None:
+                    errors.append(f"Section 5a: '{question}' was not answered.")
+            # Section 5b field-level validation
+            s5b = primary.section_5.section_5b
+            _5b_fields = {
+                "co_signer_on_undisclosed_debt": "Are you a co-signer on undisclosed debt?",
+                "outstanding_judgments": "Do you have outstanding judgments?",
+                "currently_delinquent_on_federal_debt": "Are you currently delinquent on federal debt?",
+                "party_to_lawsuit": "Are you party to a lawsuit?",
+                "conveyed_title_in_lieu_of_foreclosure_last_7_years": "Have you conveyed title in lieu of foreclosure in the last 7 years?",
+                "short_sale_or_pre_foreclosure_last_7_years": "Have you had a short sale or pre-foreclosure in the last 7 years?",
+                "foreclosed_last_7_years": "Have you been foreclosed upon in the last 7 years?",
+                "declared_bankruptcy_last_7_years": "Have you declared bankruptcy in the last 7 years?",
+            }
+            for field_name, question in _5b_fields.items():
+                if getattr(s5b, field_name) is None:
+                    errors.append(f"Section 5b: '{question}' was not answered.")
 
         # Section 6 — verbal consent required
         if not self.section_6 or not self.section_6.verbal_consent_given:
@@ -835,6 +906,23 @@ class URLAApplication(URLABase):
                 errors.append(f"Co-borrower {bid}: Demographics (Section 8) was skipped.")
 
         return errors
+
+    def validate_warnings(self) -> List[str]:
+        """
+        Returns a list of non-blocking advisory warnings. These do NOT prevent
+        finalization but should be surfaced to the loan officer.
+        """
+        warnings: List[str] = []
+
+        # C4: FCRA credit authorization — e-sign is async (sent post-finalize),
+        # so we can't block on it, but the LO needs to know it's outstanding.
+        if self.credit_authorization_pending:
+            warnings.append(
+                "Credit authorization e-sign is pending — FCRA requires "
+                "signed authorization before pulling credit."
+            )
+
+        return warnings
 
     def to_ulad_dict(self) -> Dict[str, Any]:
         """

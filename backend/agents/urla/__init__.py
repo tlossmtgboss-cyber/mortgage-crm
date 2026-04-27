@@ -66,6 +66,11 @@ try:
 except ImportError:
     pass
 
+try:
+    from .mismo_serializer import serialize_to_mismo34, serialize_to_mismo34_bytes
+except ImportError:
+    pass
+
 __all__ = [
     "URLAAgent",
     "URLAStateManager",
@@ -104,4 +109,7 @@ __all__ = [
     "sanitize_name",
     "sanitize_address",
     "sanitize_description",
+    # MISMO 3.4 Serializer
+    "serialize_to_mismo34",
+    "serialize_to_mismo34_bytes",
 ]

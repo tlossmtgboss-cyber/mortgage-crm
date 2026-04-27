@@ -79,8 +79,8 @@ def _extract_caller_phone(ctx: JobContext) -> str:
 
 def _loan_officer_from_env() -> LoanOfficer:
     """
-    Default loan officer for unrouted calls. In production, look up the LO by
-    caller phone (e.g. by CRM record) before constructing the URLAAgent.
+    Default loan officer for unrouted calls. Used as fallback when CRM lookup
+    finds no match or fails.
     """
     return LoanOfficer(
         name=os.getenv("URLA_DEFAULT_LO_NAME", "Perennia Loan Team"),
@@ -90,6 +90,93 @@ def _loan_officer_from_env() -> LoanOfficer:
         organization_name=os.getenv("URLA_ORG_NAME", "The Tim Loss Team"),
         organization_nmlsr_id=os.getenv("URLA_ORG_NMLSR", "0000000"),
     )
+
+
+_LO_LOOKUP_TIMEOUT = float(os.getenv("URLA_LO_LOOKUP_TIMEOUT", "2.0"))
+
+
+async def _resolve_loan_officer(caller_phone: str, tenant_id: str) -> dict:
+    """
+    Look up the caller's assigned loan officer via the CRM API.
+
+    Queries ``GET /api/v1/pos/resolve-lo?phone=<caller_phone>`` which searches
+    Lead.phone and Loan.borrower_phone for the caller, returning the assigned
+    LO's name, NMLS, email, and phone.
+
+    Falls back to env-var defaults if:
+      - CRM_API_BASE_URL / CRM_API_KEY are not set
+      - The CRM API returns no match (``found: false``)
+      - The request fails or exceeds the timeout (default 2 s)
+
+    The timeout is intentionally tight so the greeting is never delayed.
+
+    Returns a dict with keys: ``loan_officer``, ``lead_id``, ``loan_id``.
+    """
+    _default_result = {
+        "loan_officer": _loan_officer_from_env(),
+        "lead_id": None,
+        "loan_id": None,
+    }
+    crm_api_base = os.getenv("CRM_API_BASE_URL", "").rstrip("/")
+    crm_api_key = os.getenv("CRM_API_KEY", "")
+
+    if not crm_api_base or not crm_api_key:
+        logger.debug("CRM API not configured, using env-default LO")
+        return _default_result
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=_LO_LOOKUP_TIMEOUT) as client:
+            resp = await client.get(
+                f"{crm_api_base}/api/v1/pos/resolve-lo",
+                params={"phone": caller_phone},
+                headers={
+                    "Authorization": f"Bearer {crm_api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                if data.get("found") and data.get("loan_officer"):
+                    lo = data["loan_officer"]
+                    resolved = LoanOfficer(
+                        name=lo.get("name") or "",
+                        nmlsr_id=lo.get("nmlsr_id") or "",
+                        email=lo.get("email") or "",
+                        phone=lo.get("phone") or "",
+                        organization_name=(
+                            lo.get("organization_name")
+                            or os.getenv("URLA_ORG_NAME", "")
+                        ),
+                        organization_nmlsr_id=(
+                            lo.get("organization_nmlsr_id")
+                            or os.getenv("URLA_ORG_NMLSR", "")
+                        ),
+                    )
+                    logger.info(
+                        "CRM LO resolved",
+                        extra={
+                            "lo_name": resolved.name,
+                            "lead_id": data.get("lead_id"),
+                            "loan_id": data.get("loan_id"),
+                        },
+                    )
+                    return {
+                        "loan_officer": resolved,
+                        "lead_id": data.get("lead_id"),
+                        "loan_id": data.get("loan_id"),
+                    }
+                else:
+                    logger.info("CRM LO lookup: no match for caller", extra={"phone": caller_phone})
+            else:
+                logger.warning(
+                    "CRM LO lookup returned non-200",
+                    extra={"status": resp.status_code, "body": resp.text[:200]},
+                )
+    except Exception as e:
+        logger.warning("CRM LO lookup failed, using default", extra={"error": str(e)})
+
+    return _default_result
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +215,12 @@ async def urla_entrypoint(ctx: JobContext) -> None:
     # Pull per-call context
     tenant_id = os.getenv("URLA_TENANT_ID", "perennia")
     caller_phone = _extract_caller_phone(ctx)
-    loan_officer = _loan_officer_from_env()
+
+    # Look up LO from CRM by caller phone, fall back to env default
+    lo_result = await _resolve_loan_officer(caller_phone, tenant_id)
+    loan_officer = lo_result["loan_officer"]
+    crm_lead_id = lo_result.get("lead_id")
+    crm_loan_id = lo_result.get("loan_id")
 
     # Set structured logging context for this session
     set_session_context(tenant_id=tenant_id, caller_phone=caller_phone)
@@ -186,6 +278,8 @@ async def urla_entrypoint(ctx: JobContext) -> None:
         caller_phone=caller_phone,
         state=state,
         loan_officer=loan_officer,
+        crm_contact_id=crm_lead_id,
+        crm_loan_id=crm_loan_id,
     )
 
     # Graceful shutdown: auto-pause + close Redis on room disconnect

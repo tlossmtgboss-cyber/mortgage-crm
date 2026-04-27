@@ -1634,6 +1634,13 @@ except Exception as e:
     import traceback
     traceback.print_exc()
 
+try:
+    from routes.pos_consent_routes import router as pos_consent_router
+    app.include_router(pos_consent_router, tags=["POS Consent"])
+    logger.info("POS Consent routes loaded")
+except Exception as e:
+    logger.warning(f"POS Consent routes failed to load: {e}")
+
 # ============================================================================
 # AI PROSPECT RE-ENGAGEMENT ROUTES
 # ============================================================================
@@ -4087,6 +4094,20 @@ try:
     logger.info("✅ Admin memory staging routes loaded")
 except Exception as e:
     logger.error(f"❌ Admin memory staging routes failed to load: {e}")
+
+# ============================================================================
+# POS 1003 — Borrower-facing URLA application
+# ============================================================================
+try:
+    from routes.pos import application_router, calendar_router, ai_qa_router, hydration_router, resolve_lo_router
+    app.include_router(application_router, tags=["POS Application"])
+    app.include_router(calendar_router, tags=["POS Calendar"])
+    app.include_router(ai_qa_router, tags=["POS AI Q&A"])
+    app.include_router(hydration_router, tags=["POS Hydration"])
+    app.include_router(resolve_lo_router, tags=["POS Resolve LO"])
+    logger.info("POS 1003 routes loaded")
+except Exception as e:
+    logger.warning(f"POS 1003 routes skipped: {e}")
 
 # ============================================================================
 # TEMPORARY: One-time seed endpoint for App Store demo account

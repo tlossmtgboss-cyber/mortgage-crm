@@ -133,6 +133,7 @@ class ApplicationStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     PENDING_DOCUMENTS = "pending_documents"
     PENDING_COBORROWER = "pending_coborrower"
+    PENDING_CONSENT = "pending_consent"
     SUBMITTED = "submitted"
     UNDER_REVIEW = "under_review"
     APPROVED = "approved"
@@ -1082,6 +1083,24 @@ async def submit_application(
 
     if missing:
         raise HTTPException(status_code=400, detail=f"Missing required steps: {', '.join(missing)}")
+
+    # Voice-completed apps require both credit auth + e-consent before submit
+    if application.status == ApplicationStatus.PENDING_CONSENT:
+        try:
+            from services.pos_consent_service import check_consents_complete
+            consents = check_consents_complete(db, application.id)
+            if not consents["all_complete"]:
+                consent_missing = []
+                if not consents["credit_auth"]["completed"]:
+                    consent_missing.append("credit authorization")
+                if not consents["e_consent"]["completed"]:
+                    consent_missing.append("e-disclosure consent")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Voice-completed application requires consents: {', '.join(consent_missing)}",
+                )
+        except ImportError:
+            pass
 
     # Check co-borrower completion if applicable
     if application.has_coborrower and not application.coborrower_completed:

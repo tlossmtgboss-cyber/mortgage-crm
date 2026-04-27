@@ -387,6 +387,11 @@ from .esignature import (
     AuditEventType,
 )
 
+from .pos_consent import (
+    CreditAuthorization,
+    EConsentAgreement,
+)
+
 # Engagement event tracking
 from .engagement_event import EngagementEvent
 
@@ -785,6 +790,19 @@ from .sms_panel_message import SMSPanelMessage
 # SMS Delivery Log (Telnyx delivery tracking with TCPA consent proof)
 from .sms_delivery import SMSDeliveryLog
 
+# POS (Point-of-Sale) URLA 1003 application models
+from .pos import (
+    POSApplication,
+    POSApplicationSection,
+    POSApplicationPII,
+    POSApplicationAudit,
+    POSAIQAMessage,
+    POSStatus,
+    POSSectionKey,
+    POSAuditEvent,
+    AIQAConfidence,
+)
+
 
 __all__ = [
     # =====================
@@ -1142,6 +1160,12 @@ __all__ = [
     "RecipientAuthMethod",
     "SignatureFieldType",
     "AuditEventType",
+
+    # =====================
+    # POS Consent
+    # =====================
+    "CreditAuthorization",
+    "EConsentAgreement",
 
     # =====================
     # Document Security
@@ -1636,4 +1660,17 @@ __all__ = [
     # SMS Delivery Log (Telnyx)
     # =====================
     "SMSDeliveryLog",
+
+    # =====================
+    # POS URLA 1003
+    # =====================
+    "POSApplication",
+    "POSApplicationSection",
+    "POSApplicationPII",
+    "POSApplicationAudit",
+    "POSAIQAMessage",
+    "POSStatus",
+    "POSSectionKey",
+    "POSAuditEvent",
+    "AIQAConfidence",
 ]

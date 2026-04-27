@@ -1923,6 +1923,16 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ verified_caller_ids seed note: {e}")
 
+        # Create POS 1003 tables (pos_applications, pos_application_sections,
+        # pos_application_pii, pos_application_audit, pos_ai_qa_messages)
+        try:
+            import importlib
+            _pos_mod = importlib.import_module("migrations.2026_04_25_pos_tables")
+            _pos_mod.run_migration(_engine)
+            logger.info("✅ POS 1003 tables ready")
+        except Exception as e:
+            logger.warning(f"⚠️ POS 1003 tables note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")

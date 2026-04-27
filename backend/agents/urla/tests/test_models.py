@@ -69,12 +69,11 @@ def _complete_app() -> URLAApplication:
             outstanding_judgments=False,
             currently_delinquent_on_federal_debt=False,
             party_to_lawsuit=False,
-            conveyed_title_in_lieu_of_foreclosure=False,
-            pre_foreclosure_short_sale=False,
+            conveyed_title_in_lieu_of_foreclosure_last_7_years=False,
+            short_sale_or_pre_foreclosure_last_7_years=False,
             foreclosed_last_7_years=False,
             declared_bankruptcy_last_7_years=False,
             co_signer_on_undisclosed_debt=False,
-            delinquent_on_child_support_alimony=False,
         ),
     )
     b.section_8 = Section8_Demographics(

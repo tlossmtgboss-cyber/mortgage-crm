@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, List, Dict, Any
 
-from livekit.agents import Agent, RunContext, function_tool
+from livekit.agents import Agent, RunContext, function_tool, get_job_context
 
 from .models import (
     URLAApplication,
@@ -117,12 +117,16 @@ class URLAAgent(Agent):
         caller_phone: str,
         state: URLAStateManager,
         loan_officer: LoanOfficer,
+        crm_contact_id: Optional[int] = None,
+        crm_loan_id: Optional[int] = None,
     ):
         super().__init__(instructions=SYSTEM_PROMPT)
         self.tenant_id = tenant_id
         self.caller_phone = caller_phone
         self.state = state
         self.loan_officer = loan_officer
+        self.crm_contact_id: Optional[int] = crm_contact_id
+        self.crm_loan_id: Optional[int] = crm_loan_id
         self._active_loan_id: Optional[str] = None
         self._session_lock_token: Optional[str] = None
         # Cache of slots offered to the caller; indexed 1..N for voice readback
@@ -304,22 +308,265 @@ class URLAAgent(Agent):
     ) -> str:
         """
         Caller asked for a human, or hit a case the agent cannot handle.
-        Logs the context so the LO sees what's been collected so far.
+        Pauses the application, builds a handoff context for the LO, attempts
+        a SIP warm transfer, and creates a CRM callback task as backup.
         """
         app = await self._load()
-        logger.info(
-            "Human transfer requested",
-            extra={
-                "loan_id": app.loan_id,
-                "reason": reason,
-                "progress": app.progress_summary(),
-            },
+
+        # 1. Pause the application so progress is persisted
+        await self.state.pause(app)
+
+        # 2. Build handoff context for structured logging / LO briefing
+        progress = app.progress_summary()
+        primary = app.primary_borrower()
+        borrower_name = (
+            f"{primary.section_1a.first_name or ''} {primary.section_1a.last_name or ''}".strip()
+            if primary and primary.section_1a else "Unknown"
         )
-        # In production: emit an event to your telephony/dispatch system here.
+        handoff = {
+            "loan_id": app.loan_id,
+            "reason": reason,
+            "progress": progress,
+            "borrower_name": borrower_name,
+            "caller_phone": self.caller_phone,
+            "percent_complete": progress.get("percent_complete", 0),
+            "current_section": progress.get("current_section", "UNKNOWN"),
+            "completed_sections": progress.get("completed_sections", []),
+        }
+        logger.info("Human transfer requested", extra=handoff)
+
+        # 3. Always create a CRM callback task as backup (before attempting transfer,
+        #    so even if the transfer succeeds the LO has a record)
+        callback_task_created = await self._create_callback_task(app, reason, progress)
+
+        # 4. Attempt SIP warm transfer via LiveKit
+        transfer_target = self.loan_officer.phone or os.getenv(
+            "URLA_FALLBACK_TRANSFER_NUMBER", ""
+        )
+        if transfer_target:
+            transfer_succeeded = await self._attempt_sip_transfer(
+                ctx, app, reason, transfer_target, borrower_name
+            )
+            if transfer_succeeded:
+                return (
+                    "I'm transferring you to your loan officer now. Everything "
+                    "we've covered is saved and they'll have full context. "
+                    "Please hold for just a moment."
+                )
+
+        # 5. Fallback: transfer failed or no target number
+        loan_id_spelled = _spell_loan_id(app.loan_id)
+        if callback_task_created:
+            return (
+                "I wasn't able to transfer you directly right now, but I've "
+                "flagged your account for an urgent callback. Your loan officer "
+                f"will reach out within the hour. Your loan ID is {loan_id_spelled} "
+                "for reference."
+            )
         return (
-            "Of course. I'll connect you with a loan officer now. Everything "
-            "we've covered so far is saved, so you won't have to repeat yourself."
+            "I wasn't able to connect you right now. Your application is saved "
+            f"and your loan ID is {loan_id_spelled}. Please call back or your "
+            "loan officer will follow up with you shortly."
         )
+
+    async def _attempt_sip_transfer(
+        self,
+        ctx: RunContext,
+        app: "URLAApplication",
+        reason: str,
+        transfer_target: str,
+        borrower_name: str,
+    ) -> bool:
+        """
+        Attempt a SIP warm transfer using LiveKit's WarmTransferTask.
+        Falls back to the lower-level transfer_sip_participant API if the
+        beta workflows module is unavailable (older SDK).
+        Returns True if the transfer was initiated successfully.
+        """
+        sip_trunk_id = os.getenv("LIVEKIT_SIP_OUTBOUND_TRUNK", "")
+
+        # --- Path A: WarmTransferTask (preferred, handles hold music + context) ---
+        try:
+            from livekit.agents.beta.workflows import WarmTransferTask
+
+            extra_instructions = (
+                f"You are connecting a borrower to their loan officer. "
+                f"Borrower: {borrower_name}. "
+                f"Loan ID: {app.loan_id}. "
+                f"Transfer reason: {reason}. "
+                f"Application is {app.progress_summary().get('percent_complete', 0)}% complete. "
+                f"Current section: {app.current_section}."
+            )
+
+            kwargs: Dict[str, Any] = {
+                "sip_call_to": transfer_target,
+                "chat_ctx": ctx.session.chat_ctx,
+                "extra_instructions": extra_instructions,
+            }
+            if sip_trunk_id:
+                kwargs["sip_trunk_id"] = sip_trunk_id
+
+            result = await WarmTransferTask(**kwargs)
+            logger.info(
+                "SIP warm transfer completed",
+                extra={
+                    "loan_id": app.loan_id,
+                    "transfer_to": transfer_target,
+                    "human_agent_identity": getattr(result, "human_agent_identity", None),
+                },
+            )
+            return True
+
+        except ImportError:
+            logger.info(
+                "WarmTransferTask not available, trying lower-level SIP transfer",
+                extra={"loan_id": app.loan_id},
+            )
+        except Exception as e:
+            logger.warning(
+                "WarmTransferTask failed, trying lower-level SIP transfer",
+                extra={"loan_id": app.loan_id, "error": str(e)},
+            )
+
+        # --- Path B: Lower-level transfer_sip_participant API (cold transfer) ---
+        try:
+            from livekit import api as lk_api
+
+            job_ctx = get_job_context()
+            lk = lk_api.LiveKitAPI()
+
+            # Find the SIP participant (the caller, not the agent)
+            for p in job_ctx.room.remote_participants.values():
+                if hasattr(p, "kind") and str(getattr(p, "kind", "")).upper() == "SIP":
+                    await lk.sip.transfer_sip_participant(
+                        lk_api.TransferSIPParticipantRequest(
+                            room_name=job_ctx.room.name,
+                            participant_identity=p.identity,
+                            transfer_to=f"sip:{transfer_target}@sip.livekit.io",
+                        )
+                    )
+                    logger.info(
+                        "SIP cold transfer initiated",
+                        extra={
+                            "loan_id": app.loan_id,
+                            "transfer_to": transfer_target,
+                            "participant": p.identity,
+                        },
+                    )
+                    return True
+
+            # If no SIP participant found, try any non-agent remote participant
+            for p in job_ctx.room.remote_participants.values():
+                if not getattr(p, "is_agent", False):
+                    await lk.sip.transfer_sip_participant(
+                        lk_api.TransferSIPParticipantRequest(
+                            room_name=job_ctx.room.name,
+                            participant_identity=p.identity,
+                            transfer_to=f"sip:{transfer_target}@sip.livekit.io",
+                        )
+                    )
+                    logger.info(
+                        "SIP cold transfer initiated (non-SIP participant)",
+                        extra={
+                            "loan_id": app.loan_id,
+                            "transfer_to": transfer_target,
+                            "participant": p.identity,
+                        },
+                    )
+                    return True
+
+            logger.warning(
+                "No transferable participant found in room",
+                extra={"loan_id": app.loan_id, "room": job_ctx.room.name},
+            )
+            return False
+
+        except ImportError:
+            logger.warning(
+                "LiveKit SIP API not available — cannot transfer",
+                extra={"loan_id": app.loan_id},
+            )
+            return False
+        except Exception as e:
+            logger.warning(
+                "SIP cold transfer failed",
+                extra={"loan_id": app.loan_id, "error": str(e)},
+            )
+            return False
+
+    async def _create_callback_task(
+        self,
+        app: "URLAApplication",
+        reason: str,
+        progress: Dict[str, Any],
+    ) -> bool:
+        """
+        Create an urgent callback task in the CRM so the LO is notified even
+        if the SIP transfer succeeds (belt-and-suspenders). Returns True if
+        the task was created successfully.
+        """
+        try:
+            import httpx
+
+            crm_api_base = os.getenv("CRM_API_BASE_URL", "")
+            crm_api_key = os.getenv("CRM_API_KEY", "")
+            if not crm_api_base or not crm_api_key:
+                logger.info(
+                    "CRM API not configured, skipping callback task",
+                    extra={"loan_id": app.loan_id},
+                )
+                return False
+
+            primary = app.primary_borrower()
+            borrower_name = (
+                f"{primary.section_1a.first_name or ''} {primary.section_1a.last_name or ''}".strip()
+                if primary and primary.section_1a else "Unknown borrower"
+            )
+            percent = progress.get("percent_complete", 0)
+            completed = progress.get("completed_sections", [])
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{crm_api_base}/api/v1/tasks",
+                    json={
+                        "title": f"Callback requested -- URLA {app.loan_id}",
+                        "description": (
+                            f"Borrower {borrower_name} ({self.caller_phone}) requested "
+                            f"human transfer during URLA intake.\n"
+                            f"Reason: {reason}\n"
+                            f"Progress: {percent}% complete "
+                            f"({len(completed)}/{len(app.TRACKABLE_SECTIONS)} sections).\n"
+                            f"Current section: {app.current_section}\n"
+                            f"Completed: {', '.join(completed) if completed else 'None'}\n"
+                            f"Loan ID: {app.loan_id}"
+                        ),
+                        "priority": "high",
+                        "task_type": "callback",
+                    },
+                    headers={"Authorization": f"Bearer {crm_api_key}"},
+                )
+                if resp.status_code in (200, 201):
+                    logger.info(
+                        "Callback task created",
+                        extra={"loan_id": app.loan_id},
+                    )
+                    return True
+                else:
+                    logger.warning(
+                        "Callback task creation returned non-success",
+                        extra={
+                            "loan_id": app.loan_id,
+                            "status": resp.status_code,
+                            "body": resp.text[:200],
+                        },
+                    )
+                    return False
+        except Exception as e:
+            logger.warning(
+                "Callback task creation failed",
+                extra={"loan_id": app.loan_id, "error": str(e)},
+            )
+            return False
 
     # ==================================================================
     # SECTION 1a — PERSONAL INFORMATION
@@ -1361,8 +1608,11 @@ class URLAAgent(Agent):
     @function_tool
     async def finalize_urla(self, ctx: RunContext) -> str:
         """
-        Validate, serialize, and push the application to BytePro. Call ONLY
+        Validate, serialize, and deliver the application. Call ONLY
         after the caller has confirmed the final summary is accurate.
+
+        Primary delivery: emails a MISMO 3.4 XML attachment to the LO.
+        Optional: pushes to BytePro if BYTEPRO_API_BASE_URL is configured.
 
         On success, the session transitions to LO_KICKOFF_BOOKING — the LLM
         should then call `offer_lo_kickoff_slots` to get the caller on their
@@ -1378,37 +1628,215 @@ class URLAAgent(Agent):
                 f"to fill those in now, or pause and come back?"
             )
 
-        # Layer 2 PII scrub: DOB, account numbers, contextual patterns
-        if app.transcript:
-            scrub_post_call(app.transcript, app.current_section)
+        # C3: Snapshot pre-scrub transcript so we can restore on delivery failure
+        import copy
+        pre_scrub_transcript = copy.deepcopy(app.transcript) if app.transcript else []
+
+        # ------------------------------------------------------------------
+        # Generate MISMO 3.4 XML (serializer built in parallel — graceful
+        # degradation if not yet available)
+        # ------------------------------------------------------------------
+        xml_content: Optional[str] = None
+        try:
+            from .mismo_serializer import serialize_to_mismo34
+            xml_content = serialize_to_mismo34(app, self.loan_officer)
+        except ImportError:
+            logger.warning(
+                "mismo_serializer not available yet; skipping MISMO email",
+                extra={"loan_id": app.loan_id},
+            )
+        except Exception as e:
+            logger.error(
+                "MISMO serialization failed",
+                extra={"loan_id": app.loan_id, "error": str(e)},
+            )
+
+        # M3: Validate XML before attempting email delivery
+        if xml_content:
+            try:
+                import xml.etree.ElementTree as ET
+                ET.fromstring(xml_content)
+            except Exception as e:
+                logger.error(
+                    "MISMO XML validation failed — skipping email delivery",
+                    extra={"loan_id": app.loan_id, "error": str(e)},
+                )
+                xml_content = None
+
+        # ------------------------------------------------------------------
+        # Primary delivery: email the MISMO 3.4 XML to the loan officer
+        # ------------------------------------------------------------------
+        email_sent = False
+        if xml_content:
+            try:
+                from .email_adapter import email_mismo_file
+                primary = self._primary(app)
+                s1a = primary.section_1a
+                borrower_name = f"{s1a.first_name or ''} {s1a.last_name or ''}".strip() if s1a else "Borrower"
+
+                email_result = await email_mismo_file(
+                    xml_content=xml_content,
+                    loan_id=app.loan_id,
+                    borrower_name=borrower_name,
+                    borrower_email=(s1a.email or "") if s1a else "",
+                    loan_officer_email=self.loan_officer.email,
+                    loan_officer_name=self.loan_officer.name,
+                    organization_id=self.tenant_id,
+                )
+
+                if email_result.success:
+                    email_sent = True
+                    logger.info(
+                        "MISMO email sent to LO",
+                        extra={
+                            "loan_id": app.loan_id,
+                            "message_id": email_result.message_id,
+                        },
+                    )
+                else:
+                    logger.error(
+                        "MISMO email failed",
+                        extra={
+                            "loan_id": app.loan_id,
+                            "error": email_result.error,
+                        },
+                    )
+            except Exception as e:
+                logger.error(
+                    "MISMO email delivery error",
+                    extra={"loan_id": app.loan_id, "error": str(e)},
+                )
+
+        # ------------------------------------------------------------------
+        # Optional: BytePro push (only if BYTEPRO_API_BASE_URL is configured)
+        # ------------------------------------------------------------------
+        bytepro_base = os.getenv("BYTEPRO_API_BASE_URL", "")
+        bytepro_pushed = False
+        if bytepro_base:
+            result: PushResult = await push_to_bytepro(app, self.loan_officer)
+
+            if result.success:
+                bytepro_pushed = True
+                app.bytepro_loan_number = result.bytepro_loan_number
+                app.bytepro_submitted_at = datetime.now(timezone.utc)
+                logger.info(
+                    "BytePro push succeeded",
+                    extra={
+                        "loan_id": app.loan_id,
+                        "bytepro_loan_number": result.bytepro_loan_number,
+                    },
+                )
+            else:
+                logger.error(
+                    "BytePro push failed",
+                    extra={"loan_id": app.loan_id, "error": result.error},
+                )
+
+        # If neither delivery mechanism succeeded, restore pre-scrub transcript
+        # so a retry can work, create an urgent CRM task, and report to caller
+        if not email_sent and not bytepro_pushed:
+            # C3: Restore original transcript so PII is available for retry
+            app.transcript = pre_scrub_transcript
             await self.state.save_application(app)
 
-        result: PushResult = await push_to_bytepro(app, self.loan_officer)
+            # H3: Create an urgent CRM task so the LO is actually notified
+            try:
+                import httpx
+                crm_api_base = os.getenv("CRM_API_BASE_URL", "")
+                crm_api_key = os.getenv("CRM_API_KEY", "")
+                if crm_api_base and crm_api_key:
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        await client.post(
+                            f"{crm_api_base}/api/v1/tasks",
+                            json={
+                                "title": f"URGENT: Application delivery failed -- {app.loan_id}",
+                                "description": (
+                                    f"Both email and BytePro delivery failed for URLA "
+                                    f"application {app.loan_id}.\n"
+                                    f"Caller phone: {self.caller_phone}\n"
+                                    f"The application data is saved in Redis and can be "
+                                    f"retried. Manual intervention required."
+                                ),
+                                "priority": "high",
+                                "task_type": "callback",
+                            },
+                            headers={"Authorization": f"Bearer {crm_api_key}"},
+                        )
+                        logger.info(
+                            "Delivery failure task created",
+                            extra={"loan_id": app.loan_id},
+                        )
+            except Exception as e:
+                logger.warning(
+                    "Failed to create delivery failure task",
+                    extra={"loan_id": app.loan_id, "error": str(e)},
+                )
 
-        if not result.success:
-            logger.error(
-                "BytePro push failed",
-                extra={"loan_id": app.loan_id, "error": result.error},
-            )
             return (
                 "I've saved everything on our side, but there was a hiccup "
-                "sending it to our loan system. A loan officer will be "
+                "delivering the application. A loan officer will be "
                 f"notified right away. Your loan ID is {_spell_loan_id(app.loan_id)} "
                 "for reference."
             )
 
-        # Record BytePro submission on the application
-        app.bytepro_loan_number = result.bytepro_loan_number
-        app.bytepro_submitted_at = datetime.now(timezone.utc)
-        await self.state.finalize(app)  # sets is_finalized, transitions to LO_KICKOFF_BOOKING
+        # C3: At least one delivery succeeded — now persist the scrubbed transcript
+        if app.transcript:
+            scrub_post_call(app.transcript, app.current_section)
+            await self.state.save_application(app)
+
+        # Finalize the application in Redis (sets is_finalized, transitions
+        # to LO_KICKOFF_BOOKING)
+        await self.state.finalize(app)
 
         logger.info(
             "URLA finalized",
             extra={
                 "loan_id": app.loan_id,
-                "bytepro_loan_number": result.bytepro_loan_number,
+                "email_sent": email_sent,
+                "bytepro_pushed": bytepro_pushed,
+                "bytepro_loan_number": getattr(app, "bytepro_loan_number", None),
             },
         )
+
+        # Hydrate POS PostgreSQL tables so borrower can see data in self-service portal
+        try:
+            import httpx
+            crm_api_base = os.getenv("CRM_API_BASE_URL", "https://api.perenniaai.com")
+            crm_api_key = os.getenv("CRM_API_KEY", "")
+
+            if crm_api_base and crm_api_key:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    hydration_resp = await client.post(
+                        f"{crm_api_base}/api/v1/pos/hydrate-from-voice",
+                        json={
+                            "urla_loan_id": app.loan_id,
+                            "urla_data": app.model_dump(mode="json", exclude_none=True),
+                            "organization_id": int(self.tenant_id) if self.tenant_id.isdigit() else 1,
+                            "workspace_id": 1,
+                            "contact_id": self.crm_contact_id or 0,
+                            "loan_id": self.crm_loan_id,
+                        },
+                        headers={
+                            "Authorization": f"Bearer {crm_api_key}",
+                            "Content-Type": "application/json",
+                        },
+                    )
+                    if hydration_resp.status_code in (200, 201):
+                        logger.info("POS hydration complete", extra={
+                            "loan_id": app.loan_id,
+                            "pos_response": hydration_resp.json(),
+                        })
+                    else:
+                        logger.warning("POS hydration failed", extra={
+                            "loan_id": app.loan_id,
+                            "status": hydration_resp.status_code,
+                            "body": hydration_resp.text[:200],
+                        })
+        except Exception as e:
+            logger.warning("POS hydration trigger failed (non-fatal)", extra={
+                "loan_id": app.loan_id,
+                "error": str(e),
+            })
 
         # Trigger CI pipeline: feeds transcript through existing extraction pipeline,
         # diffs against captured structured data, routes disagreements to review queue
@@ -1512,9 +1940,28 @@ class URLAAgent(Agent):
             )
 
         lo_first = self.loan_officer.name.split()[0] if self.loan_officer.name else "your loan officer"
+
+        # Build the voice response based on which delivery methods succeeded
+        if email_sent and bytepro_pushed:
+            delivery_note = (
+                f"Application complete! I've emailed the full application to "
+                f"{lo_first} and submitted it to BytePro (reference "
+                f"{app.bytepro_loan_number})."
+            )
+        elif email_sent:
+            delivery_note = (
+                f"Application complete! I've emailed the full application to "
+                f"{lo_first}."
+            )
+        else:
+            # bytepro_pushed must be True (we returned early if neither succeeded)
+            delivery_note = (
+                f"Application submitted to BytePro. Your reference is "
+                f"{app.bytepro_loan_number}."
+            )
+
         return (
-            f"Application submitted. Your BytePro reference is "
-            f"{result.bytepro_loan_number}, and your Perennia loan ID is "
+            f"{delivery_note} Your Perennia loan ID is "
             f"{_spell_loan_id(app.loan_id)}.{sms_note} "
             f"Now let's get you on {lo_first}'s calendar for a quick kickoff "
             f"call — it takes about thirty minutes. Let me pull up some times."

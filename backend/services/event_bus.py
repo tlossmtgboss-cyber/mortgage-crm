@@ -77,6 +77,10 @@ class EventType(str, Enum):
     # Email / inbound data events
     EMAIL_DATA_EXTRACTED = "agent.email_data_extracted"
 
+    # POS (borrower-side application)
+    POS_APPLICATION_SUBMITTED = "pos.application.submitted"
+    POS_APPOINTMENT_BOOKED = "pos.appointment.booked"
+
 
 # =============================================================================
 # Event payload

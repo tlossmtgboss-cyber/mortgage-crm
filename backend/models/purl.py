@@ -78,6 +78,7 @@ class TokenScope(str, enum.Enum):
     READ = "read"
     WRITE = "write"
     FULL = "full"
+    VOICE_REVIEW_SUBMIT = "voice_review_submit"
 
 
 class TokenStatus(str, enum.Enum):

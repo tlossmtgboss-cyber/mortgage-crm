@@ -66,7 +66,7 @@ class PURLAuthContext:
 
     def has_write_access(self) -> bool:
         """Check if context has write access."""
-        return self.scope in [TokenScope.WRITE, TokenScope.FULL]
+        return self.scope in [TokenScope.WRITE, TokenScope.FULL, TokenScope.VOICE_REVIEW_SUBMIT]
 
     def has_full_access(self) -> bool:
         """Check if context has full access."""

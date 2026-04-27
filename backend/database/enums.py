@@ -274,6 +274,7 @@ class ApplicationStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"  # Actively being worked on
     PENDING_DOCUMENTS = "pending_documents"  # Waiting for document uploads
     PENDING_COBORROWER = "pending_coborrower"  # Waiting for co-borrower to complete
+    PENDING_CONSENT = "pending_consent"  # Voice-completed, awaiting borrower credit auth + e-disclosure consent
     SUBMITTED = "submitted"  # Fully submitted for review
     UNDER_REVIEW = "under_review"  # Being reviewed by LO
     APPROVED = "approved"  # Application approved

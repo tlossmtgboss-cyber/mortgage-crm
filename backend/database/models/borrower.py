@@ -185,6 +185,12 @@ class BorrowerApplication(Base):
     time_spent_seconds = Column(Integer, default=0)
     device_info = Column(JSON)
 
+    # Voice-completed application (POS consent flow)
+    voice_completed_at = Column(DateTime)
+    voice_loan_id = Column(String(255))
+    consent_sms_sent_at = Column(DateTime)
+    consent_reminder_count = Column(Integer, default=0)
+
     # Metadata
     notes = Column(Text)
     application_metadata = Column(JSON, default=dict)
