@@ -424,6 +424,12 @@ async def get_conversation(
 
     unique.sort(key=lambda x: x["timestamp"])
 
+    # Final sanitization: never return numeric-only senderName to the frontend
+    for m in unique:
+        sn = m.get("senderName") or ""
+        if not sn or sn.isdigit():
+            m["senderName"] = contact_display_name if m["direction"] == "inbound" else "You"
+
     return unique
 
 
@@ -524,12 +530,13 @@ async def send_sms(
         logger.error(f"Failed to store outbound message: {e}")
 
     # Push to WebSocket clients (tenant-scoped)
+    safe_sender = user_name if (user_name and not user_name.isdigit()) else "You"
     ws_msg = {
         "type": "new_message",
         "id": msg_id,
         "direction": "outbound",
         "body": req.message.strip(),
-        "senderName": user_name,
+        "senderName": safe_sender,
         "timestamp": now.isoformat(),
         "status": "sent",
         "mediaUrls": req.mediaUrls,
@@ -539,11 +546,12 @@ async def send_sms(
     except Exception:
         pass
 
+    safe_sender = user_name if (user_name and not user_name.isdigit()) else "You"
     return {
         "id": msg_id,
         "direction": "outbound",
         "body": req.message.strip(),
-        "senderName": user_name,
+        "senderName": safe_sender,
         "timestamp": now.isoformat(),
         "status": "sent",
         "mediaUrls": req.mediaUrls,
