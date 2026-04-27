@@ -328,9 +328,72 @@ async def route_inbound_call(
                 except Exception:
                     pass
 
-            # Return the assistant to use
+            caller_name = result.get("caller_name", "")
+            caller_type = result["caller_type"]
+
+            context_lines = []
+            if caller_name:
+                context_lines.append(f"The caller is {caller_name}.")
+            if result.get("stage"):
+                context_lines.append(f"Their current stage is: {result['stage']}.")
+            ctx = result.get("context", {})
+            if ctx.get("loan_number"):
+                context_lines.append(f"Loan number: {ctx['loan_number']}.")
+            if ctx.get("property"):
+                context_lines.append(f"Property: {ctx['property']}.")
+            caller_context = " ".join(context_lines)
+
+            system_prompt = (
+                "You are Aria, an AI assistant for The Tim Loss Team at CMG Home Loans. "
+                "You're a mortgage loan officer's virtual receptionist.\n\n"
+            )
+            if caller_type == "mum":
+                system_prompt += (
+                    "This caller is a past client in the MUM (Mortgage Update Monthly) program. "
+                    "Be warm and familiar. Ask how you can help — refinance questions, rate checks, referrals.\n"
+                )
+            elif caller_type == "active_loan":
+                system_prompt += (
+                    "This caller has an active loan in process. "
+                    "They may be calling about loan status, document requests, or closing timeline.\n"
+                )
+            elif caller_type == "lead":
+                system_prompt += (
+                    "This caller is a lead/prospect. "
+                    "Be helpful and professional. Answer general mortgage questions.\n"
+                )
+            else:
+                system_prompt += (
+                    "This is an unknown/new caller. Be welcoming and professional.\n"
+                )
+
+            if caller_context:
+                system_prompt += f"\nCaller info: {caller_context}\n"
+
+            system_prompt += (
+                "\nRules:\n"
+                "- Never provide specific rate quotes or fees\n"
+                "- Never give legal or tax advice\n"
+                "- Be concise — this is a phone call\n"
+                "- Offer to schedule a callback or take a message\n"
+                "- Always confirm the caller's name and best callback number before ending"
+            )
+
+            first_msg = f"Hi{', ' + caller_name.split()[0] if caller_name else ''}! This is Aria with The Tim Loss Team. How can I help you today?"
+
             return {
-                "assistantId": result["assistant_id"]
+                "assistant": {
+                    "name": f"Aria - {result['assistant_name']}",
+                    "model": {
+                        "provider": "anthropic",
+                        "model": "claude-sonnet-4-5-20250514",
+                        "messages": [{"role": "system", "content": system_prompt}],
+                    },
+                    "voice": {"provider": "deepgram", "voiceId": "asteria"},
+                    "firstMessage": first_msg,
+                    "silenceTimeoutSeconds": 30,
+                    "maxDurationSeconds": 600,
+                }
             }
 
         # For other message types, just acknowledge
@@ -338,9 +401,23 @@ async def route_inbound_call(
 
     except SQLAlchemyError as e:
         logger.error(f"Call routing error: {e}")
-        # Default to receptionist on error
         return {
-            "assistantId": ASSISTANT_CONFIG["receptionist"]["id"]
+            "assistant": {
+                "name": "Aria - Fallback",
+                "model": {
+                    "provider": "anthropic",
+                    "model": "claude-sonnet-4-5-20250514",
+                    "messages": [{"role": "system", "content": (
+                        "You are Aria, an AI assistant for The Tim Loss Team. "
+                        "Greet the caller, offer to take a message or schedule a callback. "
+                        "Be concise — this is a phone call."
+                    )}],
+                },
+                "voice": {"provider": "deepgram", "voiceId": "asteria"},
+                "firstMessage": "Hi, this is Aria with The Tim Loss Team. How can I help you today?",
+                "silenceTimeoutSeconds": 30,
+                "maxDurationSeconds": 300,
+            }
         }
 
 
