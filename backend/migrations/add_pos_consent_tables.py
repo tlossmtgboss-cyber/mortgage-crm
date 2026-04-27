@@ -139,6 +139,21 @@ def run_migration():
         conn.commit()
         logger.info("Added missing columns to borrower_applications")
 
+        # Widen scope CHECK constraint on purl_access_tokens to include voice_review_submit
+        try:
+            conn.execute(text(
+                "ALTER TABLE purl_access_tokens DROP CONSTRAINT IF EXISTS purl_access_tokens_scope_check"
+            ))
+            conn.execute(text(
+                "ALTER TABLE purl_access_tokens ADD CONSTRAINT purl_access_tokens_scope_check "
+                "CHECK (scope IN ('read', 'write', 'full', 'voice_review_submit'))"
+            ))
+            conn.commit()
+            logger.info("Updated purl_access_tokens scope constraint")
+        except Exception as e:
+            logger.info("purl_access_tokens scope constraint update skipped: %s", e)
+            conn.rollback()
+
     logger.info("POS consent migration complete")
 
 
