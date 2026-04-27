@@ -1210,11 +1210,9 @@ class RentalIncomeService:
 
             self.db.flush()
             logger.info(
-                "Persisted rental income for loan %s: %d properties, "
-                "monthly qualifying $%.2f",
+                "Persisted rental income for loan %s: %d properties",
                 loan_id,
                 len(result.properties),
-                float(result.total_monthly_qualifying_income),
             )
         except Exception as e:
             logger.error(

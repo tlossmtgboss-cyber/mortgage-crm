@@ -367,7 +367,12 @@ async def claim_document(
     doc.reviewed_by = user_id
     doc.status = "NEEDS_REVIEW"
     doc.updated_at = datetime.now(timezone.utc)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to claim document %s", document_id)
+        raise HTTPException(status_code=500, detail="Failed to claim document")
 
     logger.info(f"Document {document_id} claimed by {reviewer_name}")
 
@@ -425,7 +430,12 @@ async def release_document(
     doc.reviewed_by = None
     doc.status = "UPLOADED"
     doc.updated_at = datetime.now(timezone.utc)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to release document %s", document_id)
+        raise HTTPException(status_code=500, detail="Failed to release document")
 
     logger.info(f"Document {document_id} released by {user_id} (was claimed by {previous_reviewer})")
 
@@ -750,7 +760,12 @@ async def update_auto_review_settings(
             VALUES (:org_id, 'auto_review', :settings, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         """), {"org_id": org_id, "settings": settings_json})
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to update auto-review settings for org %s", org_id)
+        raise HTTPException(status_code=500, detail="Failed to update auto-review settings")
 
     logger.info(f"Auto-review settings updated for org {org_id}")
 
@@ -983,6 +998,8 @@ async def ai_extract_and_review(
 
     except ImportError:
         logger.warning("document_extraction models not available, skipping extraction")
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Extraction failed for document {document_id}: {e}")
 
@@ -990,7 +1007,12 @@ async def ai_extract_and_review(
     review_service = get_ai_review_service(db)
     review = review_service.review_document(document_id)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to commit AI extract-and-review for document %s", document_id)
+        raise HTTPException(status_code=500, detail="Failed to save review results")
 
     return {
         "document_id": document_id,

@@ -3,10 +3,12 @@
  * Displays summary of all application data and document checklist
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { useApplication } from '../../contexts/ApplicationContext';
 import { useDocumentChecklist, getCategoryLabel } from '../../hooks/useDocumentChecklist';
 import { getStages } from '../../config/stageConfig';
+import CreditAuthorizationBlock from './CreditAuthorizationBlock';
+import EDisclosureBlock from './EDisclosureBlock';
 import './ReviewStage.css';
 
 // Helper to format currency values
@@ -101,6 +103,7 @@ const ReviewStage = ({
   onSubmit,
   onNavigateToStage,
   isSubmitting = false,
+  voiceReviewToken = null,
 }) => {
   const { state, actions } = useApplication();
   const { formData, applicationType } = state;
@@ -115,6 +118,34 @@ const ReviewStage = ({
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [agreedToCredit, setAgreedToCredit] = useState(false);
   const [agreedToEConsent, setAgreedToEConsent] = useState(false);
+
+  // Voice-review consent state
+  const isVoiceReview = !!voiceReviewToken;
+  const [creditAuthDone, setCreditAuthDone] = useState(false);
+  const [eConsentDone, setEConsentDone] = useState(false);
+  const [disclosureData, setDisclosureData] = useState(null);
+
+  // Fetch consent status + disclosure texts for voice-review mode
+  useEffect(() => {
+    if (!isVoiceReview) return;
+
+    const apiBase = process.env.REACT_APP_API_URL || '';
+
+    // Fetch consent status
+    fetch(`${apiBase}/api/v1/pos/consent/${voiceReviewToken}/status`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.credit_auth?.completed) setCreditAuthDone(true);
+        if (data.e_consent?.completed) setEConsentDone(true);
+      })
+      .catch(() => {});
+
+    // Fetch disclosure texts
+    fetch(`${apiBase}/api/v1/pos/consent/${voiceReviewToken}/disclosures`)
+      .then(r => r.json())
+      .then(data => setDisclosureData(data))
+      .catch(() => {});
+  }, [isVoiceReview, voiceReviewToken]);
 
   // Get stages for navigation
   const stages = useMemo(
@@ -138,8 +169,11 @@ const ReviewStage = ({
 
   // Check if ready to submit
   const canSubmit = useMemo(() => {
+    if (isVoiceReview) {
+      return agreedToTerms && creditAuthDone && eConsentDone;
+    }
     return allRequiredDocsConfirmed && agreedToTerms && agreedToCredit && agreedToEConsent;
-  }, [allRequiredDocsConfirmed, agreedToTerms, agreedToCredit, agreedToEConsent]);
+  }, [allRequiredDocsConfirmed, agreedToTerms, agreedToCredit, agreedToEConsent, isVoiceReview, creditAuthDone, eConsentDone]);
 
   // Handle stage navigation
   const handleEditStage = useCallback((stageId) => {
@@ -326,54 +360,86 @@ const ReviewStage = ({
             </div>
           </label>
 
-          <label className="agreement-item">
-            <input
-              type="checkbox"
-              checked={agreedToCredit}
-              onChange={(e) => setAgreedToCredit(e.target.checked)}
-              className="agreement-checkbox"
-            />
-            <div className="agreement-text">
-              <strong>Credit Authorization</strong>
-              <p>
-                I authorize the lender to obtain my credit report and verify my employment,
-                income, and assets as needed to process this loan application.
-              </p>
-            </div>
-          </label>
+          {isVoiceReview ? (
+            <>
+              <CreditAuthorizationBlock
+                applicationToken={voiceReviewToken}
+                disclosureText={disclosureData?.credit_auth?.text}
+                isAuthorized={creditAuthDone}
+                onAuthorized={() => setCreditAuthDone(true)}
+              />
+              <EDisclosureBlock
+                applicationToken={voiceReviewToken}
+                disclosureData={disclosureData?.e_consent}
+                isConsented={eConsentDone}
+                onConsented={() => setEConsentDone(true)}
+              />
+            </>
+          ) : (
+            <>
+              <label className="agreement-item">
+                <input
+                  type="checkbox"
+                  checked={agreedToCredit}
+                  onChange={(e) => setAgreedToCredit(e.target.checked)}
+                  className="agreement-checkbox"
+                />
+                <div className="agreement-text">
+                  <strong>Credit Authorization</strong>
+                  <p>
+                    I authorize the lender to obtain my credit report and verify my employment,
+                    income, and assets as needed to process this loan application.
+                  </p>
+                </div>
+              </label>
 
-          <label className="agreement-item">
-            <input
-              type="checkbox"
-              checked={agreedToEConsent}
-              onChange={(e) => setAgreedToEConsent(e.target.checked)}
-              className="agreement-checkbox"
-            />
-            <div className="agreement-text">
-              <strong>Electronic Consent</strong>
-              <p>
-                I consent to receive disclosures, notices, and communications electronically
-                at the email address provided in this application.
-              </p>
-            </div>
-          </label>
+              <label className="agreement-item">
+                <input
+                  type="checkbox"
+                  checked={agreedToEConsent}
+                  onChange={(e) => setAgreedToEConsent(e.target.checked)}
+                  className="agreement-checkbox"
+                />
+                <div className="agreement-text">
+                  <strong>Electronic Consent</strong>
+                  <p>
+                    I consent to receive disclosures, notices, and communications electronically
+                    at the email address provided in this application.
+                  </p>
+                </div>
+              </label>
+            </>
+          )}
         </div>
 
         {/* Submit Button */}
         <div className="review-submit">
           {!canSubmit && (
             <div className="submit-requirements">
-              {!allRequiredDocsConfirmed && (
+              {!isVoiceReview && !allRequiredDocsConfirmed && (
                 <p className="requirement">Please confirm all required documents above</p>
               )}
               {!agreedToTerms && (
                 <p className="requirement">Please agree to the Terms and Conditions</p>
               )}
-              {!agreedToCredit && (
-                <p className="requirement">Please authorize credit check</p>
-              )}
-              {!agreedToEConsent && (
-                <p className="requirement">Please provide electronic consent</p>
+              {isVoiceReview ? (
+                <>
+                  {!creditAuthDone && (
+                    <p className="requirement">Please complete the credit authorization above</p>
+                  )}
+                  {!eConsentDone && (
+                    <p className="requirement">Please complete the electronic disclosure consent above</p>
+                  )}
+                </>
+              ) : (
+                <>
+                  {!agreedToCredit && (
+                    <p className="requirement">Please authorize credit check</p>
+                  )}
+                  {!agreedToEConsent && (
+                    <p className="requirement">Please provide electronic consent</p>
+                  )}
+                </>
               )}
             </div>
           )}

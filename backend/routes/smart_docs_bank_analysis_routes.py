@@ -239,6 +239,8 @@ async def analyze_bank_statements(
 
     try:
         result = analyzer.analyze(loan_id=loan_id, borrower_id=borrower_id)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Bank statement analysis failed for loan_id=%s", loan_id)
         raise HTTPException(status_code=500, detail="Bank statement analysis failed")
@@ -338,6 +340,8 @@ async def reanalyze_bank_statements(
             borrower_id=borrower_id,
             force_refresh=True,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Bank statement re-analysis failed for loan_id=%s", loan_id)
         raise HTTPException(status_code=500, detail="Bank statement re-analysis failed")
@@ -974,6 +978,8 @@ async def generate_bank_analysis_report(
             status_code=501,
             detail="PDF generation service is not yet available",
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to generate bank analysis report for loan %s", loan_id)
         raise HTTPException(status_code=500, detail="Failed to generate bank analysis report")

@@ -442,7 +442,9 @@ class AppCompletionOrchestrator:
             call_ids = {r.get("item_id") for r in plan.call_items}
             portal_ids = {r.get("item_id") for r in plan.portal_items}
         except Exception:
-            logger.exception("Resolution routing failed for review %s", review.id)
+            self.db.rollback()
+            logger.exception("Resolution routing failed for review %s — rolled back pending adds", review.id)
+            return {"error": "resolution_routing_failed", "review_id": review.id, "loan_id": lid}
 
         for item in items:
             if item.id in text_ids:

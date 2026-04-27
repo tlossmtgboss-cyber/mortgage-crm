@@ -167,7 +167,12 @@ async def delete_document(
             # Reset request to OPEN so borrower can re-upload
             request.status = RequestStatus.OPEN
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Database error deleting document {document_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete document")
 
     logger.info(f"Document {document_id} deleted by {reviewer} (was: {old_status})")
 
@@ -233,7 +238,12 @@ async def reject_document(
         if request:
             request.status = RequestStatus.OPEN
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Database error rejecting document {document_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to reject document")
 
     logger.info(f"Document {document_id} rejected by {body.reviewer}: {body.reason}")
 
@@ -295,7 +305,12 @@ async def approve_document(
             request.completed_at = datetime.now(timezone.utc)
             request.fulfilled_at = datetime.now(timezone.utc)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Database error approving document {document_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to approve document")
 
     logger.info(f"Document {document_id} approved by {reviewer}")
 
@@ -366,7 +381,12 @@ async def re_request_document(
             doc.rejection_reason = f"Re-requested by {body.reviewer}"
             superseded_count += 1
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Database error re-requesting document request {request_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to re-request document")
 
     # Send notification to borrower
     try:
@@ -524,8 +544,13 @@ async def extract_document_data(
         review_status=ReviewStatus.PENDING,
     )
     db.add(extraction)
-    db.commit()
-    db.refresh(extraction)
+    try:
+        db.commit()
+        db.refresh(extraction)
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Database error saving extraction for document {document_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to save extraction results")
 
     return {
         "extraction_id": extraction.id,
@@ -782,7 +807,12 @@ async def apply_extracted_fields(
     extraction.applied_at = datetime.now(timezone.utc)
     extraction.review_status = ReviewStatus.APPLIED
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Database error applying fields for document {document_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to apply extracted fields")
 
     return {
         "document_id": document_id,
@@ -816,7 +846,12 @@ async def update_document_name(
 
     document.display_name = body.display_name
     document.updated_at = datetime.now(timezone.utc)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Database error updating document name {document_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update document name")
 
     return {
         "document_id": document_id,
@@ -874,7 +909,12 @@ async def approve_document_with_review(
     applied_result = None
     if body.apply_fields:
         # Commit current changes first
-        db.commit()
+        try:
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.exception(f"Database error during review-approve for document {document_id}: {e}")
+            raise HTTPException(status_code=500, detail="Failed to save document approval")
 
         # Use the apply-fields endpoint logic
         from models.document_extraction import FIELD_TO_LEAD_MAPPING, FIELD_TO_LOAN_MAPPING
@@ -941,7 +981,12 @@ async def approve_document_with_review(
             request.completed_at = datetime.now(timezone.utc)
             request.fulfilled_at = datetime.now(timezone.utc)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception(f"Database error finalizing review-approve for document {document_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to finalize document approval")
 
     return {
         "document_id": document_id,

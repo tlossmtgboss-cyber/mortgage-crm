@@ -6,6 +6,7 @@ templates, events, freshness/expiration, payroll, queue, dashboard,
 reminders, and health endpoints.
 """
 
+import json
 import logging
 import os
 import re
@@ -119,6 +120,16 @@ def sanitize_filename(filename: str) -> str:
     return filename
 
 
+def _safe_json_loads(value, default=None):
+    """Safely parse a JSON string, returning a default on failure."""
+    if not value:
+        return default if default is not None else []
+    try:
+        return json.loads(value) if isinstance(value, str) else value
+    except (json.JSONDecodeError, TypeError):
+        return default if default is not None else []
+
+
 router = APIRouter(
     tags=["Smart Documents"],
 )
@@ -156,6 +167,8 @@ async def generate_needs_list(
             property_type=request.property_type,
         )
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception(f"Failed to generate needs list: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -454,6 +467,15 @@ async def upload_document(
         organization_id=org_id,
     )
 
+    # Validate request_id FK before proceeding
+    if request_id:
+        request_exists = db.query(DocumentRequest.id).filter(
+            DocumentRequest.id == request_id,
+            DocumentRequest.loan_id == loan_id
+        ).first()
+        if not request_exists:
+            raise HTTPException(status_code=400, detail="Invalid request_id")
+
     # Check for a prior UPLOAD_FAILED document for the same request so we can
     # recover instead of leaving orphaned records (SD-STATE-003).
     document = None
@@ -493,8 +515,7 @@ async def upload_document(
         )
         db.add(document)
 
-    db.commit()
-    db.refresh(document)
+    db.flush()  # Get the ID without committing
 
     # Upload file to S3
     upload_result = s3_service.upload_file(
@@ -511,20 +532,22 @@ async def upload_document(
 
     if not upload_result.get("success"):
         logger.error(f"S3 upload failed for document {document.id}: {upload_result.get('error')}")
-        # Mark document as upload failed so it's not served with a missing file
-        document.status = DocumentStatus.UPLOAD_FAILED.value
-        db.commit()
+        db.rollback()
         raise HTTPException(
             status_code=502,
-            detail="Document storage is temporarily unavailable. Please try uploading again."
+            detail="Document storage temporarily unavailable"
         )
-    else:
-        # Record storage usage for quota tracking (MTR-004)
-        try:
-            from services.storage_quota_service import record_storage_usage
-            record_storage_usage(db, org_id, storage_key, file_size, file_type=parsed_doc_type.value if parsed_doc_type else "document")
-        except Exception as track_err:
-            logger.warning(f"Storage usage tracking skipped: {track_err}")
+
+    # Only commit after S3 succeeds
+    db.commit()
+    db.refresh(document)
+
+    # Record storage usage for quota tracking (MTR-004)
+    try:
+        from services.storage_quota_service import record_storage_usage
+        record_storage_usage(db, org_id, storage_key, file_size, file_type=parsed_doc_type.value if parsed_doc_type else "document")
+    except Exception as track_err:
+        logger.warning(f"Storage usage tracking skipped: {track_err}")
 
     # Process the document
     pipeline = DocumentReviewPipeline(db)
@@ -695,6 +718,8 @@ async def email_single_document(
             }]
         )
         return {"success": True, "message": f"Document sent to {recipient_email}"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to email document {document_id}: {e}")
         raise HTTPException(status_code=500, detail="Failed to send email")
@@ -929,6 +954,8 @@ async def merge_and_email_documents(
             "documents_merged": doc_names,
             "recipient": recipient_email
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to send merged documents email: {e}")
         raise HTTPException(status_code=500, detail="Failed to send email")
@@ -1128,8 +1155,6 @@ async def list_templates(
     current_user = Depends(get_current_user),
 ):
     """List available needs list templates."""
-    import json
-
     query = db.query(NeedsListTemplate)
     if active_only:
         query = query.filter(NeedsListTemplate.is_active == True)
@@ -1144,9 +1169,9 @@ async def list_templates(
                 "name": t.name,
                 "slug": t.slug,
                 "description": t.description,
-                "loan_programs": json.loads(t.loan_programs) if t.loan_programs else [],
-                "occupancy_types": json.loads(t.occupancy_types) if t.occupancy_types else [],
-                "income_types": json.loads(t.income_types) if t.income_types else [],
+                "loan_programs": _safe_json_loads(t.loan_programs),
+                "occupancy_types": _safe_json_loads(t.occupancy_types),
+                "income_types": _safe_json_loads(t.income_types),
                 "is_active": t.is_active,
                 "version": t.version,
             }
@@ -1162,8 +1187,6 @@ async def get_template(
     current_user = Depends(get_current_user),
 ):
     """Get a specific needs list template."""
-    import json
-
     template = db.query(NeedsListTemplate).filter(
         NeedsListTemplate.id == template_id
     ).first()
@@ -1176,10 +1199,10 @@ async def get_template(
         "name": template.name,
         "slug": template.slug,
         "description": template.description,
-        "loan_programs": json.loads(template.loan_programs) if template.loan_programs else [],
-        "occupancy_types": json.loads(template.occupancy_types) if template.occupancy_types else [],
-        "income_types": json.loads(template.income_types) if template.income_types else [],
-        "request_templates": json.loads(template.request_templates) if template.request_templates else [],
+        "loan_programs": _safe_json_loads(template.loan_programs),
+        "occupancy_types": _safe_json_loads(template.occupancy_types),
+        "income_types": _safe_json_loads(template.income_types),
+        "request_templates": _safe_json_loads(template.request_templates),
         "is_active": template.is_active,
         "version": template.version,
     }
@@ -1335,6 +1358,8 @@ async def get_applicants_with_pending_review(
             "total_pages": (total_query + limit - 1) // limit,
             "applicants": applicants,
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Error fetching applicants with pending review")
         raise HTTPException(status_code=500, detail="Failed to fetch pending review data")

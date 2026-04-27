@@ -25,11 +25,17 @@ Covers:
 17. Rate limiting / empty-body validation on public endpoints
 """
 
+import os
+import sys
 import pytest
 from datetime import datetime, timezone, timedelta
 from unittest.mock import patch, MagicMock, PropertyMock
 from fastapi.testclient import TestClient
 from io import BytesIO
+
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
 
 # =============================================================================

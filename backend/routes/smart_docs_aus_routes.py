@@ -12,6 +12,7 @@ Prefix: /aus (mounted under /api/smart-docs by smart_docs_v2_registration.py)
 """
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -23,6 +24,17 @@ from database import get_db
 from auth.dependencies import get_current_user
 
 logger = logging.getLogger(__name__)
+
+_AUS_ENABLED = bool(os.getenv("DU_API_URL") or os.getenv("LPA_API_URL"))
+
+
+def _require_aus_enabled():
+    """Raise 501 if no AUS API URLs are configured."""
+    if not _AUS_ENABLED:
+        raise HTTPException(
+            status_code=501,
+            detail="AUS integration not configured. Set DU_API_URL or LPA_API_URL environment variables.",
+        )
 
 router = APIRouter(prefix="/aus", tags=["AUS Integration"])
 
@@ -66,6 +78,7 @@ async def submit_to_aus(
     calculation results, and submits to the selected AUS. Returns the
     AUS recommendation, conditions, and findings.
     """
+    _require_aus_enabled()
     from database.models.lead_loan import Loan
     from database.models.aus_submission import AUSSubmission
     from services.smart_docs.integrations.aus_integration_service import (
@@ -165,6 +178,7 @@ async def get_aus_findings(
     Returns the most recent completed submission's findings, conditions,
     and recommendation. Optionally filter by AUS type.
     """
+    _require_aus_enabled()
     from database.models.aus_submission import AUSSubmission
 
     org_id = getattr(current_user, "organization_id", None)
@@ -210,6 +224,7 @@ async def get_submission_history(
     current_user=Depends(get_current_user),
 ):
     """Get all AUS submission history for a loan."""
+    _require_aus_enabled()
     from services.smart_docs.integrations.aus_integration_service import (
         AUSIntegrationService,
     )
@@ -241,6 +256,7 @@ async def compare_income(
     compares the income data to our latest income calculation. Returns
     a variance report with flags.
     """
+    _require_aus_enabled()
     from database.models.aus_submission import AUSSubmission
     from services.smart_docs.integrations.aus_integration_service import (
         AUSIntegrationService,
@@ -318,6 +334,7 @@ async def import_aus_findings(
     Creates ComplianceAlert records from the AUS conditions so they
     appear in the loan's condition tracker for the processor to clear.
     """
+    _require_aus_enabled()
     from database.models.aus_submission import AUSSubmission
     from services.smart_docs.integrations.aus_integration_service import (
         AUSIntegrationService,
@@ -371,6 +388,7 @@ async def mismo_preview(
     Useful for verifying data accuracy before submission. Does NOT
     submit to any AUS — purely a read-only preview.
     """
+    _require_aus_enabled()
     from services.smart_docs.integrations.aus_integration_service import (
         AUSIntegrationService,
     )

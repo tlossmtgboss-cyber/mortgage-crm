@@ -23,12 +23,18 @@ Covers:
 16. Tenant isolation on review endpoints
 """
 
+import os
+import sys
 import json
 import pytest
 from datetime import datetime, timedelta
 from unittest.mock import patch, MagicMock, PropertyMock
 from dataclasses import dataclass
 from typing import List, Optional
+
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
 from fastapi.testclient import TestClient
 

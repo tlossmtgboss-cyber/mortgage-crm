@@ -43,8 +43,8 @@ class QueueService:
             ), {"org_id": self.organization_id}).fetchall()
             return [row[0] for row in rows]
         except Exception as e:
-            logger.warning("Failed to fetch tenant loan IDs for org %s: %s", self.organization_id, e)
-            return []
+            logger.exception("Failed to fetch tenant loan IDs for org %s", self.organization_id)
+            raise  # Critical path: callers use this for tenant scoping/access control
 
     def get_queue(
         self,
@@ -159,7 +159,7 @@ class QueueService:
             if result:
                 loan_info = dict(result._mapping)
         except Exception as e:
-            logger.debug(f"Could not fetch from loans table: {e}")
+            logger.error("Could not fetch from loans table for loan %s: %s", loan_id, e)
 
         # Fallback to purl_loans if main loans table doesn't have it
         if not loan_info:
@@ -182,7 +182,7 @@ class QueueService:
                         'created_at': purl_loan.created_at,
                     }
             except Exception as e:
-                logger.debug(f"Could not fetch from purl_loans: {e}")
+                logger.error("Could not fetch from purl_loans for loan %s: %s", loan_id, e)
 
         if not loan_info:
             # Create minimal info if no loan found

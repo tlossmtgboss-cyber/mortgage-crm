@@ -559,6 +559,7 @@ async def batch_integrity_check(
     except SQLAlchemyError as e:
         db.rollback()
         logger.exception("Failed to save batch integrity check records: %s", e)
+        raise HTTPException(status_code=500, detail="Operation failed")
 
     return {
         "total_checked": len(document_ids),
@@ -1419,7 +1420,8 @@ async def generate_watermarked_copy(
         db.commit()
     except SQLAlchemyError as e:
         db.rollback()
-        logger.warning("Failed to log watermark access event: %s", e)
+        logger.exception("Failed to log watermark access event: %s", e)
+        raise HTTPException(status_code=500, detail="Operation failed")
 
     return {
         "document_id": document_id,

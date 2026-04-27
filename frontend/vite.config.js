@@ -70,6 +70,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      '@capgo/capacitor-ssl-pinning': path.resolve(__dirname, './src/stubs/capacitor-ssl-pinning.js'),
     },
   },
 
@@ -95,6 +96,7 @@ export default defineConfig({
       'axios',
       '@tanstack/react-query',
     ],
+    exclude: ['@capgo/capacitor-ssl-pinning'],
     esbuildOptions: {
       // Handle JSX in .js files (CRA compatibility)
       loader: {

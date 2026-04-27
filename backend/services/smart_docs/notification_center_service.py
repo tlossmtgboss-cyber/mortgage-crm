@@ -983,7 +983,12 @@ class NotificationCenterService:
             )
         )
         if updated:
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logger.exception("Failed to commit mark_read for notification %s: %s", notification_id, e)
+                return False
         return updated > 0
 
     async def mark_unread(
@@ -1006,7 +1011,12 @@ class NotificationCenterService:
             )
         )
         if updated:
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logger.exception("Failed to commit mark_unread for notification %s: %s", notification_id, e)
+                return False
         return updated > 0
 
     async def dismiss(
@@ -1030,7 +1040,12 @@ class NotificationCenterService:
             )
         )
         if updated:
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logger.exception("Failed to commit dismiss for notification %s: %s", notification_id, e)
+                return False
         return updated > 0
 
     # =========================================================================
@@ -1067,7 +1082,12 @@ class NotificationCenterService:
             )
         )
         if updated:
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logger.exception("Failed to commit mark_all_read for org %s: %s", self.org_id, e)
+                return 0
         return updated
 
     async def dismiss_all(
@@ -1105,7 +1125,12 @@ class NotificationCenterService:
             )
         )
         if updated:
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logger.exception("Failed to commit dismiss_all for org %s: %s", self.org_id, e)
+                return 0
         return updated
 
     async def bulk_mark_read(
@@ -1135,7 +1160,12 @@ class NotificationCenterService:
             )
         )
         if updated:
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logger.exception("Failed to commit bulk_mark_read for org %s: %s", self.org_id, e)
+                return 0
         return updated
 
     async def bulk_dismiss(
@@ -1170,7 +1200,12 @@ class NotificationCenterService:
             )
         )
         if updated:
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logger.exception("Failed to commit bulk_dismiss for org %s: %s", self.org_id, e)
+                return 0
         return updated
 
     # =========================================================================
@@ -1262,8 +1297,16 @@ class NotificationCenterService:
             if minimum_severity is not None:
                 pref.minimum_severity = minimum_severity
 
-        self.db.commit()
-        self.db.refresh(pref)
+        try:
+            self.db.commit()
+            self.db.refresh(pref)
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(
+                "Failed to commit preference update for user %s type %s: %s",
+                user_id, notification_type, e,
+            )
+            raise
 
         return {
             "notification_type": pref.notification_type,
@@ -1287,7 +1330,12 @@ class NotificationCenterService:
             .delete(synchronize_session="fetch")
         )
         if deleted:
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logger.exception("Failed to commit reset_preferences for user %s: %s", user_id, e)
+                return 0
         return deleted
 
     # =========================================================================
@@ -1324,7 +1372,15 @@ class NotificationCenterService:
             )
         )
         if updated:
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception as e:
+                self.db.rollback()
+                logger.exception(
+                    "Failed to commit expire_stale_notifications for org %s: %s",
+                    self.org_id, e,
+                )
+                return 0
             logger.info(
                 "Expired %d stale notifications for org %s",
                 updated,

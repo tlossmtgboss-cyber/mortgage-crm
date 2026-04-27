@@ -351,7 +351,15 @@ class _CommunicationLoggerMixin:
             external_message_id=external_message_id,
         )
         self.db.add(record)
-        self.db.flush()
+        try:
+            self.db.flush()
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(
+                "Failed to log communication for loan=%s channel=%s: %s",
+                loan_id, channel, e,
+            )
+            raise
         logger.info(
             "Communication logged: loan=%s channel=%s intent=%s status=%s log_id=%s",
             loan_id, channel, message_intent, delivery_status, record.id,
@@ -367,7 +375,13 @@ class _CommunicationLoggerMixin:
             record.delivery_status = status
             if error:
                 record.error_message = error
-            self.db.flush()
+            try:
+                self.db.flush()
+            except Exception as e:
+                self.db.rollback()
+                logger.exception(
+                    "Failed to update delivery status for log %s: %s", log_id, e,
+                )
 
 
 # =============================================================================
@@ -1326,54 +1340,63 @@ class CalendarCoordinator(_CommunicationLoggerMixin):
             complexity_score=complexity,
         )
         self.db.add(coordination)
-        self.db.flush()
 
         # --- Create scheduler_appointments row ---
         calendar_event_id = str(uuid.uuid4())
         title = f"Application Review Call \u2013 {borrower_name}"
 
-        self.db.execute(
-            text("""
-                INSERT INTO scheduler_appointments (
-                    organization_id, assigned_user_id, loan_id,
-                    title, description, meeting_type, meeting_mode,
-                    scheduled_start, scheduled_end, duration_minutes,
-                    timezone, attendee_name, attendee_phone, attendee_email,
-                    status, booked_by_ai, ai_booking_context,
-                    internal_notes, external_id, external_source,
-                    created_at, updated_at
-                ) VALUES (
-                    :org_id, :pa_id, :loan_id,
-                    :title, :description, 'phone_call', 'phone',
-                    :start, :end, :duration,
-                    'America/New_York', :attendee_name, :attendee_phone, :attendee_email,
-                    'booked', TRUE, :ai_context,
-                    :internal_notes, :external_id, 'aco',
-                    :now, :now
-                )
-            """),
-            {
-                "org_id": self.org_id,
-                "pa_id": pa_user_id,
-                "loan_id": loan_id,
-                "title": title,
-                "description": f"ACO-scheduled review call for loan {loan_id}",
-                "start": start_time,
-                "end": end_time,
-                "duration": duration_minutes,
-                "attendee_name": borrower_name,
-                "attendee_phone": borrower_phone,
-                "attendee_email": borrower_email,
-                "ai_context": '{"source": "aco_communication_orchestrator"}',
-                "internal_notes": pre_call_brief or "",
-                "external_id": calendar_event_id,
-                "now": datetime.now(timezone.utc),
-            },
-        )
+        try:
+            self.db.flush()
 
-        # Update coordination with calendar reference
-        coordination.calendar_event_id = calendar_event_id
-        self.db.flush()
+            self.db.execute(
+                text("""
+                    INSERT INTO scheduler_appointments (
+                        organization_id, assigned_user_id, loan_id,
+                        title, description, meeting_type, meeting_mode,
+                        scheduled_start, scheduled_end, duration_minutes,
+                        timezone, attendee_name, attendee_phone, attendee_email,
+                        status, booked_by_ai, ai_booking_context,
+                        internal_notes, external_id, external_source,
+                        created_at, updated_at
+                    ) VALUES (
+                        :org_id, :pa_id, :loan_id,
+                        :title, :description, 'phone_call', 'phone',
+                        :start, :end, :duration,
+                        'America/New_York', :attendee_name, :attendee_phone, :attendee_email,
+                        'booked', TRUE, :ai_context,
+                        :internal_notes, :external_id, 'aco',
+                        :now, :now
+                    )
+                """),
+                {
+                    "org_id": self.org_id,
+                    "pa_id": pa_user_id,
+                    "loan_id": loan_id,
+                    "title": title,
+                    "description": f"ACO-scheduled review call for loan {loan_id}",
+                    "start": start_time,
+                    "end": end_time,
+                    "duration": duration_minutes,
+                    "attendee_name": borrower_name,
+                    "attendee_phone": borrower_phone,
+                    "attendee_email": borrower_email,
+                    "ai_context": '{"source": "aco_communication_orchestrator"}',
+                    "internal_notes": pre_call_brief or "",
+                    "external_id": calendar_event_id,
+                    "now": datetime.now(timezone.utc),
+                },
+            )
+
+            # Update coordination with calendar reference
+            coordination.calendar_event_id = calendar_event_id
+            self.db.flush()
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(
+                "Failed to book appointment for loan=%s pa=%s: %s",
+                loan_id, pa_user_id, e,
+            )
+            raise
 
         # --- Send confirmations ---
         self._sms.review_id = review_id
@@ -1606,7 +1629,15 @@ class CalendarCoordinator(_CommunicationLoggerMixin):
         if coord.borrower_confirmed and coord.pa_confirmed:
             coord.booking_status = BookingStatus.CONFIRMED.value
 
-        self.db.flush()
+        try:
+            self.db.flush()
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(
+                "Failed to confirm appointment coordination_id=%d: %s",
+                coordination_id, e,
+            )
+            raise
         return {
             "coordination_id": coordination_id,
             "booking_status": coord.booking_status,
@@ -1644,7 +1675,15 @@ class CalendarCoordinator(_CommunicationLoggerMixin):
         if call_notes:
             coord.call_notes = call_notes
 
-        self.db.flush()
+        try:
+            self.db.flush()
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(
+                "Failed to mark appointment completed coordination_id=%d: %s",
+                coordination_id, e,
+            )
+            raise
 
         logger.info(
             "Appointment completed: coordination_id=%d items_resolved=%d",
@@ -1703,7 +1742,15 @@ class CalendarCoordinator(_CommunicationLoggerMixin):
                 },
             )
 
-        self.db.flush()
+        try:
+            self.db.flush()
+        except Exception as e:
+            self.db.rollback()
+            logger.exception(
+                "Failed to cancel appointment coordination_id=%d: %s",
+                coordination_id, e,
+            )
+            raise
 
         logger.info(
             "Appointment cancelled: coordination_id=%d reason=%s",

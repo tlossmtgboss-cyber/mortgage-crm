@@ -122,6 +122,8 @@ async def create_closing(
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to create eClosing session for loan %d", loan_id)
         db.rollback()
@@ -173,6 +175,8 @@ async def upload_closing_documents(
         return {"status": "success", **result}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to upload documents for session %s", session_id)
         db.rollback()
@@ -210,6 +214,8 @@ async def get_closing_status(
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to get status for session %s", session_id)
         raise HTTPException(status_code=500, detail="Failed to get closing status")
@@ -246,6 +252,8 @@ async def schedule_notary(
         return {"status": "success", **result}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to schedule notary for session %s", session_id)
         db.rollback()
@@ -278,6 +286,8 @@ async def complete_closing(
         return {"status": "success", **result}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to complete closing for session %s", session_id)
         db.rollback()
@@ -328,6 +338,8 @@ async def get_closings_for_loan(
                 for s in sessions
             ],
         }
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to get closings for loan %d", loan_id)
         raise HTTPException(status_code=500, detail="Failed to retrieve closings")
@@ -355,6 +367,8 @@ async def get_enote_status(
         return result
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to get eNote status for session %s", session_id)
         raise HTTPException(status_code=500, detail="Failed to get eNote status")
@@ -408,6 +422,8 @@ async def handle_webhook(
         db.commit()
 
         return result
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to process webhook: %s", str(e))
         db.rollback()
@@ -453,6 +469,8 @@ async def generate_closing_package(
         }
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.exception("Failed to generate closing package for loan %d", loan_id)
         raise HTTPException(status_code=500, detail="Failed to generate closing package")

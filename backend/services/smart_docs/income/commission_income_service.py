@@ -1299,10 +1299,9 @@ class CommissionIncomeService:
 
         logger.info(
             "Commission income override applied: calc_id=%s loan=%s "
-            "original=%.2f override=%.2f variance=%.2f%% by_user=%s",
+            "by_user=%s",
             calculation_id, loan_id,
-            float(original_monthly), float(override_monthly_amount),
-            float(variance_pct), approved_by_user_id,
+            approved_by_user_id,
         )
 
         # Build result reflecting the override
@@ -2766,9 +2765,9 @@ class CommissionIncomeService:
 
             logger.info(
                 "Commission income calculation saved: db_id=%s loan=%s borrower=%s "
-                "org=%s monthly=%.2f sources=%d tasks=%d",
+                "org=%s sources=%d tasks=%d",
                 db_calc_id, result.loan_id, result.borrower_id,
-                self.org_id, float(result.total_qualifying_monthly),
+                self.org_id,
                 len(result.sources), len(result.tasks_to_create),
             )
 

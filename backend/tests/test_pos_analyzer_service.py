@@ -5,8 +5,14 @@ Tests cover document requirement generation based on loan type, occupancy,
 employment status, special circumstances, co-borrower presence, and deduplication.
 """
 
+import os
+import sys
 import pytest
 from unittest.mock import MagicMock, patch
+
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
 
 from services.smart_docs.pos_analyzer_service import (
     POSAnalyzerService,

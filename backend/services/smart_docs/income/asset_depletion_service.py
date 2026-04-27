@@ -2142,7 +2142,6 @@ class AssetDepletionService(OrgAwareService):
             logger.info(
                 f"Saved asset depletion calculation {calc_id} for loan "
                 f"{result.loan_id} org {self.org_id}: "
-                f"${result.monthly_qualifying_income:,.2f}/mo, "
                 f"confidence={result.confidence}"
             )
             return calc_id

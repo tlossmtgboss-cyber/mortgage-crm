@@ -74,6 +74,25 @@ except ImportError:
 
 
 # =============================================================================
+# REQUEST STATUS TRANSITION RULES
+# =============================================================================
+
+_VALID_REQUEST_TRANSITIONS: Dict[RequestStatus, set] = {
+    RequestStatus.OPEN: {RequestStatus.PENDING_REVIEW, RequestStatus.WAIVED},
+    RequestStatus.PENDING_REVIEW: {RequestStatus.ACCEPTED, RequestStatus.REJECTED, RequestStatus.OPEN},
+    RequestStatus.REJECTED: {RequestStatus.OPEN},  # Can re-open rejected, but not skip to accepted
+    RequestStatus.ACCEPTED: set(),  # Terminal
+    RequestStatus.WAIVED: set(),  # Terminal
+}
+
+
+def _validate_status_transition(current: RequestStatus, new: RequestStatus) -> bool:
+    """Check whether a request status transition is legal."""
+    allowed = _VALID_REQUEST_TRANSITIONS.get(current, set())
+    return new in allowed
+
+
+# =============================================================================
 # DOCUMENT TYPE CLASSIFICATION KEYWORDS
 # =============================================================================
 
@@ -642,10 +661,16 @@ class AIDocumentReviewService:
             "needs_review": DocumentDecision.NEEDS_REVIEW.value,
         }
 
+        # Priority filter: only whitelisted literals are appended to the WHERE
+        # clause. No user-supplied values are interpolated — each branch is a
+        # static SQL fragment, so there is no injection vector.
+        _ALLOWED_PRIORITIES = {"CRITICAL", "HIGH", "NORMAL"}
         priority_filter = ""
         if priority:
             p = priority.upper()
-            if p == "CRITICAL":
+            if p not in _ALLOWED_PRIORITIES:
+                logger.warning(f"Ignoring unknown review-queue priority: {priority!r}")
+            elif p == "CRITICAL":
                 priority_filter = " AND sd.detected_is_screenshot = true"
             elif p == "HIGH":
                 priority_filter = " AND (sd.is_expired = true OR (sd.screenshot_confidence > 0.4 AND sd.detected_is_screenshot IS NOT TRUE))"
@@ -657,6 +682,8 @@ class AIDocumentReviewService:
             doc_type_filter = " AND UPPER(sd.doc_type) = :doc_type"
             params["doc_type"] = doc_type.upper()
 
+        # Safe: where_clause is composed entirely of static SQL fragments and
+        # parameterized placeholders (:org_id, :needs_review, :doc_type).
         where_clause = base_where + priority_filter + doc_type_filter
 
         total = self.db.execute(text(f"""
@@ -1716,11 +1743,18 @@ class AIDocumentReviewService:
             ).first()
             if request:
                 if decision_enum == DocumentDecision.ACCEPT:
-                    request.status = RequestStatus.ACCEPTED
+                    new_status = RequestStatus.ACCEPTED
                 elif decision_enum == DocumentDecision.REJECT:
-                    request.status = RequestStatus.REJECTED
+                    new_status = RequestStatus.REJECTED
                 else:
-                    request.status = RequestStatus.PENDING_REVIEW
+                    new_status = RequestStatus.PENDING_REVIEW
+                if not _validate_status_transition(request.status, new_status):
+                    logger.warning(
+                        f"Invalid status transition: {request.status} -> {new_status} "
+                        f"(request_id={request.id}, document_id={document.id})"
+                    )
+                    # Don't block — warn and allow for now (to avoid breaking existing flows)
+                request.status = new_status
                 request.updated_at = datetime.now(timezone.utc)
 
         self.db.flush()

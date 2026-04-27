@@ -391,26 +391,28 @@ class SmartDocsFeatureFlagService:
                 "is_trial": is_trial,
                 "updated_at": now,
             }
-            trial_cols = ""
+            set_clauses = [
+                "is_enabled = :is_enabled",
+                "is_trial = :is_trial",
+                "updated_at = :updated_at",
+            ]
             if is_trial and trial_days:
                 from datetime import timedelta
                 update_params["trial_start"] = now
                 update_params["trial_end"] = now + timedelta(days=trial_days)
-                trial_cols = ", trial_start = :trial_start, trial_end = :trial_end"
+                set_clauses.append("trial_start = :trial_start")
+                set_clauses.append("trial_end = :trial_end")
             if set_by_user_id:
                 update_params["enabled_by"] = set_by_user_id
-                trial_cols += ", enabled_by = :enabled_by"
+                set_clauses.append("enabled_by = :enabled_by")
             if enabled:
                 update_params["enabled_at"] = now
-                trial_cols += ", enabled_at = :enabled_at"
+                set_clauses.append("enabled_at = :enabled_at")
 
             update_query = (
                 "UPDATE company_feature_access"
-                " SET is_enabled = :is_enabled,"
-                "     is_trial = :is_trial,"
-                "     updated_at = :updated_at"
-                + trial_cols
-                + " WHERE company_id = :org_id AND feature_key = :feature_key"
+                f" SET {', '.join(set_clauses)}"
+                " WHERE company_id = :org_id AND feature_key = :feature_key"
             )
             self._db.execute(text(update_query), update_params)
         else:
@@ -422,30 +424,33 @@ class SmartDocsFeatureFlagService:
                 "created_at": now,
                 "updated_at": now,
             }
-            extra_cols = ""
-            extra_vals = ""
+            columns = [
+                "company_id", "feature_key", "is_enabled", "is_trial",
+                "created_at", "updated_at",
+            ]
+            placeholders = [
+                ":org_id", ":feature_key", ":is_enabled", ":is_trial",
+                ":created_at", ":updated_at",
+            ]
             if enabled:
                 insert_params["enabled_at"] = now
-                extra_cols += ", enabled_at"
-                extra_vals += ", :enabled_at"
+                columns.append("enabled_at")
+                placeholders.append(":enabled_at")
             if set_by_user_id:
                 insert_params["enabled_by"] = set_by_user_id
-                extra_cols += ", enabled_by"
-                extra_vals += ", :enabled_by"
+                columns.append("enabled_by")
+                placeholders.append(":enabled_by")
             if is_trial and trial_days:
                 from datetime import timedelta
                 insert_params["trial_start"] = now
                 insert_params["trial_end"] = now + timedelta(days=trial_days)
-                extra_cols += ", trial_start, trial_end"
-                extra_vals += ", :trial_start, :trial_end"
+                columns.extend(["trial_start", "trial_end"])
+                placeholders.extend([":trial_start", ":trial_end"])
 
             insert_query = (
                 "INSERT INTO company_feature_access"
-                "     (company_id, feature_key, is_enabled, is_trial, created_at, updated_at"
-                + extra_cols + ")"
-                " VALUES"
-                "     (:org_id, :feature_key, :is_enabled, :is_trial, :created_at, :updated_at"
-                + extra_vals + ")"
+                f" ({', '.join(columns)})"
+                f" VALUES ({', '.join(placeholders)})"
             )
             self._db.execute(text(insert_query), insert_params)
 

@@ -245,6 +245,7 @@ const SmartDocsSecurity = lazyRetry(() => import('./pages/SmartDocsSecurity'));
 const SmartDocsBankAnalysis = lazyRetry(() => import('./pages/SmartDocsBankAnalysis'));
 const SmartDocsIncome = lazyRetry(() => import('./pages/SmartDocsIncome'));
 const SmartDocsAdmin = lazyRetry(() => import('./pages/SmartDocsAdmin'));
+const SmartDocsCadence = lazyRetry(() => import('./pages/SmartDocsCadence'));
 const AIDailyBlog = lazyRetry(() => import('./pages/AIDailyBlog'));
 const PublicBooking = lazyRetry(() => import('./pages/PublicBooking'));
 const BookingConfirmationPage = lazyRetry(() => import('./pages/BookingConfirmationPage'));
@@ -259,6 +260,7 @@ const PurchasePreQualForm = lazyRetry(() => import('./pages/PurchasePreQualForm'
 const NewPurchaseApplication = lazyRetry(() => import('./pages/applications/NewPurchaseApplication'));
 const NewRefinanceApplication = lazyRetry(() => import('./pages/applications/NewRefinanceApplication'));
 const ApplicationDemo = lazyRetry(() => import('./pages/applications/ApplicationDemo'));
+const VoiceReviewPage = lazyRetry(() => import('./pages/VoiceReviewPage'));
 const CoborrowerApplication = lazyRetry(() => import('./pages/CoborrowerApplication'));
 const BorrowerLogin = lazyRetry(() => import('./pages/BorrowerLogin'));
 const ApplyVerify = lazyRetry(() => import('./pages/ApplyVerify'));
@@ -305,6 +307,7 @@ const AccountManagement = lazyRetry(() => import('./pages/AccountManagement'));
 const PURLDashboard = lazyRetry(() => import('./pages/PURLDashboard'));
 const PURLApplication = lazyRetry(() => import('./pages/PURLApplication'));
 const PortalContainer = lazyRetry(() => import('./pages/portal/PortalContainer'));
+const POSApplication = lazyRetry(() => import('./pages/portal/POSApplication'));
 const LoanPortalRedirect = lazyRetry(() => import('./components/Portal/LoanPortalRedirect'));
 const AdminDocumentReviewQueue = lazyRetry(() => import('./pages/AdminDocumentReviewQueue'));
 const MemoryStaging = lazyRetry(() => import('./pages/MemoryStaging'));
@@ -853,6 +856,9 @@ function App() {
 
           {/* Borrower OAuth Callbacks */}
           <Route path="/apply/oauth/:provider/callback" element={<LazyPage><BorrowerOAuthCallback /></LazyPage>} />
+
+          {/* Voice Review — borrower consent after voice-completed URLA */}
+          <Route path="/apply/voice-review/:token" element={<LazyPage><VoiceReviewPage /></LazyPage>} />
 
           {/* Borrower Application (public - token-based access) */}
           <Route path="/apply/:token" element={<LazyPage><BorrowerApplication /></LazyPage>} />
@@ -3310,6 +3316,12 @@ function App() {
             }
           />
           <Route
+            path="/portal/:slug/application"
+            element={
+              <LazyPage><POSApplication /></LazyPage>
+            }
+          />
+          <Route
             path="/client/:type/:id"
             element={
               <PrivateRoute>
@@ -3937,6 +3949,29 @@ function App() {
                   />
                   <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
                     <LazyPage><SmartDocsAdmin /></LazyPage>
+                  </main>
+                  <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
+                </div>
+              </PrivateRoute>
+            }
+          />
+
+          <Route
+            path="/smart-docs/cadence"
+            element={
+              <PrivateRoute>
+                <div className="app-layout">
+                  <Navigation
+                    onToggleAssistant={toggleAssistant}
+                    onToggleCoach={toggleCoach}
+                    onToggleTaskSidebar={toggleTaskSidebar}
+                    assistantOpen={assistantOpen}
+                    coachOpen={coachOpen}
+                    taskSidebarOpen={taskSidebarOpen}
+                    taskCounts={taskCounts}
+                  />
+                  <main className={`app-main ${assistantOpen ? 'with-assistant' : ''}`}>
+                    <LazyPage><SmartDocsCadence /></LazyPage>
                   </main>
                   <CoachCorner isOpen={coachOpen} onClose={() => setCoachOpen(false)} />
                 </div>

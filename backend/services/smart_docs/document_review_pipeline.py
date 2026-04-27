@@ -116,8 +116,23 @@ class DocumentReviewPipeline:
             )
 
         # Update status to processing
-        document.status = ProcessingStatus.SCANNING.value
-        self.db.commit()
+        try:
+            document.status = ProcessingStatus.SCANNING.value
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            logger.exception("Failed to set SCANNING status for document %s", document_id)
+            return ProcessingResult(
+                document_id=document_id,
+                status=ProcessingStatus.ERROR,
+                decision=None,
+                rejection_category=None,
+                rejection_reason="Failed to update document status",
+                fix_instructions="Please try uploading the document again.",
+                screenshot_result=None,
+                date_result=None,
+                freshness_result=None,
+            )
 
         try:
             # Step 1: Screenshot Detection
@@ -143,7 +158,12 @@ class DocumentReviewPipeline:
 
             # Update status
             document.status = ProcessingStatus.PROCESSING.value
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                logger.exception("Failed to set PROCESSING status for document %s", document_id)
+                raise
 
             # Step 2: Date Extraction
             date_result = self._run_date_extraction(
@@ -209,7 +229,12 @@ class DocumentReviewPipeline:
                 document.status = ProcessingStatus.NEEDS_REVIEW.value
                 self._update_request_status(request_id, RequestStatus.PENDING_REVIEW)
 
-            self.db.commit()
+            try:
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                logger.exception("Failed to commit final decision for document %s", document_id)
+                raise
 
             # Log event
             self._log_event(
@@ -234,8 +259,12 @@ class DocumentReviewPipeline:
 
         except Exception as e:
             logger.exception(f"Error processing document {document_id}: {e}")
-            document.status = ProcessingStatus.ERROR.value
-            self.db.commit()
+            try:
+                document.status = ProcessingStatus.ERROR.value
+                self.db.commit()
+            except Exception:
+                self.db.rollback()
+                logger.exception("Failed to record error status for document %s", document_id)
 
             return ProcessingResult(
                 document_id=document_id,
@@ -401,7 +430,11 @@ class DocumentReviewPipeline:
         document.status = ProcessingStatus.REJECTED.value
         document.reviewed_at = datetime.now(timezone.utc)
         document.reviewed_by = "SYSTEM"
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            logger.exception("Failed to commit rejection for document %s", document.id)
 
         # Log rejection event
         event_type = {
@@ -466,7 +499,11 @@ class DocumentReviewPipeline:
             payload=payload,
         )
         self.db.add(event)
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            logger.exception("Failed to log policy event for document %s", document_id)
 
     def _get_screenshot_rejection_message(
         self, doc_type: Optional[DocType]
@@ -622,7 +659,11 @@ class DocumentReviewPipeline:
         document.is_expired = None
         document.days_until_expiration = None
         document.status = ProcessingStatus.UPLOADED.value
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            raise RuntimeError(f"Failed to reset document {document_id} state for reprocessing")
 
         logger.info(f"Reprocessing document {document_id} ({len(file_content)} bytes)")
 
@@ -676,7 +717,12 @@ class DocumentReviewPipeline:
             document.status = ProcessingStatus.REJECTED.value
             document.rejection_reason = notes
 
-        self.db.commit()
+        try:
+            self.db.commit()
+        except Exception:
+            self.db.rollback()
+            logger.exception("Failed to commit manual review for document %s", document_id)
+            raise
 
         logger.info(f"Manual review: document {document_id} {decision}ed by {reviewer}")
 

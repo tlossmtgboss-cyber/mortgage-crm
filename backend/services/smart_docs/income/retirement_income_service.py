@@ -2218,9 +2218,9 @@ class RetirementIncomeService:
 
             logger.info(
                 "Retirement income calculation saved: id=%d org=%s borrower=%d "
-                "monthly=$%s sources=%d tasks=%d",
+                "sources=%d tasks=%d",
                 calculation_id, result.org_id, result.borrower_id,
-                result.total_qualifying_monthly, len(result.sources),
+                len(result.sources),
                 len(result.tasks_to_create),
             )
 

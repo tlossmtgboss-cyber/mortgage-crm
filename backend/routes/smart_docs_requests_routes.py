@@ -159,7 +159,12 @@ async def delete_document_request(
         doc.request_id = None
 
     db.delete(request)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to delete document request %s", request_id)
+        raise HTTPException(status_code=500, detail="Failed to delete document request")
 
     logger.info(f"Deleted document request {request_id} (loan {request.loan_id})")
     return {"success": True, "request_id": request_id, "documents_unlinked": len(linked_docs)}
@@ -227,7 +232,12 @@ async def update_document_type(
     document.doc_type = new_doc_type
     document.updated_at = datetime.now(timezone.utc)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to update document type for document %s", document_id)
+        raise HTTPException(status_code=500, detail="Failed to update document type")
 
     logger.info(f"Document {document_id} type changed from {old_doc_type} to {new_doc_type}")
 
@@ -288,7 +298,12 @@ async def send_to_portal_for_signature(
         # Ensure main_loan_id is set correctly
         if not purl_loan.main_loan_id:
             purl_loan.main_loan_id = loan_id
-            db.commit()
+            try:
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.exception("Failed to update PURLLoan.main_loan_id for loan %s", loan_id)
+                raise HTTPException(status_code=500, detail="Failed to update PURL loan linkage")
             logger.info(f"Updated PURLLoan.main_loan_id to {loan_id}")
 
     # Use the correct loan_id for Smart Docs (this should be the main loans table id)
@@ -337,7 +352,12 @@ async def send_to_portal_for_signature(
                 'loe_instructions': body.loe_instructions,
                 'sent_at': datetime.now(timezone.utc).isoformat(),
             }
-            db.commit()
+            try:
+                db.commit()
+            except Exception as e:
+                db.rollback()
+                logger.exception("Failed to update request %s for portal DocuSign", request.id)
+                raise HTTPException(status_code=500, detail="Failed to update document request")
             logger.info(f"Updated existing request {request.id} for portal DocuSign")
         else:
             raise HTTPException(status_code=404, detail=f"Request {body.request_id} not found")
@@ -354,8 +374,13 @@ async def send_to_portal_for_signature(
             is_active=True,
         )
         db.add(request)
-        db.commit()
-        db.refresh(request)
+        try:
+            db.commit()
+            db.refresh(request)
+        except Exception as e:
+            db.rollback()
+            logger.exception("Failed to create document request for portal DocuSign, loan %s", smart_docs_loan_id)
+            raise HTTPException(status_code=500, detail="Failed to create document request")
         logger.info(f"Created new request {request.id} for portal DocuSign, loan_id={smart_docs_loan_id}")
 
     # Log event
@@ -372,7 +397,12 @@ async def send_to_portal_for_signature(
         }
     )
     db.add(event)
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to log DocPolicyEvent for request %s, loan %s", request.id, smart_docs_loan_id)
+        raise HTTPException(status_code=500, detail="Failed to log document policy event")
 
     return {
         "success": True,
@@ -925,7 +955,12 @@ async def create_test_loan(
     """), {"user_id": user_id})
 
     loan_id = result.fetchone()[0]
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to create test loan")
+        raise HTTPException(status_code=500, detail="Failed to create test loan")
 
     return {
         "status": "created",
@@ -1081,7 +1116,12 @@ async def cleanup_orphan_documents(
             "request_id": doc.request_id,
         })
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to clean up orphan documents for loan %s", loan_id)
+        raise HTTPException(status_code=500, detail="Failed to clean up orphan documents")
 
     logger.info(f"Cleaned up {len(cleaned)} orphan documents for loan {loan_id}")
 
@@ -1223,7 +1263,12 @@ async def cleanup_all_orphan_documents(
             "previous_status": old_status,
         })
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        logger.exception("Failed to clean up orphan documents across all loans")
+        raise HTTPException(status_code=500, detail="Failed to clean up orphan documents")
 
     logger.info(f"Cleaned up {len(cleaned)} orphan documents across all loans")
 

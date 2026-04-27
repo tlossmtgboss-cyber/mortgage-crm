@@ -342,7 +342,7 @@ class FollowupAutomationService:
             raise
 
         logger.info(
-            "Created %s follow-up campaign %d for loan %d (%d steps, %d requests)",
+            "Created %s follow-up campaign %s for loan %s (%d steps, %d requests)",
             campaign_type, campaign.id, loan_id, len(step_config), len(request_ids),
         )
 
@@ -961,7 +961,7 @@ class FollowupAutomationService:
         self._send_appointment_confirmation(appointment, borrower_info)
 
         logger.info(
-            "Created document appointment %d for loan %d at %s",
+            "Created document appointment %s for loan %s at %s",
             appointment.id, loan_id, scheduled_time.isoformat(),
         )
 

@@ -2693,8 +2693,7 @@ class IncomeTrendingService:
             logger.info(
                 f"Income trend analysis saved: org={result.org_id} "
                 f"borrower={result.borrower_id} "
-                f"classification={result.overall_classification.value} "
-                f"qualifying_monthly={result.overall_qualifying_monthly}"
+                f"classification={result.overall_classification.value}"
             )
 
         except Exception as e:

@@ -11,13 +11,18 @@ Covers:
 - Delivery history
 """
 
+import os
+import sys
 import pytest
 from unittest.mock import patch, MagicMock
 from datetime import datetime
 
+BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
 from sqlalchemy import text
 
-# Ensure models are importable before importing route helpers
 from models.smart_docs_models import DocumentRequest, RequestStatus, RequestPriority, DocType
 
 

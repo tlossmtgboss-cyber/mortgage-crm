@@ -129,6 +129,86 @@ def _get_compliance_models():
 
 
 # =============================================================================
+# SQL INJECTION PREVENTION — TABLE & COLUMN WHITELISTS
+# =============================================================================
+
+# Strict mapping from config section name to actual table name.
+# Prevents SQL injection via f-string table name interpolation.
+_CONFIG_TABLE_MAP: Dict[str, str] = {
+    "business_rules": "smart_docs_business_rules",
+    "notification_templates": "smart_docs_notification_templates",
+    "sla_configs": "smart_docs_sla_configs",
+    "workflow_rules": "smart_docs_workflow_rules",
+}
+
+# Valid column names for each config table. Only columns in this whitelist
+# are accepted during import. Prevents SQL injection via user-controlled
+# column names in INSERT statements.
+_CONFIG_COLUMN_WHITELIST: Dict[str, Set[str]] = {
+    "business_rules": {
+        "id", "organization_id", "name", "description", "rule_type",
+        "rule_category", "rule_key", "rule_value", "value_type",
+        "priority", "is_active", "effective_date", "expiration_date",
+        "conditions", "actions", "metadata", "source",
+        "created_at", "updated_at", "created_by_user_id",
+        "updated_by_user_id", "imported_by_user_id", "imported_at",
+    },
+    "notification_templates": {
+        "id", "organization_id", "name", "description", "template_type",
+        "notification_type", "subject_template", "body_template",
+        "channel", "severity", "is_active", "is_system",
+        "variables", "metadata",
+        "created_at", "updated_at", "created_by_user_id",
+        "imported_by_user_id", "imported_at",
+    },
+    "sla_configs": {
+        "id", "organization_id", "name", "sla_name", "sla_type",
+        "target_hours", "warning_threshold_pct",
+        "business_hours_only", "business_hours_start", "business_hours_end",
+        "exclude_weekends", "exclude_holidays",
+        "escalation_enabled", "escalation_chain",
+        "is_active", "created_at",
+        "imported_by_user_id", "imported_at",
+    },
+    "workflow_rules": {
+        "id", "organization_id", "name", "description", "workflow_type",
+        "trigger_event", "trigger_conditions", "actions", "action_config",
+        "priority", "is_active", "execution_order", "metadata",
+        "created_at", "updated_at", "created_by_user_id",
+        "imported_by_user_id", "imported_at",
+    },
+}
+
+# Compiled regex for validating column names: only alphanumeric + underscores.
+_SAFE_IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_column_names(
+    item_keys: Set[str],
+    section_name: str,
+) -> Tuple[List[str], List[str]]:
+    """Validate column names against whitelist and identifier format.
+
+    Returns:
+        Tuple of (valid_columns, rejected_columns).
+    """
+    whitelist = _CONFIG_COLUMN_WHITELIST.get(section_name, set())
+    valid = []
+    rejected = []
+
+    for key in item_keys:
+        if key not in whitelist:
+            rejected.append(key)
+        elif not _SAFE_IDENTIFIER_RE.match(key):
+            # Defense-in-depth: even whitelisted names must be safe identifiers
+            rejected.append(key)
+        else:
+            valid.append(key)
+
+    return valid, rejected
+
+
+# =============================================================================
 # ENUMS
 # =============================================================================
 
@@ -2235,6 +2315,15 @@ class DataExportImportService:
             if not section_data:
                 continue
 
+            # Resolve table name via strict whitelist (not f-string)
+            table_name = _CONFIG_TABLE_MAP.get(section_name)
+            if table_name is None:
+                errors.append({
+                    "section": section_name,
+                    "error": f"Unknown configuration section: {section_name}",
+                })
+                continue
+
             total_count += len(section_data)
 
             for idx, item in enumerate(section_data):
@@ -2254,10 +2343,29 @@ class DataExportImportService:
                     item["imported_by_user_id"] = user_id
                     item["imported_at"] = datetime.now(timezone.utc).isoformat()
 
-                    # Check for existing configuration with same name
+                    # Validate column names against whitelist to prevent
+                    # SQL injection via user-controlled JSON keys
+                    valid_cols, rejected_cols = _validate_column_names(
+                        set(item.keys()), section_name
+                    )
+                    if rejected_cols:
+                        errors.append({
+                            "section": section_name,
+                            "item_index": idx,
+                            "item_name": item.get("name", "unknown"),
+                            "error": (
+                                f"Invalid column names rejected: "
+                                f"{', '.join(sorted(rejected_cols))}"
+                            ),
+                        })
+                        skipped_count += 1
+                        continue
+
+                    # Check for existing configuration with same name.
+                    # table_name is from _CONFIG_TABLE_MAP (hardcoded whitelist).
                     existing = db.execute(
                         text(
-                            f"SELECT id FROM smart_docs_{section_name} "
+                            f"SELECT id FROM {table_name} "
                             f"WHERE organization_id = :org_id AND name = :name "
                             f"LIMIT 1"
                         ),
@@ -2272,15 +2380,18 @@ class DataExportImportService:
                         skipped_count += 1
                         continue
 
-                    # Insert new configuration
-                    columns = ", ".join(item.keys())
-                    placeholders = ", ".join(f":{k}" for k in item.keys())
+                    # Insert new configuration using only validated columns.
+                    # valid_cols are verified against _CONFIG_COLUMN_WHITELIST
+                    # and _SAFE_IDENTIFIER_RE — safe for SQL interpolation.
+                    safe_item = {k: item[k] for k in valid_cols}
+                    columns = ", ".join(safe_item.keys())
+                    placeholders = ", ".join(f":{k}" for k in safe_item.keys())
                     db.execute(
                         text(
-                            f"INSERT INTO smart_docs_{section_name} "
+                            f"INSERT INTO {table_name} "
                             f"({columns}) VALUES ({placeholders})"
                         ),
-                        item,
+                        safe_item,
                     )
                     imported_count += 1
 
@@ -2612,13 +2723,8 @@ class DataExportImportService:
         total_items = 0
         valid_items = 0
 
-        valid_sections = {
-            "business_rules", "notification_templates",
-            "sla_configs", "workflow_rules",
-        }
-
         for section_name, section_data in config_data.items():
-            if section_name not in valid_sections:
+            if section_name not in _CONFIG_TABLE_MAP:
                 issues.append(ValidationIssue(
                     severity="warning",
                     code="UNKNOWN_SECTION",

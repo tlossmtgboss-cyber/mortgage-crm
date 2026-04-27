@@ -1,26 +1,27 @@
 .offline-indicator {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(120%);
   z-index: 10000;
   background: #f59e0b;
   color: #1a1a1a;
   text-align: center;
-  padding: 6px 16px;
+  padding: 8px 20px;
   font-size: 13px;
   font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding-top: calc(6px + env(safe-area-inset-top, 0px));
-  transform: translateY(-100%);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transition: transform 0.3s ease;
+  max-width: 400px;
 }
 
 .offline-indicator.visible {
-  transform: translateY(0);
+  transform: translateX(-50%) translateY(0);
 }
 
 .offline-indicator--reconnected {

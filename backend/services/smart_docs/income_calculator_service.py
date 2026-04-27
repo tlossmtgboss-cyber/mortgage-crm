@@ -1444,7 +1444,6 @@ class IncomeCalculatorService:
             logger.info(
                 f"Income calculation saved: id={calculation_id} "
                 f"loan={result.loan_id} borrower={result.borrower_id} "
-                f"monthly={result.total_qualifying_monthly} "
                 f"sources={len(result.sources)} tasks={len(result.tasks_to_create)}"
             )
             return calculation_id

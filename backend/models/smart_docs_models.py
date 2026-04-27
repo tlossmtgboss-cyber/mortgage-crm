@@ -116,6 +116,89 @@ class DocumentStatus(str, enum.Enum):
     UPLOAD_FAILED = "UPLOAD_FAILED"
 
 
+# =============================================================================
+# DOCUMENT STATUS TRANSITION RULES
+# =============================================================================
+
+_VALID_DOCUMENT_TRANSITIONS: dict = {
+    DocumentStatus.UPLOADED: {
+        DocumentStatus.SCANNING,
+        DocumentStatus.PROCESSING,
+        DocumentStatus.DELETED,
+        DocumentStatus.UPLOAD_FAILED,
+        DocumentStatus.SUPERSEDED,
+    },
+    DocumentStatus.UPLOAD_FAILED: {
+        DocumentStatus.UPLOADED,
+        DocumentStatus.DELETED,
+    },
+    DocumentStatus.SCANNING: {
+        DocumentStatus.PROCESSING,
+        DocumentStatus.APPROVED,  # AI review can approve directly from SCANNING
+        DocumentStatus.REJECTED,
+        DocumentStatus.UPLOAD_FAILED,
+        DocumentStatus.DELETED,
+        DocumentStatus.SUPERSEDED,
+    },
+    DocumentStatus.PROCESSING: {
+        DocumentStatus.SCANNING,  # AI review re-entry from batch_review
+        DocumentStatus.PENDING_REVIEW,
+        DocumentStatus.NEEDS_REVIEW,
+        DocumentStatus.APPROVED,
+        DocumentStatus.REJECTED,
+        DocumentStatus.DELETED,
+        DocumentStatus.SUPERSEDED,
+    },
+    DocumentStatus.PENDING_REVIEW: {
+        DocumentStatus.APPROVED,
+        DocumentStatus.REJECTED,
+        DocumentStatus.NEEDS_REVIEW,
+        DocumentStatus.UPLOADED,  # Reprocess resets to UPLOADED
+        DocumentStatus.DELETED,
+        DocumentStatus.SUPERSEDED,
+    },
+    DocumentStatus.NEEDS_REVIEW: {
+        DocumentStatus.APPROVED,
+        DocumentStatus.REJECTED,
+        DocumentStatus.PENDING_REVIEW,
+        DocumentStatus.PROCESSING,  # AI review error fallback
+        DocumentStatus.UPLOADED,  # Reprocess resets to UPLOADED
+        DocumentStatus.DELETED,
+        DocumentStatus.SUPERSEDED,
+    },
+    DocumentStatus.APPROVED: {
+        DocumentStatus.EXPIRED,
+        DocumentStatus.SUPERSEDED,
+        DocumentStatus.DELETED,
+        DocumentStatus.UPLOADED,  # Reprocess resets to UPLOADED
+    },
+    DocumentStatus.REJECTED: {
+        DocumentStatus.UPLOADED,  # Re-upload or reprocess after rejection
+        DocumentStatus.DELETED,
+        DocumentStatus.SUPERSEDED,
+    },
+    DocumentStatus.EXPIRED: {
+        DocumentStatus.UPLOADED,  # Re-upload after expiry
+        DocumentStatus.DELETED,
+        DocumentStatus.SUPERSEDED,
+    },
+    DocumentStatus.DELETED: set(),  # Terminal
+    DocumentStatus.SUPERSEDED: set(),  # Terminal
+}
+
+
+def validate_document_status_transition(current_status: str, new_status: str) -> bool:
+    """Check if a document status transition is valid. Returns True if valid."""
+    if current_status == new_status:
+        return True  # No-op transitions are always valid
+    try:
+        current = DocumentStatus(current_status)
+        new = DocumentStatus(new_status)
+    except ValueError:
+        return True  # Don't block on unknown statuses
+    return new in _VALID_DOCUMENT_TRANSITIONS.get(current, set())
+
+
 class DocPolicyEventType(str, enum.Enum):
     """Types of policy events"""
     NEEDS_LIST_GENERATED = "NEEDS_LIST_GENERATED"
@@ -285,11 +368,20 @@ class SmartDocument(Base):
 
     @validates('status')
     def validate_status(self, key, value):
-        """Warn on invalid document status values without raising to avoid breaking existing data."""
+        """Warn on invalid document status values and invalid transitions without raising."""
+        import logging
+        _logger = logging.getLogger(__name__)
         valid = {s.value for s in DocumentStatus}
         if value not in valid:
-            import logging
-            logging.getLogger(__name__).warning(f"Invalid document status: {value}")
+            _logger.warning(f"Invalid document status: {value}")
+        # Check transition if we have a committed (pre-flush) status
+        if hasattr(self, '_sa_instance_state') and self._sa_instance_state.committed_state.get('status'):
+            old_status = self._sa_instance_state.committed_state['status']
+            if old_status and not validate_document_status_transition(old_status, value):
+                _logger.warning(
+                    f"Invalid document status transition: {old_status} -> {value} "
+                    f"for document {self.id}"
+                )
         return value
 
 

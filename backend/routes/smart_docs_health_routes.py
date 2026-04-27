@@ -3,12 +3,12 @@ Smart Docs V2 Health Check & Canary Deployment Routes
 
 Provides health, readiness, liveness, and canary deployment endpoints:
 
-    GET  /health             - Overall health (public, no auth)
+    GET  /health             - Overall health (public, minimal response)
     GET  /health/detailed    - Per-component health (admin only)
-    GET  /health/ready       - Readiness probe (public, for deployment orchestrator)
-    GET  /health/live        - Liveness probe (public, for orchestrator)
-    GET  /version            - Version/git SHA/deployed_at
-    GET  /features           - Feature manifest
+    GET  /health/ready       - Readiness probe (public, minimal response)
+    GET  /health/live        - Liveness probe (public, minimal response)
+    GET  /version            - Version/git SHA/deployed_at (auth required)
+    GET  /features           - Feature manifest (auth required)
     POST /health/smoke-test  - Run smoke test (admin only)
     GET  /health/deploy-metrics - Deployment metrics (admin only)
 
@@ -87,22 +87,10 @@ async def smart_docs_health(
         else:
             overall = "healthy"
 
-        return {
-            "status": overall,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "version": svc.get_version_info().get("version", "unknown"),
-            "components": {
-                "database": db_health.status,
-                "circuit_breaker": circuit_health.status,
-            },
-        }
+        return {"status": overall}
     except Exception as e:
         logger.error("Health check endpoint failed: %s", e)
-        return {
-            "status": "unhealthy",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "error": "Health check failed",
-        }
+        return {"status": "unhealthy"}
 
 
 # =============================================================================
@@ -144,32 +132,23 @@ async def smart_docs_readiness(
     Readiness probe for Smart Docs V2.
 
     Public endpoint for deployment orchestrator (Kubernetes, Railway).
-    Returns ``ready: true`` when the system is ready to accept traffic.
-
-    Checks: database connected, AI reachable, storage accessible,
-    e-sign keys valid, feature flags loaded.
+    Returns ``status: healthy | unhealthy``.
     """
     try:
         svc = _get_health_service()
         result = await svc.check_readiness(db)
 
-        # Return appropriate HTTP status based on readiness
         if not result["ready"]:
-            # 503 signals the orchestrator that this instance is not ready
-            raise HTTPException(status_code=503, detail=result)
+            raise HTTPException(status_code=503, detail={"status": "unhealthy"})
 
-        return result
+        return {"status": "healthy"}
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Readiness probe failed: %s", e)
         raise HTTPException(
             status_code=503,
-            detail={
-                "ready": False,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "error": "Readiness check failed",
-            },
+            detail={"status": "unhealthy"},
         )
 
 
@@ -183,30 +162,23 @@ async def smart_docs_liveness():
     Liveness probe for Smart Docs V2.
 
     Public endpoint for deployment orchestrator.
-    Returns ``alive: true`` if the process is responsive and not stuck.
-
-    Checks: HTTP responsiveness (implicit), thread count, memory usage.
-    Does NOT touch the database or external services.
+    Returns ``status: healthy | unhealthy``.
     """
     try:
         svc = _get_health_service()
         result = await svc.check_liveness()
 
         if not result["alive"]:
-            raise HTTPException(status_code=503, detail=result)
+            raise HTTPException(status_code=503, detail={"status": "unhealthy"})
 
-        return result
+        return {"status": "healthy"}
     except HTTPException:
         raise
     except Exception as e:
         logger.error("Liveness probe failed: %s", e)
         raise HTTPException(
             status_code=503,
-            detail={
-                "alive": False,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "error": "Liveness check failed",
-            },
+            detail={"status": "unhealthy"},
         )
 
 
@@ -215,11 +187,13 @@ async def smart_docs_liveness():
 # =============================================================================
 
 @router.get("/version")
-async def smart_docs_version():
+async def smart_docs_version(
+    current_user=Depends(get_current_user),
+):
     """
     Smart Docs V2 version information.
 
-    Public endpoint. Returns version, git SHA, and deployment timestamp.
+    Authenticated endpoint. Returns version, git SHA, and deployment timestamp.
     """
     svc = _get_health_service()
     return svc.get_version_info()
@@ -230,11 +204,13 @@ async def smart_docs_version():
 # =============================================================================
 
 @router.get("/features")
-async def smart_docs_features():
+async def smart_docs_features(
+    current_user=Depends(get_current_user),
+):
     """
     Smart Docs V2 feature manifest.
 
-    Public endpoint. Returns list of all registered features.
+    Authenticated endpoint. Returns list of all registered features.
     """
     svc = _get_health_service()
     return svc.get_feature_manifest()

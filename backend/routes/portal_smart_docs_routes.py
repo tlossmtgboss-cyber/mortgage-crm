@@ -74,9 +74,31 @@ _UNSAFE_FILENAME_RE = re.compile(r'[/\\:\*\?"<>\|\x00]')
 
 # Structure: { ip: [(window_start, request_count), ...] }
 # Each entry is a (window_start_epoch, count) pair for a 1-minute window.
-# TODO (SD-SEC-001): Migrate to Redis-backed rate limiting so limits are shared
-# across multiple Uvicorn workers / Railway replicas.
+# Rate limiting is per-worker (SD-SEC-001: Redis migration needed for cross-worker limits)
+# Memory-safe: auto-cleans entries older than 1 hour
 _rate_limit_store: dict = defaultdict(list)
+_RATE_LIMIT_CLEANUP_INTERVAL = 300  # 5 minutes
+_last_cleanup = time.monotonic()
+
+
+def _cleanup_rate_limits() -> None:
+    """Remove stale entries from _rate_limit_store to prevent unbounded memory growth.
+
+    Runs at most once every 5 minutes. Drops all entries older than 1 hour and
+    removes keys with no remaining entries.
+    """
+    global _last_cleanup
+    now = time.monotonic()
+    if now - _last_cleanup < _RATE_LIMIT_CLEANUP_INTERVAL:
+        return
+    _last_cleanup = now
+    cutoff = now - 3600  # Remove entries older than 1 hour
+    for key in list(_rate_limit_store.keys()):
+        _rate_limit_store[key] = [
+            (ts, cnt) for ts, cnt in _rate_limit_store[key] if ts > cutoff
+        ]
+        if not _rate_limit_store[key]:
+            del _rate_limit_store[key]
 
 
 def _get_client_ip(request: Request) -> str:
@@ -99,6 +121,7 @@ def _check_rate_limit(ip: str) -> tuple[bool, int]:
     Returns:
         (allowed: bool, remaining: int) — remaining requests left in window.
     """
+    _cleanup_rate_limits()
     now = time.monotonic()
     window_start = now - RATE_LIMIT_WINDOW_SECONDS
 

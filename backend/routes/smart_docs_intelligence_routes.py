@@ -309,7 +309,8 @@ async def classify_existing_document(
         db.commit()
     except SQLAlchemyError as e:
         db.rollback()
-        logger.error("Failed to save classification for document %d: %s", document_id, e)
+        logger.exception("Failed to save classification for document %d", document_id)
+        raise HTTPException(status_code=500, detail="Failed to save classification")
 
     return {
         "document_id": document_id,
@@ -549,6 +550,8 @@ async def create_requests_from_analysis(
             db.flush()
             created_ids.append(request.id)
 
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error("Failed to create request for %s: %s", req_data.get("doc_type"), e)
             errors.append({
@@ -560,7 +563,7 @@ async def create_requests_from_analysis(
         db.commit()
     except SQLAlchemyError as e:
         db.rollback()
-        logger.error("Failed to commit document requests: %s", e)
+        logger.exception("Failed to commit document requests")
         raise HTTPException(status_code=500, detail="Failed to create document requests")
 
     return {
@@ -689,6 +692,8 @@ async def create_requests_from_call(
                     call_need.linked_request_id = request.id
                     call_need.status = "REQUEST_CREATED"
 
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error("Failed to create request from call need: %s", e)
             errors.append({
@@ -700,7 +705,7 @@ async def create_requests_from_call(
         db.commit()
     except SQLAlchemyError as e:
         db.rollback()
-        logger.error("Failed to commit call-based document requests: %s", e)
+        logger.exception("Failed to commit call-based document requests")
         raise HTTPException(status_code=500, detail="Failed to create document requests")
 
     return {
@@ -1193,6 +1198,8 @@ async def batch_classify_documents(
             })
             classified_count += 1
 
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error("Batch classify failed for document %d: %s", doc.id, e)
             results.append({
@@ -1207,7 +1214,8 @@ async def batch_classify_documents(
         db.commit()
     except SQLAlchemyError as e:
         db.rollback()
-        logger.error("Failed to commit batch classifications for loan %d: %s", loan_id, e)
+        logger.exception("Failed to commit batch classifications for loan %d", loan_id)
+        raise HTTPException(status_code=500, detail="Failed to save batch classifications")
 
     return {
         "loan_id": loan_id,

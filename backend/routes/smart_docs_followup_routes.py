@@ -19,7 +19,6 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func
 
 from database import get_db
@@ -387,9 +386,11 @@ async def create_campaign(
         db.add(campaign)
         db.commit()
         db.refresh(campaign)
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to create follow-up campaign: {e}")
+        logger.exception("Failed to create follow-up campaign")
         raise HTTPException(status_code=500, detail="Failed to create campaign")
 
     logger.info(
@@ -489,9 +490,11 @@ async def pause_campaign(
 
     try:
         db.commit()
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to pause campaign {campaign_id}: {e}")
+        logger.exception("Failed to pause campaign %s", campaign_id)
         raise HTTPException(status_code=500, detail="Failed to pause campaign")
 
     return {"campaign_id": campaign_id, "status": "paused", "message": "Campaign paused"}
@@ -536,9 +539,11 @@ async def resume_campaign(
 
     try:
         db.commit()
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to resume campaign {campaign_id}: {e}")
+        logger.exception("Failed to resume campaign %s", campaign_id)
         raise HTTPException(status_code=500, detail="Failed to resume campaign")
 
     return {"campaign_id": campaign_id, "status": "active", "message": "Campaign resumed"}
@@ -579,9 +584,11 @@ async def cancel_campaign(
 
     try:
         db.commit()
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to cancel campaign {campaign_id}: {e}")
+        logger.exception("Failed to cancel campaign %s", campaign_id)
         raise HTTPException(status_code=500, detail="Failed to cancel campaign")
 
     return {"campaign_id": campaign_id, "status": "cancelled", "message": "Campaign cancelled"}
@@ -657,9 +664,11 @@ async def record_borrower_response(
 
     try:
         db.commit()
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to record response for campaign {campaign_id}: {e}")
+        logger.exception("Failed to record response for campaign %s", campaign_id)
         raise HTTPException(status_code=500, detail="Failed to record response")
 
     return {
@@ -732,9 +741,11 @@ async def create_appointment(
         db.add(appointment)
         db.commit()
         db.refresh(appointment)
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to create appointment: {e}")
+        logger.exception("Failed to create appointment")
         raise HTTPException(status_code=500, detail="Failed to create appointment")
 
     logger.info(
@@ -819,9 +830,11 @@ async def confirm_appointment(
 
     try:
         db.commit()
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to confirm appointment {appointment_id}: {e}")
+        logger.exception("Failed to confirm appointment %s", appointment_id)
         raise HTTPException(status_code=500, detail="Failed to confirm appointment")
 
     logger.info(f"Appointment {appointment_id} confirmed")
@@ -858,9 +871,11 @@ async def cancel_appointment(
 
     try:
         db.commit()
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to cancel appointment {appointment_id}: {e}")
+        logger.exception("Failed to cancel appointment %s", appointment_id)
         raise HTTPException(status_code=500, detail="Failed to cancel appointment")
 
     logger.info(f"Appointment {appointment_id} cancelled: {body.reason}")
@@ -925,9 +940,11 @@ async def reschedule_appointment(
         db.add(new_appointment)
         db.commit()
         db.refresh(new_appointment)
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to reschedule appointment {appointment_id}: {e}")
+        logger.exception("Failed to reschedule appointment %s", appointment_id)
         raise HTTPException(status_code=500, detail="Failed to reschedule appointment")
 
     logger.info(
@@ -966,9 +983,11 @@ async def complete_appointment(
 
     try:
         db.commit()
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to complete appointment {appointment_id}: {e}")
+        logger.exception("Failed to complete appointment %s", appointment_id)
         raise HTTPException(status_code=500, detail="Failed to complete appointment")
 
     logger.info(f"Appointment {appointment_id} completed")
@@ -1001,9 +1020,11 @@ async def mark_no_show(
 
     try:
         db.commit()
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to mark appointment {appointment_id} as no-show: {e}")
+        logger.exception("Failed to mark appointment %s as no-show", appointment_id)
         raise HTTPException(status_code=500, detail="Failed to mark no-show")
 
     logger.info(f"Appointment {appointment_id} marked as no-show")
@@ -1094,9 +1115,11 @@ async def create_template(
         db.add(template)
         db.commit()
         db.refresh(template)
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to create template: {e}")
+        logger.exception("Failed to create template")
         raise HTTPException(status_code=500, detail="Failed to create template")
 
     return _template_to_dict(template)
@@ -1155,9 +1178,11 @@ async def update_template(
     try:
         db.commit()
         db.refresh(template)
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to update template {template_id}: {e}")
+        logger.exception("Failed to update template %s", template_id)
         raise HTTPException(status_code=500, detail="Failed to update template")
 
     return _template_to_dict(template)
@@ -1253,9 +1278,11 @@ async def process_pending_followups(
 
     try:
         db.commit()
-    except SQLAlchemyError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         db.rollback()
-        logger.error(f"Failed to commit pending follow-up processing: {e}")
+        logger.exception("Failed to commit pending follow-up processing")
         raise HTTPException(status_code=500, detail="Failed to process pending follow-ups")
 
     return {

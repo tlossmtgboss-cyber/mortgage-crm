@@ -49,11 +49,33 @@ PORTAL_BASE_URL = os.getenv("PORTAL_BASE_URL", "http://localhost:3000/portal")
 # Rate limiting: max token generations per email per hour
 MAX_TOKEN_GENERATIONS_PER_HOUR = 5
 
-# In-memory rate limit store (keyed by email, values are timestamps)
-# In production with multiple workers, replace with Redis.
-# TODO (SD-SEC-11): Migrate to Redis-backed rate limiting so limits are shared
-# across multiple Uvicorn workers / Railway replicas.
+# In-memory rate limit stores (keyed by email, values are timestamps)
+# Rate limiting is per-worker (SD-SEC-11: Redis migration needed for cross-worker limits)
+# Memory-safe: auto-cleans entries older than 1 hour
 _token_generation_timestamps: Dict[str, list] = defaultdict(list)
+
+# Periodic cleanup state — shared across both token-gen and upload stores
+_RATE_LIMIT_CLEANUP_INTERVAL = 300  # 5 minutes
+_last_cleanup = time.time()
+
+
+def _cleanup_rate_limit_stores() -> None:
+    """Remove stale entries from both rate limit stores to prevent unbounded memory growth.
+
+    Runs at most once every 5 minutes. Drops all entries older than 1 hour and
+    removes keys with no remaining entries.
+    """
+    global _last_cleanup
+    now = time.time()
+    if now - _last_cleanup < _RATE_LIMIT_CLEANUP_INTERVAL:
+        return
+    _last_cleanup = now
+    cutoff = now - 3600  # Remove entries older than 1 hour
+    for store in (_token_generation_timestamps, _upload_timestamps):
+        for key in list(store.keys()):
+            store[key] = [ts for ts in store[key] if ts > cutoff]
+            if not store[key]:
+                del store[key]
 
 
 # ---------------------------------------------------------------------------
@@ -318,8 +340,8 @@ def require_write_scope(portal_user: Dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 # In-memory upload count tracking (keyed by token sub, values are timestamps)
-# TODO (SD-SEC-11): Migrate to Redis-backed rate limiting so limits are shared
-# across multiple Uvicorn workers / Railway replicas.
+# Rate limiting is per-worker (SD-SEC-11: Redis migration needed for cross-worker limits)
+# Memory-safe: auto-cleans entries older than 1 hour via _cleanup_rate_limit_stores()
 _upload_timestamps: Dict[str, list] = defaultdict(list)
 
 MAX_UPLOADS_PER_HOUR = 10
@@ -332,6 +354,7 @@ def check_upload_rate_limit(borrower_email: str) -> None:
     Raises:
         HTTPException(429): If rate limit exceeded.
     """
+    _cleanup_rate_limit_stores()
     email_lower = borrower_email.strip().lower()
     now = time.time()
     cutoff = now - 3600  # 1 hour window
@@ -444,6 +467,7 @@ def _enforce_rate_limit(email: str) -> None:
     Raises:
         HTTPException(429): If rate limit exceeded.
     """
+    _cleanup_rate_limit_stores()
     now = time.time()
     cutoff = now - 3600  # 1 hour window
 
