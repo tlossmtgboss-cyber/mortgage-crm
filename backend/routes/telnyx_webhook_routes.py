@@ -829,6 +829,32 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     "voice_scheduling_intercept: completed, workflow_id=%d, result_status=%s",
                     active_workflow.id, sched_result.get("action", "unknown"),
                 )
+                # Write to SMS panel so intercepted inbound appears in Archive
+                try:
+                    import uuid as _uuid
+                    db.execute(sa_text("""
+                        INSERT INTO sms_panel_messages
+                            (id, phone, organization_id, direction, body,
+                             sender_name, status, telnyx_message_id, created_at)
+                        VALUES (:id, :phone, :org_id, 'inbound', :body,
+                                :sender_name, 'received', :telnyx_id, NOW())
+                        ON CONFLICT (id) DO NOTHING
+                    """), {
+                        "id": str(_uuid.uuid4()),
+                        "phone": normalized_from,
+                        "org_id": _vw_org_id,
+                        "body": message_body or "",
+                        "sender_name": normalized_from,
+                        "telnyx_id": event.message_id,
+                    })
+                    db.commit()
+                    from routes.sms_conversation_routes import notify_inbound_sms
+                    await notify_inbound_sms(
+                        phone=normalized_from, body=message_body or "",
+                        telnyx_message_id=event.message_id, org_id=_vw_org_id,
+                    )
+                except Exception as _panel_err:
+                    logger.debug(f"voice_scheduling_intercept: panel write failed: {_panel_err}")
                 return {"status": "received", "handler": "voice_scheduling", "result": sched_result}
         else:
             logger.debug(
@@ -884,6 +910,31 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             except Exception as e:
                 db.rollback()
                 logger.error(f"Failed to store intercepted SMS: {e}")
+            # Write to SMS panel so intercepted inbound appears in Archive
+            try:
+                import uuid as _uuid
+                db.execute(sa_text("""
+                    INSERT INTO sms_panel_messages
+                        (id, phone, direction, body,
+                         sender_name, status, telnyx_message_id, created_at)
+                    VALUES (:id, :phone, 'inbound', :body,
+                            :sender_name, 'received', :telnyx_id, NOW())
+                    ON CONFLICT (id) DO NOTHING
+                """), {
+                    "id": str(_uuid.uuid4()),
+                    "phone": normalized_from,
+                    "body": message_body or "",
+                    "sender_name": normalized_from,
+                    "telnyx_id": event.message_id,
+                })
+                db.commit()
+                from routes.sms_conversation_routes import notify_inbound_sms
+                await notify_inbound_sms(
+                    phone=normalized_from, body=message_body or "",
+                    telnyx_message_id=event.message_id,
+                )
+            except Exception as _panel_err:
+                logger.debug(f"re_engagement_intercept: panel write failed: {_panel_err}")
             return {"status": "received", "handler": "ai_reengagement"}
     except Exception as e:
         db.rollback()
@@ -1518,7 +1569,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
 
     try:
         import uuid as _uuid
-        _panel_id = str(_uuid.uuid4())
+        _panel_id = event.message_id or str(_uuid.uuid4())
         db.execute(sa_text("""
             INSERT INTO sms_panel_messages
                 (id, phone, contact_id, organization_id, direction, body,
@@ -1543,6 +1594,31 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     except Exception as e:
         logger.warning(f"Failed to store inbound SMS in sms_panel_messages: {e}")
         db.rollback()
+
+    # Push inbound message to SMS panel WebSocket so it appears in real-time
+    try:
+        _contact_display = None
+        if _inbound_contact_id and _inbound_org_id:
+            try:
+                _name_row = db.execute(sa_text("""
+                    SELECT first_name || ' ' || last_name FROM leads
+                    WHERE id = :lid AND organization_id = :org_id
+                """), {"lid": int(_inbound_contact_id), "org_id": _inbound_org_id}).fetchone()
+                if _name_row and _name_row[0] and _name_row[0].strip():
+                    _contact_display = _name_row[0].strip()
+            except Exception:
+                pass
+
+        from routes.sms_conversation_routes import notify_inbound_sms
+        await notify_inbound_sms(
+            phone=normalized_from,
+            body=message_body or "",
+            telnyx_message_id=event.message_id,
+            org_id=_inbound_org_id,
+            contact_name=_contact_display or "",
+        )
+    except Exception as e:
+        logger.debug(f"Inbound SMS WebSocket push failed (non-critical): {e}")
 
     # ==========================================================================
     # SMS Auto-Responder: create task + AI recommendation + auto-reply
