@@ -438,11 +438,15 @@ class ComplianceChecker:
         tz_name = str(contact_tz)
 
         if current_time < self.CALLING_HOURS_START or current_time >= self.CALLING_HOURS_END:
+            if current_time < self.CALLING_HOURS_START:
+                schedule_hint = "Want me to queue it for 8 AM this morning?"
+            else:
+                schedule_hint = "Want me to queue it for 8 AM tomorrow morning?"
             reason = (
                 f"I can't send that right now — it's {now_local.strftime('%I:%M %p')} "
                 f"in the recipient's timezone ({tz_name}), which is outside "
                 f"the allowed 8 AM - 9 PM window. "
-                f"Want me to schedule it for tomorrow morning?"
+                f"{schedule_hint}"
             )
             self._log_decision(
                 decision_type="calling_hours",
