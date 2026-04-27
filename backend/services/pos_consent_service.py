@@ -350,12 +350,17 @@ def record_credit_authorization(
     app.credit_auth_ip_address = ip_address
     app.credit_auth_user_agent = user_agent
 
-    _write_application_event(db, application_id, "credit_auth_captured", {
-        "consent_version": CREDIT_AUTH_VERSION,
-        "ip_address": ip_address,
-    })
-
     db.commit()
+
+    try:
+        _write_application_event(db, application_id, "credit_auth_captured", {
+            "consent_version": CREDIT_AUTH_VERSION,
+            "ip_address": ip_address,
+        })
+        db.commit()
+    except Exception as e:
+        logger.warning("Credit auth event write failed (non-fatal): %s", e)
+        db.rollback()
 
     return {
         "status": "authorized",
@@ -424,12 +429,17 @@ def record_econsent_agreement(
     )
     db.add(agreement)
 
-    _write_application_event(db, application_id, "econsent_captured", {
-        "consent_version": ECONSENT_VERSION,
-        "ip_address": ip_address,
-    })
-
     db.commit()
+
+    try:
+        _write_application_event(db, application_id, "econsent_captured", {
+            "consent_version": ECONSENT_VERSION,
+            "ip_address": ip_address,
+        })
+        db.commit()
+    except Exception as e:
+        logger.warning("E-consent event write failed (non-fatal): %s", e)
+        db.rollback()
 
     return {
         "status": "consented",
