@@ -221,12 +221,18 @@ def _get_or_create_workspace(db, app, organization_id) -> int:
     from sqlalchemy import text
 
     slug = f"voice-consent-app-{app.id}"
-    org_id = organization_id or app.organization_id or 0
+    org_id = organization_id or app.organization_id or None
 
-    result = db.execute(text(
-        "SELECT id FROM purl_workspaces WHERE organization_id = :org_id "
-        "AND slug = :slug LIMIT 1"
-    ), {"org_id": org_id, "slug": slug}).fetchone()
+    if org_id is not None:
+        result = db.execute(text(
+            "SELECT id FROM purl_workspaces WHERE organization_id = :org_id "
+            "AND slug = :slug LIMIT 1"
+        ), {"org_id": org_id, "slug": slug}).fetchone()
+    else:
+        result = db.execute(text(
+            "SELECT id FROM purl_workspaces WHERE organization_id IS NULL "
+            "AND slug = :slug LIMIT 1"
+        ), {"slug": slug}).fetchone()
 
     if result:
         return result[0]
