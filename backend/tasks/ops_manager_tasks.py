@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 
 from database import SessionLocal
+import database.models  # noqa: F401 — ensure all mappers register
 from database.models.core import Organization
 
 logger = logging.getLogger(__name__)

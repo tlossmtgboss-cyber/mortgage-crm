@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Type
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
 
+import database.models  # noqa: F401 — ensure all mappers register before any query
 from database.models.autonomous_task import AutonomousTask, TaskExecution
 from database.models.core import Organization
 from db import SessionLocal

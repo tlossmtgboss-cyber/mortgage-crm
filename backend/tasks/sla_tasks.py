@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 
 from database import SessionLocal, get_db_with_tenant
+import database.models  # noqa: F401 — ensure all mappers register
 from database.models.core import Organization
 from crud.sla_tracking import (
     update_milestone_statuses_batch,

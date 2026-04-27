@@ -327,6 +327,8 @@ from database.models import (
     EstimateParseCache, EstimateParseFailure, EstimateComparison,
     # SSO
     SSOConfig,
+    # Device Tokens (push notifications)
+    DeviceToken, PushNotificationPreference,
 )
 
 # Configure mappers after all model imports
