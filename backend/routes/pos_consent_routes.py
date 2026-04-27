@@ -340,16 +340,21 @@ async def submit_with_consent(
     app.submitted_at = datetime.now(timezone.utc)
     app.progress_percentage = 100
 
-    # Write audit event
-    from services.pos_consent_service import _write_application_event
-    ip_address = request.client.host if request.client else "unknown"
-    _write_application_event(db, app.id, "submitted_via_voice_consent", {
-        "ip_address": ip_address,
-        "credit_auth_complete": True,
-        "econsent_complete": True,
-    })
-
     db.commit()
+
+    # Write audit event (non-fatal — application_events table may lack columns)
+    try:
+        from services.pos_consent_service import _write_application_event
+        ip_address = request.client.host if request.client else "unknown"
+        _write_application_event(db, app.id, "submitted_via_voice_consent", {
+            "ip_address": ip_address,
+            "credit_auth_complete": True,
+            "econsent_complete": True,
+        })
+        db.commit()
+    except Exception as e:
+        logger.warning("Submit event write failed (non-fatal): %s", e)
+        db.rollback()
 
     logger.info("Application %d submitted via voice consent flow", app.id)
 
