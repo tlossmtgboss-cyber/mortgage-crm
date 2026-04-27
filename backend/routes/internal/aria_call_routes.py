@@ -23,6 +23,13 @@ TELNYX_API_KEY = os.environ.get("TELNYX_API_KEY", "")
 TELNYX_PHONE_NUMBER = os.environ.get("TELNYX_PHONE_NUMBER", "")
 TELNYX_CONNECTION_ID = os.environ.get("TELNYX_CONNECTION_ID", "")
 
+try:
+    from db import engine as _engine
+    from database.models.voice_call_session import VoiceCallSession
+    VoiceCallSession.__table__.create(_engine, checkfirst=True)
+except Exception:
+    pass
+
 
 def _verify_internal_key(request: Request):
     """Verify X-Internal-API-Key header. Reads env at request time so

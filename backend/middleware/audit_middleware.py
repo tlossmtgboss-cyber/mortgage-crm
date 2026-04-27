@@ -31,7 +31,10 @@ EXEMPT_PATHS = (
     "/webhooks/",
     "/api/v1/telnyx/",
     "/api/v1/vapi/",
+    "/internal/",
 )
+
+_table_exists: bool | None = None
 
 
 class AuditMiddleware(BaseHTTPMiddleware):
@@ -46,6 +49,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
             return response
 
         response = await call_next(request)
+
+        global _table_exists
+        if _table_exists is False:
+            response.headers["x-request-id"] = request_id
+            return response
 
         try:
             from db import SessionLocal
@@ -80,9 +88,14 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     },
                 )
                 db.commit()
+                _table_exists = True
             except Exception as e:
-                logger.exception("Audit middleware failed: %s", e)
                 db.rollback()
+                if "audit_events" in str(e) and "does not exist" in str(e):
+                    _table_exists = False
+                    logger.warning("audit_events table does not exist — disabling audit middleware writes")
+                else:
+                    logger.exception("Audit middleware failed: %s", e)
             finally:
                 db.close()
         except Exception as e:
