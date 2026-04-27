@@ -463,8 +463,9 @@ async def configure_phone_routing(
                     "Content-Type": "application/json"
                 },
                 json={
-                    "serverUrl": webhook_url,
-                    "assistantId": None  # Remove direct assistant - use serverUrl routing
+                    "server": {"url": webhook_url},
+                    "assistantId": None,
+                    "squadId": None,
                 },
                 timeout=15
             )
@@ -739,12 +740,14 @@ async def fix_phone_config():
     webhook_url = f"{domain}/api/v1/call-routing/webhook/route-call"
     webhook_secret = os.getenv("VAPI_WEBHOOK_SECRET", "")
 
-    patch_payload = {
-        "serverUrl": webhook_url,
-        "assistantId": None,
-    }
+    server_config: Dict[str, Any] = {"url": webhook_url}
     if webhook_secret:
-        patch_payload["serverUrlSecret"] = webhook_secret
+        server_config["secret"] = webhook_secret
+    patch_payload: Dict[str, Any] = {
+        "server": server_config,
+        "assistantId": None,
+        "squadId": None,
+    }
 
     try:
         async with httpx.AsyncClient(timeout=15) as client:
