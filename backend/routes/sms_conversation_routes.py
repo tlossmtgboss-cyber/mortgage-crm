@@ -312,7 +312,12 @@ async def get_conversation(
 
     # Build optional cursor filter
     before_filter = ""
-    params: dict = {"pattern": like_pattern, "lim": limit, "org_id": org_id}
+    params: dict = {"pattern": like_pattern, "lim": limit}
+    if org_id is not None:
+        org_filter = "AND (organization_id = :org_id OR organization_id IS NULL)"
+        params["org_id"] = org_id
+    else:
+        org_filter = ""
     if before:
         before_filter = "AND sent_at < :before"
         params["before"] = before
@@ -332,7 +337,7 @@ async def get_conversation(
             FROM sms_delivery_log
             WHERE REPLACE(REPLACE(REPLACE(to_phone, '+', ''), '-', ''), ' ', '')
                   LIKE :pattern
-              AND (organization_id = :org_id OR organization_id IS NULL)
+              {org_filter}
             {before_filter}
             ORDER BY sent_at DESC
             LIMIT :lim
@@ -382,7 +387,7 @@ async def get_conversation(
             FROM sms_panel_messages
             WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '')
                   LIKE :pattern
-              AND (organization_id = :org_id OR organization_id IS NULL)
+              {org_filter}
             {before_filter_panel}
             ORDER BY created_at DESC
             LIMIT :lim
