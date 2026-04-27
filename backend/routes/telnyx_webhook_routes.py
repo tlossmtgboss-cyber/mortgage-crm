@@ -559,52 +559,88 @@ async def handle_call_hangup(event: TelnyxCallEvent, db: Session):
 async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
     """Handle SMS delivery status update.
 
-    Updates delivery status in both:
+    Updates delivery status in:
+    - sms_delivery_log (chokepoint tracking table)
+    - sms_panel_messages (two-way SMS Archive panel)
     - sms_messages (general SMS log)
     - bulk_sms_sends (bulk campaign message tracking)
 
-    When a bulk campaign message is delivered/failed, also increments the
-    campaign-level delivered_count or failed_count counter.
-
-    Note: sms_messages and bulk_sms_sends are matched by provider_message_id /
-    telnyx_message_id which are globally unique, so cross-tenant contamination
-    is not possible. Tenant context is resolved for logging only.
+    Also pushes real-time status to WebSocket clients and increments
+    campaign-level counters for terminal statuses.
     """
     message_id = event.message_id
     status = event.status
     is_terminal = status in ("delivered", "sent", "failed", "sending_failed", "delivery_failed")
 
-    # Resolve tenant context from sms_messages for structured logging
+    # Resolve tenant context from delivery_log or sms_messages for logging
     _sms_status_org_id = None
     try:
         _org_row = db.execute(sa_text("""
-            SELECT organization_id FROM sms_messages
-            WHERE provider_message_id = :message_id
+            SELECT organization_id FROM sms_delivery_log
+            WHERE telnyx_message_id = :message_id
             LIMIT 1
         """), {"message_id": message_id}).fetchone()
+        if not _org_row:
+            _org_row = db.execute(sa_text("""
+                SELECT organization_id FROM sms_messages
+                WHERE provider_message_id = :message_id
+                LIMIT 1
+            """), {"message_id": message_id}).fetchone()
         if _org_row:
             _sms_status_org_id = _org_row[0]
     except Exception:
-        pass  # Best-effort
+        pass
 
-    if _sms_status_org_id:
-        logger.info(
-            "SMS status update: message_id=%s, status=%s, org_id=%s",
-            message_id, status, _sms_status_org_id,
-        )
-    else:
-        logger.info(
-            "SMS status update: message_id=%s, status=%s (org unresolved)",
-            message_id, status,
-        )
+    logger.info(
+        "SMS status update: message_id=%s, status=%s, org_id=%s",
+        message_id, status, _sms_status_org_id or "unresolved",
+    )
 
-    # Normalize Telnyx status values to our internal statuses
-    # Telnyx sends: queued, sending, sent, delivered, sending_failed, delivery_failed, etc.
     normalized_status = status
     if status in ("sending_failed", "delivery_failed", "delivery_unconfirmed"):
         normalized_status = "failed"
 
-    # 1. Update sms_messages table (general SMS log)
+    # 1. Update sms_delivery_log + sms_panel_messages (SMS Archive)
+    try:
+        from integrations.sms_delivery_tracker import update_delivery_status
+        delivered_at = None
+        if normalized_status == "delivered":
+            from datetime import datetime as _dt, timezone as _tz
+            delivered_at = _dt.now(_tz.utc)
+
+        error_code = None
+        carrier_name = None
+        to_field = event.payload.get("to", [])
+        if isinstance(to_field, list) and to_field:
+            first_to = to_field[0] if isinstance(to_field[0], dict) else {}
+            error_code = first_to.get("carrier", {}).get("error_code")
+            carrier_name = first_to.get("carrier", {}).get("name")
+
+        update_delivery_status(
+            db, message_id, normalized_status,
+            error_code=str(error_code) if error_code else None,
+            carrier_name=carrier_name,
+            delivered_at=delivered_at,
+        )
+    except Exception as e:
+        logger.debug(f"sms_delivery_log/panel update skipped: {e}")
+
+    # 2. Push status to WebSocket clients
+    if is_terminal:
+        try:
+            _phone_row = db.execute(sa_text(
+                "SELECT to_phone FROM sms_delivery_log WHERE telnyx_message_id = :mid"
+            ), {"mid": message_id}).fetchone()
+            if _phone_row:
+                from routes.sms_conversation_routes import notify_status_update
+                await notify_status_update(
+                    _phone_row[0], message_id, normalized_status,
+                    org_id=_sms_status_org_id,
+                )
+        except Exception:
+            pass
+
+    # 3. Update sms_messages table (general SMS log)
     try:
         update_fields = "delivery_status = :status"
         params = {"status": normalized_status, "message_id": message_id}
@@ -620,7 +656,7 @@ async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
         db.rollback()
         logger.debug(f"sms_messages update skipped (no match): {e}")
 
-    # 2. Update bulk_sms_sends table (bulk campaign message tracking)
+    # 4. Update bulk_sms_sends table (bulk campaign message tracking)
     campaign_id = None
     try:
         update_fields = "status = :status"
@@ -642,7 +678,7 @@ async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
         db.rollback()
         logger.debug(f"bulk_sms_sends update skipped (no match or table missing): {e}")
 
-    # 3. Increment campaign-level counters for terminal statuses
+    # 5. Increment campaign-level counters for terminal statuses
     if campaign_id and is_terminal:
         try:
             if normalized_status == "delivered":
@@ -653,8 +689,6 @@ async def handle_sms_status(event: TelnyxSMSEvent, db: Session):
                 counter_col = None
 
             if counter_col:
-                # counter_col is always a hardcoded literal ("delivered_count"
-                # or "failed_count") — safe for f-string SQL construction
                 db.execute(sa_text(f"""
                     UPDATE bulk_sms_campaigns
                     SET {counter_col} = COALESCE({counter_col}, 0) + 1,

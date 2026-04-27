@@ -27,10 +27,10 @@
  */
 
 import React, {
-  useState, useRef, useEffect, useCallback, ReactNode
+  useState, useRef, useEffect, useCallback, useMemo, ReactNode
 } from 'react'
 import { toast } from 'react-toastify'
-import { getToken } from '../../utils/tokenStore';
+import { getToken, getUserData } from '../../utils/tokenStore';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -530,6 +530,19 @@ export default function SMSAccordionPanel({
       : 'https://api.perenniaai.com'
   })()
 
+  // ── Resolve sender display name: prefer assignedUser if it's a real name,
+  //    otherwise fall back to current user's name from token store ──
+  const senderDisplayName = useMemo(() => {
+    if (assignedUser && !/^\d+$/.test(String(assignedUser))) return assignedUser
+    const userData = getUserData()
+    if (userData) {
+      const full = userData.full_name || `${userData.first_name || ''} ${userData.last_name || ''}`.trim()
+      if (full) return full
+      if (userData.email) return userData.email
+    }
+    return 'You'
+  }, [assignedUser])
+
   // ── Auth helper: read JWT from localStorage (same pattern as rest of app) ──
   function getAuthHeaders(): Record<string, string> {
     const token = getToken()
@@ -757,7 +770,7 @@ export default function SMSAccordionPanel({
       id: optimisticId,
       direction: 'outbound',
       body: text.trim(),
-      senderName: assignedUser || 'You',
+      senderName: senderDisplayName,
       timestamp: now,
       status: 'sending',
       mediaUrls: staged.map(f => ({
@@ -817,9 +830,15 @@ export default function SMSAccordionPanel({
         throw new Error(typeof detail === 'string' ? detail : JSON.stringify(detail))
       }
 
-      // Update optimistic → delivered
+      // Update optimistic → delivered, and use server-assigned id + senderName
+      const serverMsg = await res.json().catch(() => ({}))
       setMessages(prev =>
-        prev.map(m => m.id === optimisticId ? { ...m, status: 'delivered' } : m)
+        prev.map(m => m.id === optimisticId ? {
+          ...m,
+          id: serverMsg.id || m.id,
+          status: 'delivered',
+          senderName: serverMsg.senderName || m.senderName,
+        } : m)
       )
     } catch (err: any) {
       const msg = err?.message || 'Send failed'

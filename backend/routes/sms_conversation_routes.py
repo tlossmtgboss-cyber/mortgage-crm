@@ -296,13 +296,13 @@ async def get_conversation(
             FROM sms_delivery_log
             WHERE REPLACE(REPLACE(REPLACE(to_phone, '+', ''), '-', ''), ' ', '')
                   LIKE :pattern
+              AND (organization_id = :org_id OR organization_id IS NULL)
             {before_filter}
             ORDER BY sent_at DESC
             LIMIT :lim
         """), params).fetchall()
 
         for r in rows:
-            # Look up sender name from user_id if available
             sender_name = "System"
             sender_user_id = r[5]
             if sender_user_id:
@@ -312,7 +312,8 @@ async def get_conversation(
                     ), {"uid": sender_user_id}).fetchone()
                     if user_row:
                         name = f"{user_row[0] or ''} {user_row[1] or ''}".strip()
-                        sender_name = name or "System"
+                        if name and not name.isdigit():
+                            sender_name = name
                 except Exception:
                     pass
 
