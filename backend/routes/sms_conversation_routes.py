@@ -212,23 +212,43 @@ def _ensure_tables(db: Session):
             UPDATE sms_panel_messages SET sender_name = ''
             WHERE sender_name ~ '^[0-9]+$'
         """))
-        # Ensure sms_delivery_log has organization_id column (older tables may lack it)
+        db.commit()
+        # Ensure sms_delivery_log exists (table may be missing in production)
         try:
             db.execute(text("""
-                ALTER TABLE sms_delivery_log ADD COLUMN IF NOT EXISTS organization_id INTEGER
+                CREATE TABLE IF NOT EXISTS sms_delivery_log (
+                    id SERIAL PRIMARY KEY,
+                    telnyx_message_id VARCHAR(100) UNIQUE NOT NULL,
+                    to_phone VARCHAR(20) NOT NULL,
+                    from_phone VARCHAR(20),
+                    message_body TEXT,
+                    direction VARCHAR(20) DEFAULT 'outbound',
+                    status VARCHAR(50) DEFAULT 'queued',
+                    segments INTEGER DEFAULT 1,
+                    consent_record_id INTEGER,
+                    consent_verified_at TIMESTAMPTZ,
+                    consent_method VARCHAR(50),
+                    organization_id INTEGER,
+                    user_id INTEGER,
+                    lead_id INTEGER,
+                    queue_id INTEGER,
+                    error_code VARCHAR(50),
+                    carrier_name VARCHAR(100),
+                    sent_at TIMESTAMPTZ,
+                    delivered_at TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
             """))
-            db.execute(text("""
-                ALTER TABLE sms_delivery_log ADD COLUMN IF NOT EXISTS consent_record_id INTEGER
-            """))
-            db.execute(text("""
-                ALTER TABLE sms_delivery_log ADD COLUMN IF NOT EXISTS consent_verified_at TIMESTAMPTZ
-            """))
-            db.execute(text("""
-                ALTER TABLE sms_delivery_log ADD COLUMN IF NOT EXISTS consent_method VARCHAR(50)
-            """))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_delivery_telnyx_id ON sms_delivery_log (telnyx_message_id)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_delivery_to_phone ON sms_delivery_log (to_phone)"))
+            db.execute(text("CREATE INDEX IF NOT EXISTS ix_sms_delivery_org ON sms_delivery_log (organization_id)"))
+            db.commit()
         except Exception:
-            pass
-        db.commit()
+            try:
+                db.rollback()
+            except Exception:
+                pass
     except Exception as e:
         db.rollback()
         logger.warning(f"Table creation skipped (may already exist): {e}")
@@ -345,6 +365,10 @@ async def get_conversation(
             })
     except Exception as e:
         logger.warning(f"sms_delivery_log query failed (messages may be incomplete): {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     # 2. Messages from sms_panel_messages (two-way table, tenant-isolated)
     before_filter_panel = ""
@@ -405,6 +429,10 @@ async def get_conversation(
             })
     except Exception as e:
         logger.warning(f"sms_panel_messages query failed (messages may be incomplete): {e}")
+        try:
+            db.rollback()
+        except Exception:
+            pass
 
     # Deduplicate: panel messages share telnyx_message_id with delivery_log.
     # Panel rows have richer metadata (sender name, role, media), so when a
@@ -724,82 +752,6 @@ async def notify_status_update(
     except Exception as e:
         logger.debug(f"WebSocket status broadcast failed: {e}")
 
-
-@router.get("/diag/query-test/{phone}")
-async def diag_query_test(phone: str, request: Request, db: Session = Depends(get_db)):
-    """Diagnostic: test the exact GET query path and return evidence. TEMPORARY — remove after debugging."""
-    token = request.query_params.get("t", "")
-    if token != "smsdiag2026":
-        raise HTTPException(status_code=403, detail="Requires valid token")
-
-    import traceback
-    results = {"phone_input": phone}
-
-    normalized = _normalize_phone(phone)
-    like_pattern = f"%{normalized[-10:]}"
-    results["normalized"] = normalized
-    results["like_pattern"] = like_pattern
-
-    # Check table existence and columns
-    try:
-        cols = db.execute(text("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_name = 'sms_panel_messages' ORDER BY ordinal_position
-        """)).fetchall()
-        results["panel_columns"] = [c[0] for c in cols] if cols else "TABLE NOT FOUND"
-    except Exception as e:
-        results["panel_columns_error"] = str(e)
-
-    try:
-        cols = db.execute(text("""
-            SELECT column_name FROM information_schema.columns
-            WHERE table_name = 'sms_delivery_log' ORDER BY ordinal_position
-        """)).fetchall()
-        results["delivery_columns"] = [c[0] for c in cols] if cols else "TABLE NOT FOUND"
-    except Exception as e:
-        results["delivery_columns_error"] = str(e)
-
-    # Count all rows
-    try:
-        row = db.execute(text("SELECT COUNT(*) FROM sms_panel_messages")).fetchone()
-        results["panel_total_rows"] = row[0] if row else 0
-    except Exception as e:
-        results["panel_count_error"] = str(e)
-
-    # Query matching this phone (no org filter)
-    try:
-        rows = db.execute(text("""
-            SELECT id, phone, organization_id, direction, body, sender_name, status, created_at
-            FROM sms_panel_messages
-            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-            ORDER BY created_at DESC LIMIT 5
-        """), {"pattern": like_pattern}).fetchall()
-        results["panel_matching_no_org"] = [
-            {"id": r[0][:20], "phone": r[1], "org": r[2], "dir": r[3],
-             "body": (r[4] or "")[:30], "sender": r[5], "status": r[6],
-             "at": r[7].isoformat() if r[7] else None}
-            for r in rows
-        ]
-    except Exception as e:
-        results["panel_query_error"] = f"{e}\n{traceback.format_exc()}"
-
-    # Query delivery log for this phone
-    try:
-        rows = db.execute(text("""
-            SELECT telnyx_message_id, to_phone, organization_id, status, sent_at
-            FROM sms_delivery_log
-            WHERE REPLACE(REPLACE(REPLACE(to_phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-            ORDER BY sent_at DESC LIMIT 5
-        """), {"pattern": like_pattern}).fetchall()
-        results["delivery_matching"] = [
-            {"msg_id": r[0][:20] if r[0] else None, "phone": r[1], "org": r[2],
-             "status": r[3], "at": r[4].isoformat() if r[4] else None}
-            for r in rows
-        ]
-    except Exception as e:
-        results["delivery_query_error"] = f"{e}\n{traceback.format_exc()}"
-
-    return results
 
 
 def update_panel_message_status(db: Session, telnyx_message_id: str, status: str):

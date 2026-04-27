@@ -49,12 +49,12 @@ def record_message_sent(
             text("""
                 INSERT INTO sms_delivery_log
                   (telnyx_message_id, to_phone, from_phone, message_body,
-                   lead_id, user_id, queue_id, status, segments,
+                   lead_id, user_id, queue_id, organization_id, status, segments,
                    consent_record_id, consent_verified_at, consent_method,
                    sent_at, created_at)
                 VALUES
                   (:msg_id, :to_phone, :from_phone, :body,
-                   :lead_id, :user_id, :queue_id, 'queued', :segments,
+                   :lead_id, :user_id, :queue_id, :organization_id, 'queued', :segments,
                    :consent_record_id, :consent_verified_at, :consent_method,
                    NOW(), NOW())
                 ON CONFLICT (telnyx_message_id) DO UPDATE SET
@@ -69,6 +69,7 @@ def record_message_sent(
                 "lead_id": lead_id,
                 "user_id": user_id,
                 "queue_id": queue_id,
+                "organization_id": organization_id,
                 "segments": segments,
                 "consent_record_id": consent_record_id,
                 "consent_verified_at": consent_verified_at,
