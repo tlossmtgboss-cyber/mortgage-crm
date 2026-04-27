@@ -169,6 +169,38 @@ async def _route_inbound_to_livekit(
 # Main Webhook Handler
 # =============================================================================
 
+_idem_table_checked = False
+
+
+def _ensure_idempotency_table(db: Session):
+    global _idem_table_checked
+    if _idem_table_checked:
+        return
+    try:
+        db.execute(sa_text("""
+            CREATE TABLE IF NOT EXISTS webhook_idempotency (
+                id SERIAL PRIMARY KEY,
+                idempotency_key VARCHAR(255) UNIQUE NOT NULL,
+                provider VARCHAR(50) NOT NULL,
+                event_type VARCHAR(100),
+                event_id VARCHAR(255),
+                status VARCHAR(20) NOT NULL DEFAULT 'processing',
+                response_code INTEGER,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """))
+        db.execute(sa_text("CREATE INDEX IF NOT EXISTS ix_webhook_idem_key ON webhook_idempotency (idempotency_key)"))
+        db.commit()
+        _idem_table_checked = True
+    except Exception as e:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.debug("Idempotency table creation skipped: %s", e)
+        _idem_table_checked = True
+
+
 @router.post("/webhook")
 async def handle_telnyx_webhook(
     request: Request,
@@ -180,6 +212,8 @@ async def handle_telnyx_webhook(
     Routes events to appropriate handlers based on event type.
     Signature verification is handled by the require_telnyx_webhook dependency.
     """
+    _ensure_idempotency_table(db)
+
     # Parse webhook payload from the already-verified raw body
     try:
         payload = json.loads(raw_body)
@@ -204,25 +238,25 @@ async def handle_telnyx_webhook(
         + (f" hangup={_raw_hangup} sip={_raw_sip}" if _raw_hangup else "")
     )
 
-    # Webhook idempotency — use WebhookIdempotencyRecord (database-backed)
-    # instead of Activity.content.contains() which was unreliable and slow
+    # Webhook idempotency — best-effort dedup via database.
+    # Wrapped in try/except so a missing table never blocks webhook processing.
     webhook_event_id = payload.get("data", {}).get("id", "")
     event_type_raw = payload.get("data", {}).get("event_type", "")
-    if webhook_event_id:
-        from database.models.webhook_idempotency import WebhookIdempotencyRecord
-        from middleware.webhook_idempotency import _build_idempotency_key, mark_processed, mark_failed
+    idem_key = None
+    try:
+        if webhook_event_id:
+            from database.models.webhook_idempotency import WebhookIdempotencyRecord
+            from middleware.webhook_idempotency import _build_idempotency_key, mark_processed, mark_failed
 
-        idem_key = _build_idempotency_key("telnyx", event_type_raw, webhook_event_id, raw_body)
-        existing = db.query(WebhookIdempotencyRecord).filter(
-            WebhookIdempotencyRecord.idempotency_key == idem_key,
-            WebhookIdempotencyRecord.status == "processed",
-        ).first()
-        if existing:
-            logger.info(f"Duplicate webhook {webhook_event_id}, skipping")
-            return {"status": "duplicate", "event_id": webhook_event_id}
+            idem_key = _build_idempotency_key("telnyx", event_type_raw, webhook_event_id, raw_body)
+            existing = db.query(WebhookIdempotencyRecord).filter(
+                WebhookIdempotencyRecord.idempotency_key == idem_key,
+                WebhookIdempotencyRecord.status == "processed",
+            ).first()
+            if existing:
+                logger.info(f"Duplicate webhook {webhook_event_id}, skipping")
+                return {"status": "duplicate", "event_id": webhook_event_id}
 
-        # Insert a 'processing' record (race-condition safe via unique constraint)
-        try:
             db.add(WebhookIdempotencyRecord(
                 idempotency_key=idem_key,
                 provider="telnyx",
@@ -231,13 +265,14 @@ async def handle_telnyx_webhook(
                 status="processing",
             ))
             db.flush()
-        except Exception:
-            # IntegrityError = another worker already inserted — treat as duplicate
-            db.rollback()
-            logger.info(f"Duplicate webhook (race) {webhook_event_id}, skipping")
-            return {"status": "duplicate", "event_id": webhook_event_id}
-    else:
+    except Exception as idem_err:
+        # Table missing or DB error — skip idempotency, process webhook anyway
         idem_key = None
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        logger.warning("Webhook idempotency check skipped: %s", idem_err)
 
     # Parse into typed event
     event = parse_telnyx_webhook(payload)

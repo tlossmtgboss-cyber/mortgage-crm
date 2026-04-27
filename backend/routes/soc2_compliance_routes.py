@@ -9,10 +9,9 @@ Prefix: /api/v1/admin/soc2
 Tags:   ["SOC 2 Compliance"]
 
 Endpoints:
-    POST /api/v1/admin/soc2/scan/run-now — Trigger on-demand compliance scan
-    GET  /api/v1/admin/soc2/readiness    — Run readiness assessment (PASS/FAIL/PARTIAL per control)
-    GET  /api/v1/admin/soc2/evidence     — Generate evidence package
-    GET  /api/v1/admin/soc2/controls     — List all security controls with status
+    GET  /api/v1/admin/soc2/readiness  — Run readiness assessment (PASS/FAIL/PARTIAL per control)
+    GET  /api/v1/admin/soc2/evidence   — Generate evidence package
+    GET  /api/v1/admin/soc2/controls   — List all security controls with status
 
 All endpoints require admin, site_admin, or platform_admin permission_role.
 
@@ -154,24 +153,24 @@ def _run_evidence_collection(
 @router.post(
     "/scan/run-now",
     summary="Trigger On-Demand Compliance Scan",
-    response_description="Compliance scan results with pass/fail/warning per check.",
+    response_description="Results of the compliance scan with pass/fail/warning per check.",
 )
 async def run_compliance_scan_now(
     current_user=Depends(_get_current_user_dep()),
     db: Session = Depends(_get_db_dep()),
 ) -> Dict[str, Any]:
     """
-    Manually trigger the SOC 2 compliance scan (same scan that runs daily).
+    Manually trigger the SOC 2 daily compliance scan on demand.
 
-    Returns check-level results so admins can verify compliance state on demand
-    without waiting for the scheduled job.
+    Runs all 10 automated checks and stores results in the
+    soc2_compliance_check table. Returns the full scan results.
 
     **Required role:** admin, site_admin, or platform_admin
     """
     _require_admin(current_user)
 
     logger.info(
-        "On-demand compliance scan triggered by %s",
+        "SOC 2 manual compliance scan triggered by %s",
         getattr(current_user, "email", "unknown"),
     )
 
@@ -179,27 +178,28 @@ async def run_compliance_scan_now(
         from soc2_compliance.scripts.compliance_scan import run_compliance_scan
 
         results = run_compliance_scan(db)
+
         passed = sum(1 for r in results if r.get("status") == "pass")
         failed = sum(1 for r in results if r.get("status") == "fail")
         warnings = sum(1 for r in results if r.get("status") == "warning")
+
+        return {
+            "triggered_by": getattr(current_user, "email", "unknown"),
+            "triggered_at": datetime.now(timezone.utc).isoformat(),
+            "summary": {
+                "total": len(results),
+                "passed": passed,
+                "failed": failed,
+                "warnings": warnings,
+            },
+            "results": results,
+        }
     except Exception as exc:
-        logger.exception("On-demand compliance scan failed")
+        logger.exception("Manual compliance scan failed")
         raise HTTPException(
             status_code=500,
             detail=f"Compliance scan failed: {str(exc)}",
         )
-
-    return {
-        "triggered_by": getattr(current_user, "email", "unknown"),
-        "triggered_at": datetime.now(timezone.utc).isoformat(),
-        "summary": {
-            "total": len(results),
-            "passed": passed,
-            "failed": failed,
-            "warnings": warnings,
-        },
-        "results": results,
-    }
 
 
 @router.get(

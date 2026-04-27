@@ -157,12 +157,6 @@ from .security import (
     Notification,
 )
 
-# Device token models (push notifications)
-from .device_token import DeviceToken
-
-# Notification preference models (push notification settings)
-from .notification_preference import NotificationPreference
-
 # Subscription & billing models
 from .subscription import (
     SubscriptionPlan,
@@ -177,9 +171,6 @@ from .microsoft import (
     MicrosoftOAuthToken,
     MicrosoftAppConfig,
 )
-
-# Unified OAuth token storage (consolidates microsoft_tokens, microsoft_oauth_tokens, integration_profiles)
-from .oauth_token import OAuthToken
 
 # Data reconciliation engine models
 from .data_reconciliation import (
@@ -287,12 +278,6 @@ from .marketing import (
     DripSequence,
 )
 
-# Drip enrollment persistence (replaces in-memory enrollment tracking)
-from .drip_enrollment import (
-    DripEnrollment,
-    DripEnrollmentEvent,
-)
-
 # LOS integration & sync models
 from .los_sync import (
     LosFieldMapping,
@@ -387,14 +372,6 @@ from .esignature import (
     AuditEventType,
 )
 
-from .pos_consent import (
-    CreditAuthorization,
-    EConsentAgreement,
-)
-
-# Engagement event tracking
-from .engagement_event import EngagementEvent
-
 # Document security & audit models
 from .document_security import (
     DocumentAccessLog,
@@ -421,9 +398,6 @@ from .decision_audit import (
     AuditRetentionConfig,
     ArchivedDecisionAuditLog,
 )
-
-# TCPA consent records
-from .tcpa_consent import TCPAConsent
 
 # TCPA Smart Docs consent & DNC models
 from .tcpa_smart_docs import (
@@ -645,163 +619,11 @@ from .compliance_log import ComplianceDecisionLog
 # SMS persistence models (campaign & scheduled job DB-backed state)
 from .sms_persistence import SMSCampaignRecord, ScheduledSMSJobRecord
 
-# SMS dead letter queue (persisted failed messages for retry/monitoring)
-from .sms_dead_letter import SMSDeadLetter
-
 # Morning Briefing (daily AI-generated briefings per user)
 from .morning_briefing import MorningBriefing
 
-# Voice Workflow (async multi-step voice command state machine)
-from .voice_workflow import VoiceWorkflow, VoiceWorkflowState, VoiceWorkflowType
-
-# Voice Call Session (Aria in-app voice conversations — transcript, analytics, compliance)
-from .voice_call_session import VoiceCallSession
-
-# Demo Data (tracking seeded demo records for cleanup)
-from .demo_data import DemoDataRecord
-
 # Security Training Records (SOC 2 CC1.4 training evidence)
 from .security_training import SecurityTrainingRecord
-
-# Email Tracking (open/click tracking for AI-composed emails)
-from .email_tracking import EmailTrackingEvent, TrackingLinkMap
-
-# SMS Conversation Threading (AI two-way SMS with intent detection)
-from .sms_conversation import (
-    SMSAIConversation,
-    SMSAIConversationMessage,
-)
-
-# Borrower Prep Sequences (pre-appointment document & reminder flows)
-from .borrower_prep import BorrowerPrepSequence, BorrowerPrepStep
-
-# Call Disposition (structured call outcome logging)
-from .call_disposition import CallDisposition
-
-# Autonomous Task Scheduler (proactive AI agent scheduling & execution)
-from .autonomous_task import AutonomousTask, TaskExecution, AgentAction
-from .action_type_confidence import ActionTypeConfidence
-
-# Agent Feedback (user ratings on AI responses)
-from .agent_feedback import AgentFeedback, AgentFeedbackSummary
-
-# Learning Examples (persistent training data for AI improvement)
-from .learning_example import LearningExample, LearningPattern, PromptOptimization
-
-# Agent Memory (conversation memory, context, facts)
-from .agent_memory import AgentConversation, AgentMemory, AgentContext
-
-# Memory Staging (Aria consolidation pipeline review queue)
-from .memory_staging import MemoryStaging
-
-# Memory Audit Events (unified memory operations audit log)
-from .memory_audit import MemoryAuditEvent
-
-# Memory Topic Config & Exclusion Rules (Aria memory configuration)
-from .memory_topic_config import MemoryTopicConfig, MemoryExclusionRule
-
-# Webhook Idempotency (duplicate callback prevention for Vapi/Telnyx/Stripe)
-from .webhook_idempotency import WebhookIdempotencyRecord
-
-# Unified Communication Threading (file-level comm timeline)
-from .file_communication import FileCommunication, CommunicationParticipant
-
-# Loan File Collaborator & User Onboarding State (Enterprise Team Onboarding)
-from .file_collaborator import LoanFileCollaborator, UserOnboardingState
-
-# Agent Context Store — Continual Learning (Domain 8)
-from .agent_context import (
-    AgentContextStore,
-    AgentContextEvent,
-    ContextChangeAudit,
-)
-
-# Vendor Management (Enterprise Challenge)
-from .vendor import Vendor, VendorOrder
-
-# Agent escalation tracking
-from .agent_escalation import (
-    AgentEscalation,
-    EscalationReason,
-    EscalationPriority,
-    EscalationStatus,
-)
-
-# Content governance (approval workflows, templates, usage tracking)
-from .content_governance import (
-    ContentTemplate,
-    ContentApproval,
-    ContentUsageLog,
-)
-
-# Document notifications
-from .doc_notification import DocNotification
-
-# Income calculation & verification
-from .income_calculation import (
-    IncomeCalculation,
-    IncomeSource,
-    IncomeVerificationTask,
-)
-
-# LO availability schedules
-from .lo_availability import (
-    LOAvailability,
-    LOAvailabilitySchedule,
-)
-
-# Live call transfers
-from .live_transfer import LiveTransfer
-
-# Push notification preferences (extends DeviceToken)
-from .device_token import PushNotificationPreference
-
-# GDPR recovery opt-outs
-from .recovery_opt_out import RecoveryOptOut
-
-# Mobile audit events (iOS AuditLogger hash-chain persistence, SOC 2)
-from .audit import MobileAuditEvent
-
-# SOC 2 audit events (API breadcrumb trail, enterprise compliance)
-from .audit_event import AuditEvent
-
-# GDPR data subject requests
-from .security import DataSubjectRequest
-
-# Agent Registry — formal governance of all AI agents (Enterprise Challenge)
-from .agent_registry import (
-    AgentRegistryEntry,
-    AgentRunLog,
-    HarnessChangeProposal,
-)
-
-# TCPA Call Authorization (Aria voice agent outbound call audit trail)
-from .call_authorization import CallAuthorization
-
-# SMS Compliance (opt-outs, consent, audit log — TCPA gate backing tables)
-from .sms_compliance import SMSOptOut, SMSConsent, SMSComplianceLog
-
-# SMS AI Auto-Response (task queue, patterns, confidence, audit)
-from .sms_task import SMSTask, SMSResponsePattern, SMSAIConfidence, SMSAIAuditLog
-
-# SMS Panel Messages (two-way SMS Archive visibility, tenant-isolated)
-from .sms_panel_message import SMSPanelMessage
-
-# SMS Delivery Log (Telnyx delivery tracking with TCPA consent proof)
-from .sms_delivery import SMSDeliveryLog
-
-# POS (Point-of-Sale) URLA 1003 application models
-from .pos import (
-    POSApplication,
-    POSApplicationSection,
-    POSApplicationPII,
-    POSApplicationAudit,
-    POSAIQAMessage,
-    POSStatus,
-    POSSectionKey,
-    POSAuditEvent,
-    AIQAConfidence,
-)
 
 
 __all__ = [
@@ -937,21 +759,6 @@ __all__ = [
     "SystemAlert",
     "SystemJobsLog",
     "Notification",
-
-    # =====================
-    # Mobile Audit (iOS hash-chain, SOC 2)
-    # =====================
-    "MobileAuditEvent",
-
-    # =====================
-    # Device Tokens (Push Notifications)
-    # =====================
-    "DeviceToken",
-
-    # =====================
-    # Notification Preferences
-    # =====================
-    "NotificationPreference",
 
     # =====================
     # Subscription & Billing
@@ -1160,12 +967,6 @@ __all__ = [
     "RecipientAuthMethod",
     "SignatureFieldType",
     "AuditEventType",
-
-    # =====================
-    # POS Consent
-    # =====================
-    "CreditAuthorization",
-    "EConsentAgreement",
 
     # =====================
     # Document Security
@@ -1460,217 +1261,12 @@ __all__ = [
     "ScheduledSMSJobRecord",
 
     # =====================
-    # SMS Dead Letter Queue
-    # =====================
-    "SMSDeadLetter",
-
-    # =====================
     # Morning Briefing
     # =====================
     "MorningBriefing",
 
     # =====================
-    # Voice Workflow (Async State Machine)
-    # =====================
-    "VoiceWorkflow",
-    "VoiceWorkflowState",
-    "VoiceWorkflowType",
-
-    # =====================
-    # Demo Data
-    # =====================
-    "DemoDataRecord",
-
-    # =====================
     # Security Training (SOC 2 CC1.4)
     # =====================
     "SecurityTrainingRecord",
-
-    # =====================
-    # Email Tracking
-    # =====================
-    "EmailTrackingEvent",
-    "TrackingLinkMap",
-
-    # =====================
-    # SMS Conversation Threading
-    # =====================
-    "SMSAIConversation",
-    "SMSAIConversationMessage",
-
-    # =====================
-    # Borrower Prep Sequences
-    # =====================
-    "BorrowerPrepSequence",
-    "BorrowerPrepStep",
-
-    # =====================
-    # Call Disposition
-    # =====================
-    "CallDisposition",
-
-    # =====================
-    # Autonomous Task Scheduler
-    # =====================
-    "AutonomousTask",
-    "TaskExecution",
-    "AgentAction",
-    "ActionTypeConfidence",
-
-    # =====================
-    # Agent Feedback
-    # =====================
-    "AgentFeedback",
-    "AgentFeedbackSummary",
-
-    # =====================
-    # Learning Examples
-    # =====================
-    "LearningExample",
-    "LearningPattern",
-    "PromptOptimization",
-
-    # =====================
-    # Agent Memory
-    # =====================
-    "AgentConversation",
-    "AgentMemory",
-    "AgentContext",
-
-    # =====================
-    # Memory Staging & Audit
-    # =====================
-    "MemoryStaging",
-    "MemoryAuditEvent",
-    "MemoryTopicConfig",
-    "MemoryExclusionRule",
-
-    # =====================
-    # Webhook Idempotency
-    # =====================
-    "WebhookIdempotencyRecord",
-
-    # =====================
-    # Unified Communication Threading
-    # =====================
-    "FileCommunication",
-    "CommunicationParticipant",
-
-    # =====================
-    # Loan File Collaborator & Onboarding
-    # =====================
-    "LoanFileCollaborator",
-    "UserOnboardingState",
-
-    # =====================
-    # Agent Context Store (Continual Learning)
-    # =====================
-    "AgentContextStore",
-    "AgentContextEvent",
-    "ContextChangeAudit",
-
-    # =====================
-    # Vendor Management (Enterprise)
-    # =====================
-    "Vendor",
-    "VendorOrder",
-
-    # =====================
-    # Agent Registry & Harness (Enterprise)
-    # =====================
-    "AgentRegistryEntry",
-    "AgentRunLog",
-    "HarnessChangeProposal",
-
-    # =====================
-    # Agent Escalation
-    # =====================
-    "AgentEscalation",
-    "EscalationReason",
-    "EscalationPriority",
-    "EscalationStatus",
-
-    # =====================
-    # Content Governance
-    # =====================
-    "ContentTemplate",
-    "ContentApproval",
-    "ContentUsageLog",
-
-    # =====================
-    # Document Notifications
-    # =====================
-    "DocNotification",
-
-    # =====================
-    # Income Calculation
-    # =====================
-    "IncomeCalculation",
-    "IncomeSource",
-    "IncomeVerificationTask",
-
-    # =====================
-    # LO Availability
-    # =====================
-    "LOAvailability",
-    "LOAvailabilitySchedule",
-
-    # =====================
-    # Live Transfers
-    # =====================
-    "LiveTransfer",
-
-    # =====================
-    # Push Notification Preferences
-    # =====================
-    "PushNotificationPreference",
-
-    # =====================
-    # GDPR
-    # =====================
-    "RecoveryOptOut",
-    "DataSubjectRequest",
-
-    # =====================
-    # TCPA Call Authorization (Aria)
-    # =====================
-    "CallAuthorization",
-
-    # =====================
-    # SMS Compliance (TCPA Gate)
-    # =====================
-    "SMSOptOut",
-    "SMSConsent",
-    "SMSComplianceLog",
-
-    # =====================
-    # SMS AI Auto-Response
-    # =====================
-    "SMSTask",
-    "SMSResponsePattern",
-    "SMSAIConfidence",
-    "SMSAIAuditLog",
-
-    # =====================
-    # SMS Panel Messages (Archive)
-    # =====================
-    "SMSPanelMessage",
-
-    # =====================
-    # SMS Delivery Log (Telnyx)
-    # =====================
-    "SMSDeliveryLog",
-
-    # =====================
-    # POS URLA 1003
-    # =====================
-    "POSApplication",
-    "POSApplicationSection",
-    "POSApplicationPII",
-    "POSApplicationAudit",
-    "POSAIQAMessage",
-    "POSStatus",
-    "POSSectionKey",
-    "POSAuditEvent",
-    "AIQAConfidence",
 ]

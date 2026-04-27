@@ -94,6 +94,20 @@ class ComplianceCheckStatus(str, Enum):
     ERROR = "error"
 
 
+class AgreementType(str, Enum):
+    BAA = "baa"          # Business Associate Agreement (HIPAA)
+    DPA = "dpa"          # Data Processing Agreement (GDPR/CCPA)
+    BAA_AND_DPA = "baa_and_dpa"  # Combined BAA + DPA
+
+
+class AgreementStatus(str, Enum):
+    PENDING = "pending"          # Sent, awaiting signature
+    SIGNED = "signed"            # Fully executed
+    EXPIRED = "expired"          # Past expiry date
+    NOT_REQUIRED = "not_required"  # Vendor does not process protected data
+    UNDER_REVIEW = "under_review"  # Being reviewed/negotiated
+
+
 class RetentionPolicy(str, Enum):
     AUDIT_LOGS = "audit_logs"          # 2 years minimum for SOC 2
     ACCESS_LOGS = "access_logs"        # 2 years

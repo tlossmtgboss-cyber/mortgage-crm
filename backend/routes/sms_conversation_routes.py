@@ -735,7 +735,7 @@ async def diag_inbound_check(db: Session = Depends(get_db)):
             SELECT COUNT(*) AS total,
                    SUM(CASE WHEN event_type = 'message.received' THEN 1 ELSE 0 END) AS inbound_count,
                    MAX(created_at) AS last_webhook
-            FROM webhook_idempotency_records
+            FROM webhook_idempotency
             WHERE provider = 'telnyx' AND created_at > NOW() - INTERVAL '1 hour'
         """)).fetchone()
         results["webhooks_last_hour"] = {

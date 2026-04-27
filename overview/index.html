@@ -2796,6 +2796,8 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
   var meetingMode = 'video';
   var availableSlots = [];
   var currentStep = 'datetime'; // datetime, form, confirmation
+  var configLoaded = false; // true once booking config fetch completes
+  var configPromise = null; // resolved when config is available
 
   // ---- Helpers ----
   function getStartOfWeek(d) {
@@ -2922,42 +2924,57 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
     timeSelect.disabled = true;
     document.getElementById('bkTimeSub').textContent = 'Loading available times...';
 
-    var url = API + '/public/book/' + SLUG + '/slots?start_date=' + fmtDateParam(d) + '&end_date=' + fmtDateParam(d);
-    if (appointmentTypeId) url += '&appointment_type_id=' + appointmentTypeId;
-    url += '&duration_minutes=' + durationMinutes;
-
-    fetch(url)
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var slots = data.slots || data.available_slots || data;
-        if (!Array.isArray(slots)) slots = [];
-
-        availableSlots = slots;
-        timeSelect.innerHTML = '';
-
-        if (slots.length === 0) {
-          timeSelect.innerHTML = '<option value="">No times available</option>';
-          timeSelect.disabled = true;
-          document.getElementById('bkTimeSub').textContent = 'No availability on this date';
-          return;
-        }
-
-        timeSelect.innerHTML = '<option value="">-- Select a time --</option>';
-        slots.forEach(function(slot) {
-          var startTime = slot.start_time || slot.start;
-          var opt = document.createElement('option');
-          opt.value = startTime;
-          opt.textContent = fmtTime(startTime);
-          timeSelect.appendChild(opt);
-        });
-        timeSelect.disabled = false;
-        document.getElementById('bkTimeSub').textContent = slots.length + ' time' + (slots.length !== 1 ? 's' : '') + ' available';
-      })
-      .catch(function() {
+    // Wait for booking config to load before fetching slots
+    // (appointmentTypeId is required by the API)
+    var ready = configLoaded ? Promise.resolve() : (configPromise || Promise.resolve());
+    ready.then(function() {
+      if (!appointmentTypeId) {
         timeSelect.innerHTML = '<option value="">Could not load times</option>';
         timeSelect.disabled = true;
-        document.getElementById('bkTimeSub').textContent = 'Error loading times';
-      });
+        document.getElementById('bkTimeSub').textContent = 'Booking configuration unavailable';
+        return;
+      }
+
+      var url = API + '/public/book/' + SLUG + '/slots?start_date=' + fmtDateParam(d) + '&end_date=' + fmtDateParam(d);
+      url += '&appointment_type_id=' + appointmentTypeId;
+      url += '&duration_minutes=' + durationMinutes;
+
+      fetch(url)
+        .then(function(r) {
+          if (!r.ok) throw new Error('API returned ' + r.status);
+          return r.json();
+        })
+        .then(function(data) {
+          var slots = data.slots || data.available_slots || data;
+          if (!Array.isArray(slots)) slots = [];
+
+          availableSlots = slots;
+          timeSelect.innerHTML = '';
+
+          if (slots.length === 0) {
+            timeSelect.innerHTML = '<option value="">No times available</option>';
+            timeSelect.disabled = true;
+            document.getElementById('bkTimeSub').textContent = 'No availability on this date';
+            return;
+          }
+
+          timeSelect.innerHTML = '<option value="">-- Select a time --</option>';
+          slots.forEach(function(slot) {
+            var startTime = slot.start_time || slot.start;
+            var opt = document.createElement('option');
+            opt.value = startTime;
+            opt.textContent = fmtTime(startTime);
+            timeSelect.appendChild(opt);
+          });
+          timeSelect.disabled = false;
+          document.getElementById('bkTimeSub').textContent = slots.length + ' time' + (slots.length !== 1 ? 's' : '') + ' available';
+        })
+        .catch(function() {
+          timeSelect.innerHTML = '<option value="">Could not load times</option>';
+          timeSelect.disabled = true;
+          document.getElementById('bkTimeSub').textContent = 'Error loading times';
+        });
+    });
   }
 
   // ---- Time selection ----
@@ -3104,17 +3121,25 @@ document.querySelectorAll('a[href^="#"]').forEach(link => {
     renderWeek();
     updateContinueBtn();
 
-    // Fetch booking config
-    fetch(API + '/public/book/' + SLUG)
-      .then(function(r) { return r.json(); })
+    // Fetch booking config — store promise so selectDate() can await it
+    configLoaded = false;
+    configPromise = fetch(API + '/public/book/' + SLUG)
+      .then(function(r) {
+        if (!r.ok) throw new Error('Config fetch failed: ' + r.status);
+        return r.json();
+      })
       .then(function(d) {
         var types = d.appointment_types || (d.booking_page && d.booking_page.appointment_types) || [];
         if (types.length > 0) {
           appointmentTypeId = types[0].id;
           if (types[0].default_duration_minutes) durationMinutes = types[0].default_duration_minutes;
         }
+        configLoaded = true;
       })
-      .catch(function() {});
+      .catch(function(err) {
+        console.error('Booking config error:', err);
+        configLoaded = true; // unblock selectDate so it can show the error
+      });
   };
 
   window.closeBooking = function() {
