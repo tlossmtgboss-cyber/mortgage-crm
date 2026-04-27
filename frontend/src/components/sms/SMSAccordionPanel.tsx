@@ -836,7 +836,7 @@ export default function SMSAccordionPanel({
         prev.map(m => m.id === optimisticId ? {
           ...m,
           id: serverMsg.id || m.id,
-          status: 'delivered',
+          status: serverMsg.status || 'sent',
           senderName: serverMsg.senderName || m.senderName,
         } : m)
       )

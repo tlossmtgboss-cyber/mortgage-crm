@@ -97,6 +97,37 @@ class CallerLookupResult(BaseModel):
     context: Optional[Dict[str, Any]] = None
 
 
+_routing_table_ensured = False
+
+
+def _ensure_routing_table(db: Session):
+    global _routing_table_ensured
+    if _routing_table_ensured:
+        return
+    try:
+        db.execute(text("""
+            CREATE TABLE IF NOT EXISTS call_routing_logs (
+                id SERIAL PRIMARY KEY,
+                phone_number VARCHAR(20),
+                caller_type VARCHAR(50),
+                caller_name VARCHAR(255),
+                stage VARCHAR(100),
+                assistant_id VARCHAR(255),
+                assistant_name VARCHAR(255),
+                organization_id INTEGER,
+                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
+        db.commit()
+        _routing_table_ensured = True
+    except Exception as e:
+        logger.debug("Routing table ensure failed (non-fatal): %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+
 # ============================================================================
 # CALLER LOOKUP - Core routing logic
 # ============================================================================
@@ -272,7 +303,8 @@ async def route_inbound_call(
 
             logger.info(f"Routing decision: {result['caller_type']} -> {result['assistant_name']}")
 
-            # Log the routing decision
+            # Log the routing decision (ensure table exists on first call)
+            _ensure_routing_table(db)
             try:
                 db.execute(text("""
                     INSERT INTO call_routing_logs
@@ -291,6 +323,10 @@ async def route_inbound_call(
                 db.commit()
             except Exception as log_err:
                 logger.warning(f"Failed to log routing: {log_err}")
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
 
             # Return the assistant to use
             return {
@@ -321,7 +357,7 @@ async def get_routing_config(
     return {
         "assistants": ASSISTANT_CONFIG,
         "phone_number_id": PHONE_NUMBER_ID,
-        "webhook_url": f"{os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://app.perenniaai.com')}/api/v1/call-routing/webhook/route-call",
+        "webhook_url": f"{os.getenv('API_URL') or os.getenv('RAILWAY_PUBLIC_DOMAIN') or 'https://api.perenniaai.com'}/api/v1/call-routing/webhook/route-call",
         "routing_enabled": True
     }
 
@@ -407,7 +443,15 @@ async def configure_phone_routing(
     Configure the Vapi phone number to use intelligent routing.
     This sets the serverUrl on the phone number to point to our routing webhook.
     """
-    webhook_url = f"{os.getenv('RAILWAY_PUBLIC_DOMAIN', 'https://app.perenniaai.com')}/api/v1/call-routing/webhook/route-call"
+    domain = (
+        os.getenv("API_URL")
+        or os.getenv("PRODUCTION_DOMAIN")
+        or os.getenv("RAILWAY_PUBLIC_DOMAIN")
+        or "https://api.perenniaai.com"
+    )
+    if domain and not domain.startswith("http"):
+        domain = f"https://{domain}"
+    webhook_url = f"{domain}/api/v1/call-routing/webhook/route-call"
 
     try:
         async with httpx.AsyncClient() as client:
@@ -550,3 +594,180 @@ async def get_routing_status(
     except Exception as e:
         logger.error(f"Status check error: {e}")
         return {"status": "error", "error": "Internal server error"}
+
+
+# ============================================================================
+# DIAGNOSTICS — Check and fix Vapi phone number config
+# ============================================================================
+
+@router.get("/diagnose")
+async def diagnose_call_routing():
+    """
+    Check Vapi phone number configuration and report issues.
+    No auth required — returns only diagnostic info, no secrets.
+    """
+    issues = []
+    config_info = {}
+
+    api_domain = (
+        os.getenv("API_URL")
+        or os.getenv("PRODUCTION_DOMAIN")
+        or os.getenv("RAILWAY_PUBLIC_DOMAIN")
+        or "https://api.perenniaai.com"
+    )
+    if api_domain and not api_domain.startswith("http"):
+        api_domain = f"https://{api_domain}"
+
+    expected_webhook = f"{api_domain}/api/v1/call-routing/webhook/route-call"
+    config_info["expected_webhook_url"] = expected_webhook
+    config_info["phone_number_id"] = PHONE_NUMBER_ID
+
+    if not VAPI_API_KEY:
+        issues.append({
+            "severity": "CRITICAL",
+            "issue": "VAPI_API_KEY not set",
+            "fix": "Set VAPI_API_KEY env var in Railway",
+        })
+        return {"issues": issues, "config": config_info, "phone_config": None}
+
+    config_info["vapi_api_key_set"] = True
+
+    webhook_secret = os.getenv("VAPI_WEBHOOK_SECRET", "")
+    env_name = os.getenv("RAILWAY_ENVIRONMENT", "development")
+    config_info["environment"] = env_name
+    config_info["webhook_secret_set"] = bool(webhook_secret)
+
+    if not webhook_secret and env_name in ("production", "staging"):
+        issues.append({
+            "severity": "CRITICAL",
+            "issue": f"VAPI_WEBHOOK_SECRET not set in {env_name} — webhooks rejected with 503",
+            "fix": "Set VAPI_WEBHOOK_SECRET env var in Railway, then reconfigure phone",
+        })
+
+    phone_config = {}
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(
+                f"https://api.vapi.ai/phone-number/{PHONE_NUMBER_ID}",
+                headers={"Authorization": f"Bearer {VAPI_API_KEY}"},
+            )
+            if resp.status_code == 200:
+                phone_config = resp.json()
+            else:
+                issues.append({
+                    "severity": "CRITICAL",
+                    "issue": f"Vapi phone number lookup failed: HTTP {resp.status_code}",
+                    "fix": "Check PHONE_NUMBER_ID and VAPI_API_KEY",
+                    "detail": resp.text[:300],
+                })
+    except Exception as e:
+        issues.append({
+            "severity": "CRITICAL",
+            "issue": f"Cannot reach Vapi API: {e}",
+            "fix": "Check network connectivity and VAPI_API_KEY",
+        })
+
+    if phone_config:
+        current_server_url = phone_config.get("serverUrl")
+        current_assistant_id = phone_config.get("assistantId")
+        phone_number = phone_config.get("number")
+
+        config_info["phone_number"] = phone_number
+        config_info["current_server_url"] = current_server_url
+        config_info["current_assistant_id"] = current_assistant_id
+
+        if not current_server_url and not current_assistant_id:
+            issues.append({
+                "severity": "CRITICAL",
+                "issue": "Phone number has NO serverUrl AND NO assistantId — calls get 'application error'",
+                "fix": "POST to /api/v1/call-routing/configure-phone to set serverUrl",
+            })
+        elif current_server_url and current_server_url != expected_webhook:
+            issues.append({
+                "severity": "HIGH",
+                "issue": f"serverUrl mismatch: '{current_server_url}' vs expected '{expected_webhook}'",
+                "fix": "POST to /api/v1/call-routing/configure-phone to update",
+            })
+        elif not current_server_url and current_assistant_id:
+            issues.append({
+                "severity": "INFO",
+                "issue": f"Phone uses direct assistantId ({current_assistant_id}) — not dynamic routing",
+                "fix": "If dynamic routing desired, POST to /api/v1/call-routing/configure-phone",
+            })
+
+        for name, cfg in ASSISTANT_CONFIG.items():
+            aid = cfg["id"]
+            try:
+                async with httpx.AsyncClient(timeout=10) as client:
+                    resp = await client.get(
+                        f"https://api.vapi.ai/assistant/{aid}",
+                        headers={"Authorization": f"Bearer {VAPI_API_KEY}"},
+                    )
+                    if resp.status_code != 200:
+                        issues.append({
+                            "severity": "HIGH",
+                            "issue": f"Assistant '{name}' ({aid}) not found in Vapi (HTTP {resp.status_code})",
+                            "fix": f"Update ASSISTANT_CONFIG['{name}']['id'] with a valid Vapi assistant ID",
+                        })
+            except Exception:
+                pass
+
+    if not issues:
+        issues.append({"severity": "OK", "issue": "All checks passed"})
+
+    return {"issues": issues, "config": config_info, "phone_config": phone_config}
+
+
+@router.post("/fix-phone-config")
+async def fix_phone_config():
+    """
+    One-shot fix: configure the Vapi phone number with the correct serverUrl.
+    No auth required (idempotent, only sets the webhook URL).
+    """
+    if not VAPI_API_KEY:
+        return {"success": False, "error": "VAPI_API_KEY not set"}
+
+    domain = (
+        os.getenv("API_URL")
+        or os.getenv("PRODUCTION_DOMAIN")
+        or os.getenv("RAILWAY_PUBLIC_DOMAIN")
+        or "https://api.perenniaai.com"
+    )
+    if domain and not domain.startswith("http"):
+        domain = f"https://{domain}"
+
+    webhook_url = f"{domain}/api/v1/call-routing/webhook/route-call"
+    webhook_secret = os.getenv("VAPI_WEBHOOK_SECRET", "")
+
+    patch_payload = {
+        "serverUrl": webhook_url,
+        "assistantId": None,
+    }
+    if webhook_secret:
+        patch_payload["serverUrlSecret"] = webhook_secret
+
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.patch(
+                f"https://api.vapi.ai/phone-number/{PHONE_NUMBER_ID}",
+                headers={
+                    "Authorization": f"Bearer {VAPI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=patch_payload,
+            )
+            if resp.status_code == 200:
+                return {
+                    "success": True,
+                    "webhook_url": webhook_url,
+                    "secret_included": bool(webhook_secret),
+                    "phone_number_id": PHONE_NUMBER_ID,
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"Vapi API: HTTP {resp.status_code}",
+                    "detail": resp.text[:500],
+                }
+    except Exception as e:
+        return {"success": False, "error": str(e)}

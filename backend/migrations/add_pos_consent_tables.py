@@ -94,14 +94,28 @@ def run_migration():
         conn.commit()
         logger.info("Created econsent_agreements table")
 
-        # Add voice_complete columns to borrower_applications
-        for col_def in [
+        # Add all missing columns to borrower_applications
+        missing_cols = [
             ("voice_completed_at", "TIMESTAMP WITH TIME ZONE"),
             ("voice_loan_id", "VARCHAR(255)"),
             ("consent_sms_sent_at", "TIMESTAMP WITH TIME ZONE"),
             ("consent_reminder_count", "INTEGER DEFAULT 0"),
-        ]:
-            col_name, col_type = col_def
+            ("ssn_encrypted", "TEXT"),
+            ("co_ssn_encrypted", "TEXT"),
+            ("prequalification_data", "JSON"),
+            ("device_info", "JSON"),
+            ("applicant_ethnicity", "TEXT"),
+            ("applicant_race", "TEXT"),
+            ("applicant_sex", "TEXT"),
+            ("applicant_age", "INTEGER"),
+            ("co_applicant_ethnicity", "TEXT"),
+            ("co_applicant_race", "TEXT"),
+            ("co_applicant_sex", "TEXT"),
+            ("co_applicant_age", "INTEGER"),
+            ("gmi_collection_method", "VARCHAR"),
+            ("gmi_collected_at", "TIMESTAMP WITH TIME ZONE"),
+        ]
+        for col_name, col_type in missing_cols:
             try:
                 conn.execute(text(
                     f"ALTER TABLE borrower_applications ADD COLUMN IF NOT EXISTS "
@@ -110,7 +124,7 @@ def run_migration():
             except Exception:
                 pass
         conn.commit()
-        logger.info("Added voice-complete columns to borrower_applications")
+        logger.info("Added missing columns to borrower_applications")
 
     logger.info("POS consent migration complete")
 
