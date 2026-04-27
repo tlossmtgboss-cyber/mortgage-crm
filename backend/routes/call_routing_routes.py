@@ -385,8 +385,8 @@ async def route_inbound_call(
                 "assistant": {
                     "name": f"Aria - {result['assistant_name']}",
                     "model": {
-                        "provider": "anthropic",
-                        "model": "claude-sonnet-4-5-20250514",
+                        "provider": "openai",
+                        "model": "gpt-4o",
                         "messages": [{"role": "system", "content": system_prompt}],
                     },
                     "voice": {"provider": "deepgram", "voiceId": "asteria"},
@@ -405,8 +405,8 @@ async def route_inbound_call(
             "assistant": {
                 "name": "Aria - Fallback",
                 "model": {
-                    "provider": "anthropic",
-                    "model": "claude-sonnet-4-5-20250514",
+                    "provider": "openai",
+                    "model": "gpt-4o",
                     "messages": [{"role": "system", "content": (
                         "You are Aria, an AI assistant for The Tim Loss Team. "
                         "Greet the caller, offer to take a message or schedule a callback. "
