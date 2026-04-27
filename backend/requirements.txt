@@ -18,7 +18,7 @@ bcrypt>=4.0.0,<5.0.0  # bcrypt 5.0.0 has compatibility issues with passlib 1.7.4
 cryptography>=41.0.0
 
 # Data Validation
-pydantic[email]>=2.5.0
+pydantic[email]>=2.13.3
 pydantic-settings>=2.1.0
 email-validator>=2.0.0
 
