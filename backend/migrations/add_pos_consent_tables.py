@@ -24,15 +24,28 @@ def run_migration():
     from db import engine
 
     with engine.connect() as conn:
-        # Add PENDING_CONSENT to the applicationstatus enum
+        # Add PENDING_CONSENT to the applicationstatus enum (both cases)
+        for val in ['pending_consent', 'PENDING_CONSENT']:
+            try:
+                conn.execute(text(
+                    f"ALTER TYPE applicationstatus ADD VALUE IF NOT EXISTS '{val}'"
+                ))
+                conn.commit()
+                logger.info("Added '%s' to applicationstatus enum", val)
+            except Exception as e:
+                logger.info("applicationstatus enum update skipped for '%s': %s", val, e)
+                conn.rollback()
+
+        # Convert borrower_applications.status from enum to VARCHAR (same pattern as leads/loans)
         try:
-            conn.execute(text(
-                "ALTER TYPE applicationstatus ADD VALUE IF NOT EXISTS 'pending_consent'"
-            ))
+            conn.execute(text("""
+                ALTER TABLE borrower_applications
+                ALTER COLUMN status TYPE VARCHAR(50) USING status::text
+            """))
             conn.commit()
-            logger.info("Added 'pending_consent' to applicationstatus enum")
+            logger.info("Converted borrower_applications.status to VARCHAR")
         except Exception as e:
-            logger.info("applicationstatus enum update skipped: %s", e)
+            logger.info("borrower_applications.status conversion skipped: %s", e)
             conn.rollback()
 
         # Create credit_authorizations table
