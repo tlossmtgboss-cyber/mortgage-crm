@@ -918,26 +918,104 @@ async def diag_sms_trace(phone: str, t: str = "", db: Session = Depends(get_db))
         except Exception:
             pass
 
-    # 8. Simulate the authenticated GET path: set tenant, run BOTH queries, report
+    # 8. Simulate the FULL authenticated GET path with a real user
     try:
-        db.rollback()  # fresh transaction
-        db.execute(text("SET LOCAL app.current_tenant = '1'"))
+        db.rollback()
+        # Fetch a real user (the production user)
+        user_row = db.execute(text(
+            "SELECT id, organization_id, email FROM users WHERE email = 'tloss@cmghomeloans.com' LIMIT 1"
+        )).fetchone()
+        if not user_row:
+            user_row = db.execute(text("SELECT id, organization_id, email FROM users LIMIT 1")).fetchone()
+
+        class _FakeUser:
+            pass
+
+        fake_user = _FakeUser()
+        fake_user.id = user_row[0] if user_row else 1
+        fake_user.organization_id = user_row[1] if user_row else 1
+        fake_user.email = user_row[2] if user_row else "test"
+        fake_user.first_name = "Test"
+        fake_user.last_name = "User"
+
+        evidence["sim_user"] = {"id": fake_user.id, "org_id": fake_user.organization_id}
+
+        # Now run the EXACT same code path as get_conversation
+        sim_org_id = _get_org_id(fake_user)
+        sim_rls_org = sim_org_id or 1
+        sim_normalized = _normalize_phone(phone)
+        sim_like = f"%{sim_normalized[-10:]}"
+
+        evidence["sim_org_id"] = sim_org_id
+        evidence["sim_normalized"] = sim_normalized
+        evidence["sim_pattern"] = sim_like
+
+        # contact name lookup (the one that could abort the transaction)
+        try:
+            sim_contact = _resolve_contact_name(db, sim_normalized, sim_org_id)
+            evidence["sim_contact_name"] = sim_contact or "(empty)"
+        except Exception as cn_err:
+            evidence["sim_contact_name_error"] = str(cn_err)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
+        # Build same params
+        sim_params = {"pattern": sim_like, "lim": 100}
+        if sim_org_id is not None:
+            sim_org_filter = "AND (organization_id = :org_id OR organization_id IS NULL)"
+            sim_params["org_id"] = sim_org_id
+        else:
+            sim_org_filter = ""
+
         # delivery_log query
-        dl_rows = db.execute(text("""
-            SELECT COUNT(*) FROM sms_delivery_log
-            WHERE REPLACE(REPLACE(REPLACE(to_phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-              AND (organization_id = 1 OR organization_id IS NULL)
-        """), {"pattern": pattern}).fetchone()
-        evidence["simulated_delivery_count"] = dl_rows[0] if dl_rows else 0
+        try:
+            db.execute(text("SET LOCAL app.current_tenant = :o"), {"o": str(sim_rls_org)})
+            dl = db.execute(text(f"""
+                SELECT telnyx_message_id, 'outbound', message_body, status, sent_at, user_id
+                FROM sms_delivery_log
+                WHERE REPLACE(REPLACE(REPLACE(to_phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+                  {sim_org_filter}
+                ORDER BY sent_at DESC LIMIT :lim
+            """), sim_params).fetchall()
+            evidence["sim_delivery_rows"] = len(dl)
+        except Exception as dle:
+            evidence["sim_delivery_error"] = str(dle)
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
         # panel query
-        p_rows = db.execute(text("""
-            SELECT COUNT(*) FROM sms_panel_messages
-            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-              AND (organization_id = 1 OR organization_id IS NULL)
-        """), {"pattern": pattern}).fetchone()
-        evidence["simulated_panel_count"] = p_rows[0] if p_rows else 0
+        try:
+            db.execute(text("SET LOCAL app.current_tenant = :o"), {"o": str(sim_rls_org)})
+            pm = db.execute(text(f"""
+                SELECT id, direction, body, sender_name, sender_role, status,
+                       media_urls, created_at, telnyx_message_id, media_s3_keys
+                FROM sms_panel_messages
+                WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+                  {sim_org_filter}
+                ORDER BY created_at DESC LIMIT :lim
+            """), sim_params).fetchall()
+            evidence["sim_panel_rows"] = len(pm)
+            evidence["sim_panel_inbound"] = sum(1 for r in pm if r[1] == "inbound")
+            evidence["sim_panel_outbound"] = sum(1 for r in pm if r[1] == "outbound")
+            # Show first 3 panel rows for inspection
+            evidence["sim_panel_sample"] = [
+                {"id": str(r[0])[:20], "dir": r[1], "body": (r[2] or "")[:30],
+                 "status": r[5], "at": r[7].isoformat() if r[7] else None}
+                for r in pm[:3]
+            ]
+        except Exception as pme:
+            evidence["sim_panel_error"] = f"{pme}\n{_tb.format_exc()}"
+            try:
+                db.rollback()
+            except Exception:
+                pass
+
     except Exception as e:
-        evidence["simulated_error"] = f"{e}\n{_tb.format_exc()}"
+        evidence["sim_setup_error"] = f"{e}\n{_tb.format_exc()}"
         try:
             db.rollback()
         except Exception:
