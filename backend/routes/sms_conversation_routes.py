@@ -918,13 +918,35 @@ async def diag_sms_trace(phone: str, t: str = "", db: Session = Depends(get_db))
         except Exception:
             pass
 
-    # 8. Simulate the FULL authenticated GET path with a real user
+    # 8. Check ALL user accounts to find org_id mismatch
     try:
         db.rollback()
-        # Fetch a real user (the production user)
+        all_users = db.execute(text(
+            "SELECT id, organization_id, email FROM users WHERE email IN ('tloss@cmghomeloans.com', 'tlossmtgboss@gmail.com') ORDER BY id"
+        )).fetchall()
+        evidence["all_user_accounts"] = [
+            {"id": r[0], "org_id": r[1], "email": r[2]} for r in all_users
+        ]
+
+        # Also check what org_ids exist on outbound panel messages
+        org_check = db.execute(text("""
+            SELECT DISTINCT organization_id, direction, COUNT(*) as cnt
+            FROM sms_panel_messages
+            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+            GROUP BY organization_id, direction ORDER BY cnt DESC
+        """), {"pattern": pattern}).fetchall()
+        evidence["panel_org_breakdown"] = [
+            {"org_id": r[0], "dir": r[1], "count": r[2]} for r in org_check
+        ]
+
+        # Fetch the ACTUAL logged-in user (gmail account)
         user_row = db.execute(text(
-            "SELECT id, organization_id, email FROM users WHERE email = 'tloss@cmghomeloans.com' LIMIT 1"
+            "SELECT id, organization_id, email FROM users WHERE email = 'tlossmtgboss@gmail.com' LIMIT 1"
         )).fetchone()
+        if not user_row:
+            user_row = db.execute(text(
+                "SELECT id, organization_id, email FROM users WHERE email = 'tloss@cmghomeloans.com' LIMIT 1"
+            )).fetchone()
         if not user_row:
             user_row = db.execute(text("SELECT id, organization_id, email FROM users LIMIT 1")).fetchone()
 
