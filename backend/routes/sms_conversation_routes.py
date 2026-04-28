@@ -281,8 +281,12 @@ def _resolve_contact_name(db: Session, phone: str, org_id: Optional[int]) -> str
             name = f"{row[0] or ''} {row[1] or ''}".strip()
             if name:
                 return name
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("_resolve_contact_name failed: %s", e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
     return ""
 
 
@@ -305,14 +309,7 @@ async def get_conversation(
     _check_tables(db)
     org_id = _get_org_id(current_user)
 
-    # Re-set RLS tenant context — auth flow commits (clearing SET LOCAL from get_db)
-    _rls_org = org_id
-    if not _rls_org:
-        _rls_org = 1  # fallback to default org for users without org_id
-    try:
-        db.execute(text("SET LOCAL app.current_tenant = :org_id"), {"org_id": str(_rls_org)})
-    except Exception:
-        pass
+    _rls_org = org_id or 1
 
     logger.info(
         "SMS GET /conversations/%s: user_id=%s org_id=%s phone_raw=%s",
@@ -341,7 +338,15 @@ async def get_conversation(
 
     messages = []
 
+    def _set_rls():
+        """(Re)set RLS tenant context for the current transaction."""
+        try:
+            db.execute(text("SET LOCAL app.current_tenant = :org_id"), {"org_id": str(_rls_org)})
+        except Exception:
+            pass
+
     # 1. Outbound from sms_delivery_log (existing Telnyx tracking table)
+    _set_rls()
     try:
         rows = db.execute(text(f"""
             SELECT
@@ -373,7 +378,11 @@ async def get_conversation(
                         if name and not name.isdigit():
                             sender_name = name
                 except Exception:
-                    pass
+                    try:
+                        db.rollback()
+                        _set_rls()
+                    except Exception:
+                        pass
 
             messages.append({
                 "id": r[0] or str(uuid.uuid4()),
@@ -389,6 +398,7 @@ async def get_conversation(
         logger.warning(f"sms_delivery_log query failed (messages may be incomplete): {e}")
         try:
             db.rollback()
+            _set_rls()
         except Exception:
             pass
 
@@ -397,6 +407,7 @@ async def get_conversation(
     if before:
         before_filter_panel = "AND created_at < :before"
 
+    _set_rls()
     try:
         rows = db.execute(text(f"""
             SELECT id, direction, body, sender_name, sender_role, status,
