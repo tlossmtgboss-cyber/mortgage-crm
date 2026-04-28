@@ -291,6 +291,7 @@ def _resolve_contact_name(db: Session, phone: str, org_id: Optional[int]) -> str
 @router.get("/conversations/{phone}")
 async def get_conversation(
     phone: str,
+    request: Request,
     limit: int = 100,
     before: Optional[str] = None,
     db: Session = Depends(get_db),
@@ -304,6 +305,13 @@ async def get_conversation(
     """
     _check_tables(db)
     org_id = _get_org_id(current_user)
+    logger.info(
+        "SMS GET /conversations/%s: user_id=%s org_id=%s phone_raw=%s",
+        phone[-4:] if phone else "?",
+        _get_user_id(current_user),
+        org_id,
+        phone,
+    )
     normalized = _normalize_phone(phone)
     like_pattern = f"%{normalized[-10:]}"  # match last 10 digits
 
@@ -478,6 +486,33 @@ async def get_conversation(
         sn = m.get("senderName") or ""
         if not sn or sn.isdigit():
             m["senderName"] = contact_display_name if m["direction"] == "inbound" else "You"
+
+    logger.info(
+        "SMS GET result: %d messages (%d inbound, %d outbound) for phone ...%s org=%s",
+        len(unique),
+        sum(1 for m in unique if m.get("direction") == "inbound"),
+        sum(1 for m in unique if m.get("direction") == "outbound"),
+        phone[-4:] if phone else "?",
+        org_id,
+    )
+
+    # TEMPORARY: return debug info when ?_debug=smstrace2026
+    if request.query_params.get("_debug") == "smstrace2026":
+        return {
+            "_debug": {
+                "user_id": _get_user_id(current_user),
+                "org_id": org_id,
+                "phone_raw": phone,
+                "normalized": normalized,
+                "pattern": like_pattern,
+                "org_filter_used": org_filter,
+                "message_count": len(unique),
+                "inbound_count": sum(1 for m in unique if m.get("direction") == "inbound"),
+                "outbound_count": sum(1 for m in unique if m.get("direction") == "outbound"),
+                "delivery_log_count": sum(1 for m in messages if m.get("_source") == "delivery_log") if any("_source" in m for m in messages) else "N/A",
+            },
+            "messages": unique,
+        }
 
     return unique
 
