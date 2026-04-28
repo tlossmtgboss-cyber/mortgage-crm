@@ -797,6 +797,155 @@ async def notify_status_update(
 
 
 
+@router.get("/diag/sms-trace/{phone}")
+async def diag_sms_trace(phone: str, t: str = "", db: Session = Depends(get_db)):
+    """TEMPORARY diagnostic — no auth, tests every query layer independently."""
+    if t != "trace2026":
+        raise HTTPException(status_code=403, detail="token required")
+    import traceback as _tb
+    digits = "".join(c for c in phone if c.isdigit())
+    pattern = f"%{digits[-10:]}" if len(digits) >= 10 else f"%{digits}"
+    evidence: dict = {"phone": phone, "pattern": pattern}
+
+    # 1. Check RLS status on sms_panel_messages
+    try:
+        r = db.execute(text("""
+            SELECT relrowsecurity, relforcerowsecurity
+            FROM pg_class WHERE relname = 'sms_panel_messages'
+        """)).fetchone()
+        evidence["rls_enabled"] = bool(r and r[0])
+        evidence["rls_forced"] = bool(r and r[1])
+    except Exception as e:
+        evidence["rls_check_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # 2. Check current tenant setting
+    try:
+        r = db.execute(text("SELECT current_setting('app.current_tenant', true)")).fetchone()
+        evidence["current_tenant"] = r[0] if r else None
+    except Exception as e:
+        evidence["tenant_check_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # 3. Raw count of ALL panel messages for this phone (no org filter, no RLS bypass)
+    try:
+        r = db.execute(text("""
+            SELECT COUNT(*), COUNT(*) FILTER (WHERE direction = 'inbound'),
+                   COUNT(*) FILTER (WHERE direction = 'outbound')
+            FROM sms_panel_messages
+            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+        """), {"pattern": pattern}).fetchone()
+        evidence["panel_total"] = r[0] if r else 0
+        evidence["panel_inbound"] = r[1] if r else 0
+        evidence["panel_outbound"] = r[2] if r else 0
+    except Exception as e:
+        evidence["panel_count_error"] = f"{e}"
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # 4. Same query WITH org_id=1 filter
+    try:
+        r = db.execute(text("""
+            SELECT COUNT(*) FROM sms_panel_messages
+            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+              AND (organization_id = 1 OR organization_id IS NULL)
+        """), {"pattern": pattern}).fetchone()
+        evidence["panel_with_org1"] = r[0] if r else 0
+    except Exception as e:
+        evidence["panel_org1_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # 5. Set tenant=1 and retry
+    try:
+        db.execute(text("SET LOCAL app.current_tenant = '1'"))
+        r = db.execute(text("""
+            SELECT COUNT(*) FROM sms_panel_messages
+            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+        """), {"pattern": pattern}).fetchone()
+        evidence["panel_after_set_tenant"] = r[0] if r else 0
+    except Exception as e:
+        evidence["panel_set_tenant_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # 6. Check sms_delivery_log
+    try:
+        r = db.execute(text("""
+            SELECT COUNT(*) FROM sms_delivery_log
+            WHERE REPLACE(REPLACE(REPLACE(to_phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+        """), {"pattern": pattern}).fetchone()
+        evidence["delivery_log_count"] = r[0] if r else 0
+    except Exception as e:
+        evidence["delivery_log_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # 7. Sample inbound messages (first 3)
+    try:
+        db.execute(text("SET LOCAL app.current_tenant = '1'"))
+        rows = db.execute(text("""
+            SELECT id, phone, organization_id, direction, body, status, created_at
+            FROM sms_panel_messages
+            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+              AND direction = 'inbound'
+            ORDER BY created_at DESC LIMIT 3
+        """), {"pattern": pattern}).fetchall()
+        evidence["inbound_sample"] = [
+            {"id": str(r[0])[:20], "phone": r[1], "org": r[2], "dir": r[3],
+             "body": (r[4] or "")[:30], "status": r[5],
+             "at": r[6].isoformat() if r[6] else None}
+            for r in rows
+        ]
+    except Exception as e:
+        evidence["inbound_sample_error"] = str(e)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    # 8. Simulate the authenticated GET path: set tenant, run BOTH queries, report
+    try:
+        db.rollback()  # fresh transaction
+        db.execute(text("SET LOCAL app.current_tenant = '1'"))
+        # delivery_log query
+        dl_rows = db.execute(text("""
+            SELECT COUNT(*) FROM sms_delivery_log
+            WHERE REPLACE(REPLACE(REPLACE(to_phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+              AND (organization_id = 1 OR organization_id IS NULL)
+        """), {"pattern": pattern}).fetchone()
+        evidence["simulated_delivery_count"] = dl_rows[0] if dl_rows else 0
+        # panel query
+        p_rows = db.execute(text("""
+            SELECT COUNT(*) FROM sms_panel_messages
+            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
+              AND (organization_id = 1 OR organization_id IS NULL)
+        """), {"pattern": pattern}).fetchone()
+        evidence["simulated_panel_count"] = p_rows[0] if p_rows else 0
+    except Exception as e:
+        evidence["simulated_error"] = f"{e}\n{_tb.format_exc()}"
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
+    return evidence
+
+
 def update_panel_message_status(db: Session, telnyx_message_id: str, status: str):
     """Update status in sms_panel_messages when delivery webhook arrives."""
     try:
