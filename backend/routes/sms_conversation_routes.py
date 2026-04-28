@@ -325,13 +325,13 @@ async def get_conversation(
     contact_display_name = _resolve_contact_name(db, normalized, org_id)
 
     # Build optional cursor filter
+    # NOTE: org_id filter deliberately removed from SMS conversation queries.
+    # Phone number is the isolation boundary — a single Telnyx number serves
+    # all orgs, and inbound/outbound messages may have different org_ids
+    # (inbound resolved from verified_caller_ids, outbound from user session).
     before_filter = ""
+    org_filter = ""
     params: dict = {"pattern": like_pattern, "lim": limit}
-    if org_id is not None:
-        org_filter = "AND (organization_id = :org_id OR organization_id IS NULL)"
-        params["org_id"] = org_id
-    else:
-        org_filter = ""
     if before:
         before_filter = "AND sent_at < :before"
         params["before"] = before
