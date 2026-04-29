@@ -274,9 +274,8 @@ def _resolve_contact_name(db: Session, phone: str, org_id: Optional[int]) -> str
         row = db.execute(text("""
             SELECT first_name, last_name FROM leads
             WHERE REPLACE(REPLACE(REPLACE(COALESCE(phone, ''), '+', ''), '-', ''), ' ', '') LIKE :pattern
-            AND (:org_id IS NULL OR organization_id = :org_id)
             LIMIT 1
-        """), {"pattern": pattern, "org_id": org_id}).fetchone()
+        """), {"pattern": pattern}).fetchone()
         if row:
             name = f"{row[0] or ''} {row[1] or ''}".strip()
             if name:
