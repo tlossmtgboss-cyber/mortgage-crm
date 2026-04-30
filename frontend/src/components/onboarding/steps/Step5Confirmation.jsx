@@ -214,7 +214,7 @@ const Step5Confirmation = ({ profileData, aiPreferences, trainingData, onComplet
       <div className="support-info">
         <p>
           Need help? Contact support at{' '}
-          <a href="mailto:support@pipeline360.io">support@pipeline360.io</a>
+          <a href="mailto:support@perenniaai.com">support@perenniaai.com</a>
         </p>
       </div>
     </div>

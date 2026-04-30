@@ -39,7 +39,7 @@ const BetaApplication = () => {
       setSubmitted(true);
     } catch (err) {
       console.error('Beta application error:', err);
-      setError('Error submitting application. Please try again or email beta@pipeline360.com');
+      setError('Error submitting application. Please try again or email support@perenniaai.com');
     } finally {
       setLoading(false);
     }
@@ -81,7 +81,7 @@ const BetaApplication = () => {
           <div className="contact-info">
             <p>
               Questions? Email{' '}
-              <a href="mailto:beta@pipeline360.com">beta@pipeline360.com</a>
+              <a href="mailto:support@perenniaai.com">support@perenniaai.com</a>
             </p>
           </div>
         </div>

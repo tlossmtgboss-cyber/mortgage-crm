@@ -7,7 +7,7 @@ watchPatterns = ["backend/**"]
 
 [deploy]
 startCommand = "cd backend && python3 start.py"
-numReplicas = 1
+numReplicas = 2
 healthcheckPath = "/health/live"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

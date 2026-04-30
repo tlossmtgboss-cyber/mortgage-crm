@@ -3117,7 +3117,7 @@ const OnboardingWizard = ({ onComplete, onSkip }) => {
 
               <div className="support-info">
                 <p className="support-note">
-                  📧 You can also email us at <strong>support@mortgagecrm.com</strong>
+                  📧 You can also email us at <strong>support@perenniaai.com</strong>
                 </p>
                 <p className="support-note">
                   ⏱️ Average response time: <strong>2-4 hours</strong>

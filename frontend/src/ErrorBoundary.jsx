@@ -226,10 +226,10 @@ class ErrorBoundary extends React.Component {
             }}>
               If this problem persists, please contact{' '}
               <a
-                href="mailto:support@pipeline360.io"
+                href="mailto:support@perenniaai.com"
                 style={{ color: '#3b82f6', textDecoration: 'none' }}
               >
-                support@pipeline360.io
+                support@perenniaai.com
               </a>
             </p>
           </div>

@@ -204,7 +204,7 @@ const OnboardingWizard = ({ user, onComplete }) => {
                 <span>🎥</span>
                 <span>Watch Video Tutorials</span>
               </a>
-              <a href="mailto:support@pipeline360.com" className="help-link">
+              <a href="mailto:support@perenniaai.com" className="help-link">
                 <span>✉️</span>
                 <span>Contact Support</span>
               </a>

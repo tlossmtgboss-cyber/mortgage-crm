@@ -50,10 +50,9 @@ class EncryptionManager:
         if not initialized:
             secret_key = os.getenv("SECRET_KEY", "")
             if is_production:
-                logger.critical(
-                    "CRITICAL: DATA_ENCRYPTION_KEY not set in production. "
-                    "Deriving encryption key from SECRET_KEY via PBKDF2. "
-                    "Set DATA_ENCRYPTION_KEY to a dedicated Fernet key."
+                raise RuntimeError(
+                    "DATA_ENCRYPTION_KEY must be set in production. "
+                    "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
                 )
             else:
                 logger.warning("DATA_ENCRYPTION_KEY not set, deriving from SECRET_KEY (not recommended for production)")

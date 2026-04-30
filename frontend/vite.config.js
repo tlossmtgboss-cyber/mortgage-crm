@@ -23,6 +23,8 @@ export default defineConfig({
   build: {
     outDir: 'build',
     sourcemap: false,
+    // Strip console.log/warn/info from production builds (keep console.error)
+    minify: 'esbuild',
     // Rollup options for chunking
     rollupOptions: {
       // Native-only Capacitor plugins — not available in web builds
@@ -77,6 +79,10 @@ export default defineConfig({
   // Environment variable prefix (Vite uses VITE_ by default)
   // This allows both VITE_ and REACT_APP_ prefixes during migration
   envPrefix: ['VITE_', 'REACT_APP_'],
+
+  esbuild: {
+    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+  },
 
   // Define global constants (for process.env compatibility)
   define: {

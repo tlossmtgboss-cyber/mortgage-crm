@@ -243,11 +243,10 @@ _MAX_BODY_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
 def _extract_role_from_request(request: Request) -> Optional[str]:
-    """Extract user role from JWT in the Authorization header.
+    """Extract user role from a signature-verified JWT in the Authorization header.
 
-    Returns the role string if present, else None. This is a lightweight
-    extraction that avoids importing the full auth stack to keep the
-    middleware dependency-free.
+    Returns the role string if present, else None. Uses auth.tokens for
+    proper cryptographic verification — never trust unverified claims.
     """
     auth_header = request.headers.get("authorization", "")
     if not auth_header.lower().startswith("bearer "):
@@ -256,24 +255,22 @@ def _extract_role_from_request(request: Request) -> Optional[str]:
     if not token:
         return None
     try:
-        import base64
-        # Decode the JWT payload (middle segment) without verification —
-        # actual auth verification already happened upstream.
-        parts = token.split(".")
-        if len(parts) != 3:
+        from auth.tokens import verify_token
+        token_data = verify_token(token)
+        if token_data is None:
             logger.warning(
-                "PII filter: malformed JWT (expected 3 parts, got %d) — "
-                "defaulting to masked mode", len(parts),
+                "PII filter: JWT signature verification failed — "
+                "defaulting to masked mode for %s %s",
+                request.method, request.url.path,
             )
             return None
-        # Add padding
-        payload_b64 = parts[1] + "=" * (4 - len(parts[1]) % 4)
-        payload_bytes = base64.urlsafe_b64decode(payload_b64)
-        payload = json.loads(payload_bytes)
-        return payload.get("role") or payload.get("user_role")
+        return getattr(token_data, "role", None) or getattr(token_data, "user_role", None)
+    except ImportError:
+        logger.warning("PII filter: auth.tokens not available — defaulting to masked mode")
+        return None
     except Exception as e:
         logger.warning(
-            "PII filter: JWT payload decode failed (%s) — defaulting to masked mode", e,
+            "PII filter: JWT verification failed (%s) — defaulting to masked mode", e,
         )
         return None
 

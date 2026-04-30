@@ -16,6 +16,7 @@ This enables the tenant isolation system to work without modifying every route.
 """
 
 import logging
+import os
 from typing import Optional, Callable
 
 from fastapi import Request
@@ -175,11 +176,13 @@ class TenantContextMiddleware(BaseHTTPMiddleware):
                                     pass
                     else:
                         # Fallback to raw jwt.decode (dev environments without auth module)
+                        _jwt_aud = os.getenv("JWT_AUDIENCE", "perennia-crm")
                         payload = jwt.decode(
                             token,
                             self.secret_key,
                             algorithms=[self.algorithm],
-                            options={"verify_aud": False}
+                            audience=_jwt_aud,
+                            options={"verify_aud": True}
                         )
                         jti = payload.get("jti")
                         if jti:

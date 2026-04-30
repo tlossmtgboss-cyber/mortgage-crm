@@ -2,7 +2,7 @@
 # used by Railway (it references backend/Dockerfile and backend/start.py).
 [deploy]
 startCommand = "python3 start.py"
-numReplicas = 1
+numReplicas = 2
 healthcheckPath = "/health/live"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"

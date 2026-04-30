@@ -439,7 +439,7 @@ View your improvement over time in the Analytics tab.`
         <div className="help-panel-footer">
           <p>Still need help?</p>
           <div className="footer-links">
-            <a href="mailto:support@pipeline360.com" className="footer-link">
+            <a href="mailto:support@perenniaai.com" className="footer-link">
               <span>✉️</span> Email Support
             </a>
             <a href="/help/videos" className="footer-link">

@@ -450,7 +450,7 @@ app.add_middleware(ImpersonationEnforcementMiddleware, db_session_factory=Sessio
 try:
     from middleware.csrf_protection import CSRFProtectionMiddleware
     # Enable CSRF in production, disable in development for easier testing
-    csrf_enabled = ENVIRONMENT not in ("development", "test")
+    csrf_enabled = ENVIRONMENT.lower() not in ("development", "test")
     app.add_middleware(
         CSRFProtectionMiddleware,
         enabled=csrf_enabled,
@@ -876,7 +876,8 @@ async def get_current_user(
         else:
             # Legacy fallback
             try:
-                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
+                _jwt_aud = os.getenv("JWT_AUDIENCE", "perennia-crm")
+                payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], audience=_jwt_aud, options={"verify_aud": True})
                 # Issuer validation (backward compatible — tokens without iss are allowed)
                 _expected_issuer = os.getenv("JWT_ISSUER", "perennia-api")
                 _token_issuer = payload.get("iss")
@@ -3447,6 +3448,12 @@ async def shutdown_event():
     if hasattr(app.state, "langgraph_executor"):
         app.state.langgraph_executor.shutdown(wait=False)
         logger.info("LangGraph thread pool executor shut down")
+    try:
+        from integrations.imessage import shutdown_clients
+        await shutdown_clients()
+        logger.info("BlueBubbles httpx clients closed")
+    except Exception:
+        pass
 
 
 def _run_critical_schema_migrations():
@@ -4124,6 +4131,18 @@ try:
     logger.info("POS 1003 routes loaded")
 except Exception as e:
     logger.warning(f"POS 1003 routes skipped: {e}")
+
+# ============================================================================
+# iMessage / BlueBubbles Integration
+# ============================================================================
+try:
+    from integrations.imessage import api_router as imessage_api_router
+    from integrations.imessage import webhook_router as imessage_webhook_router
+    app.include_router(imessage_api_router, tags=["iMessage"])
+    app.include_router(imessage_webhook_router, tags=["iMessage Webhooks"])
+    logger.info("iMessage/BlueBubbles routes loaded")
+except Exception as e:
+    logger.warning(f"iMessage routes skipped (env vars not set?): {e}")
 
 # ============================================================================
 # TEMPORARY: One-time seed endpoint for App Store demo account

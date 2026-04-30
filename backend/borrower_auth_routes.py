@@ -225,8 +225,8 @@ def generate_borrower_token(borrower_id: str, email: str) -> str:
 def verify_borrower_token(token: str) -> Optional[dict]:
     """Verify and decode a borrower JWT token."""
     try:
-        # verify_aud=False for backward compat with tokens issued before aud claim was added
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM], options={"verify_aud": False})
+        _borrower_aud = os.getenv("JWT_BORROWER_AUDIENCE", "perennia-borrower")
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM], audience=_borrower_aud, options={"verify_aud": True})
         if payload.get("type") != "borrower":
             return None
         # Check token blacklist (requires jti claim — older tokens without jti skip this check)
