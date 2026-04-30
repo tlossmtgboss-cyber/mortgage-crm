@@ -6,6 +6,7 @@ Perennia AI — SMS Tools for Aria Voice Agent
 and scheduling-via-SMS workflows.
 """
 
+import json
 import logging
 import os
 from datetime import datetime, timezone
@@ -243,7 +244,7 @@ def get_sms_conversation_history(
 
 @mortgage_tool(
     name="start_scheduling_sms",
-    description="Initiate an SMS conversation with a borrower to schedule an appointment. Sends the first message proposing times and tracks the conversation.",
+    description="Initiate an SMS conversation with a borrower to schedule an appointment. Sends the first message proposing times and tracks the conversation. The borrower's reply will be auto-handled by Aria.",
     agent_roles=["smart_scheduler", "voice_os", "ai_receptionist"],
     risk_level="MEDIUM",
     parameters={
@@ -254,6 +255,7 @@ def get_sms_conversation_history(
         "appointment_type": "Type: consultation, document_review, closing_prep, callback",
         "organization_id": "Organization ID for tenant isolation",
         "lead_id": "Optional lead ID for CRM tracking",
+        "user_id": "Optional LO user ID for calendar availability lookup",
     },
 )
 def start_scheduling_sms(
@@ -264,6 +266,7 @@ def start_scheduling_sms(
     appointment_type: str = "consultation",
     organization_id: Optional[str] = None,
     lead_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> ToolResult:
     """Send initial scheduling SMS and create AI conversation record."""
     if not to_phone or not borrower_name:
@@ -315,7 +318,14 @@ def start_scheduling_sms(
                     "phone": to_e164,
                     "lead_id": int(lead_id) if lead_id else None,
                     "org_id": int(organization_id) if organization_id else None,
-                    "context": f'{{"borrower_name": "{borrower_name}", "lo_name": "{lo_name}", "appointment_type": "{appointment_type}", "proposed_times": "{proposed_times}"}}',
+                    "context": json.dumps({
+                        "borrower_name": borrower_name,
+                        "lo_name": lo_name,
+                        "appointment_type": appointment_type,
+                        "proposed_times": proposed_times,
+                        "user_id": user_id,
+                        "lead_id": lead_id,
+                    }),
                 },
             )
             db.execute(

@@ -1090,6 +1090,43 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                 lo_name = _aria_context.get("lo_name", "your loan officer")
                 appt_type = _aria_context.get("appointment_type", "consultation")
 
+                # Look up real LO availability for the next 7 days
+                _avail_context = ""
+                try:
+                    _lo_user_id = _aria_context.get("user_id") or _aria_context.get("lo_id")
+                    if not _lo_user_id:
+                        _lo_row = db.execute(sa_text("""
+                            SELECT user_id FROM leads
+                            WHERE id = :lead_id AND user_id IS NOT NULL
+                            LIMIT 1
+                        """), {"lead_id": _aria_conv[1] if len(_aria_conv) > 1 else None}).fetchone() if hasattr(_aria_conv, '__getitem__') else None
+                        if not _lo_row:
+                            _lo_row = db.execute(sa_text("""
+                                SELECT id FROM users
+                                WHERE organization_id = :org_id AND role IN ('admin', 'loan_officer', 'lo')
+                                LIMIT 1
+                            """), {"org_id": _aria_org_id}).fetchone()
+                        if _lo_row:
+                            _lo_user_id = _lo_row[0]
+
+                    if _lo_user_id:
+                        from agents.tools.scheduler import get_availability
+                        _avail_result = get_availability(
+                            user_id=str(_lo_user_id),
+                            duration_minutes=30,
+                            meeting_type=appt_type,
+                        )
+                        if hasattr(_avail_result, 'to_dict'):
+                            _avail_data = _avail_result.to_dict().get("data", {})
+                        else:
+                            _avail_data = _avail_result.get("data", {}) if isinstance(_avail_result, dict) else {}
+                        _avail_slots = _avail_data.get("slots", [])[:6]
+                        if _avail_slots:
+                            _slot_list = ", ".join(s.get("display", "") for s in _avail_slots)
+                            _avail_context = f"\n\nAVAILABLE TIMES (next 7 days): {_slot_list}"
+                except Exception as _avail_err:
+                    logger.warning("aria_sms_intercept: availability lookup failed: %s", _avail_err)
+
                 _system = (
                     f"You are Aria, an AI assistant for {lo_name} at Perennia AI, "
                     f"a mortgage lending company. You are texting {borrower_name} "
@@ -1097,13 +1134,15 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                     "RULES:\n"
                     "- Keep responses under 160 characters (1 SMS segment)\n"
                     "- Be warm and professional\n"
-                    "- When the borrower confirms a time, acknowledge it and confirm the appointment\n"
-                    "- If they suggest a different time, accommodate it\n"
+                    "- When the borrower suggests a time, check if it's in the available slots and confirm it\n"
+                    "- If they suggest a time that isn't available, propose the closest available time\n"
+                    "- If they ask a vague question like 'do you have time tomorrow', propose 2-3 specific available slots for that day\n"
                     "- Do NOT quote rates, fees, or loan terms\n"
                     "- If they say stop or opt out, respect it immediately\n"
                     "- Do NOT promise to send calendar invites or emails — the system sends those automatically\n"
                     "- When confirming, just say the appointment is confirmed for the date/time\n"
                     f"- Current stage: {_aria_stage}"
+                    f"{_avail_context}"
                 )
 
                 _resp = _client.messages.create(
@@ -1237,6 +1276,52 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
                         for _ce in _ctx_emails:
                             if _ce not in _appt_emails:
                                 _appt_emails.append(_ce)
+
+                        # Look up lead's email if not already known
+                        if not _appt_emails:
+                            try:
+                                _lead_id_for_email = _aria_context.get("lead_id") or (
+                                    db.execute(sa_text("""
+                                        SELECT lead_id FROM sms_ai_conversations WHERE id = :cid
+                                    """), {"cid": _aria_conv_id}).scalar()
+                                )
+                                if _lead_id_for_email:
+                                    _lead_email_row = db.execute(sa_text("""
+                                        SELECT email FROM leads WHERE id = :lid AND email IS NOT NULL
+                                    """), {"lid": int(_lead_id_for_email)}).fetchone()
+                                    if _lead_email_row and _lead_email_row[0]:
+                                        _appt_emails.append(_lead_email_row[0])
+                            except Exception:
+                                pass
+
+                        # Create CRM appointment record regardless of email availability
+                        if _appt_date and _appt_time:
+                            try:
+                                _lo_uid = _aria_context.get("user_id") or _aria_context.get("lo_id")
+                                if _lo_uid:
+                                    db.execute(sa_text("""
+                                        INSERT INTO appointments
+                                        (user_id, lead_id, start_time, end_time,
+                                         appointment_type, title, status, notes, created_at)
+                                        VALUES (:uid, :lid,
+                                                CAST(:start AS timestamptz),
+                                                CAST(:end AS timestamptz),
+                                                :atype, :title, 'confirmed',
+                                                :notes, NOW())
+                                    """), {
+                                        "uid": int(_lo_uid),
+                                        "lid": int(_aria_context.get("lead_id") or 0) or None,
+                                        "start": f"{_appt_date} {_appt_time}:00",
+                                        "end": f"{_appt_date} {_appt_time}:00",
+                                        "atype": appt_type,
+                                        "title": f"{appt_type.replace('_', ' ').title()} with {borrower_name}",
+                                        "notes": f"Scheduled via SMS by Aria. Borrower: {borrower_name}",
+                                    })
+                                    db.commit()
+                                    logger.info("aria_sms_intercept: appointment created for %s at %s %s", borrower_name, _appt_date, _appt_time)
+                            except Exception as _appt_err:
+                                db.rollback()
+                                logger.error("aria_sms_intercept: appointment creation failed: %s", _appt_err)
 
                         if _appt_date and _appt_time and _appt_emails:
                             from datetime import timedelta

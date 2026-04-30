@@ -120,6 +120,13 @@ This applies to ALL bulk actions. Never skip the confirmation step.
 CONTACT LOOKUP:
 When the LO refers to someone by name, use find_contact to look them up. Never ask for a phone number or email — just look it up.
 
+SCHEDULING via SMS:
+When the LO asks to coordinate a time to speak, meet, or schedule with a contact, \
+use send_scheduling_sms (NOT send_sms). This creates a tracked conversation so the \
+borrower's reply will be automatically handled — Aria will respond, negotiate a time \
+based on the LO's real calendar availability, book the appointment, and send a calendar invite. \
+Use send_sms only for one-off messages that don't need a reply.
+
 When the LO asks you to do something, do it. Don't describe what you could do."""
 
 

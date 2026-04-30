@@ -263,6 +263,59 @@ class AriaVoiceAgent(Agent):
         return json.dumps(result, default=str)
 
     @function_tool()
+    async def send_scheduling_sms(
+        self,
+        context: RunContext,
+        phone_number: str,
+        borrower_name: str,
+        appointment_type: str,
+    ):
+        """Send an SMS to coordinate scheduling a meeting or call. Use this instead of send_sms when the goal is to schedule a time to speak, meet, or have a consultation. The system will track the borrower's reply and auto-respond to confirm and book the appointment.
+        appointment_type examples: consultation, callback, document_review, closing_prep"""
+        user_id = str(self._session_data.get("user_id", ""))
+        org_id = str(self._session_data.get("organization_id", ""))
+        lo_name = self._session_data.get("lo_name", "")
+
+        # Fetch LO availability for the next 7 days to include in the SMS
+        avail_result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "get_availability", "params": {
+                "user_id": user_id,
+                "duration_minutes": 30,
+                "meeting_type": appointment_type,
+            }},
+        )
+        proposed_times = ""
+        try:
+            slots = avail_result.get("result", {}).get("data", {}).get("slots", [])
+            if slots:
+                top_slots = slots[:3]
+                proposed_times = ", ".join(s.get("display", "") for s in top_slots)
+        except Exception:
+            pass
+
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "start_scheduling_sms", "params": {
+                "to_phone": phone_number,
+                "borrower_name": borrower_name,
+                "lo_name": lo_name,
+                "proposed_times": proposed_times,
+                "appointment_type": appointment_type,
+                "organization_id": org_id,
+                "lead_id": str(self._session_data.get("lead_id", "")),
+                "user_id": user_id,
+            }},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "send_scheduling_sms",
+            "phone": phone_number,
+            "borrower_name": borrower_name,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    @function_tool()
     async def create_task(
         self,
         context: RunContext,
