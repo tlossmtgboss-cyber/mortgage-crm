@@ -63,6 +63,7 @@ export const NAVIGATION_ITEMS = {
     path: '/sms-tasks',
     label: 'SMS Tasks',
     matchPaths: ['/sms-tasks'],
+    badgeKey: 'smsUnread',
     module: 'base'
   },
   reconciliation: {
@@ -895,6 +896,7 @@ export const MASTER_ADMIN_NAVIGATION = [
     label: 'SMS Tasks',
     path: '/sms-tasks',
     matchPaths: ['/sms-tasks'],
+    badgeKey: 'smsUnread',
     isStandalone: true
   },
   {

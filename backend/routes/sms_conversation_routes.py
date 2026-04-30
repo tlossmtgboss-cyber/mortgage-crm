@@ -760,10 +760,7 @@ async def notify_inbound_sms(
     }
 
     try:
-        if org_id:
-            await sms_manager.broadcast(org_id, phone, msg)
-        else:
-            await sms_manager.broadcast_all_orgs(phone, msg)
+        await sms_manager.broadcast_all_orgs(phone, msg)
     except Exception as e:
         logger.debug(f"WebSocket broadcast failed: {e}")
 
@@ -786,263 +783,50 @@ async def notify_status_update(
     }
 
     try:
-        if org_id:
-            await sms_manager.broadcast(org_id, phone, msg)
-        else:
-            await sms_manager.broadcast_all_orgs(phone, msg)
+        await sms_manager.broadcast_all_orgs(phone, msg)
     except Exception as e:
         logger.debug(f"WebSocket status broadcast failed: {e}")
 
 
 
-
-@router.get("/diag/sms-trace/{phone}")
-async def diag_sms_trace(phone: str, t: str = "", db: Session = Depends(get_db)):
-    """TEMPORARY diagnostic — no auth, tests every query layer independently."""
-    if t != "trace2026":
-        raise HTTPException(status_code=403, detail="token required")
-    import traceback as _tb
-    digits = "".join(c for c in phone if c.isdigit())
-    pattern = f"%{digits[-10:]}" if len(digits) >= 10 else f"%{digits}"
-    evidence: dict = {"phone": phone, "pattern": pattern}
-
-    # 1. Check RLS status on sms_panel_messages
+@router.get("/unread-count")
+async def get_unread_sms_count(
+    db: Session = Depends(get_db),
+    current_user=Depends(_require_auth),
+):
+    """
+    Count of phone numbers with inbound SMS that haven't been responded to.
+    A phone is "unread" if its most recent inbound message is newer than
+    its most recent outbound message (or it has no outbound at all).
+    """
+    _check_tables(db)
     try:
-        r = db.execute(text("""
-            SELECT relrowsecurity, relforcerowsecurity
-            FROM pg_class WHERE relname = 'sms_panel_messages'
+        row = db.execute(text("""
+            SELECT COUNT(*) FROM (
+                SELECT phone_digits,
+                       MAX(created_at) FILTER (WHERE direction = 'inbound') AS last_inbound,
+                       MAX(created_at) FILTER (WHERE direction = 'outbound') AS last_outbound
+                FROM (
+                    SELECT REGEXP_REPLACE(phone, '[^0-9]', '', 'g') AS phone_digits,
+                           direction, created_at
+                    FROM sms_panel_messages
+                    WHERE direction IN ('inbound', 'outbound')
+                ) normalized
+                GROUP BY phone_digits
+                HAVING MAX(created_at) FILTER (WHERE direction = 'inbound') IS NOT NULL
+                   AND (MAX(created_at) FILTER (WHERE direction = 'outbound') IS NULL
+                        OR MAX(created_at) FILTER (WHERE direction = 'inbound')
+                           > MAX(created_at) FILTER (WHERE direction = 'outbound'))
+            ) unread_phones
         """)).fetchone()
-        evidence["rls_enabled"] = bool(r and r[0])
-        evidence["rls_forced"] = bool(r and r[1])
+        return {"unread_count": row[0] if row else 0}
     except Exception as e:
-        evidence["rls_check_error"] = str(e)
+        logger.warning(f"Unread SMS count query failed: {e}")
         try:
             db.rollback()
         except Exception:
             pass
-
-    # 2. Check current tenant setting
-    try:
-        r = db.execute(text("SELECT current_setting('app.current_tenant', true)")).fetchone()
-        evidence["current_tenant"] = r[0] if r else None
-    except Exception as e:
-        evidence["tenant_check_error"] = str(e)
-        try:
-            db.rollback()
-        except Exception:
-            pass
-
-    # 3. Raw count of ALL panel messages for this phone (no org filter, no RLS bypass)
-    try:
-        r = db.execute(text("""
-            SELECT COUNT(*), COUNT(*) FILTER (WHERE direction = 'inbound'),
-                   COUNT(*) FILTER (WHERE direction = 'outbound')
-            FROM sms_panel_messages
-            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-        """), {"pattern": pattern}).fetchone()
-        evidence["panel_total"] = r[0] if r else 0
-        evidence["panel_inbound"] = r[1] if r else 0
-        evidence["panel_outbound"] = r[2] if r else 0
-    except Exception as e:
-        evidence["panel_count_error"] = f"{e}"
-        try:
-            db.rollback()
-        except Exception:
-            pass
-
-    # 4. Same query WITH org_id=1 filter
-    try:
-        r = db.execute(text("""
-            SELECT COUNT(*) FROM sms_panel_messages
-            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-              AND (organization_id = 1 OR organization_id IS NULL)
-        """), {"pattern": pattern}).fetchone()
-        evidence["panel_with_org1"] = r[0] if r else 0
-    except Exception as e:
-        evidence["panel_org1_error"] = str(e)
-        try:
-            db.rollback()
-        except Exception:
-            pass
-
-    # 5. Set tenant=1 and retry
-    try:
-        db.execute(text("SET LOCAL app.current_tenant = '1'"))
-        r = db.execute(text("""
-            SELECT COUNT(*) FROM sms_panel_messages
-            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-        """), {"pattern": pattern}).fetchone()
-        evidence["panel_after_set_tenant"] = r[0] if r else 0
-    except Exception as e:
-        evidence["panel_set_tenant_error"] = str(e)
-        try:
-            db.rollback()
-        except Exception:
-            pass
-
-    # 6. Check sms_delivery_log
-    try:
-        r = db.execute(text("""
-            SELECT COUNT(*) FROM sms_delivery_log
-            WHERE REPLACE(REPLACE(REPLACE(to_phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-        """), {"pattern": pattern}).fetchone()
-        evidence["delivery_log_count"] = r[0] if r else 0
-    except Exception as e:
-        evidence["delivery_log_error"] = str(e)
-        try:
-            db.rollback()
-        except Exception:
-            pass
-
-    # 7. Sample inbound messages (first 3)
-    try:
-        db.execute(text("SET LOCAL app.current_tenant = '1'"))
-        rows = db.execute(text("""
-            SELECT id, phone, organization_id, direction, body, status, created_at
-            FROM sms_panel_messages
-            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-              AND direction = 'inbound'
-            ORDER BY created_at DESC LIMIT 3
-        """), {"pattern": pattern}).fetchall()
-        evidence["inbound_sample"] = [
-            {"id": str(r[0])[:20], "phone": r[1], "org": r[2], "dir": r[3],
-             "body": (r[4] or "")[:30], "status": r[5],
-             "at": r[6].isoformat() if r[6] else None}
-            for r in rows
-        ]
-    except Exception as e:
-        evidence["inbound_sample_error"] = str(e)
-        try:
-            db.rollback()
-        except Exception:
-            pass
-
-    # 8. Check ALL user accounts to find org_id mismatch
-    try:
-        db.rollback()
-        all_users = db.execute(text(
-            "SELECT id, organization_id, email FROM users WHERE email IN ('tloss@cmghomeloans.com', 'tlossmtgboss@gmail.com') ORDER BY id"
-        )).fetchall()
-        evidence["all_user_accounts"] = [
-            {"id": r[0], "org_id": r[1], "email": r[2]} for r in all_users
-        ]
-
-        # Also check what org_ids exist on outbound panel messages
-        org_check = db.execute(text("""
-            SELECT DISTINCT organization_id, direction, COUNT(*) as cnt
-            FROM sms_panel_messages
-            WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-            GROUP BY organization_id, direction ORDER BY cnt DESC
-        """), {"pattern": pattern}).fetchall()
-        evidence["panel_org_breakdown"] = [
-            {"org_id": r[0], "dir": r[1], "count": r[2]} for r in org_check
-        ]
-
-        # Fetch the ACTUAL logged-in user (gmail account)
-        user_row = db.execute(text(
-            "SELECT id, organization_id, email FROM users WHERE email = 'tlossmtgboss@gmail.com' LIMIT 1"
-        )).fetchone()
-        if not user_row:
-            user_row = db.execute(text(
-                "SELECT id, organization_id, email FROM users WHERE email = 'tloss@cmghomeloans.com' LIMIT 1"
-            )).fetchone()
-        if not user_row:
-            user_row = db.execute(text("SELECT id, organization_id, email FROM users LIMIT 1")).fetchone()
-
-        class _FakeUser:
-            pass
-
-        fake_user = _FakeUser()
-        fake_user.id = user_row[0] if user_row else 1
-        fake_user.organization_id = user_row[1] if user_row else 1
-        fake_user.email = user_row[2] if user_row else "test"
-        fake_user.first_name = "Test"
-        fake_user.last_name = "User"
-
-        evidence["sim_user"] = {"id": fake_user.id, "org_id": fake_user.organization_id}
-
-        # Now run the EXACT same code path as get_conversation
-        sim_org_id = _get_org_id(fake_user)
-        sim_rls_org = sim_org_id or 1
-        sim_normalized = _normalize_phone(phone)
-        sim_like = f"%{sim_normalized[-10:]}"
-
-        evidence["sim_org_id"] = sim_org_id
-        evidence["sim_normalized"] = sim_normalized
-        evidence["sim_pattern"] = sim_like
-
-        # contact name lookup (the one that could abort the transaction)
-        try:
-            sim_contact = _resolve_contact_name(db, sim_normalized, sim_org_id)
-            evidence["sim_contact_name"] = sim_contact or "(empty)"
-        except Exception as cn_err:
-            evidence["sim_contact_name_error"] = str(cn_err)
-            try:
-                db.rollback()
-            except Exception:
-                pass
-
-        # Build same params
-        sim_params = {"pattern": sim_like, "lim": 100}
-        if sim_org_id is not None:
-            sim_org_filter = "AND (organization_id = :org_id OR organization_id IS NULL)"
-            sim_params["org_id"] = sim_org_id
-        else:
-            sim_org_filter = ""
-
-        # delivery_log query
-        try:
-            db.execute(text("SET LOCAL app.current_tenant = :o"), {"o": str(sim_rls_org)})
-            dl = db.execute(text(f"""
-                SELECT telnyx_message_id, 'outbound', message_body, status, sent_at, user_id
-                FROM sms_delivery_log
-                WHERE REPLACE(REPLACE(REPLACE(to_phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-                  {sim_org_filter}
-                ORDER BY sent_at DESC LIMIT :lim
-            """), sim_params).fetchall()
-            evidence["sim_delivery_rows"] = len(dl)
-        except Exception as dle:
-            evidence["sim_delivery_error"] = str(dle)
-            try:
-                db.rollback()
-            except Exception:
-                pass
-
-        # panel query
-        try:
-            db.execute(text("SET LOCAL app.current_tenant = :o"), {"o": str(sim_rls_org)})
-            pm = db.execute(text(f"""
-                SELECT id, direction, body, sender_name, sender_role, status,
-                       media_urls, created_at, telnyx_message_id, media_s3_keys
-                FROM sms_panel_messages
-                WHERE REPLACE(REPLACE(REPLACE(phone, '+', ''), '-', ''), ' ', '') LIKE :pattern
-                  {sim_org_filter}
-                ORDER BY created_at DESC LIMIT :lim
-            """), sim_params).fetchall()
-            evidence["sim_panel_rows"] = len(pm)
-            evidence["sim_panel_inbound"] = sum(1 for r in pm if r[1] == "inbound")
-            evidence["sim_panel_outbound"] = sum(1 for r in pm if r[1] == "outbound")
-            # Show first 3 panel rows for inspection
-            evidence["sim_panel_sample"] = [
-                {"id": str(r[0])[:20], "dir": r[1], "body": (r[2] or "")[:30],
-                 "status": r[5], "at": r[7].isoformat() if r[7] else None}
-                for r in pm[:3]
-            ]
-        except Exception as pme:
-            evidence["sim_panel_error"] = f"{pme}\n{_tb.format_exc()}"
-            try:
-                db.rollback()
-            except Exception:
-                pass
-
-    except Exception as e:
-        evidence["sim_setup_error"] = f"{e}\n{_tb.format_exc()}"
-        try:
-            db.rollback()
-        except Exception:
-            pass
-
-    return evidence
+        return {"unread_count": 0}
 
 
 def update_panel_message_status(db: Session, telnyx_message_id: str, status: str):

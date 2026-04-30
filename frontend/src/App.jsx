@@ -567,7 +567,8 @@ function App() {
     partners: 0,
     unifiedTasks: 0,  // New unified task count
     reconciliation: 0,  // Pending reconciliation items
-    smartDocs: 0  // Documents pending review
+    smartDocs: 0,  // Documents pending review
+    smsUnread: 0  // Inbound SMS awaiting response
   });
 
   const toggleAssistant = () => {
@@ -605,7 +606,8 @@ function App() {
           partners: 0,
           unifiedTasks: 0,
           reconciliation: 0,
-          smartDocs: 0
+          smartDocs: 0,
+          smsUnread: 0
         });
         // Clean up push notification registration on logout
         teardownPushNotifications();
@@ -637,10 +639,11 @@ function App() {
 
       try {
         // Fetch all counts in parallel
-        const [tasksResponse, reconciliationResponse, smartDocsResponse] = await Promise.all([
+        const [tasksResponse, reconciliationResponse, smartDocsResponse, smsUnreadResponse] = await Promise.all([
           fetch(`${API_BASE_URL}/api/v1/tasks`, { headers }).catch(() => null),
           fetch(`${API_BASE_URL}/api/v1/reconciliation/pending`, { headers }).catch(() => null),
-          fetch(`${API_BASE_URL}/api/v1/smart-docs/applicants/pending-review`, { headers }).catch(() => null)
+          fetch(`${API_BASE_URL}/api/v1/smart-docs/applicants/pending-review`, { headers }).catch(() => null),
+          fetch(`${API_BASE_URL}/api/v1/sms/unread-count`, { headers }).catch(() => null)
         ]);
 
         let updates = {};
@@ -675,6 +678,12 @@ function App() {
             ? smartDocsData.reduce((sum, loan) => sum + (loan.pending_count || 0), 0)
             : 0;
           updates.smartDocs = totalPending;
+        }
+
+        // Process unread SMS count
+        if (smsUnreadResponse && smsUnreadResponse.ok) {
+          const smsData = await smsUnreadResponse.json();
+          updates.smsUnread = smsData.unread_count || 0;
         }
 
         setTaskCounts(prev => ({ ...prev, ...updates }));

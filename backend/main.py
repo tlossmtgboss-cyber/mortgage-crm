@@ -2080,7 +2080,7 @@ try:
     from routes.sms_conversation_routes import router as sms_conv_router, ws_router as sms_ws_router
     app.include_router(sms_conv_router, tags=["SMS Conversations"])
     app.include_router(sms_ws_router, tags=["SMS WebSocket"])
-    logger.info("✅ SMS conversation routes loaded (REST + WebSocket)")
+    logger.info("SMS conversation routes loaded (REST + WebSocket)")
 except Exception as e:
     logger.warning(f"SMS conversation routes skipped: {e}")
 
