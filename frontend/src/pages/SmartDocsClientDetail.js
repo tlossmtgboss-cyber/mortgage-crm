@@ -144,7 +144,29 @@ function SmartDocsClientDetail() {
         }
       }
 
-      // If client info not found, set fallback
+      // If client info not found, fetch from loans API
+      if (!clientInfoFound) {
+        try {
+          const loanRes = await fetch(`${API_BASE_URL}/api/v1/loans/${loanId}`, { headers });
+          if (loanRes.ok) {
+            const loanData = await loanRes.json();
+            const loan = loanData.loan || loanData;
+            if (loan.borrower_name || loan.loan_number) {
+              setClient({
+                name: loan.borrower_name || 'Unknown',
+                email: loan.borrower_email,
+                loanNumber: loan.loan_number,
+                stage: loan.stage,
+                borrowerId: null
+              });
+              clientInfoFound = true;
+            }
+          }
+        } catch (e) {
+          // Non-critical — fall through to generic fallback
+        }
+      }
+
       if (!clientInfoFound) {
         setClient({
           name: `Loan ${loanId}`,
