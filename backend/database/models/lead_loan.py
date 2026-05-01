@@ -246,6 +246,7 @@ class Lead(Base):
     user_metadata = Column(JSON)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    deleted_at = Column(DateTime, nullable=True, index=True)
 
     # Valid lead stages (from LeadStage enum values)
     _VALID_LEAD_STAGES = frozenset(s.value for s in LeadStage)
@@ -512,6 +513,7 @@ class Loan(Base):
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    deleted_at = Column(DateTime, nullable=True, index=True)
 
     # Valid loan stages (from LoanStage enum values)
     _VALID_LOAN_STAGES = frozenset(s.value for s in LoanStage)

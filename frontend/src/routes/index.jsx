@@ -1,14 +1,12 @@
 import { lazy, Suspense } from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import { Capacitor } from '@capacitor/core';
-import { isAuthenticatedSync as isAuthenticated } from '../utils/auth';
-import { getUserEffectiveRole, getDefaultRouteForRole } from '../config/roleConfig';
 import MainLayout from '../layouts/MainLayout';
 import RouteErrorBoundary from '../components/RouteErrorBoundary';
 import MobileErrorBoundary from '../components/mobile/MobileErrorBoundary';
+import ProtectedRoute from '../components/ProtectedRoute'; // eslint-disable-line no-unused-vars
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
-import LandingPage from '../pages/LandingPage';
 import Registration from '../pages/Registration';
 import AccountVerification from '../pages/AccountVerification';
 import EmailVerificationSent from '../pages/EmailVerificationSent';
@@ -18,7 +16,6 @@ import ResetPassword from '../pages/ResetPassword';
 import AdminOnboarding from '../pages/AdminOnboarding';
 import ApplicationSubmitted from '../pages/ApplicationSubmitted';
 import BuyerIntake from '../pages/BuyerIntake';
-import { clearTokens, getUserData } from '../utils/tokenStore';
 
 // Loading fallback component with spinner for Suspense boundaries
 function PageLoadingFallback() {
@@ -51,7 +48,6 @@ const PageLoader = PageLoadingFallback;
 function lazyRetry(importFn) {
   return lazy(() =>
     importFn().catch(() => {
-      // If chunk fails to load (e.g. after new deploy), reload the page once
       const hasReloaded = sessionStorage.getItem('chunk_reload');
       if (!hasReloaded) {
         sessionStorage.setItem('chunk_reload', '1');
@@ -59,7 +55,6 @@ function lazyRetry(importFn) {
         return new Promise(() => {}); // never resolves, page is reloading
       }
       sessionStorage.removeItem('chunk_reload');
-      // If reload didn't fix it, show a fallback
       return { default: () => (
         <div style={{ textAlign: 'center', padding: '2rem' }}>
           <p>Failed to load page. Please try refreshing.</p>
@@ -83,44 +78,16 @@ function LazyPage({ children, fallback }) {
   );
 }
 
-// Private route wrapper
-function PrivateRoute({ children }) {
-  if (!isAuthenticated()) {
-    return <Navigate to="/login" />;
-  }
-  return children;
-}
+// Clear chunk reload flag on successful load
+sessionStorage.removeItem('chunk_reload');
 
-// Role-based redirect component for authenticated users
-function RoleBasedRedirect() {
-  let user = null;
-  try {
-    const stored = getUserData();
-    if (stored) user = JSON.parse(stored);
-  } catch (e) {
-    console.warn('Failed to parse stored user data, clearing corrupted entry');
-    clearTokens().catch(() => {});
-  }
-  try {
-    if (user) {
-      const permissionRole = user.permission_role || 'sales';
-      const legacyRole = user.role || null;
-      const effectiveRole = getUserEffectiveRole(permissionRole, legacyRole);
-      const defaultRoute = getDefaultRouteForRole(effectiveRole);
-      return <Navigate to={defaultRoute} replace />;
-    }
-  } catch (error) {
-    console.error('Error determining role-based redirect:', error);
-  }
-  return <Navigate to="/dashboard" replace />;
-}
+// Error pages
+const NotFound = lazyRetry(() => import('../pages/NotFound'));
+const Forbidden = lazyRetry(() => import('../pages/Forbidden'));
 
 // =============================================================================
 // LAZY LOADED PAGE COMPONENTS
 // =============================================================================
-
-// Clear chunk reload flag on successful load
-sessionStorage.removeItem('chunk_reload');
 
 // Core pages
 const Dashboard = lazyRetry(() => import('../pages/Dashboard'));
@@ -137,10 +104,16 @@ const MumClientDetail = lazyRetry(() => import('../pages/MumClientDetail'));
 const YearOverYear = lazyRetry(() => import('../pages/YearOverYear'));
 const RateMonitor = lazyRetry(() => import('../pages/RateMonitor'));
 const Tasks = lazyRetry(() => import('../pages/Tasks'));
+const SMSTasks = lazyRetry(() => import('../pages/SMSTasks'));
 const Calendar = lazyRetry(() => import('../pages/Calendar'));
 const CalendarSettings = lazyRetry(() => import('../pages/CalendarSettings'));
 const CalendarSetupWizard = lazyRetry(() => import('../components/calendar/setup/CalendarSetupWizard'));
 const CalendarAnalyticsPage = lazyRetry(() => import('../pages/CalendarAnalyticsPage'));
+const SurveyResultsPage = lazyRetry(() => import('../pages/SurveyResultsPage'));
+const BufferSettingsPage = lazyRetry(() => import('../pages/BufferSettingsPage'));
+const WaitlistPage = lazyRetry(() => import('../pages/WaitlistPage'));
+const LOTodayView = lazyRetry(() => import('../pages/LOTodayView'));
+const TeamCalendar = lazyRetry(() => import('../pages/TeamCalendar'));
 const Scorecard = lazyRetry(() => import('../pages/Scorecard'));
 const Assistant = lazyRetry(() => import('../pages/Assistant'));
 const ClientProfile = lazyRetry(() => import('../pages/ClientProfile'));
@@ -159,6 +132,7 @@ const TeamMemberProfile = lazyRetry(() => import('../pages/TeamMemberProfile'));
 const MyProfile = lazyRetry(() => import('../pages/MyProfile'));
 const MyPermissions = lazyRetry(() => import('../pages/MyPermissions'));
 const ComplianceDashboard = lazyRetry(() => import('../pages/ComplianceDashboard'));
+const OpsManagerDashboard = lazyRetry(() => import('../pages/OpsManagerDashboard'));
 const AdminSettings = lazyRetry(() => import('../pages/AdminSettings'));
 const PermissionsPage = lazyRetry(() => import('../pages/PermissionsPage'));
 const AdminCustomDomains = lazyRetry(() => import('../pages/AdminCustomDomains'));
@@ -175,9 +149,19 @@ const MobileHomeDashboard = lazyRetry(() => import('../pages/MobileHomeDashboard
 const MobileAriaChat = lazyRetry(() => import('../pages/MobileAriaChat'));
 const MobileLeadsList = lazyRetry(() => import('../pages/MobileLeadsList'));
 const MobileNotificationCenter = lazyRetry(() => import('../pages/MobileNotificationCenter'));
+const MobilePipelineView = lazyRetry(() => import('../pages/MobilePipelineView'));
+
+// Aria Mobile Redesign
+const AriaVoiceHome = lazyRetry(() => import('../pages/aria-mobile/AriaVoiceHome'));
+const AriaVoiceHistory = lazyRetry(() => import('../pages/aria-mobile/AriaVoiceHistory'));
+const MobileCalendar = lazyRetry(() => import('../pages/aria-mobile/MobileCalendar'));
+const MobileTasks = lazyRetry(() => import('../pages/aria-mobile/MobileTasks'));
+const MobileAppointmentDetail = lazyRetry(() => import('../pages/aria-mobile/MobileAppointmentDetail'));
+const MobileCallIntel = lazyRetry(() => import('../pages/aria-mobile/MobileCallIntel'));
+const AriaVoiceOnboarding = lazyRetry(() => import('../pages/aria-mobile/AriaVoiceOnboarding'));
+const AriaChatScreen = lazyRetry(() => import('../pages/aria-mobile/AriaChatScreen'));
 
 // Efficiency & Pipeline pages
-const MobilePipelineView = lazyRetry(() => import('../pages/MobilePipelineView'));
 const PipelineEfficiency = lazyRetry(() => import('../pages/PipelineEfficiency'));
 const StageEmployees = lazyRetry(() => import('../pages/StageEmployees'));
 const EmployeeLoans = lazyRetry(() => import('../pages/EmployeeLoans'));
@@ -200,12 +184,17 @@ const VoiceTalkToAgentPage = lazyRetry(() => import('../components/voice/TalkToA
 const VoiceCallAnalyticsDashboard = lazyRetry(() => import('../components/voice/CallAnalyticsDashboard'));
 const CallIntelligencePage = lazyRetry(() => import('../pages/CallIntelligencePage'));
 const MobileCallIntelligencePage = lazyRetry(() => import('../pages/MobileCallIntelligencePage'));
-const MobileCallIntelligence = lazyRetry(() => import('../pages/MobileCallIntelligence'));
+const URLACallIntelligencePage = lazyRetry(() => import('../pages/URLACallIntelligencePage'));
 const AILandingPage = lazyRetry(() => import('../pages/AILandingPage'));
+const AriaVoiceApp = lazyRetry(() => import('../pages/AriaVoiceApp'));
+const AriaCalendarPage = lazyRetry(() => import('../pages/aria/AriaCalendarPage'));
+const AriaMortgageCalculator = lazyRetry(() => import('../pages/aria/AriaMortgageCalculator'));
+const AriaTestPage = lazyRetry(() => import('../pages/AriaTestPage'));
 
 // Workflow & Analytics pages
 const WorkflowDashboard = lazyRetry(() => import('../pages/WorkflowDashboard'));
 const WorkflowStagePage = lazyRetry(() => import('../pages/WorkflowStagePage'));
+const WorkflowStatusDetail = lazyRetry(() => import('../pages/WorkflowStatusDetail'));
 const MarketDashboard = lazyRetry(() => import('../pages/MarketDashboard'));
 const MorningCheckin = lazyRetry(() => import('../pages/MorningCheckin'));
 const PartnerROIDashboard = lazyRetry(() => import('../pages/PartnerROIDashboard'));
@@ -221,39 +210,49 @@ const AcceptInvite = lazyRetry(() => import('../pages/AcceptInvite'));
 const MortgagePlannerQuestionnaire = lazyRetry(() => import('../pages/MortgagePlannerQuestionnaire'));
 const KnowledgeBase = lazyRetry(() => import('../pages/KnowledgeBase'));
 const Support = lazyRetry(() => import('../pages/Support'));
-const AriaVoiceApp = lazyRetry(() => import('../pages/AriaVoiceApp'));
 const PowerDialer = lazyRetry(() => import('../pages/PowerDialer'));
 const UserCreationWizard = lazyRetry(() => import('../pages/UserCreationWizard'));
 const UserBulkUpload = lazyRetry(() => import('../pages/UserBulkUpload'));
 const ActivateAccount = lazyRetry(() => import('../pages/ActivateAccount'));
 const MeetingRoom = lazyRetry(() => import('../pages/MeetingRoom'));
 const OAuthCallback = lazyRetry(() => import('../pages/OAuthCallback'));
-const WorkflowStatusDetail = lazyRetry(() => import('../pages/WorkflowStatusDetail'));
 const CommunicationIntelligence = lazyRetry(() => import('../pages/CommunicationIntelligence'));
 const AIOutreach = lazyRetry(() => import('../pages/AIOutreach'));
 const ConversationIntelligence = lazyRetry(() => import('../pages/ConversationIntelligence'));
 const ConversationIntelligenceRecordingDetail = lazyRetry(() => import('../pages/ConversationIntelligenceRecordingDetail'));
+const BriefingPage = lazyRetry(() => import('../pages/BriefingPage'));
+const ApplicationAnalytics = lazyRetry(() => import('../pages/ApplicationAnalytics'));
+
+// Smart Docs pages
 const SmartDocs = lazyRetry(() => import('../pages/SmartDocs'));
 const SmartDocsClientDetail = lazyRetry(() => import('../pages/SmartDocsClientDetail'));
 const SmartDocsDashboard = lazyRetry(() => import('../pages/SmartDocsDashboard'));
+const SmartDocsAnalytics = lazyRetry(() => import('../pages/SmartDocsAnalytics'));
+const SmartDocsReviewQueue = lazyRetry(() => import('../pages/SmartDocsReviewQueue'));
+const SmartDocsSecurity = lazyRetry(() => import('../pages/SmartDocsSecurity'));
+const SmartDocsBankAnalysis = lazyRetry(() => import('../pages/SmartDocsBankAnalysis'));
+const SmartDocsIncome = lazyRetry(() => import('../pages/SmartDocsIncome'));
+const SmartDocsAdmin = lazyRetry(() => import('../pages/SmartDocsAdmin'));
 const SmartDocsCadence = lazyRetry(() => import('../pages/SmartDocsCadence'));
 const EnterpriseDocumentationPortal = lazyRetry(() => import('../pages/EnterpriseDocumentationPortal'));
 const AppCompletionScoring = lazyRetry(() => import('../pages/AppCompletionScoring'));
+
+// Content & Blog
 const AIDailyBlog = lazyRetry(() => import('../pages/AIDailyBlog'));
 const PublicBooking = lazyRetry(() => import('../pages/PublicBooking'));
+const BookingConfirmationPage = lazyRetry(() => import('../pages/BookingConfirmationPage'));
 const EmbedBooking = lazyRetry(() => import('../pages/EmbedBooking'));
-const ApplicationAnalytics = lazyRetry(() => import('../pages/ApplicationAnalytics'));
 
 // Application pages
 const BorrowerApplication = lazyRetry(() => import('../pages/BorrowerApplication'));
-// AdaptiveURLA is available but not currently routed
-// const AdaptiveURLA = lazyRetry(() => import('../pages/AdaptiveURLA'));
+const AdaptiveURLA = lazyRetry(() => import('../pages/AdaptiveURLA'));
 const PurchaseApplication = lazyRetry(() => import('../pages/PurchaseApplication'));
 const RefinanceApplication = lazyRetry(() => import('../pages/RefinanceApplication'));
 const PurchasePreQualForm = lazyRetry(() => import('../pages/PurchasePreQualForm'));
 const NewPurchaseApplication = lazyRetry(() => import('../pages/applications/NewPurchaseApplication'));
 const NewRefinanceApplication = lazyRetry(() => import('../pages/applications/NewRefinanceApplication'));
 const ApplicationDemo = lazyRetry(() => import('../pages/applications/ApplicationDemo'));
+const VoiceReviewPage = lazyRetry(() => import('../pages/VoiceReviewPage'));
 const CoborrowerApplication = lazyRetry(() => import('../pages/CoborrowerApplication'));
 const BorrowerLogin = lazyRetry(() => import('../pages/BorrowerLogin'));
 const ApplyVerify = lazyRetry(() => import('../pages/ApplyVerify'));
@@ -279,6 +278,7 @@ const LeadAssignmentConfig = lazyRetry(() => import('../pages/LeadAssignmentConf
 const AgentDashboard = lazyRetry(() => import('../pages/AgentDashboard'));
 const AgentProfile = lazyRetry(() => import('../pages/AgentProfile'));
 const AcquisitionDashboard = lazyRetry(() => import('../pages/AcquisitionDashboard'));
+const EngagementDashboard = lazyRetry(() => import('../pages/EngagementDashboard'));
 const Marketing = lazyRetry(() => import('../pages/Marketing'));
 const CarouselBuilder = lazyRetry(() => import('../pages/CarouselBuilder/CarouselBuilderPage'));
 
@@ -286,6 +286,7 @@ const CarouselBuilder = lazyRetry(() => import('../pages/CarouselBuilder/Carouse
 const MasterManagerCapacity = lazyRetry(() => import('../pages/MasterManager/CapacityCommandCenter'));
 const AgentGym = lazyRetry(() => import('../pages/AgentGym'));
 const AgentGovernanceSettings = lazyRetry(() => import('../pages/AgentGovernanceSettings'));
+const MemoryStaging = lazyRetry(() => import('../pages/MemoryStaging'));
 
 // Settings pages
 const EmailIntegrationSettings = lazyRetry(() => import('../pages/EmailIntegrationSettings'));
@@ -296,8 +297,11 @@ const ClientPortalSettings = lazyRetry(() => import('../pages/ClientPortalSettin
 const CommunicationPreferences = lazyRetry(() => import('../pages/CommunicationPreferences'));
 const IntegrationSettings = lazyRetry(() => import('../pages/IntegrationSettings'));
 const SalesforceIntegrationPage = lazyRetry(() => import('../pages/SalesforceIntegrationPage'));
+const FollowUpBossIntegrationPage = lazyRetry(() => import('../pages/FollowUpBossIntegrationPage'));
 const StateRecordingRules = lazyRetry(() => import('../pages/settings/StateRecordingRules'));
 const QuoteLanguagePresets = lazyRetry(() => import('../pages/settings/QuoteLanguagePresets'));
+const CalculatorSettings = lazyRetry(() => import('../pages/settings/CalculatorSettings'));
+const BillingSettings = lazyRetry(() => import('../pages/settings/BillingSettings'));
 const APIKeysSettings = lazyRetry(() => import('../pages/APIKeysSettings'));
 const CompanyBrandingSettings = lazyRetry(() => import('../pages/CompanyBrandingSettings'));
 const AccountManagement = lazyRetry(() => import('../pages/AccountManagement'));
@@ -306,6 +310,8 @@ const AccountManagement = lazyRetry(() => import('../pages/AccountManagement'));
 const PURLDashboard = lazyRetry(() => import('../pages/PURLDashboard'));
 const PURLApplication = lazyRetry(() => import('../pages/PURLApplication'));
 const PortalContainer = lazyRetry(() => import('../pages/portal/PortalContainer'));
+const POSApplication = lazyRetry(() => import('../pages/portal/POSApplication'));
+const POSTestPage = lazyRetry(() => import('../pages/portal/POSTestPage'));
 const LoanPortalRedirect = lazyRetry(() => import('../components/Portal/LoanPortalRedirect'));
 const AdminDocumentReviewQueue = lazyRetry(() => import('../pages/AdminDocumentReviewQueue'));
 const IncomeCalculatorPopout = lazyRetry(() => import('../pages/IncomeCalculatorPopout'));
@@ -358,11 +364,15 @@ const SigningSession = lazyRetry(() => import('../pages/esign/SigningSession'));
 // =============================================================================
 
 /**
- * Generates all application routes
+ * Generates all application routes.
+ *
  * @param {Object} layoutProps - Props to pass to MainLayout (toggle functions, open states, task counts)
+ * @param {Object} options - Additional options
+ * @param {React.ComponentType} options.PrivateRoute - PrivateRoute wrapper component from App.jsx
+ * @param {React.ReactElement} options.rootElement - Element for the "/" route (handles platform detection in App.jsx)
  * @returns {JSX.Element[]} Array of Route elements
  */
-export function getRoutes(layoutProps) {
+export function getRoutes(layoutProps, options = {}) {
   const {
     toggleAssistant,
     toggleCoach,
@@ -371,8 +381,9 @@ export function getRoutes(layoutProps) {
     coachOpen,
     taskSidebarOpen,
     taskCounts,
-    // setCoachOpen is available but not currently used in route generation
   } = layoutProps;
+
+  const { PrivateRoute, rootElement } = options;
 
   // Helper to create a private route with MainLayout
   const withMainLayout = (Component, showCoach = true) => (
@@ -392,11 +403,38 @@ export function getRoutes(layoutProps) {
     </PrivateRoute>
   );
 
-  // Helper for private route without MainLayout
+  // Helper for private route without MainLayout (mobile, standalone pages)
   const privateOnly = (Component) => (
     <PrivateRoute>
       <LazyPage><Component /></LazyPage>
     </PrivateRoute>
+  );
+
+  // Helper for role-protected route with MainLayout
+  const withProtectedMainLayout = (Component, requiredRoles, showCoach = true) => (
+    <ProtectedRoute requiredRoles={requiredRoles}>
+      <MainLayout
+        onToggleAssistant={toggleAssistant}
+        onToggleCoach={toggleCoach}
+        onToggleTaskSidebar={toggleTaskSidebar}
+        assistantOpen={assistantOpen}
+        coachOpen={coachOpen}
+        taskSidebarOpen={taskSidebarOpen}
+        taskCounts={taskCounts}
+        showCoach={showCoach}
+      >
+        <Component />
+      </MainLayout>
+    </ProtectedRoute>
+  );
+
+  // Helper for mobile routes with error boundary
+  const mobilePrivate = (Component) => (
+    <MobileErrorBoundary>
+      <PrivateRoute>
+        <LazyPage><Component /></LazyPage>
+      </PrivateRoute>
+    </MobileErrorBoundary>
   );
 
   return [
@@ -404,16 +442,8 @@ export function getRoutes(layoutProps) {
     // PUBLIC ROUTES
     // =============================================================================
 
-    // Landing page (redirects to mobile home on native, landing page on web)
-    <Route
-      key="/"
-      path="/"
-      element={
-        (Capacitor.isNativePlatform() || window.location.hostname.startsWith('192.168.'))
-          ? <Navigate to="/mobile-home" />
-          : <LandingPage />
-      }
-    />,
+    // Root route — platform-dependent, provided by App.jsx
+    <Route key="/" path="/" element={rootElement} />,
 
     // Auth routes
     <Route key="/register" path="/register" element={<Registration />} />,
@@ -432,10 +462,11 @@ export function getRoutes(layoutProps) {
     <Route key="/questionnaire" path="/questionnaire" element={<LazyPage><MortgagePlannerQuestionnaire /></LazyPage>} />,
     <Route key="/mortgage-calculator" path="/mortgage-calculator" element={<LazyPage><MortgageCalculator /></LazyPage>} />,
     <Route key="/estimate-comparison" path="/estimate-comparison" element={<LazyPage><EstimateComparison /></LazyPage>} />,
-    <Route key="/aria" path="/aria" element={<LazyPage><AriaVoiceApp /></LazyPage>} />,
     <Route key="/privacy-policy" path="/privacy-policy" element={<LazyPage><PrivacyPolicy /></LazyPage>} />,
     <Route key="/terms-of-service" path="/terms-of-service" element={<LazyPage><TermsOfService /></LazyPage>} />,
     <Route key="/terms" path="/terms" element={<LazyPage><TermsOfService /></LazyPage>} />,
+    <Route key="/aria-test" path="/aria-test" element={<LazyPage><AriaTestPage /></LazyPage>} />,
+    <Route key="/pos-test" path="/pos-test" element={<LazyPage><POSTestPage /></LazyPage>} />,
 
     // Public portals
     <Route key="/realtor-portal" path="/realtor-portal" element={<LazyPage><RealtorPortal /></LazyPage>} />,
@@ -448,16 +479,17 @@ export function getRoutes(layoutProps) {
     <Route key="/book/org/:orgSlug" path="/book/org/:orgSlug" element={<LazyPage><PublicBooking /></LazyPage>} />,
     <Route key="/book/:slug" path="/book/:slug" element={<LazyPage><PublicBooking /></LazyPage>} />,
     <Route key="/embed/book/:slug" path="/embed/book/:slug" element={<LazyPage><EmbedBooking /></LazyPage>} />,
+    <Route key="/booking/confirmation/:appointmentId" path="/booking/confirmation/:appointmentId" element={<LazyPage><BookingConfirmationPage /></LazyPage>} />,
     <Route key="/portal-test" path="/portal-test" element={<LazyPage><PortalTest /></LazyPage>} />,
 
-    // Microsite routes
+    // Microsite routes (public)
     <Route key="/lo/:slug" path="/lo/:slug" element={<LazyPage><ThemeRenderer /></LazyPage>} />,
     <Route key="/lo/:slug/:pageSlug" path="/lo/:slug/:pageSlug" element={<LazyPage><ThemeRenderer /></LazyPage>} />,
     <Route key="/microsite/loan-officer/:userId" path="/microsite/loan-officer/:userId" element={<LazyPage><ThemeRenderer /></LazyPage>} />,
     <Route key="/microsite/preview" path="/microsite/preview" element={<LazyPage><MicrositePreview /></LazyPage>} />,
     <Route key="/preview/theme/:themeSlug" path="/preview/theme/:themeSlug" element={<LazyPage><ThemePreview /></LazyPage>} />,
 
-    // Borrower application routes
+    // Borrower application routes (public)
     <Route key="/apply/login" path="/apply/login" element={<LazyPage><BorrowerLogin /></LazyPage>} />,
     <Route key="/apply/verify" path="/apply/verify" element={<LazyPage><ApplyVerify /></LazyPage>} />,
     <Route key="/apply/start" path="/apply/start" element={<LazyPage><PurchaseApplication /></LazyPage>} />,
@@ -468,6 +500,7 @@ export function getRoutes(layoutProps) {
     <Route key="/apply/v2/refinance" path="/apply/v2/refinance" element={<LazyPage><NewRefinanceApplication /></LazyPage>} />,
     <Route key="/apply/demo" path="/apply/demo" element={<LazyPage><ApplicationDemo /></LazyPage>} />,
     <Route key="/apply/oauth/:provider/callback" path="/apply/oauth/:provider/callback" element={<LazyPage><BorrowerOAuthCallback /></LazyPage>} />,
+    <Route key="/apply/voice-review/:token" path="/apply/voice-review/:token" element={<LazyPage><VoiceReviewPage /></LazyPage>} />,
     <Route key="/apply/:token" path="/apply/:token" element={<LazyPage><BorrowerApplication /></LazyPage>} />,
     <Route key="/coborrower/:token" path="/coborrower/:token" element={<LazyPage><CoborrowerApplication /></LazyPage>} />,
     <Route key="/borrower-portal/:token" path="/borrower-portal/:token" element={<LazyPage><BorrowerPortal /></LazyPage>} />,
@@ -477,7 +510,7 @@ export function getRoutes(layoutProps) {
     <Route key="/calculator-dashboard" path="/calculator-dashboard" element={<LazyPage><CalculatorDashboard /></LazyPage>} />,
     <Route key="/all-in-one-loan" path="/all-in-one-loan" element={<LazyPage><AllInOneLoan /></LazyPage>} />,
 
-    // Portal routes
+    // Portal routes (public)
     <Route key="/portal/loan/:loanId" path="/portal/loan/:loanId" element={<LazyPage><ActiveLoanPortalComplete /></LazyPage>} />,
     <Route key="/portal/active/:token" path="/portal/active/:token" element={<LazyPage><ActiveLoanPortalComplete /></LazyPage>} />,
     <Route key="/portal/ultimate/:loanId" path="/portal/ultimate/:loanId" element={<LazyPage><PerenniaClientPortalUltimate /></LazyPage>} />,
@@ -492,22 +525,55 @@ export function getRoutes(layoutProps) {
     <Route key="/sign/:token" path="/sign/:token" element={<LazyPage><SigningSession /></LazyPage>} />,
     <Route key="/portal/:slug" path="/portal/:slug" element={<LazyPage><PortalContainer /></LazyPage>} />,
     <Route key="/portal/:slug/apply" path="/portal/:slug/apply" element={<LazyPage><PURLApplication /></LazyPage>} />,
+    <Route key="/portal/:slug/application" path="/portal/:slug/application" element={<LazyPage><POSApplication /></LazyPage>} />,
 
     // =============================================================================
-    // PROTECTED ROUTES WITH MAIN LAYOUT
+    // PRIVATE ROUTES — NO MAIN LAYOUT (standalone / mobile / aria)
     // =============================================================================
 
     // Onboarding
     <Route key="/onboarding" path="/onboarding" element={<PrivateRoute><Navigate to="/onboarding/welcome" replace /></PrivateRoute>} />,
     <Route key="/onboarding/:step" path="/onboarding/:step" element={withMainLayout(OnboardingWizard)} />,
 
-    // AI Landing
+    // AI Landing (standalone)
     <Route key="/ai" path="/ai" element={privateOnly(AILandingPage)} />,
+
+    // Aria standalone routes (no nav wrapper)
+    <Route key="/aria" path="/aria" element={<PrivateRoute><LazyPage><AriaVoiceApp /></LazyPage></PrivateRoute>} />,
+    <Route key="/aria/calendar" path="/aria/calendar" element={<PrivateRoute><LazyPage><AriaCalendarPage /></LazyPage></PrivateRoute>} />,
+    <Route key="/aria/calculator" path="/aria/calculator" element={<PrivateRoute><LazyPage><AriaMortgageCalculator /></LazyPage></PrivateRoute>} />,
+
+    // Mobile-native routes (no Navigation wrapper, no app-layout)
+    <Route key="/mobile-aria" path="/mobile-aria" element={mobilePrivate(MobileAriaChat)} />,
+    <Route key="/mobile-home" path="/mobile-home" element={mobilePrivate(MobileHomeDashboard)} />,
+    <Route key="/mobile/leads" path="/mobile/leads" element={mobilePrivate(MobileLeadsList)} />,
+    <Route key="/mobile/pipeline" path="/mobile/pipeline" element={mobilePrivate(MobilePipelineView)} />,
+    <Route key="/aria/notifications" path="/aria/notifications" element={mobilePrivate(MobileNotificationCenter)} />,
+    <Route key="/mobile/call-intelligence" path="/mobile/call-intelligence" element={<PrivateRoute><LazyPage><MobileCallIntelligencePage /></LazyPage></PrivateRoute>} />,
+
+    // Aria Mobile Redesign — voice-first 5-screen app
+    <Route key="/aria-mobile" path="/aria-mobile" element={mobilePrivate(AriaVoiceHome)} />,
+    <Route key="/aria-voice" path="/aria-voice" element={mobilePrivate(AriaVoiceHome)} />,
+    <Route key="/aria-history" path="/aria-history" element={mobilePrivate(AriaVoiceHistory)} />,
+    <Route key="/mobile-calendar" path="/mobile-calendar" element={mobilePrivate(MobileCalendar)} />,
+    <Route key="/mobile-tasks" path="/mobile-tasks" element={mobilePrivate(MobileTasks)} />,
+    <Route key="/mobile-appointment/:id" path="/mobile-appointment/:id" element={mobilePrivate(MobileAppointmentDetail)} />,
+    <Route key="/mobile-ci" path="/mobile-ci" element={mobilePrivate(MobileCallIntel)} />,
+    <Route key="/voice-onboarding" path="/voice-onboarding" element={privateOnly(AriaVoiceOnboarding)} />,
+    <Route key="/aria-chat" path="/aria-chat" element={privateOnly(AriaChatScreen)} />,
+
+    // Partner portal (standalone, no nav)
+    <Route key="/partner-portal/:id" path="/partner-portal/:id" element={privateOnly(PartnerDashboardPortal)} />,
+    <Route key="/partner-portal/:partnerId/client/:clientId" path="/partner-portal/:partnerId/client/:clientId" element={privateOnly(PartnerClientDetail)} />,
+
+    // =============================================================================
+    // PROTECTED ROUTES WITH MAIN LAYOUT
+    // =============================================================================
 
     // Dashboard & Command Center
     <Route key="/dashboard" path="/dashboard" element={withMainLayout(Dashboard)} />,
     <Route key="/command-center" path="/command-center" element={withMainLayout(CommandCenter)} />,
-    <Route key="/mobile/pipeline" path="/mobile/pipeline" element={<MobileErrorBoundary>{privateOnly(MobilePipelineView)}</MobileErrorBoundary>} />,
+    <Route key="/briefing" path="/briefing" element={withMainLayout(BriefingPage)} />,
     <Route key="/dashboard/efficiency" path="/dashboard/efficiency" element={withMainLayout(PipelineEfficiency)} />,
     <Route key="/efficiency" path="/efficiency" element={withMainLayout(PipelineEfficiency)} />,
     <Route key="/efficiency/stage/:stageSlug" path="/efficiency/stage/:stageSlug" element={withMainLayout(StageEmployees)} />,
@@ -550,10 +616,16 @@ export function getRoutes(layoutProps) {
 
     // Tasks & Calendar
     <Route key="/tasks" path="/tasks" element={withMainLayout(Tasks)} />,
+    <Route key="/sms-tasks" path="/sms-tasks" element={withMainLayout(SMSTasks)} />,
     <Route key="/calendar" path="/calendar" element={withMainLayout(Calendar)} />,
     <Route key="/calendar-settings" path="/calendar-settings" element={withMainLayout(CalendarSettings)} />,
     <Route key="/calendar/setup" path="/calendar/setup" element={withMainLayout(CalendarSetupWizard)} />,
     <Route key="/calendar/analytics" path="/calendar/analytics" element={withMainLayout(CalendarAnalyticsPage)} />,
+    <Route key="/calendar/surveys" path="/calendar/surveys" element={withMainLayout(SurveyResultsPage)} />,
+    <Route key="/calendar/buffer-settings" path="/calendar/buffer-settings" element={withMainLayout(BufferSettingsPage)} />,
+    <Route key="/calendar/waitlist" path="/calendar/waitlist" element={withMainLayout(WaitlistPage)} />,
+    <Route key="/today" path="/today" element={withMainLayout(LOTodayView)} />,
+    <Route key="/team-calendar" path="/team-calendar" element={withMainLayout(TeamCalendar)} />,
 
     // Marketing
     <Route key="/marketing" path="/marketing" element={withMainLayout(Marketing)} />,
@@ -578,6 +650,7 @@ export function getRoutes(layoutProps) {
     // Agents
     <Route key="/agents" path="/agents" element={withMainLayout(AgentDashboard)} />,
     <Route key="/acquisition" path="/acquisition" element={withMainLayout(AcquisitionDashboard)} />,
+    <Route key="/engagement" path="/engagement" element={withMainLayout(EngagementDashboard)} />,
     <Route key="/agent/:id" path="/agent/:id" element={withMainLayout(AgentProfile)} />,
     <Route key="/agent/:agentId/settings" path="/agent/:agentId/settings" element={withMainLayout(AgentGovernanceSettings)} />,
     <Route key="/agent-gym" path="/agent-gym" element={withMainLayout(AgentGym)} />,
@@ -619,20 +692,21 @@ export function getRoutes(layoutProps) {
     <Route key="/settings/communication" path="/settings/communication" element={withMainLayout(CommunicationPreferences)} />,
     <Route key="/settings/integrations" path="/settings/integrations" element={withMainLayout(IntegrationSettings)} />,
     <Route key="/settings/integrations/salesforce" path="/settings/integrations/salesforce" element={withMainLayout(SalesforceIntegrationPage)} />,
+    <Route key="/settings/integrations/followupboss" path="/settings/integrations/followupboss" element={withMainLayout(FollowUpBossIntegrationPage)} />,
     <Route key="/integrations" path="/integrations" element={withMainLayout(IntegrationSettings)} />,
     <Route key="/settings/state-recording-rules" path="/settings/state-recording-rules" element={withMainLayout(StateRecordingRules)} />,
     <Route key="/settings/quote-language-presets" path="/settings/quote-language-presets" element={withMainLayout(QuoteLanguagePresets)} />,
+    <Route key="/settings/calculator-types" path="/settings/calculator-types" element={withMainLayout(CalculatorSettings)} />,
     <Route key="/settings/api-keys" path="/settings/api-keys" element={withMainLayout(APIKeysSettings)} />,
     <Route key="/settings/company-branding" path="/settings/company-branding" element={withMainLayout(CompanyBrandingSettings)} />,
     <Route key="/settings/account-management" path="/settings/account-management" element={withMainLayout(AccountManagement)} />,
+    <Route key="/settings/billing" path="/settings/billing" element={withMainLayout(BillingSettings)} />,
 
     // Client & Partner management
     <Route key="/client-portals" path="/client-portals" element={withMainLayout(PURLDashboard)} />,
     <Route key="/client/:type/:id" path="/client/:type/:id" element={withMainLayout(ClientProfile)} />,
     <Route key="/referral-partners" path="/referral-partners" element={withMainLayout(ReferralPartners)} />,
     <Route key="/referral-partners/:id" path="/referral-partners/:id" element={withMainLayout(ReferralPartnerDetail)} />,
-    <Route key="/partner-portal/:id" path="/partner-portal/:id" element={privateOnly(PartnerDashboardPortal)} />,
-    <Route key="/partner-portal/:partnerId/client/:clientId" path="/partner-portal/:partnerId/client/:clientId" element={privateOnly(PartnerClientDetail)} />,
 
     // AI & Tools
     <Route key="/ai-underwriter" path="/ai-underwriter" element={withMainLayout(AIUnderwriter)} />,
@@ -647,12 +721,7 @@ export function getRoutes(layoutProps) {
     <Route key="/ai-outreach" path="/ai-outreach" element={withMainLayout(AIOutreach)} />,
     <Route key="/conversation-intelligence" path="/conversation-intelligence" element={withMainLayout(ConversationIntelligence)} />,
     <Route key="/call-intelligence" path="/call-intelligence" element={withMainLayout(CallIntelligencePage)} />,
-    <Route key="/mobile/call-intelligence" path="/mobile/call-intelligence" element={<MobileErrorBoundary>{privateOnly(MobileCallIntelligencePage)}</MobileErrorBoundary>} />,
-    <Route key="/mobile/call-intelligence-full" path="/mobile/call-intelligence-full" element={<MobileErrorBoundary>{privateOnly(MobileCallIntelligence)}</MobileErrorBoundary>} />,
-    <Route key="/mobile-home" path="/mobile-home" element={<MobileErrorBoundary>{privateOnly(MobileHomeDashboard)}</MobileErrorBoundary>} />,
-    <Route key="/mobile-aria" path="/mobile-aria" element={<MobileErrorBoundary>{privateOnly(MobileAriaChat)}</MobileErrorBoundary>} />,
-    <Route key="/mobile/leads" path="/mobile/leads" element={<MobileErrorBoundary>{privateOnly(MobileLeadsList)}</MobileErrorBoundary>} />,
-    <Route key="/aria/notifications" path="/aria/notifications" element={<MobileErrorBoundary>{privateOnly(MobileNotificationCenter)}</MobileErrorBoundary>} />,
+    <Route key="/urla-call-intelligence" path="/urla-call-intelligence" element={withMainLayout(URLACallIntelligencePage)} />,
     <Route key="/live-call-whisper" path="/live-call-whisper" element={withMainLayout(LiveCallWhisper)} />,
     <Route key="/production-predictor" path="/production-predictor" element={withMainLayout(ProductionPredictor)} />,
     <Route key="/production-predictor/detail" path="/production-predictor/detail" element={withMainLayout(ProductionPredictorDetail)} />,
@@ -662,6 +731,12 @@ export function getRoutes(layoutProps) {
     <Route key="/smart-docs" path="/smart-docs" element={withMainLayout(SmartDocs)} />,
     <Route key="/smart-docs/dashboard" path="/smart-docs/dashboard" element={withMainLayout(SmartDocsDashboard)} />,
     <Route key="/smart-docs/client/:loanId" path="/smart-docs/client/:loanId" element={withMainLayout(SmartDocsClientDetail)} />,
+    <Route key="/smart-docs/analytics" path="/smart-docs/analytics" element={withMainLayout(SmartDocsAnalytics)} />,
+    <Route key="/smart-docs/review-queue" path="/smart-docs/review-queue" element={withMainLayout(SmartDocsReviewQueue)} />,
+    <Route key="/smart-docs/security" path="/smart-docs/security" element={withMainLayout(SmartDocsSecurity)} />,
+    <Route key="/smart-docs/bank-analysis" path="/smart-docs/bank-analysis" element={withMainLayout(SmartDocsBankAnalysis)} />,
+    <Route key="/smart-docs/income" path="/smart-docs/income" element={withMainLayout(SmartDocsIncome)} />,
+    <Route key="/smart-docs/admin" path="/smart-docs/admin" element={withMainLayout(SmartDocsAdmin)} />,
     <Route key="/smart-docs/cadence" path="/smart-docs/cadence" element={withMainLayout(SmartDocsCadence)} />,
     <Route key="/smart-docs/app-scoring" path="/smart-docs/app-scoring" element={withMainLayout(AppCompletionScoring)} />,
     <Route key="/smart-docs/app-scoring/:loanId" path="/smart-docs/app-scoring/:loanId" element={withMainLayout(AppCompletionScoring)} />,
@@ -691,15 +766,17 @@ export function getRoutes(layoutProps) {
     <Route key="/my-profile" path="/my-profile" element={withMainLayout(MyProfile)} />,
     <Route key="/my-permissions" path="/my-permissions" element={withMainLayout(MyPermissions)} />,
 
-    // Admin
-    <Route key="/compliance" path="/compliance" element={withMainLayout(ComplianceDashboard)} />,
-    <Route key="/admin/settings" path="/admin/settings" element={withMainLayout(AdminSettings)} />,
-    <Route key="/admin/permissions" path="/admin/permissions" element={withMainLayout(PermissionsPage)} />,
-    <Route key="/admin/domains" path="/admin/domains" element={withMainLayout(AdminCustomDomains)} />,
-    <Route key="/admin/employee-onboarding" path="/admin/employee-onboarding" element={withMainLayout(EmployeeOnboardingAdmin)} />,
-    <Route key="/admin/documents" path="/admin/documents" element={withMainLayout(AdminDocumentReviewQueue)} />,
-    <Route key="/admin/lead-assignment" path="/admin/lead-assignment" element={withMainLayout(LeadAssignmentConfig)} />,
-    <Route key="/admin" path="/admin" element={withMainLayout(AdminPanel)} />,
+    // Admin (role-guarded)
+    <Route key="/compliance" path="/compliance" element={withProtectedMainLayout(ComplianceDashboard, ['admin', 'site_admin', 'management'])} />,
+    <Route key="/ops-manager" path="/ops-manager" element={withProtectedMainLayout(OpsManagerDashboard, ['admin', 'site_admin'])} />,
+    <Route key="/admin/settings" path="/admin/settings" element={withProtectedMainLayout(AdminSettings, ['admin', 'site_admin'])} />,
+    <Route key="/admin/permissions" path="/admin/permissions" element={withProtectedMainLayout(PermissionsPage, ['admin', 'site_admin'])} />,
+    <Route key="/admin/domains" path="/admin/domains" element={withProtectedMainLayout(AdminCustomDomains, ['admin', 'site_admin'])} />,
+    <Route key="/admin/employee-onboarding" path="/admin/employee-onboarding" element={withProtectedMainLayout(EmployeeOnboardingAdmin, ['admin', 'site_admin'])} />,
+    <Route key="/admin/documents" path="/admin/documents" element={withProtectedMainLayout(AdminDocumentReviewQueue, ['admin', 'site_admin'])} />,
+    <Route key="/admin/lead-assignment" path="/admin/lead-assignment" element={withProtectedMainLayout(LeadAssignmentConfig, ['admin', 'site_admin'])} />,
+    <Route key="/admin/memory-staging" path="/admin/memory-staging" element={withProtectedMainLayout(MemoryStaging, ['admin', 'site_admin'])} />,
+    <Route key="/admin" path="/admin" element={withProtectedMainLayout(AdminPanel, ['admin', 'site_admin'])} />,
 
     // Knowledge & Support
     <Route key="/knowledge-base" path="/knowledge-base" element={withMainLayout(KnowledgeBase)} />,
@@ -711,11 +788,11 @@ export function getRoutes(layoutProps) {
     <Route key="/compare-estimates" path="/compare-estimates" element={withMainLayout(EstimateComparison)} />,
     <Route key="/verizon-test" path="/verizon-test" element={withMainLayout(VerizonTest)} />,
 
-    // Users
+    // Users (role-guarded)
     <Route key="/team/:userId" path="/team/:userId" element={withMainLayout(UserProfile)} />,
-    <Route key="/users" path="/users" element={withMainLayout(Users)} />,
-    <Route key="/users/create" path="/users/create" element={withMainLayout(UserCreationWizard)} />,
-    <Route key="/users/bulk-upload" path="/users/bulk-upload" element={withMainLayout(UserBulkUpload)} />,
+    <Route key="/users" path="/users" element={withProtectedMainLayout(Users, ['admin', 'site_admin', 'management'])} />,
+    <Route key="/users/create" path="/users/create" element={withProtectedMainLayout(UserCreationWizard, ['admin', 'site_admin'])} />,
+    <Route key="/users/bulk-upload" path="/users/bulk-upload" element={withProtectedMainLayout(UserBulkUpload, ['admin', 'site_admin'])} />,
     <Route key="/users/:id" path="/users/:id" element={withMainLayout(UserProfile)} />,
 
     // Process templates
@@ -724,8 +801,14 @@ export function getRoutes(layoutProps) {
     // Role-specific dashboards
     <Route key="/dashboard/loan-officer" path="/dashboard/loan-officer" element={withMainLayout(LODashboard)} />,
     <Route key="/dashboard/realtor" path="/dashboard/realtor" element={withMainLayout(RealtorDashboard)} />,
+
+    // 403 Forbidden
+    <Route key="forbidden" path="/forbidden" element={<LazyPage><Forbidden /></LazyPage>} />,
+
+    // 404 catch-all — must be last
+    <Route key="404" path="*" element={<LazyPage><NotFound /></LazyPage>} />,
   ];
 }
 
 // Export components for external use
-export { PrivateRoute, RoleBasedRedirect, LazyPage, PageLoader };
+export { ProtectedRoute, LazyPage, PageLoader };

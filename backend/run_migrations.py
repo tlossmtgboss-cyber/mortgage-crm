@@ -14,6 +14,11 @@ import os
 import sys
 import logging
 
+from alembic.config import Config as AlembicConfig
+from alembic import command as alembic_command
+from alembic.runtime.migration import MigrationContext
+from alembic.script import ScriptDirectory
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -32,21 +37,16 @@ def run_migrations():
         logger.info("Fixed postgres:// prefix to postgresql://")
 
     try:
-        from alembic.config import Config
-        from alembic import command
+        from sqlalchemy import create_engine, inspect as sa_inspect
 
         # Get the directory where this script is located
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        alembic_cfg = Config(os.path.join(script_dir, "alembic.ini"))
+        alembic_cfg = AlembicConfig(os.path.join(script_dir, "alembic.ini"))
 
         # Override the script location to be absolute
         alembic_cfg.set_main_option("script_location", os.path.join(script_dir, "alembic"))
 
         logger.info("Running database migrations...")
-
-        # Get current revision
-        from alembic.runtime.migration import MigrationContext
-        from sqlalchemy import create_engine, inspect as sa_inspect
 
         engine = create_engine(os.environ["DATABASE_URL"])
         with engine.connect() as conn:
@@ -64,14 +64,14 @@ def run_migrations():
                 # Database was bootstrapped by init_db.py without alembic stamps.
                 # Stamp at head so alembic knows all migrations are already applied.
                 logger.info("Database has existing tables but no alembic version stamp — stamping at head")
-                command.stamp(alembic_cfg, "head")
+                alembic_command.stamp(alembic_cfg, "head")
             else:
                 # Truly fresh database — run all migrations
                 logger.info("Fresh database — running all migrations")
-                command.upgrade(alembic_cfg, "head")
+                alembic_command.upgrade(alembic_cfg, "head")
         else:
             # Normal case: run pending migrations
-            command.upgrade(alembic_cfg, "head")
+            alembic_command.upgrade(alembic_cfg, "head")
 
         # Get new revision
         with engine.connect() as conn:
@@ -104,13 +104,10 @@ def check_migration_status():
         database_url = database_url.replace("postgres://", "postgresql://", 1)
 
     try:
-        from alembic.config import Config
-        from alembic.runtime.migration import MigrationContext
-        from alembic.script import ScriptDirectory
         from sqlalchemy import create_engine
 
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        alembic_cfg = Config(os.path.join(script_dir, "alembic.ini"))
+        alembic_cfg = AlembicConfig(os.path.join(script_dir, "alembic.ini"))
         alembic_cfg.set_main_option("script_location", os.path.join(script_dir, "alembic"))
 
         script = ScriptDirectory.from_config(alembic_cfg)

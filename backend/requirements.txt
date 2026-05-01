@@ -96,7 +96,7 @@ factory-boy>=3.3.0
 faker>=22.0.0
 responses>=0.24.0
 freezegun>=1.2.0
-# locust  # Load testing — install separately for dev: pip install locust
+locust>=2.20.0
 
 # Production Monitoring
 sentry-sdk[fastapi]>=1.38.0

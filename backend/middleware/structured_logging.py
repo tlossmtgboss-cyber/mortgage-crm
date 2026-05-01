@@ -1,5 +1,11 @@
 """
-Structured Logging Middleware
+Structured Logging Middleware  [PARTIALLY DEPRECATED 2026-04-30]
+
+The RequestLoggingMiddleware class in this file is superseded by
+middleware/request_context.py (RequestContextMiddleware) and should NOT be
+registered as middleware.  However, the StructuredLogger utility class and its
+domain-specific log methods (log_chat_interaction, log_cta_event, log_call_event,
+etc.) remain in active use by chat_system_bootstrap.py and chat_state_routes.py.
 
 Provides production-grade logging for:
 - Chat interactions with full context

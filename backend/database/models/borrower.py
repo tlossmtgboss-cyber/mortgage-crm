@@ -212,6 +212,7 @@ class BorrowerApplication(Base):
     # Timestamps
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    deleted_at = Column(DateTime, nullable=True, index=True)
 
     @property
     def ssn_display(self) -> str:

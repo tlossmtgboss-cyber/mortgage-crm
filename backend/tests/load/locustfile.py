@@ -1,21 +1,21 @@
 """
 Perennia AI — Locust Load Test Suite
 
-Targets key API endpoints to validate performance under load.
-Tests the 47 indexes added in the enterprise hardening phase.
+Simulates loan officer workflows against the Perennia API to validate
+latency, throughput, and error rates under realistic concurrency.
 
 Usage:
     locust -f tests/load/locustfile.py --host=https://api.perenniaai.com
     locust -f tests/load/locustfile.py --host=http://localhost:8000
 
 Profiles:
-    Smoke:    locust ... --users 10  --spawn-rate 2  --run-time 1m
-    Normal:   locust ... --users 50  --spawn-rate 5  --run-time 5m
-    Stress:   locust ... --users 200 --spawn-rate 10 --run-time 10m
+    Smoke:    locust ... --headless --users 10  --spawn-rate 2  --run-time 1m
+    Normal:   locust ... --headless --users 50  --spawn-rate 5  --run-time 5m
+    Stress:   locust ... --headless --users 200 --spawn-rate 10 --run-time 10m
 
 Environment variables:
-    LOCUST_EMAIL     — account email for authentication (optional)
-    LOCUST_PASSWORD  — account password for authentication (optional)
+    LOCUST_EMAIL     — account email for authentication
+    LOCUST_PASSWORD  — account password for authentication
 
 When LOCUST_EMAIL / LOCUST_PASSWORD are not set the suite operates in
 anonymous mode: only unauthenticated endpoints (health probes) are tested.
@@ -23,314 +23,27 @@ anonymous mode: only unauthenticated endpoints (health probes) are tested.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import sys
 from typing import Optional
 
-from locust import HttpUser, TaskSet, between, events, tag, task
+from locust import HttpUser, between, events, tag, task
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Configuration — read credentials from environment
+# Configuration
 # ---------------------------------------------------------------------------
 
 _EMAIL: Optional[str] = os.getenv("LOCUST_EMAIL")
 _PASSWORD: Optional[str] = os.getenv("LOCUST_PASSWORD")
 _AUTH_AVAILABLE: bool = bool(_EMAIL and _PASSWORD)
 
-# Warning threshold (ms) — Locust logs these but does not fail the test run.
-# Critical thresholds should be enforced via CI assertions on the HTML report.
-P95_READ_WARN_MS = 500
-P95_WRITE_WARN_MS = 1_000
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-def _warn_slow(response, label: str, threshold_ms: int = P95_READ_WARN_MS) -> None:
-    """Log a warning when a single response exceeds the threshold."""
-    elapsed_ms = response.elapsed.total_seconds() * 1_000
-    if elapsed_ms > threshold_ms:
-        logger.warning(
-            "Slow response detected: %s took %.0f ms (threshold %d ms)",
-            label,
-            elapsed_ms,
-            threshold_ms,
-        )
-
-
-# ---------------------------------------------------------------------------
-# Task sets
-# ---------------------------------------------------------------------------
-
-
-class HealthCheckTasks(TaskSet):
-    """Lightweight health-probe tasks — run even without authentication."""
-
-    @tag("health", "read")
-    @task(3)
-    def health(self) -> None:
-        with self.client.get(
-            "/health",
-            name="GET /health",
-            catch_response=True,
-        ) as resp:
-            if resp.status_code == 200:
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /health")
-
-    @tag("health", "read")
-    @task(1)
-    def ready(self) -> None:
-        with self.client.get(
-            "/ready",
-            name="GET /ready",
-            catch_response=True,
-        ) as resp:
-            # 200 = ready; 503 = not ready yet (not a load-test failure)
-            if resp.status_code in (200, 503):
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /ready")
-
-
-class PipelineTasks(TaskSet):
-    """Main LO workflow — dashboard, leads, loans, tasks, search."""
-
-    @tag("pipeline", "read")
-    @task(4)
-    def dashboard_metrics(self) -> None:
-        with self.client.get(
-            "/api/v1/dashboard/metrics",
-            name="GET /api/v1/dashboard/metrics",
-            catch_response=True,
-        ) as resp:
-            if resp.status_code in (200, 304):
-                resp.success()
-            elif resp.status_code in (401, 403):
-                resp.success()  # auth issue, not a perf failure
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /api/v1/dashboard/metrics")
-
-    @tag("pipeline", "read")
-    @task(5)
-    def list_leads(self) -> None:
-        with self.client.get(
-            "/api/v1/leads?limit=50",
-            name="GET /api/v1/leads",
-            catch_response=True,
-        ) as resp:
-            if resp.status_code in (200, 304, 401, 403):
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /api/v1/leads")
-
-    @tag("pipeline", "read")
-    @task(5)
-    def list_loans(self) -> None:
-        with self.client.get(
-            "/api/v1/loans?limit=50",
-            name="GET /api/v1/loans",
-            catch_response=True,
-        ) as resp:
-            if resp.status_code in (200, 304, 401, 403):
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /api/v1/loans")
-
-    @tag("pipeline", "read")
-    @task(4)
-    def list_loans_by_stage(self) -> None:
-        with self.client.get(
-            "/api/v1/loans?stage=PROCESSING",
-            name="GET /api/v1/loans?stage=PROCESSING",
-            catch_response=True,
-        ) as resp:
-            if resp.status_code in (200, 304, 401, 403):
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /api/v1/loans?stage=PROCESSING")
-
-    @tag("pipeline", "read")
-    @task(3)
-    def list_tasks(self) -> None:
-        with self.client.get(
-            "/api/v1/tasks",
-            name="GET /api/v1/tasks",
-            catch_response=True,
-        ) as resp:
-            if resp.status_code in (200, 304, 401, 403):
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /api/v1/tasks")
-
-    @tag("pipeline", "write")
-    @task(2)
-    def search_leads(self) -> None:
-        payload = {"query": "john"}
-        with self.client.post(
-            "/api/v1/leads/search",
-            json=payload,
-            name="POST /api/v1/leads/search",
-            catch_response=True,
-        ) as resp:
-            if resp.status_code in (200, 401, 403, 422):
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "POST /api/v1/leads/search", P95_WRITE_WARN_MS)
-
-
-class CalendarTasks(TaskSet):
-    """Calendar-heavy workflow — events, slots, smart scheduler."""
-
-    @tag("calendar", "read")
-    @task(4)
-    def calendar_events(self) -> None:
-        with self.client.get(
-            "/api/v1/calendar/events",
-            name="GET /api/v1/calendar/events",
-            catch_response=True,
-        ) as resp:
-            if resp.status_code in (200, 304, 401, 403):
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /api/v1/calendar/events")
-
-    @tag("calendar", "read")
-    @task(3)
-    def calendar_slots(self) -> None:
-        with self.client.get(
-            "/api/v1/calendar/slots?date=2026-03-28",
-            name="GET /api/v1/calendar/slots",
-            catch_response=True,
-        ) as resp:
-            if resp.status_code in (200, 304, 401, 403):
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /api/v1/calendar/slots")
-
-    @tag("calendar", "read")
-    @task(3)
-    def smart_scheduler_slots(self) -> None:
-        with self.client.get(
-            "/api/v1/smart-scheduler/available-slots",
-            name="GET /api/v1/smart-scheduler/available-slots",
-            catch_response=True,
-        ) as resp:
-            if resp.status_code in (200, 304, 401, 403):
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /api/v1/smart-scheduler/available-slots")
-
-
-class AdminTasks(TaskSet):
-    """Admin/reporting workflow — users listing, compliance dashboard."""
-
-    @tag("admin", "read")
-    @task(2)
-    def admin_users(self) -> None:
-        with self.client.get(
-            "/api/v1/admin/users",
-            name="GET /api/v1/admin/users",
-            catch_response=True,
-        ) as resp:
-            # 403 is expected for non-admin users — not a load-test failure
-            if resp.status_code in (200, 304, 401, 403):
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /api/v1/admin/users")
-
-    @tag("admin", "read")
-    @task(2)
-    def compliance_dashboard(self) -> None:
-        with self.client.get(
-            "/api/v1/compliance/dashboard",
-            name="GET /api/v1/compliance/dashboard",
-            catch_response=True,
-        ) as resp:
-            if resp.status_code in (200, 304, 401, 403):
-                resp.success()
-            else:
-                resp.failure(f"Unexpected status: {resp.status_code}")
-            _warn_slow(resp, "GET /api/v1/compliance/dashboard")
-
-
-# ---------------------------------------------------------------------------
-# User classes
-# ---------------------------------------------------------------------------
-
-
-class HealthCheckUser(HttpUser):
-    """
-    Exercises health probes only.
-    Weight 1 — smallest share of virtual users.
-    Does NOT require authentication.
-    """
-
-    tasks = [HealthCheckTasks]
-    weight = 1
-    wait_time = between(1, 3)
-
-
-class PipelineUser(HttpUser):
-    """
-    Simulates a loan officer working through their daily pipeline:
-    dashboard, leads, loans, tasks, search.
-    Weight 5 — largest share of virtual users (most common workflow).
-    """
-
-    tasks = [PipelineTasks]
-    weight = 5
-    wait_time = between(1, 3)
-
-    def on_start(self) -> None:
-        """Authenticate if credentials are configured."""
-        _authenticate(self)
-
-
-class CalendarUser(HttpUser):
-    """
-    Simulates an LO focused on scheduling: calendar events and slot lookups.
-    Weight 3 — second-largest share.
-    """
-
-    tasks = [CalendarTasks]
-    weight = 3
-    wait_time = between(1, 3)
-
-    def on_start(self) -> None:
-        """Authenticate if credentials are configured."""
-        _authenticate(self)
-
-
-class AdminUser(HttpUser):
-    """
-    Simulates a platform admin reviewing compliance and user lists.
-    Weight 1 — smallest share (admin traffic is rare in production).
-    """
-
-    tasks = [AdminTasks]
-    weight = 1
-    wait_time = between(1, 3)
-
-    def on_start(self) -> None:
-        """Authenticate if credentials are configured."""
-        _authenticate(self)
+# Thresholds (ms) — enforced in CI via the quitting hook
+P95_THRESHOLD_MS = 800
+ERROR_RATE_THRESHOLD = 0.005  # 0.5%
 
 
 # ---------------------------------------------------------------------------
@@ -340,10 +53,11 @@ class AdminUser(HttpUser):
 
 def _authenticate(user: HttpUser) -> None:
     """
-    Log in and attach the JWT token as a default Authorization header.
+    Log in via POST /api/v1/account/start and attach the JWT token
+    as a default Authorization header for all subsequent requests.
 
-    If LOCUST_EMAIL / LOCUST_PASSWORD are not set, authentication is skipped
-    and only unauthenticated endpoints will respond with useful data.
+    If LOCUST_EMAIL / LOCUST_PASSWORD are not set, authentication is
+    skipped and only unauthenticated endpoints will return useful data.
     """
     if not _AUTH_AVAILABLE:
         logger.info(
@@ -352,61 +66,306 @@ def _authenticate(user: HttpUser) -> None:
         )
         return
 
-    payload = {"email": _EMAIL, "password": _PASSWORD}
+    payload = {"x1": _EMAIL, "x2": _PASSWORD}
     with user.client.post(
-        "/api/v1/auth/login",
+        "/api/v1/account/start",
         json=payload,
-        name="POST /api/v1/auth/login (setup)",
+        name="POST /api/v1/account/start [login]",
         catch_response=True,
     ) as resp:
         if resp.status_code == 200:
             try:
                 data = resp.json()
-                token = data.get("access_token") or data.get("token")
+                token = (
+                    data.get("access_token")
+                    or data.get("token")
+                    or data.get("data", {}).get("access_token")
+                )
                 if token:
-                    user.client.headers.update({"Authorization": f"Bearer {token}"})
+                    user.client.headers.update(
+                        {"Authorization": f"Bearer {token}"}
+                    )
                     resp.success()
-                    logger.debug("Authentication succeeded")
+                    logger.info("Authentication succeeded for %s", _EMAIL)
                 else:
                     resp.failure("Login response missing access_token field")
                     logger.warning("Login response had no token: %s", data)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 resp.failure(f"Could not parse login response: {exc}")
         else:
-            # Don't mark as failure — a bad credential is a config problem,
-            # not a latency/throughput problem.  Log and continue.
+            # Bad credential is a config problem, not a perf problem.
             resp.success()
             logger.warning(
-                "Login returned %d — subsequent authenticated requests may 401.",
+                "Login returned %d — subsequent requests will likely 401.",
                 resp.status_code,
             )
 
 
 # ---------------------------------------------------------------------------
-# Event hooks (optional — add per-run summary logging)
+# Main user class — LoanOfficerUser
+# ---------------------------------------------------------------------------
+
+
+class LoanOfficerUser(HttpUser):
+    """
+    Simulates a typical loan officer session.
+
+    Task weights model real-world usage:
+      - Pipeline view (leads list): 50%
+      - Dashboard metrics:          20%
+      - Task list:                  15%
+      - AI agent chat:              10%
+      - Notifications:               5%
+
+    Wait time between requests: 1–5 seconds (realistic think time).
+    """
+
+    wait_time = between(1, 5)
+    weight = 10  # dominant user persona
+
+    def on_start(self) -> None:
+        """Authenticate once at session start, reuse JWT for all requests."""
+        _authenticate(self)
+
+    # -- Pipeline view (50%) -----------------------------------------------
+
+    @tag("pipeline", "read")
+    @task(50)
+    def pipeline_leads(self) -> None:
+        """GET /api/v1/leads/ — the most-used page in the app."""
+        with self.client.get(
+            "/api/v1/leads/",
+            name="GET /api/v1/leads/",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 304, 401, 403):
+                resp.success()
+            else:
+                resp.failure(f"Status {resp.status_code}")
+
+    # -- Dashboard (20%) ---------------------------------------------------
+
+    @tag("dashboard", "read")
+    @task(20)
+    def dashboard_metrics(self) -> None:
+        """GET /api/v1/dashboard/metrics — main dashboard KPIs."""
+        with self.client.get(
+            "/api/v1/dashboard/metrics",
+            name="GET /api/v1/dashboard/metrics",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 304, 401, 403):
+                resp.success()
+            else:
+                resp.failure(f"Status {resp.status_code}")
+
+    # -- Task list (15%) ---------------------------------------------------
+
+    @tag("tasks", "read")
+    @task(15)
+    def task_list(self) -> None:
+        """GET /api/v1/tasks/ — daily task queue."""
+        with self.client.get(
+            "/api/v1/tasks/",
+            name="GET /api/v1/tasks/",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 304, 401, 403):
+                resp.success()
+            else:
+                resp.failure(f"Status {resp.status_code}")
+
+    # -- AI agent chat (10%) -----------------------------------------------
+
+    @tag("ai", "write")
+    @task(10)
+    def ai_chat(self) -> None:
+        """POST /api/v1/ai/chat — Aria agent interaction."""
+        payload = {"message": "show my pipeline"}
+        with self.client.post(
+            "/api/v1/ai/chat",
+            json=payload,
+            name="POST /api/v1/ai/chat",
+            catch_response=True,
+        ) as resp:
+            # AI chat may be slow; 200/401/403/422/429 are all non-failures
+            if resp.status_code in (200, 201, 401, 403, 422, 429):
+                resp.success()
+            else:
+                resp.failure(f"Status {resp.status_code}")
+
+    # -- Notifications (5%) ------------------------------------------------
+
+    @tag("notifications", "read")
+    @task(5)
+    def notifications(self) -> None:
+        """GET /api/v1/notifications/ — notification feed."""
+        with self.client.get(
+            "/api/v1/notifications/",
+            name="GET /api/v1/notifications/",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 304, 401, 403):
+                resp.success()
+            else:
+                resp.failure(f"Status {resp.status_code}")
+
+
+# ---------------------------------------------------------------------------
+# Secondary user class — HealthCheckUser (lightweight, no auth)
+# ---------------------------------------------------------------------------
+
+
+class HealthCheckUser(HttpUser):
+    """
+    Exercises health probes only. No authentication required.
+    Weight 1 — minimal share of virtual users.
+    """
+
+    wait_time = between(1, 3)
+    weight = 1
+
+    @tag("health", "read")
+    @task(3)
+    def health(self) -> None:
+        """GET /health — basic liveness."""
+        with self.client.get(
+            "/health",
+            name="GET /health",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code == 200:
+                resp.success()
+            else:
+                resp.failure(f"Status {resp.status_code}")
+
+    @tag("health", "read")
+    @task(1)
+    def health_live(self) -> None:
+        """GET /health/live — Kubernetes liveness probe."""
+        with self.client.get(
+            "/health/live",
+            name="GET /health/live",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 503):
+                resp.success()
+            else:
+                resp.failure(f"Status {resp.status_code}")
+
+
+# ---------------------------------------------------------------------------
+# Supplementary user — LoanPipelineUser (loan-focused LO)
+# ---------------------------------------------------------------------------
+
+
+class LoanPipelineUser(HttpUser):
+    """
+    Simulates an LO focused on loan management rather than lead intake.
+    Exercises the loans endpoint with stage filters and the dashboard.
+    Weight 3 — smaller share than the main LoanOfficerUser.
+    """
+
+    wait_time = between(1, 5)
+    weight = 3
+
+    def on_start(self) -> None:
+        _authenticate(self)
+
+    @tag("loans", "read")
+    @task(6)
+    def list_loans(self) -> None:
+        """GET /api/v1/loans/ — loan pipeline."""
+        with self.client.get(
+            "/api/v1/loans/",
+            name="GET /api/v1/loans/",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 304, 401, 403):
+                resp.success()
+            else:
+                resp.failure(f"Status {resp.status_code}")
+
+    @tag("loans", "read")
+    @task(3)
+    def loans_by_stage(self) -> None:
+        """GET /api/v1/loans/?stage=PROCESSING — filtered loan view."""
+        with self.client.get(
+            "/api/v1/loans/?stage=PROCESSING",
+            name="GET /api/v1/loans/?stage=PROCESSING",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 304, 401, 403):
+                resp.success()
+            else:
+                resp.failure(f"Status {resp.status_code}")
+
+    @tag("dashboard", "read")
+    @task(2)
+    def dashboard(self) -> None:
+        with self.client.get(
+            "/api/v1/dashboard/metrics",
+            name="GET /api/v1/dashboard/metrics",
+            catch_response=True,
+        ) as resp:
+            if resp.status_code in (200, 304, 401, 403):
+                resp.success()
+            else:
+                resp.failure(f"Status {resp.status_code}")
+
+
+# ---------------------------------------------------------------------------
+# Event hooks — threshold enforcement for CI
 # ---------------------------------------------------------------------------
 
 
 @events.quitting.add_listener
 def on_quitting(environment, **_kwargs) -> None:
-    """Log a summary of results when the test run ends."""
+    """
+    Enforce SLA thresholds at the end of the run.
+
+    Fails the process (exit code 1) if:
+      - p95 latency > 800 ms
+      - Error rate > 0.5%
+    """
     stats = environment.stats
     total = stats.total
+
+    p50 = total.get_response_time_percentile(0.50) or 0
+    p95 = total.get_response_time_percentile(0.95) or 0
+    p99 = total.get_response_time_percentile(0.99) or 0
+    error_pct = total.fail_ratio * 100
+
     logger.info(
-        "Load test complete: %d requests, %.2f RPS, %.1f%% failures, "
+        "Load test complete: %d requests, %.2f RPS, %.2f%% failures, "
         "p50=%.0f ms, p95=%.0f ms, p99=%.0f ms",
         total.num_requests,
         total.current_rps,
-        total.fail_ratio * 100,
-        total.get_response_time_percentile(0.50) or 0,
-        total.get_response_time_percentile(0.95) or 0,
-        total.get_response_time_percentile(0.99) or 0,
+        error_pct,
+        p50,
+        p95,
+        p99,
     )
 
-    # Exit with non-zero code if error rate exceeds 1% (critical threshold)
-    if total.fail_ratio > 0.01:
+    failed = False
+
+    if p95 > P95_THRESHOLD_MS:
         logger.error(
-            "CRITICAL: error rate %.2f%% exceeds 1%% threshold — marking run as failed.",
-            total.fail_ratio * 100,
+            "FAIL: p95 latency %.0f ms exceeds threshold %d ms",
+            p95,
+            P95_THRESHOLD_MS,
         )
+        failed = True
+
+    if total.fail_ratio > ERROR_RATE_THRESHOLD:
+        logger.error(
+            "FAIL: error rate %.2f%% exceeds threshold %.1f%%",
+            error_pct,
+            ERROR_RATE_THRESHOLD * 100,
+        )
+        failed = True
+
+    if failed:
         environment.process_exit_code = 1
+    else:
+        logger.info("All thresholds passed.")

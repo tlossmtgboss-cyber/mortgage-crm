@@ -1,5 +1,12 @@
 """
-Request Logging Middleware
+Request Logging Middleware  [DEPRECATED 2026-04-30]
+
+Superseded by middleware/request_context.py (RequestContextMiddleware), which is
+registered as the outermost middleware in main.py.  Both generate X-Request-ID,
+set contextvars, and produce structured JSON request logs.  This file is kept
+because middleware/__init__.py re-exports RequestLoggingMiddleware and some test
+code may reference it.  Do NOT register this middleware — it would duplicate
+request_context's logging.
 
 ASGI middleware that logs every HTTP request with structured JSON output.
 

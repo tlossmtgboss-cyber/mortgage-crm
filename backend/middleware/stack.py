@@ -56,7 +56,7 @@ def configure_middleware(
     # Import security middleware
     from security_middleware import (
         IPAccessControlMiddleware,
-        RateLimitMiddleware,
+        # RateLimitMiddleware removed (2026-04-30) — superseded by APIRateLimitMiddleware
         SecurityHeadersMiddleware,
         IPBlockingMiddleware,
         RequestValidationMiddleware,
@@ -185,11 +185,8 @@ def configure_middleware(
     # =========================================================================
     app.add_middleware(SecurityLoggingMiddleware)
     app.add_middleware(IPAccessControlMiddleware)
-    app.add_middleware(
-        RateLimitMiddleware,
-        requests_per_minute=5000,
-        requests_per_hour=100000,
-    )
+    # REMOVED (2026-04-30): Legacy RateLimitMiddleware — superseded by APIRateLimitMiddleware
+    # which is registered separately with meaningful per-identity limits.
     app.add_middleware(IPBlockingMiddleware)
     app.add_middleware(RequestValidationMiddleware)
     app.add_middleware(SecurityHeadersMiddleware)

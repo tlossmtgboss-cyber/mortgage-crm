@@ -1,0 +1,78 @@
+# .github/workflows/load-test.yml
+# Nightly load test against staging
+name: Load Test
+
+on:
+  schedule:
+    # Every night at 03:00 UTC (10pm ET)
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      users:
+        description: 'Number of virtual users'
+        required: false
+        default: '200'
+      run_time:
+        description: 'Test duration (e.g. 5m, 10m)'
+        required: false
+        default: '5m'
+      target_host:
+        description: 'Target host URL'
+        required: false
+        default: 'https://api.perenniaai.com'
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  load-test:
+    name: Locust Load Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install locust
+        run: pip install locust>=2.20.0
+
+      - name: Run load test
+        env:
+          LOCUST_EMAIL: ${{ secrets.LOAD_TEST_EMAIL }}
+          LOCUST_PASSWORD: ${{ secrets.LOAD_TEST_PASSWORD }}
+        run: |
+          locust \
+            -f backend/tests/load/locustfile.py \
+            --host=${{ inputs.target_host || 'https://api.perenniaai.com' }} \
+            --headless \
+            --users ${{ inputs.users || '200' }} \
+            --spawn-rate 10 \
+            --run-time ${{ inputs.run_time || '5m' }} \
+            --csv=backend/tests/load/results \
+            --html=backend/tests/load/report.html \
+            --loglevel INFO
+
+      # The locust process exits non-zero if p95 > 800ms or error rate > 0.5%
+      # (enforced by the on_quitting hook in locustfile.py)
+
+      - name: Upload load test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: load-test-report
+          path: |
+            backend/tests/load/report.html
+            backend/tests/load/results_stats.csv
+            backend/tests/load/results_stats_history.csv
+            backend/tests/load/results_failures.csv
+          retention-days: 30

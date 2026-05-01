@@ -35,6 +35,15 @@ TABLES_AND_COLUMNS = {
         ("deleted_at", "TIMESTAMP", None),
         ("deleted_by", "VARCHAR(36)", None),
     ],
+    "leads": [
+        ("deleted_at", "TIMESTAMP", None),
+    ],
+    "loans": [
+        ("deleted_at", "TIMESTAMP", None),
+    ],
+    "borrower_applications": [
+        ("deleted_at", "TIMESTAMP", None),
+    ],
 }
 
 

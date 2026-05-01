@@ -1,5 +1,13 @@
 """
-Adaptive Rate Limiting & DDoS Protection
+Adaptive Rate Limiting & DDoS Protection  [DEPRECATED 2026-04-30]
+
+This middleware is NOT registered in main.py and never has been.  It is only
+imported by chat_system_bootstrap.py (which is itself unused from main.py).
+Active rate limiting is provided by:
+  - middleware/api_rate_limit.py (APIRateLimitMiddleware) — per-user/IP sliding window
+  - middleware/tenant_rate_limiter.py (TenantRateLimitMiddleware) — per-org limits
+  - middleware/mobile_rate_limit.py (MobileRateLimitMiddleware) — mobile-specific
+  - middleware/rate_limiter.py — decorator-based per-endpoint rate limiting
 
 This middleware provides:
 - Per-tenant rate limiting with tier-based quotas (PERF-004)

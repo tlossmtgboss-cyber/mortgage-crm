@@ -1,7 +1,6 @@
 # Perennia AI — Load Test Suite
 
-Locust-based load tests targeting key API endpoints.
-Validates performance of the 47 database indexes added during the enterprise hardening phase.
+Locust-based load tests simulating loan officer workflows against the Perennia API.
 
 ## Prerequisites
 
@@ -9,11 +8,9 @@ Validates performance of the 47 database indexes added during the enterprise har
 pip install locust
 ```
 
-Locust requires Python 3.8+. It is already included in `backend/requirements.txt` as a dev dependency.
-
 ## Configuration
 
-Authentication is optional. When omitted, only the health-probe endpoints are tested in a meaningful way (all other endpoints will return 401/403, which the suite handles gracefully).
+Set credentials to test authenticated endpoints. Without these, only health probes run meaningfully.
 
 ```bash
 export LOCUST_EMAIL="your@email.com"
@@ -22,7 +19,7 @@ export LOCUST_PASSWORD="yourpassword"
 
 ## Usage
 
-All commands are run from the `backend/` directory.
+All commands run from the `backend/` directory.
 
 ### Headless (CI) mode
 
@@ -66,94 +63,68 @@ locust -f tests/load/locustfile.py \
 
 ```bash
 locust -f tests/load/locustfile.py --host=https://api.perenniaai.com
-# Open http://localhost:8089 to configure and start the test
+# Open http://localhost:8089
 ```
 
-### Local development target
+### Local development
 
 ```bash
-locust -f tests/load/locustfile.py --host=http://localhost:8000 --headless --users 10 --spawn-rate 2 --run-time 1m
+locust -f tests/load/locustfile.py \
+  --host=http://localhost:8000 \
+  --headless \
+  --users 10 \
+  --spawn-rate 2 \
+  --run-time 1m
 ```
 
-## User classes and traffic weights
+## User classes
 
-| Class | Weight | Task set | Description |
-|---|---|---|---|
-| `HealthCheckUser` | 1 | `HealthCheckTasks` | `GET /health`, `GET /ready` — no auth required |
-| `PipelineUser` | 5 | `PipelineTasks` | Dashboard, leads, loans, tasks, search — primary LO workflow |
-| `CalendarUser` | 3 | `CalendarTasks` | Calendar events, slots, smart-scheduler availability |
-| `AdminUser` | 1 | `AdminTasks` | Admin user list, compliance dashboard |
+| Class | Weight | Description |
+|---|---|---|
+| `LoanOfficerUser` | 10 | Primary LO workflow: leads (50%), dashboard (20%), tasks (15%), AI chat (10%), notifications (5%) |
+| `LoanPipelineUser` | 3 | Loan-focused LO: loan list, stage filters, dashboard |
+| `HealthCheckUser` | 1 | Health probes only (`/health`, `/health/live`) — no auth |
 
-With 50 virtual users the weights resolve to approximately: 5 HealthCheck, 25 Pipeline, 15 Calendar, 5 Admin.
+With 200 virtual users the weights resolve to approximately: 143 LoanOfficer, 43 LoanPipeline, 14 HealthCheck.
 
 ## Endpoints under test
 
-| Endpoint | Method | Tag | Slow-warning threshold |
+| Endpoint | Method | Weight | Auth |
 |---|---|---|---|
-| `/health` | GET | health | 500 ms |
-| `/ready` | GET | health | 500 ms |
-| `/api/v1/dashboard/metrics` | GET | pipeline | 500 ms |
-| `/api/v1/leads?limit=50` | GET | pipeline | 500 ms |
-| `/api/v1/loans?limit=50` | GET | pipeline | 500 ms |
-| `/api/v1/loans?stage=PROCESSING` | GET | pipeline | 500 ms |
-| `/api/v1/tasks` | GET | pipeline | 500 ms |
-| `/api/v1/leads/search` | POST | pipeline | 1 000 ms |
-| `/api/v1/calendar/events` | GET | calendar | 500 ms |
-| `/api/v1/calendar/slots` | GET | calendar | 500 ms |
-| `/api/v1/smart-scheduler/available-slots` | GET | calendar | 500 ms |
-| `/api/v1/admin/users` | GET | admin | 500 ms |
-| `/api/v1/compliance/dashboard` | GET | admin | 500 ms |
+| `/health` | GET | — | No |
+| `/health/live` | GET | — | No |
+| `/api/v1/leads/` | GET | 50% | Yes |
+| `/api/v1/dashboard/metrics` | GET | 20% | Yes |
+| `/api/v1/tasks/` | GET | 15% | Yes |
+| `/api/v1/ai/chat` | POST | 10% | Yes |
+| `/api/v1/notifications/` | GET | 5% | Yes |
+| `/api/v1/loans/` | GET | — | Yes |
+| `/api/v1/loans/?stage=PROCESSING` | GET | — | Yes |
 
-## How to read results
+## Thresholds (enforced in CI)
 
-After a headless run, open the generated HTML report in your browser. Key columns:
-
-- **RPS** — requests per second; higher is better.
-- **Failures** — any non-2xx/non-expected response that was explicitly marked as failure.
-- **Median / 95%ile / 99%ile** — response time percentiles in milliseconds.
-
-The suite also logs a plain-text summary at the end of each run (visible in `--headless` stdout).
-
-## Target thresholds
-
-| Metric | Warning | Critical |
+| Metric | Threshold | Action |
 |---|---|---|
-| p95 latency (read endpoints) | > 500 ms | > 2 000 ms |
-| p95 latency (write endpoints) | > 1 000 ms | > 3 000 ms |
-| Error rate | > 0.1% | > 1% |
-| Throughput | < 50 RPS | < 20 RPS |
+| p95 latency | > 800 ms | Exit code 1 |
+| Error rate | > 0.5% | Exit code 1 |
 
-The suite will exit with code `1` when the error rate exceeds the **Critical** threshold (1%).
-Slow-response warnings are logged to stdout but do not cause a non-zero exit — treat them as signals for investigation rather than hard failures.
+The suite exits non-zero when any threshold is breached, failing the CI step automatically.
 
 ## Tags
 
-Use `--tags` to run a subset of tasks:
+Run a subset of tasks with `--tags`:
 
 ```bash
-# Health probes only
-locust -f tests/load/locustfile.py --host=... --tags health
-
-# Pipeline workflow only
+# Pipeline only
 locust -f tests/load/locustfile.py --host=... --tags pipeline
 
-# Calendar endpoints only
-locust -f tests/load/locustfile.py --host=... --tags calendar
+# AI chat only
+locust -f tests/load/locustfile.py --host=... --tags ai
+
+# Health probes only
+locust -f tests/load/locustfile.py --host=... --tags health
 ```
 
 ## CI integration
 
-Add the smoke profile to your CI pipeline:
-
-```yaml
-- name: Smoke load test
-  env:
-    LOCUST_EMAIL: ${{ secrets.LOAD_TEST_EMAIL }}
-    LOCUST_PASSWORD: ${{ secrets.LOAD_TEST_PASSWORD }}
-  run: |
-    locust -f backend/tests/load/locustfile.py \
-      --host=${{ env.API_URL }} \
-      --headless --users 10 --spawn-rate 2 --run-time 1m
-```
-
-The non-zero exit code on critical error rate will fail the CI step automatically.
+The nightly load test workflow runs automatically via `.github/workflows/load-test.yml`. It targets staging with 200 users for 5 minutes and fails if p95 > 800ms or error rate > 0.5%.
