@@ -314,6 +314,9 @@ from .device_token import DeviceToken, PushNotificationPreference
 # SSO configuration models (SAML, OIDC)
 from .sso import SSOConfig
 
+# SSO enterprise configuration (SAML/OIDC with encrypted certs)
+from .sso_config import SSOConfiguration
+
 # Webhook models (API Gateway & Developer Experience)
 from .webhook import (
     WebhookSubscription,
@@ -636,6 +639,12 @@ from .voice_consent import (
     VoiceConsent,
     VoiceConsentAudit,
 )
+
+# Password policy (SOC 2 CC6.1 — history + login attempts)
+from .password_history import PasswordHistory, LoginAttempt
+
+# Partner Portal (session tokens, pre-approval letter requests)
+from .partner import PartnerSession, PreApprovalLetterRequest
 
 # iMessage / BlueBubbles integration
 from integrations.imessage.models import (
@@ -1302,6 +1311,18 @@ __all__ = [
     # =====================
     "VoiceConsent",
     "VoiceConsentAudit",
+
+    # =====================
+    # Password Policy (SOC 2 CC6.1)
+    # =====================
+    "PasswordHistory",
+    "LoginAttempt",
+
+    # =====================
+    # Partner Portal
+    # =====================
+    "PartnerSession",
+    "PreApprovalLetterRequest",
 
     # =====================
     # iMessage / BlueBubbles

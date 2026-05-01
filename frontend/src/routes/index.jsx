@@ -4,7 +4,8 @@ import { Capacitor } from '@capacitor/core';
 import MainLayout from '../layouts/MainLayout';
 import RouteErrorBoundary from '../components/RouteErrorBoundary';
 import MobileErrorBoundary from '../components/mobile/MobileErrorBoundary';
-import ProtectedRoute from '../components/ProtectedRoute'; // eslint-disable-line no-unused-vars
+// eslint-disable-next-line no-unused-vars
+import ProtectedRoute from '../components/ProtectedRoute';
 
 // Landing/Auth pages (keep these as regular imports for faster initial load)
 import Registration from '../pages/Registration';
@@ -593,7 +594,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/partner-roi" path="/partner-roi" element={withMainLayout(PartnerROIDashboard)} />,
     <Route key="/analytics/applications" path="/analytics/applications" element={withMainLayout(ApplicationAnalytics)} />,
     <Route key="/profitability" path="/profitability" element={withMainLayout(ProfitabilityDashboard)} />,
-    <Route key="/usage-intelligence" path="/usage-intelligence" element={withMainLayout(UsageIntelligenceDashboard)} />,
+    <Route key="/usage-intelligence" path="/usage-intelligence" element={withProtectedMainLayout(UsageIntelligenceDashboard, ['admin', 'site_admin'])} />,
     <Route key="/profitability/scenarios" path="/profitability/scenarios" element={withMainLayout(ScenarioModeling)} />,
     <Route key="/pipeline-probability" path="/pipeline-probability" element={withMainLayout(PipelineProbability)} />,
     <Route key="/sla-tracking" path="/sla-tracking" element={withMainLayout(SLASettings)} />,
@@ -811,4 +812,4 @@ export function getRoutes(layoutProps, options = {}) {
 }
 
 // Export components for external use
-export { ProtectedRoute, LazyPage, PageLoader };
+export { LazyPage, PageLoader };
