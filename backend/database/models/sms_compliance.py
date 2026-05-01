@@ -20,6 +20,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    UniqueConstraint,
 )
 from sqlalchemy.sql import func
 
@@ -37,7 +38,7 @@ class SMSOptOut(Base):
     __tablename__ = "sms_opt_outs"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    phone_number = Column(String(20), unique=True, nullable=False, index=True)
+    phone_number = Column(String(20), nullable=False, index=True)
     opt_out_keyword = Column(String(20), default="STOP")
     lead_id = Column(
         Integer,
@@ -46,8 +47,8 @@ class SMSOptOut(Base):
     )
     organization_id = Column(
         Integer,
-        ForeignKey("organizations.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("organizations.id"),
+        nullable=False,
         index=True,
     )
     active = Column(Boolean, default=True, nullable=False)
@@ -56,6 +57,7 @@ class SMSOptOut(Base):
 
     __table_args__ = (
         Index("ix_sms_opt_outs_org_phone", "organization_id", "phone_number"),
+        UniqueConstraint("organization_id", "phone_number", name="uq_sms_opt_out_org_phone"),
         {"extend_existing": True},
     )
 
@@ -75,19 +77,25 @@ class SMSConsent(Base):
     smart_docs_consent_records, channel_preferences, and borrower_profiles.
     Do NOT query this table alone for send/block decisions.
 
-    The ``phone_number`` column has a unique constraint; an upsert via
-    ``ON CONFLICT (phone_number) DO UPDATE`` is used by
+    The ``(organization_id, phone_number)`` composite unique constraint
+    supports upsert via ``ON CONFLICT ... DO UPDATE`` in
     ``record_consent()`` and ``record_opt_in()`` in the compliance gate.
     """
 
     __tablename__ = "sms_consent"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    phone_number = Column(String(20), unique=True, nullable=False, index=True)
+    phone_number = Column(String(20), nullable=False, index=True)
     lead_id = Column(
         Integer,
         ForeignKey("leads.id", ondelete="SET NULL"),
         nullable=True,
+    )
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id"),
+        nullable=False,
+        index=True,
     )
     consent_given = Column(Boolean, default=False, nullable=False)
     consent_source = Column(String(50))  # "web_form", "sms_keyword", etc.
@@ -95,6 +103,7 @@ class SMSConsent(Base):
     ip_address = Column(String(45), nullable=True)  # IPv4 or IPv6
 
     __table_args__ = (
+        UniqueConstraint("organization_id", "phone_number", name="uq_sms_consent_org_phone"),
         {"extend_existing": True},
     )
 
@@ -119,6 +128,12 @@ class SMSComplianceLog(Base):
     phone_number = Column(String(20), nullable=False, index=True)
     lead_id = Column(Integer, nullable=True)
     user_id = Column(Integer, nullable=True)
+    organization_id = Column(
+        Integer,
+        ForeignKey("organizations.id"),
+        nullable=False,
+        index=True,
+    )
     check_result = Column(String(50), nullable=False)
     # TCPA consent proof — which consent record was active at time of check
     consent_record_id = Column(Integer, nullable=True)

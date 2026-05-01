@@ -368,7 +368,7 @@ Generate a new, improved SMS reply incorporating the feedback. No quotes, no exp
 
 
 def _build_context_prompt(db: Session, phone_number: str, lead_id: Optional[int], organization_id: int) -> str:
-    from services.sms_phone_utils import normalize_phone
+    from telephony.phone_utils import normalize_phone
     phone_number = normalize_phone(phone_number)
 
     parts = []

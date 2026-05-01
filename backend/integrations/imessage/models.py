@@ -31,6 +31,9 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+# Perennia core PKs are Integer (User.id, Lead.id, Organization.id).
+# iMessage's own tables use UUID PKs for external-safe identifiers.
+
 # Perennia DB base — re-exported via database/__init__.py
 from database import Base
 
@@ -52,14 +55,14 @@ class IMessageLine(Base):
 
     __tablename__ = "imessage_lines"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "handle", name="uq_imessage_line_tenant_handle"),
-        Index("ix_imessage_line_tenant", "tenant_id"),
+        UniqueConstraint("organization_id", "handle", name="uq_imessage_line_org_handle"),
+        Index("ix_imessage_line_org", "organization_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    tenant_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
+    organization_id: Mapped[int] = mapped_column(Integer, nullable=False)
     label: Mapped[str] = mapped_column(String(80), nullable=False)
     # The handle as Apple sees it: "+18649820355" or "[email protected]"
     handle: Mapped[str] = mapped_column(String(120), nullable=False)
@@ -96,17 +99,17 @@ class IMessageThread(Base):
 
     __tablename__ = "imessage_threads"
     __table_args__ = (
-        UniqueConstraint("tenant_id", "contact_id", "line_id", name="uq_imessage_thread"),
+        UniqueConstraint("organization_id", "contact_id", "line_id", name="uq_imessage_thread"),
         Index("ix_imessage_thread_chat_guid", "chat_guid"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    tenant_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
-    contact_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("contacts.id", ondelete="CASCADE"),
+    organization_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    contact_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("leads.id", ondelete="CASCADE"),
         nullable=False,
     )
     line_id: Mapped[uuid.UUID] = mapped_column(
@@ -116,7 +119,6 @@ class IMessageThread(Base):
     )
     chat_guid: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
     last_known_service: Mapped[Optional[str]] = mapped_column(String(16))
-    # `is_group`, `participants` for future co-borrower / LO threads
     is_group: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     participants: Mapped[Optional[list[str]]] = mapped_column(JSON, nullable=True)
     last_message_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
@@ -148,19 +150,19 @@ class IMessageMessage(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    tenant_id: Mapped[uuid.UUID] = mapped_column(PG_UUID(as_uuid=True), nullable=False)
+    organization_id: Mapped[int] = mapped_column(Integer, nullable=False)
     thread_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("imessage_threads.id", ondelete="CASCADE"),
         nullable=False,
     )
-    contact_id: Mapped[uuid.UUID] = mapped_column(
-        PG_UUID(as_uuid=True),
-        ForeignKey("contacts.id", ondelete="CASCADE"),
+    contact_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("leads.id", ondelete="CASCADE"),
         nullable=False,
     )
-    sender_seat_id: Mapped[Optional[uuid.UUID]] = mapped_column(
-        PG_UUID(as_uuid=True),
+    sender_seat_id: Mapped[Optional[int]] = mapped_column(
+        Integer,
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
@@ -261,7 +263,7 @@ class IMessageWebhookLog(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[Optional[uuid.UUID]] = mapped_column(PG_UUID(as_uuid=True))
+    organization_id: Mapped[Optional[int]] = mapped_column(Integer)
     line_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         PG_UUID(as_uuid=True),
         ForeignKey("imessage_lines.id", ondelete="SET NULL"),

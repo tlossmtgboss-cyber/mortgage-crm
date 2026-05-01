@@ -14,7 +14,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from pydantic import BaseModel
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 # === Perennia auth + DB wiring ========================================
 from database import get_db as get_db_session
@@ -58,7 +58,7 @@ def get_service() -> IMessageService:
 
 
 SvcDep = Annotated[IMessageService, Depends(get_service)]
-DbDep = Annotated[AsyncSession, Depends(get_db_session)]
+DbDep = Annotated[Session, Depends(get_db_session)]
 UserDep = Annotated[CurrentUser, Depends(get_current_user)]
 
 
@@ -83,7 +83,7 @@ async def send_message(
     try:
         return await svc.send(
             db,
-            tenant_id=user.tenant_id,
+            organization_id=getattr(user, 'organization_id', None),
             seat_user_id=user.id,
             request=payload,
         )
@@ -105,7 +105,7 @@ async def send_tapback(
 ) -> ConversationMessage:
     try:
         return await svc.send_tapback(
-            db, tenant_id=user.tenant_id, seat_user_id=user.id, request=payload
+            db, organization_id=getattr(user, 'organization_id', None), seat_user_id=user.id, request=payload
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -124,7 +124,7 @@ async def get_thread(
 ) -> ConversationThread:
     try:
         return await svc.get_thread(
-            db, tenant_id=user.tenant_id, contact_id=contact_id, limit=limit
+            db, organization_id=getattr(user, 'organization_id', None), contact_id=contact_id, limit=limit
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -149,7 +149,7 @@ async def detect_imessage(
 ) -> IMessageDetectionResult:
     return await svc.detect_imessage(
         db,
-        tenant_id=user.tenant_id,
+        organization_id=getattr(user, 'organization_id', None),
         handle=payload.handle,
         force=payload.force,
         line_id=payload.line_id,
@@ -172,11 +172,11 @@ async def typing(
     db: DbDep,
     svc: SvcDep,
 ) -> None:
-    thread = await svc.get_thread(db, tenant_id=user.tenant_id, contact_id=payload.contact_id)
+    thread = await svc.get_thread(db, organization_id=getattr(user, 'organization_id', None), contact_id=payload.contact_id)
     if not thread.chat_guid:
         # No prior chat — typing is a no-op until first send establishes guid
         return
-    line = await db.get(IMessageLine, thread.line_id)
+    line = db.execute(select(IMessageLine).where(IMessageLine.id == thread.line_id)).scalar_one_or_none()
     if line is None:
         raise HTTPException(status_code=404, detail="line not found")
     client = svc._client_for(line)  # ok for typing — no DB write
@@ -202,10 +202,8 @@ class LineListItem(BaseModel):
     dependencies=[Depends(require_role("admin"))],
 )
 async def list_lines(user: UserDep, db: DbDep) -> list[LineListItem]:
-    rows = (
-        await db.scalars(
-            select(IMessageLine).where(IMessageLine.tenant_id == user.tenant_id)
-        )
+    rows = db.scalars(
+        select(IMessageLine).where(IMessageLine.organization_id == getattr(user, 'organization_id', None))
     ).all()
     return [
         LineListItem(
@@ -255,7 +253,7 @@ async def receive_webhook(
         logger.warning("imessage.webhook.bad_token")
         return {"ok": False}
 
-    line = await get_line_for_webhook(db, line_id=line_id)
+    line = get_line_for_webhook(db, line_id=line_id)
     if line is None or not line.enabled:
         logger.warning("imessage.webhook.unknown_line", extra={"line_id": str(line_id)})
         return {"ok": False}
@@ -284,11 +282,11 @@ async def heartbeat(
     settings = get_imessage_settings()
     if token != settings.webhook_url_secret:
         return {"ok": False}
-    line = await get_line_for_webhook(db, line_id=line_id)
+    line = get_line_for_webhook(db, line_id=line_id)
     if line is None:
         return {"ok": False}
     from datetime import datetime, timezone
     line.last_ping_at = datetime.now(timezone.utc)
     line.last_ping_status = "ok"
-    await db.flush()
+    db.flush()
     return {"ok": True}

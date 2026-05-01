@@ -116,6 +116,8 @@ def _send_sms_raw(
     # The v4.x SDK returns MessageSendResponse with .data.id (not .id)
     data = getattr(response, "data", None)
     msg_id = getattr(data, "id", None) or "unknown"
+    if msg_id == "unknown":
+        logger.warning("Telnyx SDK response missing message ID — delivery tracking will be unreliable (to=...%s)", to[-4:])
     return {"id": str(msg_id), "status": "sent"}
 
 
@@ -172,6 +174,8 @@ async def _send_sms_raw_async(
 
     data = resp.json()
     msg_id = data.get("data", {}).get("id", "unknown")
+    if msg_id == "unknown":
+        logger.warning("Telnyx HTTP response missing message ID — delivery tracking will be unreliable (to=...%s)", to[-4:])
     return {"id": str(msg_id), "status": "sent"}
 
 
@@ -283,6 +287,9 @@ def send_sms_verified(
     # Defaults from environment
     from_ = from_ or os.getenv("TELNYX_FROM_NUMBER", os.getenv("TELNYX_PHONE_NUMBER", ""))
     messaging_profile_id = messaging_profile_id or os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
+
+    if not from_:
+        raise ValueError("SMS sender phone number not configured — set TELNYX_FROM_NUMBER or TELNYX_PHONE_NUMBER")
 
     # Normalize destination phone
     normalized = _normalize_phone(to)
@@ -408,6 +415,9 @@ async def send_sms_verified_async(
     # Defaults from environment
     from_ = from_ or os.getenv("TELNYX_FROM_NUMBER", os.getenv("TELNYX_PHONE_NUMBER", ""))
     messaging_profile_id = messaging_profile_id or os.getenv("TELNYX_MESSAGING_PROFILE_ID", "")
+
+    if not from_:
+        raise ValueError("SMS sender phone number not configured — set TELNYX_FROM_NUMBER or TELNYX_PHONE_NUMBER")
 
     # Normalize destination phone
     normalized = _normalize_phone(to)

@@ -631,6 +631,21 @@ from .security_training import SecurityTrainingRecord
 from .sms_delivery import SMSDeliveryLog
 from .sms_panel_message import SMSPanelMessage
 
+# Voice consent tracking (TCPA AI voice call consent)
+from .voice_consent import (
+    VoiceConsent,
+    VoiceConsentAudit,
+)
+
+# iMessage / BlueBubbles integration
+from integrations.imessage.models import (
+    IMessageLine,
+    IMessageThread,
+    IMessageMessage,
+    IMessageLookupCache,
+    IMessageWebhookLog,
+)
+
 
 __all__ = [
     # =====================
@@ -1281,4 +1296,19 @@ __all__ = [
     # =====================
     "SMSDeliveryLog",
     "SMSPanelMessage",
+
+    # =====================
+    # Voice Consent (TCPA)
+    # =====================
+    "VoiceConsent",
+    "VoiceConsentAudit",
+
+    # =====================
+    # iMessage / BlueBubbles
+    # =====================
+    "IMessageLine",
+    "IMessageThread",
+    "IMessageMessage",
+    "IMessageLookupCache",
+    "IMessageWebhookLog",
 ]

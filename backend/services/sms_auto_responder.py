@@ -20,7 +20,7 @@ def handle_inbound_sms(
     from services.sms_ai_responder import classify_message, generate_recommendation
     from services.sms_task_service import assign_task_to_user, create_sms_task
     from services.sms_confidence_engine import should_auto_respond, record_outcome
-    from services.sms_phone_utils import normalize_phone
+    from telephony.phone_utils import normalize_phone
     phone_number = normalize_phone(phone_number)
 
     category, priority = "general", "normal"
@@ -248,7 +248,7 @@ def _send_response(
     user_id: Optional[int] = None,
     lead_id: Optional[int] = None,
 ) -> dict:
-    from services.sms_phone_utils import normalize_phone
+    from telephony.phone_utils import normalize_phone
     to_phone = normalize_phone(to_phone)
 
     try:

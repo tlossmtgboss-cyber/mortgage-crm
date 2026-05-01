@@ -6,7 +6,7 @@ rate limiting, and multi-agent collision prevention via soft locks.
 """
 
 from datetime import datetime, time, timedelta, timezone
-from typing import Optional, Tuple, Dict, Any
+from typing import Any, Dict, Optional, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 import logging
@@ -188,6 +188,117 @@ def resolve_recipient_timezone(phone: str) -> str:
     return "America/New_York"
 
 
+def verify_voice_consent(
+    phone_number: str,
+    org_id: int,
+    db: Session,
+    actor_user_id: Optional[int] = None,
+    actor_ip: Optional[str] = None,
+) -> Tuple[bool, Optional[Any]]:
+    """
+    Check whether a phone number has active TCPA voice consent for AI calls.
+
+    Queries the VoiceConsent table for a consent record that is:
+      - Scoped to the given organization
+      - Not revoked (revoked_at IS NULL)
+      - Not expired (retention_expires_at > now OR NULL)
+      - consent_type is NOT 'REVOKED'
+
+    Every verification (pass or fail) is logged to VoiceConsentAudit so there
+    is a provable record that consent was checked before each AI voice call.
+
+    Args:
+        phone_number: The phone number to verify consent for (any format).
+        org_id:       Organization ID for tenant isolation.
+        db:           SQLAlchemy session.
+        actor_user_id: Optional user ID performing the verification.
+        actor_ip:      Optional IP address of the actor.
+
+    Returns:
+        Tuple of (has_consent, consent_record).
+        has_consent=True means an active consent record exists.
+        consent_record is the VoiceConsent instance if found, else None.
+    """
+    try:
+        from database.models.voice_consent import (
+            VoiceConsent,
+            VoiceConsentAudit,
+            CONSENT_TYPE_REVOKED,
+            AUDIT_ACTION_VERIFIED,
+        )
+    except ImportError:
+        logger.error(
+            "Could not import VoiceConsent models — "
+            "blocking call (fail-closed)"
+        )
+        return False, None
+
+    # Normalize phone to digits only
+    digits = re.sub(r'\D', '', phone_number or '')
+    if digits.startswith('1') and len(digits) == 11:
+        digits = digits[1:]
+
+    if not digits:
+        logger.warning("verify_voice_consent called with empty phone number")
+        return False, None
+
+    now = datetime.now(timezone.utc)
+
+    try:
+        # Find active consent: not revoked, not expired, not REVOKED type
+        consent = db.query(VoiceConsent).filter(
+            and_(
+                VoiceConsent.organization_id == org_id,
+                VoiceConsent.phone_number.ilike(f"%{digits[-10:]}"),
+                VoiceConsent.consent_type != CONSENT_TYPE_REVOKED,
+                VoiceConsent.revoked_at.is_(None),
+            )
+        ).filter(
+            # retention_expires_at is NULL (no expiry) or in the future
+            (VoiceConsent.retention_expires_at.is_(None)) |
+            (VoiceConsent.retention_expires_at > now)
+        ).order_by(
+            VoiceConsent.consented_at.desc()
+        ).first()
+
+        # Log the verification attempt (pass or fail)
+        audit_details = {
+            "phone_digits_last4": digits[-4:] if len(digits) >= 4 else digits,
+            "has_consent": consent is not None,
+        }
+        if consent:
+            audit_details["consent_type"] = consent.consent_type
+            audit_details["consent_channel"] = consent.consent_channel
+            audit_details["consented_at"] = consent.consented_at.isoformat() if consent.consented_at else None
+
+            audit_entry = VoiceConsentAudit(
+                voice_consent_id=consent.id,
+                action=AUDIT_ACTION_VERIFIED,
+                actor_user_id=actor_user_id,
+                actor_ip=actor_ip,
+                details=audit_details,
+            )
+            db.add(audit_entry)
+            # Don't commit — let the caller's transaction handle it
+
+        if consent:
+            logger.info(
+                f"Voice consent verified for ***{digits[-4:]}, "
+                f"type={consent.consent_type}, org={org_id}"
+            )
+            return True, consent
+        else:
+            logger.warning(
+                f"No active voice consent found for ***{digits[-4:]}, org={org_id}"
+            )
+            return False, None
+
+    except Exception as e:
+        logger.error(f"Error verifying voice consent for ***{digits[-4:]}: {e}")
+        # Fail closed: no consent verification = no call
+        return False, None
+
+
 class ComplianceChecker:
     """
     Handles compliance checks for outbound calling
@@ -266,9 +377,9 @@ class ComplianceChecker:
         try:
             from database.models import ContactDNCStatus
         except ImportError:
-            # Fallback for different import paths
-            logger.warning("Could not import ContactDNCStatus model")
-            return False, None
+            # Fail closed: treat as ON the DNC list to prevent compliance bypass
+            logger.error("Could not import ContactDNCStatus model — blocking call (fail-closed)")
+            return True, "DNC check unavailable (import failure) — call blocked"
 
         # Normalize phone number
         digits = self._normalize_phone(phone_number)
@@ -523,7 +634,8 @@ class ComplianceChecker:
         try:
             from database.models import AgentTelephonySettings, CallLog
         except ImportError:
-            return True, None
+            logger.error("Could not import AgentTelephonySettings/CallLog models — blocking call (fail-closed)")
+            return False, "Rate limit check unavailable (import failure) — call blocked"
 
         settings = self.db.query(AgentTelephonySettings).filter(
             AgentTelephonySettings.user_id == agent_id
@@ -592,7 +704,8 @@ class ComplianceChecker:
         try:
             from database.models import ActiveCall, User
         except ImportError:
-            return False, None
+            logger.error("Could not import ActiveCall/User models — treating as locked (fail-closed)")
+            return True, {"agent_name": "unknown", "reason": "Soft lock check unavailable (import failure)"}
 
         digits = self._normalize_phone(phone_number)
 
@@ -801,11 +914,11 @@ class ComplianceChecker:
             try:
                 from database.models import ChannelPreference
             except ImportError:
-                logger.warning(
+                logger.error(
                     "Could not import ChannelPreference model — "
-                    "skipping call consent check"
+                    "blocking call (fail-closed)"
                 )
-                return True, None
+                return False, "Consent check unavailable (import failure) — call blocked"
 
         lead_id = contact_id
 
@@ -817,11 +930,11 @@ class ComplianceChecker:
                 try:
                     from database.models import Lead
                 except ImportError:
-                    logger.warning(
+                    logger.error(
                         "Could not import Lead model — "
-                        "skipping call consent check"
+                        "blocking call (fail-closed)"
                     )
-                    return True, None
+                    return False, "Consent check unavailable (import failure) — call blocked"
 
             digits = self._normalize_phone(phone_number)
             if digits:

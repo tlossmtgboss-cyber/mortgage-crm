@@ -385,76 +385,104 @@ class TestAvailabilityCacheStats:
 class TestSMSCircuitBreaker:
     """test_circuit_breaker_opens_after_threshold and half_open_after_cooldown."""
 
-    def setup_method(self):
-        """Reset class-level circuit breaker state before each test."""
-        from services.sms_retry_service import SMSRetryService
-        SMSRetryService._circuit_state = "closed"
-        SMSRetryService._failure_count = 0
-        SMSRetryService._circuit_opened_at = None
+    # Use a fixed org_id for per-org circuit breaker tests
+    TEST_ORG = 42
 
-    def test_circuit_breaker_opens_after_threshold(self):
-        """5 failures should trip the circuit breaker to open."""
+    def setup_method(self):
+        """Reset per-org circuit breaker state before each test."""
+        from services.sms_retry_service import SMSRetryService
+        SMSRetryService._circuit_states.clear()
+        SMSRetryService._failure_counts.clear()
+        SMSRetryService._last_failure_times.clear()
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_opens_after_threshold(self):
+        """5 failures should trip the circuit breaker to open for that org."""
         from services.sms_retry_service import SMSRetryService
         svc = SMSRetryService()
 
-        assert SMSRetryService._circuit_state == "closed"
+        assert SMSRetryService._circuit_states.get(self.TEST_ORG, "closed") == "closed"
 
         # Record 5 failures (threshold)
         for i in range(5):
-            svc._record_failure()
+            await svc._record_failure(self.TEST_ORG)
 
-        assert SMSRetryService._circuit_state == "open"
-        assert SMSRetryService._circuit_opened_at is not None
+        assert SMSRetryService._circuit_states[self.TEST_ORG] == "open"
+        assert SMSRetryService._last_failure_times.get(self.TEST_ORG) is not None
 
-        # Verify circuit blocks requests
-        assert svc._check_circuit() is False
+        # Verify circuit blocks requests for this org
+        assert await svc._check_circuit(self.TEST_ORG) is False
 
-    def test_circuit_breaker_stays_closed_below_threshold(self):
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_stays_closed_below_threshold(self):
         from services.sms_retry_service import SMSRetryService
         svc = SMSRetryService()
 
         for _ in range(4):
-            svc._record_failure()
+            await svc._record_failure(self.TEST_ORG)
 
-        assert SMSRetryService._circuit_state == "closed"
-        assert svc._check_circuit() is True
+        assert SMSRetryService._circuit_states.get(self.TEST_ORG, "closed") == "closed"
+        assert await svc._check_circuit(self.TEST_ORG) is True
 
-    def test_circuit_breaker_half_open_after_cooldown(self):
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_half_open_after_cooldown(self):
         """After cooldown period, circuit should transition to half_open and allow a test request."""
         from services.sms_retry_service import SMSRetryService
         svc = SMSRetryService()
 
         # Trip the breaker
         for _ in range(5):
-            svc._record_failure()
-        assert SMSRetryService._circuit_state == "open"
+            await svc._record_failure(self.TEST_ORG)
+        assert SMSRetryService._circuit_states[self.TEST_ORG] == "open"
 
         # Simulate cooldown elapsed by backdating the opened_at timestamp
-        SMSRetryService._circuit_opened_at = time.time() - (SMSRetryService._circuit_cooldown_seconds + 1)
+        SMSRetryService._last_failure_times[self.TEST_ORG] = time.time() - (SMSRetryService._circuit_cooldown_seconds + 1)
 
         # Now _check_circuit should allow a test request and set half_open
-        assert svc._check_circuit() is True
-        assert SMSRetryService._circuit_state == "half_open"
+        assert await svc._check_circuit(self.TEST_ORG) is True
+        assert SMSRetryService._circuit_states[self.TEST_ORG] == "half_open"
 
-    def test_circuit_breaker_closes_on_success_from_half_open(self):
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_closes_on_success_from_half_open(self):
         from services.sms_retry_service import SMSRetryService
         svc = SMSRetryService()
 
         # Put into half_open
-        SMSRetryService._circuit_state = "half_open"
+        SMSRetryService._circuit_states[self.TEST_ORG] = "half_open"
 
-        svc._record_success()
-        assert SMSRetryService._circuit_state == "closed"
-        assert SMSRetryService._failure_count == 0
+        await svc._record_success(self.TEST_ORG)
+        assert SMSRetryService._circuit_states[self.TEST_ORG] == "closed"
+        assert SMSRetryService._failure_counts.get(self.TEST_ORG, 0) == 0
 
-    def test_circuit_breaker_reopens_on_failure_from_half_open(self):
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_reopens_on_failure_from_half_open(self):
         from services.sms_retry_service import SMSRetryService
         svc = SMSRetryService()
 
-        SMSRetryService._circuit_state = "half_open"
+        SMSRetryService._circuit_states[self.TEST_ORG] = "half_open"
 
-        svc._record_failure()
-        assert SMSRetryService._circuit_state == "open"
+        await svc._record_failure(self.TEST_ORG)
+        assert SMSRetryService._circuit_states[self.TEST_ORG] == "open"
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_isolation_between_orgs(self):
+        """Failures in org A must NOT trip the circuit breaker for org B."""
+        from services.sms_retry_service import SMSRetryService
+        svc = SMSRetryService()
+
+        org_a = 100
+        org_b = 200
+
+        # Trip the breaker for org A
+        for _ in range(5):
+            await svc._record_failure(org_a)
+
+        assert SMSRetryService._circuit_states[org_a] == "open"
+        assert await svc._check_circuit(org_a) is False
+
+        # Org B should still be closed
+        assert SMSRetryService._circuit_states.get(org_b, "closed") == "closed"
+        assert await svc._check_circuit(org_b) is True
 
 
 class TestSMSDeadLetterQueueInMemory:

@@ -13,6 +13,7 @@ and the table participates in normal SQLAlchemy migrations.
 from sqlalchemy import (
     Column,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -40,7 +41,7 @@ class SMSPanelMessage(Base):
     contact_id = Column(Text, nullable=True)
 
     # Tenant isolation
-    organization_id = Column(Integer, nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
 
     # 'inbound' or 'outbound'
     direction = Column(Text, nullable=False, server_default="outbound")

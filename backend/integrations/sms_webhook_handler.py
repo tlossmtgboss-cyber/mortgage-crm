@@ -38,13 +38,21 @@ def verify_telnyx_signature(
     Returns True if signature is valid.
     """
     pub_key = public_key or os.environ.get("TELNYX_PUBLIC_KEY", "")
+    env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
     if not pub_key:
-        env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
-        if env in ("production", "staging"):
-            logger.error("TELNYX_PUBLIC_KEY not set in production - rejecting webhook")
+        if env == "production":
+            logger.error("TELNYX_PUBLIC_KEY not set in production — rejecting webhook")
             return False
-        logger.warning("TELNYX_PUBLIC_KEY not set - skipping verification (dev mode)")
-        return True
+        elif env == "staging":
+            logger.critical(
+                "TELNYX_PUBLIC_KEY not set in %s — webhook signatures NOT verified", env
+            )
+            return True
+        else:
+            logger.warning(
+                "TELNYX_PUBLIC_KEY not set — skipping verification (env=%s)", env
+            )
+            return True
 
     # Try using the telnyx SDK's built-in verification first
     try:
@@ -225,14 +233,15 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
             db.rollback()
             logger.error(f"Failed to commit inbound message: {commit_err}")
 
-        # Create SMS task for follow-up (non-blocking)
+        # Create SMS task for follow-up
+        telnyx_msg_id = record.get("id", "")
         try:
             from services.sms_auto_responder import handle_inbound_sms
             task_result = handle_inbound_sms(
                 db=db,
                 phone_number=from_phone,
                 message_text=body,
-                telnyx_message_id=record.get("id", ""),
+                telnyx_message_id=telnyx_msg_id,
                 organization_id=None,  # Will be resolved inside the service
                 contact_name=None,  # Will be resolved from lead lookup
             )
@@ -243,7 +252,31 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
                 task_result.get("ai_confidence", 0),
             )
         except Exception as task_err:
-            logger.warning("SMS task creation failed (non-blocking): %s", task_err)
+            logger.error(
+                "SMS task creation FAILED — inbound message needs manual review: "
+                "telnyx_message_id=%s from=%s error=%s",
+                telnyx_msg_id,
+                from_phone,
+                task_err,
+            )
+            # Flag the stored message so it can be found in manual review
+            try:
+                from sqlalchemy import text as _text
+                db.execute(
+                    _text("""
+                        UPDATE sms_panel_messages
+                        SET status = 'needs_review'
+                        WHERE telnyx_message_id = :msg_id
+                    """),
+                    {"msg_id": telnyx_msg_id},
+                )
+                db.commit()
+            except Exception as flag_err:
+                logger.error(
+                    "Failed to flag message for review: telnyx_message_id=%s error=%s",
+                    telnyx_msg_id,
+                    flag_err,
+                )
 
         # Push to WebSocket clients watching this phone number
         try:

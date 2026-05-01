@@ -17,7 +17,8 @@ import logging
 from typing import Optional
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 # === Perennia stub adapters (same stubs used in service.py) ==============
 # These are no-op placeholders. Replace with real imports as each
@@ -73,15 +74,17 @@ def build_imessage_service(
         ops_manager=ops_manager or AIOperationsManager(),
         deal_breaker=deal_breaker or DealBreakerRadar(),
         calculator=calculator or CalculatorAgent(),
-        telnyx=telnyx,  # left None on first-run; wire up when ready
+        telnyx=telnyx or TelnyxAdapter(),
         settings=get_imessage_settings(),
     )
 
 
-async def get_line_for_webhook(
-    session: AsyncSession, *, line_id: UUID
+def get_line_for_webhook(
+    session: Session, *, line_id: UUID
 ) -> Optional[IMessageLine]:
-    return await session.get(IMessageLine, line_id)
+    return session.execute(
+        select(IMessageLine).where(IMessageLine.id == line_id)
+    ).scalar_one_or_none()
 
 
 async def shutdown_clients() -> None:

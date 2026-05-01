@@ -49,7 +49,7 @@ from utils.startup import startup_checks
 # Import security middleware
 from security_middleware import (
     IPAccessControlMiddleware,
-    RateLimitMiddleware,
+    # RateLimitMiddleware removed (2026-04-30) — superseded by APIRateLimitMiddleware
     SecurityHeadersMiddleware,
     IPBlockingMiddleware,
     RequestValidationMiddleware,
@@ -416,6 +416,41 @@ from middleware.impersonation_middleware import ImpersonationEnforcementMiddlewa
 # Multi-Tenant: Tenant context middleware for organization isolation
 from middleware.tenant_context_middleware import TenantContextMiddleware
 
+# ============================================================================
+# MIDDLEWARE STACK ORDER (as of 2026-04-30)
+# ============================================================================
+# Starlette uses LIFO: last added = outermost = first to execute on request.
+# The list below shows execution order from outermost to innermost:
+#
+#  1. RequestContextMiddleware      — correlation IDs (X-Request-ID), structured logging
+#  2. PIIResponseFilterMiddleware   — masks SSN/account-number leaks in responses
+#  3. DynamicCORSMiddleware         — CORS headers on all responses incl. errors
+#  4. CacheControlMiddleware        — Cache-Control headers for mobile API
+#  5. AuditMiddleware (SOC2)        — soc2_audit_log table (compliance)
+#  6. BreadcrumbAuditMiddleware     — audit_events table (defense-in-depth, mutations only)
+#  7. TenantContextMiddleware       — sets request.state.user/tenant from JWT
+#  8. RBACEnforcementMiddleware     — defense-in-depth role checks on admin routes
+#  9. TenantRateLimitMiddleware     — per-org rate limits
+# 10. MobileRateLimitMiddleware     — mobile-specific rate limits
+# 11. APIRateLimitMiddleware        — per-user/per-IP sliding window (primary rate limiter)
+# 12. PerformanceMiddleware         — response time tracking
+# 13. CSRFProtectionMiddleware      — CSRF token validation on state-changing requests
+# 14. ImpersonationEnforcementMiddleware — blocks writes in read-only impersonation
+# 15. SecurityLoggingMiddleware     — logs security events
+# 16. IPAccessControlMiddleware     — environment-aware IP access control
+# 17. IPBlockingMiddleware          — blocks malicious IPs
+# 18. RequestValidatorMiddleware    — Content-Type, size, injection checks
+# 19. RequestValidationMiddleware   — (security_middleware) request validation
+# 20. SecurityHeadersMiddleware     — security response headers
+# 21. RequestTrackingMiddleware     — tracks in-flight requests for graceful shutdown
+#
+# NOT registered (available as utilities):
+#   - middleware/request_logging.py (RequestLoggingMiddleware) — superseded by #1
+#   - middleware/structured_logging.py (StructuredLogger) — utility class, not middleware
+#   - middleware/rate_limiting.py (AdaptiveRateLimiter) — never registered, chat bootstrap only
+#   - security_middleware.py (RateLimitMiddleware) — removed 2026-04-30, superseded by #11
+# ============================================================================
+
 # Request tracking for graceful shutdown (innermost middleware — added first)
 # Tracks in-flight requests and returns 503 during shutdown to drain traffic
 app.add_middleware(RequestTrackingMiddleware, shutdown_handler=graceful_shutdown)
@@ -435,9 +470,12 @@ except Exception as e:
     logger.warning(f"⚠️ Request validator middleware not loaded: {e}")
 
 app.add_middleware(IPBlockingMiddleware)
-# Rate limiting - per-user for authenticated, per-IP for anonymous
-# Supports role-based tiers (admin/power_user/standard/anonymous) and endpoint-specific limits
-app.add_middleware(RateLimitMiddleware, requests_per_minute=5000, requests_per_hour=100000)
+# REMOVED (2026-04-30): Legacy RateLimitMiddleware from security_middleware.py.
+# It was configured with requests_per_minute=5000, requests_per_hour=100000 — limits so
+# high they never triggered.  Superseded by APIRateLimitMiddleware (middleware/api_rate_limit.py)
+# which enforces meaningful per-identity sliding-window limits (60/min auth, 20/min unauth,
+# 30/min AI) with Redis backing and env-var tunability.
+# See also: TenantRateLimitMiddleware, MobileRateLimitMiddleware, rate_limiter.py (decorator).
 app.add_middleware(IPAccessControlMiddleware)  # Environment-aware IP access control
 app.add_middleware(SecurityLoggingMiddleware)
 

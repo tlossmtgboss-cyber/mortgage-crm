@@ -13,6 +13,7 @@ column validation is enforced, and TCPA consent-proof columns are present.
 from sqlalchemy import (
     Column,
     DateTime,
+    ForeignKey,
     Integer,
     String,
     Text,
@@ -34,7 +35,7 @@ class SMSDeliveryLog(Base):
 
     # Destination and source phone numbers
     to_phone = Column(String(20), nullable=False, index=True)
-    from_phone = Column(String(20), nullable=True)
+    from_phone = Column(String(20), nullable=False)
 
     # Message content (truncated to 500 chars at INSERT time by tracker)
     message_body = Column(Text, nullable=True)
@@ -57,7 +58,7 @@ class SMSDeliveryLog(Base):
     consent_method = Column(String(50), nullable=True)
 
     # ── Tenant & actor context ──────────────────────────────────────────
-    organization_id = Column(Integer, nullable=True, index=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=False, index=True)
     user_id = Column(Integer, nullable=True, index=True)
     lead_id = Column(Integer, nullable=True, index=True)
     queue_id = Column(Integer, nullable=True)

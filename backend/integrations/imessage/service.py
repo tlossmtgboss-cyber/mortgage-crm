@@ -32,7 +32,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 # === Stub adapters ========================================================
 # These classes/functions wrap Perennia subsystems that don't exist yet as
@@ -46,7 +46,7 @@ _stub_log = _logging.getLogger("integrations.imessage.stubs")
 
 class AuditLogger:
     """Stub — replace with real audit trail service."""
-    async def record(self, session, *, action, actor_user_id, tenant_id,
+    async def record(self, session, *, action, actor_user_id, organization_id,
                      resource_type, resource_id, metadata=None):
         _stub_log.debug(
             "audit.stub: %s %s/%s by %s", action, resource_type, resource_id, actor_user_id
@@ -55,33 +55,33 @@ class AuditLogger:
 
 class ContactRepository:
     """Stub — replace with real contact lookup/creation."""
-    async def get_for_tenant(self, session, *, tenant_id, contact_id):
+    async def get_for_tenant(self, session, *, organization_id, contact_id):
         from sqlalchemy import select
         # Attempt a real lookup against the leads table as a best-effort fallback
         try:
             from database.models import Lead
-            return await session.scalar(
+            return session.execute(
                 select(Lead).where(Lead.id == contact_id)
-            )
+            ).scalar_one_or_none()
         except Exception:
             _stub_log.warning("contact_repo.stub: get_for_tenant(%s) — no real impl", contact_id)
             return None
 
-    async def get_or_create_by_handle(self, session, *, tenant_id, phone_or_email, source):
+    async def get_or_create_by_handle(self, session, *, organization_id, phone_or_email, source):
         _stub_log.warning(
             "contact_repo.stub: get_or_create_by_handle(%s) — no real impl", phone_or_email
         )
         return None
 
 
-async def reset_followup_sla(session, *, tenant_id, contact_id):
+async def reset_followup_sla(session, *, organization_id, contact_id):
     """Stub — replace with real engagement SLA reset."""
     _stub_log.debug("sla.stub: reset_followup_sla for contact %s", contact_id)
 
 
 class CalculatorAgent:
     """Stub — replace with real borrower-type classification agent."""
-    async def classify_borrower_async(self, session, *, tenant_id, contact_id, body):
+    async def classify_borrower_async(self, session, *, organization_id, contact_id, body):
         _stub_log.debug("calculator.stub: classify_borrower for %s", contact_id)
 
 
@@ -103,15 +103,26 @@ async def broadcast_to_tenant(tenant_id, payload):
 
 
 class TelnyxAdapter:
-    """Stub — replace with real Telnyx SMS adapter."""
-    async def send(self, *, tenant_id, from_number, to_number, body, media_url=None):
-        _stub_log.warning(
-            "telnyx.stub: send(%s -> %s) — no real impl", from_number, to_number
-        )
+    """Wraps the existing telephony.sms.send_sms for iMessage fallback."""
+    async def send(self, *, organization_id, from_number, to_number, body, media_url=None):
+        try:
+            from telephony.sms import send_sms
+            result = send_sms(
+                to=to_number,
+                from_=from_number,
+                text=body,
+                media_urls=[media_url] if media_url else None,
+                organization_id=organization_id,
+            )
 
-        class _FakeResp:
-            id = "telnyx-stub-id"
-        return _FakeResp()
+            class _Resp:
+                pass
+            resp = _Resp()
+            resp.id = result.get("id", "telnyx-unknown")
+            return resp
+        except Exception as e:
+            _stub_log.error("telnyx.send_failed: %s -> %s: %s", from_number, to_number, e)
+            raise
 # ==========================================================================
 
 from .chat_guid import build_chat_guid, normalize_handle
@@ -176,14 +187,14 @@ class IMessageService:
     # =====================================================================
     async def send(
         self,
-        session: AsyncSession,
+        session: Session,
         *,
-        tenant_id: UUID,
+        organization_id: int,
         seat_user_id: UUID,
         request: SendMessageRequest,
     ) -> SendMessageResponse:
         contact = await self.contacts.get_for_tenant(
-            session, tenant_id=tenant_id, contact_id=request.contact_id
+            session, organization_id=organization_id, contact_id=request.contact_id
         )
         if contact is None:
             raise ValueError(f"contact {request.contact_id} not found")
@@ -191,12 +202,12 @@ class IMessageService:
         if not recipient:
             raise ValueError(f"contact {contact.id} has no phone or email")
 
-        line = await self._resolve_line(
-            session, tenant_id=tenant_id, line_id=request.line_id
+        line = self._resolve_line(
+            session, organization_id=organization_id, line_id=request.line_id
         )
-        thread = await self._get_or_create_thread(
+        thread = self._get_or_create_thread(
             session,
-            tenant_id=tenant_id,
+            organization_id=organization_id,
             contact_id=contact.id,
             line=line,
             recipient=normalize_handle(recipient),
@@ -212,7 +223,7 @@ class IMessageService:
 
         # ---- persist optimistic row first (so the UI gets an id) ---------
         msg = IMessageMessage(
-            tenant_id=tenant_id,
+            organization_id=organization_id,
             thread_id=thread.id,
             contact_id=contact.id,
             sender_seat_id=seat_user_id,
@@ -227,12 +238,12 @@ class IMessageService:
             reply_to_message_id=request.reply_to_message_id,
         )
         session.add(msg)
-        await session.flush()
+        session.flush()
 
         # ---- SMS fallback path --------------------------------------------
         if channel == Channel.SMS and self.settings.telnyx_fallback_enabled and self.telnyx:
             telnyx_resp = await self.telnyx.send(
-                tenant_id=tenant_id,
+                organization_id=organization_id,
                 from_number=line.handle,
                 to_number=recipient,
                 body=request.body or "",
@@ -241,8 +252,8 @@ class IMessageService:
             msg.status = MessageStatus.SENDING.value
             msg.bb_message_guid = telnyx_resp.id  # reuse field for unified lookup
             msg.sent_at = datetime.now(timezone.utc)
-            await session.flush()
-            await self._audit_send(session, tenant_id, seat_user_id, msg, "telnyx")
+            session.flush()
+            await self._audit_send(session, organization_id, seat_user_id, msg, "telnyx")
             return self._send_response(msg, line, channel)
 
         # ---- iMessage path -------------------------------------------------
@@ -261,7 +272,9 @@ class IMessageService:
 
         # Reply handling
         if request.reply_to_message_id:
-            replied = await session.get(IMessageMessage, request.reply_to_message_id)
+            replied = session.execute(
+                select(IMessageMessage).where(IMessageMessage.id == request.reply_to_message_id)
+            ).scalar_one_or_none()
             if replied and replied.bb_message_guid:
                 bb_payload.selectedMessageGuid = replied.bb_message_guid
                 bb_payload.partIndex = 0
@@ -274,15 +287,15 @@ class IMessageService:
             msg.error_code = -1
             msg.error_message = f"BlueBubbles unreachable: {exc}"
             await self._audit_send(
-                session, tenant_id, seat_user_id, msg, "imessage_unreachable"
+                session, organization_id, seat_user_id, msg, "imessage_unreachable"
             )
-            await session.flush()
+            session.flush()
             raise
         except BlueBubblesValidationError as exc:
             msg.status = MessageStatus.FAILED.value
             msg.error_code = exc.status_code or 400
             msg.error_message = str(exc.payload)[:1000]
-            await session.flush()
+            session.flush()
             raise
         except BlueBubblesError as exc:
             # iMessage send timeout — try Telnyx if enabled
@@ -297,7 +310,7 @@ class IMessageService:
                 )
                 msg.channel = Channel.SMS.value
                 telnyx_resp = await self.telnyx.send(
-                    tenant_id=tenant_id,
+                    organization_id=organization_id,
                     from_number=line.handle,
                     to_number=recipient,
                     body=request.body or "",
@@ -306,15 +319,15 @@ class IMessageService:
                 msg.status = MessageStatus.SENDING.value
                 msg.bb_message_guid = telnyx_resp.id
                 msg.sent_at = datetime.now(timezone.utc)
-                await session.flush()
+                session.flush()
                 await self._audit_send(
-                    session, tenant_id, seat_user_id, msg, "telnyx_fallback"
+                    session, organization_id, seat_user_id, msg, "telnyx_fallback"
                 )
                 return self._send_response(msg, line, Channel.SMS)
             msg.status = MessageStatus.FAILED.value
             msg.error_code = exc.bb_status or exc.status_code or 500
             msg.error_message = str(exc.payload)[:1000]
-            await session.flush()
+            session.flush()
             raise
 
         # ---- happy path ----------------------------------------------------
@@ -345,11 +358,11 @@ class IMessageService:
             thread.chat_guid = bb_chat_guid
         thread.last_message_at = datetime.now(timezone.utc)
 
-        await session.flush()
-        await self._audit_send(session, tenant_id, seat_user_id, msg, "imessage")
+        session.flush()
+        await self._audit_send(session, organization_id, seat_user_id, msg, "imessage")
 
         await broadcast_to_tenant(
-            tenant_id,
+            organization_id,
             {
                 "type": "imessage.message.created",
                 "thread_id": str(thread.id),
@@ -360,22 +373,28 @@ class IMessageService:
 
     async def send_tapback(
         self,
-        session: AsyncSession,
+        session: Session,
         *,
-        tenant_id: UUID,
+        organization_id: int,
         seat_user_id: UUID,
         request: TapbackRequest,
     ) -> ConversationMessage:
-        target = await session.get(IMessageMessage, request.target_message_id)
-        if target is None or target.tenant_id != tenant_id:
+        target = session.execute(
+            select(IMessageMessage).where(IMessageMessage.id == request.target_message_id)
+        ).scalar_one_or_none()
+        if target is None or target.organization_id != organization_id:
             raise ValueError("target message not found")
         if not target.bb_message_guid or not target.bb_chat_guid:
             raise ValueError("target has no BB identifiers — cannot tapback")
 
-        thread = await session.get(IMessageThread, target.thread_id)
+        thread = session.execute(
+            select(IMessageThread).where(IMessageThread.id == target.thread_id)
+        ).scalar_one_or_none()
         if thread is None:
             raise ValueError("thread missing")
-        line = await session.get(IMessageLine, thread.line_id)
+        line = session.execute(
+            select(IMessageLine).where(IMessageLine.id == thread.line_id)
+        ).scalar_one_or_none()
         if line is None:
             raise ValueError("line missing")
 
@@ -389,7 +408,7 @@ class IMessageService:
         envelope = BBMessageEnvelope.model_validate((bb_resp or {}).get("data", {}))
 
         tap_msg = IMessageMessage(
-            tenant_id=tenant_id,
+            organization_id=organization_id,
             thread_id=thread.id,
             contact_id=target.contact_id,
             sender_seat_id=seat_user_id,
@@ -405,23 +424,23 @@ class IMessageService:
             raw_payload=bb_resp,
         )
         session.add(tap_msg)
-        await session.flush()
+        session.flush()
         return _to_conv_message(tap_msg)
 
     async def detect_imessage(
         self,
-        session: AsyncSession,
+        session: Session,
         *,
-        tenant_id: UUID,
+        organization_id: int,
         handle: str,
         force: bool = False,
         line_id: Optional[UUID] = None,
     ) -> IMessageDetectionResult:
-        line = await self._resolve_line(session, tenant_id=tenant_id, line_id=line_id)
+        line = self._resolve_line(session, organization_id=organization_id, line_id=line_id)
         normalized = normalize_handle(handle)
 
         if not force:
-            cached = await self._get_cached_lookup(session, line_id=line.id, handle=normalized)
+            cached = self._get_cached_lookup(session, line_id=line.id, handle=normalized)
             if cached is not None:
                 return IMessageDetectionResult(
                     handle=normalized,
@@ -435,7 +454,7 @@ class IMessageService:
         client = self._client_for(line)
         body = await client.check_handle_availability(normalized)
         service = ((body.get("data") or {}).get("service") or "SMS")
-        row = await self._upsert_lookup(
+        row = self._upsert_lookup(
             session, line_id=line.id, handle=normalized, service=service
         )
         return IMessageDetectionResult(
@@ -450,7 +469,7 @@ class IMessageService:
     # =====================================================================
     async def ingest_event(
         self,
-        session: AsyncSession,
+        session: Session,
         *,
         line: IMessageLine,
         event: BBWebhookEvent,
@@ -466,7 +485,7 @@ class IMessageService:
         log_stmt = (
             pg_insert(IMessageWebhookLog)
             .values(
-                tenant_id=line.tenant_id,
+                organization_id=line.organization_id,
                 line_id=line.id,
                 event_type=event.type,
                 bb_guid=bb_guid,
@@ -479,7 +498,7 @@ class IMessageService:
             )
             .returning(IMessageWebhookLog.id)
         )
-        log_row = (await session.execute(log_stmt)).first()
+        log_row = session.execute(log_stmt).first()
         if log_row is None:
             logger.info("imessage.webhook.dedupe_skip", extra={"type": event.type})
             return
@@ -507,14 +526,14 @@ class IMessageService:
             logger.exception(
                 "imessage.webhook.processing_error", extra={"type": event.type}
             )
-            await session.execute(
+            session.execute(
                 IMessageWebhookLog.__table__.update()
                 .where(IMessageWebhookLog.id == log_row[0])
                 .values(processing_error=str(exc))
             )
             return
 
-        await session.execute(
+        session.execute(
             IMessageWebhookLog.__table__.update()
             .where(IMessageWebhookLog.id == log_row[0])
             .values(processed=True)
@@ -522,7 +541,7 @@ class IMessageService:
 
     # ---- new-message handler -------------------------------------------------
     async def _handle_new_message(
-        self, session: AsyncSession, line: IMessageLine, event: BBWebhookEvent
+        self, session: Session, line: IMessageLine, event: BBWebhookEvent
     ) -> None:
         envelope = event.as_message()
         if envelope is None:
@@ -541,13 +560,13 @@ class IMessageService:
 
         contact = await self.contacts.get_or_create_by_handle(
             session,
-            tenant_id=line.tenant_id,
+            organization_id=line.organization_id,
             phone_or_email=envelope.handle.address,
             source="imessage_inbound",
         )
-        thread = await self._get_or_create_thread(
+        thread = self._get_or_create_thread(
             session,
-            tenant_id=line.tenant_id,
+            organization_id=line.organization_id,
             contact_id=contact.id,
             line=line,
             recipient=normalize_handle(envelope.handle.address),
@@ -561,7 +580,7 @@ class IMessageService:
         tapback = _parse_tapback_type(envelope.associatedMessageType)
 
         msg = IMessageMessage(
-            tenant_id=line.tenant_id,
+            organization_id=line.organization_id,
             thread_id=thread.id,
             contact_id=contact.id,
             direction=Direction.INBOUND.value,
@@ -586,16 +605,16 @@ class IMessageService:
         )
         session.add(msg)
         thread.last_message_at = msg.sent_at or datetime.now(timezone.utc)
-        await session.flush()
+        session.flush()
 
         # Pipeline fan-out -----------------------------------------------------
         await reset_followup_sla(
-            session, tenant_id=line.tenant_id, contact_id=contact.id
+            session, organization_id=line.organization_id, contact_id=contact.id
         )
 
         if envelope.text:
             inbound_event = InboundMessageEvent(
-                tenant_id=line.tenant_id,
+                organization_id=line.organization_id,
                 contact_id=contact.id,
                 message_id=msg.id,
                 channel=Channel(msg.channel),
@@ -606,14 +625,14 @@ class IMessageService:
             await self.ops_manager.record_inbound_async(session, event=inbound_event)
             await self.deal_breaker.evaluate_message_async(session, event=inbound_event)
             # First-reply borrower-type classification (Calculator Agent)
-            is_first = await self._is_first_inbound(session, contact.id)
+            is_first = self._is_first_inbound(session, contact.id)
             if is_first:
                 await self.calculator.classify_borrower_async(
-                    session, tenant_id=line.tenant_id, contact_id=contact.id, body=envelope.text
+                    session, organization_id=line.organization_id, contact_id=contact.id, body=envelope.text
                 )
 
         await broadcast_to_tenant(
-            line.tenant_id,
+            line.organization_id,
             {
                 "type": "imessage.message.received",
                 "thread_id": str(thread.id),
@@ -626,22 +645,22 @@ class IMessageService:
             session,
             action="imessage.receive",
             actor_user_id=None,
-            tenant_id=line.tenant_id,
+            organization_id=line.organization_id,
             resource_type="imessage_message",
             resource_id=str(msg.id),
             metadata={"bb_guid": envelope.guid, "channel": msg.channel},
         )
 
     async def _reconcile_outbound_echo(
-        self, session: AsyncSession, envelope: BBMessageEnvelope
+        self, session: Session, envelope: BBMessageEnvelope
     ) -> None:
         # Find by guid first (perfect match) — covers the case where BB
         # returned the guid synchronously and we already stamped it.
-        msg = await session.scalar(
+        msg = session.execute(
             select(IMessageMessage).where(
                 IMessageMessage.bb_message_guid == envelope.guid
             )
-        )
+        ).scalar_one_or_none()
         if msg is None:
             # No row yet: this happens if the send response was slow and
             # the webhook beat it. We'll let the send-path UPSERT.
@@ -657,16 +676,16 @@ class IMessageService:
             msg.error_code = envelope.error
 
     async def _handle_updated_message(
-        self, session: AsyncSession, line: IMessageLine, event: BBWebhookEvent
+        self, session: Session, line: IMessageLine, event: BBWebhookEvent
     ) -> None:
         envelope = event.as_message()
         if envelope is None:
             return
-        msg = await session.scalar(
+        msg = session.execute(
             select(IMessageMessage).where(
                 IMessageMessage.bb_message_guid == envelope.guid
             )
-        )
+        ).scalar_one_or_none()
         if msg is None:
             return
         if envelope.dateDelivered and not msg.delivered_at:
@@ -682,7 +701,7 @@ class IMessageService:
             msg.error_code = envelope.error
 
         await broadcast_to_tenant(
-            line.tenant_id,
+            line.organization_id,
             {
                 "type": "imessage.message.updated",
                 "message_id": str(msg.id),
@@ -697,7 +716,7 @@ class IMessageService:
     ) -> None:
         # BB payload: {chatGuid, display: bool}
         await broadcast_to_tenant(
-            line.tenant_id,
+            line.organization_id,
             {
                 "type": "imessage.typing",
                 "chat_guid": event.data.get("chatGuid"),
@@ -706,19 +725,19 @@ class IMessageService:
         )
 
     async def _handle_read_status(
-        self, session: AsyncSession, event: BBWebhookEvent
+        self, session: Session, event: BBWebhookEvent
     ) -> None:
         chat_guid = event.data.get("chatGuid")
         read = event.data.get("read", False)
         if not chat_guid or not read:
             return
         # Mark all outbound messages in this chat as read up to the given ts
-        thread = await session.scalar(
+        thread = session.execute(
             select(IMessageThread).where(IMessageThread.chat_guid == chat_guid)
-        )
+        ).scalar_one_or_none()
         if thread is None:
             return
-        await session.execute(
+        session.execute(
             IMessageMessage.__table__.update()
             .where(
                 IMessageMessage.thread_id == thread.id,
@@ -729,7 +748,7 @@ class IMessageService:
         )
 
     async def _handle_group_event(
-        self, session: AsyncSession, line: IMessageLine, event: BBWebhookEvent
+        self, session: Session, line: IMessageLine, event: BBWebhookEvent
     ) -> None:
         # Hook this up if/when you launch the co-borrower thread feature
         logger.info(
@@ -742,26 +761,26 @@ class IMessageService:
     # =====================================================================
     async def get_thread(
         self,
-        session: AsyncSession,
+        session: Session,
         *,
-        tenant_id: UUID,
+        organization_id: int,
         contact_id: UUID,
         limit: int = 200,
     ) -> ConversationThread:
         contact = await self.contacts.get_for_tenant(
-            session, tenant_id=tenant_id, contact_id=contact_id
+            session, organization_id=organization_id, contact_id=contact_id
         )
         if contact is None:
             raise ValueError("contact not found")
 
-        thread = await session.scalar(
+        thread = session.execute(
             select(IMessageThread).where(
-                IMessageThread.tenant_id == tenant_id,
+                IMessageThread.organization_id == organization_id,
                 IMessageThread.contact_id == contact_id,
             )
-        )
+        ).scalar_one_or_none()
         if thread is None:
-            line = await self._resolve_line(session, tenant_id=tenant_id, line_id=None)
+            line = self._resolve_line(session, organization_id=organization_id, line_id=None)
             return ConversationThread(
                 contact_id=contact.id,
                 contact_phone=contact.phone,
@@ -774,16 +793,16 @@ class IMessageService:
                 messages=[],
             )
 
-        rows = (
-            await session.scalars(
-                select(IMessageMessage)
-                .where(IMessageMessage.thread_id == thread.id)
-                .order_by(IMessageMessage.created_at.desc())
-                .limit(limit)
-            )
+        rows = session.scalars(
+            select(IMessageMessage)
+            .where(IMessageMessage.thread_id == thread.id)
+            .order_by(IMessageMessage.created_at.desc())
+            .limit(limit)
         ).all()
-        line = await session.get(IMessageLine, thread.line_id)
-        cached = await self._get_cached_lookup(
+        line = session.execute(
+            select(IMessageLine).where(IMessageLine.id == thread.line_id)
+        ).scalar_one_or_none()
+        cached = self._get_cached_lookup(
             session,
             line_id=thread.line_id,
             handle=normalize_handle(contact.phone or contact.email or ""),
@@ -813,61 +832,63 @@ class IMessageService:
     # =====================================================================
     # Helpers
     # =====================================================================
-    async def _resolve_line(
+    def _resolve_line(
         self,
-        session: AsyncSession,
+        session: Session,
         *,
-        tenant_id: UUID,
+        organization_id: int,
         line_id: Optional[UUID],
     ) -> IMessageLine:
         if line_id:
-            line = await session.get(IMessageLine, line_id)
-            if line is None or line.tenant_id != tenant_id or not line.enabled:
-                raise ValueError(f"line {line_id} not available for tenant")
+            line = session.execute(
+                select(IMessageLine).where(IMessageLine.id == line_id)
+            ).scalar_one_or_none()
+            if line is None or line.organization_id != organization_id or not line.enabled:
+                raise ValueError(f"line {line_id} not available for organization")
             return line
-        # Default: pick the first enabled line for this tenant
-        line = await session.scalar(
+        # Default: pick the first enabled line for this organization
+        line = session.execute(
             select(IMessageLine)
-            .where(IMessageLine.tenant_id == tenant_id, IMessageLine.enabled.is_(True))
+            .where(IMessageLine.organization_id == organization_id, IMessageLine.enabled.is_(True))
             .order_by(IMessageLine.created_at)
             .limit(1)
-        )
+        ).scalar_one_or_none()
         if line is None:
-            raise ValueError(f"no iMessage lines configured for tenant {tenant_id}")
+            raise ValueError(f"no iMessage lines configured for organization {organization_id}")
         return line
 
-    async def _get_or_create_thread(
+    def _get_or_create_thread(
         self,
-        session: AsyncSession,
+        session: Session,
         *,
-        tenant_id: UUID,
-        contact_id: UUID,
+        organization_id: int,
+        contact_id: int,
         line: IMessageLine,
         recipient: str,
     ) -> IMessageThread:
-        thread = await session.scalar(
+        thread = session.execute(
             select(IMessageThread).where(
-                IMessageThread.tenant_id == tenant_id,
+                IMessageThread.organization_id == organization_id,
                 IMessageThread.contact_id == contact_id,
                 IMessageThread.line_id == line.id,
             )
-        )
+        ).scalar_one_or_none()
         if thread is not None:
             return thread
         thread = IMessageThread(
-            tenant_id=tenant_id,
+            organization_id=organization_id,
             contact_id=contact_id,
             line_id=line.id,
-            chat_guid=None,  # filled in on first send
+            chat_guid=None,
             is_group=False,
         )
         session.add(thread)
-        await session.flush()
+        session.flush()
         return thread
 
     async def _resolve_channel(
         self,
-        session: AsyncSession,
+        session: Session,
         *,
         line: IMessageLine,
         handle: str,
@@ -875,7 +896,7 @@ class IMessageService:
     ) -> Channel:
         if requested != Channel.AUTO:
             return requested
-        cached = await self._get_cached_lookup(
+        cached = self._get_cached_lookup(
             session, line_id=line.id, handle=handle
         )
         if cached is not None:
@@ -884,31 +905,28 @@ class IMessageService:
                 if cached.service.lower() == "imessage"
                 else Channel.SMS
             )
-        # No cache — probe live
         client = self._client_for(line)
         try:
             body = await client.check_handle_availability(handle)
         except BlueBubblesError:
-            # If the probe fails, fall through to AUTO and let BB pick;
-            # if BB picks SMS we'll record it via the response.
             return Channel.IMESSAGE
         service = ((body.get("data") or {}).get("service") or "SMS")
-        await self._upsert_lookup(
+        self._upsert_lookup(
             session, line_id=line.id, handle=handle, service=service
         )
         return Channel.IMESSAGE if service.lower() == "imessage" else Channel.SMS
 
-    async def _get_cached_lookup(
-        self, session: AsyncSession, *, line_id: UUID, handle: str
+    def _get_cached_lookup(
+        self, session: Session, *, line_id: UUID, handle: str
     ) -> Optional[IMessageLookupCache]:
         if not handle:
             return None
-        row = await session.scalar(
+        row = session.execute(
             select(IMessageLookupCache).where(
                 IMessageLookupCache.line_id == line_id,
                 IMessageLookupCache.handle == handle,
             )
-        )
+        ).scalar_one_or_none()
         if row is None:
             return None
         ttl = timedelta(seconds=self.settings.imessage_lookup_cache_ttl_seconds)
@@ -916,9 +934,9 @@ class IMessageService:
             return None
         return row
 
-    async def _upsert_lookup(
+    def _upsert_lookup(
         self,
-        session: AsyncSession,
+        session: Session,
         *,
         line_id: UUID,
         handle: str,
@@ -933,21 +951,20 @@ class IMessageService:
             )
             .returning(IMessageLookupCache)
         )
-        return (await session.execute(stmt)).scalar_one()
+        return session.execute(stmt).scalar_one()
 
-    async def _is_first_inbound(
-        self, session: AsyncSession, contact_id: UUID
+    def _is_first_inbound(
+        self, session: Session, contact_id: int
     ) -> bool:
-        count = await session.scalar(
+        row = session.execute(
             select(IMessageMessage)
             .where(
                 IMessageMessage.contact_id == contact_id,
                 IMessageMessage.direction == Direction.INBOUND.value,
             )
             .limit(2)
-        )
-        # crude — replace with COUNT() if you want exact
-        return count is None
+        ).scalar_one_or_none()
+        return row is None
 
     def _signature(self, event: BBWebhookEvent, raw_body: dict) -> str:
         envelope = event.data or {}
@@ -972,8 +989,8 @@ class IMessageService:
 
     async def _audit_send(
         self,
-        session: AsyncSession,
-        tenant_id: UUID,
+        session: Session,
+        organization_id: int,
         seat_user_id: UUID,
         msg: IMessageMessage,
         outcome: str,
@@ -982,7 +999,7 @@ class IMessageService:
             session,
             action="imessage.send",
             actor_user_id=seat_user_id,
-            tenant_id=tenant_id,
+            organization_id=organization_id,
             resource_type="imessage_message",
             resource_id=str(msg.id),
             metadata={

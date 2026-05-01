@@ -62,7 +62,7 @@ def create_sms_task(
     category: Optional[str] = None,
     priority: str = "normal",
 ) -> dict:
-    from services.sms_phone_utils import normalize_phone
+    from telephony.phone_utils import normalize_phone
     phone_number = normalize_phone(phone_number)
 
     try:
@@ -409,7 +409,7 @@ def assign_task_to_user(
     phone_number: str,
     organization_id: int,
 ) -> Optional[int]:
-    from services.sms_phone_utils import normalize_phone
+    from telephony.phone_utils import normalize_phone
     phone_number = normalize_phone(phone_number)
 
     try:

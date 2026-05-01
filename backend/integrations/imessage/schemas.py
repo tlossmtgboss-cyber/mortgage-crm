@@ -132,7 +132,7 @@ class BBWebhookEvent(BaseModel):
 # Perennia-facing models (what the React frontend talks to)
 # =============================================================================
 class SendMessageRequest(BaseModel):
-    contact_id: UUID
+    contact_id: int
     body: Optional[str] = Field(None, max_length=4000)
     media_url: Optional[str] = None
     channel: Channel = Channel.AUTO
@@ -168,7 +168,7 @@ class TapbackRequest(BaseModel):
 
 class ConversationMessage(BaseModel):
     id: UUID
-    contact_id: UUID
+    contact_id: int
     direction: Direction
     body: Optional[str]
     media_urls: list[str] = Field(default_factory=list)
@@ -178,9 +178,9 @@ class ConversationMessage(BaseModel):
     error_code: Optional[int] = None
     error_message: Optional[str] = None
     bb_message_guid: Optional[str] = None
-    sender_seat_id: Optional[UUID] = None
+    sender_seat_id: Optional[int] = None
     reply_to_message_id: Optional[UUID] = None
-    associated_message_guid: Optional[str] = None  # for tapbacks
+    associated_message_guid: Optional[str] = None
     tapback: Optional[TapbackType] = None
     created_at: datetime
     delivered_at: Optional[datetime] = None
@@ -188,7 +188,7 @@ class ConversationMessage(BaseModel):
 
 
 class ConversationThread(BaseModel):
-    contact_id: UUID
+    contact_id: int
     contact_phone: Optional[str]
     contact_email: Optional[str]
     chat_guid: Optional[str]
@@ -212,8 +212,8 @@ class IMessageDetectionResult(BaseModel):
 class InboundMessageEvent(BaseModel):
     """Event payload pushed onto your existing intake queue."""
 
-    tenant_id: UUID
-    contact_id: UUID
+    organization_id: int
+    contact_id: int
     message_id: UUID
     channel: Channel
     body: str

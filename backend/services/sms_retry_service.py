@@ -28,12 +28,17 @@ class SMSRetryService:
     MAX_RETRIES = 3
     BASE_DELAY_SECONDS = 2  # Exponential backoff: 2s, 4s, 8s
 
-    # Circuit breaker state (class-level so shared across instances)
-    _circuit_state = "closed"  # closed, open, half_open
-    _failure_count = 0
+    # Circuit breaker state — per-organization to prevent noisy-neighbor issues.
+    # A single org hitting failures won't trip the breaker for other orgs.
+    _circuit_states: Dict[int, str] = {}         # org_id -> "closed"/"open"/"half_open"
+    _failure_counts: Dict[int, int] = {}          # org_id -> count
+    _last_failure_times: Dict[int, float] = {}    # org_id -> timestamp when circuit opened
     _failure_threshold = 5
-    _circuit_opened_at: Optional[float] = None
     _circuit_cooldown_seconds = 30
+    _state_lock = asyncio.Lock()
+
+    # Sentinel org_id for callers that don't provide an organization_id
+    _DEFAULT_ORG = 0
 
     def __init__(self, telnyx_api_key: Optional[str] = None, db=None):
         self._api_key = telnyx_api_key
@@ -41,45 +46,73 @@ class SMSRetryService:
         self._dead_letter_queue: list = []  # In-memory fallback when no DB session
 
     # -----------------------------------------------------------------
-    # Circuit breaker
+    # Circuit breaker (per-organization)
     # -----------------------------------------------------------------
 
-    def _check_circuit(self) -> bool:
-        """Check if circuit breaker allows requests. Returns True if request can proceed."""
-        if self._circuit_state == "closed":
-            return True
-        if self._circuit_state == "open":
-            if self._circuit_opened_at and (time.time() - self._circuit_opened_at > self._circuit_cooldown_seconds):
-                SMSRetryService._circuit_state = "half_open"
-                logger.info("Circuit breaker half-open, testing connectivity")
+    @classmethod
+    def _resolve_org(cls, organization_id: Optional[int] = None) -> int:
+        """Resolve organization_id to a dict key, using sentinel for None."""
+        return organization_id if organization_id is not None else cls._DEFAULT_ORG
+
+    async def _check_circuit(self, organization_id: Optional[int] = None) -> bool:
+        """Check if circuit breaker allows requests for this org.
+
+        Returns True if request can proceed.
+        """
+        org = self._resolve_org(organization_id)
+        async with self._state_lock:
+            state = self._circuit_states.get(org, "closed")
+            if state == "closed":
                 return True
-            return False
-        if self._circuit_state == "half_open":
+            if state == "open":
+                opened_at = self._last_failure_times.get(org)
+                if opened_at and (time.time() - opened_at > self._circuit_cooldown_seconds):
+                    SMSRetryService._circuit_states[org] = "half_open"
+                    logger.info(
+                        "Circuit breaker half-open, testing connectivity",
+                        extra={"organization_id": str(org)},
+                    )
+                    return True
+                return False
+            if state == "half_open":
+                return True
             return True
-        return True
 
-    def _record_success(self):
-        """Record a successful API call."""
-        if self._circuit_state == "half_open":
-            SMSRetryService._circuit_state = "closed"
-            SMSRetryService._failure_count = 0
-            logger.info("Circuit breaker closed — Telnyx API recovered")
-        SMSRetryService._failure_count = 0
+    async def _record_success(self, organization_id: Optional[int] = None):
+        """Record a successful API call for this org's circuit breaker."""
+        org = self._resolve_org(organization_id)
+        async with self._state_lock:
+            state = self._circuit_states.get(org, "closed")
+            if state == "half_open":
+                SMSRetryService._circuit_states[org] = "closed"
+                SMSRetryService._failure_counts[org] = 0
+                logger.info(
+                    "Circuit breaker closed — Telnyx API recovered",
+                    extra={"organization_id": str(org)},
+                )
+            SMSRetryService._failure_counts[org] = 0
 
-    def _record_failure(self):
-        """Record a failed API call."""
-        SMSRetryService._failure_count += 1
-        if self._circuit_state == "half_open":
-            SMSRetryService._circuit_state = "open"
-            SMSRetryService._circuit_opened_at = time.time()
-            logger.warning("Circuit breaker re-opened after half-open failure")
-        elif self._failure_count >= self._failure_threshold:
-            SMSRetryService._circuit_state = "open"
-            SMSRetryService._circuit_opened_at = time.time()
-            logger.warning(
-                "Circuit breaker opened — Telnyx API failure threshold reached",
-                extra={"failure_count": self._failure_count},
-            )
+    async def _record_failure(self, organization_id: Optional[int] = None):
+        """Record a failed API call for this org's circuit breaker."""
+        org = self._resolve_org(organization_id)
+        async with self._state_lock:
+            count = self._failure_counts.get(org, 0) + 1
+            SMSRetryService._failure_counts[org] = count
+            state = self._circuit_states.get(org, "closed")
+            if state == "half_open":
+                SMSRetryService._circuit_states[org] = "open"
+                SMSRetryService._last_failure_times[org] = time.time()
+                logger.warning(
+                    "Circuit breaker re-opened after half-open failure",
+                    extra={"organization_id": str(org)},
+                )
+            elif count >= self._failure_threshold:
+                SMSRetryService._circuit_states[org] = "open"
+                SMSRetryService._last_failure_times[org] = time.time()
+                logger.warning(
+                    "Circuit breaker opened — Telnyx API failure threshold reached",
+                    extra={"failure_count": count, "organization_id": str(org)},
+                )
 
     # -----------------------------------------------------------------
     # Compliance re-check at retry time
@@ -150,7 +183,7 @@ class SMSRetryService:
         }
 
         # Circuit breaker check — skip retry loop entirely if open
-        if not self._check_circuit():
+        if not await self._check_circuit(organization_id):
             logger.warning("Circuit breaker open — SMS not attempted", extra=log_extra)
             self._persist_dead_letter(
                 to_phone=to_phone,
@@ -192,7 +225,7 @@ class SMSRetryService:
                     organization_id=organization_id,
                 )
 
-                self._record_success()
+                await self._record_success(organization_id)
 
                 logger.info(
                     "SMS sent successfully",
@@ -207,7 +240,7 @@ class SMSRetryService:
 
             except Exception as e:
                 last_error = str(e)
-                self._record_failure()
+                await self._record_failure(organization_id)
 
                 logger.warning(
                     "SMS send failed, will retry" if attempt < self.MAX_RETRIES else "SMS send failed, max retries reached",
