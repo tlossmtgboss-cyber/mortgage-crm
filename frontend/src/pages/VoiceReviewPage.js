@@ -12,6 +12,7 @@ import { ApplicationProvider } from './applications/contexts/ApplicationContext'
 import { createInitialState } from './applications/contexts/applicationReducer';
 import ReviewStage from './applications/components/stages/ReviewStage';
 import ApplicationShell from './applications/components/ApplicationShell';
+import SubmissionBridge from './applications/components/SubmissionBridge';
 import { getStages } from './applications/config/stageConfig';
 import './VoiceReviewPage.css';
 import '../styles/borrower-theme.css';
@@ -165,20 +166,17 @@ export default function VoiceReviewPage() {
   }
 
   if (submitted) {
+    const portalUrl = applicationData?.portal_token
+      ? `/borrower-portal/${applicationData.portal_token}?fromSubmission=1`
+      : null;
+
     return (
       <div className="voice-review-page borrower-theme">
-        <div className="voice-review-submitted">
-          <div className="submitted-check">&#10003;</div>
-          <h1>Application Submitted!</h1>
-          <p>
-            Your application has been submitted successfully. Your loan officer
-            will be in touch shortly with next steps.
-          </p>
-          <p className="submitted-note">
-            You'll receive an email with instructions for uploading any
-            remaining documents.
-          </p>
-        </div>
+        <SubmissionBridge
+          loName={applicationData?.lo_name}
+          portalUrl={portalUrl}
+          companyName={applicationData?.company_name}
+        />
       </div>
     );
   }
