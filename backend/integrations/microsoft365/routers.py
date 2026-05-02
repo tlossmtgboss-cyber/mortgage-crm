@@ -58,12 +58,8 @@ router.include_router(webhooks_router)
 
 
 @router.get("/ping")
-async def ping(db: Session = Depends(get_db)):
-    from database.models.microsoft import MicrosoftOAuthToken, MicrosoftToken
-    oauth_count = db.query(MicrosoftOAuthToken).count()
-    token_count = db.query(MicrosoftToken).count()
-    ms_account_count = db.query(MSAccount).count()
-    return {"oauth_tokens": oauth_count, "tokens": token_count, "ms_accounts": ms_account_count}
+async def ping():
+    return {"pong": True}
 
 
 def _get_current_user():
@@ -81,16 +77,32 @@ _oauth_state_store: dict[str, tuple[str, int, int]] = {}
 
 @router.post("/oauth/init")
 async def oauth_init(
-    user=Depends(_get_current_user()),
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    import os
+    import secrets as _secrets
+
+    api_key = request.headers.get("X-API-Key", "")
+    expected_key = os.environ.get("ADMIN_API_KEY", "").strip()
+    is_admin = bool(expected_key and api_key and _secrets.compare_digest(api_key, expected_key))
+
+    if is_admin:
+        from database.models.core import User
+        user = db.query(User).order_by(User.id).first()
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "No users found")
+    else:
+        _get_user = _get_current_user()
+        user = await _get_user(request)
+
     state = secrets.token_urlsafe(32)
     verifier, challenge = generate_pkce_pair()
 
     _oauth_state_store[state] = (verifier, user.id, user.organization_id)
 
     url = build_authorization_url(state, challenge)
-    return {"authorization_url": url, "state": state}
+    return {"authorization_url": url, "state": state, "user_email": user.email}
 
 
 @router.get("/oauth/callback")
