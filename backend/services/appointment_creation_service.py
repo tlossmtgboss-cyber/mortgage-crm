@@ -1019,6 +1019,20 @@ async def create_appointment(
         db.commit()
         db.refresh(appointment)
 
+    # -------------------------------------------------------------------------
+    # 13. Push to Outlook via .ics email invite (best-effort, non-blocking)
+    # -------------------------------------------------------------------------
+    try:
+        import os
+        outlook_email = os.environ.get("OUTLOOK_SYNC_EMAIL", "")
+        if outlook_email:
+            from services.outlook_calendar_sync import push_appointment_to_outlook
+            result = await push_appointment_to_outlook(db, appointment, outlook_email)
+            if not result.get("success"):
+                logger.debug("Outlook .ics sync skipped: %s", result.get("error", ""))
+    except Exception as exc:
+        logger.debug("Outlook .ics sync error (non-fatal): %s", exc)
+
     return AppointmentCreationResult(
         success=True,
         appointment=appointment,
