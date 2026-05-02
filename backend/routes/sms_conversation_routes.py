@@ -553,17 +553,30 @@ async def send_sms(
     except (ValueError, TypeError):
         pass
 
+    logger.warning(
+        "SMS_SEND iMessage routing check: org_id=%s lead_id=%s contactId=%r to=...%s",
+        org_id, lead_id, req.contactId, req.to[-4:] if req.to else "?",
+    )
+
     if org_id and lead_id:
         try:
             from integrations.imessage.factory import build_imessage_service
             from integrations.imessage.schemas import Channel
+            logger.warning("SMS_SEND building iMessage service...")
             im_service = build_imessage_service()
+            handle = normalize_phone(req.to) or req.to
+            logger.warning("SMS_SEND detecting iMessage for handle=%s", handle)
             detection = await im_service.detect_imessage(
                 db, organization_id=org_id,
-                handle=normalize_phone(req.to) or req.to,
+                handle=handle,
+            )
+            logger.warning(
+                "SMS_SEND iMessage detection result: service=%s for handle=%s",
+                detection.service, handle,
             )
             if detection.service == Channel.IMESSAGE:
                 from integrations.imessage.schemas import SendMessageRequest as IMSendReq
+                logger.warning("SMS_SEND sending via iMessage...")
                 im_resp = await im_service.send(
                     db,
                     organization_id=org_id,
@@ -585,8 +598,18 @@ async def send_sms(
                     "iMessage send success: to=...%s channel=%s msg_id=%s",
                     req.to[-4:], im_resp.channel.value, im_resp.message_id,
                 )
+            else:
+                logger.warning(
+                    "SMS_SEND iMessage not available for ...%s, falling back to SMS",
+                    req.to[-4:] if req.to else "?",
+                )
         except Exception as e:
-            logger.warning("iMessage routing failed (falling back to SMS): %s", e)
+            logger.warning("iMessage routing failed (falling back to SMS): %s", e, exc_info=True)
+    else:
+        logger.warning(
+            "SMS_SEND skipping iMessage: org_id=%s lead_id=%s (need both truthy)",
+            org_id, lead_id,
+        )
 
     # --- Telnyx SMS fallback ---------------------------------------------------
     if not imessage_sent:
