@@ -344,6 +344,11 @@ async def save_call_summary(call_context: dict, db: Session):
                     notes=f"Inbound call. Conversation summary:\n{json.dumps(call_context['conversation_history'], indent=2)}"
                 )
                 db.add(lead)
+                db.flush()
+
+                from services.client_file_service import ensure_client_file
+                ensure_client_file(db, lead)
+
                 logger.info("Created new lead from call")
 
             # Log activity

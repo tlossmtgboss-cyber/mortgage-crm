@@ -61,6 +61,10 @@ def ensure_lead(
         )
         db.add(new_lead)
         db.flush()
+
+        from services.client_file_service import ensure_client_file
+        ensure_client_file(db, new_lead)
+
         logger.info(f"Created new lead {new_lead.id} from booking")
         return new_lead.id
     except Exception as e:

@@ -1109,6 +1109,10 @@ class VapiCRMIntegration:
                 )
                 self.db.add(lead)
                 self.db.flush()
+
+                from services.client_file_service import ensure_client_file
+                ensure_client_file(self.db, lead)
+
                 was_new_lead = True
 
             vapi_call.lead_id = lead.id

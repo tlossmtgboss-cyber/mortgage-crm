@@ -233,6 +233,9 @@ class FollowUpBossSyncService:
                 self.db.add(lead)
                 self.db.flush()
 
+                from services.client_file_service import ensure_client_file
+                ensure_client_file(self.db, lead)
+
             # Transform and apply fields
             stage_mappings = self.get_stage_mappings(connection.id)
 

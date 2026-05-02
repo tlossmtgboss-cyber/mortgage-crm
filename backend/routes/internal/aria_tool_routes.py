@@ -303,6 +303,11 @@ async def create_lead_endpoint(
     if req.user_id:
         lead.owner_id = req.user_id
     db.add(lead)
+    db.flush()
+
+    from services.client_file_service import ensure_client_file
+    ensure_client_file(db, lead)
+
     db.commit()
     db.refresh(lead)
 

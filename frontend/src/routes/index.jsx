@@ -327,6 +327,7 @@ const LiveCallWhisper = lazyRetry(() => import('../pages/LiveCallWhisper'));
 const ProductionPredictor = lazyRetry(() => import('../pages/ProductionPredictor'));
 const ProductionPredictorDetail = lazyRetry(() => import('../pages/ProductionPredictorDetail'));
 const DealAlerts = lazyRetry(() => import('../pages/DealAlerts'));
+const ClientFilePage = lazyRetry(() => import('../pages/ClientFilePage'));
 
 // Accounting System
 const AccountingDashboard = lazyRetry(() => import('../pages/accounting/AccountingDashboard'));
@@ -603,6 +604,7 @@ export function getRoutes(layoutProps, options = {}) {
     // Leads & Loans
     <Route key="/leads" path="/leads" element={withMainLayout(Leads)} />,
     <Route key="/leads/:id" path="/leads/:id" element={withMainLayout(LeadDetail)} />,
+    <Route key="/clients/:uuid" path="/clients/:uuid" element={withMainLayout(ClientFilePage)} />,
     <Route key="/leads/:leadId/intake" path="/leads/:leadId/intake" element={withMainLayout(IntakeEngine, false)} />,
     <Route key="/loans" path="/loans" element={withMainLayout(Loans)} />,
     <Route key="/loans/:id" path="/loans/:id" element={withMainLayout(LoanDetail)} />,

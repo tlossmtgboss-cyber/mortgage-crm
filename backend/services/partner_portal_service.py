@@ -330,6 +330,10 @@ def create_referred_lead(
         property_address=property_address,
     )
     db.add(lead)
+    db.flush()
+
+    from services.client_file_service import ensure_client_file
+    ensure_client_file(db, lead)
 
     # Increment partner referral count
     partner.referrals_in = (partner.referrals_in or 0) + 1

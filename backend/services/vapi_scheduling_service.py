@@ -939,6 +939,9 @@ def _ensure_lead_for_ai_booking(
     db.add(new_lead)
     db.flush()
 
+    from services.client_file_service import ensure_client_file
+    ensure_client_file(db, new_lead)
+
     logger.info(f"Created new lead {new_lead.id} from AI booking")
     return new_lead.id
 

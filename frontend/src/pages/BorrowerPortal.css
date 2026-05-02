@@ -722,3 +722,47 @@
     font-size: 13px;
   }
 }
+
+/* ============================================
+   WELCOME BANNER (from submission)
+   ============================================ */
+
+.portal-welcome-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px;
+  margin-bottom: 20px;
+  background: var(--bt-primary-light, rgba(33, 141, 141, 0.08));
+  border: 1px solid rgba(33, 141, 141, 0.15);
+  border-radius: var(--bt-radius-md, 10px);
+  animation: fadeInUp 0.4s ease;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.portal-welcome-content strong {
+  display: block;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.portal-welcome-content p {
+  font-size: 14px;
+  color: var(--bt-text-secondary, #555);
+  margin: 0;
+}
+
+.portal-welcome-dismiss {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--bt-text-tertiary, #999);
+  cursor: pointer;
+  padding: 4px;
+  flex-shrink: 0;
+}

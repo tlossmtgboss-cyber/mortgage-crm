@@ -415,6 +415,25 @@ def sample_loan():
 
 
 @pytest.fixture
+def sample_client_file(db_session):
+    """Create a real ClientFile linked to a real Lead in the test DB."""
+    from database.models import Lead
+    from services.client_file_service import ensure_client_file
+    lead = Lead(
+        organization_id=1,
+        first_name="Test",
+        last_name="Client",
+        email="test.client@example.com",
+        owner_id=1,
+    )
+    db_session.add(lead)
+    db_session.flush()
+    cf = ensure_client_file(db_session, lead)
+    db_session.flush()
+    return cf
+
+
+@pytest.fixture
 def sample_pipeline_metrics():
     """Sample pipeline metrics response"""
     return {

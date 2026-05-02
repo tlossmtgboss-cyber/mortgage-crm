@@ -124,6 +124,11 @@ async def create_lead(
         db_lead.next_action = "Initial contact and needs assessment"
 
         db.add(db_lead)
+        db.flush()
+
+        from services.client_file_service import ensure_client_file
+        ensure_client_file(db, db_lead)
+
         db.commit()
         db.refresh(db_lead)
 
@@ -369,3 +374,21 @@ async def search_leads(
     leads = query.order_by(Lead.name).limit(limit).all()
 
     return leads
+
+
+@router.get("/{lead_id}/client-file-id")
+def get_client_file_id_for_lead(
+    lead_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    """Return the client_file ID associated with a lead."""
+    from sqlalchemy import select as sa_select
+    from database.models.client_file import ClientFile
+
+    cf = db.execute(
+        sa_select(ClientFile.id).where(ClientFile.lead_id == lead_id)
+    ).scalar_one_or_none()
+    if cf is None:
+        raise HTTPException(404, "no client file for this lead")
+    return {"client_file_id": str(cf)}

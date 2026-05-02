@@ -9,6 +9,7 @@ import { useDocumentChecklist, getCategoryLabel } from '../../hooks/useDocumentC
 import { getStages } from '../../config/stageConfig';
 import CreditAuthorizationBlock from './CreditAuthorizationBlock';
 import EDisclosureBlock from './EDisclosureBlock';
+import CalendarBookingStep from './CalendarBookingStep';
 import './ReviewStage.css';
 
 // Helper to format currency values
@@ -104,6 +105,10 @@ const ReviewStage = ({
   onNavigateToStage,
   isSubmitting = false,
   voiceReviewToken = null,
+  showCalendar = false,
+  orgSlug = null,
+  loSlug = null,
+  loName = null,
 }) => {
   const { state, actions } = useApplication();
   const { formData, applicationType } = state;
@@ -308,6 +313,16 @@ const ReviewStage = ({
             )}
           </SummarySection>
         </div>
+        {/* END .review-summary */}
+
+        {/* Calendar Booking (optional) */}
+        {showCalendar && orgSlug && (
+          <CalendarBookingStep
+            orgSlug={orgSlug}
+            loSlug={loSlug}
+            loName={loName}
+          />
+        )}
 
         {/* Document Checklist */}
         <div className="review-documents">

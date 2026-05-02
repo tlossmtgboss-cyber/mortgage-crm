@@ -469,6 +469,10 @@ If you cannot identify a partner or lead, set those fields to null but still ret
                 )
                 db.add(new_lead)
                 db.flush()
+
+                from services.client_file_service import ensure_client_file
+                ensure_client_file(db, new_lead)
+
                 lead_id = new_lead.id
                 entities_created["lead"] = {
                     "id": new_lead.id,
@@ -686,6 +690,9 @@ async def complete_lead_from_screenshot(
         )
         db.add(new_lead)
         db.flush()
+
+        from services.client_file_service import ensure_client_file
+        ensure_client_file(db, new_lead)
 
         task_title = f"Contact new lead: {new_lead.name}"
         task_due = datetime.now(timezone.utc) + timedelta(days=1)

@@ -190,6 +190,11 @@ async def submit_microsite_lead(
         # Create the lead
         new_lead = Lead(**lead_dict)
         db.add(new_lead)
+        db.flush()
+
+        from services.client_file_service import ensure_client_file
+        ensure_client_file(db, new_lead)
+
         db.commit()
         db.refresh(new_lead)
 

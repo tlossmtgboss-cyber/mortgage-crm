@@ -99,6 +99,9 @@ def _ensure_lead_for_booking(db, attendee_email: str, attendee_name: str,
         db.add(new_lead)
         db.flush()  # Get the ID without committing
 
+        from services.client_file_service import ensure_client_file
+        ensure_client_file(db, new_lead)
+
         logger.info(f"Created new lead {new_lead.id} from booking ({_mask_email(attendee_email)})")
         return new_lead.id
 
