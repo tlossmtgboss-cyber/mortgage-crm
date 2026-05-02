@@ -10,7 +10,7 @@ import secrets
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -360,16 +360,29 @@ async def link_teams(
 
 @router.post("/bootstrap")
 async def bootstrap_from_existing(
-    user=Depends(_get_current_user()),
+    request: Request,
     db: Session = Depends(get_db),
 ):
     """Bootstrap MS365 integration from existing MicrosoftOAuthToken (DRE email integration).
-    Reuses the stored refresh token to create an MSAccount with calendar/chat subscriptions."""
+    Accepts admin API key via X-API-Key header or JWT auth."""
     import base64
     import os
+    import secrets as _secrets
     from .auth import upsert_account_from_token_response, refresh_access_token
     from .subscriptions import ensure_all_subscriptions
     from .tasks import delta_sync_account
+
+    # Auth: accept admin API key or JWT
+    api_key = request.headers.get("X-API-Key", "")
+    expected_key = os.environ.get("ADMIN_API_KEY", "").strip()
+    if expected_key and api_key and _secrets.compare_digest(api_key, expected_key):
+        from database.models.core import User
+        user = db.query(User).filter(User.email == "tlossmtgboss@gmail.com").first()
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Admin user not found")
+    else:
+        _get_user = _get_current_user()
+        user = await _get_user(request)
 
     # Decrypt using DRE's encryption (SECRET_KEY-derived)
     secret_key = os.environ.get("SECRET_KEY", "")
