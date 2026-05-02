@@ -4280,6 +4280,70 @@ except Exception as e:
     logger.warning(f"Microsoft 365 routes skipped: {e}")
 
 # ============================================================================
+# CLIENT FILE AGGREGATE ROOT + TEAM CHAT TABLES
+# ============================================================================
+try:
+    from database.models.client_file import ClientFile, ClientFileCollaborator
+    from database.models.team_chat import (
+        TeamChatChannel, TeamChatMessage, TeamChatReaction, TeamChatRead,
+    )
+    for _cf_model in [ClientFile, ClientFileCollaborator,
+                      TeamChatChannel, TeamChatMessage,
+                      TeamChatReaction, TeamChatRead]:
+        _cf_model.__table__.create(engine, checkfirst=True)
+    logger.info("Client File + Team Chat tables verified/created (6 tables)")
+
+    # Enable RLS on the 6 new tables
+    try:
+        _rls_expr = "organization_id = NULLIF(current_setting('app.current_tenant', TRUE), '')::INTEGER"
+        with engine.connect() as _rls_conn:
+            for _tbl in ["client_files", "client_file_collaborators",
+                         "team_chat_channels", "team_chat_messages",
+                         "team_chat_reactions", "team_chat_reads"]:
+                from sqlalchemy import text as _sa_text
+            _rls_conn.execute(_sa_text(f"ALTER TABLE {_tbl} ENABLE ROW LEVEL SECURITY"))
+                _rls_conn.execute(_sa_text(f"ALTER TABLE {_tbl} FORCE ROW LEVEL SECURITY"))
+                _rls_conn.execute(_sa_text(
+                    f"DO $$ BEGIN "
+                    f"CREATE POLICY {_tbl}_org_isolation ON {_tbl} "
+                    f"USING ({_rls_expr}) WITH CHECK ({_rls_expr}); "
+                    f"EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+                ))
+            _rls_conn.commit()
+        logger.info("Client File + Team Chat RLS policies verified/created")
+    except Exception as _rls_err:
+        logger.warning(f"Could not set RLS on client_file/team_chat tables: {_rls_err}")
+
+    # Create enum types if they don't exist
+    try:
+        from sqlalchemy import text as _sa_text2
+        with engine.connect() as _enum_conn:
+            _enum_conn.execute(_sa_text2(
+                "DO $$ BEGIN "
+                "CREATE TYPE team_chat_author_kind AS ENUM ('human', 'system'); "
+                "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+            ))
+            _enum_conn.execute(_sa_text2(
+                "DO $$ BEGIN "
+                "CREATE TYPE team_chat_agent_slug AS ENUM "
+                "('cadence', 'aria', 'avery', 'insight', 'ops_manager', 'document', 'milestone', 'lifecycle'); "
+                "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+            ))
+            _enum_conn.execute(_sa_text2(
+                "DO $$ BEGIN "
+                "CREATE TYPE team_chat_reaction_emoji AS ENUM "
+                "('thumbs_up', 'check', 'fire', 'question'); "
+                "EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+            ))
+            _enum_conn.commit()
+        logger.info("Team Chat enum types verified/created")
+    except Exception as _enum_err:
+        logger.warning(f"Could not create team_chat enum types: {_enum_err}")
+
+except Exception as _cf_err:
+    logger.warning(f"Client File + Team Chat table setup: {_cf_err}")
+
+# ============================================================================
 # TEMPORARY: One-time seed endpoint for App Store demo account
 # Remove after demo account is created
 # Gated to non-production environments only.
