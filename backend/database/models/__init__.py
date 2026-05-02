@@ -655,6 +655,20 @@ from integrations.imessage.models import (
     IMessageWebhookLog,
 )
 
+# Team Chat models
+from .team_chat import (
+    TeamChatChannel,
+    TeamChatMessage,
+    TeamChatReaction,
+    TeamChatRead,
+    TeamChatAuthorKind,
+    TeamChatAgentSlug,
+    TeamChatReactionEmoji,
+)
+
+# Client File aggregate root + collaborators
+from .client_file import ClientFile, ClientFileCollaborator
+
 
 __all__ = [
     # =====================
@@ -1332,4 +1346,21 @@ __all__ = [
     "IMessageMessage",
     "IMessageLookupCache",
     "IMessageWebhookLog",
+
+    # =====================
+    # Team Chat
+    # =====================
+    "TeamChatChannel",
+    "TeamChatMessage",
+    "TeamChatReaction",
+    "TeamChatRead",
+    "TeamChatAuthorKind",
+    "TeamChatAgentSlug",
+    "TeamChatReactionEmoji",
+
+    # =====================
+    # Client File Aggregate
+    # =====================
+    "ClientFile",
+    "ClientFileCollaborator",
 ]
