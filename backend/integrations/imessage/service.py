@@ -948,6 +948,14 @@ class IMessageService:
             .limit(1)
         ).scalar_one_or_none()
         if line is None:
+            # Fallback: use any enabled line (single BB server serves all orgs)
+            line = session.execute(
+                select(IMessageLine)
+                .where(IMessageLine.enabled.is_(True))
+                .order_by(IMessageLine.created_at)
+                .limit(1)
+            ).scalar_one_or_none()
+        if line is None:
             raise ValueError(f"no iMessage lines configured for organization {organization_id}")
         return line
 
