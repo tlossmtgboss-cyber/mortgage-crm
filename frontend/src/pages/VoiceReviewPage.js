@@ -12,6 +12,7 @@ import { ApplicationProvider } from './applications/contexts/ApplicationContext'
 import { createInitialState } from './applications/contexts/applicationReducer';
 import ReviewStage from './applications/components/stages/ReviewStage';
 import './VoiceReviewPage.css';
+import '../styles/borrower-theme.css';
 
 const DEMO_DATA = {
   credit_auth: { completed: false, timestamp: null },
@@ -131,7 +132,7 @@ export default function VoiceReviewPage() {
 
   if (loading) {
     return (
-      <div className="voice-review-page">
+      <div className="voice-review-page borrower-theme">
         <div className="voice-review-loading">
           <div className="loading-spinner" />
           <p>Loading your application...</p>
@@ -142,7 +143,7 @@ export default function VoiceReviewPage() {
 
   if (error) {
     return (
-      <div className="voice-review-page">
+      <div className="voice-review-page borrower-theme">
         <div className="voice-review-error">
           <h2>Oops</h2>
           <p>{error}</p>
@@ -156,7 +157,7 @@ export default function VoiceReviewPage() {
 
   if (submitted) {
     return (
-      <div className="voice-review-page">
+      <div className="voice-review-page borrower-theme">
         <div className="voice-review-submitted">
           <div className="submitted-check">&#10003;</div>
           <h1>Application Submitted!</h1>
@@ -174,7 +175,7 @@ export default function VoiceReviewPage() {
   }
 
   return (
-    <div className="voice-review-page">
+    <div className="voice-review-page borrower-theme">
       <div className="voice-review-branding">
         <span className="voice-review-brand">Perennia</span>
         {applicationData?.lo_name && (

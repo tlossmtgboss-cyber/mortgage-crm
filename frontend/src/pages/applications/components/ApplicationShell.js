@@ -7,6 +7,7 @@ import React, { useMemo, useState, useCallback, lazy, Suspense } from 'react';
 import { useApplication } from '../contexts/ApplicationContext';
 import { getStages, getVisibleStages, getStageById } from '../config/stageConfig';
 import './ApplicationShell.css';
+import '../../../../styles/borrower-theme.css';
 
 // Lazy load DocumentsNeeded component for better performance
 const DocumentsNeeded = lazy(() => import('./DocumentsNeeded'));
@@ -102,7 +103,7 @@ const ApplicationShell = ({
   };
 
   return (
-    <div className="application-shell">
+    <div className="application-shell borrower-theme">
       {/* Header */}
       <header className="application-header">
         <div className="application-header-content">

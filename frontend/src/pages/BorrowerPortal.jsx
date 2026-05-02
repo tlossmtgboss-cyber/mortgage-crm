@@ -18,6 +18,7 @@ import { MilestoneTimeline } from '../components/Portal';
 import HomeValueIntelligence from '../components/Portal/HomeValueIntelligence';
 import './BorrowerPortal.css';
 import './PURLPortal.css';
+import '../styles/borrower-theme.css';
 
 // ============================================
 // CONSTANTS
@@ -564,7 +565,7 @@ export default function BorrowerPortal() {
   const hasMultiLoanContext = !!purlToken;
 
   return (
-    <div className="portal-page">
+    <div className="portal-page borrower-theme">
       {hasMultiLoanContext ? (
         <PortalProvider token={purlToken}>
           <PortalContent portalData={portalData} hasMultiLoanContext={true} />
