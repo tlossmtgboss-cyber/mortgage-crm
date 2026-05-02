@@ -4344,6 +4344,20 @@ except Exception as _cf_err:
     logger.warning(f"Client File + Team Chat table setup: {_cf_err}")
 
 # ============================================================================
+# TEMPORARY: One-time backfill endpoint for client_files
+# Remove after backfill is complete
+# ============================================================================
+@app.post("/api/v1/management/backfill-client-files")
+async def backfill_client_files_endpoint(request: Request):
+    import secrets as _bf_secrets
+    _bf_key = request.headers.get("X-API-Key", "")
+    if not _bf_secrets.compare_digest(_bf_key, os.getenv("SECRET_KEY", "")):
+        raise HTTPException(status_code=403, detail="Forbidden")
+    from migrations.backfill_client_files import backfill
+    backfill()
+    return {"status": "ok"}
+
+# ============================================================================
 # TEMPORARY: One-time seed endpoint for App Store demo account
 # Remove after demo account is created
 # Gated to non-production environments only.
