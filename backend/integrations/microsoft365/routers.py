@@ -58,8 +58,18 @@ router.include_router(webhooks_router)
 
 
 @router.get("/ping")
-async def ping():
-    return {"pong": True}
+async def ping(request: Request):
+    import os, secrets as _s
+    api_key = request.headers.get("X-API-Key", "")
+    expected_key = os.environ.get("ADMIN_API_KEY", "").strip()
+    match = bool(expected_key and api_key and _s.compare_digest(api_key, expected_key))
+    return {
+        "pong": True,
+        "api_key_len": len(api_key),
+        "expected_len": len(expected_key),
+        "match": match,
+        "expected_set": bool(expected_key),
+    }
 
 
 def _get_current_user():
