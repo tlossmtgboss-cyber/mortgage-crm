@@ -116,6 +116,45 @@ async def outbound_sync_status(
     })
 
 
+@router.post("/calendar/test-sync")
+async def test_outlook_sync(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Send a test .ics invite to verify Outlook calendar sync works."""
+    import os
+    import secrets as _secrets
+    from datetime import datetime as _dt, timedelta, timezone as _tz
+    from fastapi.responses import JSONResponse
+
+    api_key = request.headers.get("X-API-Key", "")
+    expected_key = os.environ.get("ADMIN_API_KEY", "").strip()
+    if not (expected_key and api_key and _secrets.compare_digest(api_key, expected_key)):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin API key required")
+
+    outlook_email = os.environ.get("OUTLOOK_SYNC_EMAIL", "")
+    if not outlook_email:
+        return JSONResponse(content={"success": False, "error": "OUTLOOK_SYNC_EMAIL not set"})
+
+    from services.outlook_calendar_sync import push_appointment_to_outlook
+
+    class _FakeAppointment:
+        id = 99999
+        title = "Test Sync from Perennia"
+        scheduled_start = _dt.now(_tz.utc) + timedelta(days=1)
+        scheduled_end = _dt.now(_tz.utc) + timedelta(days=1, minutes=30)
+        description = "This is a test event to verify Outlook calendar sync."
+        location = ""
+        video_link = ""
+        attendee_name = "Test"
+        attendee_email = ""
+        assigned_user_id = None
+        created_by_user_id = None
+
+    result = await push_appointment_to_outlook(db, _FakeAppointment(), outlook_email)
+    return JSONResponse(content=result)
+
+
 def _get_current_user():
     from auth.dependencies import get_current_user
     return get_current_user
