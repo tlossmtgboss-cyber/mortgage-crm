@@ -58,8 +58,12 @@ router.include_router(webhooks_router)
 
 
 @router.get("/ping")
-async def ping():
-    return {"pong": True}
+async def ping(db: Session = Depends(get_db)):
+    from database.models.microsoft import MicrosoftOAuthToken, MicrosoftToken
+    oauth_count = db.query(MicrosoftOAuthToken).count()
+    token_count = db.query(MicrosoftToken).count()
+    ms_account_count = db.query(MSAccount).count()
+    return {"oauth_tokens": oauth_count, "tokens": token_count, "ms_accounts": ms_account_count}
 
 
 def _get_current_user():
