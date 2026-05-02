@@ -4173,17 +4173,14 @@ except Exception as e:
 # ============================================================================
 # iMessage / BlueBubbles Integration
 # ============================================================================
-print("IMESSAGE_BLOCK: starting import", flush=True)
 try:
     from integrations.imessage import api_router as imessage_api_router
     from integrations.imessage import webhook_router as imessage_webhook_router
     from integrations.imessage import health_router as imessage_health_router
-    print(f"IMESSAGE_BLOCK: import OK, api={len(imessage_api_router.routes)} webhook={len(imessage_webhook_router.routes)} health={len(imessage_health_router.routes)}", flush=True)
     app.include_router(imessage_api_router, tags=["iMessage"])
     app.include_router(imessage_webhook_router, tags=["iMessage Webhooks"])
     app.include_router(imessage_health_router, tags=["iMessage Health"])
-    print("IMESSAGE_BLOCK: routers included OK", flush=True)
-    logger.info("iMessage/BlueBubbles routes loaded")
+    logger.warning("iMessage/BlueBubbles routes loaded")
 
     try:
         from integrations.imessage.models import (
@@ -4196,15 +4193,17 @@ try:
         for _im_model in [IMessageLine, IMessageThread, IMessageMessage,
                           IMessageLookupCache, IMessageWebhookLog]:
             _im_model.__table__.create(engine, checkfirst=True)
-        print("IMESSAGE_BLOCK: tables OK", flush=True)
     except Exception as _im_table_err:
-        print(f"IMESSAGE_BLOCK: table creation failed: {_im_table_err}", flush=True)
         logger.warning(f"Could not auto-create iMessage tables: {_im_table_err}")
 
+    try:
+        from migrations.seed_imessage_line import run_seed
+        run_seed()
+    except Exception as _im_seed_err:
+        logger.warning(f"iMessage line seed: {_im_seed_err}")
+
 except Exception as e:
-    print(f"IMESSAGE_BLOCK: FAILED: {type(e).__name__}: {e}", flush=True)
-    import traceback; traceback.print_exc()
-    logger.warning(f"iMessage routes skipped (env vars not set?): {e}")
+    logger.warning(f"iMessage routes skipped: {e}")
 
 # ============================================================================
 # TEMPORARY: One-time seed endpoint for App Store demo account
