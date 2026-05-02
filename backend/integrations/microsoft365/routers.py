@@ -418,13 +418,18 @@ async def bootstrap_from_credentials(
         "grant_type": "password",
     }
 
+    from fastapi.responses import JSONResponse
     async with httpx.AsyncClient(timeout=30.0) as client:
         token_resp = await client.post(token_url, data=data)
         if token_resp.status_code != 200:
             err = token_resp.json()
-            raise HTTPException(
-                status.HTTP_502_BAD_GATEWAY,
-                f"Microsoft ROPC failed: {err.get('error_description', err.get('error', 'unknown'))}",
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": err.get("error", "unknown"),
+                    "detail": err.get("error_description", "Token exchange failed"),
+                    "codes": err.get("error_codes", []),
+                },
             )
         token_response = token_resp.json()
 
