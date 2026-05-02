@@ -299,6 +299,7 @@ const CommunicationPreferences = lazyRetry(() => import('../pages/CommunicationP
 const IntegrationSettings = lazyRetry(() => import('../pages/IntegrationSettings'));
 const SalesforceIntegrationPage = lazyRetry(() => import('../pages/SalesforceIntegrationPage'));
 const FollowUpBossIntegrationPage = lazyRetry(() => import('../pages/FollowUpBossIntegrationPage'));
+const Microsoft365IntegrationPage = lazyRetry(() => import('../pages/Microsoft365IntegrationPage'));
 const StateRecordingRules = lazyRetry(() => import('../pages/settings/StateRecordingRules'));
 const QuoteLanguagePresets = lazyRetry(() => import('../pages/settings/QuoteLanguagePresets'));
 const CalculatorSettings = lazyRetry(() => import('../pages/settings/CalculatorSettings'));
@@ -694,6 +695,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/settings/integrations" path="/settings/integrations" element={withMainLayout(IntegrationSettings)} />,
     <Route key="/settings/integrations/salesforce" path="/settings/integrations/salesforce" element={withMainLayout(SalesforceIntegrationPage)} />,
     <Route key="/settings/integrations/followupboss" path="/settings/integrations/followupboss" element={withMainLayout(FollowUpBossIntegrationPage)} />,
+    <Route key="/settings/integrations/microsoft365" path="/settings/integrations/microsoft365" element={withMainLayout(Microsoft365IntegrationPage)} />,
     <Route key="/integrations" path="/integrations" element={withMainLayout(IntegrationSettings)} />,
     <Route key="/settings/state-recording-rules" path="/settings/state-recording-rules" element={withMainLayout(StateRecordingRules)} />,
     <Route key="/settings/quote-language-presets" path="/settings/quote-language-presets" element={withMainLayout(QuoteLanguagePresets)} />,
