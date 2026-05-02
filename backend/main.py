@@ -3473,6 +3473,57 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Certificate pin verification skipped: {e}")
 
+    # Microsoft 365 scheduled tasks (subscription renewal, delta sync, GC)
+    try:
+        from integrations.microsoft365.tasks import (
+            renew_expiring_subscriptions as _ms365_renew,
+            delta_sync_all_active_accounts as _ms365_delta,
+            garbage_collect_subscriptions as _ms365_gc,
+        )
+
+        async def _ms365_renew_job():
+            from db import SessionLocal
+            db = SessionLocal()
+            try:
+                await _ms365_renew(db)
+                db.commit()
+            except Exception as _e:
+                db.rollback()
+                logger.error(f"MS365 subscription renewal failed: {_e}")
+            finally:
+                db.close()
+
+        async def _ms365_delta_job():
+            from db import SessionLocal
+            db = SessionLocal()
+            try:
+                await _ms365_delta(db)
+                db.commit()
+            except Exception as _e:
+                db.rollback()
+                logger.error(f"MS365 delta sync failed: {_e}")
+            finally:
+                db.close()
+
+        async def _ms365_gc_job():
+            from db import SessionLocal
+            db = SessionLocal()
+            try:
+                await _ms365_gc(db)
+                db.commit()
+            except Exception as _e:
+                db.rollback()
+                logger.error(f"MS365 subscription GC failed: {_e}")
+            finally:
+                db.close()
+
+        scheduler.add_job(_ms365_renew_job, "interval", minutes=15, id="ms365_renew_subs", replace_existing=True)
+        scheduler.add_job(_ms365_delta_job, "interval", hours=6, id="ms365_delta_sync", replace_existing=True)
+        scheduler.add_job(_ms365_gc_job, "cron", hour=3, minute=0, id="ms365_gc_subs", replace_existing=True)
+        logger.info("✅ Microsoft 365 scheduled tasks registered (renew/15m, delta/6h, GC/daily)")
+    except Exception as e:
+        logger.warning(f"⚠️ Microsoft 365 scheduled tasks skipped: {e}")
+
     # Dedicated executor for LangGraph workflows — keeps them off the main event loop
     from concurrent.futures import ThreadPoolExecutor
     langgraph_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="langgraph")
@@ -4204,6 +4255,29 @@ try:
 
 except Exception as e:
     logger.warning(f"iMessage routes skipped: {e}")
+
+# ============================================================================
+# MICROSOFT 365 INTEGRATION
+# ============================================================================
+try:
+    from integrations.microsoft365 import router as ms365_router
+    app.include_router(ms365_router, prefix="/api/v1/microsoft", tags=["Microsoft 365"])
+    logger.info("Microsoft 365 integration routes loaded")
+
+    try:
+        from integrations.microsoft365.models import (
+            MSAccount, MSGraphSubscription, MSCalendarSyncMapping,
+            MSEmailReconciliation, MSTeamsChatReconciliation,
+        )
+        for _ms_model in [MSAccount, MSGraphSubscription, MSCalendarSyncMapping,
+                          MSEmailReconciliation, MSTeamsChatReconciliation]:
+            _ms_model.__table__.create(engine, checkfirst=True)
+        logger.info("Microsoft 365 tables verified/created (5 tables)")
+    except Exception as _ms_table_err:
+        logger.warning(f"Could not auto-create Microsoft 365 tables: {_ms_table_err}")
+
+except Exception as e:
+    logger.warning(f"Microsoft 365 routes skipped: {e}")
 
 # ============================================================================
 # TEMPORARY: One-time seed endpoint for App Store demo account

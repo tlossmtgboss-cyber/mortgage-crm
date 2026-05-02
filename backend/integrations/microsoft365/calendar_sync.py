@@ -238,22 +238,104 @@ def _mark_mapping_deleted_by_graph_id(
         _delete_crm_event(account, mapping.crm_event_id)
 
 
-# ── CRM calendar service hooks (wire to your existing service layer) ─────
+# ── CRM calendar service hooks ───────────────────────────────────────────
+
+def _get_db_session() -> Session:
+    from db import SessionLocal
+    return SessionLocal()
+
 
 def _create_crm_event(account: MSAccount, payload: dict[str, Any]) -> int:
-    # TODO: Wire into Smart Calendar service
-    # from services.smart_scheduler import create_event
-    # return create_event(user_id=account.user_id, **payload)
-    raise NotImplementedError(
-        "Wire _create_crm_event to your calendar service before enabling Outlook->CRM sync"
-    )
+    from database.models.scheduler import Appointment, AppointmentStatus
+
+    db = _get_db_session()
+    try:
+        start = payload["start"]
+        end = payload["end"]
+        if isinstance(start, str):
+            start = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        if isinstance(end, str):
+            end = datetime.fromisoformat(end.replace("Z", "+00:00"))
+
+        duration = max(1, int((end - start).total_seconds() / 60))
+
+        appointment = Appointment(
+            organization_id=account.organization_id,
+            assigned_user_id=account.user_id,
+            title=payload.get("title", "Outlook Event"),
+            description=payload.get("body_html", ""),
+            scheduled_start=start,
+            scheduled_end=end,
+            duration_minutes=duration,
+            timezone=payload.get("timezone", "UTC"),
+            location=payload.get("location"),
+            status=AppointmentStatus.BOOKED,
+            external_source="outlook",
+        )
+        db.add(appointment)
+        db.flush()
+        appt_id = appointment.id
+        db.commit()
+        return appt_id
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def _update_crm_event(account: MSAccount, crm_event_id: int, payload: dict[str, Any]) -> None:
-    # TODO: Wire into Smart Calendar service
-    pass
+    from database.models.scheduler import Appointment
+
+    db = _get_db_session()
+    try:
+        appt = db.query(Appointment).get(crm_event_id)
+        if not appt:
+            return
+
+        start = payload.get("start")
+        end = payload.get("end")
+        if isinstance(start, str):
+            start = datetime.fromisoformat(start.replace("Z", "+00:00"))
+        if isinstance(end, str):
+            end = datetime.fromisoformat(end.replace("Z", "+00:00"))
+
+        if payload.get("title"):
+            appt.title = payload["title"]
+        if payload.get("body_html"):
+            appt.description = payload["body_html"]
+        if start:
+            appt.scheduled_start = start
+        if end:
+            appt.scheduled_end = end
+        if start and end:
+            appt.duration_minutes = max(1, int((end - start).total_seconds() / 60))
+        if payload.get("timezone"):
+            appt.timezone = payload["timezone"]
+        if "location" in payload:
+            appt.location = payload["location"]
+
+        appt.last_synced_at = datetime.now(timezone.utc)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 def _delete_crm_event(account: MSAccount, crm_event_id: int) -> None:
-    # TODO: Wire into Smart Calendar service
-    pass
+    from database.models.scheduler import Appointment, AppointmentStatus
+
+    db = _get_db_session()
+    try:
+        appt = db.query(Appointment).get(crm_event_id)
+        if appt:
+            appt.status = AppointmentStatus.CANCELLED
+            appt.cancelled_at = datetime.now(timezone.utc)
+            appt.cancellation_reason = "Deleted in Outlook"
+            db.commit()
+    except Exception:
+        db.rollback()
+    finally:
+        db.close()

@@ -77,6 +77,8 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/pos/hydrate-from-voice",  # URLA voice agent hydration — uses CRM_API_KEY Bearer auth
         "/api/v1/pos/resolve-lo",  # URLA voice agent LO lookup — uses CRM_API_KEY (GET, but exempt for completeness)
         "/webhooks/imessage",  # BlueBubbles iMessage webhook — uses path-token auth (IMESSAGE_WEBHOOK_URL_SECRET)
+        "/api/v1/microsoft/webhooks",  # Microsoft Graph change notifications — verified by clientState HMAC
+        "/api/v1/microsoft/oauth",  # MS365 OAuth callback — code exchange from Azure AD redirect
         "/internal",  # Server-to-server calls from voice agent — uses X-Internal-API-Key auth
         "/health",
         "/api/health",

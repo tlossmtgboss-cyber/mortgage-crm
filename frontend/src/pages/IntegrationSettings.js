@@ -314,6 +314,8 @@ const IntegrationSettings = () => {
       navigate('/settings/integrations/salesforce');
     } else if (integrationId === 'followupboss') {
       navigate('/settings/integrations/followupboss');
+    } else if (integrationId === 'microsoft365' || integrationId === 'outlook_calendar' || integrationId === 'outlook_email') {
+      navigate('/settings/integrations/microsoft365');
     } else {
       loadIntegrationDetails(integrationId);
     }
