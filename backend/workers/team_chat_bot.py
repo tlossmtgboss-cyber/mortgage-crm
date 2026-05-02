@@ -28,10 +28,9 @@ import json
 import logging
 import time
 import uuid
-from contextlib import contextmanager
-from typing import Any, Callable, Iterator
+from typing import Any, Callable
 
-from db import SessionLocal
+from db import get_db_with_tenant
 from database.models.team_chat import TeamChatAgentSlug
 from services.team_chat import TeamChatService
 
@@ -213,19 +212,6 @@ CONSUMER_NAME_PREFIX = "team_chat_bot"
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-@contextmanager
-def _scoped_session() -> Iterator:
-    session = SessionLocal()
-    try:
-        yield session
-        session.commit()
-    except Exception:
-        session.rollback()
-        raise
-    finally:
-        session.close()
-
-
 def _ensure_consumer_groups(redis: Any) -> None:
     for stream in STREAMS:
         try:
@@ -257,12 +243,17 @@ def _process_event(redis: Any, stream: str, event_id: str, fields: dict) -> None
     # Bridge resolution: if event arrived with lead_id but no client_file_id,
     # look up the ClientFile by lead_id.
     if "client_file_id" not in event and "lead_id" in event:
-        with _scoped_session() as session:
+        org_id_raw = event.get("org_id")
+        if not org_id_raw:
+            logger.warning("team_chat_bot.bridge_missing_org_id", extra={"lead_id": event["lead_id"]})
+            return
+        with get_db_with_tenant(int(org_id_raw)) as session:
             from sqlalchemy import select
             from database.models.client_file import ClientFile
             row = session.execute(
                 select(ClientFile.id).where(
-                    ClientFile.lead_id == int(event["lead_id"])
+                    ClientFile.lead_id == int(event["lead_id"]),
+                    ClientFile.organization_id == int(org_id_raw),
                 )
             ).scalar_one_or_none()
             if row is None:
@@ -302,7 +293,7 @@ def _process_event(redis: Any, stream: str, event_id: str, fields: dict) -> None
     ) = result
 
     try:
-        with _scoped_session() as session:
+        with get_db_with_tenant(org_id) as session:
             svc = TeamChatService(session, redis=redis)
             svc.post_system_message(
                 organization_id=org_id,
@@ -314,6 +305,7 @@ def _process_event(redis: Any, stream: str, event_id: str, fields: dict) -> None
                 source_object_id=source_object_id,
                 source_object_label=source_object_label,
             )
+            session.commit()
     except Exception:  # noqa: BLE001
         logger.exception(
             "team_chat_bot.post_failed",
@@ -332,6 +324,7 @@ def run_worker_loop(redis: Any, consumer_id: str = "0") -> None:
     streams_dict = {s: ">" for s in STREAMS}
     logger.info("team_chat_bot.starting", extra={"consumer": consumer_name})
 
+    backoff = 1
     while True:
         try:
             results = redis.xreadgroup(
@@ -341,9 +334,11 @@ def run_worker_loop(redis: Any, consumer_id: str = "0") -> None:
                 count=20,
                 block=5000,
             )
+            backoff = 1
         except Exception:  # noqa: BLE001
             logger.exception("team_chat_bot.xreadgroup_failed")
-            time.sleep(1)
+            time.sleep(min(backoff, 30))
+            backoff = min(backoff * 2, 30)
             continue
 
         if not results:
@@ -391,13 +386,21 @@ def main() -> None:
     port = int(os.environ.get("PORT", "0"))
     if port:
         _start_health_server(port)
+    else:
+        logger.warning("team_chat_bot.no_health_server (PORT not set or 0)")
 
     redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
-    from services.redis_service import get_redis_client
+    from services.redis_service import redis_service, get_redis_client
+    redis_service.initialize(redis_url)
     redis_client = get_redis_client()
     if redis_client is None:
         import redis as redis_lib
-        redis_client = redis_lib.from_url(redis_url)
+        redis_client = redis_lib.from_url(
+            redis_url,
+            socket_connect_timeout=5,
+            socket_timeout=10,
+            retry_on_timeout=True,
+        )
     consumer_id = os.environ.get("HOSTNAME", "local")
     run_worker_loop(redis_client, consumer_id=consumer_id)
 

@@ -110,11 +110,12 @@ def main():
     cleanup_idle_connections()
 
     # Run migrations first (with timeout to prevent startup hang)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
     print("=" * 50, flush=True)
     print("START.PY: Running migrations...", flush=True)
     try:
         result = subprocess.run(
-            [sys.executable, "run_migrations.py"],
+            [sys.executable, os.path.join(script_dir, "run_migrations.py")],
             check=False,
             timeout=120  # 2 minute timeout — don't let migrations block startup
         )
@@ -150,9 +151,15 @@ def main():
         "--port", port
     ])
 
+ALLOWED_WORKERS = {"team_chat_bot"}
+
 if __name__ == "__main__":
     worker_mode = os.environ.get("WORKER_MODE", "")
     if worker_mode:
+        if worker_mode not in ALLOWED_WORKERS:
+            print(f"START.PY: ERROR: unknown WORKER_MODE={worker_mode!r}, "
+                  f"allowed: {ALLOWED_WORKERS}", flush=True)
+            sys.exit(1)
         print(f"START.PY: WORKER_MODE={worker_mode}", flush=True)
         os.execvp(sys.executable, [sys.executable, "-m", f"workers.{worker_mode}"])
     else:

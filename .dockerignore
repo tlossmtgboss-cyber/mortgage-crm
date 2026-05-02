@@ -1,15 +1,48 @@
+# === Secrets — NEVER ship into the image ===
+**/.env
+**/.env.*
+
+# === VCS / IDE ===
 .git
-.venv
-__pycache__
-*.pyc
-node_modules
-frontend/node_modules
+**/.idea
+**/.vscode
+
+# === Python artifacts ===
+**/.venv
+**/venv
+**/__pycache__
+**/*.pyc
+**/*.egg-info
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+**/htmlcov
+
+# === Node artifacts ===
+**/node_modules
 frontend/dist
 frontend/.vite
-.env
-.env.*
-*.egg-info
-.pytest_cache
-.mypy_cache
-.ruff_cache
+
+# === Directories the backend doesn't need at runtime ===
+ai-orchestrator
+ai-receptionist
+audit-results
+browser-extension
+demo_prompts
+docs
+email-orchestrator
+frontend
+infrastructure
+landing-page
+logs
+ml-services
+overview
+perennia-prompts
+scripts
+tenant_challenge_results
+tests
+
+# === Misc ===
 *.log
+*.tar.gz
+*.zip

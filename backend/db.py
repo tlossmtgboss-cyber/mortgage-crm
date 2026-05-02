@@ -246,8 +246,9 @@ def cleanup_idle_connections():
     logger.error("Connection cleanup failed after 5 attempts — DB may be fully exhausted")
 
 
-# Run cleanup on module load (runs once at startup)
-if DATABASE_URL.startswith("postgresql"):
+# Run cleanup on module load — but only for the main API process, not workers.
+# Workers importing db.py should not terminate the API's idle connections.
+if DATABASE_URL.startswith("postgresql") and not os.getenv("WORKER_MODE"):
     cleanup_idle_connections()
 
 
