@@ -484,6 +484,120 @@ async def bootstrap_from_credentials(
 
 
 # ─────────────────────────────────────────────────────────────────────────
+# Bulk calendar import (via MCP / admin CLI)
+# ─────────────────────────────────────────────────────────────────────────
+
+@router.post("/calendar/import")
+async def bulk_import_calendar(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Import Outlook calendar events into CRM appointments.
+    Admin API key required. Body: {"events": [...]}"""
+    import os
+    import secrets as _secrets
+    from datetime import datetime as _dt, timezone as _tz
+    from fastapi.responses import JSONResponse
+
+    api_key = request.headers.get("X-API-Key", "")
+    expected_key = os.environ.get("ADMIN_API_KEY", "").strip()
+    if not (expected_key and api_key and _secrets.compare_digest(api_key, expected_key)):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin API key required")
+
+    body = await request.json()
+    events = body.get("events", [])
+    if not events:
+        return JSONResponse(content={"imported": 0, "skipped": 0})
+
+    from database.models.core import User
+    user = db.query(User).order_by(User.id).first()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No CRM user found")
+
+    from database.models.scheduler import Appointment
+
+    imported = 0
+    skipped = 0
+    errors = []
+
+    for evt in events:
+        outlook_id = evt.get("outlook_id", "")
+        subject = evt.get("subject", "No subject")
+
+        if outlook_id:
+            existing = db.query(Appointment).filter(
+                Appointment.outlook_event_id == outlook_id,
+            ).first()
+            if existing:
+                skipped += 1
+                continue
+
+        try:
+            start_str = evt.get("start", "")
+            end_str = evt.get("end", "")
+            start = _dt.fromisoformat(start_str.replace("Z", "+00:00"))
+            end = _dt.fromisoformat(end_str.replace("Z", "+00:00"))
+            duration = int((end - start).total_seconds() / 60)
+
+            location = evt.get("location", "") or ""
+            is_teams = "teams" in location.lower()
+            is_zoom = "zoom" in location.lower()
+            is_meet = "meet.google" in location.lower()
+            is_video = is_teams or is_zoom or is_meet
+            is_phone = location.startswith("+") or location.startswith("(")
+
+            video_link = ""
+            if is_teams or is_zoom or is_meet:
+                video_link = location
+
+            meeting_mode = "video" if is_video else ("phone" if is_phone else "in_person")
+
+            attendee_list = evt.get("attendees", [])
+            attendee_name = ""
+            attendee_email = ""
+            if isinstance(attendee_list, list) and attendee_list:
+                first = attendee_list[0] if isinstance(attendee_list[0], str) else ""
+                if "@" in first:
+                    attendee_email = first
+                else:
+                    attendee_name = first
+
+            appt = Appointment(
+                organization_id=user.organization_id,
+                assigned_user_id=user.id,
+                created_by_user_id=user.id,
+                title=subject[:255],
+                description=f"Imported from Outlook",
+                scheduled_start=start,
+                scheduled_end=end,
+                duration_minutes=max(duration, 1),
+                timezone="America/New_York",
+                location=location[:255] if not is_video else "Video Call",
+                video_link=video_link[:500] if video_link else None,
+                meeting_mode=meeting_mode,
+                attendee_name=attendee_name[:255] if attendee_name else None,
+                attendee_email=attendee_email[:255] if attendee_email else None,
+                external_id=outlook_id[:100] if outlook_id else None,
+                external_source="outlook",
+                outlook_event_id=outlook_id[:255] if outlook_id else None,
+                status="booked",
+                booked_by_ai=False,
+            )
+            db.add(appt)
+            imported += 1
+        except Exception as exc:
+            errors.append(f"{subject}: {str(exc)[:100]}")
+
+    try:
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        return JSONResponse(status_code=500, content={"error": str(exc)[:300], "imported": 0})
+
+    return {"imported": imported, "skipped": skipped, "errors": errors[:10]}
+
+
+# ─────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────
 
