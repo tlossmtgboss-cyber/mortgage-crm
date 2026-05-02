@@ -199,6 +199,10 @@ export default function VoiceReviewPage() {
             onSubmit={handleSubmit}
             isSubmitting={submitting}
             voiceReviewToken={token}
+            showCalendar={true}
+            orgSlug={applicationData?.org_slug}
+            loSlug={applicationData?.lo_slug}
+            loName={applicationData?.lo_name}
           />
         </ApplicationShell>
       </ApplicationProvider>
