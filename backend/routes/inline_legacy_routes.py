@@ -1073,6 +1073,14 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load Team Chat routes: {e}")
 
+    # Include Client File routes
+    try:
+        from routes.client_file_routes import router as client_file_router
+        app.include_router(client_file_router, prefix="/api/v1", tags=["Client File"])
+        logger.info("✅ Client File routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load Client File routes: {e}")
+
     # Include Loans CRUD routes (lead-to-loan conversion, loan pipeline)
     try:
         from routes.loans_crud_routes import router as loans_crud_router
