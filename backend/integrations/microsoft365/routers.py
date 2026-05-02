@@ -62,6 +62,54 @@ async def ping():
     return {"pong": True}
 
 
+@router.get("/calendar/outbound-status")
+async def outbound_sync_status(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Check if outbound calendar sync to Outlook is ready (DRE tokens valid)."""
+    import os
+    import secrets as _secrets
+
+    api_key = request.headers.get("X-API-Key", "")
+    expected_key = os.environ.get("ADMIN_API_KEY", "").strip()
+    if not (expected_key and api_key and _secrets.compare_digest(api_key, expected_key)):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin API key required")
+
+    from fastapi.responses import JSONResponse
+    from database.models.core import User
+    from database.models.microsoft import MicrosoftOAuthToken
+
+    user = db.query(User).order_by(User.id).first()
+    if not user:
+        return JSONResponse(content={"ready": False, "error": "No CRM user found"})
+
+    oauth = db.query(MicrosoftOAuthToken).filter(
+        MicrosoftOAuthToken.user_id == user.id,
+    ).first()
+
+    if not oauth:
+        return JSONResponse(content={
+            "ready": False,
+            "user_id": user.id,
+            "user_email": user.email,
+            "error": "No MicrosoftOAuthToken record — DRE email not connected",
+        })
+
+    from services.dre_helpers import validate_microsoft_token
+    validation = await validate_microsoft_token(oauth, db)
+
+    return JSONResponse(content={
+        "ready": validation.get("valid", False),
+        "user_id": user.id,
+        "user_email": user.email,
+        "token_email": oauth.email_address,
+        "token_expires_at": str(oauth.token_expires_at) if oauth.token_expires_at else None,
+        "validation_error": validation.get("error") if not validation.get("valid") else None,
+        "needs_reauth": validation.get("needs_reauth", False),
+    })
+
+
 def _get_current_user():
     from auth.dependencies import get_current_user
     return get_current_user
