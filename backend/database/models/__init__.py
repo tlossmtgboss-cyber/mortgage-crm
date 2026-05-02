@@ -655,6 +655,17 @@ from integrations.imessage.models import (
     IMessageWebhookLog,
 )
 
+# Team Chat models
+from .team_chat import (
+    TeamChatChannel,
+    TeamChatMessage,
+    TeamChatReaction,
+    TeamChatRead,
+    TeamChatAuthorKind,
+    TeamChatAgentSlug,
+    TeamChatReactionEmoji,
+)
+
 
 __all__ = [
     # =====================
@@ -1332,4 +1343,15 @@ __all__ = [
     "IMessageMessage",
     "IMessageLookupCache",
     "IMessageWebhookLog",
+
+    # =====================
+    # Team Chat
+    # =====================
+    "TeamChatChannel",
+    "TeamChatMessage",
+    "TeamChatReaction",
+    "TeamChatRead",
+    "TeamChatAuthorKind",
+    "TeamChatAgentSlug",
+    "TeamChatReactionEmoji",
 ]
