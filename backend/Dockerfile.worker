@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.lock .
+RUN pip install --no-cache-dir -r requirements.lock
+
+COPY . .
+
+RUN groupadd --system --gid 1001 appgroup && \
+    useradd --system --uid 1001 --gid appgroup --home-dir /app appuser && \
+    chown -R appuser:appgroup /app
+
+USER appuser
+
+WORKDIR /app/backend
+
+CMD ["python3", "-m", "workers.team_chat_bot"]
