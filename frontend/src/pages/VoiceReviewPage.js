@@ -194,6 +194,7 @@ export default function VoiceReviewPage() {
           showSaveIndicator={false}
           showDocumentChecklist={false}
           readOnlyBanner="Aria completed this application during your call. Review the details below and sign to submit."
+          showAriaChat={true}
         >
           <ReviewStage
             onSubmit={handleSubmit}

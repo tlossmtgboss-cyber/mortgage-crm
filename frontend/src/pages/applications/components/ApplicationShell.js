@@ -6,6 +6,7 @@
 import React, { useMemo, useState, useCallback, lazy, Suspense } from 'react';
 import { useApplication } from '../contexts/ApplicationContext';
 import { getStages, getVisibleStages, getStageById } from '../config/stageConfig';
+import AriaChatPanel from '../../../components/AriaChatPanel/AriaChatPanel';
 import './ApplicationShell.css';
 import '../../../styles/borrower-theme.css';
 
@@ -19,6 +20,7 @@ const ApplicationShell = ({
   showDocumentChecklist = true,
   branding = null,       // { loName, companyName }
   readOnlyBanner = null, // string shown as info banner below header
+  showAriaChat = false,
 }) => {
   const { state, actions, computed } = useApplication();
   const {
@@ -34,6 +36,8 @@ const ApplicationShell = ({
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
   // Exit confirmation state (replaces window.confirm)
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  // Aria chat panel state
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Get stages based on application type
   const allStages = useMemo(() => getStages(applicationType), [applicationType]);
@@ -256,6 +260,25 @@ const ApplicationShell = ({
             </div>
           )}
         </div>
+      )}
+
+      {showAriaChat && (
+        <>
+          <button
+            type="button"
+            className="aria-chat-toggle"
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            aria-label={isChatOpen ? 'Close Aria chat' : 'Ask Aria'}
+          >
+            {isChatOpen ? '×' : 'Ask Aria'}
+          </button>
+          <AriaChatPanel
+            isOpen={isChatOpen}
+            onClose={() => setIsChatOpen(false)}
+            applicationData={formData}
+            applicationType={applicationType}
+          />
+        </>
       )}
     </div>
   );
