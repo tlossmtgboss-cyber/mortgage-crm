@@ -58,18 +58,8 @@ router.include_router(webhooks_router)
 
 
 @router.get("/ping")
-async def ping(request: Request):
-    import os, secrets as _s
-    api_key = request.headers.get("X-API-Key", "")
-    expected_key = os.environ.get("ADMIN_API_KEY", "").strip()
-    match = bool(expected_key and api_key and _s.compare_digest(api_key, expected_key))
-    return {
-        "pong": True,
-        "api_key_len": len(api_key),
-        "expected_len": len(expected_key),
-        "match": match,
-        "expected_set": bool(expected_key),
-    }
+async def ping():
+    return {"pong": True}
 
 
 def _get_current_user():
@@ -390,14 +380,13 @@ async def bootstrap_from_existing(
     # Auth: accept admin API key or JWT
     api_key = request.headers.get("X-API-Key", "")
     expected_key = os.environ.get("ADMIN_API_KEY", "").strip()
-    if expected_key and api_key and _secrets.compare_digest(api_key, expected_key):
-        from database.models.core import User
-        user = db.query(User).filter(User.email == "tlossmtgboss@gmail.com").first()
-        if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Admin user not found")
-    else:
+    is_admin_key = bool(expected_key and api_key and _secrets.compare_digest(api_key, expected_key))
+
+    if not is_admin_key:
         _get_user = _get_current_user()
         user = await _get_user(request)
+    else:
+        user = None  # resolved below from token record
 
     # Decrypt using DRE's encryption (SECRET_KEY-derived)
     secret_key = os.environ.get("SECRET_KEY", "")
@@ -407,16 +396,28 @@ async def bootstrap_from_existing(
     dre_fernet = Fernet(dre_fernet_key)
 
     from database.models.microsoft import MicrosoftOAuthToken
-    token_record = db.query(MicrosoftOAuthToken).filter(
-        MicrosoftOAuthToken.user_id == user.id,
-        MicrosoftOAuthToken.refresh_token.isnot(None),
-    ).first()
+    if user:
+        token_query = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.user_id == user.id,
+            MicrosoftOAuthToken.refresh_token.isnot(None),
+        )
+    else:
+        token_query = db.query(MicrosoftOAuthToken).filter(
+            MicrosoftOAuthToken.refresh_token.isnot(None),
+        )
+    token_record = token_query.first()
 
     if not token_record:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            "No existing Microsoft OAuth token found for your account. Connect via email integration first.",
+            "No existing Microsoft OAuth token found. Connect via email integration first.",
         )
+
+    if not user:
+        from database.models.core import User
+        user = db.query(User).filter(User.id == token_record.user_id).first()
+        if not user:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "User for token not found")
 
     try:
         refresh_token = dre_fernet.decrypt(token_record.refresh_token.encode()).decode()
