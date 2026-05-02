@@ -101,6 +101,9 @@ function LeadDetail() {
   const [clientPortalData, setClientPortalData] = useState(null);
   const [clientPortalLoading, setClientPortalLoading] = useState(false);
 
+  // Client File state
+  const [clientFileLoading, setClientFileLoading] = useState(false);
+
   // Video message modal state
   const [showSendVideoModal, setShowSendVideoModal] = useState(false);
 
@@ -1304,6 +1307,33 @@ function LeadDetail() {
     }
   };
 
+  const handleOpenClientFile = async () => {
+    try {
+      setClientFileLoading(true);
+      const token = getToken();
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://api.perenniaai.com'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+      const response = await fetch(`${API_BASE}/api/v1/leads/${id}/client-file-id`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+      const data = await response.json();
+      navigate(`/clients/${data.client_file_id}`);
+    } catch (error) {
+      console.error('Failed to open client file:', error);
+      toast.error('Could not open client file. Please try again.');
+    } finally {
+      setClientFileLoading(false);
+    }
+  };
+
   const handleSave = async () => {
     try {
       let dataToSave;
@@ -2046,6 +2076,24 @@ function LeadDetail() {
           </div>
         </div>
         <div className="header-actions">
+          <button
+            className="btn-client-file"
+            onClick={handleOpenClientFile}
+            disabled={clientFileLoading}
+            style={{
+              background: '#6366f1',
+              color: 'white',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '13px',
+              opacity: clientFileLoading ? 0.7 : 1,
+            }}
+          >
+            {clientFileLoading ? 'Opening...' : 'Open in Client File'}
+          </button>
           {editing ? (
             <>
               <button className="btn-save" onClick={handleSave}>Save</button>
