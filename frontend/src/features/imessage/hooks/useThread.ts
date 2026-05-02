@@ -20,7 +20,7 @@ import type {
 } from "../types";
 
 interface UseThreadOptions {
-  contactId: string;
+  contactId: number;
   /** Debounce typing indicator pings to BB (default 1500ms). */
   typingDwellMs?: number;
 }

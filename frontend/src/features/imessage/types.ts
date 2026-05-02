@@ -37,7 +37,7 @@ export type TapbackType =
 
 export interface ConversationMessage {
   id: string;
-  contact_id: string;
+  contact_id: number;
   direction: Direction;
   body: string | null;
   media_urls: string[];
@@ -47,7 +47,7 @@ export interface ConversationMessage {
   error_code?: number | null;
   error_message?: string | null;
   bb_message_guid?: string | null;
-  sender_seat_id?: string | null;
+  sender_seat_id?: number | null;
   reply_to_message_id?: string | null;
   associated_message_guid?: string | null;
   tapback?: TapbackType | null;
@@ -57,7 +57,7 @@ export interface ConversationMessage {
 }
 
 export interface ConversationThread {
-  contact_id: string;
+  contact_id: number;
   contact_phone: string | null;
   contact_email: string | null;
   chat_guid: string | null;
@@ -69,7 +69,7 @@ export interface ConversationThread {
 }
 
 export interface SendMessageRequest {
-  contact_id: string;
+  contact_id: number;
   body?: string | null;
   media_url?: string | null;
   channel?: Channel;
@@ -111,7 +111,7 @@ export type RealtimeEvent =
   | {
       type: "imessage.message.received";
       thread_id: string;
-      contact_id: string;
+      contact_id: number;
       message: ConversationMessage;
     }
   | {

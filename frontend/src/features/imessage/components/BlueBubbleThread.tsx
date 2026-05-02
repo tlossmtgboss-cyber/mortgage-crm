@@ -21,7 +21,7 @@ interface Props {
   thread: ConversationThread;
   remoteIsTyping?: boolean;
   /** Resolve a seat/user id to a display name (LO, processor, etc.) */
-  resolveSenderName?: (seatId: string | null | undefined) => string;
+  resolveSenderName?: (seatId: number | null | undefined) => string;
 }
 
 const APPLE_BLUE = "#007AFF";
@@ -89,7 +89,7 @@ interface BubbleProps {
   tapbacks: ConversationMessage[];
   showTail: boolean;
   isGroupStart: boolean;
-  resolveSenderName?: (seatId: string | null | undefined) => string;
+  resolveSenderName?: (seatId: number | null | undefined) => string;
 }
 
 const Bubble = memo(function Bubble({

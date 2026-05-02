@@ -35,7 +35,7 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const imessageApi = {
-  async getThread(contactId: string, limit = 200): Promise<ConversationThread> {
+  async getThread(contactId: number, limit = 200): Promise<ConversationThread> {
     return apiFetch<ConversationThread>(
       `${BASE}/contacts/${contactId}/thread?limit=${limit}`,
     );
@@ -69,7 +69,7 @@ export const imessageApi = {
     });
   },
 
-  async typing(contactId: string, on: boolean): Promise<void> {
+  async typing(contactId: number, on: boolean): Promise<void> {
     await apiFetch<void>(`${BASE}/typing`, {
       method: "POST",
       body: JSON.stringify({ contact_id: contactId, on }),

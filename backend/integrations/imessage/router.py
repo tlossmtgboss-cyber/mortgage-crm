@@ -7,6 +7,7 @@ Two routers:
 """
 from __future__ import annotations
 
+import hmac
 import logging
 from typing import Annotated, Any
 from uuid import UUID
@@ -80,10 +81,13 @@ async def send_message(
     db: DbDep,
     svc: SvcDep,
 ) -> SendMessageResponse:
+    org_id = getattr(user, 'organization_id', None)
+    if org_id is None:
+        raise HTTPException(status_code=401, detail="Organization context required")
     try:
         return await svc.send(
             db,
-            organization_id=getattr(user, 'organization_id', None),
+            organization_id=org_id,
             seat_user_id=user.id,
             request=payload,
         )
@@ -103,9 +107,12 @@ async def send_tapback(
     db: DbDep,
     svc: SvcDep,
 ) -> ConversationMessage:
+    org_id = getattr(user, 'organization_id', None)
+    if org_id is None:
+        raise HTTPException(status_code=401, detail="Organization context required")
     try:
         return await svc.send_tapback(
-            db, organization_id=getattr(user, 'organization_id', None), seat_user_id=user.id, request=payload
+            db, organization_id=org_id, seat_user_id=user.id, request=payload
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -116,15 +123,18 @@ async def send_tapback(
     response_model=ConversationThread,
 )
 async def get_thread(
-    contact_id: UUID,
+    contact_id: int,
     user: UserDep,
     db: DbDep,
     svc: SvcDep,
     limit: int = 200,
 ) -> ConversationThread:
+    org_id = getattr(user, 'organization_id', None)
+    if org_id is None:
+        raise HTTPException(status_code=401, detail="Organization context required")
     try:
         return await svc.get_thread(
-            db, organization_id=getattr(user, 'organization_id', None), contact_id=contact_id, limit=limit
+            db, organization_id=org_id, contact_id=contact_id, limit=limit
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -147,9 +157,12 @@ async def detect_imessage(
     db: DbDep,
     svc: SvcDep,
 ) -> IMessageDetectionResult:
+    org_id = getattr(user, 'organization_id', None)
+    if org_id is None:
+        raise HTTPException(status_code=401, detail="Organization context required")
     return await svc.detect_imessage(
         db,
-        organization_id=getattr(user, 'organization_id', None),
+        organization_id=org_id,
         handle=payload.handle,
         force=payload.force,
         line_id=payload.line_id,
@@ -172,7 +185,10 @@ async def typing(
     db: DbDep,
     svc: SvcDep,
 ) -> None:
-    thread = await svc.get_thread(db, organization_id=getattr(user, 'organization_id', None), contact_id=payload.contact_id)
+    org_id = getattr(user, 'organization_id', None)
+    if org_id is None:
+        raise HTTPException(status_code=401, detail="Organization context required")
+    thread = await svc.get_thread(db, organization_id=org_id, contact_id=payload.contact_id)
     if not thread.chat_guid:
         # No prior chat — typing is a no-op until first send establishes guid
         return
@@ -202,8 +218,11 @@ class LineListItem(BaseModel):
     dependencies=[Depends(require_role("admin"))],
 )
 async def list_lines(user: UserDep, db: DbDep) -> list[LineListItem]:
+    org_id = getattr(user, 'organization_id', None)
+    if org_id is None:
+        raise HTTPException(status_code=401, detail="Organization context required")
     rows = db.scalars(
-        select(IMessageLine).where(IMessageLine.organization_id == getattr(user, 'organization_id', None))
+        select(IMessageLine).where(IMessageLine.organization_id == org_id)
     ).all()
     return [
         LineListItem(
@@ -247,7 +266,7 @@ async def receive_webhook(
         configured into the BB webhook config.
     """
     settings = get_imessage_settings()
-    if token != settings.webhook_url_secret:
+    if not hmac.compare_digest(token, settings.webhook_url_secret):
         # Don't 401 — that gives an oracle. Treat as 200 + no-op to keep
         # BB's retry queue healthy and return immediately.
         logger.warning("imessage.webhook.bad_token")
@@ -265,7 +284,11 @@ async def receive_webhook(
         logger.exception("imessage.webhook.unparseable", extra={"err": str(exc)})
         return {"ok": False}
 
-    await svc.ingest_event(db, line=line, event=event, raw_body=body)
+    try:
+        await svc.ingest_event(db, line=line, event=event, raw_body=body)
+    except Exception:
+        logger.exception("imessage.webhook.ingest_failed", extra={"line_id": str(line_id), "type": event.type})
+        return {"ok": False}
     return {"ok": True}
 
 
@@ -280,7 +303,7 @@ async def heartbeat(
 ) -> dict:
     """Mac-side cron POSTs here with its self-ping result every 60s."""
     settings = get_imessage_settings()
-    if token != settings.webhook_url_secret:
+    if not hmac.compare_digest(token, settings.webhook_url_secret):
         return {"ok": False}
     line = get_line_for_webhook(db, line_id=line_id)
     if line is None:

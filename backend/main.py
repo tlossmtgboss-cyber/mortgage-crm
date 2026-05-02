@@ -4176,9 +4176,28 @@ except Exception as e:
 try:
     from integrations.imessage import api_router as imessage_api_router
     from integrations.imessage import webhook_router as imessage_webhook_router
+    from integrations.imessage import health_router as imessage_health_router
     app.include_router(imessage_api_router, tags=["iMessage"])
     app.include_router(imessage_webhook_router, tags=["iMessage Webhooks"])
+    app.include_router(imessage_health_router, tags=["iMessage Health"])
     logger.info("iMessage/BlueBubbles routes loaded")
+
+    # Auto-create iMessage tables (production pattern — checkfirst=True)
+    try:
+        from integrations.imessage.models import (
+            IMessageLine,
+            IMessageThread,
+            IMessageMessage,
+            IMessageLookupCache,
+            IMessageWebhookLog,
+        )
+        for _im_model in [IMessageLine, IMessageThread, IMessageMessage,
+                          IMessageLookupCache, IMessageWebhookLog]:
+            _im_model.__table__.create(engine, checkfirst=True)
+        logger.info("iMessage tables verified/created (5 tables)")
+    except Exception as _im_table_err:
+        logger.warning(f"Could not auto-create iMessage tables: {_im_table_err}")
+
 except Exception as e:
     logger.warning(f"iMessage routes skipped (env vars not set?): {e}")
 

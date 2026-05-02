@@ -54,24 +54,79 @@ class AuditLogger:
 
 
 class ContactRepository:
-    """Stub — replace with real contact lookup/creation."""
+    """Contact lookup/creation backed by the Lead model."""
+
     async def get_for_tenant(self, session, *, organization_id, contact_id):
-        from sqlalchemy import select
-        # Attempt a real lookup against the leads table as a best-effort fallback
-        try:
-            from database.models import Lead
-            return session.execute(
-                select(Lead).where(Lead.id == contact_id)
-            ).scalar_one_or_none()
-        except Exception:
-            _stub_log.warning("contact_repo.stub: get_for_tenant(%s) — no real impl", contact_id)
-            return None
+        from sqlalchemy import select as _select
+        from database.models import Lead
+        return session.execute(
+            _select(Lead).where(
+                Lead.id == contact_id,
+                Lead.organization_id == organization_id,
+            )
+        ).scalar_one_or_none()
 
     async def get_or_create_by_handle(self, session, *, organization_id, phone_or_email, source):
-        _stub_log.warning(
-            "contact_repo.stub: get_or_create_by_handle(%s) — no real impl", phone_or_email
+        import re
+        from sqlalchemy import select as _select
+        from database.models import Lead
+
+        handle = (phone_or_email or "").strip()
+        if not handle:
+            raise ValueError("phone_or_email is required")
+
+        # Determine if handle is email or phone
+        is_email = "@" in handle
+
+        if is_email:
+            lead = session.execute(
+                _select(Lead).where(
+                    Lead.organization_id == organization_id,
+                    Lead.email == handle,
+                )
+            ).scalar_one_or_none()
+        else:
+            # Normalize to E.164: strip non-digits, prepend +1 if 10 digits
+            digits = re.sub(r"[^\d]", "", handle)
+            if len(digits) == 10:
+                digits = "1" + digits
+            e164 = "+" + digits if digits else handle
+
+            lead = session.execute(
+                _select(Lead).where(
+                    Lead.organization_id == organization_id,
+                    Lead.phone == e164,
+                )
+            ).scalar_one_or_none()
+
+        if lead is not None:
+            return lead
+
+        # Create a new Lead with normalized phone or email
+        if not is_email:
+            digits = re.sub(r"[^\d]", "", handle)
+            if len(digits) == 10:
+                digits = "1" + digits
+            normalized_phone = "+" + digits if digits else handle
+        else:
+            normalized_phone = None
+
+        lead = Lead(
+            organization_id=organization_id,
+            first_name="Unknown",
+            last_name="",
+            phone=normalized_phone,
+            email=handle if is_email else None,
+            stage="New",
+            source=source or "imessage_inbound",
         )
-        return None
+        session.add(lead)
+        session.flush()
+        _stub_log.info(
+            "contact_repo: created Lead %s for handle %s (org %s)",
+            lead.id, phone_or_email, organization_id,
+        )
+        return lead
 
 
 async def reset_followup_sla(session, *, organization_id, contact_id):
@@ -454,7 +509,7 @@ class IMessageService:
         client = self._client_for(line)
         body = await client.check_handle_availability(normalized)
         service = ((body.get("data") or {}).get("service") or "SMS")
-        row = self._upsert_lookup(
+        row = await self._upsert_lookup(
             session, line_id=line.id, handle=normalized, service=service
         )
         return IMessageDetectionResult(
@@ -911,7 +966,7 @@ class IMessageService:
         except BlueBubblesError:
             return Channel.IMESSAGE
         service = ((body.get("data") or {}).get("service") or "SMS")
-        self._upsert_lookup(
+        await self._upsert_lookup(
             session, line_id=line.id, handle=handle, service=service
         )
         return Channel.IMESSAGE if service.lower() == "imessage" else Channel.SMS
@@ -934,7 +989,7 @@ class IMessageService:
             return None
         return row
 
-    def _upsert_lookup(
+    async def _upsert_lookup(
         self,
         session: Session,
         *,
@@ -956,15 +1011,15 @@ class IMessageService:
     def _is_first_inbound(
         self, session: Session, contact_id: int
     ) -> bool:
-        row = session.execute(
+        rows = session.scalars(
             select(IMessageMessage)
             .where(
                 IMessageMessage.contact_id == contact_id,
                 IMessageMessage.direction == Direction.INBOUND.value,
             )
             .limit(2)
-        ).scalar_one_or_none()
-        return row is None
+        ).all()
+        return len(rows) <= 1
 
     def _signature(self, event: BBWebhookEvent, raw_body: dict) -> str:
         envelope = event.data or {}

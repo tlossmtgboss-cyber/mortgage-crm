@@ -37,9 +37,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 # Perennia DB base — re-exported via database/__init__.py
 from database import Base
 
-# Perennia handles encryption at the application layer (encryption_utils),
-# not via a custom SQLAlchemy column type. Use plain String storage here;
-# the service layer encrypts/decrypts as needed.
+# WARNING: No encryption implemented — PII stored in plaintext.
+# Implement Fernet or similar before production launch.
+# EncryptedText is currently just an alias for String. The service layer
+# MUST handle encryption/decryption of sensitive fields (bb_password,
+# cf_access_client_secret, message body) before writing to or after
+# reading from the database.
 EncryptedText = String
 
 
@@ -101,6 +104,7 @@ class IMessageThread(Base):
     __table_args__ = (
         UniqueConstraint("organization_id", "contact_id", "line_id", name="uq_imessage_thread"),
         Index("ix_imessage_thread_chat_guid", "chat_guid"),
+        Index("ix_imessage_thread_org_contact", "organization_id", "contact_id"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -227,6 +231,7 @@ class IMessageLookupCache(Base):
     __tablename__ = "imessage_lookup_cache"
     __table_args__ = (
         UniqueConstraint("line_id", "handle", name="uq_imessage_lookup"),
+        Index("ix_imessage_lookup_line_handle", "line_id", "handle"),
         Index("ix_imessage_lookup_checked_at", "checked_at"),
     )
 
