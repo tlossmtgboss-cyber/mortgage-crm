@@ -4296,12 +4296,12 @@ try:
     # Enable RLS on the 6 new tables
     try:
         _rls_expr = "organization_id = NULLIF(current_setting('app.current_tenant', TRUE), '')::INTEGER"
+        from sqlalchemy import text as _sa_text
         with engine.connect() as _rls_conn:
             for _tbl in ["client_files", "client_file_collaborators",
                          "team_chat_channels", "team_chat_messages",
                          "team_chat_reactions", "team_chat_reads"]:
-                from sqlalchemy import text as _sa_text
-            _rls_conn.execute(_sa_text(f"ALTER TABLE {_tbl} ENABLE ROW LEVEL SECURITY"))
+                _rls_conn.execute(_sa_text(f"ALTER TABLE {_tbl} ENABLE ROW LEVEL SECURITY"))
                 _rls_conn.execute(_sa_text(f"ALTER TABLE {_tbl} FORCE ROW LEVEL SECURITY"))
                 _rls_conn.execute(_sa_text(
                     f"DO $$ BEGIN "
