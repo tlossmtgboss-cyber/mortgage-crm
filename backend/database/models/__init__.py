@@ -669,7 +669,6 @@ from .team_chat import (
 # Client File aggregate root + collaborators
 from .client_file import ClientFile, ClientFileCollaborator
 
-
 __all__ = [
     # =====================
     # Core - Organization
