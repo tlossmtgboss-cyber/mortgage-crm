@@ -1,28 +1,6 @@
 .voice-review-page {
   min-height: 100vh;
   background: var(--color-bg-page, #faf9f7);
-  padding: 2rem 1rem;
-}
-
-.voice-review-branding {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  max-width: 900px;
-  margin: 0 auto 2rem auto;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--color-border-light, rgba(139, 92, 68, 0.08));
-}
-
-.voice-review-brand {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-primary, #217F8D);
-}
-
-.voice-review-lo {
-  font-size: 0.875rem;
-  color: var(--color-text-secondary, #666666);
 }
 
 /* Loading */
@@ -123,13 +101,10 @@
 }
 
 @media (max-width: 640px) {
-  .voice-review-page {
-    padding: 1rem 0.5rem;
-  }
-
-  .voice-review-branding {
-    flex-direction: column;
-    gap: 0.5rem;
-    text-align: center;
+  .voice-review-loading,
+  .voice-review-error,
+  .voice-review-submitted {
+    margin-left: 0.5rem;
+    margin-right: 0.5rem;
   }
 }

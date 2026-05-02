@@ -11,6 +11,8 @@ import { useParams } from 'react-router-dom';
 import { ApplicationProvider } from './applications/contexts/ApplicationContext';
 import { createInitialState } from './applications/contexts/applicationReducer';
 import ReviewStage from './applications/components/stages/ReviewStage';
+import ApplicationShell from './applications/components/ApplicationShell';
+import { getStages } from './applications/config/stageConfig';
 import './VoiceReviewPage.css';
 import '../styles/borrower-theme.css';
 
@@ -117,11 +119,18 @@ export default function VoiceReviewPage() {
   const initialFormData = applicationData?.form_data || {};
   const appType = initialFormData.application_type || 'purchase';
 
+  const branding = useMemo(() => ({
+    loName: applicationData?.lo_name,
+    companyName: applicationData?.company_name || 'Perennia',
+  }), [applicationData]);
+
   const initialState = useMemo(() => {
     const base = createInitialState(appType);
+    const stages = getStages(appType);
     return {
       ...base,
       currentStage: 'review',
+      completedStages: stages.map(s => s.id).filter(id => id !== 'review'),
       formData: {
         ...base.formData,
         ...initialFormData,
@@ -176,22 +185,22 @@ export default function VoiceReviewPage() {
 
   return (
     <div className="voice-review-page borrower-theme">
-      <div className="voice-review-branding">
-        <span className="voice-review-brand">Perennia</span>
-        {applicationData?.lo_name && (
-          <span className="voice-review-lo">Your Loan Officer: {applicationData.lo_name}</span>
-        )}
-      </div>
-
       <ApplicationProvider
         applicationType={appType}
         initialState={initialState}
       >
-        <ReviewStage
-          onSubmit={handleSubmit}
-          isSubmitting={submitting}
-          voiceReviewToken={token}
-        />
+        <ApplicationShell
+          branding={branding}
+          showSaveIndicator={false}
+          showDocumentChecklist={false}
+          readOnlyBanner="Aria completed this application during your call. Review the details below and sign to submit."
+        >
+          <ReviewStage
+            onSubmit={handleSubmit}
+            isSubmitting={submitting}
+            voiceReviewToken={token}
+          />
+        </ApplicationShell>
       </ApplicationProvider>
     </div>
   );

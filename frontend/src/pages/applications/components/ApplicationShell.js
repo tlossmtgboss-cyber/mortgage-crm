@@ -17,6 +17,8 @@ const ApplicationShell = ({
   onExit,
   showSaveIndicator = true,
   showDocumentChecklist = true,
+  branding = null,       // { loName, companyName }
+  readOnlyBanner = null, // string shown as info banner below header
 }) => {
   const { state, actions, computed } = useApplication();
   const {
@@ -49,11 +51,17 @@ const ApplicationShell = ({
   const totalStages = visibleStages.length;
 
   // Stage progress percentage (0-100) — uses explicit progress values from stageConfig
-  // so dynamic stage visibility changes (e.g., second_mortgage appearing) don't cause regression
+  // so dynamic stage visibility changes (e.g., second_mortgage appearing) don't cause regression.
+  // When all visible stages are in completedStages (e.g., voice review), show 100%.
   const stageProgress = useMemo(() => {
-    if (currentStageIndex < 0 || !currentStageData) return 0;
+    if (currentStageIndex < 0 || !currentStageData) {
+      // Check if all visible stages are completed (voice review mode)
+      const allCompleted = visibleStages.length > 0 &&
+        visibleStages.every(s => state.completedStages.includes(s.id));
+      return allCompleted ? 100 : 0;
+    }
     return currentStageData.progress || Math.round(((currentStageIndex + 1) / totalStages) * 100);
-  }, [currentStageIndex, totalStages, currentStageData]);
+  }, [currentStageIndex, totalStages, currentStageData, visibleStages, state.completedStages]);
 
   // Handle stage click (for navigation)
   const handleStageClick = (stageId) => {
@@ -107,14 +115,23 @@ const ApplicationShell = ({
       {/* Header */}
       <header className="application-header">
         <div className="application-header-content">
-          <button
-            type="button"
-            className="application-exit-btn"
-            onClick={handleExit}
-            aria-label="Exit application"
-          >
-            ← Back
-          </button>
+          {branding ? (
+            <div className="application-branding">
+              <span className="branding-company">{branding.companyName || 'Perennia'}</span>
+              {branding.loName && (
+                <span className="branding-lo">Your Loan Officer: {branding.loName}</span>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="application-exit-btn"
+              onClick={handleExit}
+              aria-label="Exit application"
+            >
+              ← Back
+            </button>
+          )}
 
           <div className="application-title">
             <h1>{applicationType === 'purchase' ? 'Purchase' : 'Refinance'} Application</h1>
@@ -144,15 +161,22 @@ const ApplicationShell = ({
           </div>
           <span className="progress-text">{stageProgress}% Complete</span>
         </div>
+
+        {readOnlyBanner && (
+          <div className="readonly-banner">
+            <span className="readonly-icon">&#8505;</span>
+            {readOnlyBanner}
+          </div>
+        )}
       </header>
 
       {/* Stage indicators (desktop) */}
       <nav className="stage-nav" aria-label="Application stages">
         <div className="stage-list">
           {visibleStages.map((stage, index) => {
-            const isCompleted = index < currentStageIndex;
+            const isCompleted = index < currentStageIndex || state.completedStages.includes(stage.id);
             const isCurrent = stage.id === currentStage;
-            const isClickable = index <= currentStageIndex;
+            const isClickable = index <= currentStageIndex || isCompleted;
 
             return (
               <button
