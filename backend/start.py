@@ -151,4 +151,9 @@ def main():
     ])
 
 if __name__ == "__main__":
-    main()
+    worker_mode = os.environ.get("WORKER_MODE", "")
+    if worker_mode:
+        print(f"START.PY: WORKER_MODE={worker_mode}", flush=True)
+        os.execvp(sys.executable, [sys.executable, "-m", f"workers.{worker_mode}"])
+    else:
+        main()
