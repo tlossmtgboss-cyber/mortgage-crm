@@ -53,12 +53,16 @@ def run_seed():
             )
             return
 
-        # Grab the first organization
+        # Grab the organization that has the most users (the real tenant)
         row = conn.execute(
-            text("SELECT id FROM organizations ORDER BY id LIMIT 1")
+            text(
+                "SELECT organization_id, COUNT(*) as cnt "
+                "FROM users WHERE organization_id IS NOT NULL "
+                "GROUP BY organization_id ORDER BY cnt DESC LIMIT 1"
+            )
         ).fetchone()
         org_id = row[0] if row else 1
-        logger.info("Using organization_id = %s", org_id)
+        logger.warning("Using organization_id = %s (most active org)", org_id)
 
         # ------------------------------------------------------------------
         # 3. Check for existing lines
@@ -72,11 +76,33 @@ def run_seed():
         ).scalar()
 
         if existing and existing > 0:
-            logger.info(
+            logger.warning(
                 "Organization %s already has %d iMessage line(s) — skipping seed",
                 org_id,
                 existing,
             )
+            return
+
+        # If there are lines for a different org but none for the real org,
+        # reassign them (handles initial seed that picked wrong org)
+        total_lines = conn.execute(
+            text("SELECT COUNT(*) FROM imessage_lines")
+        ).scalar() or 0
+        if total_lines > 0:
+            moved = conn.execute(
+                text(
+                    "UPDATE imessage_lines SET organization_id = :org_id "
+                    "WHERE organization_id != :org_id "
+                    "RETURNING id"
+                ),
+                {"org_id": org_id},
+            ).fetchall()
+            if moved:
+                conn.commit()
+                logger.warning(
+                    "Reassigned %d iMessage line(s) to org %s (was wrong org)",
+                    len(moved), org_id,
+                )
             return
 
         # ------------------------------------------------------------------

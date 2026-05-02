@@ -24,15 +24,27 @@ export const SECTION_ORDER: SectionKey[] = [
 ];
 
 export const SECTION_LABELS: Record<SectionKey, string> = {
-  personal: 'Personal',
-  residence: 'Residence',
-  employment: 'Employment',
+  personal: 'Personal Information',
+  residence: 'Address & Contact',
+  employment: 'Employment & Income',
   assets: 'Assets',
   liabilities: 'Liabilities',
-  reo: 'Real Estate',
+  reo: 'Real Estate Owned',
   loan: 'Loan & Property',
   declarations: 'Declarations',
   review: 'Review & eSign',
+};
+
+export const SECTION_CAPTIONS: Record<SectionKey, string> = {
+  personal: 'Legal name, date of birth, ID',
+  residence: 'Where you live and how to reach you',
+  employment: 'Current job, prior history, other income',
+  assets: 'Bank, retirement, gifts and credits',
+  liabilities: 'Credit cards, loans, monthly obligations',
+  reo: 'Properties you currently own',
+  loan: 'Subject property and loan details',
+  declarations: 'Disclosure questions and HMDA',
+  review: 'Final review and submission',
 };
 
 export type ApplicationStatus = 'draft' | 'submitted' | 'abandoned' | 'withdrawn';

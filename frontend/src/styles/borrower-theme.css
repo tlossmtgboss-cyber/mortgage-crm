@@ -1,36 +1,41 @@
-.borrower-theme {
+:root {
   /* Typography */
-  --bt-font-display: 'Cormorant Garamond', 'Georgia', serif;
-  --bt-font-body: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --bt-font-mono: 'DM Mono', 'Berkeley Mono', 'Courier New', monospace;
+  --bt-font-display: 'Fraunces', Georgia, serif;
+  --bt-font-body: 'Geist', system-ui, -apple-system, sans-serif;
+  --bt-font-mono: 'Geist Mono', ui-monospace, monospace;
 
-  /* Brand Colors */
-  --bt-primary: var(--brand-primary, #218D8D);
-  --bt-primary-hover: #1a7070;
-  --bt-primary-light: rgba(33, 141, 141, 0.08);
-  --bt-accent: #B8924A;
-  --bt-accent-light: rgba(184, 146, 74, 0.1);
-
-  /* Surfaces */
-  --bt-bg-page: #FCFCF9;
+  /* Backgrounds */
+  --bt-bg-page: #FAF7F1;
   --bt-bg-surface: #FFFFFF;
-  --bt-bg-surface-raised: #FFFFFF;
-  --bt-bg-subtle: rgba(139, 92, 68, 0.04);
-
-  /* Text */
-  --bt-text-primary: #1a1a1a;
-  --bt-text-secondary: #555555;
-  --bt-text-tertiary: #999999;
-  --bt-text-on-primary: #FFFFFF;
+  --bt-bg-sidebar: #F6F2EA;
+  --bt-bg-elevated: #F2EDE2;
+  --bt-bg-soft: #FBF8F2;
 
   /* Borders */
-  --bt-border: rgba(139, 92, 68, 0.12);
-  --bt-border-light: rgba(139, 92, 68, 0.06);
+  --bt-border: #ECE6D8;
+  --bt-border-strong: #D8D0BD;
+  --bt-border-active: #1F3D2E;
+
+  /* Text */
+  --bt-text-primary: #1A1F1B;
+  --bt-text-secondary: #4F554E;
+  --bt-text-muted: #8B8A7E;
+  --bt-text-faint: #B5B2A4;
+
+  /* Brand */
+  --bt-primary: #1F3D2E;
+  --bt-primary-hover: #2A4F3D;
+  --bt-primary-light: #E5EDE6;
+  --bt-primary-tint: #EFF3EE;
+
+  /* Accent */
+  --bt-accent: #B8924A;
+  --bt-accent-light: #F5EDD9;
 
   /* Semantic */
-  --bt-success: #38a169;
-  --bt-warning: #d69e2e;
-  --bt-error: #c0152f;
+  --bt-success: #2D7A52;
+  --bt-warning: #B25F18;
+  --bt-error: #9B2C2C;
   --bt-info: #3182ce;
 
   /* Spacing */
@@ -53,16 +58,29 @@
 
   /* Layout */
   --bt-max-width: 1200px;
-  --bt-header-height: 64px;
-
-  /* Apply defaults */
-  font-family: var(--bt-font-body);
-  color: var(--bt-text-primary);
-  background: var(--bt-bg-page);
-  line-height: 1.6;
+  --bt-header-height: 60px;
+  --bt-sidebar-width: 260px;
 }
 
-/* Display headings use serif */
+.borrower-theme {
+  font-family: var(--bt-font-body);
+  background: var(--bt-bg-page);
+  color: var(--bt-text-primary);
+  font-feature-settings: 'ss01', 'cv01', 'cv11';
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+}
+
+.bt-font-display {
+  font-family: var(--bt-font-display);
+  font-feature-settings: 'ss01';
+  letter-spacing: -0.018em;
+}
+
+.bt-font-mono {
+  font-family: var(--bt-font-mono);
+}
+
 .borrower-theme h1,
 .borrower-theme h2 {
   font-family: var(--bt-font-display);
@@ -70,7 +88,6 @@
   line-height: 1.2;
 }
 
-/* Consistent card treatment */
 .borrower-theme .bt-card {
   background: var(--bt-bg-surface);
   border: 1px solid var(--bt-border);
@@ -79,10 +96,9 @@
   box-shadow: var(--bt-shadow-sm);
 }
 
-/* Primary button */
 .borrower-theme .bt-btn-primary {
   background: var(--bt-primary);
-  color: var(--bt-text-on-primary);
+  color: #F5F2E9;
   border: none;
   border-radius: var(--bt-radius-sm);
   padding: 12px 24px;
