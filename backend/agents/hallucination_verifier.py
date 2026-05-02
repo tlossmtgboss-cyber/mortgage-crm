@@ -124,7 +124,7 @@ class HallucinationVerifier:
             timeout=httpx.Timeout(30.0, connect=5.0),
             max_retries=2,
         )
-        self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
         # Numeric patterns for rule-based extraction
         self.numeric_patterns = [

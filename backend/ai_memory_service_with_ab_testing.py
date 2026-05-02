@@ -101,7 +101,7 @@ class ContextAwareAIWithExperiments:
 
             # Generate response with Claude
             response = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-6",
                 max_tokens=2000,
                 system=system_prompt,
                 messages=[{
@@ -402,7 +402,7 @@ Extract and return ONLY a JSON object with:
 Return ONLY valid JSON."""
 
             response = self.client.messages.create(
-                model="claude-3-5-sonnet-20241022",
+                model="claude-sonnet-4-6",
                 max_tokens=500,
                 messages=[{"role": "user", "content": analysis_prompt}]
             )

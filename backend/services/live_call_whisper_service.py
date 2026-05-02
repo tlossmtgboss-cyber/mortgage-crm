@@ -253,7 +253,7 @@ class LiveCallWhisperService:
 
         try:
             response = self.client.messages.create(
-                model="claude-3-haiku-20240307",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=300,
                 system="""You are a real-time sales coach for mortgage loan officers.
                 Provide brief, actionable suggestions that can be used immediately during a call.

@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+ANTHROPIC_MODEL = "claude-sonnet-4-6"
 MAX_CONTEXT_MESSAGES = 20  # Previous messages to include for context
 AUTO_DRAFT_TARGET_SECONDS = 5
 

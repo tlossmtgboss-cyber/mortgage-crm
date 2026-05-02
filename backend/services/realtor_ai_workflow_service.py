@@ -264,7 +264,7 @@ that information is not available in the portal."""
         """AI-based intent classification using Claude."""
         try:
             response = await self.anthropic.messages.create(
-                model="claude-3-haiku-20240307",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=200,
                 system=self.INTENT_CLASSIFICATION_PROMPT,
                 messages=[{"role": "user", "content": message}]
@@ -628,7 +628,7 @@ SCHEDULE [loan_id] - Schedule meeting"""
             messages.append({"role": "user", "content": question})
 
             response = await self.anthropic.messages.create(
-                model="claude-3-haiku-20240307",
+                model="claude-haiku-4-5-20251001",
                 max_tokens=500,
                 system=system_prompt,
                 messages=messages

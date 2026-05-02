@@ -124,7 +124,7 @@ def _enforce_token_budget(system_prompt: str, user_prompt: str) -> Tuple[str, st
 # Constants
 # ---------------------------------------------------------------------------
 
-ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+ANTHROPIC_MODEL = "claude-sonnet-4-6"
 MAX_TOKENS_COMPOSE = 2048
 MAX_TOKENS_SEQUENCE = 4096
 

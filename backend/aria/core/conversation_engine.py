@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 
 # ─── LLM ─────────────────────────────────────────────────────────────────────
 llm = ChatAnthropic(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     temperature=0.3,
     max_tokens=1024,
 )

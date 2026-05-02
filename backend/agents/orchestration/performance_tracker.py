@@ -240,10 +240,12 @@ class PerformanceTracker:
 
     # Token costs (approximate, update as needed)
     TOKEN_COSTS = {
-        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},  # per 1K tokens
-        "claude-haiku-4-5-20251001": {"input": 0.0008, "output": 0.004},  # Haiku costs
+        "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},  # per 1K tokens
+        "claude-sonnet-4-20250514": {"input": 0.003, "output": 0.015},
+        "claude-haiku-4-5-20251001": {"input": 0.0008, "output": 0.004},
         "claude-opus-4-20250514": {"input": 0.015, "output": 0.075},
         "gpt-4-turbo": {"input": 0.01, "output": 0.03},
+        "gpt-4o": {"input": 0.0025, "output": 0.01},
         "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
     }
 

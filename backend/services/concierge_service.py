@@ -127,7 +127,7 @@ class ConciergeService:
 
     def __init__(self):
         self.client = get_anthropic_client()
-        self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-20250514")
+        self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 
     def _get_missing_fields(self, stage: str, existing_data: Dict) -> List[str]:
         """Get fields that haven't been collected yet for a stage"""

@@ -694,7 +694,7 @@ class PublicMortgageChatService:
         client = openai.OpenAI(api_key=OPENAI_API_KEY)
 
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o",
             messages=messages,
             max_tokens=200,
             temperature=0.7
@@ -724,7 +724,7 @@ class PublicMortgageChatService:
                 })
 
         response = client.messages.create(
-            model="claude-3-haiku-20240307",
+            model="claude-haiku-4-5-20251001",
             max_tokens=200,
             system=system_content,
             messages=api_messages

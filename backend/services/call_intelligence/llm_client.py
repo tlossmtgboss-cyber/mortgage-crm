@@ -33,7 +33,7 @@ Example:
 
     # Or with explicit config
     config = LLMConfig(
-        model="claude-3-haiku-20240307",
+        model="claude-haiku-4-5-20251001",
         temperature=0.1,
         max_tokens=2000,
     )
@@ -220,7 +220,7 @@ class LLMProvider(str, Enum):
 
 
 # Default configuration constants
-DEFAULT_ANTHROPIC_MODEL = "claude-3-haiku-20240307"  # Fast and cost-effective for extraction
+DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"  # Fast and cost-effective for extraction
 DEFAULT_OPENAI_MODEL = "gpt-4o-mini"  # Cost-effective OpenAI model
 DEFAULT_MISTRAL_MODEL = "mistral-small-latest"  # Cost-effective Mistral model for extraction
 DEFAULT_MAX_TOKENS = 4096  # Sufficient for mortgage data extraction
