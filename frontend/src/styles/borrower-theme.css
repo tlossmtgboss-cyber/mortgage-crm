@@ -97,6 +97,11 @@
   background: var(--bt-primary-hover);
 }
 
+.borrower-theme .bt-btn-primary:focus-visible {
+  outline: 2px solid var(--bt-primary);
+  outline-offset: 2px;
+}
+
 .borrower-theme .bt-btn-primary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
