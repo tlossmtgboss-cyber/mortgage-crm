@@ -421,6 +421,11 @@ async def calendly_webhook(request: Request, db: Session = Depends(get_db)):
                     lead_received_date=datetime.now(timezone.utc),  # Auto-set for SLA tracking
                 )
                 db.add(new_lead)
+                db.flush()
+
+                from services.client_file_service import ensure_client_file
+                ensure_client_file(db, new_lead)
+
                 db.commit()
 
                 logger.info(f"New lead created from Calendly: {invitee_name} (org={organization_id})")

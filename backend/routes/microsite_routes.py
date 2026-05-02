@@ -749,6 +749,11 @@ async def capture_lead(
                 notes=f"Intent: {lead_data.intent_type or 'Not specified'}\nQualifier: {lead_data.qualifier_answer or 'None'}\nUTM: {lead_data.utm_source}/{lead_data.utm_medium}/{lead_data.utm_campaign}"
             )
             db.add(crm_lead)
+            db.flush()
+
+            from services.client_file_service import ensure_client_file
+            ensure_client_file(db, crm_lead)
+
             db.commit()
             db.refresh(crm_lead)
             crm_lead_id = crm_lead.id

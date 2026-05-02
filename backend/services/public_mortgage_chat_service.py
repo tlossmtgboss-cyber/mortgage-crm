@@ -376,6 +376,10 @@ class PublicMortgageChatService:
                     )
                     self.db.add(lead)
                     self.db.flush()  # Get the ID without committing
+
+                    from services.client_file_service import ensure_client_file
+                    ensure_client_file(self.db, lead)
+
                     lead_id = lead.id
                     logger.info(f"Created new lead {lead_id} for {contact_email} as Prospect")
 

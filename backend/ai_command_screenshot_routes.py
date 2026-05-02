@@ -210,6 +210,11 @@ async def create_lead_from_screenshot(
         )
 
         db.add(new_lead)
+        db.flush()
+
+        from services.client_file_service import ensure_client_file
+        ensure_client_file(db, new_lead)
+
         db.commit()
         db.refresh(new_lead)
 

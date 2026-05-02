@@ -997,6 +997,9 @@ async def submit_preapproval_application_function(
             )
             db.add(lead)
             db.flush()
+
+            from services.client_file_service import ensure_client_file
+            ensure_client_file(db, lead)
         else:
             # Update existing lead
             if email:
@@ -1144,6 +1147,9 @@ async def schedule_calendly_appointment_function(
             )
             db.add(lead)
             db.flush()
+
+            from services.client_file_service import ensure_client_file
+            ensure_client_file(db, lead)
 
         # Calendly link (configured via environment variable)
         import os

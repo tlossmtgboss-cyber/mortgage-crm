@@ -1587,6 +1587,9 @@ async def submit_mortgage_planner_questionnaire(
             db.add(lead)
             db.flush()  # Get the lead ID
 
+            from services.client_file_service import ensure_client_file
+            ensure_client_file(db, lead)
+
         # Store questionnaire responses in lead metadata
         lead.notes = f"""
 MORTGAGE PLANNER QUESTIONNAIRE RESPONSES

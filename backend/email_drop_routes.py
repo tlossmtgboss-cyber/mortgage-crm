@@ -599,6 +599,11 @@ async def process_as_lead(
                     setattr(lead, field, fields[field])
 
         db.add(lead)
+        db.flush()
+
+        from services.client_file_service import ensure_client_file
+        ensure_client_file(db, lead)
+
         db.commit()
         db.refresh(lead)
 

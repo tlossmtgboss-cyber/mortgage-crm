@@ -525,6 +525,11 @@ def register_mobile_api_routes(app, get_db, get_current_user, **kwargs):
         )
 
         db.add(lead)
+        db.flush()
+
+        from services.client_file_service import ensure_client_file
+        ensure_client_file(db, lead)
+
         db.commit()
         db.refresh(lead)
 

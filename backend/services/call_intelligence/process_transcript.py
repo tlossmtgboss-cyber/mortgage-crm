@@ -584,6 +584,11 @@ async def process_transcript_and_create_lead(
                 **lead_data
             )
             db_session.add(lead)
+            db_session.flush()
+
+            from services.client_file_service import ensure_client_file
+            ensure_client_file(db_session, lead)
+
             db_session.commit()
             db_session.refresh(lead)
             lead_id = lead.id
