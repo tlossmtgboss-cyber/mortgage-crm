@@ -354,6 +354,108 @@ async def link_teams(
 
 
 # ─────────────────────────────────────────────────────────────────────────
+# Bootstrap from existing Microsoft OAuth tokens (one-shot, admin only)
+# ─────────────────────────────────────────────────────────────────────────
+
+
+@router.post("/bootstrap")
+async def bootstrap_from_existing(
+    user=Depends(_get_current_user()),
+    db: Session = Depends(get_db),
+):
+    """Bootstrap MS365 integration from existing MicrosoftOAuthToken (DRE email integration).
+    Reuses the stored refresh token to create an MSAccount with calendar/chat subscriptions."""
+    import base64
+    import os
+    from .auth import upsert_account_from_token_response, refresh_access_token
+    from .subscriptions import ensure_all_subscriptions
+    from .tasks import delta_sync_account
+
+    # Decrypt using DRE's encryption (SECRET_KEY-derived)
+    secret_key = os.environ.get("SECRET_KEY", "")
+    key_material = secret_key.encode()[:32].ljust(32, b"0")
+    dre_fernet_key = base64.urlsafe_b64encode(key_material)
+    from cryptography.fernet import Fernet
+    dre_fernet = Fernet(dre_fernet_key)
+
+    from database.models.microsoft import MicrosoftOAuthToken
+    token_record = db.query(MicrosoftOAuthToken).filter(
+        MicrosoftOAuthToken.user_id == user.id,
+        MicrosoftOAuthToken.refresh_token.isnot(None),
+    ).first()
+
+    if not token_record:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No existing Microsoft OAuth token found for your account. Connect via email integration first.",
+        )
+
+    try:
+        refresh_token = dre_fernet.decrypt(token_record.refresh_token.encode()).decode()
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            f"Failed to decrypt existing token: {exc}",
+        )
+
+    # Refresh to get a fresh access token
+    try:
+        token_response = await refresh_access_token(refresh_token)
+    except Exception as exc:
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            f"Microsoft token refresh failed: {exc}",
+        )
+
+    # Get user profile from Graph
+    import httpx
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        me_resp = await client.get(
+            "https://graph.microsoft.com/v1.0/me",
+            headers={"Authorization": f"Bearer {token_response['access_token']}"},
+        )
+        me_resp.raise_for_status()
+        me = me_resp.json()
+
+    # Create MSAccount
+    account = upsert_account_from_token_response(
+        db,
+        organization_id=user.organization_id,
+        user_id=user.id,
+        token_response=token_response,
+        me=me,
+    )
+
+    # Create webhook subscriptions
+    sub_results = []
+    try:
+        await ensure_all_subscriptions(db, account)
+        sub_results.append("subscriptions created")
+    except Exception as exc:
+        sub_results.append(f"subscriptions failed: {exc}")
+
+    db.commit()
+
+    # Initial delta sync
+    sync_counts = {"emails": 0, "events": 0}
+    try:
+        sync_counts = await delta_sync_account(db, account)
+        db.commit()
+    except Exception as exc:
+        sub_results.append(f"initial sync failed: {exc}")
+        db.rollback()
+
+    return {
+        "status": "connected",
+        "account_id": account.id,
+        "upn": account.upn,
+        "display_name": account.display_name,
+        "subscriptions": sub_results,
+        "initial_sync": sync_counts,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────
 
