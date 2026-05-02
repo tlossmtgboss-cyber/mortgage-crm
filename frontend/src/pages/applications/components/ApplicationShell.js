@@ -220,14 +220,16 @@ const ApplicationShell = ({
       </main>
 
       {/* Mobile stage indicator */}
-      <div className="mobile-stage-indicator">
-        <span className="mobile-stage-current">
-          Step {currentStageIndex + 1} of {totalStages}
-        </span>
-        <span className="mobile-stage-name">
-          {currentStageData?.label}
-        </span>
-      </div>
+      {currentStageIndex >= 0 && (
+        <div className="mobile-stage-indicator">
+          <span className="mobile-stage-current">
+            Step {currentStageIndex + 1} of {totalStages}
+          </span>
+          <span className="mobile-stage-name">
+            {currentStageData?.label}
+          </span>
+        </div>
+      )}
 
       {/* Dynamic Document Checklist */}
       {showDocumentChecklist && (
