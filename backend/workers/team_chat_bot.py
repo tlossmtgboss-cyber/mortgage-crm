@@ -363,10 +363,35 @@ def run_worker_loop(redis: Any, consumer_id: str = "0") -> None:
                     redis.xack(stream_str, CONSUMER_GROUP, event_id_str)
 
 
+def _start_health_server(port: int) -> None:
+    """Minimal HTTP health check so Railway doesn't kill the worker."""
+    import http.server
+    import threading
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"ok")
+
+        def log_message(self, *args: Any) -> None:
+            pass
+
+    server = http.server.HTTPServer(("", port), Handler)
+    t = threading.Thread(target=server.serve_forever, daemon=True)
+    t.start()
+    logger.info("team_chat_bot.health_server", extra={"port": port})
+
+
 def main() -> None:
     import os
 
     logging.basicConfig(level=logging.INFO)
+
+    port = int(os.environ.get("PORT", "0"))
+    if port:
+        _start_health_server(port)
+
     redis_url = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     from services.redis_service import get_redis_client
     redis_client = get_redis_client()
