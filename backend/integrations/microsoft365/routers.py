@@ -380,80 +380,55 @@ async def link_teams(
 
 
 @router.post("/bootstrap")
-async def bootstrap_from_existing(
+async def bootstrap_from_credentials(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Bootstrap MS365 integration from existing MicrosoftOAuthToken (DRE email integration).
-    Accepts admin API key via X-API-Key header or JWT auth."""
-    import base64
+    """Bootstrap MS365 integration using ROPC (username/password) grant.
+    Admin API key required. Body: {"username": "...", "password": "..."}"""
     import os
     import secrets as _secrets
-    from .auth import upsert_account_from_token_response, refresh_access_token
+    import httpx
+    from .auth import upsert_account_from_token_response
     from .subscriptions import ensure_all_subscriptions
     from .tasks import delta_sync_account
+    from .config import get_settings, GRAPH_SCOPES
 
-    # Auth: accept admin API key or JWT
     api_key = request.headers.get("X-API-Key", "")
     expected_key = os.environ.get("ADMIN_API_KEY", "").strip()
-    is_admin_key = bool(expected_key and api_key and _secrets.compare_digest(api_key, expected_key))
+    if not (expected_key and api_key and _secrets.compare_digest(api_key, expected_key)):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Admin API key required")
 
-    if not is_admin_key:
-        _get_user = _get_current_user()
-        user = await _get_user(request)
-    else:
-        user = None  # resolved below from token record
+    body = await request.json()
+    username = body.get("username", "")
+    password = body.get("password", "")
+    if not username or not password:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "username and password required")
 
-    # Decrypt using DRE's encryption (SECRET_KEY-derived)
-    secret_key = os.environ.get("SECRET_KEY", "")
-    key_material = secret_key.encode()[:32].ljust(32, b"0")
-    dre_fernet_key = base64.urlsafe_b64encode(key_material)
-    from cryptography.fernet import Fernet
-    dre_fernet = Fernet(dre_fernet_key)
+    s = get_settings()
 
-    from database.models.microsoft import MicrosoftOAuthToken
-    if user:
-        token_query = db.query(MicrosoftOAuthToken).filter(
-            MicrosoftOAuthToken.user_id == user.id,
-            MicrosoftOAuthToken.refresh_token.isnot(None),
-        )
-    else:
-        token_query = db.query(MicrosoftOAuthToken).filter(
-            MicrosoftOAuthToken.refresh_token.isnot(None),
-        )
-    token_record = token_query.first()
+    # ROPC token exchange — no browser needed
+    token_url = f"https://login.microsoftonline.com/{s.tenant_id}/oauth2/v2.0/token"
+    data = {
+        "client_id": s.client_id,
+        "client_secret": s.client_secret.get_secret_value(),
+        "scope": " ".join(GRAPH_SCOPES),
+        "username": username,
+        "password": password,
+        "grant_type": "password",
+    }
 
-    if not token_record:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "No existing Microsoft OAuth token found. Connect via email integration first.",
-        )
-
-    if not user:
-        from database.models.core import User
-        user = db.query(User).filter(User.id == token_record.user_id).first()
-        if not user:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "User for token not found")
-
-    try:
-        refresh_token = dre_fernet.decrypt(token_record.refresh_token.encode()).decode()
-    except Exception as exc:
-        raise HTTPException(
-            status.HTTP_500_INTERNAL_SERVER_ERROR,
-            f"Failed to decrypt existing token: {exc}",
-        )
-
-    # Refresh to get a fresh access token
-    try:
-        token_response = await refresh_access_token(refresh_token)
-    except Exception as exc:
-        raise HTTPException(
-            status.HTTP_502_BAD_GATEWAY,
-            f"Microsoft token refresh failed: {exc}",
-        )
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        token_resp = await client.post(token_url, data=data)
+        if token_resp.status_code != 200:
+            err = token_resp.json()
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                f"Microsoft ROPC failed: {err.get('error_description', err.get('error', 'unknown'))}",
+            )
+        token_response = token_resp.json()
 
     # Get user profile from Graph
-    import httpx
     async with httpx.AsyncClient(timeout=30.0) as client:
         me_resp = await client.get(
             "https://graph.microsoft.com/v1.0/me",
@@ -462,7 +437,12 @@ async def bootstrap_from_existing(
         me_resp.raise_for_status()
         me = me_resp.json()
 
-    # Create MSAccount
+    # Resolve CRM user
+    from database.models.core import User
+    user = db.query(User).order_by(User.id).first()
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No CRM user found")
+
     account = upsert_account_from_token_response(
         db,
         organization_id=user.organization_id,
@@ -471,7 +451,6 @@ async def bootstrap_from_existing(
         me=me,
     )
 
-    # Create webhook subscriptions
     sub_results = []
     try:
         await ensure_all_subscriptions(db, account)
@@ -481,7 +460,6 @@ async def bootstrap_from_existing(
 
     db.commit()
 
-    # Initial delta sync
     sync_counts = {"emails": 0, "events": 0}
     try:
         sync_counts = await delta_sync_account(db, account)
