@@ -6,7 +6,7 @@ dockerfilePath = "backend/Dockerfile"
 watchPatterns = ["backend/**"]
 
 [deploy]
-startCommand = "cd backend && python3 start.py"
+startCommand = "python3 backend/start.py"
 numReplicas = 2
 healthcheckPath = "/health/live"
 healthcheckTimeout = 300
