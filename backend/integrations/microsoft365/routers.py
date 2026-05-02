@@ -84,16 +84,22 @@ async def outbound_sync_status(
     if not user:
         return JSONResponse(content={"ready": False, "error": "No CRM user found"})
 
-    oauth = db.query(MicrosoftOAuthToken).filter(
-        MicrosoftOAuthToken.user_id == user.id,
-    ).first()
+    all_tokens = db.query(MicrosoftOAuthToken).all()
+    oauth = None
+    for t in all_tokens:
+        if t.user_id == user.id:
+            oauth = t
+            break
+    if not oauth and all_tokens:
+        oauth = all_tokens[0]
 
     if not oauth:
         return JSONResponse(content={
             "ready": False,
             "user_id": user.id,
             "user_email": user.email,
-            "error": "No MicrosoftOAuthToken record — DRE email not connected",
+            "all_token_count": len(all_tokens),
+            "error": "No MicrosoftOAuthToken records exist",
         })
 
     from services.dre_helpers import validate_microsoft_token
