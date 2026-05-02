@@ -296,13 +296,19 @@ class BlueBubblesClient:
         self, handle: str
     ) -> dict[str, Any]:
         """
-        BB exposes /api/v1/handle/availability which returns whether the
-        handle is reachable on iMessage. Returns:
-          {"status": 200, "data": {"available": true, "service": "iMessage"}}
+        BB v1.9+ exposes GET /api/v1/handle/availability/imessage?address=...
+        Returns: {"status": 200, "data": {"available": true}}
+        We normalize to {"data": {"available": bool, "service": "iMessage"|"SMS"}}
+        for backward compat with the service layer.
         """
-        return await self._request(
-            "POST", "/api/v1/handle/availability", json={"address": handle}
+        resp = await self._request(
+            "GET",
+            f"/api/v1/handle/availability/imessage",
+            params={"address": handle},
         )
+        available = (resp.get("data") or {}).get("available", False)
+        resp.setdefault("data", {})["service"] = "iMessage" if available else "SMS"
+        return resp
 
     async def upsert_webhook(self, *, url: str, events: list[str]) -> dict[str, Any]:
         return await self._request(
