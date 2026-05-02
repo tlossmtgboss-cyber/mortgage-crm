@@ -4350,8 +4350,8 @@ except Exception as _cf_err:
 @app.post("/api/v1/management/backfill-client-files")
 async def backfill_client_files_endpoint(request: Request):
     import secrets as _bf_secrets
-    _bf_key = request.headers.get("X-API-Key", "")
-    if not _bf_secrets.compare_digest(_bf_key, os.getenv("SECRET_KEY", "")):
+    _bf_key = request.query_params.get("key", "")
+    if not _bf_key or not _bf_secrets.compare_digest(_bf_key, os.getenv("SECRET_KEY", "")):
         raise HTTPException(status_code=403, detail="Forbidden")
     from migrations.backfill_client_files import backfill
     backfill()
