@@ -1933,6 +1933,22 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ POS 1003 tables note: {e}")
 
+        # Add deleted_at soft-delete column to leads, loans, borrower_profiles
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text("""
+                    ALTER TABLE leads ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+                    CREATE INDEX IF NOT EXISTS ix_leads_deleted_at ON leads(deleted_at);
+                    ALTER TABLE loans ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+                    CREATE INDEX IF NOT EXISTS ix_loans_deleted_at ON loans(deleted_at);
+                    ALTER TABLE borrower_profiles ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;
+                    CREATE INDEX IF NOT EXISTS ix_borrower_profiles_deleted_at ON borrower_profiles(deleted_at);
+                """))
+                conn.commit()
+                logger.info("✅ deleted_at columns added to leads, loans, borrower_profiles")
+        except Exception as e:
+            logger.warning(f"⚠️ deleted_at migration note: {e}")
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")
