@@ -18,6 +18,7 @@ import { MilestoneTimeline } from '../components/Portal';
 import HomeValueIntelligence from '../components/Portal/HomeValueIntelligence';
 import './BorrowerPortal.css';
 import './PURLPortal.css';
+import '../styles/borrower-theme.css';
 
 // ============================================
 // CONSTANTS
@@ -507,6 +508,8 @@ function PortalContent({ portalData, hasMultiLoanContext = false }) {
 export default function BorrowerPortal() {
   const { token } = useParams();
   const [searchParams] = useSearchParams();
+  const fromSubmission = searchParams.get('fromSubmission') === '1';
+  const [showWelcome, setShowWelcome] = useState(fromSubmission);
   const [portalData, setPortalData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -564,7 +567,22 @@ export default function BorrowerPortal() {
   const hasMultiLoanContext = !!purlToken;
 
   return (
-    <div className="portal-page">
+    <div className="portal-page borrower-theme">
+      {showWelcome && (
+        <div className="portal-welcome-banner">
+          <div className="portal-welcome-content">
+            <strong>Welcome to your Borrower Portal</strong>
+            <p>This is your hub for tracking your loan progress, uploading documents, and communicating with your team.</p>
+          </div>
+          <button
+            className="portal-welcome-dismiss"
+            onClick={() => setShowWelcome(false)}
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {hasMultiLoanContext ? (
         <PortalProvider token={purlToken}>
           <PortalContent portalData={portalData} hasMultiLoanContext={true} />

@@ -11,7 +11,11 @@ import { useParams } from 'react-router-dom';
 import { ApplicationProvider } from './applications/contexts/ApplicationContext';
 import { createInitialState } from './applications/contexts/applicationReducer';
 import ReviewStage from './applications/components/stages/ReviewStage';
+import ApplicationShell from './applications/components/ApplicationShell';
+import SubmissionBridge from './applications/components/SubmissionBridge';
+import { getStages } from './applications/config/stageConfig';
 import './VoiceReviewPage.css';
+import '../styles/borrower-theme.css';
 
 const DEMO_DATA = {
   credit_auth: { completed: false, timestamp: null },
@@ -116,11 +120,18 @@ export default function VoiceReviewPage() {
   const initialFormData = applicationData?.form_data || {};
   const appType = initialFormData.application_type || 'purchase';
 
+  const branding = useMemo(() => ({
+    loName: applicationData?.lo_name,
+    companyName: applicationData?.company_name || 'Perennia',
+  }), [applicationData]);
+
   const initialState = useMemo(() => {
     const base = createInitialState(appType);
+    const stages = getStages(appType);
     return {
       ...base,
       currentStage: 'review',
+      completedStages: stages.map(s => s.id).filter(id => id !== 'review'),
       formData: {
         ...base.formData,
         ...initialFormData,
@@ -131,7 +142,7 @@ export default function VoiceReviewPage() {
 
   if (loading) {
     return (
-      <div className="voice-review-page">
+      <div className="voice-review-page borrower-theme">
         <div className="voice-review-loading">
           <div className="loading-spinner" />
           <p>Loading your application...</p>
@@ -142,7 +153,7 @@ export default function VoiceReviewPage() {
 
   if (error) {
     return (
-      <div className="voice-review-page">
+      <div className="voice-review-page borrower-theme">
         <div className="voice-review-error">
           <h2>Oops</h2>
           <p>{error}</p>
@@ -155,42 +166,44 @@ export default function VoiceReviewPage() {
   }
 
   if (submitted) {
+    const portalUrl = applicationData?.portal_token
+      ? `/borrower-portal/${applicationData.portal_token}?fromSubmission=1`
+      : null;
+
     return (
-      <div className="voice-review-page">
-        <div className="voice-review-submitted">
-          <div className="submitted-check">&#10003;</div>
-          <h1>Application Submitted!</h1>
-          <p>
-            Your application has been submitted successfully. Your loan officer
-            will be in touch shortly with next steps.
-          </p>
-          <p className="submitted-note">
-            You'll receive an email with instructions for uploading any
-            remaining documents.
-          </p>
-        </div>
+      <div className="voice-review-page borrower-theme">
+        <SubmissionBridge
+          loName={applicationData?.lo_name}
+          portalUrl={portalUrl}
+          companyName={applicationData?.company_name}
+        />
       </div>
     );
   }
 
   return (
-    <div className="voice-review-page">
-      <div className="voice-review-branding">
-        <span className="voice-review-brand">Perennia</span>
-        {applicationData?.lo_name && (
-          <span className="voice-review-lo">Your Loan Officer: {applicationData.lo_name}</span>
-        )}
-      </div>
-
+    <div className="voice-review-page borrower-theme">
       <ApplicationProvider
         applicationType={appType}
         initialState={initialState}
       >
-        <ReviewStage
-          onSubmit={handleSubmit}
-          isSubmitting={submitting}
-          voiceReviewToken={token}
-        />
+        <ApplicationShell
+          branding={branding}
+          showSaveIndicator={false}
+          showDocumentChecklist={false}
+          readOnlyBanner="Aria completed this application during your call. Review the details below and sign to submit."
+          showAriaChat={true}
+        >
+          <ReviewStage
+            onSubmit={handleSubmit}
+            isSubmitting={submitting}
+            voiceReviewToken={token}
+            showCalendar={true}
+            orgSlug={applicationData?.org_slug}
+            loSlug={applicationData?.lo_slug}
+            loName={applicationData?.lo_name}
+          />
+        </ApplicationShell>
       </ApplicationProvider>
     </div>
   );

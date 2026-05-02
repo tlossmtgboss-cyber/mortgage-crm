@@ -1065,6 +1065,14 @@ def register_inline_routes(app, get_db, get_current_user, get_current_user_flexi
     except Exception as e:
         logger.warning(f"⚠️ Could not load Leads CRUD routes: {e}")
 
+    # Include Team Chat routes
+    try:
+        from routes.team_chat_routes import router as team_chat_router
+        app.include_router(team_chat_router, prefix="/api/v1", tags=["Team Chat"])
+        logger.info("✅ Team Chat routes loaded")
+    except Exception as e:
+        logger.warning(f"⚠️ Could not load Team Chat routes: {e}")
+
     # Include Loans CRUD routes (lead-to-loan conversion, loan pipeline)
     try:
         from routes.loans_crud_routes import router as loans_crud_router

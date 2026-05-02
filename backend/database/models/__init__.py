@@ -666,6 +666,8 @@ from .team_chat import (
     TeamChatReactionEmoji,
 )
 
+# Client File aggregate root + collaborators
+from .client_file import ClientFile, ClientFileCollaborator
 
 __all__ = [
     # =====================
@@ -1354,4 +1356,10 @@ __all__ = [
     "TeamChatAuthorKind",
     "TeamChatAgentSlug",
     "TeamChatReactionEmoji",
+
+    # =====================
+    # Client File Aggregate
+    # =====================
+    "ClientFile",
+    "ClientFileCollaborator",
 ]

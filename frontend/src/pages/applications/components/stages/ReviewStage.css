@@ -555,3 +555,80 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Calendar Booking Step */
+.calendar-booking-step {
+  margin: var(--bt-space-xl, 32px) 0;
+  padding: var(--bt-space-lg, 24px);
+  background: var(--bt-bg-surface, #fff);
+  border: 1px solid var(--bt-border, rgba(139, 92, 68, 0.12));
+  border-radius: var(--bt-radius-lg, 14px);
+}
+
+.calendar-booking-header {
+  margin-bottom: var(--bt-space-lg, 24px);
+  position: relative;
+}
+
+.calendar-booking-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.calendar-booking-subtitle {
+  font-size: 14px;
+  color: var(--bt-text-secondary, #555);
+}
+
+.calendar-booking-optional {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--bt-text-tertiary, #999);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.calendar-booking-widget {
+  min-height: 300px;
+}
+
+.calendar-booking-step--booked {
+  background: rgba(56, 161, 105, 0.06);
+  border-color: rgba(56, 161, 105, 0.2);
+}
+
+.booking-confirmed {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.booking-confirmed-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bt-success, #38a169);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.booking-confirmed-details strong {
+  display: block;
+  font-size: 16px;
+  margin-bottom: 2px;
+}
+
+.booking-confirmed-details p {
+  font-size: 14px;
+  color: var(--bt-text-secondary, #555);
+  margin: 0;
+}

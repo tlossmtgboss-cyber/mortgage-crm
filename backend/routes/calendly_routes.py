@@ -867,6 +867,10 @@ async def process_booking_created(db: Session, payload: Dict[str, Any]):
                         )
                         db.add(new_lead)
                         db.flush()
+
+                        from services.client_file_service import ensure_client_file
+                        ensure_client_file(db, new_lead)
+
                         crm_lead_id = new_lead.id
                     db.commit()
                     logger.info(f"Calendly lead {'linked' if existing_lead else 'created'}: {crm_lead_id}")

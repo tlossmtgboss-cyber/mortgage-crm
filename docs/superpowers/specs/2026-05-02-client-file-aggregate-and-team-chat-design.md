@@ -52,11 +52,13 @@ The design doc specifies UUID PKs for the aggregate root. This makes `client_fil
 
 ### D3. Event publishers resolve via bridge column (for now)
 
-No Redis Stream publishers exist today. The team chat bot worker will idle until streams are created in future phases. A `resolve_client_file_id(lead_id)` utility in the worker handles any early publisher that only knows `lead_id`. Future publishers (cadence agent, milestone engine) will emit `client_file_id` natively.
+No Redis Stream publishers exist today. The team chat bot worker will idle until streams are created in future phases. A `resolve_client_file_id(lead_id)` utility in the worker handles any early publisher that only knows `lead_id`. The wiring point is in `_process_event`: after parsing the event payload, if `client_file_id` is missing but `lead_id` is present, resolve via the bridge column before dispatching to the handler. Future publishers (cadence agent, milestone engine) will emit `client_file_id` natively.
 
 ### D4. Service hook creates `client_files` on lead creation
 
 A thin hook in the lead creation path creates the corresponding `ClientFile` row: copies identity fields, sets `lead_id`, flushes. No Postgres trigger (invisible to application, bad for debugging). No one-way migration (doesn't cover new leads).
+
+The hook must fire in **all 28 lead creation paths** (enumerated in section 4.7). The implementation strategy is a centralized `ensure_client_file(db, lead)` function in `services/client_file_service.py` called after every `db.add(lead); db.flush()` sequence.
 
 ### D5. New `ClientFileCollaborator` table for member resolution
 
@@ -108,6 +110,7 @@ CREATE TABLE client_files (
     assigned_loan_officer_id    INTEGER REFERENCES users(id),
     assigned_loan_assistant_id  INTEGER REFERENCES users(id),
     assigned_processor_id       INTEGER REFERENCES users(id),
+    assigned_underwriter_id     INTEGER REFERENCES users(id),
 
     -- Denormalized loan rollups
     property_address            JSONB,
@@ -127,9 +130,21 @@ CREATE TABLE client_files (
     created_by_user_id          INTEGER REFERENCES users(id)
 );
 
+-- updated_at trigger: SQLAlchemy's onupdate only fires on ORM updates.
+-- This trigger covers raw SQL paths (migrations, ad-hoc fixes, future services).
+CREATE OR REPLACE FUNCTION update_client_files_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN NEW.updated_at = now(); RETURN NEW; END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_client_files_updated_at
+    BEFORE UPDATE ON client_files
+    FOR EACH ROW EXECUTE FUNCTION update_client_files_updated_at();
+
 CREATE INDEX ix_client_files_org ON client_files(organization_id);
 CREATE INDEX ix_client_files_lead ON client_files(lead_id);
 CREATE INDEX ix_client_files_assigned_lo ON client_files(assigned_loan_officer_id);
+CREATE INDEX ix_client_files_assigned_uw ON client_files(assigned_underwriter_id);
 CREATE INDEX ix_client_files_lifecycle ON client_files(organization_id, lifecycle_stage);
 CREATE INDEX ix_client_files_tags ON client_files USING gin(tags);
 ```
@@ -184,13 +199,16 @@ Table structures, indexes, and constraints remain identical to the package. RLS 
 
 The backfill runs as a Python script (not raw SQL in the migration) because several Lead columns use `EncryptedString` — `address`, `city`, `state`, `zip_code` are encrypted at rest and only decrypted through the ORM. A raw `INSERT...SELECT` would copy encrypted blobs.
 
-The backfill script iterates leads through SQLAlchemy, reads decrypted values, and creates `ClientFile` rows:
+**Lead count:** Local dev DB has 7 leads. Production count is unknown from local (no `DATABASE_URL` set), but likely under 5k at this platform stage. The script batches commits every 500 rows as a safety measure — if it fails partway through, the idempotency check (`if existing: continue`) resumes from the last committed batch rather than re-processing the entire table.
 
 ```python
 # backend/migrations/backfill_client_files.py (run once after migration)
+import logging
 from db import SessionLocal
 from database.models import Lead
 from database.models.client_file import ClientFile
+
+logger = logging.getLogger(__name__)
 
 STAGE_MAP = {
     'FUNDED': 'closed_active',
@@ -207,15 +225,21 @@ STAGE_MAP = {
     'DOCS_OUT': 'clear_to_close',
 }
 
+BATCH_SIZE = 500
+
 def backfill():
     db = SessionLocal()
     try:
-        leads = db.query(Lead).all()
-        for lead in leads:
+        total = db.query(Lead).count()
+        logger.info(f"Backfilling client_files from {total} leads")
+        created = 0
+        skipped = 0
+        for lead in db.query(Lead).yield_per(BATCH_SIZE):
             existing = db.query(ClientFile).filter(
                 ClientFile.lead_id == lead.id
             ).first()
             if existing:
+                skipped += 1
                 continue
             prop_addr = None
             if lead.city:  # decrypted by ORM
@@ -247,12 +271,23 @@ def backfill():
                 last_contact_at=lead.last_contact,
             )
             db.add(cf)
+            created += 1
+            if created % BATCH_SIZE == 0:
+                db.commit()
+                logger.info(f"  committed batch: {created} created, {skipped} skipped")
         db.commit()
+        logger.info(f"Backfill complete: {created} created, {skipped} skipped (of {total} leads)")
     finally:
         db.close()
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    backfill()
 ```
 
 Run after the Alembic migration creates the table: `python -m migrations.backfill_client_files`.
+
+**Note on `assigned_underwriter_id`:** This column is not populated during backfill. `Lead.underwriter` is a `Column(String)` containing a name (e.g., "Jane Smith"), not an Integer FK to `users.id`. Resolving names to user IDs is unreliable (ambiguity, external UWs not in users table). The field will be populated going forward when UWs are assigned through the client file UI, which writes a proper FK.
 
 ---
 
@@ -326,16 +361,20 @@ Changes:
 - `_scoped_session()` uses `SessionLocal()` from `db`
 - `org_id` in event payloads → passed as `organization_id` to service
 - Add `resolve_client_file_id(session, lead_id)` utility for bridge lookups
+- **Wiring point:** In `_process_event`, after parsing the event payload JSON, before dispatching to the handler: if `client_file_id` is missing but `lead_id` is present, resolve via `SELECT id FROM client_files WHERE lead_id = :lead_id` using the existing session (already open via `_scoped_session()` context manager). Inject the resolved UUID as `client_file_id` into the event dict. If resolution fails (no matching row), log a warning and skip the event.
 - Redis client initialization uses `services.redis_service.get_redis_client()`
 
 ### 4.7 Lead creation hook
 
-In the lead creation path (wherever `Lead()` is committed and flushed), add:
+The hook lives in `services/client_file_service.py` as `ensure_client_file(db, lead)`. It is called after every `db.add(lead); db.flush()` in the codebase.
 
 ```python
+# backend/services/client_file_service.py
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 from database.models.client_file import ClientFile
 
-def _ensure_client_file(db: Session, lead: Lead) -> ClientFile:
+def ensure_client_file(db: Session, lead) -> ClientFile:
     existing = db.execute(
         select(ClientFile).where(ClientFile.lead_id == lead.id)
     ).scalar_one_or_none()
@@ -357,7 +396,44 @@ def _ensure_client_file(db: Session, lead: Lead) -> ClientFile:
     return cf
 ```
 
-This gets called after the lead is flushed (so `lead.id` exists). Exact integration point identified during implementation.
+**All 28 lead creation paths that must call `ensure_client_file`:**
+
+Enumerated via `grep -rn 'Lead(' backend/` → filtered to actual `Lead(...)` instantiations (excluding class references, imports, type hints).
+
+| # | File:line | Path / trigger |
+|---|---|---|
+| 1 | `routes/leads_crud_routes.py:114` | `POST /api/v1/leads/` — manual UI creation |
+| 2 | `public_routes.py:1579` | Public lead capture form (unauthenticated) |
+| 3 | `vapi_routes.py:988` | Vapi AI inbound call — new caller (path 1) |
+| 4 | `vapi_routes.py:1135` | Vapi AI inbound call — new caller (path 2) |
+| 5 | `vapi_service.py:1104` | VapiService internal lead creation |
+| 6 | `email_drop_routes.py:583` | Inbound email lead capture |
+| 7 | `microsite_routes.py:191` | Legacy microsite form submission |
+| 8 | `routes/microsite_routes.py:740` | Microsite → CRM lead sync |
+| 9 | `integrations/imessage/service.py:114` | iMessage/BlueBubbles new SMS contact |
+| 10 | `routes/calendly_integration_routes.py:410` | Calendly webhook — unknown contact |
+| 11 | `routes/calendly_routes.py:856` | Calendly (alternate integration path) |
+| 12 | `routes/conversation_intelligence_routes.py:389` | Call intelligence — lead from analyzed call |
+| 13 | `routes/data_reconciliation_routes.py:1020` | Data reconciliation (path 1) |
+| 14 | `routes/data_reconciliation_routes.py:1816` | Data reconciliation (path 2) |
+| 15 | `ai_command_screenshot_routes.py:199` | AI screenshot — business card scan |
+| 16 | `routes/chat_screenshot_routes.py:454` | Chat screenshot — lead extraction (path 1) |
+| 17 | `routes/chat_screenshot_routes.py:671` | Chat screenshot — lead extraction (path 2) |
+| 18 | `routes/internal/aria_tool_routes.py:288` | Aria tool — voice-driven lead creation |
+| 19 | `routes/mobile_api_routes.py:512` | Mobile app — new lead from iOS |
+| 20 | `routes/scheduler/_crm_integration.py:85` | Smart Scheduler — CRM lead sync |
+| 21 | `routes/voice/telnyx_ws.py:338` | Telnyx WebSocket — new inbound caller |
+| 22 | `services/appointment_creation_service.py:533` | Appointment creation — unknown attendee |
+| 23 | `services/appointment/crm_bridge.py:49` | Appointment CRM bridge — sync attendee to lead |
+| 24 | `services/call_intelligence/process_transcript.py:582` | Call transcript processing — entity extraction |
+| 25 | `services/followupboss_sync_service.py:232` | FollowUpBoss sync — inbound lead import |
+| 26 | `services/partner_portal_service.py:317` | Partner portal — referral lead creation |
+| 27 | `services/public_mortgage_chat_service.py:364` | Public mortgage chat — visitor → lead |
+| 28 | `services/vapi_scheduling_service.py:926` | Vapi scheduling — lead from voice booking |
+
+Each path follows the same pattern: `lead = Lead(...); db.add(lead); db.flush()`. The hook call is inserted immediately after the flush: `ensure_client_file(db, lead)`. The hook is idempotent — duplicate calls for the same `lead_id` return the existing row.
+
+**Not hooked (intentionally):** `database/init_db.py` and `database/init/seeds.py` (seed data — backfill covers these), `scripts/seed_demo_org.py` (dev-only).
 
 ### 4.8 Router registration in `main.py`
 
@@ -397,16 +473,44 @@ import { setApiBaseUrl } from "./client-file";
 setApiBaseUrl("https://api.perenniaai.com/api/v1");
 ```
 
-### 5.4 `ClientFileView` wiring
+### 5.4 URL routing and `ClientFileView` wiring
 
-Find the route component that renders the client/lead detail view. Update to pass `currentUserId`:
+**Decision:** The existing `/leads/:id` route stays for backward compatibility. A new `/clients/:uuid` route renders the 3-pane `ClientFileView`. The existing lead detail page gets a "Open in Client File" link that resolves the lead's UUID via a new `GET /api/v1/leads/{lead_id}/client-file-id` endpoint (returns `{ client_file_id: uuid }` via the bridge column) and navigates to `/clients/:uuid`.
+
+This avoids breaking existing bookmarks, deep links, and frontend routes. Over time, navigation shifts to `/clients/:uuid` as the primary path.
+
+The route component:
 
 ```tsx
+// In App.jsx route definitions
 import { ClientFileView } from "./client-file";
 
-// currentUserId from auth context (however the app reads the logged-in user)
-<ClientFileView clientFileId={clientFileId} currentUserId={currentUser.id} />
+// New route: /clients/:uuid
+function ClientFilePage() {
+  const { uuid } = useParams();
+  const { user } = useAuth(); // however the app reads auth context
+  return <ClientFileView clientFileId={uuid} currentUserId={String(user.id)} />;
+}
 ```
+
+The bridge endpoint lives in `routes/leads_crud_routes.py` (same router that owns `POST /api/v1/leads/`):
+
+```python
+@router.get("/leads/{lead_id}/client-file-id")
+def get_client_file_id_for_lead(
+    lead_id: int,
+    user=Depends(get_current_user),
+    db=Depends(get_db),
+):
+    cf = db.execute(
+        select(ClientFile.id).where(ClientFile.lead_id == lead_id)
+    ).scalar_one_or_none()
+    if cf is None:
+        raise HTTPException(404, "no client file for this lead")
+    return {"client_file_id": str(cf)}
+```
+
+Note: `Depends(get_current_user)` is required — without it, any unauthenticated caller could probe lead→client_file mappings. RLS via `app.current_tenant` is a second layer (set by auth middleware), but the auth dependency is the primary gate.
 
 ### 5.5 CORS
 
@@ -421,17 +525,19 @@ Single Alembic migration file: `backend/alembic/versions/client_file_and_team_ch
 `down_revision` set to the current Alembic head.
 
 **Upgrade order:**
-1. Install `uuid-ossp` extension (if not present) for `gen_random_uuid()`
+1. `gen_random_uuid()` is built-in on Postgres 13+ (Railway runs 14+). No extension needed. If running on Postgres < 13, install `pgcrypto` (NOT `uuid-ossp` — that provides `uuid_generate_v4()`, not `gen_random_uuid()`).
 2. Create `client_files` table with all columns and indexes
 3. Create `client_file_collaborators` table
-4. Backfill `client_files` from `leads`
-5. Create 3 enum types (`team_chat_author_kind`, `team_chat_agent_slug`, `team_chat_reaction_emoji`)
-6. Create `team_chat_channels` table (without pinned_message FK)
-7. Create `team_chat_messages` table with all indexes including GIN on `mentioned_user_ids`
-8. Add `pinned_message_id` FK constraint on channels → messages
-9. Create `team_chat_reactions` table
-10. Create `team_chat_reads` table
-11. Enable RLS + create policies on all 6 new tables
+4. Create 3 enum types (`team_chat_author_kind`, `team_chat_agent_slug`, `team_chat_reaction_emoji`)
+5. Create `team_chat_channels` table (without pinned_message FK)
+6. Create `team_chat_messages` table with all indexes including GIN on `mentioned_user_ids`
+7. Add `pinned_message_id` FK constraint on channels → messages
+8. Create `team_chat_reactions` table
+9. Create `team_chat_reads` table
+10. Enable RLS + create policies on all 6 new tables
+
+**Post-migration deployment step:**
+11. Run backfill script: `python -m migrations.backfill_client_files` (see section 3.4). This is NOT inside the Alembic migration — it runs through the ORM to handle EncryptedString columns.
 
 **Downgrade:**
 1. Drop FK constraint on channels → messages
@@ -480,12 +586,34 @@ These are all future work that builds on the foundation this spec creates.
 
 ---
 
-## 9. Verification checklist
+## 9. Test fixtures
+
+Add to `tests/conftest.py`:
+
+```python
+@pytest.fixture
+def sample_client_file(db_session, sample_lead):
+    """Create a ClientFile linked to the sample lead. Use in any test that needs a client file."""
+    from services.client_file_service import ensure_client_file
+    cf = ensure_client_file(db_session, sample_lead)
+    db_session.commit()
+    return cf
+```
+
+This fixture depends on the existing `sample_lead` fixture and exercises the same `ensure_client_file` path used in production. All team chat tests should depend on `sample_client_file`.
+
+---
+
+## 10. Verification checklist
 
 After deployment:
 
+**Data integrity:**
 - [ ] `client_files` table exists with backfilled data from all leads
-- [ ] New lead creation also creates a `client_files` row
+- [ ] Backfill row count parity: `SELECT COUNT(*) FROM client_files WHERE lead_id IS NOT NULL` equals `SELECT COUNT(*) FROM leads`
+- [ ] Smoke test: create a new lead via `POST /api/v1/leads/` and verify a `client_files` row is created (check `SELECT * FROM client_files WHERE lead_id = :new_lead_id`)
+
+**Frontend:**
 - [ ] Three-pane layout renders when navigating to a client file
 - [ ] Filter pills above timeline filter event categories
 - [ ] Right rail shows Insights → Follow-ups → Tasks → Documents → Relationships
@@ -495,5 +623,12 @@ After deployment:
 - [ ] Pinning a message shows yellow banner; re-pinning replaces
 - [ ] @mentions render highlighted
 - [ ] Unread badge appears on Team chat tab
+
+**Security:**
 - [ ] RLS enforced: org A cannot see org B's chat
+- [ ] Bridge endpoint `GET /leads/{lead_id}/client-file-id` returns 401 without auth token
+- [ ] Bridge endpoint returns 404 for a lead belonging to a different org (RLS prevents cross-tenant lookup)
+
+**Worker:**
 - [ ] Worker logs `team_chat_bot.starting` on boot
+- [ ] Worker bridge resolution: publish a test event with `lead_id` (no `client_file_id`) to `perennia:cadence_events` and verify the worker resolves it to the correct `client_file_id` via the bridge column, posting a system message to the correct channel

@@ -1028,6 +1028,9 @@ async def approve_reconciliation(
                     db.add(new_lead)
                     db.flush()
 
+                    from services.client_file_service import ensure_client_file
+                    ensure_client_file(db, new_lead)
+
                     db.execute(text("UPDATE leads SET stage = :stage WHERE id = :id"),
                                {"stage": lead_stage_enum.name, "id": new_lead.id})
                     db.flush()
@@ -1851,6 +1854,9 @@ async def create_lead_from_extracted(
 
         db.add(new_lead)
         db.flush()
+
+        from services.client_file_service import ensure_client_file
+        ensure_client_file(db, new_lead)
 
         extracted.match_entity_type = "lead"
         extracted.match_entity_id = new_lead.id

@@ -568,3 +568,62 @@
     justify-content: flex-end;
   }
 }
+
+/* Branding (voice review / borrower-facing) */
+.application-branding {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.branding-company {
+  font-family: var(--bt-font-display, inherit);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--bt-text-primary, #1a1a1a);
+}
+
+.branding-lo {
+  font-size: 13px;
+  color: var(--bt-text-secondary, #666);
+}
+
+/* Readonly info banner */
+.readonly-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--bt-primary-light, rgba(33, 141, 141, 0.08));
+  border-bottom: 1px solid var(--bt-border-light, rgba(0, 0, 0, 0.06));
+  font-size: 14px;
+  color: var(--bt-text-secondary, #555);
+}
+
+.readonly-icon {
+  font-size: 16px;
+}
+
+/* Aria Chat Toggle Button */
+.aria-chat-toggle {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--bt-primary, #218D8D);
+  color: white;
+  border: none;
+  border-radius: 28px;
+  padding: 12px 24px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(33, 141, 141, 0.3);
+  z-index: 999;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.aria-chat-toggle:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(33, 141, 141, 0.4);
+}

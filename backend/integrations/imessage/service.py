@@ -122,6 +122,10 @@ class ContactRepository:
         )
         session.add(lead)
         session.flush()
+
+        from services.client_file_service import ensure_client_file
+        ensure_client_file(session, lead)
+
         _stub_log.info(
             "contact_repo: created Lead %s for handle %s (org %s)",
             lead.id, phone_or_email, organization_id,

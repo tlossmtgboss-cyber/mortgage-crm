@@ -6,7 +6,9 @@
 import React, { useMemo, useState, useCallback, lazy, Suspense } from 'react';
 import { useApplication } from '../contexts/ApplicationContext';
 import { getStages, getVisibleStages, getStageById } from '../config/stageConfig';
+import AriaChatPanel from '../../../components/AriaChatPanel/AriaChatPanel';
 import './ApplicationShell.css';
+import '../../../styles/borrower-theme.css';
 
 // Lazy load DocumentsNeeded component for better performance
 const DocumentsNeeded = lazy(() => import('./DocumentsNeeded'));
@@ -16,6 +18,9 @@ const ApplicationShell = ({
   onExit,
   showSaveIndicator = true,
   showDocumentChecklist = true,
+  branding = null,       // { loName, companyName }
+  readOnlyBanner = null, // string shown as info banner below header
+  showAriaChat = false,
 }) => {
   const { state, actions, computed } = useApplication();
   const {
@@ -31,6 +36,8 @@ const ApplicationShell = ({
   const [isChecklistExpanded, setIsChecklistExpanded] = useState(true);
   // Exit confirmation state (replaces window.confirm)
   const [showExitConfirm, setShowExitConfirm] = useState(false);
+  // Aria chat panel state
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   // Get stages based on application type
   const allStages = useMemo(() => getStages(applicationType), [applicationType]);
@@ -48,11 +55,17 @@ const ApplicationShell = ({
   const totalStages = visibleStages.length;
 
   // Stage progress percentage (0-100) — uses explicit progress values from stageConfig
-  // so dynamic stage visibility changes (e.g., second_mortgage appearing) don't cause regression
+  // so dynamic stage visibility changes (e.g., second_mortgage appearing) don't cause regression.
+  // When all visible stages are in completedStages (e.g., voice review), show 100%.
   const stageProgress = useMemo(() => {
-    if (currentStageIndex < 0 || !currentStageData) return 0;
+    if (currentStageIndex < 0 || !currentStageData) {
+      // Check if all visible stages are completed (voice review mode)
+      const allCompleted = visibleStages.length > 0 &&
+        visibleStages.every(s => state.completedStages.includes(s.id));
+      return allCompleted ? 100 : 0;
+    }
     return currentStageData.progress || Math.round(((currentStageIndex + 1) / totalStages) * 100);
-  }, [currentStageIndex, totalStages, currentStageData]);
+  }, [currentStageIndex, totalStages, currentStageData, visibleStages, state.completedStages]);
 
   // Handle stage click (for navigation)
   const handleStageClick = (stageId) => {
@@ -102,18 +115,27 @@ const ApplicationShell = ({
   };
 
   return (
-    <div className="application-shell">
+    <div className="application-shell borrower-theme">
       {/* Header */}
       <header className="application-header">
         <div className="application-header-content">
-          <button
-            type="button"
-            className="application-exit-btn"
-            onClick={handleExit}
-            aria-label="Exit application"
-          >
-            ← Back
-          </button>
+          {branding ? (
+            <div className="application-branding">
+              <span className="branding-company">{branding.companyName || 'Perennia'}</span>
+              {branding.loName && (
+                <span className="branding-lo">Your Loan Officer: {branding.loName}</span>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="application-exit-btn"
+              onClick={handleExit}
+              aria-label="Exit application"
+            >
+              ← Back
+            </button>
+          )}
 
           <div className="application-title">
             <h1>{applicationType === 'purchase' ? 'Purchase' : 'Refinance'} Application</h1>
@@ -143,15 +165,22 @@ const ApplicationShell = ({
           </div>
           <span className="progress-text">{stageProgress}% Complete</span>
         </div>
+
+        {readOnlyBanner && (
+          <div className="readonly-banner">
+            <span className="readonly-icon">&#8505;</span>
+            {readOnlyBanner}
+          </div>
+        )}
       </header>
 
       {/* Stage indicators (desktop) */}
       <nav className="stage-nav" aria-label="Application stages">
         <div className="stage-list">
           {visibleStages.map((stage, index) => {
-            const isCompleted = index < currentStageIndex;
+            const isCompleted = index < currentStageIndex || state.completedStages.includes(stage.id);
             const isCurrent = stage.id === currentStage;
-            const isClickable = index <= currentStageIndex;
+            const isClickable = index <= currentStageIndex || isCompleted;
 
             return (
               <button
@@ -195,14 +224,16 @@ const ApplicationShell = ({
       </main>
 
       {/* Mobile stage indicator */}
-      <div className="mobile-stage-indicator">
-        <span className="mobile-stage-current">
-          Step {currentStageIndex + 1} of {totalStages}
-        </span>
-        <span className="mobile-stage-name">
-          {currentStageData?.label}
-        </span>
-      </div>
+      {currentStageIndex >= 0 && (
+        <div className="mobile-stage-indicator">
+          <span className="mobile-stage-current">
+            Step {currentStageIndex + 1} of {totalStages}
+          </span>
+          <span className="mobile-stage-name">
+            {currentStageData?.label}
+          </span>
+        </div>
+      )}
 
       {/* Dynamic Document Checklist */}
       {showDocumentChecklist && (
@@ -229,6 +260,25 @@ const ApplicationShell = ({
             </div>
           )}
         </div>
+      )}
+
+      {showAriaChat && (
+        <>
+          <button
+            type="button"
+            className="aria-chat-toggle"
+            onClick={() => setIsChatOpen(!isChatOpen)}
+            aria-label={isChatOpen ? 'Close Aria chat' : 'Ask Aria'}
+          >
+            {isChatOpen ? '×' : 'Ask Aria'}
+          </button>
+          <AriaChatPanel
+            isOpen={isChatOpen}
+            onClose={() => setIsChatOpen(false)}
+            applicationData={formData}
+            applicationType={applicationType}
+          />
+        </>
       )}
     </div>
   );

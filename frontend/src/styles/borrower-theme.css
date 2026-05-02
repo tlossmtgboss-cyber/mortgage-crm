@@ -1,0 +1,108 @@
+.borrower-theme {
+  /* Typography */
+  --bt-font-display: 'Cormorant Garamond', 'Georgia', serif;
+  --bt-font-body: 'DM Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --bt-font-mono: 'DM Mono', 'Berkeley Mono', 'Courier New', monospace;
+
+  /* Brand Colors */
+  --bt-primary: var(--brand-primary, #218D8D);
+  --bt-primary-hover: #1a7070;
+  --bt-primary-light: rgba(33, 141, 141, 0.08);
+  --bt-accent: #B8924A;
+  --bt-accent-light: rgba(184, 146, 74, 0.1);
+
+  /* Surfaces */
+  --bt-bg-page: #FCFCF9;
+  --bt-bg-surface: #FFFFFF;
+  --bt-bg-surface-raised: #FFFFFF;
+  --bt-bg-subtle: rgba(139, 92, 68, 0.04);
+
+  /* Text */
+  --bt-text-primary: #1a1a1a;
+  --bt-text-secondary: #555555;
+  --bt-text-tertiary: #999999;
+  --bt-text-on-primary: #FFFFFF;
+
+  /* Borders */
+  --bt-border: rgba(139, 92, 68, 0.12);
+  --bt-border-light: rgba(139, 92, 68, 0.06);
+
+  /* Semantic */
+  --bt-success: #38a169;
+  --bt-warning: #d69e2e;
+  --bt-error: #c0152f;
+  --bt-info: #3182ce;
+
+  /* Spacing */
+  --bt-space-xs: 4px;
+  --bt-space-sm: 8px;
+  --bt-space-md: 16px;
+  --bt-space-lg: 24px;
+  --bt-space-xl: 32px;
+  --bt-space-2xl: 48px;
+
+  /* Radii */
+  --bt-radius-sm: 6px;
+  --bt-radius-md: 10px;
+  --bt-radius-lg: 14px;
+
+  /* Shadows */
+  --bt-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --bt-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+  --bt-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+
+  /* Layout */
+  --bt-max-width: 1200px;
+  --bt-header-height: 64px;
+
+  /* Apply defaults */
+  font-family: var(--bt-font-body);
+  color: var(--bt-text-primary);
+  background: var(--bt-bg-page);
+  line-height: 1.6;
+}
+
+/* Display headings use serif */
+.borrower-theme h1,
+.borrower-theme h2 {
+  font-family: var(--bt-font-display);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Consistent card treatment */
+.borrower-theme .bt-card {
+  background: var(--bt-bg-surface);
+  border: 1px solid var(--bt-border);
+  border-radius: var(--bt-radius-lg);
+  padding: var(--bt-space-lg);
+  box-shadow: var(--bt-shadow-sm);
+}
+
+/* Primary button */
+.borrower-theme .bt-btn-primary {
+  background: var(--bt-primary);
+  color: var(--bt-text-on-primary);
+  border: none;
+  border-radius: var(--bt-radius-sm);
+  padding: 12px 24px;
+  font-family: var(--bt-font-body);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.borrower-theme .bt-btn-primary:hover {
+  background: var(--bt-primary-hover);
+}
+
+.borrower-theme .bt-btn-primary:focus-visible {
+  outline: 2px solid var(--bt-primary);
+  outline-offset: 2px;
+}
+
+.borrower-theme .bt-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
