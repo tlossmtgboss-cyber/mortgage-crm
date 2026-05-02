@@ -132,7 +132,7 @@ class DeepgramVoiceAgentSession:
                     "provider": {
                         "type": "anthropic"
                     },
-                    "model": "claude-3-haiku-20240307",
+                    "model": "claude-haiku-4-5-20251001",
                     "instructions": get_voice_agent_prompt()
                 },
                 "speak": {
@@ -368,7 +368,7 @@ async def get_voice_agent_status():
         "provider": "deepgram_voice_agent",
         "features": {
             "stt": "nova-2",
-            "llm": "claude-3-haiku",
+            "llm": "claude-haiku-4-5",
             "tts": "aura-asteria-en"
         }
     }

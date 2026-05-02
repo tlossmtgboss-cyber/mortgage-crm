@@ -244,7 +244,7 @@ async def generate_ai_response(
 
             # Call Claude
             response = client.messages.create(
-                model="claude-3-haiku-20240307",  # Fast model for chat
+                model="claude-haiku-4-5-20251001",
                 max_tokens=500,
                 system=generate_system_prompt(context),
                 messages=messages

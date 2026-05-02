@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # API Configuration
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-DEFAULT_MODEL = "claude-3-haiku-20240307"  # Claude 3 Haiku - fast and efficient
+DEFAULT_MODEL = "claude-haiku-4-5-20251001"  # Claude Haiku 4.5 - fast and efficient
 
 
 class ContentGenerationResult:

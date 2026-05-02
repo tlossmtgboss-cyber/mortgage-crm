@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Models for different complexity levels
-MODEL_HAIKU = "claude-3-5-haiku-20241022"   # Fast for simple queries (~1-2s)
-MODEL_SONNET = "claude-sonnet-4-20250514"   # Full power for complex analysis (~7-8s)
+MODEL_HAIKU = "claude-haiku-4-5-20251001"   # Fast for simple queries (~1-2s)
+MODEL_SONNET = "claude-sonnet-4-6"   # Full power for complex analysis (~5-7s)
 
 
 UNIFIED_SYSTEM_PROMPT = """You are Perennia AI, an expert mortgage industry assistant. Your job is to analyze data AND generate a helpful response in one step.

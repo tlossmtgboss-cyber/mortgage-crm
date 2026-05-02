@@ -469,7 +469,7 @@ Focus on keywords that would be valuable for mortgage professionals to rank for.
                         "content-type": "application/json",
                     },
                     json={
-                        "model": "claude-3-haiku-20240307",
+                        "model": "claude-haiku-4-5-20251001",
                         "max_tokens": 1000,
                         "messages": [{"role": "user", "content": prompt}],
                     },

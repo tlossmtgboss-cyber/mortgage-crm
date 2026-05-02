@@ -30,7 +30,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
-SUMMARY_MODEL = "claude-sonnet-4-20250514"
+SUMMARY_MODEL = "claude-sonnet-4-6"
 
 
 class SummaryType(str, Enum):

@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     # =========================================================================
     ANTHROPIC_API_KEY: str = Field(default="", description="Anthropic API key")
     ANTHROPIC_MODEL: str = Field(
-        default="claude-sonnet-4-20250514",
+        default="claude-sonnet-4-6",
         description="Claude model to use"
     )
     ANTHROPIC_MAX_TOKENS: int = Field(default=1024, description="Max tokens per response")

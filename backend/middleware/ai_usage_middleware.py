@@ -41,7 +41,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_PRICING = {
     # Anthropic
     "claude-opus-4-5-20251101": {"input": Decimal("75.00"), "output": Decimal("150.00")},
+    "claude-sonnet-4-6": {"input": Decimal("3.00"), "output": Decimal("15.00")},
     "claude-sonnet-4-20250514": {"input": Decimal("3.00"), "output": Decimal("15.00")},
+    "claude-haiku-4-5-20251001": {"input": Decimal("0.80"), "output": Decimal("4.00")},
     "claude-3-5-sonnet-20241022": {"input": Decimal("3.00"), "output": Decimal("15.00")},
     "claude-3-5-haiku-20241022": {"input": Decimal("0.80"), "output": Decimal("4.00")},
     # OpenAI

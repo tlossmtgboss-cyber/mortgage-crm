@@ -70,7 +70,7 @@ class BrandVoiceAnalyzerService:
     """
 
     # Default model for analysis
-    DEFAULT_MODEL = "claude-3-haiku-20240307"
+    DEFAULT_MODEL = "claude-haiku-4-5-20251001"
 
     def __init__(self, db: Session):
         """Initialize with database session."""
