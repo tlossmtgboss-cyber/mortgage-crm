@@ -57,6 +57,11 @@ router = APIRouter(tags=["microsoft"])
 router.include_router(webhooks_router)
 
 
+@router.get("/ping")
+async def ping():
+    return {"pong": True}
+
+
 def _get_current_user():
     from auth.dependencies import get_current_user
     return get_current_user
