@@ -527,7 +527,8 @@ async def send_sms(
     current_user=Depends(_require_auth),
 ):
     """
-    Send an SMS/MMS message via Telnyx with full compliance stack.
+    Send a message with iMessage-first smart routing.
+    Checks BlueBubbles iMessage availability, falls back to Telnyx SMS.
     Stores in conversation history, pushes to WebSocket.
     Tenant-isolated, sender-identified.
     """
@@ -543,28 +544,67 @@ async def send_sms(
     if not normalize_phone(req.to):
         raise HTTPException(status_code=400, detail=f"Invalid phone number format: {req.to}")
 
-    # Use existing SMSClient for compliance + sending
+    # --- iMessage smart routing: try BlueBubbles first -------------------------
+    imessage_sent = False
+    result = {"success": False}
+    lead_id = None
     try:
-        from integrations.sms_service import SMSClient
-        client = SMSClient(db=db, user_id=user_id)
+        lead_id = int(req.contactId)
+    except (ValueError, TypeError):
+        pass
 
-        lead_id = None
+    if org_id and lead_id:
         try:
-            lead_id = int(req.contactId)
-        except (ValueError, TypeError):
-            pass
+            from integrations.imessage.factory import build_imessage_service
+            from integrations.imessage.schemas import Channel
+            im_service = build_imessage_service()
+            detection = await im_service.detect_imessage(
+                db, organization_id=org_id,
+                handle=normalize_phone(req.to) or req.to,
+            )
+            if detection.service == Channel.IMESSAGE:
+                from integrations.imessage.schemas import SendMessageRequest as IMSendReq
+                im_resp = await im_service.send(
+                    db,
+                    organization_id=org_id,
+                    seat_user_id=user_id,
+                    request=IMSendReq(
+                        contact_id=lead_id,
+                        body=req.message.strip(),
+                        media_url=req.mediaUrls[0] if req.mediaUrls else None,
+                        channel=Channel.AUTO,
+                    ),
+                )
+                imessage_sent = True
+                result = {
+                    "success": True,
+                    "message_id": str(im_resp.message_id),
+                    "channel": im_resp.channel.value,
+                }
+                logger.warning(
+                    "iMessage send success: to=...%s channel=%s msg_id=%s",
+                    req.to[-4:], im_resp.channel.value, im_resp.message_id,
+                )
+        except Exception as e:
+            logger.warning("iMessage routing failed (falling back to SMS): %s", e)
 
-        result = client.send_sms(
-            to_phone=req.to,
-            message=req.message.strip(),
-            lead_id=lead_id,
-            user_id=user_id,
-            organization_id=org_id,
-            media_urls=req.mediaUrls if req.mediaUrls else None,
-        )
-    except Exception as e:
-        logger.error(f"SMS send error: {e}")
-        result = {"success": False, "error": str(e)}
+    # --- Telnyx SMS fallback ---------------------------------------------------
+    if not imessage_sent:
+        try:
+            from integrations.sms_service import SMSClient
+            client = SMSClient(db=db, user_id=user_id)
+
+            result = client.send_sms(
+                to_phone=req.to,
+                message=req.message.strip(),
+                lead_id=lead_id,
+                user_id=user_id,
+                organization_id=org_id,
+                media_urls=req.mediaUrls if req.mediaUrls else None,
+            )
+        except Exception as e:
+            logger.error(f"SMS send error: {e}")
+            result = {"success": False, "error": str(e)}
 
     if not result.get("success"):
         raise HTTPException(status_code=422, detail=result.get("error", "Send failed"))
@@ -640,6 +680,7 @@ async def send_sms(
         "timestamp": now.isoformat(),
         "status": "sent",
         "mediaUrls": req.mediaUrls,
+        "channel": result.get("channel", "sms"),
     }
 
 

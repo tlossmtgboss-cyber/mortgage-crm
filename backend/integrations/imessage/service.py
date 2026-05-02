@@ -666,6 +666,41 @@ class IMessageService:
         thread.last_message_at = msg.sent_at or datetime.now(timezone.utc)
         session.flush()
 
+        # Sync to sms_panel_messages so iMessages appear in the CRM conversation
+        try:
+            from sqlalchemy import text as _sa_text
+            session.execute(_sa_text("""
+                INSERT INTO sms_panel_messages
+                    (id, phone, contact_id, organization_id, direction, body,
+                     sender_name, status, telnyx_message_id, created_at)
+                VALUES (:id, :phone, :contact_id, :org_id, 'inbound', :body,
+                        :sender_name, 'received', :msg_guid, :created_at)
+                ON CONFLICT (id) DO NOTHING
+            """), {
+                "id": str(msg.id),
+                "phone": normalize_handle(envelope.handle.address),
+                "contact_id": str(contact.id),
+                "org_id": line.organization_id,
+                "body": envelope.text or "",
+                "sender_name": normalize_handle(envelope.handle.address),
+                "msg_guid": envelope.guid,
+                "created_at": msg.sent_at or datetime.now(timezone.utc),
+            })
+        except Exception as _sync_err:
+            logger.warning("iMessage→sms_panel sync failed: %s", _sync_err)
+
+        # Push to SMS panel WebSocket so inbound iMessages appear in real-time
+        try:
+            from routes.sms_conversation_routes import notify_inbound_sms
+            await notify_inbound_sms(
+                phone=normalize_handle(envelope.handle.address),
+                body=envelope.text or "",
+                telnyx_message_id=envelope.guid,
+                org_id=line.organization_id,
+            )
+        except Exception as _ws_err:
+            logger.debug("iMessage→SMS panel WebSocket push failed: %s", _ws_err)
+
         # Pipeline fan-out -----------------------------------------------------
         await reset_followup_sla(
             session, organization_id=line.organization_id, contact_id=contact.id

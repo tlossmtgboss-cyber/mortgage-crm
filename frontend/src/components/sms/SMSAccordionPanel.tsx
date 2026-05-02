@@ -643,7 +643,9 @@ export default function SMSAccordionPanel({
     scrollToBottom()
     setUnreadCount(0)
     connectWS()
-    return () => wsRef.current?.close()
+    // Poll every 12s as fallback — WebSocket push is unreliable across replicas
+    const pollId = setInterval(() => { fetchHistory() }, 12000)
+    return () => { wsRef.current?.close(); clearInterval(pollId) }
   }, [open, activePhone])
 
   async function fetchHistory() {

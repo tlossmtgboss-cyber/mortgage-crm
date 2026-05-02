@@ -761,7 +761,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
     normalized_from = _normalize_phone(from_number)
     normalized_to = _normalize_phone(to_number)
 
-    logger.info(
+    logger.warning(
         "Inbound SMS from ...%s to ...%s: %s...",
         from_number[-4:] if from_number else "?",
         to_number[-4:] if to_number else "?",
@@ -1670,7 +1670,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
         if row:
             intelligence_queue_id = row[0]
         db.commit()
-        logger.info(f"Telnyx SMS queued for intelligence processing: id={intelligence_queue_id}")
+        logger.warning(f"Telnyx SMS queued for intelligence processing: id={intelligence_queue_id}")
     except Exception as e:
         logger.error(f"Failed to queue SMS for intelligence processing: {e}")
         db.rollback()
@@ -1788,7 +1788,7 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
             "telnyx_id": event.message_id,
         })
         db.commit()
-        logger.info(f"Inbound SMS stored in sms_panel_messages for phone=...{normalized_from[-4:]}, contact_id={_inbound_contact_id}")
+        logger.warning(f"Inbound SMS stored in sms_panel_messages for phone=...{normalized_from[-4:]}, contact_id={_inbound_contact_id}, org_id={_inbound_org_id}")
     except Exception as e:
         logger.warning(f"Failed to store inbound SMS in sms_panel_messages: {e}")
         db.rollback()
