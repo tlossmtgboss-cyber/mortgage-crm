@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { dialerAPI } from '../services/api';
 import './ClickableContact.css';
 
 // Clickable email link
@@ -17,7 +16,7 @@ export const ClickableEmail = ({ email, className = '' }) => {
   );
 };
 
-// Clickable phone link with Telnyx click-to-dial
+// Clickable phone link — opens Teams for click-to-dial
 export const ClickablePhone = ({
   phone,
   className = '',
@@ -27,8 +26,6 @@ export const ClickablePhone = ({
   leadId = null,
   loanId = null
 }) => {
-  const [calling, setCalling] = useState(false);
-  const [callError, setCallError] = useState(null);
   const [callSuccess, setCallSuccess] = useState(false);
 
   if (!phone) return <span className="no-value">N/A</span>;
@@ -36,39 +33,14 @@ export const ClickablePhone = ({
   // Clean phone number (remove formatting)
   const cleanPhone = phone.replace(/[^0-9+]/g, '');
 
-  const handleClickToDial = async (e) => {
+  const handleClickToDial = (e) => {
     e.preventDefault();
     e.stopPropagation();
 
-    if (calling) return;
-
-    setCalling(true);
-    setCallError(null);
-    setCallSuccess(false);
-
-    try {
-      const response = await dialerAPI.clickToDial({
-        phone_number: cleanPhone,
-        contact_name: contactName || '',
-        lead_id: leadId,
-        loan_id: loanId
-      });
-
-      if (response.success) {
-        setCallSuccess(true);
-        // Reset success state after 3 seconds
-        setTimeout(() => setCallSuccess(false), 3000);
-      } else {
-        setCallError(response.error || 'Failed to initiate call');
-        setTimeout(() => setCallError(null), 5000);
-      }
-    } catch (error) {
-      console.error('Click-to-dial error:', error);
-      setCallError(error.response?.data?.detail || 'Failed to connect call');
-      setTimeout(() => setCallError(null), 5000);
-    } finally {
-      setCalling(false);
-    }
+    const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
+    window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
+    setCallSuccess(true);
+    setTimeout(() => setCallSuccess(false), 3000);
   };
 
   if (showActions) {
@@ -77,12 +49,11 @@ export const ClickablePhone = ({
         <span className="phone-number">{phone}</span>
         <div className="phone-action-buttons">
           <button
-            className={`phone-action-btn call-btn ${calling ? 'calling' : ''} ${callSuccess ? 'success' : ''} ${callError ? 'error' : ''}`}
-            title={calling ? 'Calling...' : callSuccess ? 'Call initiated!' : callError || 'Click to call'}
+            className={`phone-action-btn call-btn ${callSuccess ? 'success' : ''}`}
+            title={callSuccess ? 'Opening Teams...' : 'Call via Teams'}
             onClick={handleClickToDial}
-            disabled={calling}
           >
-            {calling ? '📱' : callSuccess ? '✓' : '📞'}
+            {callSuccess ? '✓' : '📞'}
           </button>
           {onSMSClick ? (
             <button
@@ -106,20 +77,17 @@ export const ClickablePhone = ({
             </a>
           )}
         </div>
-        {callError && <span className="call-error-tooltip">{callError}</span>}
       </div>
     );
   }
 
   return (
     <button
-      className={`clickable-phone ${className} ${calling ? 'calling' : ''} ${callSuccess ? 'success' : ''}`}
+      className={`clickable-phone ${className} ${callSuccess ? 'success' : ''}`}
       onClick={handleClickToDial}
-      disabled={calling}
-      title={calling ? 'Calling your phone...' : callSuccess ? 'Call initiated!' : 'Click to call'}
+      title={callSuccess ? 'Opening Teams...' : 'Call via Teams'}
     >
-      {calling ? '📱 Calling...' : callSuccess ? '✓ ' + phone : phone}
-      {callError && <span className="call-error-inline"> - {callError}</span>}
+      {callSuccess ? '✓ ' + phone : phone}
     </button>
   );
 };
