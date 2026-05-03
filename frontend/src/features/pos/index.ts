@@ -28,5 +28,7 @@ export type {
   TimeSlot,
 } from './types';
 
-export { SECTION_LABELS, SECTION_ORDER } from './types';
+export { TopNav } from './components/TopNav';
+export { POSSidebar } from './components/POSSidebar';
+export { SECTION_LABELS, SECTION_CAPTIONS, SECTION_ORDER } from './types';
 export { validateSection, SECTION_SCHEMAS } from './schemas/urla';

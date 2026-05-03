@@ -1,6 +1,6 @@
 import { PlannedAction, ActionType } from "../orchestrator/types";
 
-const API_BASE_URL = process.env.CRM_API_URL || "https://app.perenniaai.com";
+const API_BASE_URL = process.env.CRM_API_URL || "https://api.perenniaai.com";
 
 interface ExecutionResult {
   success: boolean;
@@ -30,18 +30,31 @@ async function apiCall(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API error ${response.status}: ${errorText}`);
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`API error ${response.status}: ${errorText}`);
+    }
+
+    return response.json();
+  } catch (err: any) {
+    clearTimeout(timeout);
+    if (err.name === "AbortError") {
+      throw new Error(`API timeout (15s) for ${method} ${endpoint}`);
+    }
+    throw err;
   }
-
-  return response.json();
 }
 
 export async function executeActions(

@@ -68,14 +68,23 @@ class AuditEntry:
     hallucination_score: Optional[float] = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
+    @staticmethod
+    def _redact_pii(text: str) -> str:
+        """Mask SSNs, full phone numbers, and account numbers before audit storage."""
+        import re
+        text = re.sub(r'\b\d{3}-\d{2}-\d{4}\b', '[REDACTED-SSN]', text)
+        text = re.sub(r'\b(?:\+?1[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}\b', '[REDACTED-PHONE]', text)
+        text = re.sub(r'\b(?:account|acct|routing)[#:\s]*\d{4,}\b', '[REDACTED-ACCT]', text, flags=re.I)
+        return text
+
     def to_db_params(self) -> Dict[str, Any]:
-        """Convert to parameters for the ai_audit_log INSERT."""
+        """Convert to parameters for the ai_audit_log INSERT. PII is redacted."""
         import json
         return {
             "request_id": self.request_id,
             "action": self.intent or "chat",
-            "input": self.user_message[:2000],
-            "output": self.response_text[:2000],
+            "input": self._redact_pii(self.user_message[:2000]),
+            "output": self._redact_pii(self.response_text[:2000]),
             "user_id": self.user_id,
             "org_id": self.organization_id,
             "model": self.model_used,
@@ -185,7 +194,32 @@ class AuditLogger:
             db_session.flush()
 
         except Exception as audit_err:
-            logger.warning(f"[AUDIT] Failed to write audit log: {audit_err}")
+            logger.error(f"[AUDIT] Failed to write audit log: {audit_err}")
+            self._write_dead_letter(entry)
+
+    @staticmethod
+    def _write_dead_letter(entry: AuditEntry) -> None:
+        """Fallback: write failed audit entry to a local file for later recovery."""
+        try:
+            import json
+            dead_letter_path = os.path.join(
+                os.getenv("AUDIT_DEAD_LETTER_DIR", "/tmp"),
+                "audit_dead_letter.jsonl",
+            )
+            record = {
+                "request_id": entry.request_id,
+                "user_id": entry.user_id,
+                "org_id": entry.organization_id,
+                "intent": entry.intent,
+                "timestamp": entry.timestamp.isoformat(),
+                "tokens": entry.tokens_input + entry.tokens_output,
+                "model": entry.model_used,
+            }
+            with open(dead_letter_path, "a") as f:
+                f.write(json.dumps(record) + "\n")
+            logger.info(f"[AUDIT] Dead-letter written to {dead_letter_path}")
+        except Exception as dl_err:
+            logger.critical(f"[AUDIT] Dead-letter write ALSO failed: {dl_err}")
 
     @staticmethod
     def extract_token_usage(llm_response: Any) -> tuple:

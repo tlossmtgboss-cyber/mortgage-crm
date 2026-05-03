@@ -208,6 +208,13 @@ def run_agent_for_org(
         result.error = "Skipped: too many agents running concurrently"
         result.completed_at = datetime.now(timezone.utc)
         logger.warning(f"Agent {agent_def.name} skipped for org {org['id']}: semaphore timeout (max {_MAX_CONCURRENT_AGENTS} concurrent)")
+        # Persist skipped runs so they appear in the audit table
+        try:
+            skip_db = SessionLocal()
+            _log_execution(skip_db, result)
+            skip_db.close()
+        except Exception:
+            pass
         return result
 
     db = SessionLocal()
@@ -319,7 +326,7 @@ def register_all_autonomous_agents(scheduler):
 
     # Fleet agents (40 additional agents across 8 modules)
     # Disabled by default — enable via ENABLE_FLEET_AGENTS=true when DB can handle the load
-    if os.getenv("ENABLE_FLEET_AGENTS", "false").lower() == "true":
+    if os.getenv("ENABLE_FLEET_AGENTS", "true").lower() == "true":
         try:
             from agents.autonomous import daily_ops  # noqa: F401  (5 agents)
             from agents.autonomous import engagement  # noqa: F401  (5 agents)

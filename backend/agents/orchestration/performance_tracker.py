@@ -18,7 +18,7 @@ Persistence strategy:
 
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta, timezone
-from collections import defaultdict
+from collections import defaultdict, deque
 from decimal import Decimal
 import json
 import logging
@@ -260,9 +260,8 @@ class PerformanceTracker:
                         agent_invocations table regardless of this parameter.
         """
         self.db_session = db_session
-        self._in_memory_executions: List[Dict] = []
-        self._in_memory_outcomes: List[Dict] = []
-        # Buffer for batch flush — records that haven't been persisted yet
+        self._in_memory_executions: deque = deque(maxlen=500)
+        self._in_memory_outcomes: deque = deque(maxlen=500)
         self._pending_invocations: List[Dict] = []
 
     # ------------------------------------------------------------------

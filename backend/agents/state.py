@@ -5,6 +5,7 @@ This module defines the state schema that flows through all nodes in the
 LangGraph orchestrator. Each node can read from and write to this shared state.
 """
 
+import copy
 from typing import TypedDict, Literal, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -238,7 +239,7 @@ def update_state(state: AgentState, updates: dict) -> AgentState:
     Returns:
         AgentState: New state with updates applied
     """
-    new_state = dict(state)
+    new_state = copy.deepcopy(dict(state))
     new_state.update(updates)
     return AgentState(**new_state)
 

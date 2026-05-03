@@ -251,6 +251,7 @@ const PurchaseApplication = lazyRetry(() => import('../pages/PurchaseApplication
 const RefinanceApplication = lazyRetry(() => import('../pages/RefinanceApplication'));
 const PurchasePreQualForm = lazyRetry(() => import('../pages/PurchasePreQualForm'));
 const NewPurchaseApplication = lazyRetry(() => import('../pages/applications/NewPurchaseApplication'));
+const POSEntryPage = lazyRetry(() => import('../pages/pos/POSEntryPage'));
 const NewRefinanceApplication = lazyRetry(() => import('../pages/applications/NewRefinanceApplication'));
 const ApplicationDemo = lazyRetry(() => import('../pages/applications/ApplicationDemo'));
 const VoiceReviewPage = lazyRetry(() => import('../pages/VoiceReviewPage'));
@@ -501,6 +502,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/apply/purchase" path="/apply/purchase" element={<LazyPage><PurchaseApplication /></LazyPage>} />,
     <Route key="/apply/refinance" path="/apply/refinance" element={<LazyPage><RefinanceApplication /></LazyPage>} />,
     <Route key="/prequal/purchase" path="/prequal/purchase" element={<LazyPage><PurchasePreQualForm embedded={new URLSearchParams(window.location.search).get('embedded') === 'true'} /></LazyPage>} />,
+    <Route key="/apply/v3/purchase" path="/apply/v3/purchase" element={<LazyPage><POSEntryPage /></LazyPage>} />,
     <Route key="/apply/v2/purchase" path="/apply/v2/purchase" element={<LazyPage><NewPurchaseApplication /></LazyPage>} />,
     <Route key="/apply/v2/refinance" path="/apply/v2/refinance" element={<LazyPage><NewRefinanceApplication /></LazyPage>} />,
     <Route key="/apply/demo" path="/apply/demo" element={<LazyPage><ApplicationDemo /></LazyPage>} />,

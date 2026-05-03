@@ -176,6 +176,27 @@ def _is_valid_api_key(candidate: str) -> bool:
     return False
 
 
+def _get_api_key_org_id(candidate: str) -> Optional[int]:
+    """Return the org_id bound to an API key via env config.
+
+    Each API key has a corresponding _ORG_ID env var (e.g. CRM_API_KEY_ORG_ID).
+    If the env var is not set, the key is treated as system-level (org_id=None)
+    and will NOT inherit org_id from the request body — preventing callers from
+    choosing arbitrary tenants.
+    """
+    for env_name in ("CRM_API_KEY", "INTERNAL_API_KEY"):
+        expected = os.environ.get(env_name, "").strip()
+        if expected and hmac.compare_digest(candidate, expected):
+            org_str = os.environ.get(f"{env_name}_ORG_ID", "").strip()
+            if org_str:
+                try:
+                    return int(org_str)
+                except ValueError:
+                    pass
+            return None
+    return None
+
+
 async def get_current_user_or_api_key(
     request: Request,
     db: Session = Depends(get_db),
@@ -213,21 +234,27 @@ async def get_current_user_or_api_key(
 
         # Bearer value is not a JWT — treat it as an API key candidate.
         if _is_valid_api_key(token):
-            org_id = await _extract_org_id_from_body(request)
+            org_id = _get_api_key_org_id(token)
+            if org_id is None:
+                org_id = await _extract_org_id_from_body(request)
             logger.info("Service auth via Bearer API key (org=%s)", org_id)
             return _SystemUser(organization_id=org_id)
 
     # --- 2. Check X-API-Key header ---
     api_key = request.headers.get("X-API-Key", "")
     if api_key and _is_valid_api_key(api_key):
-        org_id = await _extract_org_id_from_body(request)
+        org_id = _get_api_key_org_id(api_key)
+        if org_id is None:
+            org_id = await _extract_org_id_from_body(request)
         logger.info("Service auth via X-API-Key header (org=%s)", org_id)
         return _SystemUser(organization_id=org_id)
 
     # --- 3. Check X-Internal-API-Key header (Aria pattern) ---
     internal_key = request.headers.get("X-Internal-API-Key", "")
     if internal_key and _is_valid_api_key(internal_key):
-        org_id = await _extract_org_id_from_body(request)
+        org_id = _get_api_key_org_id(internal_key)
+        if org_id is None:
+            org_id = await _extract_org_id_from_body(request)
         logger.info("Service auth via X-Internal-API-Key header (org=%s)", org_id)
         return _SystemUser(organization_id=org_id)
 

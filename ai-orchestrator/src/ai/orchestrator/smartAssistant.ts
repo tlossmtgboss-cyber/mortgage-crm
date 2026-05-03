@@ -20,7 +20,7 @@ import {
 } from "../memory/memoryService";
 import { logInteraction } from "../../lib/logger";
 
-const API_BASE_URL = process.env.CRM_API_URL || "https://app.perenniaai.com";
+const API_BASE_URL = process.env.CRM_API_URL || "https://api.perenniaai.com";
 
 async function apiCall(endpoint: string, token?: string): Promise<any> {
   const headers: Record<string, string> = {
@@ -30,12 +30,30 @@ async function apiCall(endpoint: string, token?: string): Promise<any> {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, { headers });
-  if (!response.ok) {
-    console.error(`[CONTEXT] API error ${response.status} for ${endpoint}`);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers,
+      signal: controller.signal
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) {
+      console.error(`[CONTEXT] API error ${response.status} for ${endpoint}`);
+      return null;
+    }
+    return response.json();
+  } catch (err: any) {
+    clearTimeout(timeout);
+    if (err.name === "AbortError") {
+      console.error(`[CONTEXT] Timeout (10s) for ${endpoint}`);
+    } else {
+      console.error(`[CONTEXT] Fetch error for ${endpoint}:`, err.message);
+    }
     return null;
   }
-  return response.json();
 }
 
 async function retrieveContext(

@@ -52,6 +52,7 @@ class AgentToolConfig:
     tool_timeout_seconds: int = 30
     requires_approval_for: List[str] = field(default_factory=list)
     recommended_model: str = "sonnet"  # Default to Sonnet; override to "haiku" for simpler agents
+    temperature: float = 0.3  # Default conservative; compliance=0.1, analytics=0.3, creative=0.7
 
 
 AGENT_CONFIGS = {
@@ -95,6 +96,7 @@ AGENT_CONFIGS = {
         ],
         requires_approval_for=["override_compliance_flag"],
         recommended_model="sonnet",  # Regulatory compliance needs precise reasoning
+        temperature=0.1,
     ),
     "lead_nurturer": AgentToolConfig(
         role="lead_nurturer",
@@ -253,6 +255,7 @@ AGENT_CONFIGS = {
         ],
         requires_approval_for=["send_email"],
         recommended_model="sonnet",  # Email drafting/analysis needs quality
+        temperature=0.5,
     ),
     "ai_receptionist": AgentToolConfig(
         role="ai_receptionist",
@@ -598,7 +601,9 @@ AGENT_CONFIGS = {
             "send_notification",
             "escalate_issue",
         ],
+        requires_approval_for=["escalate_issue", "send_notification"],
         recommended_model="sonnet",
+        temperature=0.1,
     ),
     "risk_assessor": AgentToolConfig(
         role="risk_assessor",
@@ -614,7 +619,9 @@ AGENT_CONFIGS = {
             "check_tolerance_violations",
             "get_bottleneck_analysis",
         ],
+        requires_approval_for=["audit_loan_file"],
         recommended_model="sonnet",
+        temperature=0.1,
     ),
     "quality_control": AgentToolConfig(
         role="quality_control",
@@ -631,6 +638,7 @@ AGENT_CONFIGS = {
             "check_tolerance_violations",
         ],
         recommended_model="sonnet",
+        temperature=0.1,
     ),
     "turn_down_specialist": AgentToolConfig(
         role="turn_down_specialist",
@@ -646,6 +654,7 @@ AGENT_CONFIGS = {
             "get_engagement_history",
             "send_notification",
         ],
+        requires_approval_for=["send_email", "send_notification"],
         recommended_model="sonnet",
     ),
     # =========================================================================
@@ -666,6 +675,7 @@ AGENT_CONFIGS = {
             "schedule_notification",
         ],
         recommended_model="sonnet",
+        temperature=0.7,
     ),
     "social_media_manager": AgentToolConfig(
         role="social_media_manager",
@@ -682,6 +692,7 @@ AGENT_CONFIGS = {
             "get_dashboard_metrics",
         ],
         recommended_model="sonnet",
+        temperature=0.7,
     ),
     "market_analyst": AgentToolConfig(
         role="market_analyst",
