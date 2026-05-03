@@ -75,8 +75,6 @@ export const POSContainer: React.FC<POSContainerProps> = ({
     if (application && !sections.personal) {
       setActiveStep(application.current_step);
       loadSection(application.current_step);
-      // Load intake section to check if already completed.
-      // All required fields (is_veteran + loan_purpose) must be present.
       loadSection('intake' as SectionKey).then(sec => {
         if (sec?.data && sec.data.is_veteran != null && sec.data.loan_purpose != null) {
           setIntakeData(sec.data as unknown as IntakeData);
@@ -84,14 +82,6 @@ export const POSContainer: React.FC<POSContainerProps> = ({
         } else if (sec?.data) {
           setIntakeData(prev => ({ ...prev, ...(sec.data as any) }));
         }
-      });
-      // Pre-load all sections the document detector needs so previously-saved
-      // answers are visible on cold start (returning borrower scenario).
-      const detectorSections: SectionKey[] = [
-        'employment', 'assets', 'loan', 'declarations', 'reo', 'liabilities',
-      ];
-      detectorSections.forEach(key => {
-        if (key !== application.current_step) loadSection(key);
       });
     }
   }, [application, sections.personal, loadSection]);
