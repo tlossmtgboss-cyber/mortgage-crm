@@ -951,6 +951,50 @@
   color: #8B6B2A;
 }
 
+/* ---------- Add entry / link button ---------- */
+
+.urla-add-entry {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+  margin-bottom: 8px;
+}
+
+.urla-btn-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  color: var(--bt-primary);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 10px 16px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.urla-btn-link:hover {
+  background: var(--bt-primary-tint, rgba(31, 61, 46, 0.06));
+}
+
+.urla-btn-link--danger {
+  color: var(--bt-error, #9B2C2C);
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.urla-btn-link--danger:hover {
+  background: rgba(155, 44, 44, 0.06);
+}
+
+.urla-banner--info {
+  margin-top: 0;
+  margin-bottom: 24px;
+}
+
 /* ---------- Loading / Error ---------- */
 
 .pos-loading {
