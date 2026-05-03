@@ -133,21 +133,6 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
     );
   }
 
-  // ---------- loading ----------
-
-  if (loadingLO) {
-    return <div className="smart-cal smart-cal--loading">Finding your loan officer…</div>;
-  }
-
-  if (!lo) {
-    return (
-      <div className="smart-cal smart-cal--error">
-        <p>{error ?? 'No loan officer assigned yet.'}</p>
-        <button onClick={() => loadLO()}>Try again</button>
-      </div>
-    );
-  }
-
   // ---------- summary line ----------
 
   const summaryParts: string[] = [];
@@ -160,33 +145,37 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
     summaryParts.push('at ' + formatTime(selectedSlot.start, tz));
   }
 
+  const loName = lo?.name ?? 'your loan officer';
+
   // ---------- main view ----------
 
   return (
     <div className="smart-cal">
-      {/* LO card at top */}
-      <div className="smart-cal__lo-card">
-        {lo.avatar_url ? (
-          <img src={lo.avatar_url} alt="" className="smart-cal__lo-avatar" />
-        ) : (
-          <span className="smart-cal__lo-avatar smart-cal__lo-avatar--initials">
-            {initials(lo.name)}
-          </span>
-        )}
-        <div className="smart-cal__lo-info">
-          <span className="smart-cal__lo-name">{lo.name}</span>
-          <span className="smart-cal__lo-role">
-            Loan Officer{lo.nmls ? ` · NMLS #${lo.nmls}` : ''} · {MEETING_TYPE_LABELS[meetingType]}
-          </span>
+      {/* LO card at top — shown when loaded, never blocks the calendar */}
+      {lo && (
+        <div className="smart-cal__lo-card">
+          {lo.avatar_url ? (
+            <img src={lo.avatar_url} alt="" className="smart-cal__lo-avatar" />
+          ) : (
+            <span className="smart-cal__lo-avatar smart-cal__lo-avatar--initials">
+              {initials(lo.name)}
+            </span>
+          )}
+          <div className="smart-cal__lo-info">
+            <span className="smart-cal__lo-name">{lo.name}</span>
+            <span className="smart-cal__lo-role">
+              Loan Officer{lo.nmls ? ` · NMLS #${lo.nmls}` : ''} · {MEETING_TYPE_LABELS[meetingType]}
+            </span>
+          </div>
+          {onClose && (
+            <button type="button" className="smart-cal__close" onClick={onClose} aria-label="Close">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
         </div>
-        {onClose && (
-          <button type="button" className="smart-cal__close" onClick={onClose} aria-label="Close">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Date chips */}
       <div className="smart-cal__section">
@@ -262,7 +251,7 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
       {/* Summary line */}
       {selectedSlot && (
         <div className="smart-cal__summary">
-          Phone call with {lo.name} · {summaryParts.join(' ')}
+          Phone call with {loName} · {summaryParts.join(' ')}
         </div>
       )}
 
