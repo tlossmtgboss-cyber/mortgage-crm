@@ -10,44 +10,44 @@
    ───────────────────────────────────────────────────────────────────────── */
 
 :root {
-  /* Backgrounds — translucent so they sit on the host's deep-space bg */
-  --pf-cf-bg-deep: #060A10;
-  --pf-cf-bg-glass: rgba(255, 255, 255, 0.025);
-  --pf-cf-bg-glass-strong: rgba(255, 255, 255, 0.045);
-  --pf-cf-bg-secondary: rgba(255, 255, 255, 0.04);
-  --pf-cf-bg-hover: rgba(255, 255, 255, 0.06);
+  /* Backgrounds — light theme to match CRM shell */
+  --pf-cf-bg-deep: #ffffff;
+  --pf-cf-bg-glass: #f8fafc;
+  --pf-cf-bg-glass-strong: #f1f5f9;
+  --pf-cf-bg-secondary: #f8f9fa;
+  --pf-cf-bg-hover: #e9ecef;
 
-  /* Accent — electric blue */
-  --pf-cf-accent: #7EB8F7;
-  --pf-cf-accent-dim: rgba(126, 184, 247, 0.7);
-  --pf-cf-accent-bg: rgba(126, 184, 247, 0.10);
-  --pf-cf-accent-bg-hover: rgba(126, 184, 247, 0.16);
-  --pf-cf-accent-border: rgba(126, 184, 247, 0.30);
+  /* Accent — teal to match CRM */
+  --pf-cf-accent: #218D8D;
+  --pf-cf-accent-dim: rgba(33, 141, 141, 0.7);
+  --pf-cf-accent-bg: rgba(33, 141, 141, 0.08);
+  --pf-cf-accent-bg-hover: rgba(33, 141, 141, 0.14);
+  --pf-cf-accent-border: rgba(33, 141, 141, 0.30);
 
   /* Text */
-  --pf-cf-text: rgba(255, 255, 255, 0.92);
-  --pf-cf-text-secondary: rgba(255, 255, 255, 0.62);
-  --pf-cf-text-tertiary: rgba(255, 255, 255, 0.40);
-  --pf-cf-text-faint: rgba(255, 255, 255, 0.22);
+  --pf-cf-text: #1a1a2e;
+  --pf-cf-text-secondary: #64748b;
+  --pf-cf-text-tertiary: #94a3b8;
+  --pf-cf-text-faint: #cbd5e1;
   --pf-cf-text-on-accent: #FFFFFF;
 
   /* Borders */
-  --pf-cf-border: rgba(255, 255, 255, 0.07);
-  --pf-cf-border-strong: rgba(255, 255, 255, 0.14);
-  --pf-cf-border-accent: rgba(126, 184, 247, 0.30);
+  --pf-cf-border: #e2e8f0;
+  --pf-cf-border-strong: #cbd5e1;
+  --pf-cf-border-accent: rgba(33, 141, 141, 0.30);
 
   /* Semantic */
-  --pf-cf-success: #5DCAA5;
-  --pf-cf-success-bg: rgba(93, 202, 165, 0.12);
-  --pf-cf-warning: #EF9F27;
-  --pf-cf-warning-bg: rgba(239, 159, 39, 0.12);
-  --pf-cf-danger: #F0997B;
-  --pf-cf-danger-bg: rgba(240, 153, 123, 0.12);
+  --pf-cf-success: #10b981;
+  --pf-cf-success-bg: rgba(16, 185, 129, 0.08);
+  --pf-cf-warning: #f59e0b;
+  --pf-cf-warning-bg: rgba(245, 158, 11, 0.08);
+  --pf-cf-danger: #ef4444;
+  --pf-cf-danger-bg: rgba(239, 68, 68, 0.08);
 
-  /* Agent attribution — a soft purple distinguishes agent-emitted activity */
-  --pf-cf-agent: #C4B5FD;
-  --pf-cf-agent-bg: rgba(196, 181, 253, 0.10);
-  --pf-cf-agent-border: rgba(196, 181, 253, 0.25);
+  /* Agent attribution */
+  --pf-cf-agent: #7c3aed;
+  --pf-cf-agent-bg: rgba(124, 58, 237, 0.06);
+  --pf-cf-agent-border: rgba(124, 58, 237, 0.20);
 
   /* Typography */
   --pf-cf-font-display: "Cormorant Garamond", Georgia, serif;
