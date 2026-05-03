@@ -141,7 +141,7 @@ function TaskCard({
               <div className="pf-cf-taskcard__actions">
                 <button
                   type="button"
-                  className="pf-cf-btn pf-cf-btn--outline pf-cf-btn--sm"
+                  className="pf-cf-btn pf-cf-btn--ghost pf-cf-btn--sm"
                   onClick={() => {
                     setEditTitle(task.title);
                     setEditBody(task.body || "");
@@ -155,16 +155,16 @@ function TaskCard({
                 {!done && (
                   <button
                     type="button"
-                    className="pf-cf-btn pf-cf-btn--accent pf-cf-btn--sm"
+                    className="pf-cf-btn pf-cf-btn--success pf-cf-btn--sm"
                     onClick={() => mutations.complete.mutate(task.id)}
                   >
-                    Complete
+                    Mark Complete
                   </button>
                 )}
                 {done && (
                   <button
                     type="button"
-                    className="pf-cf-btn pf-cf-btn--ghost pf-cf-btn--sm"
+                    className="pf-cf-btn pf-cf-btn--outline pf-cf-btn--sm"
                     onClick={() => mutations.reopen.mutate(task.id)}
                   >
                     Reopen

@@ -192,22 +192,22 @@ function DocumentCard({
             <div className="pf-cf-doccard__actions">
               <button
                 type="button"
-                className="pf-cf-btn pf-cf-btn--accent"
+                className="pf-cf-btn pf-cf-btn--success pf-cf-btn--sm"
                 onClick={() => actions.approve.mutate(doc.id)}
                 disabled={actions.approve.isPending}
               >
-                Approve
+                {actions.approve.isPending ? "Approving..." : "Approve"}
               </button>
               <button
                 type="button"
-                className="pf-cf-btn pf-cf-btn--outline"
+                className="pf-cf-btn pf-cf-btn--outline pf-cf-btn--sm"
                 onClick={() => setShowReject((v) => !v)}
               >
                 Reject
               </button>
               <button
                 type="button"
-                className="pf-cf-btn pf-cf-btn--ghost"
+                className="pf-cf-btn pf-cf-btn--accent pf-cf-btn--sm"
                 onClick={() => actions.aiReview.mutate(doc.id)}
                 disabled={actions.aiReview.isPending}
               >
