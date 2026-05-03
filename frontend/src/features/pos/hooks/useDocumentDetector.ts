@@ -234,6 +234,14 @@ export function useDocumentDetector(
         reason: 'Verify coverage on owned properties',
         triggeredBy: 'Other real estate indicated',
       });
+      add({
+        name: 'HOA statements (all properties)',
+        category: 'property',
+        priority: 'conditional',
+        description: 'Most recent HOA statement or payment coupon for each property with an HOA',
+        reason: 'Verify HOA dues for debt-to-income calculation',
+        triggeredBy: 'Other real estate indicated',
+      });
 
       const properties = (reo.properties as Array<Record<string, unknown>>) || [];
       const hasRental = properties.some(p => p.monthly_rental_income && Number(p.monthly_rental_income) > 0);
