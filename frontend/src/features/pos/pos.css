@@ -1917,20 +1917,15 @@
 
 /* ---------- Smart Calendar ---------- */
 
+/* Smart Calendar — Chip Picker (flat, no card wrapper) */
 .smart-cal {
-  background: var(--bt-bg-surface);
-  border: 1px solid var(--bt-border);
-  border-radius: var(--bt-radius-lg);
-  padding: 28px 32px 32px;
-  max-width: 480px;
-  margin: 0 auto;
-  box-shadow: var(--bt-shadow-md);
+  padding: 0;
 }
 
 .smart-cal--loading,
 .smart-cal--error {
   text-align: center;
-  padding: 48px 32px;
+  padding: 32px 0;
   color: var(--bt-text-secondary);
   font-size: 15px;
 }
@@ -1946,19 +1941,51 @@
   color: var(--bt-text-primary);
 }
 
-.smart-cal__header {
+/* LO card at top */
+.smart-cal__lo-card {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--bt-bg-surface);
+  border: 1px solid var(--bt-border);
+  border-radius: var(--bt-radius-md);
+  margin-bottom: 28px;
 }
 
-.smart-cal__title {
-  font-family: var(--bt-font-display);
-  font-size: 20px;
+.smart-cal__lo-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.smart-cal__lo-avatar--initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bt-primary);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.smart-cal__lo-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.smart-cal__lo-name {
+  font-size: 15px;
   font-weight: 600;
   color: var(--bt-text-primary);
-  margin: 0;
+}
+
+.smart-cal__lo-role {
+  font-size: 12px;
+  color: var(--bt-text-muted);
 }
 
 .smart-cal__close {
@@ -1973,228 +2000,97 @@
   align-items: center;
   justify-content: center;
   transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
 }
 .smart-cal__close:hover {
   background: var(--bt-bg-elevated);
   color: var(--bt-text-primary);
 }
 
-/* Week date picker */
-.smart-cal__week {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* Sections */
+.smart-cal__section {
   margin-bottom: 24px;
 }
 
-.smart-cal__week-nav {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid var(--bt-border);
-  background: var(--bt-bg-surface);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--bt-text-secondary);
-  flex-shrink: 0;
-  transition: border-color 0.15s, color 0.15s;
+.smart-cal__section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bt-text-primary);
+  margin-bottom: 14px;
 }
-.smart-cal__week-nav:hover:not(:disabled) {
+
+.smart-cal__loading-text {
+  font-size: 13px;
+  color: var(--bt-text-muted);
+  padding: 4px 0;
+}
+
+/* Chip layout */
+.smart-cal__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.smart-cal__chip {
+  padding: 10px 16px;
+  border-radius: var(--bt-radius-md);
+  border: 1px solid var(--bt-border);
+  background: transparent;
+  font-family: var(--bt-font-body);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--bt-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.smart-cal__chip:hover:not(:disabled):not(.is-selected) {
   border-color: var(--bt-border-strong);
   color: var(--bt-text-primary);
 }
-.smart-cal__week-nav:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.smart-cal__week-days {
-  display: flex;
-  gap: 6px;
-  flex: 1;
-  justify-content: center;
-}
-
-.smart-cal__day {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  padding: 10px 12px;
-  border-radius: var(--bt-radius-md);
-  border: 2px solid transparent;
-  background: var(--bt-bg-soft);
-  cursor: pointer;
-  transition: all 0.15s;
-  min-width: 56px;
-}
-.smart-cal__day:hover:not(:disabled):not(.is-selected) {
-  background: var(--bt-bg-elevated);
-  border-color: var(--bt-border-strong);
-}
-.smart-cal__day.is-selected {
+.smart-cal__chip.is-selected {
   background: var(--bt-primary-light);
-  border-color: var(--bt-primary);
+  border: 2px solid var(--bt-primary);
+  color: var(--bt-primary);
+  font-weight: 600;
+  padding: 9px 15px;
 }
-.smart-cal__day.is-disabled {
+.smart-cal__chip.is-disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.smart-cal__day-name {
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+.smart-cal__chip--nav {
+  width: 36px;
+  padding: 10px 0;
+  text-align: center;
+  font-size: 16px;
   color: var(--bt-text-muted);
+  border-color: var(--bt-border);
 }
-.smart-cal__day.is-selected .smart-cal__day-name {
-  color: var(--bt-primary);
-}
-
-.smart-cal__day-num {
-  font-size: 18px;
-  font-weight: 700;
-  color: var(--bt-text-primary);
-  line-height: 1.1;
-}
-
-.smart-cal__day-month {
-  font-size: 11px;
-  color: var(--bt-text-muted);
-}
-.smart-cal__day.is-selected .smart-cal__day-month {
-  color: var(--bt-primary);
-}
-
-/* Sections */
-.smart-cal__section {
-  margin-bottom: 20px;
-}
-
-.smart-cal__label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--bt-text-secondary);
-  margin-bottom: 8px;
-}
-
-.smart-cal__select {
-  width: 100%;
-  padding: 10px 14px;
-  border: 1px solid var(--bt-border);
-  border-radius: var(--bt-radius-sm);
-  background: var(--bt-bg-surface);
-  font-family: var(--bt-font-body);
-  font-size: 14px;
-  color: var(--bt-text-primary);
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234F554E' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 12px center;
-  cursor: pointer;
-}
-.smart-cal__select:focus {
-  outline: none;
-  border-color: var(--bt-primary);
-  box-shadow: 0 0 0 3px rgba(31, 61, 46, 0.08);
-}
-.smart-cal__select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* Mode toggle (phone / video) */
-.smart-cal__mode-toggle {
-  display: flex;
-  gap: 10px;
-}
-
-.smart-cal__mode-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border: 2px solid var(--bt-border);
-  border-radius: var(--bt-radius-sm);
-  background: var(--bt-bg-surface);
-  font-family: var(--bt-font-body);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--bt-text-secondary);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.smart-cal__mode-btn:hover:not(.is-active) {
+.smart-cal__chip--nav:hover {
   border-color: var(--bt-border-strong);
   color: var(--bt-text-primary);
 }
-.smart-cal__mode-btn.is-active {
-  border-color: var(--bt-primary);
-  color: var(--bt-primary);
-  background: var(--bt-primary-tint);
+
+.smart-cal__chip--time {
+  padding: 10px 18px;
+}
+.smart-cal__chip--time.is-selected {
+  padding: 9px 17px;
 }
 
-/* LO display */
-.smart-cal__lo-display {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border: 1px solid var(--bt-border);
-  border-radius: var(--bt-radius-sm);
-  background: var(--bt-bg-soft);
+.smart-cal__chip-star {
+  margin-left: 4px;
+  color: var(--bt-warning, #D4A017);
 }
 
-.smart-cal__lo-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-.smart-cal__lo-avatar--initials {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bt-primary);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.smart-cal__lo-text {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--bt-text-primary);
-}
-
-/* Info card */
-.smart-cal__info-card {
-  background: var(--bt-bg-elevated);
-  border-radius: var(--bt-radius-sm);
-  padding: 14px 16px;
-  margin-bottom: 24px;
-}
-
-.smart-cal__info-line {
-  margin: 0 0 4px;
-  font-size: 13px;
-  color: var(--bt-text-secondary);
-}
-.smart-cal__info-line:last-child { margin-bottom: 0; }
-
-.smart-cal__info-label {
-  font-weight: 600;
-}
-
-.smart-cal__info-value {
-  color: var(--bt-text-primary);
+/* Summary line */
+.smart-cal__summary {
+  font-size: 12px;
+  color: var(--bt-text-muted);
+  text-align: center;
+  margin-bottom: 16px;
 }
 
 /* Submit */
@@ -2233,7 +2129,7 @@
 /* Confirmed */
 .smart-cal--confirmed {
   text-align: center;
-  padding: 40px 32px;
+  padding: 40px 0;
 }
 
 .smart-cal__confirm-icon {
@@ -2289,10 +2185,11 @@
 @media (max-width: 768px) {
   .pos-main { padding: 20px 16px; }
   .pos-main__heading { font-size: 28px; }
-  .smart-cal { padding: 20px 16px; }
-  .smart-cal__week-days { gap: 4px; }
-  .smart-cal__day { min-width: 48px; padding: 8px 8px; }
-  .smart-cal__mode-toggle { flex-direction: column; }
+  .smart-cal__lo-card { padding: 12px 14px; gap: 10px; }
+  .smart-cal__chip { padding: 8px 12px; font-size: 12px; }
+  .smart-cal__chip.is-selected { padding: 7px 11px; }
+  .smart-cal__chip--time { padding: 8px 14px; }
+  .smart-cal__chip--time.is-selected { padding: 7px 13px; }
 }
 
 /* ===================================================================
@@ -3179,215 +3076,3 @@
   font-size: 13px;
 }
 
-/* ===================================================================
-   SMART CALENDAR — Booking widget in Review step
-   =================================================================== */
-
-.smart-cal {
-  background: var(--bt-bg-soft);
-  border: 1px solid var(--bt-border-strong);
-  border-radius: 12px;
-  overflow: hidden;
-  margin: 24px 0;
-}
-
-.smart-cal__header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--bt-border);
-}
-
-.smart-cal__title {
-  font-family: var(--bt-font-display);
-  font-size: 18px;
-  font-weight: 500;
-}
-
-.smart-cal__body {
-  display: grid;
-  grid-template-columns: 1fr 360px;
-}
-
-.smart-cal__calendar {
-  padding: 20px;
-  border-right: 1px solid var(--bt-border);
-}
-
-.smart-cal__slots {
-  padding: 20px;
-}
-
-.smart-cal__month-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.smart-cal__month-label {
-  font-weight: 600;
-  font-size: 15px;
-}
-
-.smart-cal__nav-btn {
-  padding: 8px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  transition: background 0.12s;
-  color: var(--bt-text-primary);
-}
-
-.smart-cal__nav-btn:hover {
-  background: var(--bt-bg-elevated);
-}
-
-.smart-cal__nav-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-.smart-cal__grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-  text-align: center;
-}
-
-.smart-cal__day-header {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--bt-text-muted);
-  padding: 4px 0 8px;
-  text-transform: uppercase;
-}
-
-.smart-cal__day {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  font-size: 13.5px;
-  font-weight: 500;
-  border: none;
-  cursor: pointer;
-  transition: all 0.12s;
-  background: transparent;
-  color: var(--bt-text-primary);
-  margin: 0 auto;
-}
-
-.smart-cal__day:hover {
-  background: var(--bt-bg-elevated);
-}
-
-.smart-cal__day--today {
-  font-weight: 700;
-  box-shadow: inset 0 -2px 0 var(--bt-primary);
-}
-
-.smart-cal__day--selected {
-  background: var(--bt-primary);
-  color: #F5F2E9;
-}
-
-.smart-cal__day--unavailable {
-  color: var(--bt-text-faint);
-  cursor: default;
-}
-
-.smart-cal__day--unavailable:hover {
-  background: transparent;
-}
-
-.smart-cal__day--empty {
-  visibility: hidden;
-}
-
-.smart-cal__slot {
-  padding: 8px 14px;
-  border: 1px solid var(--bt-border-strong);
-  border-radius: 8px;
-  font-size: 13.5px;
-  font-weight: 500;
-  font-family: var(--bt-font-mono);
-  cursor: pointer;
-  background: var(--bt-bg-surface);
-  transition: all 0.12s;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 6px;
-  width: 100%;
-  color: var(--bt-text-primary);
-}
-
-.smart-cal__slot:hover {
-  border-color: var(--bt-primary);
-  background: var(--bt-primary-tint);
-}
-
-.smart-cal__slot--selected {
-  border-color: var(--bt-primary);
-  background: var(--bt-primary-tint);
-  box-shadow: 0 0 0 1px var(--bt-primary) inset;
-}
-
-.smart-cal__slot--booked {
-  opacity: 0.4;
-  cursor: not-allowed;
-  text-decoration: line-through;
-}
-
-.smart-cal__slot--recommended::after {
-  content: 'Recommended';
-  font-size: 10px;
-  font-family: var(--bt-font-body);
-  background: var(--bt-accent-light);
-  color: #6B4F1A;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-weight: 500;
-}
-
-.smart-cal__confirm-btn {
-  width: 100%;
-  margin-top: 16px;
-}
-
-/* Calendar confirmation */
-.smart-cal__confirm-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  background: var(--bt-success);
-  color: white;
-  display: grid;
-  place-items: center;
-  margin: 0 auto 16px;
-}
-
-.smart-cal__confirmed-time {
-  font-family: var(--bt-font-display);
-  font-size: 20px;
-  font-weight: 500;
-  text-align: center;
-}
-
-.smart-cal__confirmed-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  margin-top: 16px;
-}
-
-@media (max-width: 768px) {
-  .smart-cal__body {
-    grid-template-columns: 1fr;
-  }
-  .smart-cal__calendar {
-    border-right: none;
-    border-bottom: 1px solid var(--bt-border);
-  }
-}

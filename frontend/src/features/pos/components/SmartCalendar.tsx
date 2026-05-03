@@ -1,9 +1,3 @@
-/**
- * SmartCalendar — Step 9 booking widget.
- *
- * Redesigned to match the scheduler booking UI: horizontal week date picker,
- * time dropdown, phone/video toggle, appointment-with info, and submit button.
- */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useSmartCalendar } from '../hooks/useSmartCalendar';
@@ -21,8 +15,6 @@ const MEETING_TYPE_LABELS: Record<MeetingType, string> = {
   application_review: 'Application review (30 min)',
   full_consultation: 'Full consultation (60 min)',
 };
-
-type CallMode = 'phone' | 'video';
 
 export const SmartCalendar: React.FC<SmartCalendarProps> = ({
   applicationId,
@@ -46,9 +38,9 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
     releaseHold,
   } = useSmartCalendar(applicationId);
 
-  const [meetingType, setMeetingType] = useState<MeetingType>(defaultMeetingType);
+  const [meetingType] = useState<MeetingType>(defaultMeetingType);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
-  const [callMode, setCallMode] = useState<CallMode>('phone');
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [weekOffset, setWeekOffset] = useState(0);
 
   useEffect(() => {
@@ -76,13 +68,6 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
     return days;
   }, [weekOffset]);
 
-  const selectedDateKey = useMemo(() => {
-    if (!selectedSlot) return null;
-    return new Date(selectedSlot.start).toISOString().slice(0, 10);
-  }, [selectedSlot]);
-
-  const [selectedDate, setSelectedDate] = useState<string | null>(null);
-
   const timesForSelectedDate = useMemo(() => {
     if (!selectedDate || !slots?.slots_by_date) return [];
     return slots.slots_by_date[selectedDate] ?? [];
@@ -94,21 +79,15 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
     setSelectedSlot(null);
   }, []);
 
-  const handleTimeChange = useCallback((e: React.ChangeEvent<HTMLSelectElement>) => {
-    const idx = parseInt(e.target.value, 10);
-    if (isNaN(idx) || idx < 0) {
-      setSelectedSlot(null);
-      return;
-    }
-    setSelectedSlot(timesForSelectedDate[idx] ?? null);
-  }, [timesForSelectedDate]);
+  const handleTimeSelect = useCallback((slot: TimeSlot) => {
+    setSelectedSlot(slot);
+  }, []);
 
   const handleSubmit = useCallback(async () => {
     if (!selectedSlot) return;
     if (!hold) await holdSlot(selectedSlot);
-    const notes = callMode === 'video' ? 'Video call preferred' : undefined;
-    await bookSlot(selectedSlot, meetingType, notes);
-  }, [selectedSlot, hold, holdSlot, bookSlot, meetingType, callMode]);
+    await bookSlot(selectedSlot, meetingType);
+  }, [selectedSlot, hold, holdSlot, bookSlot, meetingType]);
 
   // ---------- confirmation view ----------
 
@@ -157,36 +136,59 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
     );
   }
 
+  // ---------- summary line ----------
+
+  const summaryParts: string[] = [];
+  if (selectedDate) {
+    const d = new Date(selectedDate + 'T12:00:00');
+    summaryParts.push(d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }));
+  }
+  if (selectedSlot && slots?.timezone) {
+    summaryParts.push('at ' + formatTime(selectedSlot.start, slots.timezone));
+  }
+
   // ---------- main view ----------
 
   return (
     <div className="smart-cal">
-      <header className="smart-cal__header">
-        <h2 className="smart-cal__title">Pick a date</h2>
+      {/* LO card at top */}
+      <div className="smart-cal__lo-card">
+        {lo.avatar_url ? (
+          <img src={lo.avatar_url} alt="" className="smart-cal__lo-avatar" />
+        ) : (
+          <span className="smart-cal__lo-avatar smart-cal__lo-avatar--initials">
+            {initials(lo.name)}
+          </span>
+        )}
+        <div className="smart-cal__lo-info">
+          <span className="smart-cal__lo-name">{lo.name}</span>
+          <span className="smart-cal__lo-role">
+            Loan Officer{lo.nmls ? ` · NMLS #${lo.nmls}` : ''} · {MEETING_TYPE_LABELS[meetingType]}
+          </span>
+        </div>
         {onClose && (
           <button type="button" className="smart-cal__close" onClick={onClose} aria-label="Close">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
         )}
-      </header>
+      </div>
 
-      {/* Week date picker */}
-      <div className="smart-cal__week">
-        <button
-          type="button"
-          className="smart-cal__week-nav"
-          onClick={() => setWeekOffset(w => w - 1)}
-          disabled={weekOffset <= 0}
-          aria-label="Previous week"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
-
-        <div className="smart-cal__week-days">
+      {/* Date chips */}
+      <div className="smart-cal__section">
+        <div className="smart-cal__section-title">Pick a date & time</div>
+        <div className="smart-cal__chips">
+          {weekOffset > 0 && (
+            <button
+              type="button"
+              className="smart-cal__chip smart-cal__chip--nav"
+              onClick={() => setWeekOffset(w => w - 1)}
+              aria-label="Previous week"
+            >
+              ‹
+            </button>
+          )}
           {weekDays.map(day => {
             const key = day.toISOString().slice(0, 10);
             const isSelected = selectedDate === key;
@@ -196,111 +198,61 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
               <button
                 key={key}
                 type="button"
-                className={`smart-cal__day${isSelected ? ' is-selected' : ''}${!hasSlots || isPast ? ' is-disabled' : ''}`}
+                className={`smart-cal__chip${isSelected ? ' is-selected' : ''}${!hasSlots || isPast ? ' is-disabled' : ''}`}
                 onClick={() => handleDateSelect(day)}
                 disabled={!hasSlots || isPast}
               >
-                <span className="smart-cal__day-name">
-                  {day.toLocaleDateString(undefined, { weekday: 'short' })}
-                </span>
-                <span className="smart-cal__day-num">{day.getDate()}</span>
-                <span className="smart-cal__day-month">
-                  {day.toLocaleDateString(undefined, { month: 'short' })}
-                </span>
+                {day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
               </button>
             );
           })}
-        </div>
-
-        <button
-          type="button"
-          className="smart-cal__week-nav"
-          onClick={() => setWeekOffset(w => w + 1)}
-          disabled={weekOffset >= 3}
-          aria-label="Next week"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <polyline points="9 6 15 12 9 18" />
-          </svg>
-        </button>
-      </div>
-
-      {/* Pick a time */}
-      <div className="smart-cal__section">
-        <label className="smart-cal__label">Pick a time</label>
-        <select
-          className="smart-cal__select"
-          value={selectedSlot ? String(timesForSelectedDate.indexOf(selectedSlot)) : '-1'}
-          onChange={handleTimeChange}
-          disabled={!selectedDate || loadingSlots}
-        >
-          <option value="-1">
-            {loadingSlots ? 'Loading…' : !selectedDate ? 'Select a date first' : timesForSelectedDate.length === 0 ? 'No times available' : 'Select a time'}
-          </option>
-          {timesForSelectedDate.map((slot, idx) => (
-            <option key={idx} value={String(idx)}>
-              {formatTime(slot.start, slots!.timezone)}
-              {slot.is_recommended ? ' ★' : ''}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Phone / Video toggle */}
-      <div className="smart-cal__section">
-        <div className="smart-cal__mode-toggle">
-          <button
-            type="button"
-            className={`smart-cal__mode-btn${callMode === 'phone' ? ' is-active' : ''}`}
-            onClick={() => setCallMode('phone')}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
-            </svg>
-            Phone call
-          </button>
-          <button
-            type="button"
-            className={`smart-cal__mode-btn${callMode === 'video' ? ' is-active' : ''}`}
-            onClick={() => setCallMode('video')}
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="23 7 16 12 23 17 23 7" />
-              <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-            </svg>
-            Video call
-          </button>
-        </div>
-      </div>
-
-      {/* Appointment with */}
-      <div className="smart-cal__section">
-        <label className="smart-cal__label">Appointment with</label>
-        <div className="smart-cal__lo-display">
-          {lo.avatar_url ? (
-            <img src={lo.avatar_url} alt="" className="smart-cal__lo-avatar" />
-          ) : (
-            <span className="smart-cal__lo-avatar smart-cal__lo-avatar--initials">
-              {initials(lo.name)}
-            </span>
+          {weekOffset < 3 && (
+            <button
+              type="button"
+              className="smart-cal__chip smart-cal__chip--nav"
+              onClick={() => setWeekOffset(w => w + 1)}
+              aria-label="Next week"
+            >
+              ›
+            </button>
           )}
-          <span className="smart-cal__lo-text">
-            {lo.name}{lo.nmls ? ` · NMLS #${lo.nmls}` : ''}
-          </span>
         </div>
       </div>
 
-      {/* Info card */}
-      <div className="smart-cal__info-card">
-        <p className="smart-cal__info-line">
-          <span className="smart-cal__info-label">Scheduling for:</span>{' '}
-          <span className="smart-cal__info-value">{lo.name}</span>
-        </p>
-        <p className="smart-cal__info-line">
-          <span className="smart-cal__info-label">Meeting type:</span>{' '}
-          <span className="smart-cal__info-value">{MEETING_TYPE_LABELS[meetingType]}</span>
-        </p>
-      </div>
+      {/* Time chips */}
+      {selectedDate && (
+        <div className="smart-cal__section">
+          {loadingSlots ? (
+            <div className="smart-cal__loading-text">Loading times…</div>
+          ) : timesForSelectedDate.length === 0 ? (
+            <div className="smart-cal__loading-text">No times available for this date</div>
+          ) : (
+            <div className="smart-cal__chips">
+              {timesForSelectedDate.map((slot, idx) => {
+                const isSelected = selectedSlot === slot;
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={`smart-cal__chip smart-cal__chip--time${isSelected ? ' is-selected' : ''}`}
+                    onClick={() => handleTimeSelect(slot)}
+                  >
+                    {formatTime(slot.start, slots!.timezone)}
+                    {slot.is_recommended && <span className="smart-cal__chip-star">★</span>}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Summary line */}
+      {selectedSlot && (
+        <div className="smart-cal__summary">
+          Phone call with {lo.name} · {summaryParts.join(' ')}
+        </div>
+      )}
 
       {/* Submit */}
       <button
@@ -309,7 +261,7 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
         onClick={handleSubmit}
         disabled={!selectedSlot || busy}
       >
-        {busy ? 'Booking…' : 'Submit'}
+        {busy ? 'Booking…' : 'Confirm & schedule'}
       </button>
 
       {error && <p className="smart-cal__error">{error}</p>}

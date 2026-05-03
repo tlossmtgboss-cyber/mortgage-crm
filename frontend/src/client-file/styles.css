@@ -513,14 +513,54 @@
   color: var(--pf-cf-text-tertiary);
 }
 
-/* Filter bar */
+/* Filter bar — folder tabs */
 .pf-cf-filters {
   display: flex;
-  gap: 4px;
-  padding: 14px 20px 12px;
-  flex-wrap: wrap;
-  border-bottom: 1px solid var(--pf-cf-border);
+  gap: 0;
+  padding: 8px 20px 0;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--pf-cf-border-strong);
   flex-shrink: 0;
+  position: relative;
+}
+
+.pf-cf-tab {
+  padding: 8px 18px 9px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pf-cf-text-tertiary);
+  background: #eef1f5;
+  border: 1px solid #dde2e8;
+  border-bottom: 1px solid var(--pf-cf-border-strong);
+  border-radius: 8px 8px 0 0;
+  cursor: pointer;
+  font-family: var(--pf-cf-font-sans);
+  margin-left: -1px;
+  margin-bottom: -1px;
+  position: relative;
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.pf-cf-tab:first-child {
+  margin-left: 0;
+}
+
+.pf-cf-tab:hover:not(.pf-cf-tab--active) {
+  color: var(--pf-cf-text-secondary);
+  background: #e4e8ed;
+}
+
+.pf-cf-tab--active {
+  padding: 10px 22px 11px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pf-cf-text);
+  background: #ffffff;
+  border: 1px solid var(--pf-cf-border-strong);
+  border-bottom: 1px solid #ffffff;
+  border-radius: 10px 10px 0 0;
+  z-index: 2;
+  box-shadow: 0 -2px 6px rgba(0, 0, 0, 0.04);
 }
 
 /* Timeline */

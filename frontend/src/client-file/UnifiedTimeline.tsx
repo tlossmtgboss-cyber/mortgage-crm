@@ -122,13 +122,16 @@ export function UnifiedTimeline({ clientFileId }: Props) {
     <>
       <div className="pf-cf-filters" role="tablist" aria-label="Activity filters">
         {FILTERS.map((f) => (
-          <Pill
+          <button
             key={f.key}
-            active={filter === f.key}
+            type="button"
+            role="tab"
+            aria-selected={filter === f.key}
+            className={`pf-cf-tab${filter === f.key ? " pf-cf-tab--active" : ""}`}
             onClick={() => setFilter(f.key)}
           >
             {f.label}
-          </Pill>
+          </button>
         ))}
       </div>
 
