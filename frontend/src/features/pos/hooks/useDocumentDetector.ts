@@ -31,8 +31,15 @@ function nested(data: Record<string, unknown>, key: string): Record<string, unkn
   return (data[key] as Record<string, unknown>) || {};
 }
 
+export interface IntakeFlags {
+  is_veteran?: boolean | null;
+  has_co_borrower?: boolean | null;
+  co_borrowers?: Array<{ first_name: string; last_name: string }>;
+}
+
 export function useDocumentDetector(
   sections: Partial<Record<string, SectionResponse>>,
+  intake?: IntakeFlags,
 ): DetectedDocument[] {
   return useMemo(() => {
     const docs: DetectedDocument[] = [];
@@ -95,6 +102,26 @@ export function useDocumentDetector(
         description: 'Bank statements for all accounts (all pages)',
         reason: 'Verify funds for down payment and closing costs',
         triggeredBy: 'Application started',
+      });
+    }
+
+    // ---- VETERAN (from intake) ----
+    if (intake?.is_veteran === true) {
+      add({
+        name: 'DD-214 (Certificate of Release)',
+        category: 'compliance',
+        priority: 'required',
+        description: 'DD-214 Certificate of Release or Discharge from Active Duty',
+        reason: 'Verify veteran status and VA loan eligibility',
+        triggeredBy: 'Veteran status confirmed',
+      });
+      add({
+        name: 'Certificate of Eligibility (COE)',
+        category: 'compliance',
+        priority: 'required',
+        description: 'VA Certificate of Eligibility — can be obtained online through the VA portal',
+        reason: 'Verify VA loan entitlement',
+        triggeredBy: 'Veteran status confirmed',
       });
     }
 
@@ -330,7 +357,7 @@ export function useDocumentDetector(
     }
 
     return docs;
-  }, [sections]);
+  }, [sections, intake]);
 }
 
 export const CATEGORY_LABELS: Record<DocCategory, string> = {

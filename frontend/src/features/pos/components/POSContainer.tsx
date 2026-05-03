@@ -2,6 +2,7 @@ import React, { useCallback, useState } from 'react';
 
 import { usePOSApplication } from '../hooks/usePOSApplication';
 import { useDocumentDetector } from '../hooks/useDocumentDetector';
+import { posApi } from '../api';
 import type { SectionKey } from '../types';
 import { SECTION_ORDER, SECTION_LABELS, SECTION_CAPTIONS } from '../types';
 import { TopNav } from './TopNav';
@@ -9,6 +10,8 @@ import { POSSidebar } from './POSSidebar';
 import { StepRail } from './StepRail';
 import { AriaPanel } from './AriaPanel';
 import { DocumentsDrawer } from './DocumentsDrawer';
+import { IntakePanel, EMPTY_INTAKE } from './IntakePanel';
+import type { IntakeData } from './IntakePanel';
 
 import { PersonalPanel } from './panels/PersonalPanel';
 import { ResidencePanel } from './panels/ResidencePanel';
@@ -63,13 +66,22 @@ export const POSContainer: React.FC<POSContainerProps> = ({
   const [activeStep, setActiveStep] = useState<SectionKey>('personal');
   const [ariaOpen, setAriaOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
+  const [intakeComplete, setIntakeComplete] = useState(false);
+  const [intakeData, setIntakeData] = useState<IntakeData>(EMPTY_INTAKE);
 
-  const detectedDocs = useDocumentDetector(sections);
+  const detectedDocs = useDocumentDetector(sections, intakeData);
 
   React.useEffect(() => {
     if (application && !sections.personal) {
       setActiveStep(application.current_step);
       loadSection(application.current_step);
+      // Load intake section to check if already completed.
+      loadSection('intake' as SectionKey).then(sec => {
+        if (sec?.data && sec.data.is_veteran != null) {
+          setIntakeData(sec.data as unknown as IntakeData);
+          setIntakeComplete(true);
+        }
+      });
     }
   }, [application, sections.personal, loadSection]);
 
@@ -104,7 +116,31 @@ export const POSContainer: React.FC<POSContainerProps> = ({
     );
   }
 
+  const handleIntakeComplete = async (data: IntakeData) => {
+    setIntakeData(data);
+    setIntakeComplete(true);
+    if (application) {
+      await posApi.updateSection(application.id, 'intake' as SectionKey, {
+        data: data as unknown as Record<string, unknown>,
+        mark_complete: true,
+      });
+    }
+  };
+
   const ActivePanel = PANEL_COMPONENTS[activeStep];
+
+  if (!intakeComplete) {
+    return (
+      <div className="pos-page">
+        <TopNav saveState={saveState} userInitials={userInitials || borrowerName.charAt(0).toUpperCase()} />
+        <div className="pos-body">
+          <main className="pos-main" style={{ maxWidth: 640, margin: '0 auto' }}>
+            <IntakePanel initial={intakeData} onComplete={handleIntakeComplete} />
+          </main>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pos-page">

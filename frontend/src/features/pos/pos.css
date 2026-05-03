@@ -1117,6 +1117,216 @@
   color: var(--bt-error);
 }
 
+/* ---------- Intake Panel ---------- */
+
+.pos-intake {
+  padding: 48px 0 32px;
+}
+
+.pos-intake__header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.pos-intake__title {
+  font-family: var(--bt-font-display);
+  font-size: 32px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.pos-intake__subtitle {
+  font-size: 15px;
+  color: var(--bt-text-secondary);
+  margin: 8px 0 0;
+}
+
+.pos-intake__card {
+  background: var(--bt-bg-surface);
+  border: 1px solid var(--bt-border);
+  border-radius: 16px;
+  padding: 32px;
+  animation: pos-fadeUp 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.pos-intake__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--bt-text-muted);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 16px;
+}
+
+.pos-intake__back:hover {
+  color: var(--bt-text-primary);
+}
+
+.pos-intake__question {
+  font-family: var(--bt-font-display);
+  font-size: 22px;
+  font-weight: 500;
+  margin: 0 0 8px;
+}
+
+.pos-intake__hint {
+  font-size: 14px;
+  color: var(--bt-text-secondary);
+  line-height: 1.5;
+  margin: 0 0 24px;
+}
+
+.pos-intake__choices {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pos-intake__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--bt-border-strong, #D8D0BD);
+  border-radius: 12px;
+  background: var(--bt-bg-surface);
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+  font-family: inherit;
+}
+
+.pos-intake__choice:hover {
+  border-color: var(--bt-primary);
+  background: var(--bt-primary-tint, rgba(31, 61, 46, 0.04));
+}
+
+.pos-intake__choice.is-selected {
+  border-color: var(--bt-primary);
+  background: var(--bt-primary-tint, rgba(31, 61, 46, 0.04));
+  box-shadow: 0 0 0 1px var(--bt-primary) inset;
+}
+
+.pos-intake__choice-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bt-border-strong, #D8D0BD);
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: grid;
+  place-items: center;
+  background: var(--bt-bg-surface);
+}
+
+.pos-intake__choice.is-selected .pos-intake__choice-dot {
+  border-color: var(--bt-primary);
+}
+
+.pos-intake__choice.is-selected .pos-intake__choice-dot::after {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--bt-primary);
+}
+
+.pos-intake__choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.pos-intake__choice-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--bt-text-primary);
+}
+
+.pos-intake__choice-desc {
+  font-size: 13px;
+  color: var(--bt-text-secondary);
+}
+
+/* Co-borrower names */
+.pos-intake__names {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.pos-intake__name-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pos-intake__name-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bt-text-muted);
+}
+
+.pos-intake__name-fields {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.pos-intake__input {
+  flex: 1;
+  padding: 12px 14px;
+  background: var(--bt-bg-surface);
+  border: 1px solid var(--bt-border-strong, #D8D0BD);
+  border-radius: 8px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--bt-text-primary);
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.pos-intake__input:focus {
+  border-color: var(--bt-primary);
+  box-shadow: 0 0 0 3px var(--bt-primary-tint, rgba(31, 61, 46, 0.08));
+}
+
+.pos-intake__input::placeholder {
+  color: var(--bt-text-faint, #B5B2A4);
+}
+
+.pos-intake__remove {
+  background: none;
+  border: none;
+  color: var(--bt-text-muted);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.pos-intake__remove:hover {
+  background: rgba(155, 44, 44, 0.06);
+  color: var(--bt-error, #9B2C2C);
+}
+
+.pos-intake__submit {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid var(--bt-border);
+}
+
 /* ---------- Documents Drawer ---------- */
 
 .pos-drawer {
