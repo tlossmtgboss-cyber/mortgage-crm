@@ -85,31 +85,36 @@ class CalendarService:
         """Find the LO this borrower should book with.
 
         Resolution order:
-          1. loan.loan_officer_id (the assigned LO)
-          2. fall back to organization round-robin (not implemented here —
-             raise so the frontend can show "no LO assigned" UI)
+          1. loan.loan_officer_id (the assigned LO on the linked loan)
+          2. Organization's first active user (fallback for demo/guest apps)
         """
-        if application.loan_id is None:
-            raise NoLoanOfficerAssignedError(
-                "Application has no loan; an LO must be assigned before booking"
-            )
+        if application.loan_id is not None:
+            loan = session.get(Loan, application.loan_id)
+            if loan is not None:
+                lo_id = getattr(loan, "loan_officer_id", None) or getattr(loan, "owner_id", None)
+                if lo_id is not None:
+                    lo = session.get(User, lo_id)
+                    if lo is not None:
+                        return lo
 
-        loan = session.get(Loan, application.loan_id)
-        if loan is None:
-            raise NoLoanOfficerAssignedError(
-                f"Loan {application.loan_id} not found"
-            )
-        # Loan model field name from the dev spec: loan_officer_id.
-        lo_id = getattr(loan, "loan_officer_id", None) or getattr(loan, "owner_id", None)
-        if lo_id is None:
-            raise NoLoanOfficerAssignedError(
-                f"Loan {loan.id} has no assigned loan officer"
-            )
+        lo = self._fallback_lo_for_org(session, application.organization_id)
+        if lo is not None:
+            return lo
 
-        lo = session.get(User, lo_id)
-        if lo is None:
-            raise NoLoanOfficerAssignedError(f"Loan officer user {lo_id} not found")
-        return lo
+        raise NoLoanOfficerAssignedError(
+            "No loan officer could be resolved for this application"
+        )
+
+    @staticmethod
+    def _fallback_lo_for_org(session: Session, org_id: int) -> User | None:
+        stmt = (
+            select(User)
+            .where(User.organization_id == org_id)
+            .where(User.is_active.is_(True))
+            .order_by(User.id.asc())
+            .limit(1)
+        )
+        return session.execute(stmt).scalar_one_or_none()
 
     def get_booking_link_for_lo(
         self,
