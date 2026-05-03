@@ -192,15 +192,14 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
           {weekDays.map(day => {
             const key = day.toISOString().slice(0, 10);
             const isSelected = selectedDate === key;
-            const hasSlots = slots?.slots_by_date?.[key]?.length > 0;
             const isPast = day < new Date(new Date().toDateString());
             return (
               <button
                 key={key}
                 type="button"
-                className={`smart-cal__chip${isSelected ? ' is-selected' : ''}${!hasSlots || isPast ? ' is-disabled' : ''}`}
+                className={`smart-cal__chip${isSelected ? ' is-selected' : ''}${isPast ? ' is-disabled' : ''}`}
                 onClick={() => handleDateSelect(day)}
-                disabled={!hasSlots || isPast}
+                disabled={isPast}
               >
                 {day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
               </button>

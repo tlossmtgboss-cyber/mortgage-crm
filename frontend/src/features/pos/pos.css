@@ -1920,6 +1920,7 @@
 /* Smart Calendar — Chip Picker (flat, no card wrapper) */
 .smart-cal {
   padding: 0;
+  max-width: 560px;
 }
 
 .smart-cal--loading,
@@ -2095,8 +2096,10 @@
 
 /* Submit */
 .smart-cal__submit {
-  width: 100%;
-  padding: 14px 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 36px;
   border: none;
   border-radius: var(--bt-radius-sm);
   background: var(--bt-primary);
