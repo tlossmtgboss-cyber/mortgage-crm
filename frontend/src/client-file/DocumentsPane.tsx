@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useDocumentsTab, useDocumentActions } from "./hooks";
+import { useDocumentsTab, useDocumentActions, useClientFile } from "./hooks";
 import { Pill } from "./primitives/Pill";
 import { formatRelativeTime } from "./format";
 import type { SmartDocRequest, SmartDocument } from "./types";
@@ -301,6 +301,16 @@ const DOC_CHIPS: { value: string; label: string; esign?: boolean }[] = [
   { value: "OTHER", label: "Other Document" },
 ];
 
+const LOE_TEMPLATES: { value: string; label: string; prompt: string }[] = [
+  { value: "credit_inquiry", label: "Credit Inquiry Explanation", prompt: "Please explain the recent credit inquiry from {company} on {date}." },
+  { value: "late_payment", label: "Late Payment Explanation", prompt: "Please explain the late payment on your {account_type} account in {date}." },
+  { value: "employment_gap", label: "Employment Gap Explanation", prompt: "Please explain the gap in employment between {start_date} and {end_date}." },
+  { value: "large_deposit", label: "Large Deposit Explanation", prompt: "Please explain the large deposit of {amount} on {date} in your {account} account." },
+  { value: "address_discrepancy", label: "Address Discrepancy Explanation", prompt: "Please explain the discrepancy between your current address and the address on your {document}." },
+  { value: "name_variation", label: "Name Variation Explanation", prompt: "Please explain the name variation between {name1} and {name2} on your documents." },
+  { value: "custom", label: "Custom Letter of Explanation", prompt: "" },
+];
+
 const PRIORITY_OPTS = ["LOW", "NORMAL", "HIGH", "URGENT"];
 
 interface QueuedDoc {
@@ -308,11 +318,13 @@ interface QueuedDoc {
   docType: string;
   title: string;
   instructions: string;
+  requireEsign: boolean;
+  loeTemplate: string;
 }
 
 let _nextQId = 0;
 function emptyDoc(): QueuedDoc {
-  return { id: ++_nextQId, docType: "", title: "", instructions: "" };
+  return { id: ++_nextQId, docType: "", title: "", instructions: "", requireEsign: false, loeTemplate: "custom" };
 }
 
 function NewRequestForm({
@@ -323,10 +335,14 @@ function NewRequestForm({
   onClose: () => void;
 }) {
   const actions = useDocumentActions(clientFileId);
+  const { data: clientFile } = useClientFile(clientFileId);
+  const borrowerEmail = clientFile?.primary_email ?? null;
+
   const [queue, setQueue] = useState<QueuedDoc[]>(() => [emptyDoc()]);
   const [activeIdx, setActiveIdx] = useState(0);
   const [priority, setPriority] = useState("NORMAL");
   const [dueDate, setDueDate] = useState("");
+  const [sendNotification, setSendNotification] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   const active = queue[activeIdx] ?? queue[0];
@@ -340,6 +356,14 @@ function NewRequestForm({
     updateActive({
       docType: value,
       title: active.title || chip?.label || docTypeLabel(value),
+    });
+  }
+
+  function handleLoeTemplateChange(templateValue: string) {
+    const template = LOE_TEMPLATES.find((t) => t.value === templateValue);
+    updateActive({
+      loeTemplate: templateValue,
+      instructions: template?.prompt || active.instructions,
     });
   }
 
@@ -357,10 +381,14 @@ function NewRequestForm({
 
   const validCount = queue.filter((d) => d.title.trim() && d.docType).length;
 
+  const [submitError, setSubmitError] = useState("");
+
   async function handleSubmit() {
     const toSend = queue.filter((d) => d.title.trim() && d.docType);
     if (toSend.length === 0) return;
     setSubmitting(true);
+    setSubmitError("");
+    let succeeded = 0;
     for (const doc of toSend) {
       try {
         await actions.createRequest.mutateAsync({
@@ -369,11 +397,17 @@ function NewRequestForm({
           instructions: doc.instructions || undefined,
           priority,
           due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+          require_esign: doc.requireEsign || undefined,
+          send_notification: sendNotification,
         });
-      } catch { /* best-effort */ }
+        succeeded++;
+      } catch (err: any) {
+        const detail = (err?.body as any)?.detail;
+        setSubmitError(detail || err?.message || "Request failed");
+      }
     }
     setSubmitting(false);
-    onClose();
+    if (succeeded > 0) onClose();
   }
 
   return (
@@ -439,6 +473,21 @@ function NewRequestForm({
             </div>
           </div>
 
+          {active.docType === "LOE" && (
+            <div className="pf-cf-newreq__row">
+              <label className="pf-cf-newreq__label">LOE Template</label>
+              <select
+                className="pf-cf-newreq__select"
+                value={active.loeTemplate}
+                onChange={(e) => handleLoeTemplateChange(e.target.value)}
+              >
+                {LOE_TEMPLATES.map((t) => (
+                  <option key={t.value} value={t.value}>{t.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="pf-cf-newreq__row">
             <label className="pf-cf-newreq__label">Title *</label>
             <input
@@ -458,6 +507,17 @@ function NewRequestForm({
               placeholder="What should the borrower include in this document?"
               rows={3}
             />
+          </div>
+
+          <div className="pf-cf-newreq__row">
+            <label className="pf-cf-newreq__checkbox-label">
+              <input
+                type="checkbox"
+                checked={active.requireEsign}
+                onChange={(e) => updateActive({ requireEsign: e.target.checked })}
+              />
+              <span>Require E-Signature</span>
+            </label>
           </div>
         </div>
       </div>
@@ -484,8 +544,24 @@ function NewRequestForm({
               className="pf-cf-newreq__input"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
+              min={new Date().toISOString().split("T")[0]}
             />
           </div>
+        </div>
+        <div className="pf-cf-docreq-modal__notification">
+          <label className="pf-cf-newreq__checkbox-label">
+            <input
+              type="checkbox"
+              checked={sendNotification}
+              onChange={(e) => setSendNotification(e.target.checked)}
+            />
+            <span>Send Email Notification</span>
+            <span className="pf-cf-newreq__checkbox-hint">
+              {borrowerEmail
+                ? `Notify ${borrowerEmail}`
+                : "No email on file — notification will not be sent"}
+            </span>
+          </label>
         </div>
         <div className="pf-cf-docreq-modal__actions">
           <button
@@ -506,6 +582,9 @@ function NewRequestForm({
               : `Send ${validCount} Request${validCount !== 1 ? "s" : ""}`}
           </button>
         </div>
+        {submitError && (
+          <div className="pf-cf-docreq-modal__error">{submitError}</div>
+        )}
       </div>
     </div>
   );

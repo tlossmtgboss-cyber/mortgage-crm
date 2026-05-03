@@ -102,7 +102,7 @@ def list_messages(
     svc = _svc(db, redis)
     try:
         return svc.list_messages(
-            org_id=user.organization_id,
+            organization_id=user.organization_id,
             client_file_id=client_file_id,
             actor_user_id=user.id,
             before=before,
@@ -126,7 +126,7 @@ def send_message(
     svc = _svc(db, redis)
     try:
         msg = svc.post_human_message(
-            org_id=user.organization_id,
+            organization_id=user.organization_id,
             client_file_id=client_file_id,
             author_user_id=user.id,
             body=body.body,
@@ -229,7 +229,7 @@ def get_pinned(
 ) -> Optional[dict]:
     svc = _svc(db, redis)
     return svc.get_pinned(
-        org_id=user.organization_id,
+        organization_id=user.organization_id,
         client_file_id=client_file_id,
         actor_user_id=user.id,
     )
@@ -252,7 +252,7 @@ def react(
         message_id=message_id,
         user_id=user.id,
         emoji=payload.emoji,
-        org_id=user.organization_id,
+        organization_id=user.organization_id,
     )
     db.commit()
     return {
@@ -289,7 +289,7 @@ def list_members(
     redis: Any = Depends(get_redis),
 ) -> list[dict]:
     svc = _svc(db, redis)
-    return svc.list_members(org_id=user.organization_id, client_file_id=client_file_id)
+    return svc.list_members(organization_id=user.organization_id, client_file_id=client_file_id)
 
 
 @router.post("/clients/{client_file_id}/team-chat/read")
@@ -302,7 +302,7 @@ def mark_read(
 ) -> dict:
     svc = _svc(db, redis)
     result = svc.mark_read(
-        org_id=user.organization_id,
+        organization_id=user.organization_id,
         client_file_id=client_file_id,
         user_id=user.id,
         last_read_message_id=payload.last_read_message_id,
@@ -320,7 +320,7 @@ def unread_count(
 ) -> dict:
     svc = _svc(db, redis)
     return svc.unread_count(
-        org_id=user.organization_id,
+        organization_id=user.organization_id,
         client_file_id=client_file_id,
         user_id=user.id,
     )
@@ -338,7 +338,7 @@ def set_typing(
 ) -> None:
     svc = _svc(db, redis)
     svc.set_typing(
-        org_id=user.organization_id, client_file_id=client_file_id, user_id=user.id
+        organization_id=user.organization_id, client_file_id=client_file_id, user_id=user.id
     )
 
 
@@ -351,5 +351,5 @@ def get_typing(
 ) -> dict:
     svc = _svc(db, redis)
     return svc.get_typing(
-        org_id=user.organization_id, client_file_id=client_file_id
+        organization_id=user.organization_id, client_file_id=client_file_id
     )

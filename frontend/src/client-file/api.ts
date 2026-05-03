@@ -228,6 +228,8 @@ export const documentApi = {
     instructions?: string;
     priority?: string;
     due_date?: string;
+    require_esign?: boolean;
+    send_notification?: boolean;
   }) =>
     request<unknown>(`/clients/${clientFileId}/documents/request`, {
       method: "POST",

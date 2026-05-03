@@ -1724,10 +1724,9 @@
 
 .pf-cf-docreq-modal__footer {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 20px;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 20px;
   border-top: 1px solid var(--pf-cf-border);
   background: var(--pf-cf-bg-glass);
 }
@@ -1751,10 +1750,46 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  justify-content: flex-end;
 }
 
 .pf-cf-docreq-modal__actions .pf-cf-btn--accent {
   min-width: 140px;
+}
+
+.pf-cf-docreq-modal__notification {
+  padding: 0;
+}
+
+.pf-cf-docreq-modal__error {
+  padding: 8px 0 0;
+  font-size: 12px;
+  color: var(--pf-cf-danger);
+}
+
+.pf-cf-newreq__checkbox-label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--pf-cf-text);
+  cursor: pointer;
+}
+
+.pf-cf-newreq__checkbox-label input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--pf-cf-accent);
+  cursor: pointer;
+}
+
+.pf-cf-newreq__checkbox-hint {
+  display: block;
+  width: 100%;
+  margin-left: 24px;
+  font-size: 11px;
+  color: var(--pf-cf-text-tertiary);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
