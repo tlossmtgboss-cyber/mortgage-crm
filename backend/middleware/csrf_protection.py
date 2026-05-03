@@ -72,11 +72,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/v1/livekit",  # LiveKit token provisioning — uses JWT Bearer auth, no session context
         "/api/v1/mobile-voice",  # Mobile voice endpoints — uses JWT Bearer auth
         "/api/v1/app",  # Mobile app compatibility/health (unauthenticated, pre-login)
-        "/api/v1/pos/start",  # POS public start — creates guest workspace, no auth
-        "/api/v1/pos/consent",  # POS consent flow — uses PURL token auth, no session context
-        "/api/v1/pos/voice-complete",  # Voice-complete trigger — uses JWT Bearer auth
-        "/api/v1/pos/hydrate-from-voice",  # URLA voice agent hydration — uses CRM_API_KEY Bearer auth
-        "/api/v1/pos/resolve-lo",  # URLA voice agent LO lookup — uses CRM_API_KEY (GET, but exempt for completeness)
+        "/api/v1/pos/",  # POS borrower portal — all routes use PURL token auth (stateless JWT in localStorage, inherently CSRF-safe)
         "/webhooks/imessage",  # BlueBubbles iMessage webhook — uses path-token auth (IMESSAGE_WEBHOOK_URL_SECRET)
         "/api/v1/microsoft/webhooks",  # Microsoft Graph change notifications — verified by clientState HMAC
         "/api/v1/microsoft/oauth",  # MS365 OAuth callback — code exchange from Azure AD redirect
