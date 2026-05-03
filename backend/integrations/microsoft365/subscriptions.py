@@ -44,6 +44,7 @@ def _max_minutes_for(kind: str) -> int:
         SubscriptionKind.CALENDAR.value: s.sub_max_minutes_calendar,
         SubscriptionKind.EMAIL.value: s.sub_max_minutes_messages,
         SubscriptionKind.TEAMS_CHATS.value: s.sub_max_minutes_chats,
+        SubscriptionKind.CALL_RECORDS.value: s.sub_max_minutes_call_records,
     }[kind]
 
 
@@ -143,13 +144,20 @@ def expiring_subscriptions(db: Session) -> list[MSGraphSubscription]:
     ).all()
 
 
+DELEGATED_SUBSCRIPTION_KINDS = {
+    SubscriptionKind.CALENDAR,
+    SubscriptionKind.EMAIL,
+    SubscriptionKind.TEAMS_CHATS,
+}
+
+
 async def ensure_all_subscriptions(db: Session, account: MSAccount) -> None:
     existing_kinds = {
         s.kind for s in db.query(MSGraphSubscription).filter(
             MSGraphSubscription.ms_account_id == account.id
         ).all()
     }
-    for kind in SubscriptionKind:
+    for kind in DELEGATED_SUBSCRIPTION_KINDS:
         if kind.value not in existing_kinds:
             try:
                 await create_subscription(db, account, kind.value)

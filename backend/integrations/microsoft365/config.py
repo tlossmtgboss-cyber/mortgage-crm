@@ -53,6 +53,7 @@ class MS365Settings(BaseSettings):
     sub_max_minutes_calendar: int = 4230
     sub_max_minutes_messages: int = 4230
     sub_max_minutes_chats: int = 4230
+    sub_max_minutes_call_records: int = 4230
 
     # ── Loan number patterns ─────────────────────────────────────────────
     loan_number_patterns: list[str] = Field(
@@ -86,16 +87,18 @@ GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 
 
 # ── Subscription kinds we manage ─────────────────────────────────────────
-SubscriptionKind = Literal["calendar", "email", "teams_chats"]
+SubscriptionKind = Literal["calendar", "email", "teams_chats", "call_records"]
 
 SUBSCRIPTION_RESOURCES: dict[SubscriptionKind, str] = {
     "calendar": "/me/events",
     "email": "/me/messages",
     "teams_chats": "/me/chats/getAllMessages",
+    "call_records": "/communications/callRecords",
 }
 
 SUBSCRIPTION_CHANGE_TYPES: dict[SubscriptionKind, str] = {
     "calendar": "created,updated,deleted",
     "email": "created,updated",
     "teams_chats": "created",
+    "call_records": "created",
 }

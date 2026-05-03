@@ -21,6 +21,7 @@ const formatHour = (hour) => {
 const getEventColorClass = (eventType) => {
   const typeMap = {
     meeting: 'event-color-meeting',
+    teams_meeting: 'event-color-meeting',
     call: 'event-color-call',
     appraisal: 'event-color-appraisal',
     closing: 'event-color-closing',

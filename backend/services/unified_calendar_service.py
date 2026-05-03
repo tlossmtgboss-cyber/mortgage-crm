@@ -1,16 +1,17 @@
 """
 Unified Calendar Service
 
-Fetches and merges events from 3 calendar sources:
+Fetches and merges events from 4 calendar sources:
 1. CalendarEvent - User calendar events (/api/v1/calendar/events)
 2. ScheduledAppointment - Scheduled appointments (/api/v1/scheduler/appointments)
 3. CRMCalendarEvent - CRM events synced with Salesforce (/api/calendar/events)
+4. Microsoft Outlook - Events from user's Outlook calendar via Graph API
 
 Handles partial failures gracefully - if one source fails, others still return.
 """
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
 from sqlalchemy.orm import Session
@@ -76,6 +77,15 @@ class UnifiedCalendarService:
         else:
             sources_queried.append("crm")
         events.extend(crm_events)
+
+        outlook_events, outlook_warning = self._fetch_outlook_events(
+            start_date, end_date
+        )
+        if outlook_warning:
+            warnings.append(outlook_warning)
+        else:
+            sources_queried.append("outlook")
+        events.extend(outlook_events)
 
         # Sort by start_time
         events.sort(key=lambda e: e.get("start_time") or "")
@@ -175,6 +185,168 @@ class UnifiedCalendarService:
         except Exception as e:
             logger.error(f"Failed to fetch CRM events: {e}", exc_info=True)
             return [], f"crm: {str(e)}"
+
+    def _fetch_outlook_events(
+        self, start_date: datetime, end_date: datetime
+    ) -> tuple[List[Dict], Optional[str]]:
+        """Fetch events from Microsoft Outlook via Graph API using stored OAuth tokens."""
+        try:
+            from database.models.microsoft import MicrosoftToken
+            from integrations.microsoft_outlook_service import microsoft_outlook_client
+
+            # MicrosoftToken.user_id has unique=True so no org filter needed
+            token_row = self.db.query(MicrosoftToken).filter(
+                MicrosoftToken.user_id == self.user_id
+            ).with_for_update(skip_locked=True).first()
+
+            if not token_row or not token_row.access_token:
+                return [], None
+
+            access_token = token_row.access_token
+
+            if token_row.expires_at and token_row.refresh_token:
+                expires_at = token_row.expires_at
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if expires_at <= datetime.now(timezone.utc):
+                    refreshed = microsoft_outlook_client.refresh_access_token(token_row.refresh_token)
+                    if refreshed and refreshed.get("access_token"):
+                        access_token = refreshed["access_token"]
+                        token_row.access_token = refreshed["access_token"]
+                        if refreshed.get("refresh_token"):
+                            token_row.refresh_token = refreshed["refresh_token"]
+                        if refreshed.get("expires_at"):
+                            token_row.expires_at = datetime.fromisoformat(
+                                refreshed["expires_at"].replace("Z", "+00:00")
+                            )
+                        self.db.commit()
+                    else:
+                        logger.warning("Outlook token refresh failed for user %s", self.user_id)
+                        return [], None
+
+            result = microsoft_outlook_client.list_events(
+                access_token=access_token,
+                start_time=start_date,
+                end_time=end_date,
+                top=200,
+            )
+
+            if not result or "value" not in result:
+                return [], None
+
+            events = []
+            for raw in result["value"]:
+                if raw.get("isCancelled"):
+                    continue
+                transformed = self._transform_outlook_event(raw)
+                if transformed:
+                    events.append(transformed)
+
+            return events, None
+
+        except Exception as e:
+            logger.error("Failed to fetch Outlook events: %s", e, exc_info=True)
+            return [], f"outlook: {str(e)}"
+
+    def _transform_outlook_event(self, event: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Transform a raw Microsoft Graph event to unified format."""
+        start_dt = self._parse_outlook_datetime(event.get("start", {}))
+        end_dt = self._parse_outlook_datetime(event.get("end", {}))
+
+        if not start_dt:
+            return None
+
+        attendees = []
+        for att in event.get("attendees", []):
+            email_obj = att.get("emailAddress", {})
+            attendees.append({
+                "name": email_obj.get("name", ""),
+                "email": email_obj.get("address", ""),
+            })
+
+        location_parts = []
+        loc = event.get("location", {})
+        if loc.get("displayName"):
+            location_parts.append(loc["displayName"])
+
+        is_teams = event.get("isOnlineMeeting", False)
+        meeting_link = None
+        if is_teams and event.get("onlineMeeting"):
+            meeting_link = event["onlineMeeting"].get("joinUrl")
+
+        return {
+            "id": f"outlook-{event['id']}",
+            "title": event.get("subject") or "Outlook Event",
+            "description": (event.get("body", {}).get("content") or "")[:500],
+            "start_time": start_dt.isoformat() if start_dt else None,
+            "end_time": end_dt.isoformat() if end_dt else None,
+            "event_type": "teams_meeting" if is_teams else "meeting",
+            "location": ", ".join(location_parts) if location_parts else ("Microsoft Teams" if is_teams else ""),
+            "source": "outlook",
+            "related_lead_id": None,
+            "related_loan_id": None,
+            "attendee_name": attendees[0]["name"] if attendees else None,
+            "status": event.get("showAs", "busy"),
+            "is_appointment": False,
+            "is_crm_event": False,
+            "all_day": event.get("isAllDay", False),
+            "attendees": attendees,
+            "meeting_link": meeting_link,
+            "outlook_event_id": event.get("id"),
+            "organizer": event.get("organizer", {}).get("emailAddress", {}).get("name"),
+        }
+
+    @staticmethod
+    def _parse_outlook_datetime(dt_dict: Dict[str, Any]) -> Optional[datetime]:
+        """Parse Outlook start/end dict {dateTime, timeZone} into a UTC datetime.
+
+        Graph returns datetimes in the user's calendar timezone (e.g. "Pacific
+        Standard Time"). We attempt to convert to UTC using zoneinfo; if the
+        Windows-style timezone name isn't recognized, we fall back to treating
+        the value as UTC (acceptable for display — may be off by the user's
+        offset until the Graph request adds Prefer: outlook.timezone="UTC").
+        """
+        if not dt_dict:
+            return None
+        raw = dt_dict.get("dateTime")
+        if not raw:
+            return None
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+
+            if dt.tzinfo is None:
+                tz_name = dt_dict.get("timeZone")
+                if tz_name and tz_name != "UTC":
+                    try:
+                        from zoneinfo import ZoneInfo
+                        tz = ZoneInfo(tz_name)
+                        dt = dt.replace(tzinfo=tz).astimezone(timezone.utc)
+                    except (KeyError, ImportError):
+                        WINDOWS_TZ_MAP = {
+                            "Pacific Standard Time": "America/Los_Angeles",
+                            "Mountain Standard Time": "America/Denver",
+                            "Central Standard Time": "America/Chicago",
+                            "Eastern Standard Time": "America/New_York",
+                            "US Eastern Standard Time": "America/Indianapolis",
+                            "Alaskan Standard Time": "America/Anchorage",
+                            "Hawaiian Standard Time": "Pacific/Honolulu",
+                            "GMT Standard Time": "Europe/London",
+                        }
+                        iana = WINDOWS_TZ_MAP.get(tz_name)
+                        if iana:
+                            try:
+                                from zoneinfo import ZoneInfo
+                                dt = dt.replace(tzinfo=ZoneInfo(iana)).astimezone(timezone.utc)
+                            except (KeyError, ImportError):
+                                dt = dt.replace(tzinfo=timezone.utc)
+                        else:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                else:
+                    dt = dt.replace(tzinfo=timezone.utc)
+
+            return dt
+        except (ValueError, TypeError):
+            return None
 
     def _transform_calendar_event(self, event) -> Dict[str, Any]:
         """

@@ -4281,6 +4281,16 @@ except Exception as e:
     logger.warning(f"Microsoft 365 routes skipped: {e}")
 
 # ============================================================================
+# TEAMS INBOUND CALL NOTIFICATIONS (WebSocket + webhook)
+# ============================================================================
+try:
+    from routes.teams_call_routes import router as teams_call_router
+    app.include_router(teams_call_router)
+    logger.info("Teams inbound call notification routes loaded")
+except Exception as e:
+    logger.warning(f"Teams call notification routes skipped: {e}")
+
+# ============================================================================
 # CLIENT FILE AGGREGATE ROOT + TEAM CHAT TABLES
 # ============================================================================
 try:

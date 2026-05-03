@@ -60,6 +60,7 @@ class SubscriptionKind(str, Enum):
     CALENDAR = "calendar"
     EMAIL = "email"
     TEAMS_CHATS = "teams_chats"
+    CALL_RECORDS = "call_records"
 
 
 class MSAccount(Base):

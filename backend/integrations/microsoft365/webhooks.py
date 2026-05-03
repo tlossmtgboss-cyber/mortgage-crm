@@ -34,7 +34,8 @@ async def handle_webhook(
     if validation_token is not None:
         return Response(content=validation_token, media_type="text/plain", status_code=200)
 
-    if kind not in {k.value for k in SubscriptionKind}:
+    valid_kinds = {k.value for k in SubscriptionKind}
+    if kind not in valid_kinds:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Unknown subscription kind")
 
     try:
@@ -115,6 +116,12 @@ async def _dispatch_notification(
                     await ingest_chat_message(
                         db, account, chat_id=chat_id, message_id=message_id
                     )
+
+            elif kind == SubscriptionKind.CALL_RECORDS.value:
+                from .call_record_ingest import ingest_call_record
+                record_id = resource_data.get("id")
+                if record_id and change_type == "created":
+                    await ingest_call_record(db, account, record_id)
 
             db.commit()
         finally:

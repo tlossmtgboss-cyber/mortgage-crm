@@ -25,6 +25,7 @@ import { initNotificationActions } from './services/notificationActions';
 import { initDeepLinkRouter, consumePendingDeepLink } from './services/deepLinkRouter';
 import { API_BASE_URL } from './services/api';
 import { getToken } from './utils/tokenStore';
+import InboundCallLightbox from './components/InboundCallLightbox';
 import { getRoutes } from './routes/index';
 import './App.css';
 
@@ -454,6 +455,7 @@ function App() {
         <GlobalSearch />
         {/* Aria FAB - floating mic button on native mobile */}
         <AriaFAB />
+        <InboundCallLightbox />
         </div>
       </Router>
         </BrandingProvider>

@@ -76,6 +76,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/webhooks/imessage",  # BlueBubbles iMessage webhook — uses path-token auth (IMESSAGE_WEBHOOK_URL_SECRET)
         "/api/v1/microsoft/webhooks",  # Microsoft Graph change notifications — verified by clientState HMAC
         "/api/v1/microsoft/oauth",  # MS365 OAuth callback — code exchange from Azure AD redirect
+        "/api/v1/teams/calls/inbound",  # Teams call webhook — verified by HMAC (TEAMS_WEBHOOK_SECRET)
         "/api/v1/microsoft/bootstrap",  # MS365 bootstrap — admin API key auth
         "/internal",  # Server-to-server calls from voice agent — uses X-Internal-API-Key auth
         "/api/v1/management",  # Management endpoints — uses SECRET_KEY query param auth
