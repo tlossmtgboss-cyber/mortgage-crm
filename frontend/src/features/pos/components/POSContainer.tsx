@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react';
 
 import { usePOSApplication } from '../hooks/usePOSApplication';
 import type { SectionKey } from '../types';
-import { SECTION_ORDER, SECTION_LABELS } from '../types';
+import { SECTION_ORDER, SECTION_LABELS, SECTION_CAPTIONS } from '../types';
 import { TopNav } from './TopNav';
 import { POSSidebar } from './POSSidebar';
 import { StepRail } from './StepRail';
@@ -109,16 +109,19 @@ export const POSContainer: React.FC<POSContainerProps> = ({
         <POSSidebar application={application} onAskAria={() => setAriaOpen(true)} />
 
         <main className="pos-main">
-          <div className="pos-main__header">
-            <div>
-              <p className="pos-main__step-counter">
-                Step {SECTION_ORDER.indexOf(activeStep) + 1} of {SECTION_ORDER.length}
-              </p>
-              <h1 className="pos-main__step-title">{SECTION_LABELS[activeStep]}</h1>
+          <div className="pos-main__welcome">
+            <div className="pos-main__urla-badge">
+              <span className="pos-main__urla-tag">URLA · Form 1003</span>
+              <span className="pos-main__time-estimate">Estimated time remaining: ~14 minutes</span>
             </div>
+            <h1 className="pos-main__heading">Welcome back, {borrowerName}.</h1>
+            <p className="pos-main__subheading">
+              Let's finish your loan application. Your progress saves automatically — step away
+              anytime and pick up right where you left off.
+            </p>
           </div>
 
-          <div className="pos-main__steps">
+          <div className="pos-main__grid">
             <StepRail
               steps={SECTION_ORDER}
               labels={SECTION_LABELS}
@@ -126,27 +129,34 @@ export const POSContainer: React.FC<POSContainerProps> = ({
               completionByStep={application.sections_complete}
               onStepClick={handleStepChange}
             />
-          </div>
 
-          <div className="pos-main__panel">
-            <ActivePanel
-              section={sections[activeStep]}
-              onChange={(data: Record<string, unknown>) =>
-                updateSectionData(activeStep, data)
-              }
-              onComplete={() => {
-                markComplete(activeStep).then(() => {
-                  const nextIdx = Math.min(
-                    SECTION_ORDER.indexOf(activeStep) + 1,
-                    SECTION_ORDER.length - 1,
-                  );
-                  handleStepChange(SECTION_ORDER[nextIdx]);
-                });
-              }}
-              application={application}
-              onSubmit={submit}
-              onAskAria={() => setAriaOpen(true)}
-            />
+            <div className="pos-main__panel">
+              <div className="pos-main__step-header">
+                <p className="pos-main__step-counter">
+                  Step {SECTION_ORDER.indexOf(activeStep) + 1} of {SECTION_ORDER.length}
+                </p>
+                <h2 className="pos-main__step-title">{SECTION_LABELS[activeStep]}</h2>
+              </div>
+
+              <ActivePanel
+                section={sections[activeStep]}
+                onChange={(data: Record<string, unknown>) =>
+                  updateSectionData(activeStep, data)
+                }
+                onComplete={() => {
+                  markComplete(activeStep).then(() => {
+                    const nextIdx = Math.min(
+                      SECTION_ORDER.indexOf(activeStep) + 1,
+                      SECTION_ORDER.length - 1,
+                    );
+                    handleStepChange(SECTION_ORDER[nextIdx]);
+                  });
+                }}
+                application={application}
+                onSubmit={submit}
+                onAskAria={() => setAriaOpen(true)}
+              />
+            </div>
           </div>
         </main>
       </div>

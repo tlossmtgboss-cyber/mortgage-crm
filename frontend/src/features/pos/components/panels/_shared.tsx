@@ -32,8 +32,8 @@ export interface FieldProps {
   placeholder?: string;
   required?: boolean;
   helpText?: string;
-  cols?: 1 | 2 | 3;
-  options?: { value: string; label: string }[]; // for select
+  cols?: 1 | 2 | 3 | 4;
+  options?: { value: string; label: string }[];
   inputMode?: string;
 }
 

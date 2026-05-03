@@ -9,6 +9,7 @@
 import React from 'react';
 
 import type { SectionKey } from '../types';
+import { SECTION_CAPTIONS } from '../types';
 
 export interface StepRailProps {
   steps: SectionKey[];
@@ -58,7 +59,12 @@ export const StepRail: React.FC<StepRailProps> = ({
               <span className="pos-step-rail__index">
                 {isComplete ? <CheckIcon /> : idx + 1}
               </span>
-              <span className="pos-step-rail__label">{labels[key]}</span>
+              <span className="pos-step-rail__label-wrap">
+                <span className="pos-step-rail__label">{labels[key]}</span>
+                {SECTION_CAPTIONS[key] && (
+                  <span className="pos-step-rail__caption">{SECTION_CAPTIONS[key]}</span>
+                )}
+              </span>
             </button>
           </li>
         );

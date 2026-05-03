@@ -659,7 +659,7 @@
 
 .urla-form-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px 20px;
 }
 
@@ -670,6 +670,8 @@
 
 .urla-field--cols-1 { grid-column: span 1; }
 .urla-field--cols-2 { grid-column: span 2; }
+.urla-field--cols-3 { grid-column: span 3; }
+.urla-field--cols-4 { grid-column: span 4; }
 
 .urla-field__label {
   display: block;
@@ -815,14 +817,138 @@
   background: var(--bt-bg-elevated);
 }
 
+@media (max-width: 900px) {
+  .urla-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .urla-field--cols-3,
+  .urla-field--cols-4 {
+    grid-column: span 2;
+  }
+}
+
 @media (max-width: 640px) {
   .urla-form-grid {
     grid-template-columns: 1fr;
   }
   .urla-field--cols-1,
-  .urla-field--cols-2 {
+  .urla-field--cols-2,
+  .urla-field--cols-3,
+  .urla-field--cols-4 {
     grid-column: span 1;
   }
+}
+
+/* ---------- Radio Cards ---------- */
+
+.urla-radio-cards {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.urla-radio-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--bt-border-strong, #D8D0BD);
+  border-radius: 10px;
+  cursor: pointer;
+  background: var(--bt-bg-surface);
+  transition: all 0.15s;
+  flex: 1;
+  min-width: 160px;
+}
+
+.urla-radio-card:hover {
+  border-color: var(--bt-primary);
+  background: var(--bt-primary-tint, rgba(31, 61, 46, 0.04));
+}
+
+.urla-radio-card.is-selected {
+  border-color: var(--bt-primary);
+  background: var(--bt-primary-tint, rgba(31, 61, 46, 0.04));
+  box-shadow: 0 0 0 1px var(--bt-primary) inset;
+}
+
+.urla-radio-card__input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.urla-radio-card__dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--bt-border-strong, #D8D0BD);
+  flex-shrink: 0;
+  margin-top: 2px;
+  display: grid;
+  place-items: center;
+  background: var(--bt-bg-surface);
+}
+
+.urla-radio-card.is-selected .urla-radio-card__dot {
+  border-color: var(--bt-primary);
+}
+
+.urla-radio-card.is-selected .urla-radio-card__dot::after {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--bt-primary);
+}
+
+.urla-radio-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.urla-radio-card__label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bt-text-primary);
+}
+
+.urla-radio-card__desc {
+  font-size: 12px;
+  color: var(--bt-text-secondary);
+}
+
+/* ---------- Banner ---------- */
+
+.urla-banner {
+  background: linear-gradient(180deg, #FBF6E8, #F8F0D8);
+  border: 1px solid #E5D49A;
+  border-radius: 12px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  color: #6B4F1A;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-top: 24px;
+}
+
+.urla-banner p {
+  margin: 0;
+}
+
+.urla-banner strong {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.urla-banner svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #8B6B2A;
 }
 
 /* ---------- Loading / Error ---------- */
