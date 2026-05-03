@@ -156,10 +156,6 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({
             Drop a document and we'll handle the rest.
           </p>
         </div>
-        <button type="button" className="docs-btn docs-btn--primary" onClick={handleUploadClick}>
-          <UploadIcon />
-          Upload a document
-        </button>
         <input ref={fileInputRef} type="file" className="docs-page__file-input" multiple accept=".pdf,.png,.jpg,.jpeg" />
       </div>
 
