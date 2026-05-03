@@ -41,7 +41,11 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
   const [meetingType] = useState<MeetingType>(defaultMeetingType);
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [weekOffset, setWeekOffset] = useState(0);
+  const minWeekOffset = useMemo(() => {
+    const dow = new Date().getDay();
+    return (dow === 0 || dow === 6) ? 1 : 0;
+  }, []);
+  const [weekOffset, setWeekOffset] = useState(minWeekOffset);
 
   useEffect(() => {
     loadLO();
@@ -179,7 +183,7 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
       <div className="smart-cal__section">
         <div className="smart-cal__section-title">Pick a date & time</div>
         <div className="smart-cal__chips">
-          {weekOffset > 0 && (
+          {weekOffset > minWeekOffset && (
             <button
               type="button"
               className="smart-cal__chip smart-cal__chip--nav"
