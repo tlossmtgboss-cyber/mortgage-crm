@@ -106,7 +106,7 @@ def get_section(
     section_key: str,
     application: POSApplication = Depends(resolve_application_for_borrower),
 ) -> SectionResponse:
-    if section_key not in POSSectionKey.ORDERED:
+    if section_key not in POSSectionKey.ALL_VALID:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Unknown section")
 
     section = next(
@@ -154,7 +154,7 @@ def update_section(
     service: ApplicationService = Depends(get_application_service),
     ctx: AuditContext = Depends(build_audit_context),
 ) -> SectionResponse:
-    if section_key not in POSSectionKey.ORDERED:
+    if section_key not in POSSectionKey.ALL_VALID:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Unknown section")
 
     # Lift PII fields out of `data` if this is the personal section — they're

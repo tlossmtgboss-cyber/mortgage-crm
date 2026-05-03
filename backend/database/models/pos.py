@@ -55,6 +55,7 @@ class POSStatus:
 
 
 class POSSectionKey:
+    INTAKE = "intake"
     PERSONAL = "personal"
     RESIDENCE = "residence"
     EMPLOYMENT = "employment"
@@ -66,6 +67,7 @@ class POSSectionKey:
     REVIEW = "review"
 
     # Source of truth for ordering and the step count shown to the borrower.
+    # intake is excluded — it's a pre-screen, not a numbered step.
     ORDERED = (
         PERSONAL,
         RESIDENCE,
@@ -77,6 +79,9 @@ class POSSectionKey:
         DECLARATIONS,
         REVIEW,
     )
+
+    # All valid section keys (includes pre-screen sections not in ORDERED).
+    ALL_VALID = ORDERED + (INTAKE,)
 
 
 class POSAuditEvent:

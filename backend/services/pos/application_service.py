@@ -178,7 +178,7 @@ class ApplicationService:
         and pass them to `upsert_pii` separately — those go to the encrypted
         PII table, not the JSONB section.
         """
-        if section_key not in POSSectionKey.ORDERED:
+        if section_key not in POSSectionKey.ALL_VALID:
             raise ApplicationStateError(f"Unknown section_key: {section_key}")
         if application.status != POSStatus.DRAFT:
             raise ApplicationStateError(
