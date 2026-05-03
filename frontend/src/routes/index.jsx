@@ -315,7 +315,6 @@ const PURLApplication = lazyRetry(() => import('../pages/PURLApplication'));
 const PortalContainer = lazyRetry(() => import('../pages/portal/PortalContainer'));
 const POSApplication = lazyRetry(() => import('../pages/portal/POSApplication'));
 const POSTestPage = lazyRetry(() => import('../pages/portal/POSTestPage'));
-const POSEntryPage = lazyRetry(() => import('../pages/pos/POSEntryPage'));
 const LoanPortalRedirect = lazyRetry(() => import('../components/Portal/LoanPortalRedirect'));
 const AdminDocumentReviewQueue = lazyRetry(() => import('../pages/AdminDocumentReviewQueue'));
 const IncomeCalculatorPopout = lazyRetry(() => import('../pages/IncomeCalculatorPopout'));
