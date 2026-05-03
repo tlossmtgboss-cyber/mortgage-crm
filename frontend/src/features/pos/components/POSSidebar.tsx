@@ -6,9 +6,11 @@ import { AskAriaButton } from './AskAriaButton';
 export interface POSSidebarProps {
   application: ApplicationResponse | null;
   onAskAria: () => void;
+  documentCount?: number;
+  onDocumentsClick?: () => void;
 }
 
-export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria }) => {
+export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, documentCount = 0, onDocumentsClick }) => {
   const pct = application?.completion_pct ?? 0;
 
   return (
@@ -47,7 +49,7 @@ export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria }
           <span className="pos-nav__section-title">Your Loan</span>
           <NavItem icon={<HomeIcon />} label="Home" />
           <NavItem icon={<FormIcon />} label="Application" active />
-          <NavItem icon={<UploadIcon />} label="Documents" badge={3} />
+          <NavItem icon={<UploadIcon />} label="Documents" badge={documentCount || undefined} onClick={onDocumentsClick} />
           <NavItem icon={<ChecklistIcon />} label="Tasks" count={5} />
           <NavItem icon={<ChatIcon />} label="Messages" dot />
           <NavItem icon={<BookIcon />} label="Disclosures" />
@@ -69,10 +71,12 @@ const NavItem: React.FC<{
   badge?: number;
   count?: number;
   dot?: boolean;
-}> = ({ icon, label, active, badge, count, dot }) => (
+  onClick?: () => void;
+}> = ({ icon, label, active, badge, count, dot, onClick }) => (
   <button
     type="button"
     className={`pos-nav__item${active ? ' pos-nav__item--active' : ''}`}
+    onClick={onClick}
   >
     <span className="pos-nav__icon">{icon}</span>
     <span>{label}</span>

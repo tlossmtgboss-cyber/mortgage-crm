@@ -1,12 +1,14 @@
 import React, { useCallback, useState } from 'react';
 
 import { usePOSApplication } from '../hooks/usePOSApplication';
+import { useDocumentDetector } from '../hooks/useDocumentDetector';
 import type { SectionKey } from '../types';
 import { SECTION_ORDER, SECTION_LABELS, SECTION_CAPTIONS } from '../types';
 import { TopNav } from './TopNav';
 import { POSSidebar } from './POSSidebar';
 import { StepRail } from './StepRail';
 import { AriaPanel } from './AriaPanel';
+import { DocumentsDrawer } from './DocumentsDrawer';
 
 import { PersonalPanel } from './panels/PersonalPanel';
 import { ResidencePanel } from './panels/ResidencePanel';
@@ -60,6 +62,9 @@ export const POSContainer: React.FC<POSContainerProps> = ({
 
   const [activeStep, setActiveStep] = useState<SectionKey>('personal');
   const [ariaOpen, setAriaOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
+
+  const detectedDocs = useDocumentDetector(sections);
 
   React.useEffect(() => {
     if (application && !sections.personal) {
@@ -106,7 +111,12 @@ export const POSContainer: React.FC<POSContainerProps> = ({
       <TopNav saveState={saveState} userInitials={userInitials || borrowerName.charAt(0).toUpperCase()} />
 
       <div className="pos-body">
-        <POSSidebar application={application} onAskAria={() => setAriaOpen(true)} />
+        <POSSidebar
+          application={application}
+          onAskAria={() => setAriaOpen(true)}
+          documentCount={detectedDocs.length}
+          onDocumentsClick={() => setDocsOpen(true)}
+        />
 
         <main className="pos-main">
           <div className="pos-main__welcome">
@@ -166,6 +176,12 @@ export const POSContainer: React.FC<POSContainerProps> = ({
         onClose={() => setAriaOpen(false)}
         applicationId={application.id}
         currentStep={activeStep}
+      />
+
+      <DocumentsDrawer
+        open={docsOpen}
+        onClose={() => setDocsOpen(false)}
+        documents={detectedDocs}
       />
     </div>
   );
