@@ -73,13 +73,6 @@ export const DeclarationsPanel: React.FC<PanelProps> = ({ section, onChange, onC
           value={data.federal_debt_delinquent as boolean | null}
           onChange={updateField} cols={3} />
 
-        <YesNoField label="Are you a U.S. citizen?"
-          name="us_citizen" value={data.us_citizen as boolean | null}
-          onChange={updateField} cols={3} />
-
-        <YesNoField label="Are you a permanent resident alien?"
-          name="permanent_resident" value={data.permanent_resident as boolean | null}
-          onChange={updateField} cols={3} />
       </FormSection>
 
       <ContinueButton onClick={onComplete} />
