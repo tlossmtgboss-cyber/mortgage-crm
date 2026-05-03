@@ -6,6 +6,7 @@ import {
   useActionPlanRuns,
   useCadenceLifecycle,
   useCadenceSequences,
+  useClientFile,
   useDocumentSets,
   useInsight,
   useRelationships,
@@ -24,6 +25,77 @@ import type {
   Relationship,
   Task,
 } from "./types";
+
+// ─────────────────────────────────────────────────────────────────────────
+// Loan summary
+// ─────────────────────────────────────────────────────────────────────────
+
+function formatCurrency(val: number): string {
+  return val.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+}
+
+function formatTerm(months: number): string {
+  const years = months / 12;
+  return Number.isInteger(years) ? `${years} yr` : `${months} mo`;
+}
+
+function formatStage(stage: string): string {
+  return stage
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function LoanPanel({ clientFileId }: { clientFileId: string }) {
+  const { data: cf, isLoading } = useClientFile(clientFileId);
+
+  if (isLoading) {
+    return (
+      <Card title="loan" variant="strong">
+        <div className="pf-cf-empty">Loading…</div>
+      </Card>
+    );
+  }
+
+  if (!cf?.active_loan_id) {
+    return (
+      <Card title="loan" variant="strong">
+        <div className="pf-cf-empty">No active loan linked.</div>
+      </Card>
+    );
+  }
+
+  const rows: { label: string; value: string }[] = [];
+
+  if (cf.active_loan_stage)
+    rows.push({ label: "Stage", value: formatStage(cf.active_loan_stage) });
+  if (cf.active_loan_type)
+    rows.push({ label: "Loan Type", value: cf.active_loan_type });
+  if (cf.active_loan_term)
+    rows.push({ label: "Term", value: formatTerm(cf.active_loan_term) });
+  if (cf.active_loan_purchase_price)
+    rows.push({ label: "Purchase Price", value: formatCurrency(cf.active_loan_purchase_price) });
+  if (cf.active_loan_amount)
+    rows.push({ label: "Loan Amount", value: formatCurrency(cf.active_loan_amount) });
+  if (cf.active_loan_interest_rate)
+    rows.push({ label: "Interest Rate", value: `${cf.active_loan_interest_rate}%` });
+
+  return (
+    <Card title="loan" variant="strong">
+      {rows.length === 0 ? (
+        <div className="pf-cf-empty">No loan details available.</div>
+      ) : (
+        <div className="pf-cf-loan-grid">
+          {rows.map((r) => (
+            <div key={r.label} className="pf-cf-loan-row">
+              <span className="pf-cf-loan-row__label">{r.label}</span>
+              <span className="pf-cf-loan-row__value">{r.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // Insights — engagement score + NBA

@@ -101,6 +101,11 @@ export interface ClientFile {
   active_loan_lock_expires_at?: string | null;
   active_loan_projected_close_date?: string | null;
   active_loan_current_milestone?: string | null;
+  active_loan_stage?: string | null;
+  active_loan_type?: string | null;
+  active_loan_term?: number | null;
+  active_loan_purchase_price?: number | null;
+  active_loan_interest_rate?: number | null;
   // Audit
   created_at: string;
   updated_at: string;

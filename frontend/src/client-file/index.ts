@@ -20,6 +20,7 @@ export {
   DocumentsPanel,
   FollowUpsPanel,
   InsightsPanel,
+  LoanPanel,
   RelationshipsPanel,
   TasksPanel,
 } from "./RailPanels";

@@ -77,6 +77,11 @@ class ClientFileResponse(BaseModel):
     active_loan_lock_expires_at: Optional[str] = None
     active_loan_projected_close_date: Optional[str] = None
     active_loan_current_milestone: Optional[str] = None
+    active_loan_stage: Optional[str] = None
+    active_loan_type: Optional[str] = None
+    active_loan_term: Optional[int] = None
+    active_loan_purchase_price: Optional[float] = None
+    active_loan_interest_rate: Optional[float] = None
     created_at: str
     updated_at: str
 
@@ -90,7 +95,7 @@ def _iso(dt: Optional[datetime]) -> Optional[str]:
     return dt.isoformat() if dt else None
 
 
-def _to_response(cf: Any, lo_name: Optional[str] = None) -> dict:
+def _to_response(cf: Any, lo_name: Optional[str] = None, loan: Any = None) -> dict:
     return ClientFileResponse(
         id=str(cf.id),
         org_id=str(cf.organization_id),
@@ -109,12 +114,18 @@ def _to_response(cf: Any, lo_name: Optional[str] = None) -> dict:
         assigned_processor_id=str(cf.assigned_processor_id) if cf.assigned_processor_id else None,
         last_contact_at=_iso(cf.last_contact_at),
         tags=cf.tags or [],
-        active_loan_program=cf.active_loan_program,
-        active_loan_purpose=cf.active_loan_purpose,
-        active_loan_amount=float(cf.active_loan_amount) if cf.active_loan_amount else None,
+        active_loan_id=str(loan.id) if loan else None,
+        active_loan_program=cf.active_loan_program or (loan.program if loan else None),
+        active_loan_purpose=cf.active_loan_purpose or (loan.loan_type if loan else None),
+        active_loan_amount=float(loan.amount) if loan and loan.amount else (float(cf.active_loan_amount) if cf.active_loan_amount else None),
         active_loan_fico=cf.active_loan_fico,
         active_loan_lock_expires_at=_iso(cf.active_loan_lock_expires_at),
-        active_loan_projected_close_date=_iso(cf.active_loan_projected_close_date),
+        active_loan_projected_close_date=_iso(loan.closing_date) if loan and loan.closing_date else _iso(cf.active_loan_projected_close_date),
+        active_loan_stage=loan.stage if loan else None,
+        active_loan_type=loan.loan_type if loan else None,
+        active_loan_term=loan.term if loan else None,
+        active_loan_purchase_price=float(loan.purchase_price) if loan and loan.purchase_price else None,
+        active_loan_interest_rate=float(loan.rate) if loan and loan.rate else None,
         created_at=cf.created_at.isoformat(),
         updated_at=cf.updated_at.isoformat(),
     ).model_dump()
@@ -131,6 +142,16 @@ def _get_cf(db: Session, cf_id: uuid.UUID, org_id: int):
     if cf is None:
         raise HTTPException(404, "client file not found")
     return cf
+
+
+def _active_loan(db: Session, cf: Any, org_id: int):
+    loan_ids = _get_loan_ids_for_cf(db, cf, org_id)
+    if not loan_ids:
+        return None
+    from database.models.lead_loan import Loan
+    return db.execute(
+        select(Loan).where(Loan.id == loan_ids[0])
+    ).scalar_one_or_none()
 
 
 def _lo_name(db: Session, user_id: Optional[int]) -> Optional[str]:
@@ -150,7 +171,8 @@ def get_client_file(
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
-    return _to_response(cf, _lo_name(db, cf.assigned_loan_officer_id))
+    loan = _active_loan(db, cf, current_user.organization_id)
+    return _to_response(cf, _lo_name(db, cf.assigned_loan_officer_id), loan=loan)
 
 
 class ClientFilePatch(BaseModel):

@@ -954,6 +954,39 @@
   white-space: nowrap;
 }
 
+/* Loan summary */
+.pf-cf-loan-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.pf-cf-loan-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--pf-cf-border);
+}
+
+.pf-cf-loan-row:last-child {
+  border-bottom: none;
+}
+
+.pf-cf-loan-row__label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pf-cf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pf-cf-loan-row__value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--pf-cf-text);
+}
+
 /* Empty state */
 .pf-cf-empty {
   display: flex;
