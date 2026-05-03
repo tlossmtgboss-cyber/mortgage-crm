@@ -21,12 +21,6 @@ export const TopNav: React.FC<TopNavProps> = ({ saveState, userInitials, onExit 
           <PerenniaLogo />
           <span className="pos-topnav__brand-name">Perennia</span>
         </span>
-        <nav className="pos-topnav__links">
-          <button type="button" className="pos-topnav__link">Dashboard</button>
-          <button type="button" className="pos-topnav__link pos-topnav__link--active">Application</button>
-          <button type="button" className="pos-topnav__link">Documents</button>
-          <button type="button" className="pos-topnav__link">Resources</button>
-        </nav>
       </div>
       <div className="pos-topnav__right">
         {saveState !== 'idle' && (
