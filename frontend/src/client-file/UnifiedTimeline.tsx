@@ -16,9 +16,6 @@ const FILTERS: { key: ActivityCategory; label: string }[] = [
   { key: "calls", label: "Calls" },
   { key: "texts", label: "Texts" },
   { key: "emails", label: "Emails" },
-  { key: "milestones", label: "Milestones" },
-  { key: "follow_ups", label: "Follow-ups" },
-  { key: "starred", label: "Starred" },
 ];
 
 function eventActorLabel(event: TimelineEvent): string {

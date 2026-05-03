@@ -1798,6 +1798,123 @@
   text-align: center; margin: 10px 0 0;
 }
 
+/* ---------- Ask Aria Button ---------- */
+
+.ask-aria-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--bt-border);
+  border-radius: var(--bt-radius-md);
+  background: linear-gradient(135deg, var(--bt-primary-tint) 0%, var(--bt-bg-surface) 100%);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+.ask-aria-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--bt-radius-md);
+  border: 1px solid transparent;
+  transition: border-color 0.2s;
+}
+.ask-aria-btn:hover {
+  border-color: var(--bt-primary);
+  box-shadow: var(--bt-shadow-md);
+  transform: translateY(-1px);
+}
+.ask-aria-btn:hover::before {
+  border-color: var(--bt-primary);
+}
+.ask-aria-btn:active {
+  transform: translateY(0);
+  box-shadow: var(--bt-shadow-sm);
+}
+
+.ask-aria-btn__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--bt-primary);
+  color: #F5F2E9;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 6px rgba(31, 61, 46, 0.25);
+}
+
+.ask-aria-btn__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.ask-aria-btn__title {
+  font-family: var(--bt-font-body);
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--bt-text-primary);
+  line-height: 1.2;
+}
+
+.ask-aria-btn__sub {
+  font-size: 11.5px;
+  color: var(--bt-text-muted);
+  line-height: 1.2;
+}
+
+.ask-aria-btn > svg:last-child {
+  color: var(--bt-text-faint);
+  flex-shrink: 0;
+  transition: color 0.15s, transform 0.15s;
+}
+.ask-aria-btn:hover > svg:last-child {
+  color: var(--bt-primary);
+  transform: translateX(2px);
+}
+
+/* Floating action button variant */
+.aria-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 20px;
+  border: none;
+  border-radius: 999px;
+  background: var(--bt-primary);
+  color: #F5F2E9;
+  font-family: var(--bt-font-body);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(31, 61, 46, 0.3), 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s ease;
+}
+.aria-fab:hover {
+  background: var(--bt-primary-hover);
+  box-shadow: 0 6px 24px rgba(31, 61, 46, 0.35), 0 2px 6px rgba(0, 0, 0, 0.12);
+  transform: translateY(-2px);
+}
+.aria-fab:active {
+  transform: translateY(0);
+}
+
+.aria-fab__label {
+  white-space: nowrap;
+}
+
 /* ---------- Smart Calendar ---------- */
 
 .smart-cal {
