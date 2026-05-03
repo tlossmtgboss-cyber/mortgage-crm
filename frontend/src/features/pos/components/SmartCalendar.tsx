@@ -73,8 +73,16 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
   }, [weekOffset]);
 
   const timesForSelectedDate = useMemo(() => {
-    if (!selectedDate || !slots?.slots_by_date) return [];
-    return slots.slots_by_date[selectedDate] ?? [];
+    if (!selectedDate) return [];
+    const apiSlots = slots?.slots_by_date?.[selectedDate];
+    if (apiSlots && apiSlots.length > 0) return apiSlots;
+    // Generate default business-hours slots when API has no availability data
+    const hours = [9, 10, 11, 13, 14, 15, 16];
+    return hours.map((h, i) => ({
+      start: `${selectedDate}T${String(h).padStart(2, '0')}:00:00`,
+      end: `${selectedDate}T${String(h + 1).padStart(2, '0')}:00:00`,
+      is_recommended: h === 10,
+    })) as TimeSlot[];
   }, [selectedDate, slots]);
 
   const handleDateSelect = useCallback((date: Date) => {
@@ -147,8 +155,9 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
     const d = new Date(selectedDate + 'T12:00:00');
     summaryParts.push(d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }));
   }
-  if (selectedSlot && slots?.timezone) {
-    summaryParts.push('at ' + formatTime(selectedSlot.start, slots.timezone));
+  if (selectedSlot) {
+    const tz = slots?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+    summaryParts.push('at ' + formatTime(selectedSlot.start, tz));
   }
 
   // ---------- main view ----------
@@ -240,7 +249,7 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
                     className={`smart-cal__chip smart-cal__chip--time${isSelected ? ' is-selected' : ''}`}
                     onClick={() => handleTimeSelect(slot)}
                   >
-                    {formatTime(slot.start, slots!.timezone)}
+                    {formatTime(slot.start, slots?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone)}
                     {slot.is_recommended && <span className="smart-cal__chip-star">★</span>}
                   </button>
                 );
