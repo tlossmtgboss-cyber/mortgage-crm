@@ -399,9 +399,19 @@ export function TasksPane({ clientFileId }: Props) {
           <div className="pf-cf-empty">Loading tasks...</div>
         ) : filtered.length === 0 ? (
           <div className="pf-cf-empty">
-            {subTab === "open"
-              ? "No open tasks."
-              : subTab === "completed"
+            {subTab === "open" ? (
+              <>
+                <div>No open tasks.</div>
+                <button
+                  type="button"
+                  className="pf-cf-btn pf-cf-btn--accent pf-cf-btn--sm"
+                  style={{ marginTop: 10 }}
+                  onClick={() => setShowNewTask(true)}
+                >
+                  + Create a Task
+                </button>
+              </>
+            ) : subTab === "completed"
               ? "No completed tasks."
               : "No tasks yet."}
           </div>

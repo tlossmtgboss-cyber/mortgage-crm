@@ -403,15 +403,13 @@ export function DocumentsPane({ clientFileId }: Props) {
           </button>
         ))}
         <div style={{ flex: 1 }} />
-        {subTab === "requested" && (
-          <button
-            type="button"
-            className="pf-cf-btn pf-cf-btn--accent pf-cf-btn--sm"
-            onClick={() => setShowNewRequest((v) => !v)}
-          >
-            + Request
-          </button>
-        )}
+        <button
+          type="button"
+          className="pf-cf-btn pf-cf-btn--accent pf-cf-btn--sm"
+          onClick={() => setShowNewRequest((v) => !v)}
+        >
+          + Request
+        </button>
       </div>
 
       {/* New request form */}
@@ -428,9 +426,19 @@ export function DocumentsPane({ clientFileId }: Props) {
           <div className="pf-cf-empty">Loading documents...</div>
         ) : requestCount === 0 && docCount === 0 ? (
           <div className="pf-cf-empty">
-            {subTab === "requested"
-              ? "No outstanding document requests."
-              : subTab === "received"
+            {subTab === "requested" ? (
+              <>
+                <div>No outstanding document requests.</div>
+                <button
+                  type="button"
+                  className="pf-cf-btn pf-cf-btn--accent pf-cf-btn--sm"
+                  style={{ marginTop: 10 }}
+                  onClick={() => setShowNewRequest(true)}
+                >
+                  + Request a Document
+                </button>
+              </>
+            ) : subTab === "received"
               ? "No documents received yet."
               : "No archived documents."}
           </div>
