@@ -61,24 +61,30 @@ export function useDocumentDetector(
     const liabilities = sec(sections, 'liabilities');
     const employer = nested(employment, 'employer');
 
-    // ---- BASE DOCUMENTS (always required once any section has data) ----
-    const hasAnyData = Object.values(sections).some(s => s && Object.keys(s.data || {}).length > 0);
-    if (hasAnyData) {
+    // ---- IDENTITY (after Personal Information is filled) ----
+    const personal = sec(sections, 'personal');
+    const hasPersonalData = Object.keys(personal).length > 0;
+    if (hasPersonalData) {
       add({
         name: 'Government-issued photo ID',
         category: 'identity',
         priority: 'required',
         description: "Valid driver's license, passport, or state ID",
         reason: 'Identity verification',
-        triggeredBy: 'Application started',
+        triggeredBy: 'Personal information provided',
       });
+    }
+
+    // ---- INCOME (after Employment & Income is filled) ----
+    const hasEmploymentData = Object.keys(employment).length > 0;
+    if (hasEmploymentData) {
       add({
         name: 'Pay stubs (30 days)',
         category: 'income',
         priority: 'required',
         description: 'Most recent 30 days of pay stubs',
         reason: 'Verify current employment and income',
-        triggeredBy: 'Application started',
+        triggeredBy: 'Employment information provided',
       });
       add({
         name: 'W-2 forms (2 years)',
@@ -86,7 +92,7 @@ export function useDocumentDetector(
         priority: 'required',
         description: 'W-2 forms for the past 2 years',
         reason: 'Verify employment history and income',
-        triggeredBy: 'Application started',
+        triggeredBy: 'Employment information provided',
       });
       add({
         name: 'Federal tax returns (2 years)',
@@ -94,15 +100,20 @@ export function useDocumentDetector(
         priority: 'required',
         description: 'Federal tax returns with all schedules',
         reason: 'Verify reported income',
-        triggeredBy: 'Application started',
+        triggeredBy: 'Employment information provided',
       });
+    }
+
+    // ---- ASSETS (after Assets section is filled) ----
+    const hasAssetData = Object.keys(assets).length > 0;
+    if (hasAssetData) {
       add({
         name: 'Bank statements (2 months)',
         category: 'assets',
         priority: 'required',
         description: 'Bank statements for all accounts (all pages)',
         reason: 'Verify funds for down payment and closing costs',
-        triggeredBy: 'Application started',
+        triggeredBy: 'Asset information provided',
       });
     }
 
