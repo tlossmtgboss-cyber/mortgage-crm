@@ -91,8 +91,8 @@ def _lookup_contact_by_phone(db: Session, phone: str, organization_id: int) -> O
 
     cf_result = db.execute(
         text("""
-            SELECT cf.id, cf.display_name, cf.primary_email, cf.primary_phone,
-                   cf.status, cf.assigned_lo_id
+            SELECT cf.id, cf.first_name, cf.last_name, cf.primary_email,
+                   cf.primary_phone, cf.lifecycle_stage, cf.assigned_loan_officer_id
             FROM client_files cf
             WHERE cf.organization_id = :org_id
               AND (
@@ -112,11 +112,11 @@ def _lookup_contact_by_phone(db: Session, phone: str, organization_id: int) -> O
         return {
             "match_type": "client_file",
             "id": str(cf_row[0]),
-            "name": cf_row[1] or "",
-            "email": cf_row[2],
-            "phone": cf_row[3],
-            "stage": cf_row[4],
-            "owner_id": cf_row[5],
+            "name": f"{cf_row[1] or ''} {cf_row[2] or ''}".strip(),
+            "email": cf_row[3],
+            "phone": cf_row[4],
+            "stage": cf_row[5],
+            "owner_id": cf_row[6],
             "profile_url": f"/client-file/{cf_row[0]}",
         }
 
