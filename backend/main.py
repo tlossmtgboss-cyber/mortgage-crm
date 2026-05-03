@@ -4211,12 +4211,13 @@ except Exception as e:
 # POS 1003 — Borrower-facing URLA application
 # ============================================================================
 try:
-    from routes.pos import application_router, calendar_router, ai_qa_router, hydration_router, resolve_lo_router
+    from routes.pos import application_router, calendar_router, ai_qa_router, hydration_router, resolve_lo_router, start_router
     app.include_router(application_router, tags=["POS Application"])
     app.include_router(calendar_router, tags=["POS Calendar"])
     app.include_router(ai_qa_router, tags=["POS AI Q&A"])
     app.include_router(hydration_router, tags=["POS Hydration"])
     app.include_router(resolve_lo_router, tags=["POS Resolve LO"])
+    app.include_router(start_router, tags=["POS Public Start"])
     logger.info("POS 1003 routes loaded")
 except Exception as e:
     logger.warning(f"POS 1003 routes skipped: {e}")
