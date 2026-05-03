@@ -347,7 +347,6 @@ class IPAccessControlMiddleware(BaseHTTPMiddleware):
                     "https://app.perenniaai.com",
                     "https://app.perenniaai.com",
                     "http://localhost:3000",
-                    "http://localhost:3001",
                 ]
 
                 is_allowed_origin = any(

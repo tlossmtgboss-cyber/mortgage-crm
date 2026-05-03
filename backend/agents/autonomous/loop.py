@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 # Cap concurrent agent executions to avoid exhausting Railway's ~20 DB connections.
 # API requests, Aria voice tools, and scheduler tasks all share the same pool.
-_MAX_CONCURRENT_AGENTS = int(os.getenv("MAX_CONCURRENT_AGENTS", "2"))
+_MAX_CONCURRENT_AGENTS = int(os.getenv("MAX_CONCURRENT_AGENTS", "12"))
 _agent_semaphore = threading.Semaphore(_MAX_CONCURRENT_AGENTS)
 
 
@@ -63,12 +63,12 @@ FREQUENCY_CRON = {
     AgentFrequency.HOURLY: {"minute": "0"},
     AgentFrequency.EVERY_2_HOURS: {"minute": "0", "hour": "*/2"},
     AgentFrequency.EVERY_4_HOURS: {"minute": "0", "hour": "*/4"},
-    AgentFrequency.DAILY_6AM: {"hour": "6", "minute": "0"},
-    AgentFrequency.DAILY_7AM: {"hour": "7", "minute": "0"},
-    AgentFrequency.DAILY_8AM: {"hour": "8", "minute": "0"},
-    AgentFrequency.DAILY_9AM: {"hour": "9", "minute": "0"},
+    AgentFrequency.DAILY_6AM: {"hour": "6", "minute": "5"},
+    AgentFrequency.DAILY_7AM: {"hour": "7", "minute": "2"},
+    AgentFrequency.DAILY_8AM: {"hour": "8", "minute": "7"},
+    AgentFrequency.DAILY_9AM: {"hour": "9", "minute": "3"},
     AgentFrequency.DAILY_12PM: {"hour": "12", "minute": "0"},
-    AgentFrequency.DAILY_6PM: {"hour": "18", "minute": "0"},
+    AgentFrequency.DAILY_6PM: {"hour": "18", "minute": "5"},
     AgentFrequency.DAILY_9PM: {"hour": "21", "minute": "0"},
     AgentFrequency.WEEKLY_MONDAY: {"day_of_week": "mon", "hour": "7", "minute": "0"},
     AgentFrequency.WEEKLY_FRIDAY: {"day_of_week": "fri", "hour": "16", "minute": "0"},

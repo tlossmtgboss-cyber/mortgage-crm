@@ -33,12 +33,11 @@ from .state import (
 )
 from .nodes.analyze import analyze_query
 from .nodes.gather import gather_data
-from .nodes.reason import reason_and_analyze
 from .nodes.execute import execute_actions
-from .nodes.respond import generate_response, format_structured_response
-from .nodes.reason_and_respond import reason_and_respond
+from .nodes.reason_and_respond import reason_and_respond, format_structured_response
 from .hallucination_verifier import get_hallucination_verifier
 from .orchestration.quality_analyzer import QualityAnalyzer
+from .checkpointer import get_checkpointer
 
 # Enterprise modules: budget, rate limiting, audit, correlation IDs
 from .token_budget import get_token_budget, get_rate_limiter
@@ -200,11 +199,10 @@ INTENT_TO_SCOPED_TOOLS = {
 }
 
 
-def create_orchestrator(
+async def create_orchestrator(
     tool_functions: Dict[str, Callable] = None,
     anthropic_client: Anthropic = None,
     autonomous_mode: bool = True,
-    use_unified_mode: bool = True  # New flag to enable optimized mode
 ) -> StateGraph:
     """
     Create the LangGraph orchestrator workflow.
@@ -247,17 +245,9 @@ def create_orchestrator(
         """Data gathering node"""
         return await gather_data(state, tool_functions)
 
-    async def reason_node(state: AgentState) -> AgentState:
-        """Reasoning node (legacy)"""
-        return await reason_and_analyze(state, anthropic_client)
-
     async def execute_node(state: AgentState) -> AgentState:
         """Action execution node"""
         return await execute_actions(state, tool_functions, autonomous_mode)
-
-    async def respond_node(state: AgentState) -> AgentState:
-        """Response generation node (legacy)"""
-        return await generate_response(state, anthropic_client)
 
     async def unified_reason_respond_node(state: AgentState) -> AgentState:
         """Unified reasoning + response node (optimized - saves ~5-7s)"""
@@ -378,139 +368,66 @@ def create_orchestrator(
     # Build the graph
     workflow = StateGraph(AgentState)
 
-    if use_unified_mode:
-        # OPTIMIZED v5: Fast-path routing + deferred verification
-        # Flow: analyze → gather → reason_and_respond → route → verify_and_score|execute|END
-        # Greetings/simple skip verify_and_score entirely for ~100-200ms savings
-        logger.info("[ORCHESTRATOR] Using UNIFIED mode (reason+respond combined, fast-path routing)")
+    # Flow: analyze → gather → reason_and_respond → route → verify_and_score|execute|END
+    workflow.add_node("analyze", analyze_node)
+    workflow.add_node("gather", gather_node)
+    workflow.add_node("reason_and_respond", unified_reason_respond_node)
+    workflow.add_node("verify_and_score", verify_and_score_node)
+    workflow.add_node("execute", execute_node)
 
-        # Add nodes
-        workflow.add_node("analyze", analyze_node)
-        workflow.add_node("gather", gather_node)
-        workflow.add_node("reason_and_respond", unified_reason_respond_node)
-        workflow.add_node("verify_and_score", verify_and_score_node)
-        workflow.add_node("execute", execute_node)
+    def route_after_respond(state: AgentState) -> Literal["verify_and_score", "execute", "end"]:
+        requires_action = state.get("requires_action", False)
+        query_intent = state.get("query_intent", QueryIntent.GENERAL_QUERY)
+        intent_str = state.get("intent_str", "")
+        use_haiku = state.get("use_haiku", False)
 
-        # Route after reason_and_respond: skip verification for fast intents
-        def route_after_respond(state: AgentState) -> Literal["verify_and_score", "execute", "end"]:
-            """Route after response generation.
+        if requires_action or query_intent == QueryIntent.ACTION_REQUEST:
+            return "execute"
 
-            Fast intents (greeting, simple, Haiku-eligible) skip verification
-            for faster response times. Complex/compliance intents go through
-            full verification pipeline.
-            """
-            requires_action = state.get("requires_action", False)
-            query_intent = state.get("query_intent", QueryIntent.GENERAL_QUERY)
-            intent_str = state.get("intent_str", "")
-            use_haiku = state.get("use_haiku", False)
-
-            # Actions always need execution
-            if requires_action or query_intent == QueryIntent.ACTION_REQUEST:
-                return "execute"
-
-            # Fast intents skip verification entirely
-            SKIP_VERIFY_INTENTS = {"greeting", "simple", "schedule", "tasks",
-                                   "video", "notifications", "onboarding",
-                                   "billing", "calls"}
-            if intent_str in SKIP_VERIFY_INTENTS or use_haiku:
-                return "end"
-
-            # Complex/compliance intents get full verification
-            return "verify_and_score"
-
-        # Define routing logic for post-verification
-        def should_execute_after_verify(state: AgentState) -> Literal["execute", "end"]:
-            """Determine if we should execute actions after verification."""
-            requires_action = state.get("requires_action", False)
-            query_intent = state.get("query_intent", QueryIntent.GENERAL_QUERY)
-
-            if requires_action or query_intent == QueryIntent.ACTION_REQUEST:
-                return "execute"
+        SKIP_VERIFY_INTENTS = {"greeting", "simple", "schedule", "tasks",
+                               "video", "notifications", "onboarding",
+                               "billing", "calls"}
+        if intent_str in SKIP_VERIFY_INTENTS or use_haiku:
             return "end"
 
-        # Define edges: analyze → gather → reason_and_respond → route
-        workflow.set_entry_point("analyze")
-        workflow.add_edge("analyze", "gather")
-        workflow.add_edge("gather", "reason_and_respond")
+        return "verify_and_score"
 
-        # After response, route based on intent complexity
-        workflow.add_conditional_edges(
-            "reason_and_respond",
-            route_after_respond,
-            {
-                "verify_and_score": "verify_and_score",
-                "execute": "execute",
-                "end": END
-            }
-        )
+    def should_execute_after_verify(state: AgentState) -> Literal["execute", "end"]:
+        requires_action = state.get("requires_action", False)
+        query_intent = state.get("query_intent", QueryIntent.GENERAL_QUERY)
 
-        # After verification, check if we need to execute actions
-        workflow.add_conditional_edges(
-            "verify_and_score",
-            should_execute_after_verify,
-            {
-                "execute": "execute",
-                "end": END
-            }
-        )
+        if requires_action or query_intent == QueryIntent.ACTION_REQUEST:
+            return "execute"
+        return "end"
 
-        # Execute leads to end (response already generated)
-        workflow.add_edge("execute", END)
+    workflow.set_entry_point("analyze")
+    workflow.add_edge("analyze", "gather")
+    workflow.add_edge("gather", "reason_and_respond")
 
-    else:
-        # LEGACY: Separate reason and respond nodes - 3 LLM calls
-        logger.info("[ORCHESTRATOR] Using LEGACY mode (separate reason + respond)")
+    workflow.add_conditional_edges(
+        "reason_and_respond",
+        route_after_respond,
+        {
+            "verify_and_score": "verify_and_score",
+            "execute": "execute",
+            "end": END
+        }
+    )
 
-        # Add nodes
-        workflow.add_node("analyze", analyze_node)
-        workflow.add_node("gather", gather_node)
-        workflow.add_node("reason", reason_node)
-        workflow.add_node("execute", execute_node)
-        workflow.add_node("respond", respond_node)
+    workflow.add_conditional_edges(
+        "verify_and_score",
+        should_execute_after_verify,
+        {
+            "execute": "execute",
+            "end": END
+        }
+    )
 
-        # Define routing logic
-        def should_execute_actions(state: AgentState) -> Literal["execute", "respond"]:
-            """Determine if we should execute actions or go straight to response."""
-            requires_action = state.get("requires_action", False)
-            query_intent = state.get("query_intent", QueryIntent.GENERAL_QUERY)
+    workflow.add_edge("execute", END)
 
-            if requires_action or query_intent == QueryIntent.ACTION_REQUEST:
-                return "execute"
-            return "respond"
-
-        def should_skip_reasoning(state: AgentState) -> Literal["reason", "execute_check"]:
-            """Determine if reasoning can be skipped for simple queries.
-            Always routes to execute_check (not respond) to ensure actions are never skipped."""
-            query_complexity = state.get("query_complexity", "moderate")
-            data_quality = state.get("data_quality", "complete")
-
-            if query_complexity == "simple" and data_quality == "complete":
-                gathered_data = state.get("gathered_data", {})
-                if len(gathered_data) <= 1:
-                    return "execute_check"
-            return "reason"
-
-        # Define edges — execute node is ALWAYS reachable
-        workflow.set_entry_point("analyze")
-        workflow.add_edge("analyze", "gather")
-
-        workflow.add_conditional_edges(
-            "gather",
-            should_skip_reasoning,
-            {"reason": "reason", "execute_check": "execute"}
-        )
-
-        workflow.add_conditional_edges(
-            "reason",
-            should_execute_actions,
-            {"execute": "execute", "respond": "respond"}
-        )
-
-        workflow.add_edge("execute", "respond")
-        workflow.add_edge("respond", END)
-
-    # Compile the graph
-    return workflow.compile()
+    # Compile the graph (with optional durable checkpointing)
+    checkpointer = await get_checkpointer()
+    return workflow.compile(checkpointer=checkpointer)
 
 
 async def run_orchestrator(
@@ -715,8 +632,8 @@ async def run_orchestrator(
         # STEP 4: Create orchestrator graph with scoped tools
         # ================================================================
         step_start = time.perf_counter()
-        orchestrator = create_orchestrator(
-            tool_functions=scoped_tools,  # Use scoped tools, not all tools
+        orchestrator = await create_orchestrator(
+            tool_functions=scoped_tools,
             anthropic_client=anthropic_client,
             autonomous_mode=autonomous_mode
         )

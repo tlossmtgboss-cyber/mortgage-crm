@@ -1798,6 +1798,368 @@
   text-align: center; margin: 10px 0 0;
 }
 
+/* ---------- Smart Calendar ---------- */
+
+.smart-cal {
+  background: var(--bt-bg-surface);
+  border: 1px solid var(--bt-border);
+  border-radius: var(--bt-radius-lg);
+  padding: 28px 32px 32px;
+  max-width: 480px;
+  margin: 0 auto;
+  box-shadow: var(--bt-shadow-md);
+}
+
+.smart-cal--loading,
+.smart-cal--error {
+  text-align: center;
+  padding: 48px 32px;
+  color: var(--bt-text-secondary);
+  font-size: 15px;
+}
+
+.smart-cal--error button {
+  margin-top: 12px;
+  padding: 8px 20px;
+  border: 1px solid var(--bt-border-strong);
+  border-radius: var(--bt-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--bt-text-primary);
+}
+
+.smart-cal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.smart-cal__title {
+  font-family: var(--bt-font-display);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--bt-text-primary);
+  margin: 0;
+}
+
+.smart-cal__close {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--bt-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, color 0.15s;
+}
+.smart-cal__close:hover {
+  background: var(--bt-bg-elevated);
+  color: var(--bt-text-primary);
+}
+
+/* Week date picker */
+.smart-cal__week {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.smart-cal__week-nav {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--bt-border);
+  background: var(--bt-bg-surface);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--bt-text-secondary);
+  flex-shrink: 0;
+  transition: border-color 0.15s, color 0.15s;
+}
+.smart-cal__week-nav:hover:not(:disabled) {
+  border-color: var(--bt-border-strong);
+  color: var(--bt-text-primary);
+}
+.smart-cal__week-nav:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.smart-cal__week-days {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+}
+
+.smart-cal__day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: var(--bt-radius-md);
+  border: 2px solid transparent;
+  background: var(--bt-bg-soft);
+  cursor: pointer;
+  transition: all 0.15s;
+  min-width: 56px;
+}
+.smart-cal__day:hover:not(:disabled):not(.is-selected) {
+  background: var(--bt-bg-elevated);
+  border-color: var(--bt-border-strong);
+}
+.smart-cal__day.is-selected {
+  background: var(--bt-primary-light);
+  border-color: var(--bt-primary);
+}
+.smart-cal__day.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.smart-cal__day-name {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bt-text-muted);
+}
+.smart-cal__day.is-selected .smart-cal__day-name {
+  color: var(--bt-primary);
+}
+
+.smart-cal__day-num {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--bt-text-primary);
+  line-height: 1.1;
+}
+
+.smart-cal__day-month {
+  font-size: 11px;
+  color: var(--bt-text-muted);
+}
+.smart-cal__day.is-selected .smart-cal__day-month {
+  color: var(--bt-primary);
+}
+
+/* Sections */
+.smart-cal__section {
+  margin-bottom: 20px;
+}
+
+.smart-cal__label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--bt-text-secondary);
+  margin-bottom: 8px;
+}
+
+.smart-cal__select {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--bt-border);
+  border-radius: var(--bt-radius-sm);
+  background: var(--bt-bg-surface);
+  font-family: var(--bt-font-body);
+  font-size: 14px;
+  color: var(--bt-text-primary);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234F554E' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  cursor: pointer;
+}
+.smart-cal__select:focus {
+  outline: none;
+  border-color: var(--bt-primary);
+  box-shadow: 0 0 0 3px rgba(31, 61, 46, 0.08);
+}
+.smart-cal__select:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Mode toggle (phone / video) */
+.smart-cal__mode-toggle {
+  display: flex;
+  gap: 10px;
+}
+
+.smart-cal__mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 2px solid var(--bt-border);
+  border-radius: var(--bt-radius-sm);
+  background: var(--bt-bg-surface);
+  font-family: var(--bt-font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--bt-text-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.smart-cal__mode-btn:hover:not(.is-active) {
+  border-color: var(--bt-border-strong);
+  color: var(--bt-text-primary);
+}
+.smart-cal__mode-btn.is-active {
+  border-color: var(--bt-primary);
+  color: var(--bt-primary);
+  background: var(--bt-primary-tint);
+}
+
+/* LO display */
+.smart-cal__lo-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--bt-border);
+  border-radius: var(--bt-radius-sm);
+  background: var(--bt-bg-soft);
+}
+
+.smart-cal__lo-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.smart-cal__lo-avatar--initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bt-primary);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.smart-cal__lo-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--bt-text-primary);
+}
+
+/* Info card */
+.smart-cal__info-card {
+  background: var(--bt-bg-elevated);
+  border-radius: var(--bt-radius-sm);
+  padding: 14px 16px;
+  margin-bottom: 24px;
+}
+
+.smart-cal__info-line {
+  margin: 0 0 4px;
+  font-size: 13px;
+  color: var(--bt-text-secondary);
+}
+.smart-cal__info-line:last-child { margin-bottom: 0; }
+
+.smart-cal__info-label {
+  font-weight: 600;
+}
+
+.smart-cal__info-value {
+  color: var(--bt-text-primary);
+}
+
+/* Submit */
+.smart-cal__submit {
+  width: 100%;
+  padding: 14px 24px;
+  border: none;
+  border-radius: var(--bt-radius-sm);
+  background: var(--bt-primary);
+  color: #F5F2E9;
+  font-family: var(--bt-font-body);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.smart-cal__submit:hover:not(:disabled) {
+  background: var(--bt-primary-hover);
+}
+.smart-cal__submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Error */
+.smart-cal__error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  border-radius: var(--bt-radius-sm);
+  font-size: 13px;
+  color: var(--bt-error);
+}
+
+/* Confirmed */
+.smart-cal--confirmed {
+  text-align: center;
+  padding: 40px 32px;
+}
+
+.smart-cal__confirm-icon {
+  color: var(--bt-success);
+  margin-bottom: 12px;
+}
+
+.smart-cal--confirmed h3 {
+  font-family: var(--bt-font-display);
+  font-size: 22px;
+  margin: 0 0 8px;
+  color: var(--bt-text-primary);
+}
+
+.smart-cal--confirmed p {
+  font-size: 14px;
+  color: var(--bt-text-secondary);
+  margin: 0 0 6px;
+}
+
+.smart-cal__confirmed-time {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bt-text-primary);
+  margin-top: 12px;
+}
+
+.smart-cal__confirmed-actions {
+  list-style: none;
+  padding: 0;
+  margin: 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--bt-text-secondary);
+}
+
+.smart-cal__confirmed-actions a {
+  color: var(--bt-primary);
+  text-decoration: underline;
+}
+
 /* ---------- Responsive ---------- */
 
 @media (max-width: 1024px) {
@@ -1810,4 +2172,8 @@
 @media (max-width: 768px) {
   .pos-main { padding: 20px 16px; }
   .pos-main__heading { font-size: 28px; }
+  .smart-cal { padding: 20px 16px; }
+  .smart-cal__week-days { gap: 4px; }
+  .smart-cal__day { min-width: 48px; padding: 8px 8px; }
+  .smart-cal__mode-toggle { flex-direction: column; }
 }

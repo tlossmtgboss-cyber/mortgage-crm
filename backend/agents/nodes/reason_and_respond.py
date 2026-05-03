@@ -26,6 +26,7 @@ from ..state import (
     update_state
 )
 from ..intent_router import HAIKU_INTENTS, is_haiku_intent
+from ..sanitizer import sanitize_for_llm, strip_boundary_markers
 
 logger = logging.getLogger(__name__)
 
@@ -474,11 +475,16 @@ DO NOT use a canned/scripted response. Be natural and human."""
         # Inject user memories into system prompt for personalization
         memory_context = state.get("memory_context", "")
         if memory_context:
+            memory_context = _mask_pii_value("memory", memory_context)
+            memory_context = sanitize_for_llm(memory_context)
             system_prompt += "\n\n## User Context & Preferences\nThe following are remembered facts and preferences about this user. Use them to personalize your response where relevant:\n" + memory_context
 
-        # Build user context (wrap user input with markers to prevent prompt injection)
+        # Sanitize user message: strip boundary markers, mask PII, neutralize injection
+        safe_message = strip_boundary_markers(user_message)
+        safe_message = _mask_pii_value("message", safe_message)
+
         context_parts = [
-            f"USER QUESTION: [USER_INPUT_START]\n{user_message}\n[USER_INPUT_END]",
+            f"USER QUESTION: [USER_INPUT_START]\n{safe_message}\n[USER_INPUT_END]",
             f"QUERY INTENT: {query_intent.value}",
             f"DATA QUALITY: {data_quality}",
         ]
@@ -487,6 +493,8 @@ DO NOT use a canned/scripted response. Be natural and human."""
         # This allows the AI to answer "send them an email" or "what stage is this at?"
         active_entity_data = state.get("active_entity_data")
         if active_entity_data:
+            active_entity_data = _mask_gathered_data(active_entity_data)
+            active_entity_data = sanitize_for_llm(active_entity_data)
             context_parts.append("")
             context_parts.append("=== ACTIVE CRM CONTEXT (the lead/loan the user is currently viewing) ===")
             for key, value in active_entity_data.items():
@@ -650,6 +658,10 @@ DO NOT use a canned/scripted response. Be natural and human."""
 
         response_text = response.content[0].text.strip()
 
+        # Scrub any PII the LLM may have echoed back
+        response_text = _SSN_PATTERN.sub("[REDACTED-SSN]", response_text)
+        response_text = _FULL_PHONE_PATTERN.sub(r"***-***-\1", response_text)
+
         # Extract token usage from response for budget tracking
         if hasattr(response, 'usage'):
             state = update_state(state, {
@@ -733,3 +745,26 @@ DO NOT use a canned/scripted response. Be natural and human."""
             "response_type": "text",
             "follow_up_suggestions": ["Show me my pipeline", "What are my priorities today?"]
         })
+
+
+def format_structured_response(state: AgentState) -> dict:
+    """Format the response as a structured object for rich UI rendering."""
+    return {
+        "text": state.get("response", ""),
+        "intent": state.get("query_intent", QueryIntent.GENERAL_QUERY).value,
+        "confidence": state.get("confidence_score", 0.5),
+        "insights": state.get("insights", []),
+        "recommendations": state.get("recommendations", []),
+        "actions_completed": [
+            {
+                "type": a.action_type,
+                "success": a.success,
+                "message": a.message
+            }
+            for a in state.get("actions_executed", [])
+        ],
+        "actions_pending": state.get("actions_pending", []),
+        "follow_ups": state.get("follow_up_suggestions", []),
+        "data_quality": state.get("data_quality", "unknown"),
+        "processing_trace": state.get("node_trace", [])
+    }

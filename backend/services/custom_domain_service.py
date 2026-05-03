@@ -32,7 +32,6 @@ class CustomDomainService:
     # Static domains that are always allowed
     STATIC_DOMAINS = {
         "http://localhost:3000",
-        "http://localhost:3001",
         "https://perenniaai.com",
         "https://www.perenniaai.com",
         "https://app.perenniaai.com",
