@@ -33,6 +33,7 @@ function nested(data: Record<string, unknown>, key: string): Record<string, unkn
 
 export interface IntakeFlags {
   is_veteran?: boolean | null;
+  loan_purpose?: 'purchase' | 'refinance' | null;
   has_co_borrower?: boolean | null;
   co_borrowers?: Array<{ first_name: string; last_name: string }>;
 }
@@ -176,7 +177,7 @@ export function useDocumentDetector(
     }
 
     // ---- PURCHASE ----
-    const loanPurpose = loan.loan_purpose as string;
+    const loanPurpose = intake?.loan_purpose || (loan.loan_purpose as string);
     if (loanPurpose === 'purchase') {
       add({
         name: 'Purchase contract',
@@ -361,6 +362,18 @@ export function useDocumentDetector(
         description: 'Details of pending litigation',
         reason: 'Assess potential financial liability',
         triggeredBy: 'Pending lawsuit declared',
+      });
+    }
+
+    // ---- FEDERAL DEBT DELINQUENCY ----
+    if (declarations.federal_debt_delinquent === true) {
+      add({
+        name: 'Federal debt documentation',
+        category: 'credit',
+        priority: 'required',
+        description: 'IRS notice, student loan statements, or other federal debt records showing current status',
+        reason: 'Verify delinquency status and repayment plan',
+        triggeredBy: 'Federal debt delinquency declared',
       });
     }
 

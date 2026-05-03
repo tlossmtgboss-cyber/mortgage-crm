@@ -29,11 +29,18 @@ const OCCUPANCY_OPTIONS = [
   { value: 'investment', label: 'Investment property' },
 ];
 
-export const LoanPanel: React.FC<PanelProps> = ({ section, onChange, onComplete }) => {
+export const LoanPanel: React.FC<PanelProps> = ({ section, onChange, onComplete, intakeLoanPurpose }) => {
   const { data, updateField } = usePanelData(section, onChange);
 
-  const loanPurpose = (data.loan_purpose as string) || '';
+  const loanPurpose = intakeLoanPurpose || (data.loan_purpose as string) || '';
   const property = (data.property as Record<string, unknown>) || {};
+
+  // Sync intake loan_purpose into section data so the backend has it.
+  React.useEffect(() => {
+    if (intakeLoanPurpose && data.loan_purpose !== intakeLoanPurpose) {
+      onChange({ ...data, loan_purpose: intakeLoanPurpose });
+    }
+  }, [intakeLoanPurpose]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const purchasePrice = Number(data.purchase_price) || 0;
   const loanAmount = Number(data.loan_amount) || 0;
@@ -53,29 +60,6 @@ export const LoanPanel: React.FC<PanelProps> = ({ section, onChange, onComplete 
 
   return (
     <>
-      <FormSection title="What are you looking to do?">
-        <div className="urla-field urla-field--cols-4">
-          <div className="urla-radio-cards">
-            {[
-              { value: 'purchase', label: 'Purchase', desc: 'Buying a new home' },
-              { value: 'refinance', label: 'Refinance', desc: 'Refinancing an existing mortgage' },
-            ].map(opt => (
-              <label key={opt.value} className={`urla-radio-card${loanPurpose === opt.value ? ' is-selected' : ''}`}>
-                <input type="radio" name="loan_purpose" value={opt.value}
-                  checked={loanPurpose === opt.value}
-                  onChange={() => updateField('loan_purpose', opt.value)}
-                  className="urla-radio-card__input" />
-                <span className="urla-radio-card__dot" />
-                <span className="urla-radio-card__text">
-                  <span className="urla-radio-card__label">{opt.label}</span>
-                  <span className="urla-radio-card__desc">{opt.desc}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </div>
-      </FormSection>
-
       {loanPurpose === 'purchase' && (
         <>
           <FormSection title="Loan details">

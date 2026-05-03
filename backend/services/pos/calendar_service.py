@@ -124,7 +124,7 @@ class CalendarService:
         """Return the LO's primary public booking link if one exists."""
         stmt = (
             select(BookingLink)
-            .where(BookingLink.owner_user_id == lo_user_id)
+            .where(BookingLink.user_id == lo_user_id)
             .where(BookingLink.is_active.is_(True))
             .order_by(BookingLink.created_at.asc())
             .limit(1)

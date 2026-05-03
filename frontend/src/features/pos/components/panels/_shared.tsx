@@ -10,6 +10,13 @@ import React from 'react';
 import type { ApplicationResponse, SectionResponse } from '../../types';
 import type { ApplicationSubmitRequest, ApplicationSubmitResponse } from '../../types';
 
+export interface IntakeData {
+  is_veteran: boolean | null;
+  loan_purpose: 'purchase' | 'refinance' | null;
+  has_co_borrower: boolean | null;
+  co_borrowers: Array<{ first_name: string; last_name: string }>;
+}
+
 export interface PanelProps {
   section?: SectionResponse;
   onChange: (data: Record<string, unknown>) => void;
@@ -19,6 +26,8 @@ export interface PanelProps {
     body: ApplicationSubmitRequest,
   ) => Promise<ApplicationSubmitResponse | null>;
   onAskAria?: () => void;
+  intakeData?: IntakeData;
+  intakeLoanPurpose?: 'purchase' | 'refinance' | null;
 }
 
 // ---------- Field primitives ----------
