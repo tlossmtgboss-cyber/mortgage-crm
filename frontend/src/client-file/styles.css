@@ -1465,6 +1465,226 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Document Request Modal (mirrors Smart Docs)
+   ───────────────────────────────────────────────────────────────────────── */
+
+.pf-cf-docreq-modal {
+  margin: 0 12px 12px;
+  border: 1px solid var(--pf-cf-accent-border);
+  border-radius: var(--pf-cf-radius-md);
+  background: var(--pf-cf-bg-deep);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.pf-cf-docreq-modal__top {
+  display: flex;
+  min-height: 320px;
+}
+
+/* Queue sidebar */
+
+.pf-cf-docreq-modal__queue {
+  width: 180px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--pf-cf-border);
+  background: var(--pf-cf-bg-glass);
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.pf-cf-docreq-modal__queue-title {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--pf-cf-text-tertiary);
+  padding: 0 14px 8px;
+}
+
+.pf-cf-docreq-modal__queue-item {
+  display: flex;
+  align-items: center;
+}
+
+.pf-cf-docreq-modal__queue-item--active .pf-cf-docreq-modal__queue-btn {
+  background: var(--pf-cf-accent-bg);
+  color: var(--pf-cf-accent);
+  font-weight: 500;
+}
+
+.pf-cf-docreq-modal__queue-item--active .pf-cf-docreq-modal__queue-num {
+  background: var(--pf-cf-accent);
+  color: white;
+}
+
+.pf-cf-docreq-modal__queue-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--pf-cf-text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.pf-cf-docreq-modal__queue-btn:hover {
+  background: var(--pf-cf-bg-hover);
+}
+
+.pf-cf-docreq-modal__queue-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--pf-cf-bg-glass-strong);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pf-cf-text-secondary);
+  flex-shrink: 0;
+}
+
+.pf-cf-docreq-modal__queue-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-cf-docreq-modal__queue-remove {
+  border: none;
+  background: transparent;
+  color: var(--pf-cf-text-tertiary);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 10px;
+  line-height: 1;
+}
+
+.pf-cf-docreq-modal__queue-remove:hover {
+  color: var(--pf-cf-danger);
+}
+
+.pf-cf-docreq-modal__add-btn {
+  margin: 8px 14px 0;
+  padding: 6px 0;
+  border: 1px dashed var(--pf-cf-border-strong);
+  border-radius: var(--pf-cf-radius-sm);
+  background: transparent;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--pf-cf-accent);
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.15s;
+}
+
+.pf-cf-docreq-modal__add-btn:hover {
+  background: var(--pf-cf-accent-bg);
+  border-color: var(--pf-cf-accent-border);
+}
+
+/* Form panel */
+
+.pf-cf-docreq-modal__form {
+  flex: 1;
+  padding: 16px 20px;
+  min-width: 0;
+}
+
+/* Doc type chips */
+
+.pf-cf-docreq-modal__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pf-cf-docreq-modal__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--pf-cf-border);
+  border-radius: 20px;
+  background: var(--pf-cf-bg-deep);
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--pf-cf-text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.pf-cf-docreq-modal__chip:hover {
+  border-color: var(--pf-cf-accent-border);
+  background: var(--pf-cf-accent-bg);
+}
+
+.pf-cf-docreq-modal__chip--active {
+  border-color: var(--pf-cf-accent);
+  background: var(--pf-cf-accent-bg);
+  color: var(--pf-cf-accent);
+  font-weight: 500;
+}
+
+.pf-cf-docreq-modal__esign-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--pf-cf-success);
+  color: white;
+  line-height: 1.3;
+}
+
+/* Footer */
+
+.pf-cf-docreq-modal__footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--pf-cf-border);
+  background: var(--pf-cf-bg-glass);
+}
+
+.pf-cf-docreq-modal__settings {
+  display: flex;
+  gap: 12px;
+}
+
+.pf-cf-docreq-modal__setting {
+  min-width: 120px;
+}
+
+.pf-cf-docreq-modal__setting .pf-cf-newreq__select,
+.pf-cf-docreq-modal__setting .pf-cf-newreq__input {
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.pf-cf-docreq-modal__actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.pf-cf-docreq-modal__actions .pf-cf-btn--accent {
+  min-width: 140px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Task Cards (Tasks Pane)
    ───────────────────────────────────────────────────────────────────────── */
 

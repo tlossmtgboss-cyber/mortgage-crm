@@ -287,11 +287,33 @@ function RequestRow({ req }: { req: SmartDocRequest }) {
 // New Request Form
 // ─────────────────────────────────────────────────────────────────────────
 
-const DOC_TYPES = [
-  "PAYSTUB", "W2", "TAX_RETURN", "BANK_STATEMENT", "DRIVERS_LICENSE",
-  "PURCHASE_CONTRACT", "HOMEOWNERS_INSURANCE", "APPRAISAL", "TITLE_REPORT",
-  "GIFT_LETTER", "LOE", "VA_COE", "DD214", "OTHER",
+const DOC_CHIPS: { value: string; label: string; esign?: boolean }[] = [
+  { value: "LOE", label: "Letter of Explanation", esign: true },
+  { value: "GIFT_LETTER", label: "Gift Letter", esign: true },
+  { value: "PAYSTUB", label: "Pay Stubs" },
+  { value: "BANK_STATEMENT", label: "Bank Statements" },
+  { value: "TAX_RETURN", label: "Tax Returns" },
+  { value: "W2", label: "W-2 Forms" },
+  { value: "DRIVERS_LICENSE", label: "Driver's License" },
+  { value: "PURCHASE_CONTRACT", label: "Purchase Contract" },
+  { value: "PROFIT_LOSS", label: "Profit & Loss Statement" },
+  { value: "HOMEOWNERS_INSURANCE", label: "Homeowners Insurance" },
+  { value: "OTHER", label: "Other Document" },
 ];
+
+const PRIORITY_OPTS = ["LOW", "NORMAL", "HIGH", "URGENT"];
+
+interface QueuedDoc {
+  id: number;
+  docType: string;
+  title: string;
+  instructions: string;
+}
+
+let _nextQId = 0;
+function emptyDoc(): QueuedDoc {
+  return { id: ++_nextQId, docType: "", title: "", instructions: "" };
+}
 
 function NewRequestForm({
   clientFileId,
@@ -301,65 +323,189 @@ function NewRequestForm({
   onClose: () => void;
 }) {
   const actions = useDocumentActions(clientFileId);
-  const [docType, setDocType] = useState("PAYSTUB");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
+  const [queue, setQueue] = useState<QueuedDoc[]>(() => [emptyDoc()]);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [priority, setPriority] = useState("NORMAL");
+  const [dueDate, setDueDate] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const active = queue[activeIdx] ?? queue[0];
+
+  function updateActive(patch: Partial<QueuedDoc>) {
+    setQueue((q) => q.map((d, i) => (i === activeIdx ? { ...d, ...patch } : d)));
+  }
+
+  function selectDocType(value: string) {
+    const chip = DOC_CHIPS.find((c) => c.value === value);
+    updateActive({
+      docType: value,
+      title: active.title || chip?.label || docTypeLabel(value),
+    });
+  }
+
+  function addDocument() {
+    const doc = emptyDoc();
+    setQueue((q) => [...q, doc]);
+    setActiveIdx(queue.length);
+  }
+
+  function removeDocument(idx: number) {
+    if (queue.length <= 1) return;
+    setQueue((q) => q.filter((_, i) => i !== idx));
+    setActiveIdx((prev) => (prev >= idx && prev > 0 ? prev - 1 : prev));
+  }
+
+  const validCount = queue.filter((d) => d.title.trim() && d.docType).length;
+
+  async function handleSubmit() {
+    const toSend = queue.filter((d) => d.title.trim() && d.docType);
+    if (toSend.length === 0) return;
+    setSubmitting(true);
+    for (const doc of toSend) {
+      try {
+        await actions.createRequest.mutateAsync({
+          doc_type: doc.docType,
+          title: doc.title.trim(),
+          instructions: doc.instructions || undefined,
+          priority,
+          due_date: dueDate ? new Date(dueDate).toISOString() : undefined,
+        });
+      } catch { /* best-effort */ }
+    }
+    setSubmitting(false);
+    onClose();
+  }
 
   return (
-    <div className="pf-cf-newreq">
-      <div className="pf-cf-newreq__row">
-        <label className="pf-cf-newreq__label">Document Type</label>
-        <select
-          className="pf-cf-newreq__select"
-          value={docType}
-          onChange={(e) => {
-            setDocType(e.target.value);
-            if (!title) setTitle(docTypeLabel(e.target.value));
-          }}
-        >
-          {DOC_TYPES.map((dt) => (
-            <option key={dt} value={dt}>{docTypeLabel(dt)}</option>
+    <div className="pf-cf-docreq-modal">
+      <div className="pf-cf-docreq-modal__top">
+        {/* Left: document queue */}
+        <div className="pf-cf-docreq-modal__queue">
+          <div className="pf-cf-docreq-modal__queue-title">Documents to Request</div>
+          {queue.map((doc, idx) => (
+            <div
+              key={doc.id}
+              className={`pf-cf-docreq-modal__queue-item${idx === activeIdx ? " pf-cf-docreq-modal__queue-item--active" : ""}`}
+            >
+              <button
+                type="button"
+                className="pf-cf-docreq-modal__queue-btn"
+                onClick={() => setActiveIdx(idx)}
+              >
+                <span className="pf-cf-docreq-modal__queue-num">{idx + 1}</span>
+                <span className="pf-cf-docreq-modal__queue-label">
+                  {doc.title || "New Document"}
+                </span>
+              </button>
+              {queue.length > 1 && (
+                <button
+                  type="button"
+                  className="pf-cf-docreq-modal__queue-remove"
+                  onClick={() => removeDocument(idx)}
+                  aria-label="Remove"
+                >
+                  &times;
+                </button>
+              )}
+            </div>
           ))}
-        </select>
+          <button
+            type="button"
+            className="pf-cf-docreq-modal__add-btn"
+            onClick={addDocument}
+          >
+            + Add Document
+          </button>
+        </div>
+
+        {/* Right: active document form */}
+        <div className="pf-cf-docreq-modal__form">
+          <div className="pf-cf-newreq__row">
+            <label className="pf-cf-newreq__label">Document Type</label>
+            <div className="pf-cf-docreq-modal__chips">
+              {DOC_CHIPS.map((chip) => (
+                <button
+                  key={chip.value}
+                  type="button"
+                  className={`pf-cf-docreq-modal__chip${active.docType === chip.value ? " pf-cf-docreq-modal__chip--active" : ""}`}
+                  onClick={() => selectDocType(chip.value)}
+                >
+                  {chip.label}
+                  {chip.esign && (
+                    <span className="pf-cf-docreq-modal__esign-badge">E-SIGN</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="pf-cf-newreq__row">
+            <label className="pf-cf-newreq__label">Title *</label>
+            <input
+              className="pf-cf-newreq__input"
+              value={active.title}
+              onChange={(e) => updateActive({ title: e.target.value })}
+              placeholder="Document title"
+            />
+          </div>
+
+          <div className="pf-cf-newreq__row">
+            <label className="pf-cf-newreq__label">Instructions for Borrower</label>
+            <textarea
+              className="pf-cf-newreq__textarea"
+              value={active.instructions}
+              onChange={(e) => updateActive({ instructions: e.target.value })}
+              placeholder="What should the borrower include in this document?"
+              rows={3}
+            />
+          </div>
+        </div>
       </div>
-      <div className="pf-cf-newreq__row">
-        <label className="pf-cf-newreq__label">Title</label>
-        <input
-          className="pf-cf-newreq__input"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder={docTypeLabel(docType)}
-        />
-      </div>
-      <div className="pf-cf-newreq__row">
-        <label className="pf-cf-newreq__label">Description (optional)</label>
-        <textarea
-          className="pf-cf-newreq__textarea"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Instructions for the borrower..."
-          rows={2}
-        />
-      </div>
-      <div className="pf-cf-newreq__actions">
-        <button
-          type="button"
-          className="pf-cf-btn pf-cf-btn--accent"
-          disabled={!title.trim() || actions.createRequest.isPending}
-          onClick={() => {
-            actions.createRequest.mutate({
-              doc_type: docType,
-              title: title.trim() || docTypeLabel(docType),
-              description: description || undefined,
-            });
-            onClose();
-          }}
-        >
-          Request Document
-        </button>
-        <button type="button" className="pf-cf-btn pf-cf-btn--ghost" onClick={onClose}>
-          Cancel
-        </button>
+
+      {/* Footer: shared settings + actions */}
+      <div className="pf-cf-docreq-modal__footer">
+        <div className="pf-cf-docreq-modal__settings">
+          <div className="pf-cf-docreq-modal__setting">
+            <label className="pf-cf-newreq__label">Priority</label>
+            <select
+              className="pf-cf-newreq__select"
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+            >
+              {PRIORITY_OPTS.map((p) => (
+                <option key={p} value={p}>{p.charAt(0) + p.slice(1).toLowerCase()}</option>
+              ))}
+            </select>
+          </div>
+          <div className="pf-cf-docreq-modal__setting">
+            <label className="pf-cf-newreq__label">Due Date</label>
+            <input
+              type="date"
+              className="pf-cf-newreq__input"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="pf-cf-docreq-modal__actions">
+          <button
+            type="button"
+            className="pf-cf-btn pf-cf-btn--ghost"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="pf-cf-btn pf-cf-btn--accent"
+            disabled={validCount === 0 || submitting}
+            onClick={handleSubmit}
+          >
+            {submitting
+              ? "Sending..."
+              : `Send ${validCount} Request${validCount !== 1 ? "s" : ""}`}
+          </button>
+        </div>
       </div>
     </div>
   );
