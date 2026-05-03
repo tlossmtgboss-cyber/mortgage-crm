@@ -9,6 +9,7 @@ export type SectionKey =
   | 'reo'
   | 'loan'
   | 'declarations'
+  | 'schedule'
   | 'review';
 
 export const SECTION_ORDER: SectionKey[] = [
@@ -20,6 +21,7 @@ export const SECTION_ORDER: SectionKey[] = [
   'reo',
   'loan',
   'declarations',
+  'schedule',
   'review',
 ];
 
@@ -32,7 +34,8 @@ export const SECTION_LABELS: Record<SectionKey, string> = {
   reo: 'Real Estate Owned',
   loan: 'Loan & Property',
   declarations: 'Declarations',
-  review: 'Review & eSign',
+  schedule: 'Schedule a Call',
+  review: 'Review & Sign',
 };
 
 export const SECTION_CAPTIONS: Record<SectionKey, string> = {
@@ -44,6 +47,7 @@ export const SECTION_CAPTIONS: Record<SectionKey, string> = {
   reo: 'Properties you currently own',
   loan: 'Subject property and loan details',
   declarations: 'Disclosure questions and HMDA',
+  schedule: 'Book a time with your loan officer',
   review: 'Final review and submission',
 };
 

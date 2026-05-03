@@ -16,6 +16,7 @@ import { LiabilitiesPanel } from './panels/LiabilitiesPanel';
 import { REOPanel } from './panels/REOPanel';
 import { LoanPanel } from './panels/LoanPanel';
 import { DeclarationsPanel } from './panels/DeclarationsPanel';
+import { SchedulePanel } from './panels/SchedulePanel';
 import { ReviewPanel } from './panels/ReviewPanel';
 
 import '../../../styles/borrower-theme.css';
@@ -36,6 +37,7 @@ const PANEL_COMPONENTS: Record<SectionKey, React.ComponentType<any>> = {
   reo: REOPanel,
   loan: LoanPanel,
   declarations: DeclarationsPanel,
+  schedule: SchedulePanel,
   review: ReviewPanel,
 };
 

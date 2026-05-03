@@ -1,22 +1,10 @@
 import React, { useState } from 'react';
 
-import type { ApplicationSubmitResponse, BookingResponse } from '../../types';
+import type { ApplicationSubmitResponse } from '../../types';
 import { SECTION_LABELS, SECTION_ORDER } from '../../types';
-import { SmartCalendar } from '../SmartCalendar';
 import { PanelProps } from './_shared';
 
-/**
- * The Review & eSign step. Three things happen here:
- *   1. Recap of what's been completed
- *   2. Smart Calendar widget — borrower books their application review
- *   3. Three certification checkboxes + final Submit
- *
- * On successful submit, swaps to a confirmation view that displays the
- * confirmation_number and the next_steps list returned from the backend.
- */
 export const ReviewPanel: React.FC<PanelProps> = ({ application, onSubmit, onAskAria }) => {
-  const [booking, setBooking] = useState<BookingResponse | null>(null);
-
   const [acks, setAcks] = useState<{
     truth_certification: boolean;
     esign_consent: boolean;
@@ -40,6 +28,7 @@ export const ReviewPanel: React.FC<PanelProps> = ({ application, onSubmit, onAsk
     .filter(k => k !== 'review')
     .every(k => application.sections_complete[k] === true);
 
+  const hasAppointment = application.submitted_appointment_id != null;
   const canSubmit = allSectionsComplete && allAcked && !submitting;
 
   const handleSubmit = async () => {
@@ -47,7 +36,7 @@ export const ReviewPanel: React.FC<PanelProps> = ({ application, onSubmit, onAsk
     setSubmitting(true);
     setSubmitError(null);
     const result = await onSubmit({
-      appointment_id: booking?.appointment_id ?? null,
+      appointment_id: application.submitted_appointment_id ?? null,
       acknowledged_certifications: Object.entries(acks)
         .filter(([, v]) => v)
         .map(([k]) => k),
@@ -108,19 +97,6 @@ export const ReviewPanel: React.FC<PanelProps> = ({ application, onSubmit, onAsk
             </li>
           ))}
         </ul>
-      </section>
-
-      {/* Smart Calendar */}
-      <section className="urla-form-section">
-        <h3 className="urla-form-section__title">Schedule your application review</h3>
-        <p className="urla-form-section__desc">
-          Pick a time to walk through your application together. Your loan officer
-          will go through everything and answer any final questions before submission.
-        </p>
-        <SmartCalendar
-          applicationId={application.id}
-          onBooked={setBooking}
-        />
       </section>
 
       {/* Certifications */}
