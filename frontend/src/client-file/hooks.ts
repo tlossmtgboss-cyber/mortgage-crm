@@ -183,6 +183,16 @@ export function useTaskMutations(clientFileId: string) {
   const invalidate = () =>
     qc.invalidateQueries({ queryKey: [...qk.all, "tasks", clientFileId] });
   return {
+    create: useMutation({
+      mutationFn: (input: Parameters<typeof taskApi.create>[1]) =>
+        taskApi.create(clientFileId, input),
+      onSuccess: invalidate,
+    }),
+    patch: useMutation({
+      mutationFn: ({ taskId, ...input }: { taskId: string } & Parameters<typeof taskApi.patch>[2]) =>
+        taskApi.patch(clientFileId, taskId, input),
+      onSuccess: invalidate,
+    }),
     complete: useMutation({
       mutationFn: (taskId: string) => taskApi.complete(clientFileId, taskId),
       onSuccess: invalidate,
@@ -203,6 +213,47 @@ export function useDocumentSets(clientFileId: string) {
     queryKey: qk.documents(clientFileId),
     queryFn: () => documentApi.listSets(clientFileId),
   });
+}
+
+export function useDocumentsTab(clientFileId: string, tab: string = "all") {
+  return useQuery({
+    queryKey: [...qk.documents(clientFileId), "tab", tab] as const,
+    queryFn: () => documentApi.listDocuments(clientFileId, tab),
+    refetchInterval: 30_000,
+  });
+}
+
+export function useDocumentActions(clientFileId: string) {
+  const qc = useQueryClient();
+  const invalidate = () =>
+    qc.invalidateQueries({ queryKey: qk.documents(clientFileId) });
+
+  return {
+    createRequest: useMutation({
+      mutationFn: (input: Parameters<typeof documentApi.createRequest>[1]) =>
+        documentApi.createRequest(clientFileId, input),
+      onSuccess: invalidate,
+    }),
+    approve: useMutation({
+      mutationFn: (documentId: number) =>
+        documentApi.approveDocument(clientFileId, documentId),
+      onSuccess: invalidate,
+    }),
+    reject: useMutation({
+      mutationFn: (input: { documentId: number; reason: string; category?: string; fix_instructions?: string }) =>
+        documentApi.rejectDocument(clientFileId, input.documentId, {
+          reason: input.reason,
+          category: input.category,
+          fix_instructions: input.fix_instructions,
+        }),
+      onSuccess: invalidate,
+    }),
+    aiReview: useMutation({
+      mutationFn: (documentId: number) =>
+        documentApi.triggerAiReview(clientFileId, documentId),
+      onSuccess: invalidate,
+    }),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────

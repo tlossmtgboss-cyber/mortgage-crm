@@ -11,6 +11,8 @@ export { IdentityPanel } from "./IdentityPanel";
 export { ActivityPane } from "./ActivityPane";
 export { ActivityComposer } from "./ActivityComposer";
 export { UnifiedTimeline } from "./UnifiedTimeline";
+export { DocumentsPane } from "./DocumentsPane";
+export { TasksPane } from "./TasksPane";
 export { TeamChatPane } from "./TeamChatPane";
 export { ToolsRail } from "./ToolsRail";
 export {
@@ -55,6 +57,8 @@ export {
   useTasks,
   useTaskMutations,
   useDocumentSets,
+  useDocumentsTab,
+  useDocumentActions,
   useCadenceSequences,
   useCadenceLifecycle,
   useRelationships,

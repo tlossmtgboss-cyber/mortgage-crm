@@ -955,3 +955,614 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Activity tab strip (shared by Activity, Documents, Team Chat)
+   ───────────────────────────────────────────────────────────────────────── */
+
+.pf-cf-activity__tabs {
+  display: flex;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--pf-cf-border);
+  background: var(--pf-cf-bg-glass);
+  flex-shrink: 0;
+}
+
+.pf-cf-activity__tab {
+  padding: 12px 14px;
+  background: transparent;
+  border: none;
+  font-size: 13px;
+  color: var(--pf-cf-text-secondary);
+  font-weight: 400;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.pf-cf-activity__tab:hover {
+  color: var(--pf-cf-text);
+}
+
+.pf-cf-activity__tab--active {
+  color: var(--pf-cf-text);
+  font-weight: 500;
+  border-bottom-color: var(--pf-cf-accent);
+}
+
+.pf-cf-activity__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--pf-cf-accent);
+  color: var(--pf-cf-text-on-accent);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.pf-cf-activity__badge--urgent {
+  background: var(--pf-cf-danger);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Documents Pane
+   ───────────────────────────────────────────────────────────────────────── */
+
+.pf-cf-docs {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-width: 0;
+}
+
+.pf-cf-docs__tabs {
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--pf-cf-border);
+  background: var(--pf-cf-bg-glass-strong);
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.pf-cf-docs__tab {
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  font-size: 12px;
+  color: var(--pf-cf-text-secondary);
+  font-weight: 400;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  font-family: inherit;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.pf-cf-docs__tab:hover {
+  color: var(--pf-cf-text);
+}
+
+.pf-cf-docs__tab--active {
+  color: var(--pf-cf-text);
+  font-weight: 500;
+  border-bottom-color: var(--pf-cf-accent);
+}
+
+.pf-cf-docs__content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+.pf-cf-docs__section {
+  margin-bottom: 20px;
+}
+
+.pf-cf-docs__section-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pf-cf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+}
+
+/* Document request row */
+
+.pf-cf-docreq {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-md);
+  margin-bottom: 8px;
+  background: var(--pf-cf-bg-deep);
+}
+
+.pf-cf-docreq__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pf-cf-docreq__title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--pf-cf-text);
+  margin-bottom: 2px;
+}
+
+.pf-cf-docreq__meta {
+  font-size: 12px;
+  color: var(--pf-cf-text-secondary);
+}
+
+.pf-cf-docreq__desc {
+  font-size: 12px;
+  color: var(--pf-cf-text-secondary);
+  margin-top: 4px;
+}
+
+.pf-cf-docreq__instructions {
+  font-size: 12px;
+  color: var(--pf-cf-accent);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.pf-cf-docreq__badges {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* Document card (received documents) */
+
+.pf-cf-doccard {
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-md);
+  margin-bottom: 8px;
+  background: var(--pf-cf-bg-deep);
+  overflow: hidden;
+}
+
+.pf-cf-doccard__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.pf-cf-doccard__head:hover {
+  background: var(--pf-cf-bg-hover);
+}
+
+.pf-cf-doccard__icon {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--pf-cf-radius-sm);
+  background: var(--pf-cf-bg-glass-strong);
+}
+
+.pf-cf-doccard__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pf-cf-doccard__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--pf-cf-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-cf-doccard__meta {
+  font-size: 12px;
+  color: var(--pf-cf-text-secondary);
+}
+
+.pf-cf-doccard__status {
+  flex-shrink: 0;
+}
+
+.pf-cf-doccard__chevron {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--pf-cf-text-tertiary);
+}
+
+.pf-cf-doccard__body {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--pf-cf-border);
+}
+
+.pf-cf-doc-ai {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.pf-cf-doccard__reasons {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--pf-cf-radius-sm);
+  background: var(--pf-cf-agent-bg);
+  border: 1px solid var(--pf-cf-agent-border);
+}
+
+.pf-cf-doccard__reasons-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--pf-cf-agent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+
+.pf-cf-doccard__reasons ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 13px;
+  color: var(--pf-cf-text);
+}
+
+.pf-cf-doccard__reasons li {
+  margin-bottom: 2px;
+}
+
+.pf-cf-doccard__rejection {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: var(--pf-cf-radius-sm);
+  background: var(--pf-cf-danger-bg);
+  font-size: 13px;
+  color: var(--pf-cf-text);
+}
+
+.pf-cf-doccard__fix {
+  margin-top: 6px;
+  font-style: italic;
+}
+
+.pf-cf-doccard__extracted {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--pf-cf-text-secondary);
+}
+
+.pf-cf-doccard__confidence {
+  margin-left: 6px;
+  color: var(--pf-cf-text-tertiary);
+}
+
+.pf-cf-doccard__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pf-cf-doccard__reject-form {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pf-cf-doccard__reject-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-sm);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--pf-cf-text);
+  background: var(--pf-cf-bg-deep);
+  resize: vertical;
+}
+
+/* Shared button styles */
+
+.pf-cf-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 14px;
+  border-radius: var(--pf-cf-radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.pf-cf-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pf-cf-btn--sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.pf-cf-btn--accent {
+  background: var(--pf-cf-accent);
+  color: var(--pf-cf-text-on-accent);
+  border-color: var(--pf-cf-accent);
+}
+
+.pf-cf-btn--accent:hover:not(:disabled) {
+  background: var(--pf-cf-accent-dim);
+}
+
+.pf-cf-btn--outline {
+  background: transparent;
+  color: var(--pf-cf-text);
+  border-color: var(--pf-cf-border-strong);
+}
+
+.pf-cf-btn--outline:hover:not(:disabled) {
+  background: var(--pf-cf-bg-hover);
+}
+
+.pf-cf-btn--ghost {
+  background: transparent;
+  color: var(--pf-cf-accent);
+  border-color: transparent;
+}
+
+.pf-cf-btn--ghost:hover:not(:disabled) {
+  background: var(--pf-cf-accent-bg);
+}
+
+.pf-cf-btn--danger {
+  background: var(--pf-cf-danger);
+  color: white;
+  border-color: var(--pf-cf-danger);
+}
+
+.pf-cf-btn--danger:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+/* New Request Form */
+
+.pf-cf-newreq {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--pf-cf-border);
+  background: var(--pf-cf-bg-glass);
+}
+
+.pf-cf-newreq__row {
+  margin-bottom: 10px;
+}
+
+.pf-cf-newreq__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pf-cf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.pf-cf-newreq__select,
+.pf-cf-newreq__input,
+.pf-cf-newreq__textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-sm);
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--pf-cf-text);
+  background: var(--pf-cf-bg-deep);
+}
+
+.pf-cf-newreq__select:focus,
+.pf-cf-newreq__input:focus,
+.pf-cf-newreq__textarea:focus {
+  outline: none;
+  border-color: var(--pf-cf-accent);
+  box-shadow: 0 0 0 2px var(--pf-cf-accent-bg);
+}
+
+.pf-cf-newreq__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Task Cards (Tasks Pane)
+   ───────────────────────────────────────────────────────────────────────── */
+
+.pf-cf-taskcard {
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius-md);
+  margin-bottom: 8px;
+  background: var(--pf-cf-bg-deep);
+  overflow: hidden;
+}
+
+.pf-cf-taskcard--done {
+  opacity: 0.7;
+}
+
+.pf-cf-taskcard__head {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.pf-cf-taskcard__check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--pf-cf-border-strong);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 14px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.pf-cf-taskcard__check:hover {
+  border-color: var(--pf-cf-accent);
+}
+
+.pf-cf-taskcard__check--done {
+  background: var(--pf-cf-success);
+  border-color: var(--pf-cf-success);
+}
+
+.pf-cf-taskcard__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px 12px 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+
+.pf-cf-taskcard__main:hover {
+  background: var(--pf-cf-bg-hover);
+}
+
+.pf-cf-taskcard__info {
+  flex: 1;
+  min-width: 0;
+}
+
+.pf-cf-taskcard__title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--pf-cf-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pf-cf-taskcard__title--done {
+  text-decoration: line-through;
+  color: var(--pf-cf-text-tertiary);
+}
+
+.pf-cf-taskcard__meta {
+  display: flex;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--pf-cf-text-secondary);
+  margin-top: 2px;
+}
+
+.pf-cf-taskcard__due {
+  font-weight: 500;
+}
+
+.pf-cf-taskcard__due--overdue {
+  color: var(--pf-cf-danger);
+}
+
+.pf-cf-taskcard__due--soon {
+  color: var(--pf-cf-warning);
+}
+
+.pf-cf-taskcard__assignee {
+  color: var(--pf-cf-text-tertiary);
+}
+
+.pf-cf-taskcard__completed {
+  color: var(--pf-cf-text-tertiary);
+  font-style: italic;
+}
+
+.pf-cf-taskcard__badges {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.pf-cf-taskcard__chevron {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--pf-cf-text-tertiary);
+}
+
+.pf-cf-taskcard__body {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--pf-cf-border);
+}
+
+.pf-cf-taskcard__desc {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--pf-cf-text-secondary);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.pf-cf-taskcard__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.pf-cf-taskcard__detail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--pf-cf-text);
+}
+
+.pf-cf-taskcard__detail-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--pf-cf-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pf-cf-taskcard__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pf-cf-taskcard__edit {
+  margin-top: 10px;
+}

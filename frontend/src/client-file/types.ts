@@ -288,6 +288,72 @@ export interface DocumentRequest {
   is_stale?: boolean;
 }
 
+// Detailed document types for full document management
+
+export type SmartDocStatus =
+  | "UPLOADED" | "SCANNING" | "PROCESSING" | "PENDING_REVIEW"
+  | "NEEDS_REVIEW" | "APPROVED" | "REJECTED" | "EXPIRED"
+  | "DELETED" | "SUPERSEDED" | "UPLOAD_FAILED";
+
+export type DocDecision = "ACCEPT" | "REJECT" | "NEEDS_REVIEW";
+
+export type RejectionCategory =
+  | "SCREENSHOT" | "EXPIRED" | "POOR_QUALITY" | "INCOMPLETE" | "WRONG_TYPE" | "OTHER";
+
+export interface SmartDocRequest {
+  id: number;
+  loan_id: number;
+  doc_type: string;
+  title: string;
+  description?: string | null;
+  instructions?: string | null;
+  status: string;
+  priority: string;
+  due_date?: string | null;
+  sla_due_at?: string | null;
+  freshness_days?: number | null;
+  fulfilled_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface SmartDocument {
+  id: number;
+  request_id?: number | null;
+  loan_id?: number | null;
+  file_name: string;
+  original_filename?: string | null;
+  mime_type: string;
+  file_size: number;
+  page_count?: number | null;
+  doc_type?: string | null;
+  detected_doc_type?: string | null;
+  display_name?: string | null;
+  status: SmartDocStatus;
+  decision?: DocDecision | null;
+  decision_reasons?: string[] | null;
+  rejection_reason?: string | null;
+  rejection_category?: RejectionCategory | null;
+  fix_instructions?: string | null;
+  detected_is_screenshot?: boolean;
+  screenshot_confidence?: number | null;
+  is_expired?: boolean;
+  doc_date?: string | null;
+  doc_expires_at?: string | null;
+  extracted_names?: string[] | null;
+  extracted_employer?: string | null;
+  extracted_amount?: number | null;
+  extraction_confidence?: number | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  uploaded_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface DocumentsTabData {
+  requests: SmartDocRequest[];
+  documents: SmartDocument[];
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Cadence (autonomous follow-up)
 // ─────────────────────────────────────────────────────────────────────────

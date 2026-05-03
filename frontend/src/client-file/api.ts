@@ -15,8 +15,10 @@ import type {
   ClientFile,
   ClientInsight,
   DocumentSet,
+  DocumentsTabData,
   FollowupSequence,
   Relationship,
+  SmartDocument,
   Task,
   TeamChatMember,
   TeamChatMessage,
@@ -186,6 +188,17 @@ export const taskApi = {
     }),
   create: (clientFileId: string, input: Partial<Task> & { title: string }) =>
     request<Task>(`/clients/${clientFileId}/tasks`, { method: "POST", body: input }),
+  patch: (clientFileId: string, taskId: string, input: {
+    title?: string;
+    body?: string;
+    priority?: string;
+    due_at?: string;
+    assigned_to_user_id?: number;
+  }) =>
+    request<Task>(`/clients/${clientFileId}/tasks/${taskId}`, {
+      method: "PATCH",
+      body: input,
+    }),
   complete: (clientFileId: string, taskId: string) =>
     request<Task>(`/clients/${clientFileId}/tasks/${taskId}/complete`, { method: "POST" }),
   reopen: (clientFileId: string, taskId: string) =>
@@ -199,6 +212,53 @@ export const taskApi = {
 export const documentApi = {
   listSets: (clientFileId: string) =>
     request<DocumentSet[]>(`/clients/${clientFileId}/document-sets`),
+
+  listDocuments: (clientFileId: string, tab: string = "all") =>
+    request<DocumentsTabData>(`/clients/${clientFileId}/documents`, {
+      query: { tab },
+    }),
+
+  getDocument: (clientFileId: string, documentId: number) =>
+    request<SmartDocument>(`/clients/${clientFileId}/documents/${documentId}`),
+
+  createRequest: (clientFileId: string, input: {
+    doc_type: string;
+    title: string;
+    description?: string;
+    instructions?: string;
+    priority?: string;
+    due_date?: string;
+  }) =>
+    request<unknown>(`/clients/${clientFileId}/documents/request`, {
+      method: "POST",
+      body: input,
+    }),
+
+  approveDocument: (clientFileId: string, documentId: number) =>
+    request<unknown>(`/clients/${clientFileId}/documents/${documentId}/approve`, {
+      method: "POST",
+    }),
+
+  rejectDocument: (clientFileId: string, documentId: number, input: {
+    reason: string;
+    category?: string;
+    fix_instructions?: string;
+  }) =>
+    request<unknown>(`/clients/${clientFileId}/documents/${documentId}/reject`, {
+      method: "POST",
+      body: input,
+    }),
+
+  triggerAiReview: (clientFileId: string, documentId: number) =>
+    request<{ document_id: number; decision?: string; reasons?: string[]; fix_instructions?: string }>(
+      `/clients/${clientFileId}/documents/${documentId}/ai-review`,
+      { method: "POST" },
+    ),
+
+  getDownloadUrl: (clientFileId: string, documentId: number) =>
+    request<{ url: string; filename: string }>(
+      `/clients/${clientFileId}/documents/${documentId}/download-url`,
+    ),
 };
 
 // ─────────────────────────────────────────────────────────────────────────

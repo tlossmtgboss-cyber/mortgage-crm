@@ -271,7 +271,7 @@ class TaskResponse(BaseModel):
     created_by_user_id: Optional[str] = None
 
 
-def _task_to_response(task: Any, cf_id: uuid.UUID) -> dict:
+def _task_to_response(task: Any, cf_id: uuid.UUID, owner_name: Optional[str] = None) -> dict:
     return TaskResponse(
         id=str(task.id),
         client_file_id=str(cf_id),
@@ -282,6 +282,7 @@ def _task_to_response(task: Any, cf_id: uuid.UUID) -> dict:
         due_at=_iso(task.due_date),
         completed_at=_iso(task.completed_at),
         assigned_to_user_id=str(task.owner_id) if task.owner_id else None,
+        assigned_to_user_name=owner_name,
         created_by_user_id=None,
     ).model_dump()
 
@@ -305,7 +306,18 @@ def list_tasks(
         q = q.where(Task.status != "completed")
     q = q.order_by(Task.due_date.asc().nullslast(), Task.created_at.desc())
     tasks = db.execute(q).scalars().all()
-    return [_task_to_response(t, client_file_id) for t in tasks]
+
+    owner_ids = {t.owner_id for t in tasks if t.owner_id}
+    owner_names: dict[int, str] = {}
+    if owner_ids:
+        from database.models.core import User
+        users = db.execute(
+            select(User.id, User.first_name, User.last_name).where(User.id.in_(owner_ids))
+        ).all()
+        for u in users:
+            owner_names[u.id] = f"{u.first_name or ''} {u.last_name or ''}".strip()
+
+    return [_task_to_response(t, client_file_id, owner_names.get(t.owner_id)) for t in tasks]
 
 
 class CreateTaskBody(BaseModel):
@@ -342,6 +354,45 @@ def create_task(
     db.commit()
     db.refresh(task)
     return _task_to_response(task, client_file_id)
+
+
+class PatchTaskBody(BaseModel):
+    title: Optional[str] = None
+    body: Optional[str] = None
+    priority: Optional[str] = None
+    due_at: Optional[str] = None
+    assigned_to_user_id: Optional[int] = None
+
+
+@router.patch("/clients/{client_file_id}/tasks/{task_id}")
+def patch_task(
+    client_file_id: uuid.UUID,
+    task_id: int,
+    body: PatchTaskBody,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    _get_cf(db, client_file_id, current_user.organization_id)
+    from database.models.task import Task
+    task = db.execute(
+        select(Task).where(Task.id == task_id, Task.organization_id == current_user.organization_id)
+    ).scalar_one_or_none()
+    if task is None:
+        raise HTTPException(404, "task not found")
+    if body.title is not None:
+        task.title = body.title
+    if body.body is not None:
+        task.description = body.body
+    if body.priority is not None:
+        task.priority = body.priority
+    if body.due_at is not None:
+        task.due_date = datetime.fromisoformat(body.due_at) if body.due_at else None
+    if body.assigned_to_user_id is not None:
+        task.owner_id = body.assigned_to_user_id
+    db.commit()
+    db.refresh(task)
+    owner_name = _lo_name(db, task.owner_id)
+    return _task_to_response(task, client_file_id, owner_name)
 
 
 @router.post("/clients/{client_file_id}/tasks/{task_id}/complete")
@@ -413,17 +464,7 @@ def list_cadence_sequences(
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
-    if not cf.lead_id:
-        return []
-    from database.models.lead_loan import Loan
-    loan_ids = [
-        lid for (lid,) in db.execute(
-            select(Loan.id).where(
-                Loan.lead_id == cf.lead_id,
-                Loan.organization_id == current_user.organization_id,
-            )
-        ).all()
-    ]
+    loan_ids = _get_loan_ids_for_cf(db, cf, current_user.organization_id)
     if not loan_ids:
         return []
     from database.models.followup_cadence import FollowupExecution
@@ -489,14 +530,545 @@ def recompute_insight(
     return {"detail": "insight recompute not yet implemented"}
 
 
+def _get_loan_ids_for_cf(db: Session, cf, org_id: int) -> list[int]:
+    """Resolve client_file → lead → loan IDs.
+
+    Three resolution strategies, tried in order:
+    1. Lead.loan_number → Loan.loan_number (SF sync, manual entry)
+    2. APP-{lead_id} convention → Loan.loan_number (POS application flow)
+    3. Lead.email → Loan.borrower_email (fallback for unlinked records)
+    """
+    if not cf.lead_id:
+        return []
+    from database.models.lead_loan import Lead, Loan
+    lead = db.execute(
+        select(Lead.id, Lead.loan_number, Lead.email).where(
+            Lead.id == cf.lead_id, Lead.organization_id == org_id,
+        )
+    ).first()
+    if not lead:
+        return []
+    loan_ids = []
+
+    if lead.loan_number:
+        loan_ids = [
+            lid for (lid,) in db.execute(
+                select(Loan.id).where(
+                    Loan.loan_number == lead.loan_number,
+                    Loan.organization_id == org_id,
+                )
+            ).all()
+        ]
+
+    if not loan_ids:
+        app_loan_number = f"APP-{str(lead.id).zfill(6)}"
+        loan_ids = [
+            lid for (lid,) in db.execute(
+                select(Loan.id).where(
+                    Loan.loan_number == app_loan_number,
+                    Loan.organization_id == org_id,
+                )
+            ).all()
+        ]
+
+    if not loan_ids and lead.email:
+        loan_ids = [
+            lid for (lid,) in db.execute(
+                select(Loan.id).where(
+                    Loan.borrower_email == lead.email,
+                    Loan.organization_id == org_id,
+                )
+            ).all()
+        ]
+    return loan_ids
+
+
 @router.get("/clients/{client_file_id}/document-sets")
 def list_document_sets(
     client_file_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
-    _get_cf(db, client_file_id, current_user.organization_id)
-    return []
+    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    loan_ids = _get_loan_ids_for_cf(db, cf, current_user.organization_id)
+    if not loan_ids:
+        return []
+
+    from models.smart_docs_models import DocumentRequest, SmartDocument
+
+    requests = db.execute(
+        select(DocumentRequest).where(
+            DocumentRequest.loan_id.in_(loan_ids),
+            DocumentRequest.is_active == True,
+        ).order_by(DocumentRequest.created_at.desc())
+    ).scalars().all()
+
+    docs_by_request: dict[int, list] = {}
+    if requests:
+        req_ids = [r.id for r in requests]
+        docs = db.execute(
+            select(SmartDocument).where(
+                SmartDocument.request_id.in_(req_ids),
+                SmartDocument.status != "DELETED",
+            )
+        ).scalars().all()
+        for d in docs:
+            docs_by_request.setdefault(d.request_id, []).append(d)
+
+    DOC_TYPE_CATEGORY = {
+        "PAYSTUB": "income", "W2": "income", "TAX_RETURN": "income",
+        "BUSINESS_TAX_RETURN": "income", "PROFIT_LOSS": "income",
+        "BALANCE_SHEET": "income",
+        "BANK_STATEMENT": "assets", "INVESTMENT_STATEMENT": "assets",
+        "GIFT_LETTER": "assets",
+        "DRIVERS_LICENSE": "identity", "VA_COE": "identity", "DD214": "identity",
+        "PURCHASE_CONTRACT": "property", "APPRAISAL": "property",
+        "TITLE_REPORT": "property",
+        "HOMEOWNERS_INSURANCE": "insurance",
+        "BANKRUPTCY_DISCHARGE": "credit",
+        "LOE": "other", "LEASE_AGREEMENT": "other",
+        "FHA_CERT": "other", "OTHER": "other",
+    }
+
+    STATUS_MAP = {
+        "OPEN": "pending", "PENDING_REVIEW": "under_review",
+        "ACCEPTED": "fulfilled", "REJECTED": "rejected", "WAIVED": "waived",
+    }
+
+    sets_map: dict[str, dict] = {}
+    for req in requests:
+        dt = req.doc_type.value if hasattr(req.doc_type, "value") else str(req.doc_type)
+        cat = DOC_TYPE_CATEGORY.get(dt, "other")
+        if cat not in sets_map:
+            sets_map[cat] = {
+                "id": cat,
+                "set_type": cat,
+                "title": cat.replace("_", " ").title(),
+                "open_count": 0,
+                "fulfilled_count": 0,
+                "rejected_count": 0,
+                "requests": [],
+            }
+        s = sets_map[cat]
+        status_str = req.status.value if hasattr(req.status, "value") else str(req.status)
+        mapped_status = STATUS_MAP.get(status_str, "pending")
+        is_stale = False
+        req_docs = docs_by_request.get(req.id, [])
+        for d in req_docs:
+            if d.is_expired:
+                is_stale = True
+                break
+
+        if mapped_status == "fulfilled":
+            s["fulfilled_count"] += 1
+        elif mapped_status == "rejected":
+            s["rejected_count"] += 1
+        else:
+            s["open_count"] += 1
+
+        s["requests"].append({
+            "id": str(req.id),
+            "client_file_id": str(client_file_id),
+            "document_set_id": cat,
+            "doc_type": dt,
+            "title": req.title,
+            "description": req.description,
+            "status": mapped_status,
+            "priority": (req.priority.value if hasattr(req.priority, "value") else str(req.priority or "NORMAL")).lower(),
+            "due_at": _iso(req.due_date),
+            "expires_after_days": req.freshness_days,
+            "fulfilled_at": _iso(req.fulfilled_at),
+            "rejection_reason": None,
+            "is_stale": is_stale,
+        })
+
+    return list(sets_map.values())
+
+
+@router.get("/clients/{client_file_id}/documents")
+def list_documents(
+    client_file_id: uuid.UUID,
+    tab: str = Query("all"),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    """List documents for a client file. tab: requested, received, archived, all."""
+    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    loan_ids = _get_loan_ids_for_cf(db, cf, current_user.organization_id)
+    if not loan_ids:
+        return {"requests": [], "documents": []}
+
+    from models.smart_docs_models import DocumentRequest, SmartDocument
+
+    requests = db.execute(
+        select(DocumentRequest).where(
+            DocumentRequest.loan_id.in_(loan_ids),
+            DocumentRequest.is_active == True,
+        ).order_by(DocumentRequest.created_at.desc())
+    ).scalars().all()
+
+    docs = db.execute(
+        select(SmartDocument).where(
+            SmartDocument.loan_id.in_(loan_ids),
+            SmartDocument.status != "DELETED",
+        ).order_by(SmartDocument.created_at.desc())
+    ).scalars().all()
+
+    def _req_to_dict(r):
+        st = r.status.value if hasattr(r.status, "value") else str(r.status)
+        dt = r.doc_type.value if hasattr(r.doc_type, "value") else str(r.doc_type)
+        pr = r.priority.value if hasattr(r.priority, "value") else str(r.priority or "NORMAL")
+        return {
+            "id": r.id,
+            "loan_id": r.loan_id,
+            "doc_type": dt,
+            "title": r.title,
+            "description": r.description,
+            "instructions": r.instructions,
+            "status": st,
+            "priority": pr,
+            "due_date": _iso(r.due_date),
+            "sla_due_at": _iso(r.sla_due_at),
+            "freshness_days": r.freshness_days,
+            "fulfilled_at": _iso(r.fulfilled_at),
+            "created_at": _iso(r.created_at),
+        }
+
+    def _doc_to_dict(d):
+        dt = d.doc_type.value if hasattr(d.doc_type, "value") else str(d.doc_type) if d.doc_type else None
+        return {
+            "id": d.id,
+            "request_id": d.request_id,
+            "loan_id": d.loan_id,
+            "file_name": d.file_name,
+            "original_filename": d.original_filename,
+            "mime_type": d.mime_type,
+            "file_size": d.file_size,
+            "page_count": d.page_count,
+            "doc_type": dt,
+            "detected_doc_type": d.detected_doc_type,
+            "display_name": d.display_name,
+            "status": d.status,
+            "decision": d.decision.value if d.decision and hasattr(d.decision, "value") else d.decision,
+            "decision_reasons": d.decision_reasons,
+            "rejection_reason": d.rejection_reason,
+            "rejection_category": d.rejection_category.value if d.rejection_category and hasattr(d.rejection_category, "value") else d.rejection_category,
+            "fix_instructions": d.fix_instructions,
+            "detected_is_screenshot": d.detected_is_screenshot,
+            "screenshot_confidence": d.screenshot_confidence,
+            "is_expired": d.is_expired,
+            "doc_date": _iso(d.doc_date),
+            "doc_expires_at": _iso(d.doc_expires_at),
+            "extracted_names": d.extracted_names,
+            "extracted_employer": d.extracted_employer,
+            "extracted_amount": float(d.extracted_amount) if d.extracted_amount else None,
+            "extraction_confidence": d.extraction_confidence,
+            "reviewed_at": _iso(d.reviewed_at),
+            "reviewed_by": d.reviewed_by,
+            "uploaded_at": _iso(d.uploaded_at),
+            "created_at": _iso(d.created_at),
+        }
+
+    REQUESTED_STATUSES = {"OPEN", "PENDING_REVIEW"}
+    RECEIVED_DOC_STATUSES = {"UPLOADED", "SCANNING", "PROCESSING", "PENDING_REVIEW", "NEEDS_REVIEW", "APPROVED"}
+    ARCHIVED_DOC_STATUSES = {"REJECTED", "EXPIRED", "SUPERSEDED"}
+    ARCHIVED_REQ_STATUSES = {"ACCEPTED", "WAIVED", "REJECTED"}
+
+    req_list = [_req_to_dict(r) for r in requests]
+    doc_list = [_doc_to_dict(d) for d in docs]
+
+    if tab == "requested":
+        req_list = [r for r in req_list if r["status"] in REQUESTED_STATUSES]
+        doc_list = []
+    elif tab == "received":
+        req_list = [r for r in req_list if r["status"] == "PENDING_REVIEW"]
+        doc_list = [d for d in doc_list if d["status"] in RECEIVED_DOC_STATUSES]
+    elif tab == "archived":
+        req_list = [r for r in req_list if r["status"] in ARCHIVED_REQ_STATUSES]
+        doc_list = [d for d in doc_list if d["status"] in ARCHIVED_DOC_STATUSES]
+
+    return {"requests": req_list, "documents": doc_list}
+
+
+@router.get("/clients/{client_file_id}/documents/{document_id}")
+def get_document_detail(
+    client_file_id: uuid.UUID,
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    """Get full document detail including AI review results."""
+    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    loan_ids = _get_loan_ids_for_cf(db, cf, current_user.organization_id)
+    if not loan_ids:
+        raise HTTPException(404, "no loans linked to this client file")
+
+    from models.smart_docs_models import SmartDocument
+    doc = db.execute(
+        select(SmartDocument).where(
+            SmartDocument.id == document_id,
+            SmartDocument.loan_id.in_(loan_ids),
+        )
+    ).scalar_one_or_none()
+    if doc is None:
+        raise HTTPException(404, "document not found")
+
+    dt = doc.doc_type.value if hasattr(doc.doc_type, "value") else str(doc.doc_type) if doc.doc_type else None
+    return {
+        "id": doc.id,
+        "request_id": doc.request_id,
+        "loan_id": doc.loan_id,
+        "file_name": doc.file_name,
+        "original_filename": doc.original_filename,
+        "mime_type": doc.mime_type,
+        "file_size": doc.file_size,
+        "page_count": doc.page_count,
+        "storage_key": doc.storage_key,
+        "doc_type": dt,
+        "detected_doc_type": doc.detected_doc_type,
+        "display_name": doc.display_name,
+        "status": doc.status,
+        "decision": doc.decision.value if doc.decision and hasattr(doc.decision, "value") else doc.decision,
+        "decision_reasons": doc.decision_reasons,
+        "rejection_reason": doc.rejection_reason,
+        "rejection_category": doc.rejection_category.value if doc.rejection_category and hasattr(doc.rejection_category, "value") else doc.rejection_category,
+        "fix_instructions": doc.fix_instructions,
+        "detected_is_screenshot": doc.detected_is_screenshot,
+        "screenshot_confidence": doc.screenshot_confidence,
+        "screenshot_reasons": doc.screenshot_reasons,
+        "is_expired": doc.is_expired,
+        "doc_date": _iso(doc.doc_date),
+        "doc_expires_at": _iso(doc.doc_expires_at),
+        "days_until_expiration": doc.days_until_expiration,
+        "extracted_dates": doc.extracted_dates,
+        "extracted_names": doc.extracted_names,
+        "extracted_employer": doc.extracted_employer,
+        "extracted_account_number": doc.extracted_account_number,
+        "extracted_amount": float(doc.extracted_amount) if doc.extracted_amount else None,
+        "extraction_confidence": doc.extraction_confidence,
+        "ocr_text": doc.ocr_text[:500] if doc.ocr_text else None,
+        "reviewed_at": _iso(doc.reviewed_at),
+        "reviewed_by": doc.reviewed_by,
+        "upload_source": doc.upload_source,
+        "uploaded_at": _iso(doc.uploaded_at),
+        "created_at": _iso(doc.created_at),
+    }
+
+
+class CreateDocRequestBody(BaseModel):
+    doc_type: str
+    title: str
+    description: Optional[str] = None
+    instructions: Optional[str] = None
+    priority: str = "NORMAL"
+    due_date: Optional[str] = None
+
+
+@router.post("/clients/{client_file_id}/documents/request")
+def create_document_request(
+    client_file_id: uuid.UUID,
+    body: CreateDocRequestBody,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    """Create a new document request for this client's loan."""
+    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    loan_ids = _get_loan_ids_for_cf(db, cf, current_user.organization_id)
+    if not loan_ids:
+        raise HTTPException(400, "no loan linked to this client file — cannot request documents")
+
+    from models.smart_docs_models import DocumentRequest, DocType, RequestPriority
+    try:
+        doc_type = DocType(body.doc_type)
+    except ValueError:
+        doc_type = DocType.OTHER
+
+    try:
+        priority = RequestPriority(body.priority)
+    except ValueError:
+        priority = RequestPriority.NORMAL
+
+    due = None
+    if body.due_date:
+        due = datetime.fromisoformat(body.due_date)
+
+    req = DocumentRequest(
+        loan_id=loan_ids[0],
+        doc_type=doc_type,
+        title=body.title,
+        description=body.description,
+        instructions=body.instructions,
+        priority=priority,
+        due_date=due,
+    )
+    db.add(req)
+    db.commit()
+    db.refresh(req)
+
+    return {
+        "id": req.id,
+        "loan_id": req.loan_id,
+        "doc_type": req.doc_type.value if hasattr(req.doc_type, "value") else str(req.doc_type),
+        "title": req.title,
+        "status": req.status.value if hasattr(req.status, "value") else str(req.status),
+        "priority": req.priority.value if hasattr(req.priority, "value") else str(req.priority),
+        "created_at": _iso(req.created_at),
+    }
+
+
+@router.post("/clients/{client_file_id}/documents/{document_id}/approve")
+def approve_document(
+    client_file_id: uuid.UUID,
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    loan_ids = _get_loan_ids_for_cf(db, cf, current_user.organization_id)
+    if not loan_ids:
+        raise HTTPException(404, "no loans linked")
+
+    from models.smart_docs_models import SmartDocument, DocumentRequest
+    doc = db.execute(
+        select(SmartDocument).where(
+            SmartDocument.id == document_id,
+            SmartDocument.loan_id.in_(loan_ids),
+        )
+    ).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(404, "document not found")
+
+    doc.status = "APPROVED"
+    doc.decision = "ACCEPT"
+    doc.reviewed_at = datetime.now(timezone.utc)
+    doc.reviewed_by = str(current_user.id)
+
+    if doc.request_id:
+        req = db.get(DocumentRequest, doc.request_id)
+        if req:
+            req.status = "ACCEPTED"
+            req.fulfilled_at = datetime.now(timezone.utc)
+
+    db.commit()
+    return {"status": "approved", "document_id": document_id}
+
+
+class RejectDocBody(BaseModel):
+    reason: str
+    category: str = "OTHER"
+    fix_instructions: Optional[str] = None
+
+
+@router.post("/clients/{client_file_id}/documents/{document_id}/reject")
+def reject_document(
+    client_file_id: uuid.UUID,
+    document_id: int,
+    body: RejectDocBody,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    loan_ids = _get_loan_ids_for_cf(db, cf, current_user.organization_id)
+    if not loan_ids:
+        raise HTTPException(404, "no loans linked")
+
+    from models.smart_docs_models import SmartDocument, DocumentRequest
+    doc = db.execute(
+        select(SmartDocument).where(
+            SmartDocument.id == document_id,
+            SmartDocument.loan_id.in_(loan_ids),
+        )
+    ).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(404, "document not found")
+
+    doc.status = "REJECTED"
+    doc.decision = "REJECT"
+    doc.rejection_reason = body.reason
+    doc.rejection_category = body.category
+    doc.fix_instructions = body.fix_instructions
+    doc.reviewed_at = datetime.now(timezone.utc)
+    doc.reviewed_by = str(current_user.id)
+
+    if doc.request_id:
+        req = db.get(DocumentRequest, doc.request_id)
+        if req:
+            req.status = "REJECTED"
+
+    db.commit()
+    return {"status": "rejected", "document_id": document_id}
+
+
+@router.post("/clients/{client_file_id}/documents/{document_id}/ai-review")
+def trigger_ai_review(
+    client_file_id: uuid.UUID,
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    """Trigger AI review for a document."""
+    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    loan_ids = _get_loan_ids_for_cf(db, cf, current_user.organization_id)
+    if not loan_ids:
+        raise HTTPException(404, "no loans linked")
+
+    from models.smart_docs_models import SmartDocument
+    doc = db.execute(
+        select(SmartDocument).where(
+            SmartDocument.id == document_id,
+            SmartDocument.loan_id.in_(loan_ids),
+        )
+    ).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(404, "document not found")
+
+    try:
+        from services.smart_docs.ai_review_service import review_document
+        result = review_document(db, doc)
+        return {
+            "document_id": document_id,
+            "decision": result.get("decision"),
+            "reasons": result.get("reasons", []),
+            "fix_instructions": result.get("fix_instructions"),
+        }
+    except ImportError:
+        return {
+            "document_id": document_id,
+            "decision": doc.decision.value if doc.decision and hasattr(doc.decision, "value") else doc.decision,
+            "reasons": doc.decision_reasons or [],
+            "fix_instructions": doc.fix_instructions,
+        }
+
+
+@router.get("/clients/{client_file_id}/documents/{document_id}/download-url")
+def get_document_download_url(
+    client_file_id: uuid.UUID,
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    """Get a presigned download URL for a document."""
+    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    loan_ids = _get_loan_ids_for_cf(db, cf, current_user.organization_id)
+    if not loan_ids:
+        raise HTTPException(404, "no loans linked")
+
+    from models.smart_docs_models import SmartDocument
+    doc = db.execute(
+        select(SmartDocument).where(
+            SmartDocument.id == document_id,
+            SmartDocument.loan_id.in_(loan_ids),
+        )
+    ).scalar_one_or_none()
+    if not doc:
+        raise HTTPException(404, "document not found")
+
+    try:
+        from services.smart_docs.s3_storage_service import generate_presigned_url
+        url = generate_presigned_url(doc.storage_key)
+        return {"url": url, "filename": doc.original_filename or doc.file_name}
+    except Exception:
+        raise HTTPException(501, "document download not available")
 
 
 @router.get("/clients/{client_file_id}/relationships")

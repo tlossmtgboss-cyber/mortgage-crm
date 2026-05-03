@@ -2219,6 +2219,15 @@ async def submit_application(
                 db.commit()
                 logger.info(f"Created loan {loan_id} (number: {loan_number}) for lead {lead_id}")
 
+                # Backfill Lead.loan_number so client-file resolution uses the fast path
+                try:
+                    db.execute(text(
+                        "UPDATE leads SET loan_number = :ln WHERE id = :lid AND loan_number IS NULL"
+                    ), {"ln": loan_number, "lid": lead_id})
+                    db.commit()
+                except Exception as e:
+                    logger.debug(f"Could not backfill lead loan_number: {e}")
+
             except Exception as loan_error:
                 logger.warning(f"Failed to create loan record: {loan_error}")
                 # Non-critical - continue without loan record
