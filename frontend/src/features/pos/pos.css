@@ -736,6 +736,18 @@
   margin: 4px 0 0;
 }
 
+/* Computed read-only value */
+.urla-computed-value {
+  padding: 11px 14px;
+  background: var(--bt-bg-soft, #FDFBF5);
+  border: 1px solid var(--bt-border, #E8E1CE);
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--bt-primary);
+  letter-spacing: -0.01em;
+}
+
 /* Yes/No toggle */
 .urla-yesno {
   display: flex;
