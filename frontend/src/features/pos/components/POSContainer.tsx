@@ -9,7 +9,7 @@ import { TopNav } from './TopNav';
 import { POSSidebar } from './POSSidebar';
 import { StepRail } from './StepRail';
 import { AriaPanel } from './AriaPanel';
-import { DocumentsDrawer } from './DocumentsDrawer';
+import { DocumentsPage } from './DocumentsPage';
 import { IntakePanel, EMPTY_INTAKE } from './IntakePanel';
 import type { IntakeData } from './IntakePanel';
 
@@ -65,7 +65,7 @@ export const POSContainer: React.FC<POSContainerProps> = ({
 
   const [activeStep, setActiveStep] = useState<SectionKey>('personal');
   const [ariaOpen, setAriaOpen] = useState(false);
-  const [docsOpen, setDocsOpen] = useState(false);
+  const [view, setView] = useState<'application' | 'documents'>('application');
   const [intakeComplete, setIntakeComplete] = useState(false);
   const [intakeData, setIntakeData] = useState<IntakeData>(EMPTY_INTAKE);
 
@@ -152,60 +152,73 @@ export const POSContainer: React.FC<POSContainerProps> = ({
           application={application}
           onAskAria={() => setAriaOpen(true)}
           documentCount={detectedDocs.length}
-          onDocumentsClick={() => setDocsOpen(true)}
+          onDocumentsClick={() => setView('documents')}
+          activeNav={view === 'documents' ? 'documents' : 'application'}
         />
 
         <main className="pos-main">
-          <div className="pos-main__welcome">
-            <div className="pos-main__urla-badge">
-              <span className="pos-main__urla-tag">URLA · Form 1003</span>
-              <span className="pos-main__time-estimate">Estimated time remaining: ~14 minutes</span>
-            </div>
-            <h1 className="pos-main__heading">Welcome back, {borrowerName}.</h1>
-            <p className="pos-main__subheading">
-              Let's finish your loan application. Your progress saves automatically — step away
-              anytime and pick up right where you left off.
-            </p>
-          </div>
-
-          <div className="pos-main__grid">
-            <StepRail
-              steps={SECTION_ORDER}
-              labels={SECTION_LABELS}
-              activeStep={activeStep}
-              completionByStep={application.sections_complete}
-              onStepClick={handleStepChange}
+          {view === 'documents' ? (
+            <DocumentsPage
+              loName="your loan officer"
+              loInitials="A"
+              detectedDocs={detectedDocs}
+              onAskAria={() => setAriaOpen(true)}
+              onBack={() => setView('application')}
             />
-
-            <div className="pos-main__panel">
-              <div className="pos-main__step-header">
-                <p className="pos-main__step-counter">
-                  Step {SECTION_ORDER.indexOf(activeStep) + 1} of {SECTION_ORDER.length}
+          ) : (
+            <>
+              <div className="pos-main__welcome">
+                <div className="pos-main__urla-badge">
+                  <span className="pos-main__urla-tag">URLA · Form 1003</span>
+                  <span className="pos-main__time-estimate">Estimated time remaining: ~14 minutes</span>
+                </div>
+                <h1 className="pos-main__heading">Welcome back, {borrowerName}.</h1>
+                <p className="pos-main__subheading">
+                  Let's finish your loan application. Your progress saves automatically — step away
+                  anytime and pick up right where you left off.
                 </p>
-                <h2 className="pos-main__step-title">{SECTION_LABELS[activeStep]}</h2>
               </div>
 
-              <ActivePanel
-                section={sections[activeStep]}
-                onChange={(data: Record<string, unknown>) =>
-                  updateSectionData(activeStep, data)
-                }
-                onComplete={() => {
-                  markComplete(activeStep).then(() => {
-                    const nextIdx = Math.min(
-                      SECTION_ORDER.indexOf(activeStep) + 1,
-                      SECTION_ORDER.length - 1,
-                    );
-                    handleStepChange(SECTION_ORDER[nextIdx]);
-                  });
-                }}
-                application={application}
-                onSubmit={submit}
-                onAskAria={() => setAriaOpen(true)}
-                intakeLoanPurpose={intakeData.loan_purpose}
-              />
-            </div>
-          </div>
+              <div className="pos-main__grid">
+                <StepRail
+                  steps={SECTION_ORDER}
+                  labels={SECTION_LABELS}
+                  activeStep={activeStep}
+                  completionByStep={application.sections_complete}
+                  onStepClick={handleStepChange}
+                />
+
+                <div className="pos-main__panel">
+                  <div className="pos-main__step-header">
+                    <p className="pos-main__step-counter">
+                      Step {SECTION_ORDER.indexOf(activeStep) + 1} of {SECTION_ORDER.length}
+                    </p>
+                    <h2 className="pos-main__step-title">{SECTION_LABELS[activeStep]}</h2>
+                  </div>
+
+                  <ActivePanel
+                    section={sections[activeStep]}
+                    onChange={(data: Record<string, unknown>) =>
+                      updateSectionData(activeStep, data)
+                    }
+                    onComplete={() => {
+                      markComplete(activeStep).then(() => {
+                        const nextIdx = Math.min(
+                          SECTION_ORDER.indexOf(activeStep) + 1,
+                          SECTION_ORDER.length - 1,
+                        );
+                        handleStepChange(SECTION_ORDER[nextIdx]);
+                      });
+                    }}
+                    application={application}
+                    onSubmit={submit}
+                    onAskAria={() => setAriaOpen(true)}
+                    intakeLoanPurpose={intakeData.loan_purpose}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </main>
       </div>
 
@@ -216,11 +229,6 @@ export const POSContainer: React.FC<POSContainerProps> = ({
         currentStep={activeStep}
       />
 
-      <DocumentsDrawer
-        open={docsOpen}
-        onClose={() => setDocsOpen(false)}
-        documents={detectedDocs}
-      />
     </div>
   );
 };
