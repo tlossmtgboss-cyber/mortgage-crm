@@ -547,6 +547,147 @@ def star_event(
     return {"detail": "star not yet implemented"}
 
 
+# ─── Cross-entity client file resolution (auto-create) ────────────────
+
+def _get_or_create_client_file(db: Session, lead_id: int, org_id: int) -> str:
+    """Look up the client file for a lead. If none exists, create one from the lead data."""
+    from database.models.client_file import ClientFile
+    from database.models.lead_loan import Lead
+
+    cf_id = db.execute(
+        select(ClientFile.id).where(ClientFile.lead_id == lead_id)
+    ).scalar_one_or_none()
+    if cf_id is not None:
+        return str(cf_id)
+
+    lead = db.execute(
+        select(Lead).where(Lead.id == lead_id, Lead.organization_id == org_id)
+    ).scalar_one_or_none()
+    if lead is None:
+        raise HTTPException(404, "lead not found")
+
+    stage_map = {
+        "New": "new_lead", "Attempted Contact": "new_lead",
+        "Prospect": "prospect", "Pre-Qualified": "prospect",
+        "Application": "active_borrower", "Pre-Approved": "active_borrower",
+        "Funded": "post_close",
+    }
+    lifecycle = stage_map.get(lead.stage, "new_lead")
+
+    cf = ClientFile(
+        organization_id=org_id,
+        lead_id=lead_id,
+        first_name=lead.first_name or (lead.name.split()[0] if lead.name else None),
+        last_name=lead.last_name or (lead.name.split()[-1] if lead.name and " " in lead.name else None),
+        primary_email=lead.email,
+        primary_phone=lead.phone,
+        lifecycle_stage=lifecycle,
+        source=lead.source,
+        preferred_channel=lead.preferred_communication,
+        assigned_loan_officer_id=lead.owner_id,
+        property_address={
+            "street": lead.address, "city": lead.city,
+            "state": lead.state, "zip": lead.zip_code,
+        } if lead.address else None,
+        active_loan_amount=float(lead.loan_amount) if lead.loan_amount else None,
+        active_loan_fico=lead.credit_score,
+        created_by_user_id=lead.owner_id,
+    )
+    db.add(cf)
+    db.commit()
+    db.refresh(cf)
+    return str(cf.id)
+
+
+def _find_lead_for_loan(db: Session, loan_id: int, org_id: int) -> int:
+    """Resolve a loan to its originating lead via loan_number or borrower_email."""
+    from database.models.lead_loan import Lead, Loan
+
+    loan = db.execute(
+        select(Loan.loan_number, Loan.borrower_email).where(
+            Loan.id == loan_id, Loan.organization_id == org_id,
+        )
+    ).first()
+    if loan is None:
+        raise HTTPException(404, "loan not found")
+
+    lead_id = None
+    if loan.loan_number:
+        lead_id = db.execute(
+            select(Lead.id).where(
+                Lead.loan_number == loan.loan_number,
+                Lead.organization_id == org_id,
+            )
+        ).scalar_one_or_none()
+    if lead_id is None and loan.borrower_email:
+        lead_id = db.execute(
+            select(Lead.id).where(
+                Lead.email == loan.borrower_email,
+                Lead.organization_id == org_id,
+            )
+        ).scalar_one_or_none()
+    if lead_id is None:
+        raise HTTPException(404, "no matching lead found for this loan")
+    return lead_id
+
+
+def _find_lead_for_mum(db: Session, mum_id: int, org_id: int) -> int:
+    """Resolve a MUM client to its originating lead via loan_number or email."""
+    from database.models.lead_loan import Lead
+    from database.models.referral import MUMClient
+
+    mum = db.execute(
+        select(MUMClient.loan_number, MUMClient.email).where(
+            MUMClient.id == mum_id, MUMClient.organization_id == org_id,
+        )
+    ).first()
+    if mum is None:
+        raise HTTPException(404, "MUM client not found")
+
+    lead_id = None
+    if mum.loan_number:
+        lead_id = db.execute(
+            select(Lead.id).where(
+                Lead.loan_number == mum.loan_number,
+                Lead.organization_id == org_id,
+            )
+        ).scalar_one_or_none()
+    if lead_id is None and mum.email:
+        lead_id = db.execute(
+            select(Lead.id).where(
+                Lead.email == mum.email,
+                Lead.organization_id == org_id,
+            )
+        ).scalar_one_or_none()
+    if lead_id is None:
+        raise HTTPException(404, "no matching lead found for this MUM client")
+    return lead_id
+
+
+@router.get("/loans/{loan_id}/client-file-id")
+def get_client_file_id_for_loan(
+    loan_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    """Return (or auto-create) the client_file for a loan."""
+    lead_id = _find_lead_for_loan(db, loan_id, current_user.organization_id)
+    cf_id = _get_or_create_client_file(db, lead_id, current_user.organization_id)
+    return {"client_file_id": cf_id}
+
+
+@router.get("/mum-clients/{mum_id}/client-file-id")
+def get_client_file_id_for_mum(
+    mum_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user_dep()),
+):
+    """Return (or auto-create) the client_file for a MUM client."""
+    lead_id = _find_lead_for_mum(db, mum_id, current_user.organization_id)
+    cf_id = _get_or_create_client_file(db, lead_id, current_user.organization_id)
+    return {"client_file_id": cf_id}
+
+
 @router.delete("/clients/{client_file_id}/timeline/{event_id}/star", status_code=501)
 def unstar_event(
     client_file_id: uuid.UUID,

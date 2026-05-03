@@ -382,13 +382,8 @@ def get_client_file_id_for_lead(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
-    """Return the client_file ID associated with a lead."""
-    from sqlalchemy import select as sa_select
-    from database.models.client_file import ClientFile
+    """Return (or auto-create) the client_file for a lead."""
+    from routes.client_file_routes import _get_or_create_client_file
 
-    cf = db.execute(
-        sa_select(ClientFile.id).where(ClientFile.lead_id == lead_id)
-    ).scalar_one_or_none()
-    if cf is None:
-        raise HTTPException(404, "no client file for this lead")
-    return {"client_file_id": str(cf)}
+    cf_id = _get_or_create_client_file(db, lead_id, current_user.organization_id)
+    return {"client_file_id": cf_id}

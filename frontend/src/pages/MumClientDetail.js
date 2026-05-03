@@ -20,6 +20,7 @@ import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import AIActivityTab from '../components/ai/AIActivityTab';
 import './LeadDetail.css';
 import { toast } from '../utils/toast';
+import { getToken } from '../utils/tokenStore';
 
 // Mock lead data generator (same as Leads.js)
 const generateMockLeads = () => {
@@ -94,6 +95,9 @@ function MumClientDetail() {
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
   const [statusSaving, setStatusSaving] = useState(false);
 
+  // Client file state
+  const [clientFileLoading, setClientFileLoading] = useState(false);
+
   // Client navigation state
   const [clientsList, setClientsList] = useState([]);
   const [currentClientIndex, setCurrentClientIndex] = useState(-1);
@@ -154,6 +158,33 @@ function MumClientDetail() {
 
   const handleRemoveCustomField = (fieldKey) => {
     setCustomFields(customFields.filter(f => f.key !== fieldKey));
+  };
+
+  const handleOpenClientFile = async () => {
+    try {
+      setClientFileLoading(true);
+      const token = getToken();
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://api.perenniaai.com'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+      const response = await fetch(`${API_BASE}/api/v1/mum-clients/${id}/client-file-id`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+      const data = await response.json();
+      navigate(`/clients/${data.client_file_id}`);
+    } catch (error) {
+      console.error('Failed to open client file:', error);
+      toast.error('Could not open client file. Please try again.');
+    } finally {
+      setClientFileLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -729,6 +760,24 @@ function MumClientDetail() {
           </button>
         </div>
         <div className="header-actions">
+          <button
+            className="btn-client-file"
+            onClick={handleOpenClientFile}
+            disabled={clientFileLoading}
+            style={{
+              background: '#6366f1',
+              color: 'white',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '13px',
+              opacity: clientFileLoading ? 0.7 : 1,
+            }}
+          >
+            {clientFileLoading ? 'Opening...' : 'Open in Client File'}
+          </button>
           {editing ? (
             <>
               <button className="btn-save" onClick={handleSave}>Save</button>

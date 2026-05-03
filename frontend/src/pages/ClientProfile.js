@@ -91,6 +91,7 @@ function ClientProfile() {
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [milestones, setMilestones] = useState([]);
   const [milestonesLoading, setMilestonesLoading] = useState(false);
+  const [clientFileLoading, setClientFileLoading] = useState(false);
 
   // Status options — all stages across Lead, Active Loan, and MUM
   const statusOptions = [
@@ -148,6 +149,33 @@ function ClientProfile() {
 
   const handleRemoveCustomField = (fieldKey) => {
     setCustomFields(customFields.filter(f => f.key !== fieldKey));
+  };
+
+  const handleOpenClientFile = async () => {
+    try {
+      setClientFileLoading(true);
+      const token = getToken();
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://api.perenniaai.com'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+      const response = await fetch(`${API_BASE}/api/v1/loans/${id}/client-file-id`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}`);
+      }
+      const data = await response.json();
+      navigate(`/clients/${data.client_file_id}`);
+    } catch (error) {
+      console.error('Failed to open client file:', error);
+      toast.error('Could not open client file. Please try again.');
+    } finally {
+      setClientFileLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -801,6 +829,24 @@ function ClientProfile() {
           ← Back to Leads
         </button>
         <div className="header-actions">
+          <button
+            className="btn-client-file"
+            onClick={handleOpenClientFile}
+            disabled={clientFileLoading}
+            style={{
+              background: '#6366f1',
+              color: 'white',
+              border: 'none',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontWeight: '500',
+              fontSize: '13px',
+              opacity: clientFileLoading ? 0.7 : 1,
+            }}
+          >
+            {clientFileLoading ? 'Opening...' : 'Open in Client File'}
+          </button>
           {editing ? (
             <>
               <button className="btn-save" onClick={handleSave}>Save</button>

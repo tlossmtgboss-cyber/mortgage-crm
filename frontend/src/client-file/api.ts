@@ -25,7 +25,15 @@ import type {
   TimelineEvent,
 } from "./types";
 
-let API_BASE = "/api/v1";
+function getApiBase(): string {
+  const isLocalhost = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const origin = isLocalhost
+    ? (process.env.REACT_APP_API_URL || "http://localhost:8000")
+    : "https://api.perenniaai.com";
+  return origin + "/api/v1";
+}
+
+let API_BASE = getApiBase();
 
 export function setApiBaseUrl(base: string): void {
   API_BASE = base;
@@ -35,6 +43,14 @@ export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
     super(message);
     this.name = "ApiError";
+  }
+}
+
+function getAuthToken(): string | null {
+  try {
+    return localStorage.getItem("token") || null;
+  } catch {
+    return null;
   }
 }
 
@@ -54,10 +70,15 @@ async function request<T>(
       }
     }
   }
+  const headers: Record<string, string> = {};
+  const token = getAuthToken();
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (opts.body) headers["Content-Type"] = "application/json";
+
   const res = await fetch(url.toString(), {
     method: opts.method ?? "GET",
     credentials: "include",
-    headers: opts.body ? { "Content-Type": "application/json" } : undefined,
+    headers,
     body: opts.body ? JSON.stringify(opts.body) : undefined,
   });
   if (!res.ok) {
