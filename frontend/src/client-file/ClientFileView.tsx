@@ -6,6 +6,7 @@ import { ToolsRail } from "./ToolsRail";
 import { useClientFile } from "./hooks";
 import { LIFECYCLE_STAGE_LABEL } from "./format";
 import type { ClientFile } from "./types";
+import "./styles.css";
 
 interface Props {
   clientFileId: string;
