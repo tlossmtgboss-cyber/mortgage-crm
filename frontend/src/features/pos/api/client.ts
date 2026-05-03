@@ -51,6 +51,7 @@ async function request<T>(
   method: string,
   path: string,
   body?: unknown,
+  _retries = 0,
 ): Promise<T> {
   const token = getPurlToken();
   const resp = await fetch(`${API_BASE}${path}`, {
@@ -63,6 +64,13 @@ async function request<T>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: 'include',
   });
+
+  if (resp.status === 429 && _retries < 3) {
+    const retryAfter = parseInt(resp.headers.get('Retry-After') || '2', 10);
+    const delay = Math.max(retryAfter, 1) * 1000;
+    await new Promise(r => setTimeout(r, delay));
+    return request<T>(method, path, body, _retries + 1);
+  }
 
   if (!resp.ok) {
     let detail = `Request failed`;
