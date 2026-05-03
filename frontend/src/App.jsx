@@ -150,7 +150,7 @@ function AriaFAB() {
   // Hide on public/auth pages and when already on Aria
   const hiddenPaths = ['/login', '/register', '/forgot-password', '/reset-password',
     '/verify-account', '/verify-email-sent', '/aria-voice', '/aria',
-    '/mobile-aria', '/apply', '/aria-test'];
+    '/mobile-aria', '/apply', '/aria-test', '/pos'];
   if (hiddenPaths.some(p => location.pathname === p || location.pathname.startsWith(p + '/'))) {
     return null;
   }

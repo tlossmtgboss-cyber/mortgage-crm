@@ -314,6 +314,7 @@ const PURLApplication = lazyRetry(() => import('../pages/PURLApplication'));
 const PortalContainer = lazyRetry(() => import('../pages/portal/PortalContainer'));
 const POSApplication = lazyRetry(() => import('../pages/portal/POSApplication'));
 const POSTestPage = lazyRetry(() => import('../pages/portal/POSTestPage'));
+const POSEntryPage = lazyRetry(() => import('../pages/pos/POSEntryPage'));
 const LoanPortalRedirect = lazyRetry(() => import('../components/Portal/LoanPortalRedirect'));
 const AdminDocumentReviewQueue = lazyRetry(() => import('../pages/AdminDocumentReviewQueue'));
 const IncomeCalculatorPopout = lazyRetry(() => import('../pages/IncomeCalculatorPopout'));
@@ -469,6 +470,7 @@ export function getRoutes(layoutProps, options = {}) {
     <Route key="/terms-of-service" path="/terms-of-service" element={<LazyPage><TermsOfService /></LazyPage>} />,
     <Route key="/terms" path="/terms" element={<LazyPage><TermsOfService /></LazyPage>} />,
     <Route key="/aria-test" path="/aria-test" element={<LazyPage><AriaTestPage /></LazyPage>} />,
+    <Route key="/pos" path="/pos" element={<LazyPage><POSEntryPage /></LazyPage>} />,
     <Route key="/pos-test" path="/pos-test" element={<LazyPage><POSTestPage /></LazyPage>} />,
 
     // Public portals

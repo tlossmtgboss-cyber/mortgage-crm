@@ -1,6 +1,8 @@
 // Public surface of the POS feature.
 
 export { POSContainer } from './components/POSContainer';
+export { TopNav } from './components/TopNav';
+export { POSSidebar } from './components/POSSidebar';
 export { SmartCalendar } from './components/SmartCalendar';
 export { AriaPanel } from './components/AriaPanel';
 export { AskAriaButton } from './components/AskAriaButton';
