@@ -43,7 +43,7 @@ export const LiabilitiesPanel: React.FC<PanelProps> = ({ section, onChange, onCo
             <div className="urla-subform__header">
               <span>Debt {idx + 1}</span>
               {liabilities.length > 1 && (
-                <button type="button" className="urla-link-btn" onClick={() => remove(idx)}>Remove</button>
+                <button type="button" className="urla-btn-link urla-btn-link--danger" onClick={() => remove(idx)}>Remove</button>
               )}
             </div>
             <div className="urla-form-grid">
@@ -70,8 +70,13 @@ export const LiabilitiesPanel: React.FC<PanelProps> = ({ section, onChange, onCo
             </div>
           </div>
         ))}
-        <div style={{ gridColumn: '1 / -1' }}>
-          <button type="button" className="urla-link-btn" onClick={add}>+ Add another debt</button>
+        <div className="urla-add-entry" style={{ gridColumn: '1 / -1' }}>
+          <button type="button" className="urla-btn-link" onClick={add}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add another debt
+          </button>
         </div>
       </FormSection>
 

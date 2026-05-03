@@ -75,8 +75,13 @@ export const REOPanel: React.FC<PanelProps> = ({ section, onChange, onComplete }
               </div>
             </div>
           ))}
-          <div style={{ gridColumn: '1 / -1' }}>
-            <button type="button" className="urla-link-btn" onClick={add}>+ Add another property</button>
+          <div className="urla-add-entry" style={{ gridColumn: '1 / -1' }}>
+            <button type="button" className="urla-btn-link" onClick={add}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add another property
+            </button>
           </div>
         </FormSection>
       )}

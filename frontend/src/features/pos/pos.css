@@ -951,6 +951,25 @@
   color: #8B6B2A;
 }
 
+/* ---------- Subform cards (repeating entries) ---------- */
+
+.urla-subform {
+  background: var(--bt-bg-soft, #FDFBF5);
+  border: 1px solid var(--bt-border, #E8E1CE);
+  border-radius: 12px;
+  padding: 16px 20px 20px;
+}
+
+.urla-subform__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--bt-text-primary);
+}
+
 /* ---------- Add entry / link button ---------- */
 
 .urla-add-entry {

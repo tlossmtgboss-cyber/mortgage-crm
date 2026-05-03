@@ -44,7 +44,7 @@ export const AssetsPanel: React.FC<PanelProps> = ({ section, onChange, onComplet
             <div className="urla-subform__header">
               <span>Account {idx + 1}</span>
               {accounts.length > 1 && (
-                <button type="button" className="urla-link-btn"
+                <button type="button" className="urla-btn-link urla-btn-link--danger"
                   onClick={() => removeAccount(idx)}>Remove</button>
               )}
             </div>
@@ -71,9 +71,12 @@ export const AssetsPanel: React.FC<PanelProps> = ({ section, onChange, onComplet
             </div>
           </div>
         ))}
-        <div style={{ gridColumn: '1 / -1' }}>
-          <button type="button" className="urla-link-btn" onClick={addAccount}>
-            + Add another account
+        <div className="urla-add-entry" style={{ gridColumn: '1 / -1' }}>
+          <button type="button" className="urla-btn-link" onClick={addAccount}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            Add another account
           </button>
         </div>
       </FormSection>
@@ -102,7 +105,7 @@ export const AssetsPanel: React.FC<PanelProps> = ({ section, onChange, onComplet
             {onAskAria && (
               <p style={{ gridColumn: '1 / -1' }} className="urla-helper-prompt">
                 Not sure what's allowed?{' '}
-                <button type="button" className="urla-link-btn" onClick={onAskAria}>
+                <button type="button" className="urla-btn-link" onClick={onAskAria}>
                   Ask Aria about gift fund eligibility
                 </button>
               </p>
