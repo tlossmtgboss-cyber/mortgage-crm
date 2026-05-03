@@ -54,14 +54,14 @@ const DEMO_DOCS: DocItem[] = [
     dueDate: 'Due soon',
   },
   {
-    id: 'disclosures', name: 'Sign your initial disclosure package', status: 'action', category: 'compliance',
-    description: '9 documents bundled together. Should take about 5 minutes to review and sign.',
+    id: 'esign-docs', name: 'Documents to review & sign', status: 'action', category: 'compliance',
+    description: 'Your loan officer has sent documents that need your electronic signature.',
     eSignDocs: [
-      'Loan Estimate (LE)', 'Intent to Proceed', 'ECOA Notice',
-      'Settlement Service Providers', 'Privacy Notice (GLBA)', 'Borrower Certification',
-      '4506-C (IRS Tax Auth)', 'eConsent Disclosure', 'Initial 1003 Application',
+      'Letter of Explanation — Large Deposit',
+      'Credit Inquiry Letter',
+      'Gift Letter',
     ],
-    eSignProgress: { signed: 0, total: 9 },
+    eSignProgress: { signed: 0, total: 3 },
   },
   {
     id: 'w2-2023', name: 'W-2 (2023)', status: 'review', category: 'income',
