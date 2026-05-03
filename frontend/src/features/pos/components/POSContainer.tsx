@@ -18,6 +18,7 @@ import { LoanPanel } from './panels/LoanPanel';
 import { DeclarationsPanel } from './panels/DeclarationsPanel';
 import { ReviewPanel } from './panels/ReviewPanel';
 
+import '../../../styles/borrower-theme.css';
 import '../pos.css';
 
 export interface POSContainerProps {
