@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../services/api';
 import './InboundCallLightbox.css';
 
-const WS_BASE_URL =
-  process.env.REACT_APP_WS_URL ||
-  (window.location.protocol === 'https:' ? 'wss://' : 'ws://') +
-  (process.env.REACT_APP_API_URL?.replace(/^https?:\/\//, '') || 'localhost:8000');
+const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
 
 function useInboundCallSocket() {
   const [callData, setCallData] = useState(null);
