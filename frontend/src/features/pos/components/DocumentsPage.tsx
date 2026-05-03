@@ -54,16 +54,6 @@ const DEMO_DOCS: DocItem[] = [
     dueDate: 'Due soon',
   },
   {
-    id: 'esign-docs', name: 'Documents to review & sign', status: 'action', category: 'compliance',
-    description: 'Your loan officer has sent documents that need your electronic signature.',
-    eSignDocs: [
-      'Letter of Explanation — Large Deposit',
-      'Credit Inquiry Letter',
-      'Gift Letter',
-    ],
-    eSignProgress: { signed: 0, total: 3 },
-  },
-  {
     id: 'w2-2023', name: 'W-2 (2023)', status: 'review', category: 'income',
     filename: 'w2_2023.pdf', filesize: '318 KB', uploadedAt: 'Submitted recently',
     extraction: [{ label: 'Employer', value: 'On file' }, { label: 'Box 1 Wages', value: 'Verified' }, { label: 'Tax Year', value: '2023' }],
