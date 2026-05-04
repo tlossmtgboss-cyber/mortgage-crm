@@ -677,7 +677,7 @@ def list_timeline(
             body_key = (ev.get("body") or "")[:100]
             if not body_key:
                 continue
-            ts = (ev.get("occurred_at") or "")[:19]
+            ts = (ev.get("occurred_at") or "")[:16]
             detailed_keys.add(f"{body_key}|{ts}")
 
     seen_msg_ids: set[str] = set()
@@ -691,7 +691,7 @@ def list_timeline(
             seen_msg_ids.add(mid)
         if eid.startswith("act-"):
             body_key = (ev.get("body") or "")[:100]
-            ts = (ev.get("occurred_at") or "")[:19]
+            ts = (ev.get("occurred_at") or "")[:16]
             if f"{body_key}|{ts}" in detailed_keys:
                 continue
         deduped.append(ev)
@@ -1351,9 +1351,8 @@ def add_note(
     db.commit()
     db.refresh(activity)
 
-    user_name = f"{getattr(current_user, 'first_name', '') or ''} {getattr(current_user, 'last_name', '') or ''}".strip()
     return _make_timeline_event(
-        id=str(activity.id),
+        id=f"act-{activity.id}",
         client_file_id=str(client_file_id),
         org_id=str(current_user.organization_id),
         kind="note_added",

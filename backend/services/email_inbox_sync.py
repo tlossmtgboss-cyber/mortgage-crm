@@ -16,6 +16,7 @@ from typing import Optional
 
 import httpx
 from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger("email_inbox_sync")
@@ -25,6 +26,7 @@ GRAPH_SELECT = (
     "id,subject,bodyPreview,body,from,toRecipients,"
     "receivedDateTime,hasAttachments,isRead"
 )
+GRAPH_TIMEOUT = 30
 SYNC_LOOKBACK_HOURS = 6
 FETCH_LIMIT = 50
 
@@ -84,19 +86,23 @@ def _store_emails(
 ) -> int:
     from database.models.communication import Email
 
+    msg_ids = [m.get("id") for m in emails if m.get("id")]
+    if not msg_ids:
+        return 0
+
+    existing_ids = set(
+        db.execute(
+            select(Email.message_id).where(
+                Email.message_id.in_(msg_ids),
+                Email.organization_id == org_id,
+            )
+        ).scalars().all()
+    )
+
     stored = 0
     for msg in emails:
         msg_id = msg.get("id")
-        if not msg_id:
-            continue
-
-        exists = db.execute(
-            select(func.count()).select_from(Email).where(
-                Email.message_id == msg_id,
-                Email.organization_id == org_id,
-            )
-        ).scalar()
-        if exists:
+        if not msg_id or msg_id in existing_ids:
             continue
 
         sender = msg.get("from", {}).get("emailAddress", {})
@@ -105,6 +111,9 @@ def _store_emails(
             for r in msg.get("toRecipients", [])
         ]
         body_obj = msg.get("body", {})
+        body_text = msg.get("bodyPreview", "")
+        if body_obj.get("contentType") == "text" and body_obj.get("content"):
+            body_text = body_obj["content"]
 
         email = Email(
             organization_id=org_id,
@@ -114,7 +123,7 @@ def _store_emails(
             sender_name=sender.get("name", ""),
             recipient_emails=recipients,
             subject=msg.get("subject", ""),
-            body_text=msg.get("bodyPreview", ""),
+            body_text=body_text,
             body_html=(
                 body_obj.get("content", "")
                 if body_obj.get("contentType") == "html"
@@ -126,11 +135,12 @@ def _store_emails(
             folder_name=folder,
             processed=False,
         )
-        db.add(email)
-        stored += 1
-
-    if stored:
-        db.flush()
+        try:
+            db.add(email)
+            db.flush()
+            stored += 1
+        except IntegrityError:
+            db.rollback()
 
     return stored
 
@@ -218,16 +228,16 @@ async def sync_user_emails(
     elif since.tzinfo is None:
         since = since.replace(tzinfo=timezone.utc)
 
-    async with httpx.AsyncClient(timeout=30) as http:
+    async with httpx.AsyncClient(timeout=GRAPH_TIMEOUT) as http:
         inbox = await _fetch_folder(http, access_token, "Inbox", since)
         sent = await _fetch_folder(http, access_token, "SentItems", since)
 
     stored = 0
     stored += _store_emails(db, inbox, user_id, org_id, "Inbox")
     stored += _store_emails(db, sent, user_id, org_id, "Sent Items")
+    db.commit()
 
     matched = match_unlinked_emails(db, org_id)
-
     oauth_record.last_sync_at = datetime.now(timezone.utc)
     db.commit()
 
@@ -245,10 +255,12 @@ async def sync_user_emails(
 async def sync_all_users() -> dict:
     """Sync emails for every user with an active Microsoft OAuth token.
 
-    Creates a fresh DB session per user to avoid holding a single
-    connection for the entire sync cycle and to scope RLS context.
+    Creates a fresh RLS-scoped DB session per user to enforce tenant
+    isolation and avoid holding a single connection for the entire cycle.
+    The discovery query uses a bare session since MicrosoftOAuthToken has
+    no organization_id column — only id and user_id are selected (no tokens).
     """
-    from db import SessionLocal
+    from db import SessionLocal, get_db_with_tenant
     from database.models.microsoft import MicrosoftOAuthToken
     from database.models.core import User
 
@@ -269,37 +281,39 @@ async def sync_all_users() -> dict:
     if not rows:
         return {"users": 0, "stored": 0, "matched": 0}
 
+    # Resolve org_id per user with a lightweight lookup session
+    user_orgs: list[tuple[int, int, int]] = []  # (token_id, user_id, org_id)
+    lookup_db = SessionLocal()
+    try:
+        for token_id, user_id in rows:
+            org_id = lookup_db.execute(
+                select(User.organization_id).where(User.id == user_id)
+            ).scalar()
+            if org_id:
+                user_orgs.append((token_id, user_id, org_id))
+    finally:
+        lookup_db.close()
+
     total_stored = 0
     total_matched = 0
     synced_users = 0
 
-    for token_id, user_id in rows:
-        db = SessionLocal()
+    for token_id, user_id, org_id in user_orgs:
         try:
-            tok = db.execute(
-                select(MicrosoftOAuthToken).where(MicrosoftOAuthToken.id == token_id)
-            ).scalar()
-            if not tok:
-                continue
+            with get_db_with_tenant(org_id) as db:
+                tok = db.execute(
+                    select(MicrosoftOAuthToken).where(
+                        MicrosoftOAuthToken.id == token_id
+                    )
+                ).scalar()
+                if not tok:
+                    continue
 
-            user = db.execute(
-                select(User).where(User.id == user_id)
-            ).scalar()
-            if not user:
-                continue
-
-            org_id = getattr(user, "organization_id", None)
-            if not org_id:
-                continue
-
-            result = await sync_user_emails(tok, db, user_id, org_id)
-            total_stored += result.get("stored", 0)
-            total_matched += result.get("matched", 0)
-            synced_users += 1
+                result = await sync_user_emails(tok, db, user_id, org_id)
+                total_stored += result.get("stored", 0)
+                total_matched += result.get("matched", 0)
+                synced_users += 1
         except Exception as e:
             logger.error("Email sync failed for user %d: %s", user_id, e)
-            db.rollback()
-        finally:
-            db.close()
 
     return {"users": synced_users, "stored": total_stored, "matched": total_matched}
