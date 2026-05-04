@@ -16,8 +16,11 @@ import type {
   AvailableSlotsResponse,
   BookingRequest,
   BookingResponse,
+  BorrowerMessage,
+  BorrowerMessagesResponse,
   BorrowerTasksResponse,
   BorrowerTask,
+  DocumentsResponse,
   QAHistoryResponse,
   SectionKey,
   SectionResponse,
@@ -200,6 +203,14 @@ export const posApi = {
       `/api/v1/pos/ai-qa/applications/${applicationId}/history?limit=${limit}`,
     ),
 
+  // ---------- Documents ----------
+
+  getDocuments: (loanId: number) =>
+    request<DocumentsResponse>(
+      'GET',
+      `/api/v1/pos/documents?loan_id=${loanId}`,
+    ),
+
   // ---------- Borrower Tasks ----------
 
   getTasks: (applicationId: string, includeCompleted = false) =>
@@ -213,6 +224,26 @@ export const posApi = {
       'PATCH',
       `/api/v1/pos/applications/${applicationId}/tasks/${taskId}`,
       { status: 'completed' },
+    ),
+
+  // ---------- Borrower Messages ----------
+
+  getMessages: (applicationId: string) =>
+    request<BorrowerMessagesResponse>(
+      'GET',
+      `/api/v1/pos/applications/${applicationId}/messages`,
+    ),
+
+  markMessageRead: (applicationId: string, messageId: number) =>
+    request<BorrowerMessage>(
+      'PATCH',
+      `/api/v1/pos/applications/${applicationId}/messages/${messageId}/read`,
+    ),
+
+  markAllMessagesRead: (applicationId: string) =>
+    request<BorrowerMessagesResponse>(
+      'PATCH',
+      `/api/v1/pos/applications/${applicationId}/messages/read-all`,
     ),
 };
 

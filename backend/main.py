@@ -4236,15 +4236,25 @@ except Exception as e:
 # POS 1003 — Borrower-facing URLA application
 # ============================================================================
 try:
-    from routes.pos import application_router, calendar_router, ai_qa_router, hydration_router, resolve_lo_router, start_router, tasks_router
+    from routes.pos import application_router, calendar_router, ai_qa_router, documents_router, hydration_router, messages_router, resolve_lo_router, start_router, tasks_router
     app.include_router(application_router, tags=["POS Application"])
     app.include_router(calendar_router, tags=["POS Calendar"])
     app.include_router(ai_qa_router, tags=["POS AI Q&A"])
+    app.include_router(documents_router, tags=["POS Documents"])
     app.include_router(hydration_router, tags=["POS Hydration"])
+    app.include_router(messages_router, tags=["POS Messages"])
     app.include_router(resolve_lo_router, tags=["POS Resolve LO"])
     app.include_router(start_router, tags=["POS Public Start"])
     app.include_router(tasks_router, tags=["POS Tasks"])
     logger.info("POS 1003 routes loaded")
+
+    # Ensure pos_borrower_messages table exists
+    try:
+        from database.models.pos import POSBorrowerMessage
+        POSBorrowerMessage.__table__.create(engine, checkfirst=True)
+    except Exception as _tbl_err:
+        logger.warning(f"pos_borrower_messages table creation skipped: {_tbl_err}")
+
 except Exception as e:
     logger.warning(f"POS 1003 routes skipped: {e}")
 

@@ -217,6 +217,45 @@ export interface QAHistoryResponse {
   total: number;
 }
 
+// ---------- Documents ----------
+
+export type PosDocStatus = 'action' | 'review' | 'approved' | 'reference';
+export type PosDocCategory = 'income' | 'assets' | 'identity' | 'property' | 'compliance';
+
+export interface PosDocExtractionField {
+  label: string;
+  value: string;
+}
+
+export interface PosDocItem {
+  id: string;
+  name: string;
+  status: PosDocStatus;
+  category: PosDocCategory;
+  description: string | null;
+  filename: string | null;
+  filesize: string | null;
+  uploadedAt: string | null;
+  dueDate: string | null;
+  dueSeverity: 'urgent' | 'normal' | null;
+  extraction: PosDocExtractionField[] | null;
+  reviewedBy: string | null;
+  clearedAt: string | null;
+  meta: string | null;
+  rejectionReason: string | null;
+  fixInstructions: string | null;
+}
+
+export interface DocumentsResponse {
+  documents: PosDocItem[];
+  counts: {
+    action: number;
+    review: number;
+    approved: number;
+    reference: number;
+  };
+}
+
 // ---------- Borrower Tasks ----------
 
 export type BorrowerTaskStatus = 'pending' | 'in_progress' | 'completed';
@@ -242,5 +281,26 @@ export interface BorrowerTasksResponse {
     in_progress: number;
     completed: number;
     total: number;
+  };
+}
+
+// ---------- Borrower Messages ----------
+
+export interface BorrowerMessage {
+  id: number;
+  sender_name: string;
+  sender_role: string;
+  content: string;
+  is_read: boolean;
+  created_at: string;
+  read_at: string | null;
+}
+
+export interface BorrowerMessagesResponse {
+  application_id: string;
+  messages: BorrowerMessage[];
+  counts: {
+    total: number;
+    unread: number;
   };
 }

@@ -1,7 +1,9 @@
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { DetectedDocument, DocCategory } from '../hooks/useDocumentDetector';
 import { CATEGORY_LABELS } from '../hooks/useDocumentDetector';
+import { posApi } from '../api';
+import type { DocumentsResponse } from '../types';
 
 import './documents-page.css';
 
@@ -26,6 +28,8 @@ interface DocItem {
   reviewedBy?: string;
   clearedAt?: string;
   meta?: string;
+  rejectionReason?: string;
+  fixInstructions?: string;
   eSignDocs?: string[];
   eSignProgress?: { signed: number; total: number };
 }
@@ -34,6 +38,7 @@ export interface DocumentsPageProps {
   loName: string;
   loNmls?: string;
   loInitials: string;
+  loanId?: number | null;
   detectedDocs: DetectedDocument[];
   onAskAria?: () => void;
   onBack: () => void;
@@ -94,13 +99,59 @@ const FILTERS: { key: FilterKey; label: string; pulse?: boolean }[] = [
 export const DocumentsPage: React.FC<DocumentsPageProps> = ({
   loName,
   loInitials,
+  loanId,
   onAskAria,
   onBack,
 }) => {
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [fetchedDocs, setFetchedDocs] = useState<DocItem[] | null>(null);
+  const [docsLoading, setDocsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const docs = DEMO_DOCS;
+  useEffect(() => {
+    if (loanId == null) return;
+    let cancelled = false;
+    setDocsLoading(true);
+
+    posApi
+      .getDocuments(loanId)
+      .then((resp: DocumentsResponse) => {
+        if (cancelled) return;
+        if (resp.documents && resp.documents.length > 0) {
+          const mapped: DocItem[] = resp.documents.map(d => ({
+            id: d.id,
+            name: d.name,
+            status: d.status as DocStatus,
+            category: (d.category || 'compliance') as DocCategory,
+            description: d.description ?? undefined,
+            filename: d.filename ?? undefined,
+            filesize: d.filesize ?? undefined,
+            uploadedAt: d.uploadedAt ?? undefined,
+            dueDate: d.dueDate ?? undefined,
+            dueSeverity: d.dueSeverity ?? undefined,
+            extraction: d.extraction ?? undefined,
+            reviewedBy: d.reviewedBy ?? undefined,
+            clearedAt: d.clearedAt ?? undefined,
+            meta: d.meta ?? undefined,
+            rejectionReason: d.rejectionReason ?? undefined,
+            fixInstructions: d.fixInstructions ?? undefined,
+          }));
+          setFetchedDocs(mapped);
+        }
+      })
+      .catch(() => {
+        // Silently fall back to demo data
+      })
+      .finally(() => {
+        if (!cancelled) setDocsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loanId]);
+
+  const docs = fetchedDocs ?? DEMO_DOCS;
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: docs.length };
@@ -123,6 +174,15 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
+
+  if (docsLoading) {
+    return (
+      <div className="docs-page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 320, gap: 12 }}>
+        <div className="pos-loading__spinner" />
+        <p style={{ color: 'var(--text-secondary, #666)', fontSize: 14 }}>Loading documents...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="docs-page">

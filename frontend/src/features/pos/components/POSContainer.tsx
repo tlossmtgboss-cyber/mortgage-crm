@@ -10,6 +10,7 @@ import { POSSidebar } from './POSSidebar';
 import { StepRail } from './StepRail';
 import { AriaPanel } from './AriaPanel';
 import { DocumentsPage } from './DocumentsPage';
+import { MessagesPage } from './MessagesPage';
 import { TasksPage } from './TasksPage';
 import { IntakePanel, EMPTY_INTAKE } from './IntakePanel';
 import type { IntakeData } from './IntakePanel';
@@ -66,13 +67,15 @@ export const POSContainer: React.FC<POSContainerProps> = ({
 
   const [activeStep, setActiveStep] = useState<SectionKey>('personal');
   const [ariaOpen, setAriaOpen] = useState(false);
-  const [view, setView] = useState<'application' | 'documents' | 'tasks'>('application');
+  const [view, setView] = useState<'application' | 'documents' | 'tasks' | 'messages'>('application');
   const [taskCount, setTaskCount] = useState(0);
+  const [messageCount, setMessageCount] = useState(0);
 
   const appId = application?.id;
   React.useEffect(() => {
     if (appId) {
       posApi.getTasks(appId).then(resp => setTaskCount(resp.counts.pending + resp.counts.in_progress)).catch(() => {});
+      posApi.getMessages(appId).then(resp => setMessageCount(resp.counts.unread)).catch(() => {});
     }
   }, [appId]);
   const [intakeComplete, setIntakeComplete] = useState(false);
@@ -182,8 +185,10 @@ export const POSContainer: React.FC<POSContainerProps> = ({
           onAskAria={() => setAriaOpen(true)}
           documentCount={detectedDocs.length}
           taskCount={taskCount}
+          messageCount={messageCount}
           onDocumentsClick={() => setView('documents')}
           onTasksClick={() => setView('tasks')}
+          onMessagesClick={() => setView('messages')}
           activeNav={view}
         />
 
@@ -192,12 +197,21 @@ export const POSContainer: React.FC<POSContainerProps> = ({
             <DocumentsPage
               loName="your loan officer"
               loInitials="A"
+              loanId={application?.loan_id}
               detectedDocs={detectedDocs}
               onAskAria={() => setAriaOpen(true)}
               onBack={() => setView('application')}
             />
           ) : view === 'tasks' ? (
             <TasksPage
+              applicationId={application.id}
+              loName="your loan officer"
+              loInitials="A"
+              onAskAria={() => setAriaOpen(true)}
+              onBack={() => setView('application')}
+            />
+          ) : view === 'messages' ? (
+            <MessagesPage
               applicationId={application.id}
               onAskAria={() => setAriaOpen(true)}
               onBack={() => setView('application')}
