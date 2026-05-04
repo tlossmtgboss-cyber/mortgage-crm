@@ -28,6 +28,8 @@ export interface PanelProps {
   onAskAria?: () => void;
   intakeData?: IntakeData;
   intakeLoanPurpose?: 'purchase' | 'refinance' | null;
+  allSections?: Partial<Record<import('../../types').SectionKey, SectionResponse>>;
+  onNavigate?: (key: import('../../types').SectionKey, highlightField?: string) => void;
 }
 
 // ---------- Field primitives ----------

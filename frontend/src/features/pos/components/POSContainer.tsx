@@ -86,10 +86,32 @@ export const POSContainer: React.FC<POSContainerProps> = ({
     }
   }, [application, sections.personal, loadSection]);
 
+  React.useEffect(() => {
+    if (activeStep === 'review' && application) {
+      SECTION_ORDER.filter(k => k !== 'review' && !sections[k]).forEach(k => loadSection(k));
+    }
+  }, [activeStep, application, sections, loadSection]);
+
+  const [highlightField, setHighlightField] = useState<string | null>(null);
+
   const handleStepChange = useCallback(
-    (key: SectionKey) => {
+    (key: SectionKey, fieldToHighlight?: string) => {
       setActiveStep(key);
       if (!sections[key]) loadSection(key);
+      if (fieldToHighlight) {
+        setHighlightField(fieldToHighlight);
+        setTimeout(() => {
+          const el = document.getElementById(`f-${fieldToHighlight}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('urla-field--highlight');
+            el.focus();
+            setTimeout(() => el.classList.remove('urla-field--highlight'), 3000);
+          }
+        }, 300);
+      } else {
+        setHighlightField(null);
+      }
     },
     [sections, loadSection],
   );
@@ -214,6 +236,8 @@ export const POSContainer: React.FC<POSContainerProps> = ({
                     onSubmit={submit}
                     onAskAria={() => setAriaOpen(true)}
                     intakeLoanPurpose={intakeData.loan_purpose}
+                    allSections={sections}
+                    onNavigate={handleStepChange}
                   />
                 </div>
               </div>

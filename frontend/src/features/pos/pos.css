@@ -2504,7 +2504,247 @@
 }
 
 .urla-recap {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.urla-recap__item {
+  border: 1px solid var(--bt-border);
+  border-radius: 10px;
+  padding: 12px 16px;
+  background: var(--bt-bg);
+  transition: background 0.15s;
+}
+
+.urla-recap__item.is-complete {
+  border-color: rgba(16, 185, 129, 0.25);
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.urla-recap__item.is-incomplete {
+  border-color: rgba(239, 68, 68, 0.2);
+  background: rgba(239, 68, 68, 0.03);
+}
+
+.urla-recap__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.urla-recap__icon {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+}
+
+.urla-recap__section-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 550;
+  font-size: 14px;
+  color: var(--bt-text);
+  cursor: pointer;
+  text-align: left;
+  flex: 1;
+}
+
+.urla-recap__section-link:hover {
+  color: var(--bt-primary);
+  text-decoration: underline;
+}
+
+.urla-recap__status {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  color: #10b981;
+}
+
+.urla-recap__status--incomplete {
+  color: #ef4444;
+}
+
+.urla-recap__issues {
+  list-style: none;
+  padding: 8px 0 0 30px;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.urla-recap__issue {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.urla-recap__issue-link {
+  background: none;
+  border: none;
+  padding: 2px 0;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--bt-text);
+  border-radius: 4px;
+  transition: color 0.15s;
+}
+
+.urla-recap__issue-link:hover {
+  color: var(--bt-primary);
+}
+
+.urla-recap__issue-link:hover .urla-recap__issue-field {
+  text-decoration: underline;
+}
+
+.urla-recap__issue-field {
+  font-weight: 550;
+  color: var(--bt-text);
+}
+
+.urla-recap__issue-msg {
+  color: var(--bt-text-muted);
+}
+
+/* ---------- Certifications & eSign ---------- */
+
+.urla-cert {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--bt-border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  margin-bottom: 8px;
+  user-select: none;
+}
+
+.urla-cert:hover {
+  border-color: var(--bt-primary);
+  background: var(--bt-primary-tint);
+}
+
+.urla-cert.is-checked {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.urla-cert__input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.urla-cert__box {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 2px solid var(--bt-border-dark, #c0c0c0);
+  display: grid;
+  place-items: center;
+  transition: border-color 0.15s, background 0.15s;
+  margin-top: 1px;
+}
+
+.urla-cert.is-checked .urla-cert__box {
+  border-color: #10b981;
+  background: #10b981;
+  color: white;
+}
+
+.urla-cert__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.urla-cert__title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--bt-text);
+}
+
+.urla-cert__desc {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--bt-text-muted);
+}
+
+/* ---------- Submit actions ---------- */
+
+.urla-actions--submit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.urla-warn {
+  font-size: 13px;
+  color: #ef4444;
+  text-align: center;
+  margin: 0;
+}
+
+.urla-btn--large {
+  padding: 14px 40px;
+  font-size: 16px;
+  border-radius: 12px;
+}
+
+/* ---------- Field highlight animation ---------- */
+
+@keyframes urla-highlight-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(31, 61, 46, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(31, 61, 46, 0.1); }
+  100% { box-shadow: 0 0 0 0 rgba(31, 61, 46, 0); }
+}
+
+.urla-field--highlight {
+  animation: urla-highlight-pulse 0.8s ease-in-out 2;
+  outline: 2px solid var(--bt-primary);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ---------- Confirmation steps ---------- */
+
+.urla-confirm__sub {
+  color: var(--bt-text-muted);
+  font-size: 15px;
   margin-bottom: 24px;
+}
+
+.urla-confirm__steps {
+  text-align: left;
+  max-width: 400px;
+  margin: 0 auto;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--bt-text);
+  line-height: 1.5;
 }
 
 /* Hairline divider */
