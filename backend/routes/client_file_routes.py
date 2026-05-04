@@ -1430,60 +1430,86 @@ async def _send_sms_from_client_file(
         error = result.get("error") or result.get("reason") or "SMS send failed"
         raise HTTPException(502, error)
 
-    from database.models.communication import Activity, SMSMessage
-    from database.enums import ActivityType
-
-    sms_msg = None
-    sms_id = None
-    sms_created_at = None
+    # SMS was delivered — everything below is best-effort record keeping.
+    # The session may be dirty from compliance/delivery-tracker flushes inside
+    # send_sms, so reset it before our own writes.
     provider_msg_id = result.get("message_id")
 
     try:
-        sms_msg = SMSMessage(
+        db.rollback()
+    except Exception:
+        pass
+
+    from datetime import datetime as _dt, timezone as _tz
+    now = _dt.now(_tz.utc)
+
+    try:
+        from database.models.communication import Activity, SMSMessage
+        from database.enums import ActivityType
+
+        sms_id = None
+        try:
+            sms_msg = SMSMessage(
+                organization_id=org_id,
+                user_id=user_id,
+                lead_id=cf.lead_id,
+                to_number=phone,
+                from_number=sms_client.from_number or "",
+                message=body,
+                direction="outbound",
+                status="sent",
+                provider_message_id=provider_msg_id,
+            )
+            db.add(sms_msg)
+            db.flush()
+            sms_id = sms_msg.id
+        except Exception as e:
+            db.rollback()
+            logger.warning("SMSMessage ORM insert failed (SMS was sent): %s", e)
+
+        activity = Activity(
             organization_id=org_id,
             user_id=user_id,
             lead_id=cf.lead_id,
-            to_number=phone,
-            from_number=sms_client.from_number or "",
-            message=body,
-            direction="outbound",
-            status="sent",
-            provider_message_id=provider_msg_id,
+            type=ActivityType.SMS,
+            content=body,
         )
-        db.add(sms_msg)
-        db.flush()
-        sms_id = sms_msg.id
-        sms_created_at = sms_msg.created_at
+        db.add(activity)
+        db.commit()
+
+        event_id = f"sms-{sms_id}" if sms_id else f"act-{activity.id}"
+        event_ts = (sms_msg.created_at if sms_id else None) or activity.created_at or now
+
+        return _make_timeline_event(
+            id=event_id,
+            client_file_id=str(client_file_id),
+            org_id=str(org_id),
+            kind="message_sent_sms",
+            event_category="texts",
+            occurred_at=event_ts,
+            headline="Text sent",
+            body=body,
+            actor_user_id=str(user_id),
+            related_message_id=provider_msg_id,
+        )
     except Exception as e:
-        db.rollback()
-        logger.warning("SMSMessage ORM insert failed (SMS was sent): %s", e)
-
-    activity = Activity(
-        organization_id=org_id,
-        user_id=user_id,
-        lead_id=cf.lead_id,
-        type=ActivityType.SMS,
-        content=body,
-    )
-    db.add(activity)
-    db.commit()
-
-    from datetime import datetime as _dt, timezone as _tz
-    event_id = f"sms-{sms_id}" if sms_id else f"act-{activity.id}"
-    event_ts = sms_created_at or activity.created_at or _dt.now(_tz.utc)
-
-    return _make_timeline_event(
-        id=event_id,
-        client_file_id=str(client_file_id),
-        org_id=str(org_id),
-        kind="message_sent_sms",
-        event_category="texts",
-        occurred_at=event_ts,
-        headline="Text sent",
-        body=body,
-        actor_user_id=str(user_id),
-        related_message_id=provider_msg_id,
-    )
+        logger.error("SMS record-keeping failed (SMS was delivered): %s", e, exc_info=True)
+        try:
+            db.rollback()
+        except Exception:
+            pass
+        return _make_timeline_event(
+            id=f"tmp-{provider_msg_id or 'sms'}",
+            client_file_id=str(client_file_id),
+            org_id=str(org_id),
+            kind="message_sent_sms",
+            event_category="texts",
+            occurred_at=now,
+            headline="Text sent",
+            body=body,
+            actor_user_id=str(user_id),
+            related_message_id=provider_msg_id,
+        )
 
 
 async def _send_email_from_client_file(
