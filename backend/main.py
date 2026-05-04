@@ -3524,6 +3524,14 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"⚠️ Microsoft 365 scheduled tasks skipped: {e}")
 
+    # Email sync scheduler — fetches loan-related emails from Graph API every 5 minutes
+    try:
+        from services.email_sync_scheduler import run_email_sync
+        scheduler.add_job(run_email_sync, "interval", minutes=5, id="email_sync_dre", replace_existing=True)
+        logger.info("✅ Email sync scheduler registered (every 5 minutes)")
+    except Exception as e:
+        logger.warning(f"⚠️ Email sync scheduler skipped: {e}")
+
     # Dedicated executor for LangGraph workflows — keeps them off the main event loop
     from concurrent.futures import ThreadPoolExecutor
     langgraph_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="langgraph")
