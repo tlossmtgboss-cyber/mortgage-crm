@@ -675,6 +675,8 @@ def list_timeline(
         eid = ev.get("id", "")
         if eid.startswith(("sms-", "em-", "graph-")):
             body_key = (ev.get("body") or "")[:100]
+            if not body_key:
+                continue
             ts = (ev.get("occurred_at") or "")[:19]
             detailed_keys.add(f"{body_key}|{ts}")
 
@@ -1490,17 +1492,21 @@ async def _send_email_from_client_file(
 
     try:
         access_token = await _get_microsoft_token(user_id, db)
-    except Exception:
+    except Exception as e:
+        logger.warning("Microsoft token unavailable for user %s: %s", user_id, e)
         raise HTTPException(
             400,
             "Microsoft 365 not connected. Please connect your Outlook account in Settings.",
         )
 
+    import html as _html
+    safe_body_html = f"<p>{_html.escape(body)}</p>"
+
     result = await _send_via_graph(
         access_token=access_token,
         to_email=to_email,
         subject=subject,
-        body_html=f"<p>{body}</p>",
+        body_html=safe_body_html,
     )
 
     if not result.get("success"):
@@ -1524,7 +1530,7 @@ async def _send_email_from_client_file(
         from_email=from_email,
         subject=subject,
         body=body,
-        html_body=f"<p>{body}</p>",
+        html_body=safe_body_html,
         direction="outbound",
         status="sent",
         microsoft_message_id=result.get("message_id"),
@@ -1540,18 +1546,19 @@ async def _send_email_from_client_file(
     )
     db.add(activity)
     db.commit()
-    db.refresh(activity)
+    db.refresh(em)
 
     return _make_timeline_event(
-        id=str(activity.id),
+        id=f"em-{em.id}",
         client_file_id=str(client_file_id),
         org_id=str(org_id),
         kind="message_sent_email",
         event_category="emails",
-        occurred_at=activity.created_at,
+        occurred_at=em.created_at,
         headline=subject,
         body=body,
         actor_user_id=str(user_id),
+        related_message_id=em.microsoft_message_id,
     )
 
 

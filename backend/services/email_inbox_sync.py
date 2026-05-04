@@ -30,6 +30,7 @@ FETCH_LIMIT = 50
 
 
 async def _fetch_folder(
+    client: httpx.AsyncClient,
     access_token: str,
     folder: str,
     since: Optional[datetime] = None,
@@ -46,21 +47,19 @@ async def _fetch_folder(
         )
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            resp = await client.get(
-                f"{GRAPH_BASE}/me/mailFolders/{folder}/messages",
-                params=params,
-                headers={"Authorization": f"Bearer {access_token}"},
+        resp = await client.get(
+            f"{GRAPH_BASE}/me/mailFolders/{folder}/messages",
+            params=params,
+            headers={"Authorization": f"Bearer {access_token}"},
+        )
+        if resp.status_code != 200:
+            logger.warning(
+                "Graph API returned %d for folder %s",
+                resp.status_code,
+                folder,
             )
-            if resp.status_code != 200:
-                logger.warning(
-                    "Graph %s returned %d for folder %s",
-                    resp.status_code,
-                    resp.status_code,
-                    folder,
-                )
-                return []
-            return resp.json().get("value", [])
+            return []
+        return resp.json().get("value", [])
     except Exception as e:
         logger.error("Graph fetch error (%s): %s", folder, e)
         return []
@@ -94,6 +93,7 @@ def _store_emails(
         exists = db.execute(
             select(func.count()).select_from(Email).where(
                 Email.message_id == msg_id,
+                Email.organization_id == org_id,
             )
         ).scalar()
         if exists:
@@ -218,8 +218,9 @@ async def sync_user_emails(
     elif since.tzinfo is None:
         since = since.replace(tzinfo=timezone.utc)
 
-    inbox = await _fetch_folder(access_token, "Inbox", since)
-    sent = await _fetch_folder(access_token, "SentItems", since)
+    async with httpx.AsyncClient(timeout=30) as http:
+        inbox = await _fetch_folder(http, access_token, "Inbox", since)
+        sent = await _fetch_folder(http, access_token, "SentItems", since)
 
     stored = 0
     stored += _store_emails(db, inbox, user_id, org_id, "Inbox")
@@ -241,48 +242,64 @@ async def sync_user_emails(
     return {"stored": stored, "matched": matched}
 
 
-async def sync_all_users(db: Session) -> dict:
-    """Sync emails for every user with an active Microsoft OAuth token."""
-    from database.models.microsoft import MicrosoftOAuthToken
+async def sync_all_users() -> dict:
+    """Sync emails for every user with an active Microsoft OAuth token.
 
-    tokens = (
-        db.execute(
-            select(MicrosoftOAuthToken).where(
+    Creates a fresh DB session per user to avoid holding a single
+    connection for the entire sync cycle and to scope RLS context.
+    """
+    from db import SessionLocal
+    from database.models.microsoft import MicrosoftOAuthToken
+    from database.models.core import User
+
+    discovery_db = SessionLocal()
+    try:
+        rows = discovery_db.execute(
+            select(
+                MicrosoftOAuthToken.id,
+                MicrosoftOAuthToken.user_id,
+            ).where(
                 MicrosoftOAuthToken.sync_enabled.is_(True),
                 MicrosoftOAuthToken.access_token.isnot(None),
             )
-        )
-        .scalars()
-        .all()
-    )
+        ).all()
+    finally:
+        discovery_db.close()
 
-    if not tokens:
+    if not rows:
         return {"users": 0, "stored": 0, "matched": 0}
-
-    from database.models.core import User
 
     total_stored = 0
     total_matched = 0
     synced_users = 0
 
-    for tok in tokens:
-        user = db.execute(
-            select(User).where(User.id == tok.user_id)
-        ).scalar()
-        if not user:
-            continue
-
-        org_id = getattr(user, "organization_id", None)
-        if not org_id:
-            continue
-
+    for token_id, user_id in rows:
+        db = SessionLocal()
         try:
-            result = await sync_user_emails(tok, db, tok.user_id, org_id)
+            tok = db.execute(
+                select(MicrosoftOAuthToken).where(MicrosoftOAuthToken.id == token_id)
+            ).scalar()
+            if not tok:
+                continue
+
+            user = db.execute(
+                select(User).where(User.id == user_id)
+            ).scalar()
+            if not user:
+                continue
+
+            org_id = getattr(user, "organization_id", None)
+            if not org_id:
+                continue
+
+            result = await sync_user_emails(tok, db, user_id, org_id)
             total_stored += result.get("stored", 0)
             total_matched += result.get("matched", 0)
             synced_users += 1
         except Exception as e:
-            logger.error("Email sync failed for user %d: %s", tok.user_id, e)
+            logger.error("Email sync failed for user %d: %s", user_id, e)
             db.rollback()
+        finally:
+            db.close()
 
     return {"users": synced_users, "stored": total_stored, "matched": total_matched}

@@ -3529,10 +3529,8 @@ async def startup_event():
         from services.email_inbox_sync import sync_all_users as _email_sync_all
 
         async def _email_inbox_sync_job():
-            from db import SessionLocal
-            db = SessionLocal()
             try:
-                result = await _email_sync_all(db)
+                result = await _email_sync_all()
                 if result.get("stored") or result.get("matched"):
                     logger.info(
                         "Email inbox sync: users=%d stored=%d matched=%d",
@@ -3541,10 +3539,7 @@ async def startup_event():
                         result.get("matched", 0),
                     )
             except Exception as _e:
-                db.rollback()
                 logger.error(f"Email inbox sync failed: {_e}")
-            finally:
-                db.close()
 
         scheduler.add_job(
             _email_inbox_sync_job, "interval", minutes=5,
