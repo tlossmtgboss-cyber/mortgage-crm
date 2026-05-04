@@ -37,6 +37,13 @@ class TranscribeTestRequest(BaseModel):
     call_id: Optional[str] = Field(None, description="Call ID override (auto-generated if omitted)")
 
 
+class TranscriptTestRequest(BaseModel):
+    transcript: str = Field(..., description="Raw transcript text to process")
+    organization_id: int = Field(..., description="Org ID for CI processing")
+    loan_id: Optional[int] = Field(None, description="Loan ID (optional)")
+    call_id: Optional[str] = Field(None, description="Call ID override (auto-generated if omitted)")
+
+
 class PipelineStatusResponse(BaseModel):
     deepgram_available: bool
     whisper_available: bool
@@ -177,5 +184,52 @@ async def transcribe_test(
         "word_count": transcript_result.get("word_count", 0),
         "transcript_confidence": transcript_result.get("confidence", 0.0),
         "speakers_detected": transcript_result.get("speakers_detected", 0),
+        "ci_result": ci_result,
+    }
+
+
+@router.post("/extract-test", dependencies=[Depends(_require_admin)])
+async def extract_test(
+    body: TranscriptTestRequest,
+    db: Session = Depends(get_db),
+):
+    """Run CI extraction on raw transcript text (skips transcription).
+
+    Use this to test the Mistral extraction pipeline with sample
+    mortgage conversation text when no real recordings are available.
+    """
+    import uuid
+
+    if not body.transcript.strip():
+        return {"success": False, "error": "Empty transcript"}
+
+    call_id = body.call_id or f"diag-{uuid.uuid4().hex[:12]}"
+    word_count = len(body.transcript.split())
+
+    try:
+        from services.call_intelligence.integration import CallIntelligenceIntegration
+
+        integration = CallIntelligenceIntegration(db)
+        ci_result = await integration.process_completed_call(
+            call_id=call_id,
+            loan_id=body.loan_id,
+            organization_id=body.organization_id,
+            transcript=body.transcript,
+            call_type="diagnostic_test",
+            call_metadata={"source": "ci_diagnostic_extract_test"},
+        )
+    except Exception as e:
+        logger.exception("CI extraction failed: %s", e)
+        return {
+            "success": False,
+            "stage": "ci_processing",
+            "error": str(e),
+            "word_count": word_count,
+        }
+
+    return {
+        "success": ci_result.get("success", False),
+        "call_id": call_id,
+        "word_count": word_count,
         "ci_result": ci_result,
     }
