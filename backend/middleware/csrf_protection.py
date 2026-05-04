@@ -161,12 +161,13 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         # Skip if request uses X-API-Key header with a valid key (machine-to-machine auth).
-        # Validate against ADMIN_API_KEY to prevent CSRF bypass via empty/arbitrary header.
+        # Validate against known service keys to prevent CSRF bypass via empty/arbitrary header.
         api_key = request.headers.get("X-API-Key")
         if api_key:
-            expected_key = os.getenv("ADMIN_API_KEY", "").strip()
-            if expected_key and secrets.compare_digest(api_key, expected_key):
-                return await call_next(request)
+            for env_name in ("ADMIN_API_KEY", "CRM_API_KEY"):
+                expected_key = os.getenv(env_name, "").strip()
+                if expected_key and secrets.compare_digest(api_key, expected_key):
+                    return await call_next(request)
 
         # Validate CSRF token
         if not self._validate_token(request):

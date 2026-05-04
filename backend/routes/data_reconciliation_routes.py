@@ -11,7 +11,7 @@ Provides endpoints for:
 - Duplicate lead detection and merging
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import text, or_
 from pydantic import BaseModel
@@ -39,6 +39,23 @@ class IncomingDataEventCreate(BaseModel):
     sender: Optional[str] = None
     recipients: Optional[List[str]] = None
     attachments: Optional[List[Dict[str, Any]]] = None
+
+
+class BulkEmailItem(BaseModel):
+    subject: Optional[str] = None
+    sender: Optional[str] = None
+    recipients: Optional[List[str]] = None
+    body_text: Optional[str] = None
+    body_html: Optional[str] = None
+    received_at: Optional[str] = None
+    has_attachments: Optional[bool] = False
+    external_message_id: Optional[str] = None
+    web_link: Optional[str] = None
+
+
+class BulkEmailSync(BaseModel):
+    emails: List[BulkEmailItem]
+    user_email: Optional[str] = None
 
 
 class ReconciliationApproval(BaseModel):
@@ -222,6 +239,94 @@ async def ingest_email_data(
         }
     except Exception as e:
         logger.error(f"Ingest error: {e}")
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@router.post("/bulk-sync")
+async def bulk_sync_emails(
+    payload: BulkEmailSync,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Bulk-ingest emails from an external source (MCP, manual, etc.) into the DRE pipeline.
+    Deduplicates by external_message_id. Returns count of newly ingested emails.
+
+    Auth: JWT Bearer (normal user) OR X-API-Key header with CRM_API_KEY.
+    When using API key, pass user_email in the payload to identify the target user.
+    """
+    import hmac
+
+    models = get_models()
+    User = models["User"]
+
+    api_key = request.headers.get("X-API-Key", "")
+    if api_key:
+        expected = os.environ.get("CRM_API_KEY", "").strip()
+        if not expected or not hmac.compare_digest(api_key, expected):
+            raise HTTPException(status_code=401, detail="Invalid API key")
+        if not payload.user_email:
+            raise HTTPException(status_code=400, detail="user_email required with API key auth")
+        current_user = db.query(User).filter(User.email == payload.user_email).first()
+        if not current_user:
+            raise HTTPException(status_code=404, detail="User not found")
+    else:
+        import main
+        current_user = await main.get_current_user_flexible(request, db)
+
+    try:
+        IncomingDataEvent = models["IncomingDataEvent"]
+        BlockedSender = models["BlockedSender"]
+
+        blocked_senders = {
+            row.sender_email.lower()
+            for row in db.query(BlockedSender).filter(
+                BlockedSender.user_id == current_user.id
+            ).all()
+        }
+
+        existing_ids = set()
+        ext_ids = [e.external_message_id for e in payload.emails if e.external_message_id]
+        if ext_ids:
+            rows = db.execute(
+                text("""
+                    SELECT external_message_id FROM incoming_data_events
+                    WHERE user_id = :uid AND external_message_id = ANY(:ids)
+                """),
+                {"uid": current_user.id, "ids": ext_ids},
+            ).fetchall()
+            existing_ids = {r[0] for r in rows}
+
+        ingested = 0
+        for email in payload.emails:
+            if email.external_message_id and email.external_message_id in existing_ids:
+                continue
+            if email.sender and email.sender.lower().strip() in blocked_senders:
+                continue
+
+            db_event = IncomingDataEvent(
+                source="outlook_mcp",
+                raw_text=email.body_text,
+                raw_html=email.body_html,
+                subject=email.subject,
+                sender=email.sender,
+                recipients=email.recipients,
+                external_message_id=email.external_message_id,
+                user_id=current_user.id,
+                processed=False,
+            )
+            db.add(db_event)
+            ingested += 1
+
+        db.commit()
+        return {
+            "status": "success",
+            "processed_count": ingested,
+            "skipped_count": len(payload.emails) - ingested,
+            "message": f"Synced {ingested} new emails ({len(payload.emails) - ingested} skipped as duplicates or blocked)"
+        }
+    except Exception as e:
+        logger.error(f"Bulk sync error: {e}")
         db.rollback()
         raise HTTPException(status_code=500, detail="Internal server error")
 

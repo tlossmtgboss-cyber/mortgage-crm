@@ -452,10 +452,15 @@ function ReconciliationCenter() {
           headers: { 'Authorization': `Bearer ${token}` }
         });
       } else {
-        // No email service connected
+        // Email sync is handled via Claude Code MCP — just refresh the view
         if (!silent) {
-          setSyncStatus('⚠ No email service connected. Go to Settings to connect Gmail or Microsoft 365.');
-          setTimeout(() => setSyncStatus(''), 5000);
+          setSyncStatus('Emails are synced via Claude Code. Refreshing view...');
+        }
+        await fetchPendingItems();
+        await fetchCompletedItems();
+        if (!silent) {
+          setSyncingEmails(false);
+          setSyncStatus('View refreshed. Use Claude Code to sync new emails.');
         }
         return;
       }
