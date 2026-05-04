@@ -4243,28 +4243,30 @@ except Exception as e:
 # ============================================================================
 # POS 1003 — Borrower-facing URLA application
 # ============================================================================
-try:
-    from routes.pos import application_router, calendar_router, ai_qa_router, documents_router, hydration_router, messages_router, resolve_lo_router, start_router, tasks_router
-    app.include_router(application_router, tags=["POS Application"])
-    app.include_router(calendar_router, tags=["POS Calendar"])
-    app.include_router(ai_qa_router, tags=["POS AI Q&A"])
-    app.include_router(documents_router, tags=["POS Documents"])
-    app.include_router(hydration_router, tags=["POS Hydration"])
-    app.include_router(messages_router, tags=["POS Messages"])
-    app.include_router(resolve_lo_router, tags=["POS Resolve LO"])
-    app.include_router(start_router, tags=["POS Public Start"])
-    app.include_router(tasks_router, tags=["POS Tasks"])
-    logger.info("POS 1003 routes loaded")
-
-    # Ensure pos_borrower_messages table exists
+_pos_routers = {
+    "application": ("routes.pos.application", "router"),
+    "calendar": ("routes.pos.calendar", "router"),
+    "ai_qa": ("routes.pos.ai_qa", "router"),
+    "documents": ("routes.pos.documents", "router"),
+    "hydration": ("routes.pos.hydration", "router"),
+    "messages": ("routes.pos.messages", "router"),
+    "resolve_lo": ("routes.pos.resolve_lo", "router"),
+    "start": ("routes.pos.start", "router"),
+    "tasks": ("routes.pos.tasks", "router"),
+}
+for _pos_name, (_pos_mod, _pos_attr) in _pos_routers.items():
     try:
-        from database.models.pos import POSBorrowerMessage
-        POSBorrowerMessage.__table__.create(engine, checkfirst=True)
-    except Exception as _tbl_err:
-        logger.warning(f"pos_borrower_messages table creation skipped: {_tbl_err}")
+        import importlib
+        _mod = importlib.import_module(_pos_mod)
+        app.include_router(getattr(_mod, _pos_attr), tags=[f"POS {_pos_name.title()}"])
+    except Exception as e:
+        logger.error(f"POS route '{_pos_name}' failed to load: {e}", exc_info=True)
 
-except Exception as e:
-    logger.warning(f"POS 1003 routes skipped: {e}")
+try:
+    from database.models.pos import POSBorrowerMessage
+    POSBorrowerMessage.__table__.create(engine, checkfirst=True)
+except Exception as _tbl_err:
+    logger.warning(f"pos_borrower_messages table creation skipped: {_tbl_err}")
 
 # ============================================================================
 # iMessage / BlueBubbles Integration
