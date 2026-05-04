@@ -554,6 +554,98 @@ Please:
         raise HTTPException(status_code=500, detail="Internal server error")
 
 
+@router.post("/bulk-extract")
+async def bulk_extract_emails(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Trigger AI extraction on all unprocessed IncomingDataEvent records.
+    Supports API key auth via X-API-Key header (requires user_email query param).
+    """
+    import hmac
+
+    models = get_models()
+    helpers = get_helper_functions()
+    User = models["User"]
+    IncomingDataEvent = models["IncomingDataEvent"]
+    ExtractedData = models["ExtractedData"]
+
+    api_key = request.headers.get("X-API-Key", "")
+    if api_key:
+        expected = os.environ.get("CRM_API_KEY", "").strip()
+        if not expected or not hmac.compare_digest(api_key, expected):
+            raise HTTPException(status_code=401, detail="Invalid API key")
+        user_email = request.query_params.get("user_email")
+        if not user_email:
+            raise HTTPException(status_code=400, detail="user_email query param required")
+        current_user = db.query(User).filter(User.email == user_email).first()
+        if not current_user:
+            raise HTTPException(status_code=404, detail="User not found")
+    else:
+        import main
+        current_user = await main.get_current_user_flexible(request, db)
+
+    unprocessed = db.query(IncomingDataEvent).filter(
+        IncomingDataEvent.user_id == current_user.id,
+        IncomingDataEvent.processed == False
+    ).order_by(IncomingDataEvent.received_at.desc()).limit(50).all()
+
+    results = {"processed": 0, "skipped": 0, "errors": 0, "items": []}
+
+    for event in unprocessed:
+        try:
+            content = event.raw_text or event.raw_html or ""
+            subject = event.subject or ""
+
+            if not content and not subject:
+                event.processed = True
+                results["skipped"] += 1
+                continue
+
+            classification = helpers["classify_email_content"](content, subject)
+
+            if classification["category"] == "unrelated" or classification.get("confidence", 0) < 0.5:
+                event.processed = True
+                results["skipped"] += 1
+                continue
+
+            fields = helpers["extract_loan_fields"](content, classification["category"]) if classification["category"] != "unrelated" else {}
+            if not fields:
+                # Still create a minimal record so email shows in pending view
+                fields = {"email_summary": {"value": subject, "confidence": 0.7}}
+
+            entity_match = helpers["match_entity"](fields, db, current_user.id)
+
+            confidences = [f.get("confidence", 0.0) for f in fields.values()] if fields else []
+            avg_confidence = sum(confidences) / len(confidences) if confidences else classification.get("confidence", 0.5)
+
+            status = "pending_review"
+            if avg_confidence < 0.60 or entity_match["confidence"] < 0.50:
+                status = "needs_review"
+
+            extracted = ExtractedData(
+                event_id=event.id,
+                category=classification["category"],
+                subcategory=classification.get("subcategory"),
+                fields=fields,
+                match_entity_type=entity_match["entity_type"],
+                match_entity_id=entity_match["entity_id"],
+                match_confidence=entity_match["confidence"],
+                ai_confidence=avg_confidence,
+                status=status
+            )
+            db.add(extracted)
+            event.processed = True
+            results["processed"] += 1
+            results["items"].append({"event_id": event.id, "subject": subject, "status": status})
+        except Exception as e:
+            logger.error(f"Extraction error for event {event.id}: {e}")
+            results["errors"] += 1
+
+    db.commit()
+    return {"status": "success", **results}
+
+
 @router.get("/pending")
 async def get_pending_reconciliation(
     current_user=Depends(get_current_user_dep()),
