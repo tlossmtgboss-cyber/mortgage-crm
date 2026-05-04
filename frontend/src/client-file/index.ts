@@ -15,6 +15,7 @@ export { DocumentsPane } from "./DocumentsPane";
 export { TasksPane } from "./TasksPane";
 export { TeamChatPane } from "./TeamChatPane";
 export { ToolsRail } from "./ToolsRail";
+export { QuickActionsRail } from "./QuickActionsRail";
 export {
   ActionPlansPanel,
   DocumentsPanel,

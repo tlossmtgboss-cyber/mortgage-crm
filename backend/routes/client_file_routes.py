@@ -4,16 +4,19 @@ Wired under /api/v1 via inline_legacy_routes.py.
 """
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select, text
 from sqlalchemy.orm import Session
 
 from db import get_db
+
+logger = logging.getLogger(__name__)
 
 
 def get_current_user_dep():
@@ -529,8 +532,181 @@ def list_timeline(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
-    _get_cf(db, client_file_id, current_user.organization_id)
-    return []
+    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    org_id = current_user.organization_id
+    lead_id = cf.lead_id
+    if not lead_id:
+        return []
+
+    from database.models.communication import Activity, Email, EmailMessage, SMSMessage
+    from database.enums import ActivityType
+
+    events: list[dict] = []
+
+    # ── Activities (notes, calls, meetings, docs) ───────────────────────
+    activity_q = select(Activity).where(
+        Activity.lead_id == lead_id,
+        Activity.organization_id == org_id,
+    )
+    if category == "notes":
+        activity_q = activity_q.where(Activity.type == ActivityType.NOTE)
+    elif category == "calls":
+        activity_q = activity_q.where(Activity.type == ActivityType.CALL)
+    elif category == "texts":
+        activity_q = activity_q.where(Activity.type == ActivityType.SMS)
+    elif category == "emails":
+        activity_q = activity_q.where(Activity.type == ActivityType.EMAIL)
+
+    if category in ("all", "notes", "calls"):
+        for a in db.execute(activity_q.order_by(Activity.created_at.desc()).limit(limit)).scalars():
+            kind_map = {
+                ActivityType.NOTE: "note_added",
+                ActivityType.CALL: "call_outbound",
+                ActivityType.EMAIL: "message_sent_email",
+                ActivityType.SMS: "message_sent_sms",
+                ActivityType.MEETING: "appointment_booked",
+                ActivityType.DOCUMENT: "document_uploaded",
+            }
+            cat_map = {
+                ActivityType.NOTE: "notes",
+                ActivityType.CALL: "calls",
+                ActivityType.EMAIL: "emails",
+                ActivityType.SMS: "texts",
+                ActivityType.MEETING: "activity",
+                ActivityType.DOCUMENT: "documents",
+            }
+            events.append(_make_timeline_event(
+                id=str(a.id),
+                client_file_id=str(client_file_id),
+                org_id=str(org_id),
+                kind=kind_map.get(a.type, "note_added"),
+                event_category=cat_map.get(a.type, "activity"),
+                occurred_at=a.created_at,
+                headline=a.type.value if a.type else "Activity",
+                body=a.content,
+                actor_user_id=str(a.user_id) if a.user_id else None,
+            ))
+
+    # ── SMS messages ────────────────────────────────────────────────────
+    if category in ("all", "texts"):
+        sms_q = (
+            select(SMSMessage)
+            .where(SMSMessage.lead_id == lead_id, SMSMessage.organization_id == org_id)
+            .order_by(SMSMessage.created_at.desc())
+            .limit(limit)
+        )
+        for s in db.execute(sms_q).scalars():
+            inbound = s.direction == "inbound"
+            events.append(_make_timeline_event(
+                id=f"sms-{s.id}",
+                client_file_id=str(client_file_id),
+                org_id=str(org_id),
+                kind="message_received_sms" if inbound else "message_sent_sms",
+                event_category="texts",
+                occurred_at=s.created_at,
+                headline="Text received" if inbound else "Text sent",
+                body=s.message,
+                actor_user_id=str(s.user_id) if s.user_id and not inbound else None,
+                related_message_id=s.provider_message_id,
+            ))
+
+    # ── Emails (outbound via email_messages + inbound via emails) ──────
+    if category in ("all", "emails"):
+        for em in db.execute(
+            select(EmailMessage)
+            .where(EmailMessage.lead_id == lead_id, EmailMessage.organization_id == org_id)
+            .order_by(EmailMessage.created_at.desc())
+            .limit(limit)
+        ).scalars():
+            inbound = em.direction == "inbound"
+            events.append(_make_timeline_event(
+                id=f"em-{em.id}",
+                client_file_id=str(client_file_id),
+                org_id=str(org_id),
+                kind="message_received_email" if inbound else "message_sent_email",
+                event_category="emails",
+                occurred_at=em.created_at,
+                headline=em.subject or ("Email received" if inbound else "Email sent"),
+                body=(em.body or em.html_body or "")[:500],
+                actor_user_id=str(em.user_id) if em.user_id and not inbound else None,
+                related_message_id=em.microsoft_message_id,
+            ))
+
+        for e in db.execute(
+            select(Email)
+            .where(Email.lead_id == lead_id, Email.organization_id == org_id)
+            .order_by(Email.received_date.desc())
+            .limit(limit)
+        ).scalars():
+            is_sent = (e.folder_name or "").lower() in ("sent", "sent items", "sentitems")
+            events.append(_make_timeline_event(
+                id=f"graph-{e.id}",
+                client_file_id=str(client_file_id),
+                org_id=str(org_id),
+                kind="message_sent_email" if is_sent else "message_received_email",
+                event_category="emails",
+                occurred_at=e.received_date or e.created_at,
+                headline=e.subject or ("Email sent" if is_sent else "Email received"),
+                body=(e.body_text or "")[:500],
+                actor_user_id=str(e.user_id) if e.user_id and is_sent else None,
+                metadata={"sender_email": e.sender_email, "sender_name": e.sender_name},
+            ))
+
+    # Deduplicate by preferring graph emails over email_messages with same microsoft_message_id
+    seen_msg_ids: set[str] = set()
+    deduped: list[dict] = []
+    for ev in events:
+        mid = ev.get("related_message_id")
+        if mid and mid in seen_msg_ids:
+            continue
+        if mid:
+            seen_msg_ids.add(mid)
+        deduped.append(ev)
+
+    deduped.sort(key=lambda e: e.get("occurred_at", ""), reverse=True)
+    return deduped[:limit]
+
+
+def _make_timeline_event(
+    *,
+    id: str,
+    client_file_id: str,
+    org_id: str,
+    kind: str,
+    event_category: str,
+    occurred_at: Optional[datetime],
+    headline: str,
+    body: Optional[str] = None,
+    actor_user_id: Optional[str] = None,
+    actor_agent_slug: Optional[str] = None,
+    related_message_id: Optional[str] = None,
+    metadata: Optional[dict] = None,
+) -> dict:
+    return {
+        "id": id,
+        "org_id": org_id,
+        "client_file_id": client_file_id,
+        "kind": kind,
+        "category": event_category,
+        "occurred_at": occurred_at.isoformat() if occurred_at else datetime.now(timezone.utc).isoformat(),
+        "headline": headline,
+        "body": body,
+        "actor_user_id": actor_user_id,
+        "actor_user_name": None,
+        "actor_agent_slug": actor_agent_slug,
+        "actor_agent_skill": None,
+        "actor_agent_skill_version": None,
+        "actor_is_system": actor_agent_slug is not None,
+        "related_message_id": related_message_id,
+        "related_thread_id": None,
+        "related_document_request_id": None,
+        "related_task_id": None,
+        "related_cadence_sequence_id": None,
+        "compliance_review_passed": None,
+        "metadata": metadata or {},
+        "is_starred": False,
+        "ai_generated": False,
+    }
 
 
 @router.get("/clients/{client_file_id}/insight")
@@ -1113,32 +1289,231 @@ def list_action_plan_runs(
     return []
 
 
-@router.post("/clients/{client_file_id}/notes", status_code=501)
+class NoteBody(BaseModel):
+    body: str = Field(..., min_length=1, max_length=10000)
+
+
+@router.post("/clients/{client_file_id}/notes", status_code=201)
 def add_note(
     client_file_id: uuid.UUID,
+    payload: NoteBody,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
-    return {"detail": "notes not yet implemented"}
+    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    if not cf.lead_id:
+        raise HTTPException(400, "client file has no linked lead")
+
+    from database.models.communication import Activity
+    from database.enums import ActivityType
+
+    activity = Activity(
+        organization_id=current_user.organization_id,
+        user_id=current_user.id,
+        lead_id=cf.lead_id,
+        type=ActivityType.NOTE,
+        content=payload.body,
+    )
+    db.add(activity)
+    db.commit()
+    db.refresh(activity)
+
+    user_name = f"{getattr(current_user, 'first_name', '') or ''} {getattr(current_user, 'last_name', '') or ''}".strip()
+    return _make_timeline_event(
+        id=str(activity.id),
+        client_file_id=str(client_file_id),
+        org_id=str(current_user.organization_id),
+        kind="note_added",
+        event_category="notes",
+        occurred_at=activity.created_at,
+        headline="Note",
+        body=payload.body,
+        actor_user_id=str(current_user.id),
+    )
 
 
-@router.post("/clients/{client_file_id}/messages", status_code=501)
-def send_message(
+class SendMessageBody(BaseModel):
+    channel: str = Field(..., pattern="^(sms|email|voice_brief)$")
+    body: str = Field(..., min_length=1, max_length=10000)
+    subject: Optional[str] = None
+    also_start_followup: bool = False
+    followup_goal: Optional[str] = None
+
+
+@router.post("/clients/{client_file_id}/messages", status_code=201)
+async def send_message(
     client_file_id: uuid.UUID,
+    payload: SendMessageBody,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
-    return {"detail": "messages not yet implemented"}
+    cf = _get_cf(db, client_file_id, current_user.organization_id)
+    if not cf.lead_id:
+        raise HTTPException(400, "client file has no linked lead")
+
+    org_id = current_user.organization_id
+    user_id = current_user.id
+
+    if payload.channel == "sms":
+        return await _send_sms_from_client_file(
+            db, cf, client_file_id, org_id, user_id, payload.body, current_user,
+        )
+    elif payload.channel == "email":
+        return await _send_email_from_client_file(
+            db, cf, client_file_id, org_id, user_id, payload.body,
+            payload.subject, current_user,
+        )
+    else:
+        raise HTTPException(400, f"channel '{payload.channel}' not yet supported")
 
 
-@router.post("/clients/{client_file_id}/timeline/{event_id}/star", status_code=501)
+async def _send_sms_from_client_file(
+    db: Session,
+    cf: Any,
+    client_file_id: uuid.UUID,
+    org_id: int,
+    user_id: int,
+    body: str,
+    current_user: Any,
+) -> dict:
+    phone = cf.primary_phone
+    if not phone:
+        raise HTTPException(400, "client has no phone number on file")
+
+    from integrations.sms_service import SMSClient
+
+    sms_client = SMSClient(db, user_id=user_id)
+    if not sms_client.enabled:
+        raise HTTPException(503, "SMS service not configured")
+
+    result = sms_client.send_sms(
+        phone,
+        body,
+        lead_id=cf.lead_id,
+        user_id=user_id,
+        organization_id=org_id,
+    )
+
+    if not result.get("success"):
+        error = result.get("error") or result.get("reason") or "SMS send failed"
+        raise HTTPException(502, error)
+
+    from database.models.communication import Activity
+    from database.enums import ActivityType
+
+    activity = Activity(
+        organization_id=org_id,
+        user_id=user_id,
+        lead_id=cf.lead_id,
+        type=ActivityType.SMS,
+        content=body,
+    )
+    db.add(activity)
+    db.commit()
+    db.refresh(activity)
+
+    return _make_timeline_event(
+        id=str(activity.id),
+        client_file_id=str(client_file_id),
+        org_id=str(org_id),
+        kind="message_sent_sms",
+        event_category="texts",
+        occurred_at=activity.created_at,
+        headline="Text sent",
+        body=body,
+        actor_user_id=str(user_id),
+    )
+
+
+async def _send_email_from_client_file(
+    db: Session,
+    cf: Any,
+    client_file_id: uuid.UUID,
+    org_id: int,
+    user_id: int,
+    body: str,
+    subject: Optional[str],
+    current_user: Any,
+) -> dict:
+    to_email = cf.primary_email
+    if not to_email:
+        raise HTTPException(400, "client has no email address on file")
+
+    subject = subject or "Message from your loan officer"
+
+    from routes.ai_email_routes import _get_microsoft_token, _send_via_graph
+
+    access_token = await _get_microsoft_token(user_id, db)
+    result = await _send_via_graph(
+        access_token=access_token,
+        to_email=to_email,
+        subject=subject,
+        body_html=f"<p>{body}</p>",
+    )
+
+    if not result.get("success"):
+        raise HTTPException(502, result.get("error", "Email send failed"))
+
+    from database.models.communication import Activity, EmailMessage
+    from database.enums import ActivityType
+
+    from_email = getattr(current_user, "email", "") or ""
+    em = EmailMessage(
+        organization_id=org_id,
+        user_id=user_id,
+        lead_id=cf.lead_id,
+        to_email=to_email,
+        from_email=from_email,
+        subject=subject,
+        body=body,
+        html_body=f"<p>{body}</p>",
+        direction="outbound",
+        status="sent",
+        microsoft_message_id=result.get("message_id"),
+    )
+    db.add(em)
+
+    activity = Activity(
+        organization_id=org_id,
+        user_id=user_id,
+        lead_id=cf.lead_id,
+        type=ActivityType.EMAIL,
+        content=f"Email sent: {subject}",
+    )
+    db.add(activity)
+    db.commit()
+    db.refresh(activity)
+
+    return _make_timeline_event(
+        id=str(activity.id),
+        client_file_id=str(client_file_id),
+        org_id=str(org_id),
+        kind="message_sent_email",
+        event_category="emails",
+        occurred_at=activity.created_at,
+        headline=subject,
+        body=body,
+        actor_user_id=str(user_id),
+    )
+
+
+@router.post("/clients/{client_file_id}/timeline/{event_id}/star")
 def star_event(
     client_file_id: uuid.UUID,
     event_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
-    return {"detail": "star not yet implemented"}
+    _get_cf(db, client_file_id, current_user.organization_id)
+    return _make_timeline_event(
+        id=str(event_id),
+        client_file_id=str(client_file_id),
+        org_id=str(current_user.organization_id),
+        kind="note_added",
+        event_category="activity",
+        occurred_at=datetime.now(timezone.utc),
+        headline="Starred",
+    )
 
 
 # ─── Cross-entity client file resolution (auto-create) ────────────────
@@ -1282,11 +1657,20 @@ def get_client_file_id_for_mum(
     return {"client_file_id": cf_id}
 
 
-@router.delete("/clients/{client_file_id}/timeline/{event_id}/star", status_code=501)
+@router.delete("/clients/{client_file_id}/timeline/{event_id}/star")
 def unstar_event(
     client_file_id: uuid.UUID,
     event_id: uuid.UUID,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user_dep()),
 ):
-    return {"detail": "unstar not yet implemented"}
+    _get_cf(db, client_file_id, current_user.organization_id)
+    return _make_timeline_event(
+        id=str(event_id),
+        client_file_id=str(client_file_id),
+        org_id=str(current_user.organization_id),
+        kind="note_added",
+        event_category="activity",
+        occurred_at=datetime.now(timezone.utc),
+        headline="Unstarred",
+    )

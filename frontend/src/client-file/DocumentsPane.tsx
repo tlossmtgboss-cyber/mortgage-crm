@@ -327,6 +327,68 @@ function emptyDoc(): QueuedDoc {
   return { id: ++_nextQId, docType: "", title: "", instructions: "", requireEsign: false, loeTemplate: "custom" };
 }
 
+function EsignSetup({ onFileSelect }: { onFileSelect: (file: File) => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  function handleFile(f: File) {
+    if (f.type !== "application/pdf") return;
+    if (f.size > 25 * 1024 * 1024) return;
+    setFile(f);
+    onFileSelect(f);
+  }
+
+  return (
+    <div className="pf-cf-esign-setup">
+      <div className="pf-cf-esign-setup__header">
+        <span className="pf-cf-esign-setup__icon">&#9997;</span>
+        <span className="pf-cf-esign-setup__title">E-Signature Setup</span>
+      </div>
+      <div className="pf-cf-esign-setup__label">Upload Document for Signing</div>
+      <div
+        className={`pf-cf-esign-setup__dropzone${dragging ? " pf-cf-esign-setup__dropzone--active" : ""}`}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragging(false);
+          const f = e.dataTransfer.files[0];
+          if (f) handleFile(f);
+        }}
+        onClick={() => {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = ".pdf";
+          input.onchange = () => {
+            const f = input.files?.[0];
+            if (f) handleFile(f);
+          };
+          input.click();
+        }}
+      >
+        {file ? (
+          <div className="pf-cf-esign-setup__file">
+            <span className="pf-cf-esign-setup__file-icon">&#128196;</span>
+            <span>{file.name}</span>
+            <span className="pf-cf-esign-setup__file-size">
+              ({(file.size / 1024).toFixed(0)} KB)
+            </span>
+          </div>
+        ) : (
+          <>
+            <div className="pf-cf-esign-setup__upload-icon">&#8593;</div>
+            <div>
+              Drag &amp; drop a PDF here, or{" "}
+              <span className="pf-cf-esign-setup__browse">click to browse</span>
+            </div>
+            <div className="pf-cf-esign-setup__hint">PDF only, max 25 MB</div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function NewRequestForm({
   clientFileId,
   onClose,
@@ -519,6 +581,12 @@ function NewRequestForm({
               <span>Require E-Signature</span>
             </label>
           </div>
+
+          {active.requireEsign && (
+            <EsignSetup
+              onFileSelect={(file) => updateActive({ esignFile: file } as any)}
+            />
+          )}
         </div>
       </div>
 

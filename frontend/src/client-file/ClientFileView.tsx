@@ -2,6 +2,7 @@ import { ActivityPane } from "./ActivityPane";
 import { Avatar, deriveInitials } from "./primitives/Avatar";
 import { IdentityPanel } from "./IdentityPanel";
 import { Pill } from "./primitives/Pill";
+import { QuickActionsRail } from "./QuickActionsRail";
 import { ToolsRail } from "./ToolsRail";
 import { useClientFile } from "./hooks";
 import { LIFECYCLE_STAGE_LABEL } from "./format";
@@ -81,8 +82,9 @@ export function ClientFileView({ clientFileId, currentUserId }: Props) {
     <div className="pf-cf">
       <ClientFileHeader client={client} />
       <div className="pf-cf__grid">
-        <aside className="pf-cf__pane" aria-label="Identity">
+        <aside className="pf-cf__pane" aria-label="Identity & Details">
           <IdentityPanel client={client} />
+          <ToolsRail clientFileId={clientFileId} />
         </aside>
         <main className="pf-cf__pane" aria-label="Activity">
           <ActivityPane
@@ -90,8 +92,8 @@ export function ClientFileView({ clientFileId, currentUserId }: Props) {
             currentUserId={currentUserId}
           />
         </main>
-        <aside className="pf-cf__pane" aria-label="Tools">
-          <ToolsRail clientFileId={clientFileId} />
+        <aside className="pf-cf__pane" aria-label="Quick Actions">
+          <QuickActionsRail clientFileId={clientFileId} client={client} />
         </aside>
       </div>
     </div>

@@ -1969,3 +1969,202 @@
 .pf-cf-taskcard__edit {
   margin-top: 10px;
 }
+
+/* ── Quick Actions ─────────────────────────────────────────────────────── */
+
+.pf-cf-quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.pf-cf-quick-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 6px;
+  border: none;
+  border-radius: var(--pf-cf-radius-sm);
+  background: var(--pf-cf-accent);
+  color: var(--pf-cf-text-on-accent);
+  font-size: 11px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+}
+
+.pf-cf-quick-action:hover {
+  opacity: 0.85;
+}
+
+/* ── Mini Calendar ─────────────────────────────────────────────────────── */
+
+.pf-cf-minical {
+  padding: 16px;
+  border: 1px solid var(--pf-cf-border);
+  border-radius: var(--pf-cf-radius);
+  background: var(--pf-cf-bg-glass);
+}
+
+.pf-cf-minical__nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.pf-cf-minical__arrow {
+  background: none;
+  border: none;
+  padding: 4px 8px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--pf-cf-text-secondary);
+  border-radius: var(--pf-cf-radius-sm);
+}
+
+.pf-cf-minical__arrow:hover {
+  background: var(--pf-cf-bg-hover);
+}
+
+.pf-cf-minical__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pf-cf-text);
+}
+
+.pf-cf-minical__table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: center;
+  font-size: 12px;
+}
+
+.pf-cf-minical__table th {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--pf-cf-text-tertiary);
+  padding: 4px 0;
+  text-transform: uppercase;
+}
+
+.pf-cf-minical__table td {
+  padding: 4px 0;
+  color: var(--pf-cf-text-secondary);
+  cursor: default;
+}
+
+.pf-cf-minical__today {
+  background: var(--pf-cf-accent);
+  color: var(--pf-cf-text-on-accent) !important;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.pf-cf-minical__footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--pf-cf-border);
+}
+
+.pf-cf-minical__footer-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--pf-cf-text);
+  margin-bottom: 8px;
+}
+
+/* ── E-Signature Setup ─────────────────────────────────────────────────── */
+
+.pf-cf-esign-setup {
+  margin-top: 8px;
+  padding: 14px;
+  border: 1px solid var(--pf-cf-warning);
+  border-radius: var(--pf-cf-radius);
+  background: var(--pf-cf-warning-bg);
+}
+
+.pf-cf-esign-setup__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.pf-cf-esign-setup__icon {
+  font-size: 16px;
+}
+
+.pf-cf-esign-setup__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--pf-cf-text);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.pf-cf-esign-setup__label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--pf-cf-text);
+  margin-bottom: 8px;
+}
+
+.pf-cf-esign-setup__dropzone {
+  border: 2px dashed var(--pf-cf-border-strong);
+  border-radius: var(--pf-cf-radius);
+  padding: 24px 16px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  font-size: 13px;
+  color: var(--pf-cf-text-secondary);
+  background: var(--pf-cf-bg-deep);
+}
+
+.pf-cf-esign-setup__dropzone--active {
+  border-color: var(--pf-cf-accent);
+  background: var(--pf-cf-accent-bg);
+}
+
+.pf-cf-esign-setup__dropzone:hover {
+  border-color: var(--pf-cf-accent);
+}
+
+.pf-cf-esign-setup__upload-icon {
+  font-size: 24px;
+  color: var(--pf-cf-accent);
+  margin-bottom: 8px;
+}
+
+.pf-cf-esign-setup__browse {
+  color: var(--pf-cf-accent);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pf-cf-esign-setup__hint {
+  font-size: 11px;
+  color: var(--pf-cf-text-tertiary);
+  margin-top: 4px;
+}
+
+.pf-cf-esign-setup__file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--pf-cf-text);
+}
+
+.pf-cf-esign-setup__file-icon {
+  font-size: 20px;
+}
+
+.pf-cf-esign-setup__file-size {
+  color: var(--pf-cf-text-tertiary);
+  font-size: 11px;
+}
