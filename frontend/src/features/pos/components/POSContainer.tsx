@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 
 import { usePOSApplication } from '../hooks/usePOSApplication';
 import { useDocumentDetector } from '../hooks/useDocumentDetector';
@@ -69,11 +69,12 @@ export const POSContainer: React.FC<POSContainerProps> = ({
   const [view, setView] = useState<'application' | 'documents' | 'tasks'>('application');
   const [taskCount, setTaskCount] = useState(0);
 
+  const appId = application?.id;
   React.useEffect(() => {
-    if (application) {
-      posApi.getTasks(application.id).then(resp => setTaskCount(resp.counts.pending + resp.counts.in_progress)).catch(() => {});
+    if (appId) {
+      posApi.getTasks(appId).then(resp => setTaskCount(resp.counts.pending + resp.counts.in_progress)).catch(() => {});
     }
-  }, [application]);
+  }, [appId]);
   const [intakeComplete, setIntakeComplete] = useState(false);
   const [intakeData, setIntakeData] = useState<IntakeData>(EMPTY_INTAKE);
 
@@ -94,20 +95,20 @@ export const POSContainer: React.FC<POSContainerProps> = ({
     }
   }, [application, sections.personal, loadSection]);
 
+  const reviewPreloaded = useRef(false);
   React.useEffect(() => {
-    if (activeStep === 'review' && application) {
-      SECTION_ORDER.filter(k => k !== 'review' && !sections[k]).forEach(k => loadSection(k));
+    if (activeStep === 'review' && application && !reviewPreloaded.current) {
+      reviewPreloaded.current = true;
+      SECTION_ORDER.filter(k => k !== 'review').forEach(k => loadSection(k));
     }
-  }, [activeStep, application, sections, loadSection]);
-
-  const [highlightField, setHighlightField] = useState<string | null>(null);
+    if (activeStep !== 'review') reviewPreloaded.current = false;
+  }, [activeStep, application, loadSection]);
 
   const handleStepChange = useCallback(
     (key: SectionKey, fieldToHighlight?: string) => {
       setActiveStep(key);
       if (!sections[key]) loadSection(key);
       if (fieldToHighlight) {
-        setHighlightField(fieldToHighlight);
         setTimeout(() => {
           const el = document.getElementById(`f-${fieldToHighlight}`);
           if (el) {
@@ -117,8 +118,6 @@ export const POSContainer: React.FC<POSContainerProps> = ({
             setTimeout(() => el.classList.remove('urla-field--highlight'), 3000);
           }
         }, 300);
-      } else {
-        setHighlightField(null);
       }
     },
     [sections, loadSection],

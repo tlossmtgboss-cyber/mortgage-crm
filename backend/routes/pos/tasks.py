@@ -11,7 +11,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from typing import Optional
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
@@ -67,9 +66,14 @@ class BorrowerTaskListResponse(BaseModel):
     counts: BorrowerTaskCounts
 
 
-class BorrowerTaskCompleteRequest(BaseModel):
-    """Body is intentionally minimal — borrowers can only mark complete."""
-    pass
+# Internal task types that should never surface to borrowers.
+_INTERNAL_TASK_TYPES = frozenset({
+    "sf_disposition",
+    "email_classification",
+    "sla_milestone",
+    "internal",
+    "system",
+})
 
 
 # ---------------------------------------------------------------------------
@@ -122,10 +126,15 @@ def list_tasks(
 
     all_tasks = (
         db.query(Task)
-        .filter(Task.loan_id == application.loan_id)
+        .filter(
+            Task.loan_id == application.loan_id,
+            Task.organization_id == application.organization_id,
+        )
         .order_by(Task.due_date.asc().nullslast(), Task.created_at.desc())
         .all()
     )
+
+    all_tasks = [t for t in all_tasks if (t.related_type or "") not in _INTERNAL_TASK_TYPES]
 
     counts = BorrowerTaskCounts(total=len(all_tasks))
     for t in all_tasks:
@@ -169,7 +178,11 @@ def complete_task(
 
     task = (
         db.query(Task)
-        .filter(Task.id == task_id, Task.loan_id == application.loan_id)
+        .filter(
+            Task.id == task_id,
+            Task.loan_id == application.loan_id,
+            Task.organization_id == application.organization_id,
+        )
         .first()
     )
 
