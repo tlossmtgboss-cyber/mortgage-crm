@@ -893,21 +893,27 @@ async def schedule_appointment_function(
         return {"success": False, "error": "Internal server error"}
 
 
-@router.get("/functions/available-time-slots")
+@router.post("/functions/get-available-time-slots")
 async def available_time_slots_function(
     request: Request,
-    date: Optional[str] = None,
     db: Session = Depends(get_db),
     _: bool = Depends(verify_vapi_request)
 ):
     """
-    Get available appointment time slots
-    Simplified version - returns standard business hours
+    Get available appointment time slots.
+    Route name matches tool definition: get_available_time_slots → get-available-time-slots
+    Vapi sends POST with JSON body containing function call args.
     """
     try:
         from datetime import datetime, timezone, timedelta
 
-        # Parse requested date or use tomorrow
+        data = {}
+        try:
+            data = await request.json()
+        except Exception:
+            pass
+        date = data.get("date")
+
         if date:
             try:
                 target_date = datetime.fromisoformat(date.replace('Z', '+00:00')).date()
@@ -916,24 +922,28 @@ async def available_time_slots_function(
         else:
             target_date = (datetime.now(timezone.utc) + timedelta(days=1)).date()
 
-        # Generate time slots (9 AM - 5 PM, every hour)
         slots = []
-        for hour in range(9, 17):  # 9 AM to 4 PM
-            slot_time = datetime.combine(
-                target_date,
-                datetime.min.time().replace(hour=hour)
-            ).replace(tzinfo=timezone.utc)
+        for day_offset in range(7):
+            check_date = target_date + timedelta(days=day_offset)
+            if check_date.weekday() >= 5:
+                continue
+            for hour in range(9, 17):
+                slot_time = datetime.combine(
+                    check_date,
+                    datetime.min.time().replace(hour=hour)
+                ).replace(tzinfo=timezone.utc)
 
-            slots.append({
-                "time": slot_time.isoformat(),
-                "display": slot_time.strftime("%I:%M %p"),
-                "available": True
-            })
+                if slot_time > datetime.now(timezone.utc):
+                    slots.append({
+                        "time": slot_time.isoformat(),
+                        "display": slot_time.strftime("%A, %B %d at %I:%M %p"),
+                        "available": True
+                    })
 
         return {
             "success": True,
             "date": target_date.isoformat(),
-            "slots": slots
+            "slots": slots[:20]
         }
 
     except Exception as e:
