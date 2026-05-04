@@ -79,21 +79,40 @@ export function useCallIntelligenceSession({
   const [sessionId, setSessionId] = useState(null);
   const [consentInfo, setConsentInfo] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const [agentStatuses, setAgentStatuses] = useState({});
+  const [agentEvents, setAgentEvents] = useState([]);
+  const [duration, setDuration] = useState(0);
 
   const wsRef = useRef(null);
   const timeoutRef = useRef(null);
   const audioRef = useRef(null);
+  const durationRef = useRef(null);
+  const activeStartRef = useRef(null);
 
   useEffect(() => {
     return () => {
       wsRef.current?.close();
       clearTimeout(timeoutRef.current);
+      clearInterval(durationRef.current);
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (sessionState === SESSION_STATES.ACTIVE) {
+      activeStartRef.current = Date.now();
+      setDuration(0);
+      durationRef.current = setInterval(() => {
+        setDuration(Math.floor((Date.now() - activeStartRef.current) / 1000));
+      }, 1000);
+    } else {
+      clearInterval(durationRef.current);
+    }
+    return () => clearInterval(durationRef.current);
+  }, [sessionState]);
 
   useEffect(() => {
     if (!sessionId || sessionState === SESSION_STATES.IDLE) return;
@@ -121,8 +140,33 @@ export function useCallIntelligenceSession({
           case 'agent_update':
           case 'agent_complete':
           case 'agent_error':
-          case 'confidence_flag':
+          case 'confidence_flag': {
+            const agent = data.agent || data.agent_type || 'system';
+            const config = AGENT_CONFIG[agent] || { label: agent, icon: '🔍', color: '#94a3b8' };
+            const eventEntry = {
+              id: Date.now() + Math.random(),
+              agent,
+              label: config.label,
+              icon: config.icon,
+              color: config.color,
+              type: data.event,
+              message: data.message || data.field_name || data.detail || '',
+              value: data.value || data.extracted_value || null,
+              confidence: data.confidence ?? null,
+              timestamp: Date.now(),
+            };
+            setAgentEvents(prev => [...prev.slice(-100), eventEntry]);
+            setAgentStatuses(prev => ({
+              ...prev,
+              [agent]: {
+                status: data.event === 'agent_complete' ? 'complete' :
+                        data.event === 'agent_error' ? 'error' : 'active',
+                lastMessage: eventEntry.message,
+                lastUpdate: Date.now(),
+              },
+            }));
             break;
+          }
 
           case 'call_status':
             if (data.status === 'completed') {
@@ -397,6 +441,9 @@ export function useCallIntelligenceSession({
     sessionId,
     consentInfo,
     errorMessage,
+    agentStatuses,
+    agentEvents,
+    duration,
 
     isIdle: sessionState === SESSION_STATES.IDLE,
     isPlayingDisclosure: sessionState === SESSION_STATES.PLAYING_DISCLOSURE,

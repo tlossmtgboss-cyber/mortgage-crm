@@ -13,6 +13,8 @@ import useVoiceWorkflows from '../hooks/useVoiceWorkflows';
 import MobileBottomNav from '../components/mobile/MobileBottomNav';
 import CallIntelligenceButton from '../components/aria/CallIntelligenceButton';
 import CallIntelligenceSlidePanel from '../components/aria/CallIntelligenceSlidePanel';
+import CIStatusStrip from '../components/aria/CIStatusStrip';
+import CILiveSidebar from '../components/aria/CILiveSidebar';
 import useAriaCallIntelligence from '../hooks/useAriaCallIntelligence';
 import { toast } from '../utils/toast';
 import './AriaVoiceApp.css';
@@ -527,6 +529,17 @@ const AriaVoiceApp = () => {
 
   return (
     <div className="aria-app">
+      {/* CI Status Strip — compact top bar when recording */}
+      <CIStatusStrip
+        isActive={ci.isActive}
+        isStarting={ci.isStarting}
+        duration={ci.duration}
+        agentStatuses={ci.agentStatuses}
+        agentEvents={ci.agentEvents}
+        sessionState={ci.sessionState}
+        onTogglePanel={() => setShowCIPanel(prev => !prev)}
+        panelOpen={showCIPanel}
+      />
       <div className="aria-container">
         {/* Header */}
         <div className="aria-header">
@@ -687,11 +700,16 @@ const AriaVoiceApp = () => {
       {/* Mobile bottom navigation */}
       {isAuthenticated && <MobileBottomNav />}
 
-      {/* Call Intelligence Slide Panel */}
+      {/* Call Intelligence Live Sidebar — 4-quadrant agent dashboard */}
       {showCIPanel && (
-        <CallIntelligenceSlidePanel
+        <CILiveSidebar
+          isActive={ci.isActive}
+          isStarting={ci.isStarting}
+          duration={ci.duration}
+          agentStatuses={ci.agentStatuses}
+          agentEvents={ci.agentEvents}
+          sessionState={ci.sessionState}
           onClose={() => setShowCIPanel(false)}
-          ciSession={ci}
         />
       )}
     </div>

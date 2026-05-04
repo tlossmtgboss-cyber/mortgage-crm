@@ -127,12 +127,14 @@ const useAriaCallIntelligence = ({ onArtifactsReady, onSessionStarted, onSession
   return {
     // Pass through CI session state
     sessionId: ciSession.sessionId,
+    sessionState: ciSession.sessionState,
     isActive: ciSession.isActive,
     isStopping: ciSession.isStopping,
     isStarting,
-    duration: ciSession.duration,
+    duration: ciSession.duration || 0,
     transcript: ciSession.transcript,
-    agentStatuses: ciSession.agentStatuses,
+    agentStatuses: ciSession.agentStatuses || {},
+    agentEvents: ciSession.agentEvents || [],
     artifacts: ciSession.artifacts || [],
     detectedClient: ciSession.detectedClient,
 
