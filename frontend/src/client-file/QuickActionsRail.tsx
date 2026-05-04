@@ -9,8 +9,6 @@ interface Props {
 
 const QUICK_ACTIONS: { key: string; label: string; icon: string; color?: string }[] = [
   { key: "call", label: "Call", icon: "phone" },
-  { key: "sms", label: "SMS Text", icon: "message-square" },
-  { key: "email", label: "Send Email", icon: "mail" },
   { key: "task", label: "Create Task", icon: "check-square" },
   { key: "appointment", label: "Set Appointment", icon: "calendar" },
   { key: "video", label: "Video Call", icon: "video" },
@@ -117,16 +115,12 @@ function MiniCalendar() {
 export function QuickActionsRail({ clientFileId, client }: Props) {
   const handleAction = (key: string) => {
     const phone = client.primary_phone;
-    const email = client.primary_email;
 
     switch (key) {
       case "call":
         if (phone) {
           window.open(`msteams://teams.microsoft.com/l/call/0/0?users=4:${phone}`, "_blank");
         }
-        break;
-      case "email":
-        if (email) window.open(`mailto:${email}`, "_blank");
         break;
       default:
         break;

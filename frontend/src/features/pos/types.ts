@@ -216,3 +216,31 @@ export interface QAHistoryResponse {
   messages: QAMessageResponse[];
   total: number;
 }
+
+// ---------- Borrower Tasks ----------
+
+export type BorrowerTaskStatus = 'pending' | 'in_progress' | 'completed';
+export type BorrowerTaskPriority = 'low' | 'medium' | 'high';
+
+export interface BorrowerTask {
+  id: number;
+  title: string;
+  description: string | null;
+  status: BorrowerTaskStatus;
+  priority: BorrowerTaskPriority;
+  category: string | null;
+  due_date: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
+export interface BorrowerTasksResponse {
+  application_id: string;
+  tasks: BorrowerTask[];
+  counts: {
+    pending: number;
+    in_progress: number;
+    completed: number;
+    total: number;
+  };
+}

@@ -7,11 +7,13 @@ export interface POSSidebarProps {
   application: ApplicationResponse | null;
   onAskAria: () => void;
   documentCount?: number;
+  taskCount?: number;
   onDocumentsClick?: () => void;
-  activeNav?: 'application' | 'documents';
+  onTasksClick?: () => void;
+  activeNav?: 'application' | 'documents' | 'tasks';
 }
 
-export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, documentCount = 0, onDocumentsClick, activeNav = 'application' }) => {
+export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, documentCount = 0, taskCount = 0, onDocumentsClick, onTasksClick, activeNav = 'application' }) => {
   const pct = application?.completion_pct ?? 0;
 
   return (
@@ -51,7 +53,7 @@ export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, 
           <NavItem icon={<HomeIcon />} label="Home" />
           <NavItem icon={<FormIcon />} label="Application" active={activeNav === 'application'} />
           <NavItem icon={<UploadIcon />} label="Documents" badge={documentCount || undefined} onClick={onDocumentsClick} active={activeNav === 'documents'} />
-          <NavItem icon={<ChecklistIcon />} label="Tasks" count={5} />
+          <NavItem icon={<ChecklistIcon />} label="Tasks" badge={taskCount || undefined} onClick={onTasksClick} active={activeNav === 'tasks'} />
           <NavItem icon={<ChatIcon />} label="Messages" dot />
           <NavItem icon={<BookIcon />} label="Disclosures" />
 

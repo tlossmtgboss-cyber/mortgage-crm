@@ -10,6 +10,7 @@ import { POSSidebar } from './POSSidebar';
 import { StepRail } from './StepRail';
 import { AriaPanel } from './AriaPanel';
 import { DocumentsPage } from './DocumentsPage';
+import { TasksPage } from './TasksPage';
 import { IntakePanel, EMPTY_INTAKE } from './IntakePanel';
 import type { IntakeData } from './IntakePanel';
 
@@ -65,7 +66,14 @@ export const POSContainer: React.FC<POSContainerProps> = ({
 
   const [activeStep, setActiveStep] = useState<SectionKey>('personal');
   const [ariaOpen, setAriaOpen] = useState(false);
-  const [view, setView] = useState<'application' | 'documents'>('application');
+  const [view, setView] = useState<'application' | 'documents' | 'tasks'>('application');
+  const [taskCount, setTaskCount] = useState(0);
+
+  React.useEffect(() => {
+    if (application) {
+      posApi.getTasks(application.id).then(resp => setTaskCount(resp.counts.pending + resp.counts.in_progress)).catch(() => {});
+    }
+  }, [application]);
   const [intakeComplete, setIntakeComplete] = useState(false);
   const [intakeData, setIntakeData] = useState<IntakeData>(EMPTY_INTAKE);
 
@@ -174,8 +182,10 @@ export const POSContainer: React.FC<POSContainerProps> = ({
           application={application}
           onAskAria={() => setAriaOpen(true)}
           documentCount={detectedDocs.length}
+          taskCount={taskCount}
           onDocumentsClick={() => setView('documents')}
-          activeNav={view === 'documents' ? 'documents' : 'application'}
+          onTasksClick={() => setView('tasks')}
+          activeNav={view}
         />
 
         <main className="pos-main">
@@ -184,6 +194,12 @@ export const POSContainer: React.FC<POSContainerProps> = ({
               loName="your loan officer"
               loInitials="A"
               detectedDocs={detectedDocs}
+              onAskAria={() => setAriaOpen(true)}
+              onBack={() => setView('application')}
+            />
+          ) : view === 'tasks' ? (
+            <TasksPage
+              applicationId={application.id}
               onAskAria={() => setAriaOpen(true)}
               onBack={() => setView('application')}
             />

@@ -16,6 +16,8 @@ import type {
   AvailableSlotsResponse,
   BookingRequest,
   BookingResponse,
+  BorrowerTasksResponse,
+  BorrowerTask,
   QAHistoryResponse,
   SectionKey,
   SectionResponse,
@@ -196,6 +198,21 @@ export const posApi = {
     request<QAHistoryResponse>(
       'GET',
       `/api/v1/pos/ai-qa/applications/${applicationId}/history?limit=${limit}`,
+    ),
+
+  // ---------- Borrower Tasks ----------
+
+  getTasks: (applicationId: string, includeCompleted = false) =>
+    request<BorrowerTasksResponse>(
+      'GET',
+      `/api/v1/pos/applications/${applicationId}/tasks${includeCompleted ? '?include_completed=true' : ''}`,
+    ),
+
+  completeTask: (applicationId: string, taskId: number) =>
+    request<BorrowerTask>(
+      'PATCH',
+      `/api/v1/pos/applications/${applicationId}/tasks/${taskId}`,
+      { status: 'completed' },
     ),
 };
 
