@@ -1949,6 +1949,18 @@ def init_db():
         except Exception as e:
             logger.warning(f"⚠️ deleted_at migration note: {e}")
 
+        # POSAIQAMessage — structured_output column (borrower agent)
+        try:
+            with _engine.connect() as conn:
+                conn.execute(text(
+                    "ALTER TABLE pos_ai_qa_messages ADD COLUMN IF NOT EXISTS "
+                    "structured_output JSONB"
+                ))
+                conn.commit()
+                logger.info("Added structured_output column to pos_ai_qa_messages")
+        except Exception as e:
+            logger.debug("structured_output column migration: %s", e)
+
         return True
     except Exception as e:
         logger.error(f"❌ Database initialization failed: {e}")

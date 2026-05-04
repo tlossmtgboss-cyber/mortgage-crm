@@ -2,7 +2,7 @@
 
 Orchestrates:
   - Loan-file retrieval (the borrower's own draft + linked loan record)
-  - Existing GuidelinesChatAgent for FNMA / FHLMC / FHA / VA citations
+  - BorrowerApplicationAgent for guideline citations + structured output
   - Conversation history retrieval for thread continuity
   - Confidence scoring and escalation to LO when uncertain
 
@@ -79,12 +79,15 @@ class AIQAService:
             session, application_id=application.id, ids=context_message_ids
         )
 
-        # 3. Call the guidelines agent (your existing module).
+        # 3. Call the borrower application agent.
         agent_response = await self._call_guidelines_agent(
             question=question,
             loan_context=loan_context,
             history=history,
             current_step=current_step,
+            organization_id=getattr(application, 'organization_id', None),
+            contact_id=getattr(application, 'contact_id', None),
+            application_id=str(application.id),
         )
 
         # 4. Score confidence and decide whether to escalate.
@@ -104,6 +107,7 @@ class AIQAService:
             confidence=confidence,
         )
         session.add(aria_msg)
+        aria_msg.structured_output = agent_response.get("structured_output")
         session.flush()
 
         # 6. Audit (no question content — privacy; just metadata).
@@ -133,6 +137,9 @@ class AIQAService:
             "escalation_recommended": escalate,
             "escalation_reason": agent_response.get("escalation_reason"),
             "created_at": aria_msg.created_at,
+            "structured_output": agent_response.get("structured_output"),
+            "meeting_offered": agent_response.get("meeting_offered", False),
+            "meeting_details": agent_response.get("meeting_details"),
         }
 
     def get_history(
@@ -242,30 +249,15 @@ class AIQAService:
         self,
         *,
         question: str,
-        loan_context: dict[str, Any],
-        history: list[dict[str, Any]],
+        loan_context: dict,
+        history: list,
         current_step: str | None,
-    ) -> dict[str, Any]:
-        """Invoke the existing GuidelinesChatAgent.
-
-        Expected agent contract (from the existing Perennia module):
-            await agent.answer(
-                question: str,
-                loan_context: dict,
-                history: list[dict],
-                current_step: str | None,
-            ) -> dict with keys:
-                content: str (markdown)
-                sources: list[{type, label, anchor}]
-                follow_ups: list[str]
-                tokens_used: int | None
-                escalation_reason: str | None  (when the agent declines)
-        """
+        organization_id: int | None = None,
+        contact_id: int | None = None,
+        application_id: str | None = None,
+    ) -> dict:
         if self._guidelines_agent is None:
-            # Fallback: produce a generic deflection rather than a hard error
-            # so the borrower still gets a usable response in environments
-            # where the agent isn't wired up yet (e.g. local dev).
-            logger.warning("GuidelinesChatAgent unavailable; returning deflection")
+            logger.warning("BorrowerApplicationAgent unavailable; returning deflection")
             return _deflection_response(question)
 
         try:
@@ -274,9 +266,12 @@ class AIQAService:
                 loan_context=loan_context,
                 history=history,
                 current_step=current_step,
+                organization_id=organization_id,
+                contact_id=contact_id,
+                application_id=application_id,
             )
         except Exception as exc:
-            logger.exception("GuidelinesChatAgent raised; deflecting: %s", exc)
+            logger.exception("BorrowerApplicationAgent raised; deflecting: %s", exc)
             return _deflection_response(
                 question,
                 escalation_reason=f"Agent error: {type(exc).__name__}",
@@ -308,30 +303,13 @@ class AIQAService:
 # ---------------------------------------------------------------------------
 
 
-def _resolve_guidelines_agent() -> Any | None:
-    """Best-effort import of the existing GuidelinesChatAgent.
-
-    Tries the most likely module paths. If none resolve, returns None and the
-    service falls back to a deflection response.
-    """
-    candidates = [
-        "agents.guidelines_chat_agent",
-        "services.agents.guidelines_chat_agent",
-        "ai.agents.guidelines",
-    ]
-    for path in candidates:
-        try:
-            module = __import__(path, fromlist=["GuidelinesChatAgent"])
-            cls = getattr(module, "GuidelinesChatAgent", None)
-            if cls is not None:
-                return cls()
-        except Exception:
-            continue
-    logger.info(
-        "Could not auto-resolve GuidelinesChatAgent. Inject one explicitly via "
-        "AIQAService(guidelines_agent=...) when constructing the service."
-    )
-    return None
+def _resolve_guidelines_agent():
+    try:
+        from services.pos.borrower_application_agent import BorrowerApplicationAgent
+        return BorrowerApplicationAgent()
+    except Exception as e:
+        logger.warning("Could not load BorrowerApplicationAgent: %s", e)
+        return None
 
 
 def _decimal_to_float(value: Any) -> float | None:

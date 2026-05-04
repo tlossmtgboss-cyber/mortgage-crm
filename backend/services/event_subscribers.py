@@ -929,6 +929,21 @@ def register_all_subscribers() -> None:
     event_bus.subscribe(EventType.POS_APPOINTMENT_BOOKED, on_pos_appointment_booked_notify_lo)
     event_bus.subscribe(EventType.POS_APPOINTMENT_BOOKED, on_pos_appointment_booked_audit)
 
+    # -- borrower_agent events --
+    try:
+        from services.pos.borrower_agent_event_handlers import (
+            on_application_escalation,
+            on_meeting_booked,
+            on_document_suggested,
+            on_application_stall,
+        )
+        event_bus.subscribe(EventType.APPLICATION_ESCALATION, on_application_escalation)
+        event_bus.subscribe(EventType.MEETING_BOOKED, on_meeting_booked)
+        event_bus.subscribe(EventType.DOCUMENT_SUGGESTED, on_document_suggested)
+        event_bus.subscribe(EventType.APPLICATION_STALL, on_application_stall)
+    except ImportError:
+        logger.debug("Borrower agent event handlers not available — skipping")
+
     logger.info(
         "Registered %d event subscribers across %d event types",
         event_bus.subscriber_count,

@@ -339,6 +339,7 @@ class POSAIQAMessage(Base):
     latency_ms = Column(Integer, nullable=True)
     tokens_used = Column(Integer, nullable=True)
     confidence = Column(String(16), nullable=True)  # AIQAConfidence
+    structured_output = Column(JSONB, nullable=True)
 
     created_at = Column(
         DateTime(timezone=True),

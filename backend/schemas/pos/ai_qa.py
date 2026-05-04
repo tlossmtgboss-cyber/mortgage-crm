@@ -76,6 +76,19 @@ class AskResponse(BaseModel):
     escalation_recommended: bool = False
     escalation_reason: str | None = None
 
+    structured_output: dict | None = Field(
+        default=None,
+        description="Structured JSON output from the agent (intent, risk level, flags, etc.)",
+    )
+    meeting_offered: bool = Field(
+        default=False,
+        description="True if the agent offered a meeting with the LO this turn.",
+    )
+    meeting_details: dict | None = Field(
+        default=None,
+        description="Calendar slot time, LO name, and confirmation when a meeting is booked.",
+    )
+
     created_at: datetime
 
 

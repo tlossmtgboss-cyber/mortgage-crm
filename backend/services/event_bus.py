@@ -81,6 +81,12 @@ class EventType(str, Enum):
     POS_APPLICATION_SUBMITTED = "pos.application.submitted"
     POS_APPOINTMENT_BOOKED = "pos.appointment.booked"
 
+    # Borrower Application Agent events
+    APPLICATION_ESCALATION = "borrower_agent.escalation"
+    MEETING_BOOKED = "borrower_agent.meeting_booked"
+    DOCUMENT_SUGGESTED = "borrower_agent.document_suggested"
+    APPLICATION_STALL = "borrower_agent.application_stall"
+
 
 # =============================================================================
 # Event payload

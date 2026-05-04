@@ -101,6 +101,9 @@ async def ask_aria(
         confidence=result["confidence"],
         escalation_recommended=result["escalation_recommended"],
         escalation_reason=result.get("escalation_reason"),
+        structured_output=result.get("structured_output"),
+        meeting_offered=result.get("meeting_offered", False),
+        meeting_details=result.get("meeting_details"),
         created_at=result["created_at"],
     )
 
