@@ -4305,6 +4305,33 @@ try:
         _cf_model.__table__.create(engine, checkfirst=True)
     logger.info("Client File + Team Chat tables verified/created (6 tables)")
 
+    # Ensure all ClientFile columns exist (checkfirst only checks table, not columns)
+    try:
+        from sqlalchemy import text as _sa_cf_text
+        _cf_columns = [
+            ("active_loan_program", "VARCHAR"),
+            ("active_loan_purpose", "VARCHAR"),
+            ("active_loan_amount", "NUMERIC(18,2)"),
+            ("active_loan_fico", "INTEGER"),
+            ("active_loan_ltv", "NUMERIC(8,4)"),
+            ("active_loan_lock_expires_at", "TIMESTAMPTZ"),
+            ("active_loan_projected_close_date", "TIMESTAMPTZ"),
+            ("sticky_note", "TEXT"),
+            ("preferred_channel", "VARCHAR"),
+            ("assigned_underwriter_id", "INTEGER REFERENCES users(id)"),
+            ("created_by_user_id", "INTEGER REFERENCES users(id)"),
+            ("last_contact_at", "TIMESTAMPTZ"),
+        ]
+        with engine.connect() as _cf_col_conn:
+            for _col_name, _col_type in _cf_columns:
+                _cf_col_conn.execute(_sa_cf_text(
+                    f"ALTER TABLE client_files ADD COLUMN IF NOT EXISTS {_col_name} {_col_type}"
+                ))
+            _cf_col_conn.commit()
+        logger.info("Client File columns verified/added (%d columns)", len(_cf_columns))
+    except Exception as _cf_col_err:
+        logger.warning("Could not add client_file columns: %s", _cf_col_err)
+
     # Enable RLS on the 6 new tables
     try:
         _rls_expr = "organization_id = NULLIF(current_setting('app.current_tenant', TRUE), '')::INTEGER"

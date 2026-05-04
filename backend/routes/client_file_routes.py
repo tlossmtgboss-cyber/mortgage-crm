@@ -99,6 +99,14 @@ def _iso(dt: Optional[datetime]) -> Optional[str]:
 
 
 def _to_response(cf: Any, lo_name: Optional[str] = None, loan: Any = None) -> dict:
+    def _loan_attr(attr: str, convert=None):
+        if not loan:
+            return None
+        val = getattr(loan, attr, None)
+        if val is None:
+            return None
+        return convert(val) if convert else val
+
     return ClientFileResponse(
         id=str(cf.id),
         org_id=str(cf.organization_id),
@@ -118,17 +126,17 @@ def _to_response(cf: Any, lo_name: Optional[str] = None, loan: Any = None) -> di
         last_contact_at=_iso(cf.last_contact_at),
         tags=cf.tags or [],
         active_loan_id=str(loan.id) if loan else None,
-        active_loan_program=cf.active_loan_program or (loan.program if loan else None),
-        active_loan_purpose=cf.active_loan_purpose or (loan.loan_type if loan else None),
-        active_loan_amount=float(loan.amount) if loan and loan.amount else (float(cf.active_loan_amount) if cf.active_loan_amount else None),
-        active_loan_fico=cf.active_loan_fico,
-        active_loan_lock_expires_at=_iso(cf.active_loan_lock_expires_at),
-        active_loan_projected_close_date=_iso(loan.closing_date) if loan and loan.closing_date else _iso(cf.active_loan_projected_close_date),
-        active_loan_stage=loan.stage if loan else None,
-        active_loan_type=loan.loan_type if loan else None,
-        active_loan_term=loan.term if loan else None,
-        active_loan_purchase_price=float(loan.purchase_price) if loan and loan.purchase_price else None,
-        active_loan_interest_rate=float(loan.rate) if loan and loan.rate else None,
+        active_loan_program=getattr(cf, 'active_loan_program', None) or _loan_attr('program'),
+        active_loan_purpose=getattr(cf, 'active_loan_purpose', None) or _loan_attr('loan_type'),
+        active_loan_amount=_loan_attr('amount', float) or (float(cf.active_loan_amount) if getattr(cf, 'active_loan_amount', None) else None),
+        active_loan_fico=getattr(cf, 'active_loan_fico', None),
+        active_loan_lock_expires_at=_iso(getattr(cf, 'active_loan_lock_expires_at', None)),
+        active_loan_projected_close_date=_iso(_loan_attr('closing_date')) or _iso(getattr(cf, 'active_loan_projected_close_date', None)),
+        active_loan_stage=_loan_attr('stage'),
+        active_loan_type=_loan_attr('loan_type'),
+        active_loan_term=_loan_attr('term'),
+        active_loan_purchase_price=_loan_attr('purchase_price', float),
+        active_loan_interest_rate=_loan_attr('rate', float),
         created_at=cf.created_at.isoformat(),
         updated_at=cf.updated_at.isoformat(),
     ).model_dump()
@@ -174,8 +182,17 @@ def get_client_file(
     current_user=Depends(get_current_user_dep()),
 ):
     cf = _get_cf(db, client_file_id, current_user.organization_id)
-    loan = _active_loan(db, cf, current_user.organization_id)
-    return _to_response(cf, _lo_name(db, cf.assigned_loan_officer_id), loan=loan)
+    try:
+        loan = _active_loan(db, cf, current_user.organization_id)
+    except Exception as e:
+        logger.exception("Failed to resolve active loan for client file %s", client_file_id)
+        loan = None
+    try:
+        lo_name = _lo_name(db, cf.assigned_loan_officer_id)
+    except Exception as e:
+        logger.exception("Failed to resolve LO name for client file %s", client_file_id)
+        lo_name = None
+    return _to_response(cf, lo_name, loan=loan)
 
 
 class ClientFilePatch(BaseModel):
