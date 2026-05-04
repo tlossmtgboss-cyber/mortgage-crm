@@ -3524,6 +3524,36 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"⚠️ Microsoft 365 scheduled tasks skipped: {e}")
 
+    # Outlook inbox/sent sync — pulls emails into timeline every 5 minutes
+    try:
+        from services.email_inbox_sync import sync_all_users as _email_sync_all
+
+        async def _email_inbox_sync_job():
+            from db import SessionLocal
+            db = SessionLocal()
+            try:
+                result = await _email_sync_all(db)
+                if result.get("stored") or result.get("matched"):
+                    logger.info(
+                        "Email inbox sync: users=%d stored=%d matched=%d",
+                        result.get("users", 0),
+                        result.get("stored", 0),
+                        result.get("matched", 0),
+                    )
+            except Exception as _e:
+                db.rollback()
+                logger.error(f"Email inbox sync failed: {_e}")
+            finally:
+                db.close()
+
+        scheduler.add_job(
+            _email_inbox_sync_job, "interval", minutes=5,
+            id="email_inbox_sync", replace_existing=True,
+        )
+        logger.info("✅ Email inbox sync scheduled (every 5m)")
+    except Exception as e:
+        logger.warning(f"⚠️ Email inbox sync skipped: {e}")
+
     # Dedicated executor for LangGraph workflows — keeps them off the main event loop
     from concurrent.futures import ThreadPoolExecutor
     langgraph_executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="langgraph")
