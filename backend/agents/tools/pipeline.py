@@ -973,3 +973,157 @@ def get_lo_pipeline_breakdown(
 
     except Exception as e:
         return ToolResult.error(f"Failed to get LO pipeline breakdown: {str(e)}")
+
+
+@mortgage_tool(
+    name="update_loan_fields",
+    description="Update one or more fields on a loan record. Supports all fields: stage, loan_type, program, amount, rate, term, purchase_price, down_payment, property info, team assignments (processor, underwriter, closer, realtor, title company, lender), key dates (closing, lock, lock_expiration), rate lock status, monthly payment, LTV, CLTV, loan_purpose, borrower info, and notes.",
+    agent_roles=["pipeline_analyst", "manager", "sales", "voice_os", "ai_receptionist"],
+    risk_level="medium",
+    requires_confirmation=True,
+    examples=[
+        "Move this loan to CTC",
+        "Update the closing date",
+        "Change the rate to 6.5%",
+        "Assign the processor",
+        "Update the loan amount",
+    ],
+)
+def update_loan_fields(
+    loan_id: int,
+    stage: Optional[str] = None,
+    loan_type: Optional[str] = None,
+    program: Optional[str] = None,
+    amount: Optional[float] = None,
+    purchase_price: Optional[float] = None,
+    down_payment: Optional[float] = None,
+    rate: Optional[float] = None,
+    term: Optional[int] = None,
+    property_address: Optional[str] = None,
+    property_city: Optional[str] = None,
+    property_state: Optional[str] = None,
+    property_zip: Optional[str] = None,
+    property_type: Optional[str] = None,
+    occupancy_type: Optional[str] = None,
+    borrower_name: Optional[str] = None,
+    borrower_email: Optional[str] = None,
+    borrower_phone: Optional[str] = None,
+    processor: Optional[str] = None,
+    underwriter: Optional[str] = None,
+    closer: Optional[str] = None,
+    realtor_agent: Optional[str] = None,
+    title_company: Optional[str] = None,
+    lender: Optional[str] = None,
+    loan_purpose: Optional[str] = None,
+    closing_date: Optional[str] = None,
+    lock_expiration_date: Optional[str] = None,
+    rate_lock_status: Optional[str] = None,
+    monthly_payment: Optional[float] = None,
+    ltv: Optional[float] = None,
+    cltv: Optional[float] = None,
+    loan_number: Optional[str] = None,
+    notes: Optional[str] = None,
+) -> ToolResult:
+    """Update any combination of fields on a loan record."""
+    try:
+        from sqlalchemy import text
+
+        loan_check = execute_single(
+            "SELECT id, borrower_name, loan_number, stage FROM loans WHERE id = :loan_id",
+            {"loan_id": loan_id}
+        )
+        if not loan_check:
+            return ToolResult.no_data(f"Loan {loan_id} not found")
+
+        updates = {}
+        if stage is not None:
+            updates["stage"] = stage.upper()
+        if loan_type is not None:
+            updates["loan_type"] = loan_type
+        if program is not None:
+            updates["program"] = program
+        if amount is not None:
+            updates["amount"] = amount
+        if purchase_price is not None:
+            updates["purchase_price"] = purchase_price
+        if down_payment is not None:
+            updates["down_payment"] = down_payment
+        if rate is not None:
+            updates["rate"] = rate
+        if term is not None:
+            updates["term"] = term
+        if property_address is not None:
+            updates["property_address"] = property_address
+        if property_city is not None:
+            updates["property_city"] = property_city
+        if property_state is not None:
+            updates["property_state"] = property_state
+        if property_zip is not None:
+            updates["property_zip"] = property_zip
+        if property_type is not None:
+            updates["property_type"] = property_type
+        if occupancy_type is not None:
+            updates["occupancy_type"] = occupancy_type
+        if borrower_name is not None:
+            updates["borrower_name"] = borrower_name
+        if borrower_email is not None:
+            updates["borrower_email"] = borrower_email
+        if borrower_phone is not None:
+            updates["borrower_phone"] = borrower_phone
+        if processor is not None:
+            updates["processor"] = processor
+        if underwriter is not None:
+            updates["underwriter"] = underwriter
+        if closer is not None:
+            updates["closer"] = closer
+        if realtor_agent is not None:
+            updates["realtor_agent"] = realtor_agent
+        if title_company is not None:
+            updates["title_company"] = title_company
+        if lender is not None:
+            updates["lender"] = lender
+        if loan_purpose is not None:
+            updates["loan_purpose"] = loan_purpose
+        if closing_date is not None:
+            updates["closing_date"] = closing_date
+        if lock_expiration_date is not None:
+            updates["lock_expiration_date"] = lock_expiration_date
+        if rate_lock_status is not None:
+            updates["rate_lock_status"] = rate_lock_status
+        if monthly_payment is not None:
+            updates["monthly_payment"] = monthly_payment
+        if ltv is not None:
+            updates["ltv"] = ltv
+        if cltv is not None:
+            updates["cltv"] = cltv
+        if loan_number is not None:
+            updates["loan_number"] = loan_number
+
+        if not updates and not notes:
+            return ToolResult.error("No fields provided to update")
+
+        set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
+        updates["loan_id"] = loan_id
+
+        if notes:
+            if set_clauses:
+                set_clauses += ", "
+            set_clauses += "ai_insights = COALESCE(ai_insights, '') || E'\\n' || :notes"
+            updates["notes"] = notes
+
+        with get_db() as db:
+            db.execute(
+                text(f"UPDATE loans SET {set_clauses}, updated_at = NOW() WHERE id = :loan_id"),
+                updates,
+            )
+
+        return ToolResult.success({
+            "loan_id": loan_id,
+            "borrower_name": loan_check["borrower_name"],
+            "loan_number": loan_check["loan_number"],
+            "fields_updated": [k for k in updates.keys() if k != "loan_id"],
+            "updated": True,
+        })
+
+    except Exception as e:
+        return ToolResult.error(f"Failed to update loan: {str(e)}")

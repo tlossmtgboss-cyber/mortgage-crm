@@ -717,3 +717,348 @@ async def email_daily_report(
     except Exception as e:
         logger.error("Email report send failed: %s", e)
         return {"error": f"Failed to send email: {e}"}
+
+
+# ─── Loan Endpoints ────────────────────────────────────────────────────────
+
+class LoanInfoRequest(BaseModel):
+    loan_id: Optional[int] = None
+    lead_id: Optional[int] = None
+    loan_number: Optional[str] = None
+    organization_id: Optional[int] = None
+
+
+class LoanUpdateRequest(BaseModel):
+    loan_id: int
+    stage: Optional[str] = None
+    loan_type: Optional[str] = None
+    program: Optional[str] = None
+    amount: Optional[float] = None
+    purchase_price: Optional[float] = None
+    down_payment: Optional[float] = None
+    rate: Optional[float] = None
+    term: Optional[int] = None
+    property_address: Optional[str] = None
+    property_city: Optional[str] = None
+    property_state: Optional[str] = None
+    property_zip: Optional[str] = None
+    property_type: Optional[str] = None
+    occupancy_type: Optional[str] = None
+    borrower_name: Optional[str] = None
+    borrower_email: Optional[str] = None
+    borrower_phone: Optional[str] = None
+    coborrower_name: Optional[str] = None
+    processor: Optional[str] = None
+    underwriter: Optional[str] = None
+    closer: Optional[str] = None
+    realtor_agent: Optional[str] = None
+    title_company: Optional[str] = None
+    lender: Optional[str] = None
+    loan_purpose: Optional[str] = None
+    closing_date: Optional[str] = None
+    lock_date: Optional[str] = None
+    lock_expiration_date: Optional[str] = None
+    rate_lock_status: Optional[str] = None
+    notes: Optional[str] = None
+    monthly_payment: Optional[float] = None
+    property_tax: Optional[float] = None
+    hazard_insurance: Optional[float] = None
+    mortgage_insurance: Optional[float] = None
+    hoa_amount: Optional[float] = None
+    ltv: Optional[float] = None
+    cltv: Optional[float] = None
+    loan_number: Optional[str] = None
+
+
+@router.post("/loan-info")
+async def loan_info(
+    req: LoanInfoRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Return comprehensive loan data — ALL fields for active loans and MUM."""
+    _verify_internal_key(request)
+    from database.models.lead_loan import Loan, Lead
+
+    loan = None
+    if req.loan_id:
+        q = db.query(Loan).filter(Loan.id == req.loan_id)
+        if req.organization_id:
+            q = q.filter(Loan.organization_id == req.organization_id)
+        loan = q.first()
+    elif req.loan_number:
+        q = db.query(Loan).filter(Loan.loan_number == req.loan_number)
+        if req.organization_id:
+            q = q.filter(Loan.organization_id == req.organization_id)
+        loan = q.first()
+    elif req.lead_id:
+        q = db.query(Lead).filter(Lead.id == req.lead_id)
+        if req.organization_id:
+            q = q.filter(Lead.organization_id == req.organization_id)
+        lead = q.first()
+        if lead:
+            loan = db.query(Loan).filter(Loan.lead_id == lead.id).order_by(Loan.created_at.desc()).first()
+
+    if not loan:
+        return {"error": "Loan not found"}
+
+    def _num(val):
+        return float(val) if val is not None else None
+
+    def _dt(val):
+        return val.isoformat() if val else None
+
+    return {
+        "id": loan.id,
+        "loan_number": loan.loan_number,
+        "organization_id": loan.organization_id,
+        "stage": loan.stage,
+        "program": loan.program,
+        "loan_type": loan.loan_type,
+        "loan_purpose": getattr(loan, "loan_purpose", None),
+        # Borrower
+        "borrower_name": loan.borrower_name,
+        "borrower_email": loan.borrower_email,
+        "borrower_phone": loan.borrower_phone,
+        "preferred_communication": loan.preferred_communication,
+        "coborrower_name": loan.coborrower_name,
+        "co_borrower_email": loan.co_borrower_email,
+        "co_borrower_phone": loan.co_borrower_phone,
+        # Financials
+        "amount": _num(loan.amount),
+        "purchase_price": _num(loan.purchase_price),
+        "down_payment": _num(loan.down_payment),
+        "rate": _num(loan.rate),
+        "term": loan.term,
+        "monthly_payment": _num(getattr(loan, "monthly_payment", None)),
+        "property_tax": _num(getattr(loan, "property_tax", None)),
+        "hazard_insurance": _num(getattr(loan, "hazard_insurance", None)),
+        "mortgage_insurance": _num(getattr(loan, "mortgage_insurance", None)),
+        "hoa_amount": _num(getattr(loan, "hoa_amount", None)),
+        "origination_fee": _num(getattr(loan, "origination_fee", None)),
+        "points": _num(getattr(loan, "points", None)),
+        "ltv": _num(getattr(loan, "ltv", None)),
+        "cltv": _num(getattr(loan, "cltv", None)),
+        "rate_type": getattr(loan, "rate_type", None),
+        # Property
+        "property_address": loan.property_address,
+        "property_city": loan.property_city,
+        "property_state": loan.property_state,
+        "property_zip": loan.property_zip,
+        "property_type": getattr(loan, "property_type", None),
+        "occupancy_type": getattr(loan, "occupancy_type", None),
+        "property_county": getattr(loan, "property_county", None),
+        "property_units": getattr(loan, "property_units", None),
+        # Team
+        "loan_officer_id": loan.loan_officer_id,
+        "loan_officer_name": loan.loan_officer_name,
+        "loan_officer_email": loan.loan_officer_email,
+        "processor": loan.processor,
+        "processor_email": loan.processor_email,
+        "underwriter": loan.underwriter,
+        "underwriter_email": loan.underwriter_email,
+        "closer": loan.closer,
+        "closer_email": loan.closer_email,
+        "production_assistant": loan.production_assistant,
+        "realtor_agent": loan.realtor_agent,
+        "title_company": loan.title_company,
+        "lender": loan.lender,
+        # Key dates
+        "lock_date": _dt(loan.lock_date),
+        "closing_date": _dt(loan.closing_date),
+        "funded_date": _dt(loan.funded_date),
+        "application_date": _dt(getattr(loan, "application_date", None)),
+        "contract_received_date": _dt(getattr(loan, "contract_received_date", None)),
+        "conditional_approval_date": _dt(getattr(loan, "conditional_approval_date", None)),
+        "clear_to_close_date": _dt(getattr(loan, "clear_to_close_date", None)),
+        "docs_ordered_date": _dt(getattr(loan, "docs_ordered_date", None)),
+        "docs_out_date": _dt(getattr(loan, "docs_out_date", None)),
+        "scheduled_closing_date": _dt(getattr(loan, "scheduled_closing_date", None)),
+        "scheduled_funding_date": _dt(getattr(loan, "scheduled_funding_date", None)),
+        # Rate Lock
+        "lock_expiration_date": _dt(loan.lock_expiration_date),
+        "rate_lock_status": loan.rate_lock_status.value if hasattr(loan.rate_lock_status, "value") else str(loan.rate_lock_status) if loan.rate_lock_status else None,
+        "lock_term_days": loan.lock_term_days,
+        "float_down_available": loan.float_down_available,
+        "volatility_score": loan.volatility_score,
+        # Appraisal
+        "appraisal_ordered_date": _dt(loan.appraisal_ordered_date),
+        "appraisal_scheduled_date": _dt(loan.appraisal_scheduled_date),
+        "appraisal_completed_date": _dt(loan.appraisal_completed_date),
+        "appraisal_value": _num(loan.appraisal_value),
+        "appraisal_received_date": _dt(loan.appraisal_received_date),
+        # Title & Insurance
+        "title_ordered_date": _dt(loan.title_ordered_date),
+        "title_received_date": _dt(loan.title_received_date),
+        "insurance_ordered_date": _dt(loan.insurance_ordered_date),
+        "insurance_received_date": _dt(loan.insurance_received_date),
+        # SLA
+        "days_in_stage": loan.days_in_stage,
+        "sla_status": loan.sla_status,
+        "predicted_close_date": _dt(loan.predicted_close_date),
+        "risk_score": loan.risk_score,
+        "stage_changed_at": _dt(loan.stage_changed_at),
+        # AMR / MUM
+        "mum_date": _dt(getattr(loan, "mum_date", None)),
+        "last_amr_date": _dt(loan.last_amr_date),
+        "next_amr_date": _dt(loan.next_amr_date),
+        "refi_opportunity_score": loan.refi_opportunity_score,
+        # Timestamps
+        "created_at": _dt(loan.created_at),
+        "updated_at": _dt(loan.updated_at),
+    }
+
+
+@router.post("/update-loan")
+async def update_loan_endpoint(
+    req: LoanUpdateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Update loan fields — supports all active loan and MUM fields."""
+    _verify_internal_key(request)
+    from database.models.lead_loan import Loan
+    from datetime import datetime as dt_cls
+
+    loan = db.query(Loan).filter(Loan.id == req.loan_id).first()
+    if not loan:
+        return {"error": f"Loan {req.loan_id} not found"}
+
+    updated_fields = []
+
+    if req.stage:
+        loan.stage = req.stage
+        updated_fields.append("stage")
+    if req.loan_type:
+        loan.loan_type = req.loan_type
+        updated_fields.append("loan_type")
+    if req.program:
+        loan.program = req.program
+        updated_fields.append("program")
+    if req.amount is not None:
+        loan.amount = req.amount
+        updated_fields.append("amount")
+    if req.purchase_price is not None:
+        loan.purchase_price = req.purchase_price
+        updated_fields.append("purchase_price")
+    if req.down_payment is not None:
+        loan.down_payment = req.down_payment
+        updated_fields.append("down_payment")
+    if req.rate is not None:
+        loan.rate = req.rate
+        updated_fields.append("rate")
+    if req.term is not None:
+        loan.term = req.term
+        updated_fields.append("term")
+    if req.property_address:
+        loan.property_address = req.property_address
+        updated_fields.append("property_address")
+    if req.property_city:
+        loan.property_city = req.property_city
+        updated_fields.append("property_city")
+    if req.property_state:
+        loan.property_state = req.property_state
+        updated_fields.append("property_state")
+    if req.property_zip:
+        loan.property_zip = req.property_zip
+        updated_fields.append("property_zip")
+    if req.property_type:
+        loan.property_type = req.property_type
+        updated_fields.append("property_type")
+    if req.occupancy_type:
+        loan.occupancy_type = req.occupancy_type
+        updated_fields.append("occupancy_type")
+    if req.borrower_name:
+        loan.borrower_name = req.borrower_name
+        updated_fields.append("borrower_name")
+    if req.borrower_email:
+        loan.borrower_email = req.borrower_email
+        updated_fields.append("borrower_email")
+    if req.borrower_phone:
+        loan.borrower_phone = req.borrower_phone
+        updated_fields.append("borrower_phone")
+    if req.coborrower_name:
+        loan.coborrower_name = req.coborrower_name
+        updated_fields.append("coborrower_name")
+    if req.processor:
+        loan.processor = req.processor
+        updated_fields.append("processor")
+    if req.underwriter:
+        loan.underwriter = req.underwriter
+        updated_fields.append("underwriter")
+    if req.closer:
+        loan.closer = req.closer
+        updated_fields.append("closer")
+    if req.realtor_agent:
+        loan.realtor_agent = req.realtor_agent
+        updated_fields.append("realtor_agent")
+    if req.title_company:
+        loan.title_company = req.title_company
+        updated_fields.append("title_company")
+    if req.lender:
+        loan.lender = req.lender
+        updated_fields.append("lender")
+    if req.loan_purpose:
+        loan.loan_purpose = req.loan_purpose
+        updated_fields.append("loan_purpose")
+    if req.closing_date:
+        try:
+            loan.closing_date = dt_cls.fromisoformat(req.closing_date)
+            updated_fields.append("closing_date")
+        except ValueError:
+            pass
+    if req.lock_date:
+        try:
+            loan.lock_date = dt_cls.fromisoformat(req.lock_date)
+            updated_fields.append("lock_date")
+        except ValueError:
+            pass
+    if req.lock_expiration_date:
+        try:
+            loan.lock_expiration_date = dt_cls.fromisoformat(req.lock_expiration_date)
+            updated_fields.append("lock_expiration_date")
+        except ValueError:
+            pass
+    if req.rate_lock_status:
+        loan.rate_lock_status = req.rate_lock_status
+        updated_fields.append("rate_lock_status")
+    if req.monthly_payment is not None:
+        loan.monthly_payment = req.monthly_payment
+        updated_fields.append("monthly_payment")
+    if req.property_tax is not None:
+        loan.property_tax = req.property_tax
+        updated_fields.append("property_tax")
+    if req.hazard_insurance is not None:
+        loan.hazard_insurance = req.hazard_insurance
+        updated_fields.append("hazard_insurance")
+    if req.mortgage_insurance is not None:
+        loan.mortgage_insurance = req.mortgage_insurance
+        updated_fields.append("mortgage_insurance")
+    if req.hoa_amount is not None:
+        loan.hoa_amount = req.hoa_amount
+        updated_fields.append("hoa_amount")
+    if req.ltv is not None:
+        loan.ltv = req.ltv
+        updated_fields.append("ltv")
+    if req.cltv is not None:
+        loan.cltv = req.cltv
+        updated_fields.append("cltv")
+    if req.loan_number:
+        loan.loan_number = req.loan_number
+        updated_fields.append("loan_number")
+    if req.notes:
+        loan.ai_insights = (loan.ai_insights or "") + f"\n{req.notes}" if loan.ai_insights else req.notes
+        updated_fields.append("notes")
+
+    if not updated_fields:
+        return {"error": "No fields to update"}
+
+    db.commit()
+
+    return {
+        "loan_id": loan.id,
+        "loan_number": loan.loan_number,
+        "borrower_name": loan.borrower_name,
+        "updated": True,
+        "fields_updated": updated_fields,
+    }

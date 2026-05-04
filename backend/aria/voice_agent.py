@@ -653,6 +653,167 @@ class AriaVoiceAgent(Agent):
         )
         return json.dumps(result, default=str)
 
+    @function_tool()
+    async def get_loan_details(
+        self,
+        context: RunContext,
+        loan_id: str = "",
+        lead_id: str = "",
+        loan_number: str = "",
+    ):
+        """Get ALL details for a loan — financials, property, team, dates, rate lock, appraisal, SLA, and MUM info.
+        Look up by loan_id, lead_id, or loan_number. Use for active loans AND funded/closed (MUM) records."""
+        params: Dict[str, Any] = {}
+        if loan_id:
+            params["loan_id"] = int(loan_id)
+        elif lead_id:
+            params["lead_id"] = int(lead_id)
+        elif loan_number:
+            params["loan_number"] = loan_number
+        else:
+            return json.dumps({"error": "Provide loan_id, lead_id, or loan_number."})
+        result = await self._call_backend("/internal/aria/loan-info", params)
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def update_loan(
+        self,
+        context: RunContext,
+        loan_id: str,
+        stage: str = "",
+        loan_type: str = "",
+        program: str = "",
+        amount: str = "",
+        purchase_price: str = "",
+        down_payment: str = "",
+        rate: str = "",
+        term: str = "",
+        property_address: str = "",
+        property_city: str = "",
+        property_state: str = "",
+        property_zip: str = "",
+        property_type: str = "",
+        occupancy_type: str = "",
+        borrower_name: str = "",
+        borrower_email: str = "",
+        borrower_phone: str = "",
+        coborrower_name: str = "",
+        processor: str = "",
+        underwriter: str = "",
+        closer: str = "",
+        realtor_agent: str = "",
+        title_company: str = "",
+        lender: str = "",
+        loan_purpose: str = "",
+        closing_date: str = "",
+        lock_date: str = "",
+        lock_expiration_date: str = "",
+        rate_lock_status: str = "",
+        notes: str = "",
+        monthly_payment: str = "",
+        ltv: str = "",
+        loan_number: str = "",
+    ):
+        """Update any field on a loan record. Supports ALL fields: stage, financials (amount, rate, term, purchase_price, down_payment), property info, team (processor, underwriter, closer, realtor), dates (closing, lock), rate lock status, monthly payment, LTV, and more.
+        Use for active loans AND funded/closed (MUM) records."""
+        if not loan_id:
+            return json.dumps({"error": "loan_id is required."})
+        payload: Dict[str, Any] = {"loan_id": int(loan_id)}
+        if stage:
+            payload["stage"] = stage
+        if loan_type:
+            payload["loan_type"] = loan_type
+        if program:
+            payload["program"] = program
+        if amount:
+            try:
+                payload["amount"] = float(amount.replace(",", "").replace("$", ""))
+            except ValueError:
+                pass
+        if purchase_price:
+            try:
+                payload["purchase_price"] = float(purchase_price.replace(",", "").replace("$", ""))
+            except ValueError:
+                pass
+        if down_payment:
+            try:
+                payload["down_payment"] = float(down_payment.replace(",", "").replace("$", ""))
+            except ValueError:
+                pass
+        if rate:
+            try:
+                payload["rate"] = float(rate.replace("%", ""))
+            except ValueError:
+                pass
+        if term:
+            try:
+                payload["term"] = int(term)
+            except ValueError:
+                pass
+        if property_address:
+            payload["property_address"] = property_address
+        if property_city:
+            payload["property_city"] = property_city
+        if property_state:
+            payload["property_state"] = property_state
+        if property_zip:
+            payload["property_zip"] = property_zip
+        if property_type:
+            payload["property_type"] = property_type
+        if occupancy_type:
+            payload["occupancy_type"] = occupancy_type
+        if borrower_name:
+            payload["borrower_name"] = borrower_name
+        if borrower_email:
+            payload["borrower_email"] = borrower_email
+        if borrower_phone:
+            payload["borrower_phone"] = borrower_phone
+        if coborrower_name:
+            payload["coborrower_name"] = coborrower_name
+        if processor:
+            payload["processor"] = processor
+        if underwriter:
+            payload["underwriter"] = underwriter
+        if closer:
+            payload["closer"] = closer
+        if realtor_agent:
+            payload["realtor_agent"] = realtor_agent
+        if title_company:
+            payload["title_company"] = title_company
+        if lender:
+            payload["lender"] = lender
+        if loan_purpose:
+            payload["loan_purpose"] = loan_purpose
+        if closing_date:
+            payload["closing_date"] = closing_date
+        if lock_date:
+            payload["lock_date"] = lock_date
+        if lock_expiration_date:
+            payload["lock_expiration_date"] = lock_expiration_date
+        if rate_lock_status:
+            payload["rate_lock_status"] = rate_lock_status
+        if notes:
+            payload["notes"] = notes
+        if monthly_payment:
+            try:
+                payload["monthly_payment"] = float(monthly_payment.replace(",", "").replace("$", ""))
+            except ValueError:
+                pass
+        if ltv:
+            try:
+                payload["ltv"] = float(ltv.replace("%", ""))
+            except ValueError:
+                pass
+        if loan_number:
+            payload["loan_number"] = loan_number
+        result = await self._call_backend("/internal/aria/update-loan", payload)
+        self._session_data["tools_executed"].append({
+            "tool": "update_loan",
+            "loan_id": loan_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
     # ─── Voicemail Drop Tool ─────────────────────────────────────────
 
     @function_tool()
