@@ -67,7 +67,7 @@ def _build_intents() -> List[Intent]:
 
         Intent(
             name="send_preapproval_letter",
-            description="Generate and send a mortgage pre-approval letter to a realtor or borrower via email or SMS",
+            description="Generate and send a mortgage pre-approval letter with review-edit loop for all fields",
             category="documents",
             trigger_phrases=[
                 "send a pre-approval letter",
@@ -83,17 +83,14 @@ def _build_intents() -> List[Intent]:
                 "text the pre-approval to",
             ],
             required_slots=[
-                SlotSpec("borrower_id",      "Which borrower this letter is for",                  "borrower",  extraction_hint="borrower name or loan number"),
-                SlotSpec("recipient",        "Who to send the letter to — name, email, or phone",  "contact",   extraction_hint="recipient name, email address, or phone number"),
-                SlotSpec("approval_amount",  "Dollar amount to show on the letter",                 "number",    extraction_hint="dollar amount, may say 'full amount' or specific figure"),
+                SlotSpec("borrower_id", "Which borrower this letter is for", "borrower",
+                         extraction_hint="borrower name or loan number"),
             ],
             optional_slots=[
-                SlotSpec("delivery_channel", "How to deliver: email or sms",                        "choice",  required=False, default="email",
+                SlotSpec("delivery_channel", "How to deliver: email or sms", "choice",
+                         required=False, default="email",
                          choices=["email", "sms"],
-                         extraction_hint="'via sms', 'via text', 'text it', 'by text' = sms. 'via email', 'email it' = email. Default: email"),
-                SlotSpec("property_address", "Property address if specific property is involved",   "text",    required=False),
-                SlotSpec("expiry_days",      "How many days until the letter expires (default 30)", "number",  required=False, default=30),
-                SlotSpec("custom_note",      "Any custom note to include",                          "text",    required=False),
+                         extraction_hint="'via sms', 'via text', 'text it' = sms. Default: email"),
             ],
         ),
 
@@ -172,9 +169,14 @@ def _build_intents() -> List[Intent]:
 
         Intent(
             name="schedule_call",
-            description="Schedule a call and send a calendar invite",
-            category="communication",
-            trigger_phrases=["schedule a call", "book a call", "set up a call", "schedule time with"],
+            description="Schedule a call or meeting on your calendar with a borrower, realtor, or contact — books a real appointment, syncs to Outlook, and sends a calendar invite",
+            category="calendar",
+            trigger_phrases=[
+                "schedule a call", "book a call", "set up a call", "schedule time with",
+                "put on my calendar", "book a meeting", "schedule a meeting",
+                "calendar invite", "set up a meeting with", "book time with",
+                "schedule an appointment", "put a meeting on my calendar",
+            ],
             required_slots=[
                 SlotSpec("with_person", "Who to schedule the call with", "contact"),
                 SlotSpec("call_date",   "Date for the call",             "date"),
@@ -184,6 +186,25 @@ def _build_intents() -> List[Intent]:
                 SlotSpec("duration_minutes", "Duration in minutes (default 30)", "number", required=False, default=30),
                 SlotSpec("call_topic",       "What the call is about",           "text",   required=False),
             ],
+        ),
+
+        Intent(
+            name="check_my_schedule",
+            description="Check your calendar availability, see upcoming appointments, or find open time slots",
+            category="calendar",
+            trigger_phrases=[
+                "check my calendar", "what's on my calendar", "am I free",
+                "when am I available", "show my schedule", "what do I have today",
+                "my appointments", "upcoming meetings", "when is my next meeting",
+                "do I have anything", "what's my schedule look like",
+                "find an open time", "when can I meet", "available slots",
+            ],
+            required_slots=[],
+            optional_slots=[
+                SlotSpec("date_range", "Date or range to check (default: today + next 3 days)", "text", required=False, default="next 3 days"),
+                SlotSpec("duration_minutes", "Meeting length to find slots for (default 30)", "number", required=False, default=30),
+            ],
+            requires_confirmation=False,
         ),
 
         # ── Pipeline actions ────────────────────────────────────────────────────
@@ -291,6 +312,28 @@ def _build_intents() -> List[Intent]:
             trigger_phrases=["income analysis", "calculate income", "qualifying income for", "what income qualifies"],
             required_slots=[
                 SlotSpec("borrower_id", "Which borrower", "borrower"),
+            ],
+            requires_confirmation=False,
+        ),
+
+        Intent(
+            name="check_pos_applications",
+            description="Check which borrowers have started but not completed their online application (POS/1003)",
+            category="lookup",
+            trigger_phrases=[
+                "who hasn't finished their application",
+                "incomplete applications",
+                "stalled POS apps",
+                "who started an application",
+                "unfinished 1003s",
+                "abandoned applications",
+                "stalled applications",
+                "POS applications",
+                "who hasn't completed their app",
+            ],
+            required_slots=[],
+            optional_slots=[
+                SlotSpec("date_range", "Filter by date range", "text", required=False, default="all"),
             ],
             requires_confirmation=False,
         ),

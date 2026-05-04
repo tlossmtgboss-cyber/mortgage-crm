@@ -12,7 +12,7 @@ and returns a result dict describing what was done.
 import asyncio
 import logging
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 from uuid import uuid4
 
 from aria.documents.document_generator import DocumentGenerator
@@ -40,6 +40,7 @@ class TaskExecutor:
             "send_sms":                   self._send_sms,
             "send_email":                 self._send_email,
             "schedule_call":              self._schedule_call,
+            "check_my_schedule":          self._check_my_schedule,
             "update_loan_status":         self._update_loan_status,
             "add_loan_note":              self._add_loan_note,
             "create_task":                self._create_task,
@@ -48,6 +49,7 @@ class TaskExecutor:
             "mortgage_guideline_question":self._guideline_question,
             "pipeline_report":            self._pipeline_report,
             "run_income_analysis":        self._income_analysis,
+            "check_pos_applications":     self._check_pos_applications,
         }
 
     async def execute(
@@ -64,31 +66,85 @@ class TaskExecutor:
     # ── Document handlers ───────────────────────────────────────────────────
 
     async def _send_preapproval_letter(self, slots, user_id, org_id) -> Dict:
+        """Review-edit loop: auto-populate from CRM, present, allow edits, then send."""
         borrower = await self.crm.get_borrower(slots["borrower_id"], org_id)
         if not borrower:
             raise ValueError(f"Borrower not found: {slots['borrower_id']}")
 
         loan = await self.crm.get_active_loan(borrower["id"], org_id)
-        lo   = await self.crm.get_user(user_id)
+        lo = await self.crm.get_user(user_id)
+
+        purchase_price = loan.get("purchase_price") if loan else None
+        loan_amount = loan.get("loan_amount") if loan else None
+        loan_type = loan.get("loan_type", "Conventional") if loan else "Conventional"
+        property_address = loan.get("property_address") if loan else None
+        approval_amount = slots.get("approval_amount") or loan_amount
+
+        if slots.get("purchase_price"):
+            purchase_price = float(slots["purchase_price"])
+        if slots.get("loan_amount"):
+            loan_amount = float(slots["loan_amount"])
+        if slots.get("approval_amount"):
+            approval_amount = float(slots["approval_amount"])
+        if slots.get("property_address"):
+            property_address = slots["property_address"]
+        if slots.get("property_address_tbd"):
+            property_address = "TBD"
+
+        if not approval_amount:
+            raise ValueError("Could not determine approval amount — no loan data found for this borrower.")
 
         doc_result = await self.docs.generate_preapproval_letter(
             borrower=borrower, loan=loan, lo=lo,
-            approval_amount=float(slots["approval_amount"]),
-            property_address=slots.get("property_address"),
+            approval_amount=float(approval_amount),
+            property_address=property_address,
             expiry_days=int(slots.get("expiry_days", 30)),
             custom_note=slots.get("custom_note"),
         )
 
+        recipient = slots.get("recipient")
         delivery_channel = (slots.get("delivery_channel") or "email").lower().strip()
+
+        if not recipient:
+            realtor = await self._find_associated_realtor(borrower["id"], org_id)
+            if realtor:
+                recipient = realtor.get("name") or realtor.get("email")
+            else:
+                raise ValueError(
+                    "Who should I send this to? I don't see an agent on this file."
+                )
 
         if delivery_channel == "sms":
             return await self._deliver_preapproval_via_sms(
-                slots, borrower, loan, lo, doc_result, user_id, org_id,
+                slots={**slots, "recipient": recipient, "approval_amount": approval_amount},
+                borrower=borrower, loan=loan, lo=lo,
+                doc_result=doc_result, user_id=user_id, org_id=org_id,
             )
-
         return await self._deliver_preapproval_via_email(
-            slots, borrower, loan, lo, doc_result, user_id,
+            slots={**slots, "recipient": recipient, "approval_amount": approval_amount},
+            borrower=borrower, loan=loan, lo=lo,
+            doc_result=doc_result, user_id=user_id,
         )
+
+    async def _find_associated_realtor(self, lead_id: int, org_id: str) -> Optional[Dict]:
+        """Check if there's a realtor/referral partner associated with this lead."""
+        def _query():
+            db_session = __import__('db', fromlist=['SessionLocal']).SessionLocal()
+            try:
+                from sqlalchemy import text
+                row = db_session.execute(text(
+                    "SELECT rp.id, rp.name, rp.email, rp.phone "
+                    "FROM referral_partners rp "
+                    "JOIN leads ld ON ld.referral_partner_id = rp.id "
+                    "WHERE ld.id = :lead_id AND rp.organization_id = :org_id "
+                    "LIMIT 1"
+                ), {"lead_id": lead_id, "org_id": org_id}).fetchone()
+                if row:
+                    return {"id": row[0], "name": row[1], "email": row[2], "phone": row[3]}
+                return None
+            finally:
+                db_session.close()
+        return await asyncio.to_thread(_query)
 
     async def _deliver_preapproval_via_email(
         self, slots, borrower, loan, lo, doc_result, user_id,
@@ -330,7 +386,12 @@ class TaskExecutor:
 
     async def _schedule_call(self, slots, user_id, org_id) -> Dict:
         contact = await self.crm.resolve_contact(slots["with_person"], org_id)
-        lo      = await self.crm.get_user(user_id)
+        if not contact:
+            return {
+                "action": "schedule_failed",
+                "error": f"Could not find a contact named '{slots['with_person']}'.",
+            }
+        lo = await self.crm.get_user(user_id)
 
         result = await self.comms.schedule_call(
             with_contact=contact, lo=lo,
@@ -339,8 +400,118 @@ class TaskExecutor:
             topic=slots.get("call_topic", ""),
         )
 
-        return {"action": "call_scheduled", "with": contact["name"],
-                "datetime": result["datetime"], "calendar_link": result.get("calendar_link")}
+        return {
+            "action": "call_scheduled",
+            "with": contact["name"],
+            "datetime": result["datetime"],
+            "calendar_link": result.get("calendar_link"),
+            "appointment_id": result.get("appointment_id"),
+            "outlook_synced": result.get("outlook_synced", False),
+            "invite_sent": result.get("invite_sent", False),
+            "sms_sent": result.get("sms_sent", False),
+            "note": result.get("note", ""),
+        }
+
+    async def _check_my_schedule(self, slots, user_id, org_id) -> Dict:
+        from dateutil import parser as dtparser
+        from datetime import date as date_type, timedelta
+
+        date_range = slots.get("date_range", "next 3 days")
+        duration = int(slots.get("duration_minutes", 30))
+
+        date_from = None
+        date_to = None
+        range_lower = date_range.lower().strip()
+        today = date_type.today()
+
+        if "today" in range_lower:
+            date_from = today.isoformat()
+            date_to = today.isoformat()
+        elif "tomorrow" in range_lower:
+            date_from = (today + timedelta(days=1)).isoformat()
+            date_to = (today + timedelta(days=1)).isoformat()
+        elif "this week" in range_lower:
+            date_from = today.isoformat()
+            days_until_friday = (4 - today.weekday()) % 7
+            date_to = (today + timedelta(days=max(days_until_friday, 1))).isoformat()
+        elif "next week" in range_lower:
+            days_until_monday = (7 - today.weekday()) % 7
+            if days_until_monday == 0:
+                days_until_monday = 7
+            next_monday = today + timedelta(days=days_until_monday)
+            date_from = next_monday.isoformat()
+            date_to = (next_monday + timedelta(days=4)).isoformat()
+        else:
+            try:
+                parsed = dtparser.parse(date_range, fuzzy=True).date()
+                date_from = parsed.isoformat()
+                date_to = parsed.isoformat()
+            except (ValueError, TypeError):
+                date_from = today.isoformat()
+                date_to = (today + timedelta(days=3)).isoformat()
+
+        result = await self.comms.get_schedule(
+            lo_id=int(user_id),
+            org_id=org_id,
+            date_from=date_from,
+            date_to=date_to,
+            duration_minutes=duration,
+        )
+
+        return {
+            "action": "schedule_checked",
+            "date_range": result["date_range"],
+            "upcoming_count": result["upcoming_count"],
+            "upcoming": result["upcoming"],
+            "available_slots_count": result["available_slots_count"],
+            "available_slots": result["available_slots"],
+        }
+
+    async def _check_pos_applications(self, slots, user_id, org_id) -> Dict:
+        """Check for incomplete POS applications and return summary."""
+        def _query():
+            from db import SessionLocal
+            from sqlalchemy import text
+            db = SessionLocal()
+            try:
+                rows = db.execute(text(
+                    "SELECT pa.id, pa.current_step, pa.completion_pct, "
+                    "pa.created_at, pa.updated_at, "
+                    "ld.name, ld.email, ld.phone "
+                    "FROM pos_applications pa "
+                    "LEFT JOIN leads ld ON pa.contact_id = ld.id "
+                    "WHERE pa.organization_id = :org_id "
+                    "AND pa.status = 'draft' "
+                    "ORDER BY pa.updated_at DESC"
+                ), {"org_id": org_id}).fetchall()
+                return rows
+            finally:
+                db.close()
+
+        rows = await asyncio.to_thread(_query)
+
+        apps = []
+        for r in rows:
+            apps.append({
+                "application_id": str(r[0]),
+                "current_step": r[1],
+                "completion_pct": r[2],
+                "started": r[3].isoformat() if r[3] else None,
+                "last_activity": r[4].isoformat() if r[4] else None,
+                "borrower_name": r[5] or "Unknown",
+                "borrower_email": r[6],
+                "borrower_phone": r[7],
+            })
+
+        lo = await self.crm.get_user(user_id)
+
+        return {
+            "action": "pos_applications_checked",
+            "total_incomplete": len(apps),
+            "applications": apps[:20],
+            "lo_email": lo.get("email") if lo else None,
+            "summary_mode": "full" if len(apps) <= 5 else "top_3",
+        }
 
     # ── Pipeline handlers ────────────────────────────────────────────────────
 

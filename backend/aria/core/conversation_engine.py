@@ -30,6 +30,7 @@ from typing_extensions import TypedDict
 
 from aria.core.intent_registry import IntentRegistry, Intent, SlotSpec
 from aria.core.context_loader import AriaContextLoader
+from aria.core.mode_router import classify_mode, AriaMode
 from aria.tasks.task_executor import TaskExecutor
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,7 @@ class AriaState(TypedDict):
     org_id: str
     user_name: str
     user_role: str
+    mode: Optional[str]
 
     # Operational
     iteration_count: int
@@ -97,6 +99,10 @@ Today is {now}.
   you mention it naturally without being preachy
 - You confirm before doing anything irreversible (sending emails, updating records)
 - You ask ONE question at a time when gathering information — never fire a list of questions
+
+## Greeting
+When starting a new conversation, greet the LO by first name: "Hey {user_name}, what can I help you with?"
+If the user name is unknown, use "Hey there" instead.
 
 ## What you can do
 - Send pre-approval letters, conditional approval letters, LOEs, adverse action notices
@@ -404,6 +410,72 @@ Write a brief, warm completion message that:
     }
 
 
+async def query_mode_node(state: AriaState) -> AriaState:
+    """Agentic query mode — Claude picks tools, chains queries, synthesizes answer."""
+    import json as _json
+    import anthropic
+    import os
+
+    from aria.tools.crm_query_tools import QUERY_TOOL_DEFINITIONS, execute_query_tool
+
+    question = state["messages"][-1].content if state["messages"] else ""
+    org_id = state["org_id"]
+    user_id = state["user_id"]
+
+    client = anthropic.AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY", ""))
+
+    context_loader = AriaContextLoader()
+    context = await context_loader.load_full(user_id)
+    system = build_aria_system_prompt(context)
+
+    messages = [{"role": "user", "content": question}]
+
+    response = await client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=1024,
+        temperature=0.3,
+        system=system + "\n\nYou have access to CRM query tools. Use them to answer the LO's question. Chain multiple tools if needed. Be specific with numbers and names.",
+        messages=messages,
+        tools=QUERY_TOOL_DEFINITIONS,
+    )
+
+    for _ in range(3):
+        tool_blocks = [b for b in response.content if b.type == "tool_use"]
+        if not tool_blocks:
+            break
+
+        tool_results = []
+        for block in tool_blocks:
+            result = execute_query_tool(
+                block.name, org_id=org_id, user_id=user_id, **block.input
+            )
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": _json.dumps(result, default=str),
+            })
+
+        messages.append({"role": "assistant", "content": response.content})
+        messages.append({"role": "user", "content": tool_results})
+
+        response = await client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            temperature=0.3,
+            system=system,
+            messages=messages,
+            tools=QUERY_TOOL_DEFINITIONS,
+        )
+
+    text_blocks = [b.text for b in response.content if hasattr(b, "text")]
+    answer = "\n".join(text_blocks) or "I couldn't find that information."
+
+    return {
+        "messages": [AIMessage(content=answer)],
+        "phase": DialoguePhase.RESPONDING,
+    }
+
+
 # ─── Entry router nodes ──────────────────────────────────────────────────────
 
 MAX_SLOT_ITERATIONS = 15
@@ -417,6 +489,12 @@ async def dispatch_node(state: AriaState) -> dict:
             "phase": DialoguePhase.RESPONDING,
             "error": "I seem to be going in circles. Let me start fresh — what would you like to do?",
         }
+
+    if not state.get("intent") and not state.get("mode"):
+        last_message = state["messages"][-1].content if state["messages"] else ""
+        mode = await classify_mode(last_message)
+        return {"mode": mode.value}
+
     return {}
 
 
@@ -442,6 +520,10 @@ def route_dispatch(state: AriaState) -> str:
     # User responding to confirmation prompt
     if phase == DialoguePhase.CONFIRMING:
         return "check_confirm"
+
+    mode = state.get("mode")
+    if mode == AriaMode.QUERY.value:
+        return "query_mode"
 
     # Default: NLU on the new message
     return "nlu"
@@ -505,6 +587,7 @@ def build_aria_graph() -> StateGraph:
     graph.add_node("check_confirm", check_confirm_node)
     graph.add_node("execute",       execute_node)
     graph.add_node("response",      response_node)
+    graph.add_node("query_mode",    query_mode_node)
 
     # Entry point — dispatch routes based on current dialogue phase
     graph.set_entry_point("dispatch")
@@ -514,6 +597,7 @@ def build_aria_graph() -> StateGraph:
         "slot_answer":   "slot_answer",
         "check_confirm": "check_confirm",
         "response":      "response",
+        "query_mode":    "query_mode",
     })
 
     # NLU routes: chitchat → response, missing slots → slot_fill, ready → confirmation
@@ -544,6 +628,9 @@ def build_aria_graph() -> StateGraph:
         "response": "response",
         "nlu":      "nlu",
     })
+
+    # Query mode → END
+    graph.add_edge("query_mode", END)
 
     # Execute → response → END
     graph.add_edge("execute", "response")

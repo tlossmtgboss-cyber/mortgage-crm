@@ -222,6 +222,78 @@ def _handle_inbound_message(db: Session, payload: dict) -> dict:
                 "from": from_phone,
             }
 
+        # ── Campaign reply routing ───────────────────────────────────────
+        # Check if this inbound message is a reply to an Aria campaign.
+        # Must run AFTER keyword handling (STOP/START always takes priority)
+        # but BEFORE normal inbound storage / auto-responder.
+        try:
+            from aria.campaigns.reply_handler import CampaignReplyHandler
+            import asyncio as _asyncio
+
+            # Resolve organization_id for this phone number
+            _org_id = None
+            try:
+                from sqlalchemy import text as _org_text
+                _org_row = db.execute(
+                    _org_text(
+                        "SELECT organization_id FROM verified_caller_ids "
+                        "WHERE phone_number = :phone AND organization_id IS NOT NULL LIMIT 1"
+                    ),
+                    {"phone": from_phone},
+                ).fetchone()
+                if _org_row:
+                    _org_id = _org_row[0]
+            except Exception:
+                pass
+
+            _handler = CampaignReplyHandler()
+            _loop = _asyncio.get_event_loop()
+            if _loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    campaign_result = pool.submit(
+                        _asyncio.run,
+                        _handler.handle_inbound(
+                            from_phone=from_phone,
+                            message_body=body,
+                            org_id=str(_org_id or ""),
+                        )
+                    ).result(timeout=10)
+            else:
+                campaign_result = _asyncio.run(_handler.handle_inbound(
+                    from_phone=from_phone,
+                    message_body=body,
+                    org_id=str(_org_id or ""),
+                ))
+            if campaign_result:
+                if campaign_result.get("response"):
+                    from aria.tools.communication_tools import CommunicationTools
+                    _comms = CommunicationTools()
+                    if _loop.is_running():
+                        with concurrent.futures.ThreadPoolExecutor() as pool:
+                            pool.submit(
+                                _asyncio.run,
+                                _comms.send_sms(
+                                    to_phone=from_phone,
+                                    from_user={"id": campaign_result.get("lo_user_id", "")},
+                                    message=campaign_result["response"],
+                                    org_id=str(_org_id or ""),
+                                )
+                            ).result(timeout=10)
+                    else:
+                        _asyncio.run(_comms.send_sms(
+                            to_phone=from_phone,
+                            from_user={"id": campaign_result.get("lo_user_id", "")},
+                            message=campaign_result["response"],
+                            org_id=str(_org_id or ""),
+                        ))
+                logger.info("Campaign reply handled: %s -> %s", from_phone, campaign_result.get("action"))
+                return campaign_result
+        except ImportError:
+            pass
+        except Exception as e:
+            logger.warning("Campaign reply check failed (non-blocking): %s", e)
+
         # Store inbound message for conversation threading
         _store_inbound_message(db, from_phone, body, record)
         # Also store in panel messages table for the two-way SMS panel (with S3 keys)

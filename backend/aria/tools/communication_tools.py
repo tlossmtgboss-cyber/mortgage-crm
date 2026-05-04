@@ -133,52 +133,196 @@ class CommunicationTools:
         duration_minutes: int = 30,
         topic: str = "",
     ) -> Dict:
-        """Schedule a call by creating a task and notifying the contact via SMS."""
+        """Book a real appointment on the LO's calendar, sync to Outlook, and send invite."""
         try:
-            from aria.tools.pipeline_tools import PipelineTools
-            pipe = PipelineTools()
+            from db import SessionLocal
+            from services.appointment.service import AppointmentService
+            from dateutil import parser as dtparser
 
-            task = await pipe.create_task(
-                description=f"Call {with_contact['name']}" + (f" — {topic}" if topic else ""),
-                due_date=date,
-                assigned_to=str(lo["id"]),
-                borrower_id=str(with_contact["id"]) if with_contact.get("type") == "borrower" else None,
-                created_by=str(lo["id"]),
-                org_id=str(lo.get("organization_id", "")),
-            )
+            org_id = lo.get("organization_id", "")
+            contact_name = with_contact.get("name", "")
+            title = f"Call — {contact_name}" + (f" — {topic}" if topic else "")
+            scheduled_start = dtparser.parse(f"{date} {time}")
+
+            db = SessionLocal()
+            try:
+                svc = AppointmentService(db=db, organization_id=int(org_id) if org_id else None)
+                result = await svc.create_appointment(
+                    data={
+                        "title": title,
+                        "scheduled_start": scheduled_start.isoformat(),
+                        "duration_minutes": duration_minutes,
+                        "assigned_user_id": int(lo["id"]),
+                        "attendee_email": with_contact.get("email", ""),
+                        "attendee_name": contact_name,
+                        "attendee_phone": with_contact.get("phone", ""),
+                        "meeting_type": "consultation",
+                        "meeting_mode": "phone",
+                        "description": topic or f"Scheduled call with {contact_name}",
+                    },
+                    source="ai_scheduler",
+                    requester_user_id=int(lo["id"]),
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                raise
+            finally:
+                db.close()
+
+            appointment_id = getattr(result, "appointment_id", None) or (result.get("appointment_id") if isinstance(result, dict) else None)
+            outlook_link = getattr(result, "outlook_web_link", None) or (result.get("outlook_web_link") if isinstance(result, dict) else None)
 
             sms_sent = False
             contact_phone = with_contact.get("phone")
             if contact_phone:
                 try:
                     lo_name = lo.get("full_name", "your loan officer")
-                    contact_name = with_contact.get("name", "")
                     sms_body = (
-                        f"Hi {contact_name}, {lo_name} would like to schedule a call"
-                        + (f" on {date} at {time}" if date and time else "")
+                        f"Hi {contact_name}, you have a call scheduled with {lo_name}"
+                        f" on {date} at {time}"
                         + (f" regarding {topic}" if topic else "")
-                        + ". Please let me know if that works for you!"
+                        + ". A calendar invite has been sent to your email."
                         + f" — {lo_name}"
                     )
                     await self.send_sms(
                         to_phone=contact_phone,
                         from_user=lo,
                         message=sms_body,
-                        org_id=str(lo.get("organization_id", "")),
+                        org_id=str(org_id),
                     )
                     sms_sent = True
                 except Exception as sms_err:
-                    logger.warning(f"Could not send scheduling SMS to {contact_phone}: {sms_err}")
+                    logger.warning(f"Could not send confirmation SMS to {contact_phone}: {sms_err}")
 
             return {
                 "datetime": f"{date} {time}",
                 "duration_minutes": duration_minutes,
-                "with": with_contact["name"],
-                "task_id": task.get("id"),
-                "calendar_link": None,
+                "with": contact_name,
+                "appointment_id": appointment_id,
+                "calendar_link": outlook_link,
+                "outlook_synced": bool(outlook_link),
+                "invite_sent": bool(with_contact.get("email")),
                 "sms_sent": sms_sent,
-                "note": "SMS sent to coordinate timing." if sms_sent else "Task created but could not reach contact via SMS.",
+                "note": "Appointment booked, calendar invite sent." + (" SMS confirmation sent." if sms_sent else ""),
             }
         except Exception as e:
             logger.error(f"Aria schedule call failed: {e}", exc_info=True)
             raise ValueError(f"Failed to schedule call: {e}")
+
+    async def get_schedule(
+        self, lo_id: int, org_id: str,
+        date_from: str = None, date_to: str = None,
+        duration_minutes: int = 30,
+    ) -> Dict:
+        """Check the LO's calendar: upcoming appointments and available slots."""
+        try:
+            from db import SessionLocal
+            from services.appointment.service import AppointmentService
+            from datetime import date as date_type, timedelta
+            from dateutil import parser as dtparser
+
+            if date_from:
+                start = dtparser.parse(date_from).date()
+            else:
+                start = date_type.today()
+
+            if date_to:
+                end = dtparser.parse(date_to).date()
+            else:
+                end = start + timedelta(days=3)
+
+            db = SessionLocal()
+            try:
+                svc = AppointmentService(db=db, organization_id=int(org_id) if org_id else None)
+
+                upcoming = []
+                try:
+                    upcoming_raw = await svc.list_appointments(
+                        user_id=lo_id,
+                        start_date=start,
+                        end_date=end,
+                        status="booked",
+                        limit=20,
+                    )
+                    for apt in (upcoming_raw.get("items", []) if isinstance(upcoming_raw, dict) else []):
+                        upcoming.append({
+                            "id": apt.get("id"),
+                            "title": apt.get("title", ""),
+                            "start": str(apt.get("scheduled_start", "")),
+                            "end": str(apt.get("scheduled_end", "")),
+                            "attendee": apt.get("attendee_name", ""),
+                            "type": apt.get("meeting_type", ""),
+                            "status": apt.get("status", ""),
+                        })
+                except Exception as e:
+                    logger.warning(f"Could not fetch upcoming appointments: {e}")
+
+                available = []
+                try:
+                    slots_raw = await svc.get_available_slots(
+                        lo_id=lo_id,
+                        start_date=start,
+                        end_date=end,
+                        duration_minutes=duration_minutes,
+                    )
+                    for slot in (slots_raw or [])[:10]:
+                        available.append({
+                            "start": str(slot.get("start", "")),
+                            "end": str(slot.get("end", "")),
+                            "date": str(slot.get("date", "")),
+                            "day": slot.get("day", ""),
+                        })
+                except Exception as e:
+                    logger.warning(f"Could not fetch available slots: {e}")
+            finally:
+                db.close()
+
+            return {
+                "date_range": f"{start} to {end}",
+                "upcoming_count": len(upcoming),
+                "upcoming": upcoming,
+                "available_slots_count": len(available),
+                "available_slots": available,
+            }
+        except Exception as e:
+            logger.error(f"Aria calendar check failed: {e}", exc_info=True)
+            raise ValueError(f"Failed to check calendar: {e}")
+
+    async def send_batch_sms(
+        self, recipients: list, from_user: Dict,
+        message_template: str, org_id: str,
+    ) -> list:
+        """Send SMS to multiple recipients. Returns list of results."""
+        results = []
+        for recipient in recipients:
+            try:
+                result = await self.send_sms(
+                    to_phone=recipient["phone"],
+                    from_user=from_user,
+                    message=message_template.replace(
+                        "[first_name]",
+                        recipient.get("first_name", "there"),
+                    ),
+                    org_id=org_id,
+                )
+                results.append({**result, "phone": recipient["phone"]})
+            except Exception as e:
+                results.append({
+                    "phone": recipient["phone"],
+                    "status": "failed",
+                    "error": str(e),
+                })
+        return results
+
+    async def send_reminder(
+        self, to_phone: str, from_user: Dict,
+        message: str, org_id: str,
+    ) -> Dict:
+        """Send a reminder SMS (thin wrapper around send_sms for clarity)."""
+        return await self.send_sms(
+            to_phone=to_phone,
+            from_user=from_user,
+            message=message,
+            org_id=org_id,
+        )

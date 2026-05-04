@@ -669,6 +669,9 @@ from .team_chat import (
 # Client File aggregate root + collaborators
 from .client_file import ClientFile, ClientFileCollaborator
 
+# Aria Campaign models (mass text outreach)
+from .aria_campaign import AriaCampaign, AriaCampaignRecipient
+
 __all__ = [
     # =====================
     # Core - Organization
@@ -1362,4 +1365,10 @@ __all__ = [
     # =====================
     "ClientFile",
     "ClientFileCollaborator",
+
+    # =====================
+    # Aria Campaign (Mass Text Outreach)
+    # =====================
+    "AriaCampaign",
+    "AriaCampaignRecipient",
 ]
