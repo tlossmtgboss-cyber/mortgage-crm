@@ -1433,18 +1433,30 @@ async def _send_sms_from_client_file(
     from database.models.communication import Activity, SMSMessage
     from database.enums import ActivityType
 
-    sms_msg = SMSMessage(
-        organization_id=org_id,
-        user_id=user_id,
-        lead_id=cf.lead_id,
-        to_number=phone,
-        from_number=sms_client.from_number or "",
-        message=body,
-        direction="outbound",
-        status="sent",
-        provider_message_id=result.get("message_id"),
-    )
-    db.add(sms_msg)
+    sms_msg = None
+    sms_id = None
+    sms_created_at = None
+    provider_msg_id = result.get("message_id")
+
+    try:
+        sms_msg = SMSMessage(
+            organization_id=org_id,
+            user_id=user_id,
+            lead_id=cf.lead_id,
+            to_number=phone,
+            from_number=sms_client.from_number or "",
+            message=body,
+            direction="outbound",
+            status="sent",
+            provider_message_id=provider_msg_id,
+        )
+        db.add(sms_msg)
+        db.flush()
+        sms_id = sms_msg.id
+        sms_created_at = sms_msg.created_at
+    except Exception as e:
+        db.rollback()
+        logger.warning("SMSMessage ORM insert failed (SMS was sent): %s", e)
 
     activity = Activity(
         organization_id=org_id,
@@ -1455,19 +1467,22 @@ async def _send_sms_from_client_file(
     )
     db.add(activity)
     db.commit()
-    db.refresh(sms_msg)
+
+    from datetime import datetime as _dt, timezone as _tz
+    event_id = f"sms-{sms_id}" if sms_id else f"act-{activity.id}"
+    event_ts = sms_created_at or activity.created_at or _dt.now(_tz.utc)
 
     return _make_timeline_event(
-        id=f"sms-{sms_msg.id}",
+        id=event_id,
         client_file_id=str(client_file_id),
         org_id=str(org_id),
         kind="message_sent_sms",
         event_category="texts",
-        occurred_at=sms_msg.created_at,
+        occurred_at=event_ts,
         headline="Text sent",
         body=body,
         actor_user_id=str(user_id),
-        related_message_id=sms_msg.provider_message_id,
+        related_message_id=provider_msg_id,
     )
 
 

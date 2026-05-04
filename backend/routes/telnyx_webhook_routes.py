@@ -1793,6 +1793,40 @@ async def handle_inbound_sms(event: TelnyxSMSEvent, db: Session):
         logger.warning(f"Failed to store inbound SMS in sms_panel_messages: {e}")
         db.rollback()
 
+    # Link the sms_messages row to org/lead so it shows in client file timeline
+    if _inbound_org_id or _inbound_contact_id:
+        try:
+            db.execute(sa_text("""
+                UPDATE sms_messages
+                SET organization_id = COALESCE(:org_id, organization_id),
+                    lead_id = COALESCE(CAST(:lead_id AS INTEGER), lead_id)
+                WHERE provider_message_id = :msg_id
+            """), {
+                "org_id": _inbound_org_id,
+                "lead_id": int(_inbound_contact_id) if _inbound_contact_id else None,
+                "msg_id": event.message_id,
+            })
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.debug("Failed to link inbound SMS to org/lead: %s", e)
+
+    # Create Activity record for inbound SMS so it appears in client file timeline
+    if _inbound_contact_id and _inbound_org_id:
+        try:
+            db.execute(sa_text("""
+                INSERT INTO activities (organization_id, lead_id, type, content, created_at)
+                VALUES (:org_id, :lead_id, 'SMS', :content, NOW())
+            """), {
+                "org_id": _inbound_org_id,
+                "lead_id": int(_inbound_contact_id),
+                "content": message_body or "",
+            })
+            db.commit()
+        except Exception as e:
+            db.rollback()
+            logger.debug("Failed to create Activity for inbound SMS: %s", e)
+
     # Push inbound message to SMS panel WebSocket so it appears in real-time
     try:
         _contact_display = None
