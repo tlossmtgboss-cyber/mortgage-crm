@@ -8,12 +8,14 @@ export interface POSSidebarProps {
   onAskAria: () => void;
   documentCount?: number;
   taskCount?: number;
+  messageCount?: number;
   onDocumentsClick?: () => void;
   onTasksClick?: () => void;
-  activeNav?: 'application' | 'documents' | 'tasks';
+  onMessagesClick?: () => void;
+  activeNav?: 'application' | 'documents' | 'tasks' | 'messages';
 }
 
-export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, documentCount = 0, taskCount = 0, onDocumentsClick, onTasksClick, activeNav = 'application' }) => {
+export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, documentCount = 0, taskCount = 0, messageCount = 0, onDocumentsClick, onTasksClick, onMessagesClick, activeNav = 'application' }) => {
   const pct = application?.completion_pct ?? 0;
 
   return (
@@ -54,7 +56,7 @@ export const POSSidebar: React.FC<POSSidebarProps> = ({ application, onAskAria, 
           <NavItem icon={<FormIcon />} label="Application" active={activeNav === 'application'} />
           <NavItem icon={<UploadIcon />} label="Documents" badge={documentCount || undefined} onClick={onDocumentsClick} active={activeNav === 'documents'} />
           <NavItem icon={<ChecklistIcon />} label="Tasks" badge={taskCount || undefined} onClick={onTasksClick} active={activeNav === 'tasks'} />
-          <NavItem icon={<ChatIcon />} label="Messages" dot />
+          <NavItem icon={<ChatIcon />} label="Messages" badge={messageCount || undefined} dot={messageCount > 0} onClick={onMessagesClick} active={activeNav === 'messages'} />
           <NavItem icon={<BookIcon />} label="Disclosures" />
 
           <span className="pos-nav__section-title">Tools</span>

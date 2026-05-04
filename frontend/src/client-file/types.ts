@@ -106,6 +106,7 @@ export interface ClientFile {
   active_loan_term?: number | null;
   active_loan_purchase_price?: number | null;
   active_loan_interest_rate?: number | null;
+  lead_id?: number | null;
   // Audit
   created_at: string;
   updated_at: string;

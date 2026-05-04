@@ -2916,6 +2916,14 @@ try:
 except Exception as e:
     logger.warning(f"Call intelligence review routes skipped: {e}")
 
+# --- Call Intelligence Diagnostic (admin-only) ---
+try:
+    from routes.ci_diagnostic_routes import router as ci_diag_router
+    app.include_router(ci_diag_router, tags=["Call Intelligence Diagnostic"])
+    logger.info("CI diagnostic routes loaded")
+except Exception as e:
+    logger.warning(f"CI diagnostic routes skipped: {e}")
+
 # --- Rate Monitor (iOS-compatible alerts) ---
 try:
     from routes.rate_monitor_routes import router as rate_monitor_ios_router

@@ -355,6 +355,43 @@ class POSAIQAMessage(Base):
 
 
 # ---------------------------------------------------------------------------
+# Borrower messages (LO/team → borrower inbox in POS portal)
+# ---------------------------------------------------------------------------
+
+class POSBorrowerMessage(Base):
+    """Messages sent from the lending team to the borrower's portal inbox."""
+
+    __tablename__ = "pos_borrower_messages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    application_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("pos_applications.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    organization_id = Column(Integer, nullable=False, index=True)
+
+    sender_user_id = Column(Integer, nullable=True)
+    sender_name = Column(String(128), nullable=False)
+    sender_role = Column(String(64), nullable=False, default="Loan Officer")
+
+    content = Column(Text, nullable=False)
+
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+
+    __table_args__ = (
+        Index("ix_pos_msg_app_created", "application_id", "created_at"),
+        Index("ix_pos_msg_app_unread", "application_id", "read_at"),
+    )
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

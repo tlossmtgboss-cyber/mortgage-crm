@@ -9,13 +9,15 @@ type FilterKey = 'all' | 'pending' | 'in_progress' | 'completed';
 
 interface TasksPageProps {
   applicationId: string;
+  loName?: string;
+  loInitials?: string;
   onAskAria?: () => void;
   onBack: () => void;
 }
 
-const FILTERS: { key: FilterKey; label: string }[] = [
+const FILTERS: { key: FilterKey; label: string; pulse?: boolean }[] = [
   { key: 'all', label: 'All Tasks' },
-  { key: 'pending', label: 'To Do' },
+  { key: 'pending', label: 'To Do', pulse: true },
   { key: 'in_progress', label: 'In Progress' },
   { key: 'completed', label: 'Completed' },
 ];
@@ -27,6 +29,12 @@ const PRIORITY_LABELS: Record<string, string> = {
 };
 
 const STATUS_LABELS: Record<BorrowerTaskStatus, string> = {
+  pending: 'To Do',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+};
+
+const SECTION_TITLES: Record<BorrowerTaskStatus, string> = {
   pending: 'To Do',
   in_progress: 'In Progress',
   completed: 'Completed',
@@ -49,6 +57,8 @@ function formatDueDate(iso: string | null): { label: string; urgent: boolean } {
 
 export const TasksPage: React.FC<TasksPageProps> = ({
   applicationId,
+  loName = 'your loan officer',
+  loInitials = 'P',
   onAskAria,
   onBack,
 }) => {
@@ -110,7 +120,7 @@ export const TasksPage: React.FC<TasksPageProps> = ({
       <div className="tasks-page">
         <div className="tasks-page__loading">
           <div className="pos-loading__spinner" />
-          <p>Loading tasks…</p>
+          <p>Loading tasks...</p>
         </div>
       </div>
     );
@@ -118,6 +128,7 @@ export const TasksPage: React.FC<TasksPageProps> = ({
 
   return (
     <div className="tasks-page">
+      {/* Back button */}
       <button type="button" className="tasks-page__back" onClick={onBack}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="15 18 9 12 15 6" />
@@ -125,33 +136,34 @@ export const TasksPage: React.FC<TasksPageProps> = ({
         Back to application
       </button>
 
+      {/* Header */}
       <div className="tasks-page__header">
         <div className="tasks-page__badge-row">
           <span className="tasks-chip">Tasks</span>
         </div>
         <h1 className="tasks-page__title">Your To-Do List</h1>
         <p className="tasks-page__subtitle">
-          Items your loan officer or underwriter need you to complete.
+          Items {loName} or the underwriter need you to complete.
           Finish these to keep your loan moving forward.
         </p>
       </div>
 
       {/* Stats */}
       <div className="tasks-stats">
-        <div className="tasks-stat tasks-stat--pending">
-          <p className="tasks-stat__label">To Do</p>
-          <p className="tasks-stat__value">{pendingCount}</p>
-          <p className="tasks-stat__sub">{pendingCount === 1 ? '1 item' : `${pendingCount} items`} need attention</p>
-        </div>
-        <div className="tasks-stat tasks-stat--progress">
-          <p className="tasks-stat__label">In Progress</p>
-          <p className="tasks-stat__value">{inProgressCount}</p>
-          <p className="tasks-stat__sub">Being worked on</p>
-        </div>
-        <div className="tasks-stat tasks-stat--completed">
-          <p className="tasks-stat__label">Completed</p>
-          <p className="tasks-stat__value">{completedCount}</p>
-          <p className="tasks-stat__sub">Done</p>
+        <StatCard label="To Do" value={pendingCount} sub={`${pendingCount === 1 ? '1 item' : `${pendingCount} items`} need attention`} variant="pending" />
+        <StatCard label="In Progress" value={inProgressCount} sub="Being worked on" variant="progress" />
+        <StatCard label="Completed" value={completedCount} sub="Done" variant="completed" />
+      </div>
+
+      {/* Aria banner */}
+      <div className="tasks-banner">
+        <span className="tasks-banner__seal">{loInitials.charAt(0) || 'A'}</span>
+        <div className="tasks-banner__content">
+          <div className="tasks-banner__title">Aria tracks your tasks automatically</div>
+          <p className="tasks-banner__desc">
+            As your loan progresses, new tasks may appear here. Complete them promptly
+            to keep things on track — Aria will remind you if a deadline is approaching.
+          </p>
         </div>
       </div>
 
@@ -169,6 +181,7 @@ export const TasksPage: React.FC<TasksPageProps> = ({
               if (f.key === 'completed' && !showCompleted) setShowCompleted(true);
             }}
           >
+            {f.pulse && f.key !== filter && pendingCount > 0 && <span className="tasks-filter__pulse" />}
             {f.label}
             <span className="tasks-filter__count">{counts[f.key] || 0}</span>
           </button>
@@ -191,28 +204,48 @@ export const TasksPage: React.FC<TasksPageProps> = ({
         grouped.map(group => (
           <section key={group.status} className="tasks-section">
             <div className="tasks-section__header">
-              <h2 className="tasks-section__title">{STATUS_LABELS[group.status]}</h2>
+              <h2 className="tasks-section__title">{SECTION_TITLES[group.status]}</h2>
               <span className={`tasks-chip tasks-chip--${group.status}`}>
                 {group.items.length} {group.items.length === 1 ? 'item' : 'items'}
               </span>
               <div className="tasks-section__line" />
             </div>
 
-            <div className="tasks-card-list">
-              {group.items.map(task => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onComplete={handleComplete}
-                  completing={completing === task.id}
-                  onAskAria={onAskAria}
-                />
-              ))}
-            </div>
+            {group.status === 'completed' ? (
+              <div className="tasks-completed-grid">
+                {group.items.map(task => (
+                  <div key={task.id} className="tasks-completed-row">
+                    <div className="tasks-completed-row__icon"><CheckIcon /></div>
+                    <div className="tasks-completed-row__main">
+                      <p className="tasks-completed-row__title">{task.title}</p>
+                      <p className="tasks-completed-row__sub">
+                        {task.completed_at
+                          ? `Completed ${new Date(task.completed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`
+                          : 'Done'}
+                        {task.category ? ` · ${task.category}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="tasks-card-list">
+                {group.items.map(task => (
+                  <TaskCard
+                    key={task.id}
+                    task={task}
+                    onComplete={handleComplete}
+                    completing={completing === task.id}
+                    onAskAria={onAskAria}
+                  />
+                ))}
+              </div>
+            )}
           </section>
         ))
       )}
 
+      {/* Footer */}
       <div className="tasks-page__footer">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <circle cx="12" cy="12" r="10" />
@@ -225,7 +258,17 @@ export const TasksPage: React.FC<TasksPageProps> = ({
   );
 };
 
-// ---------- Task card ----------
+// ---------- Sub-components ----------
+
+const StatCard: React.FC<{
+  label: string; value: number; sub: string; variant?: 'pending' | 'progress' | 'completed';
+}> = ({ label, value, sub, variant }) => (
+  <div className={`tasks-stat${variant ? ` tasks-stat--${variant}` : ''}`}>
+    <p className="tasks-stat__label">{label}</p>
+    <p className="tasks-stat__value">{value}</p>
+    <p className="tasks-stat__sub">{sub}</p>
+  </div>
+);
 
 const TaskCard: React.FC<{
   task: BorrowerTask;
@@ -234,72 +277,78 @@ const TaskCard: React.FC<{
   onAskAria?: () => void;
 }> = ({ task, onComplete, completing, onAskAria }) => {
   const due = formatDueDate(task.due_date);
-  const isCompleted = task.status === 'completed';
+  const isPending = task.status === 'pending';
 
   return (
-    <article className={`tasks-card${isCompleted ? ' tasks-card--completed' : ''}${task.priority === 'high' ? ' tasks-card--high' : ''}`}>
+    <article className={`tasks-card${isPending ? ' tasks-card--pending' : ''}${task.priority === 'high' ? ' tasks-card--high' : ''}`}>
       <div className="tasks-card__top">
-        <div className="tasks-card__check-col">
-          {isCompleted ? (
-            <div className="tasks-card__check tasks-card__check--done">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="tasks-card__check"
-              onClick={() => onComplete(task.id)}
-              disabled={completing}
-              title="Mark as complete"
-            >
-              {completing && <span className="tasks-card__check-spinner" />}
-            </button>
-          )}
-        </div>
-
         <div className="tasks-card__info">
-          <h3 className={`tasks-card__title${isCompleted ? ' tasks-card__title--done' : ''}`}>
-            {task.title}
-          </h3>
-          {task.description && (
-            <p className="tasks-card__desc">{task.description}</p>
-          )}
-          <div className="tasks-card__meta">
-            {task.category && (
-              <span className="tasks-card__category">{task.category}</span>
-            )}
-            {due.label && (
-              <span className={`tasks-card__due${due.urgent ? ' tasks-card__due--urgent' : ''}`}>
-                {due.label}
-              </span>
-            )}
-            {isCompleted && task.completed_at && (
-              <span className="tasks-card__completed-date">
-                Completed {new Date(task.completed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-              </span>
-            )}
-          </div>
+          <h3 className="tasks-card__name">{task.title}</h3>
+          {task.description && <p className="tasks-card__desc">{task.description}</p>}
         </div>
-
         <div className="tasks-card__status-col">
           <span className={`tasks-status-pill tasks-status-pill--${task.status}`}>
-            <span className="tasks-status-pill__dot" />
-            {STATUS_LABELS[task.status]}
+            <span className="tasks-status-pill__dot" /> {STATUS_LABELS[task.status]}
           </span>
-          {task.priority === 'high' && !isCompleted && (
+          {due.label && (
+            <span className={`tasks-card__due${due.urgent ? ' tasks-card__due--urgent' : ''}`}>
+              {due.label}
+            </span>
+          )}
+          {task.priority === 'high' && (
             <span className="tasks-card__priority">{PRIORITY_LABELS[task.priority]}</span>
           )}
         </div>
       </div>
 
-      {!isCompleted && onAskAria && (
-        <div className="tasks-card__hint">
+      {/* Action zone for pending tasks */}
+      {isPending && (
+        <div className="tasks-action-zone" onClick={() => onComplete(task.id)}>
+          <div className="tasks-action-zone__icon">
+            {completing ? <span className="tasks-action-zone__spinner" /> : <CheckIcon />}
+          </div>
+          <div className="tasks-action-zone__text">
+            <p className="tasks-action-zone__primary">Mark as complete</p>
+            <p className="tasks-action-zone__hint">Click when you've finished this task</p>
+          </div>
+          <button type="button" className="tasks-action-cta" disabled={completing}>
+            {completing ? 'Completing...' : 'Complete'}
+          </button>
+        </div>
+      )}
+
+      {/* In-progress indicator */}
+      {task.status === 'in_progress' && (
+        <div className="tasks-progress-bar">
+          <div className="tasks-progress-bar__body">
+            <p className="tasks-progress-bar__label">
+              <SparkIcon /> In progress
+            </p>
+            <div className="tasks-progress-bar__fields">
+              {task.category && (
+                <div className="tasks-progress-bar__field">
+                  <p className="tasks-progress-bar__key">Category</p>
+                  <p className="tasks-progress-bar__val">{task.category}</p>
+                </div>
+              )}
+              {due.label && (
+                <div className="tasks-progress-bar__field">
+                  <p className="tasks-progress-bar__key">Timeline</p>
+                  <p className="tasks-progress-bar__val">{due.label}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI hint */}
+      {isPending && onAskAria && (
+        <div className="tasks-ai-hint">
           <SparkIcon />
           <span>
             Not sure what to do?{' '}
-            <button type="button" className="tasks-card__hint-action" onClick={onAskAria}>
+            <button type="button" className="tasks-ai-hint__action" onClick={onAskAria}>
               Ask Aria for help
             </button>
           </span>
@@ -308,6 +357,14 @@ const TaskCard: React.FC<{
     </article>
   );
 };
+
+// ---------- Icons ----------
+
+const CheckIcon: React.FC = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
 
 const SparkIcon: React.FC = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" className="tasks-spark">

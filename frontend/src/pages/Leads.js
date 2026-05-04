@@ -710,19 +710,32 @@ function Leads() {
     return !viewedLeads.has(String(leadId));
   };
 
-  const handleLeadClick = (leadId) => {
-    console.log('Lead clicked:', leadId);
-
+  const handleLeadClick = async (leadId) => {
     // Mark lead as viewed
     const newViewedLeads = new Set(viewedLeads);
     newViewedLeads.add(String(leadId));
     setViewedLeads(newViewedLeads);
-
-    // Save to localStorage
     localStorage.setItem('viewedLeads', JSON.stringify([...newViewedLeads]));
 
-    // Navigate to lead detail
-    console.log('Navigating to:', `/leads/${leadId}`);
+    // Navigate to client file (primary view) instead of lead detail
+    try {
+      const token = getToken();
+      const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
+      const API_BASE = isProduction
+        ? 'https://api.perenniaai.com'
+        : (process.env.REACT_APP_API_URL || 'http://localhost:8000');
+      const resp = await fetch(`${API_BASE}/api/v1/leads/${leadId}/client-file-id`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        navigate(`/clients/${data.client_file_id}`);
+        return;
+      }
+    } catch (e) {
+      console.warn('Client file lookup failed, falling back to lead detail:', e);
+    }
+    // Fallback: if client file fetch fails, go to lead detail
     navigate(`/leads/${leadId}`);
   };
 

@@ -24,6 +24,12 @@ const POSEntryPage: React.FC = () => {
     }
   }, [tokenParam]);
 
+  const handleAuthError = () => {
+    localStorage.removeItem('perennia_purl_token');
+    delete (window as any).__PURL_TOKEN__;
+    setPurlToken(null);
+  };
+
   if (!purlToken) {
     return <StartForm onStarted={(token) => {
       localStorage.setItem('perennia_purl_token', token);
@@ -38,6 +44,7 @@ const POSEntryPage: React.FC = () => {
       loanId={loanId}
       borrowerName={searchParams.get('name') || 'there'}
       userInitials={searchParams.get('initials') || ''}
+      onAuthError={handleAuthError}
     />
   );
 };

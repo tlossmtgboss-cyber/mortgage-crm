@@ -160,6 +160,33 @@
   letter-spacing: 0.02em;
 }
 
+.pf-cf-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pf-cf-header__lead-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--pf-cf-bg-glass);
+  border: 1px solid var(--pf-cf-border);
+  color: var(--pf-cf-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: var(--pf-cf-font-body);
+  transition: all 0.15s;
+}
+.pf-cf-header__lead-btn:hover {
+  border-color: var(--pf-cf-accent);
+  color: var(--pf-cf-accent);
+  background: rgba(45, 87, 64, 0.06);
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    Card primitive (glass surface)
    ───────────────────────────────────────────────────────────────────────── */

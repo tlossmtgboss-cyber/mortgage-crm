@@ -33,6 +33,7 @@ export interface POSContainerProps {
   loanId?: number;
   borrowerName?: string;
   userInitials?: string;
+  onAuthError?: () => void;
 }
 
 const PANEL_COMPONENTS: Record<SectionKey, React.ComponentType<any>> = {
@@ -52,6 +53,7 @@ export const POSContainer: React.FC<POSContainerProps> = ({
   loanId,
   borrowerName = 'there',
   userInitials = '',
+  onAuthError,
 }) => {
   const {
     application,
@@ -138,6 +140,11 @@ export const POSContainer: React.FC<POSContainerProps> = ({
   }
 
   if (error || !application) {
+    const isAuthError = error && (error.includes('401') || error.includes('404') || error.includes('Not Found') || error.includes('Unauthorized'));
+    if (isAuthError && onAuthError) {
+      onAuthError();
+      return null;
+    }
     return (
       <div className="pos-page">
         <div className="pos-error">

@@ -85,6 +85,7 @@ class ClientFileResponse(BaseModel):
     active_loan_term: Optional[int] = None
     active_loan_purchase_price: Optional[float] = None
     active_loan_interest_rate: Optional[float] = None
+    lead_id: Optional[int] = None
     created_at: str
     updated_at: str
 
@@ -137,6 +138,7 @@ def _to_response(cf: Any, lo_name: Optional[str] = None, loan: Any = None) -> di
         active_loan_term=_loan_attr('term'),
         active_loan_purchase_price=_loan_attr('purchase_price', float),
         active_loan_interest_rate=_loan_attr('rate', float),
+        lead_id=cf.lead_id,
         created_at=cf.created_at.isoformat(),
         updated_at=cf.updated_at.isoformat(),
     ).model_dump()
