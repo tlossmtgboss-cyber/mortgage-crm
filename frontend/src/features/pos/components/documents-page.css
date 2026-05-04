@@ -757,6 +757,41 @@
   .docs-ref-grid { grid-template-columns: 1fr; }
 }
 
+/* ── Empty state ── */
+.docs-empty {
+  text-align: center;
+  padding: 60px 24px;
+  background: var(--surface, #fff);
+  border-radius: 16px;
+  border: 2px dashed var(--border, #e2e5e3);
+  margin-top: 24px;
+}
+.docs-empty__icon {
+  width: 48px; height: 48px; margin: 0 auto 16px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-muted, #f4f5f3); border-radius: 12px;
+  color: var(--text-secondary, #6B7B75);
+}
+.docs-empty__icon svg { width: 24px; height: 24px; }
+.docs-empty__title {
+  font-size: 18px; font-weight: 600; color: var(--brand-primary, #1F3D2E);
+  margin: 0 0 8px;
+}
+.docs-empty__desc {
+  font-size: 14px; color: var(--text-secondary, #6B7B75);
+  max-width: 400px; margin: 0 auto 24px; line-height: 1.5;
+}
+
+/* ── Triggered-by line on action cards ── */
+.docs-card__triggered {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 12px; color: var(--brand-accent, #B8924A);
+  margin-top: 4px;
+}
+.docs-card__triggered .docs-spark {
+  width: 11px; height: 11px;
+}
+
 @media (max-width: 768px) {
   .docs-page { padding: 20px 16px 32px; }
   .docs-page__title { font-size: 28px; }

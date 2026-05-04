@@ -17,7 +17,10 @@ interface DocItem {
   name: string;
   status: DocStatus;
   category: DocCategory;
+  priority?: 'required' | 'conditional';
   description?: string;
+  reason?: string;
+  triggeredBy?: string;
   filename?: string;
   filesize?: string;
   uploadedAt?: string;
@@ -44,46 +47,6 @@ export interface DocumentsPageProps {
   onBack: () => void;
 }
 
-// ---------- demo data ----------
-// Real data will come from the API; this seeds the page so the LO sees a complete picture.
-
-const DEMO_DOCS: DocItem[] = [
-  {
-    id: 'paystubs', name: 'Upload your most recent paystubs', status: 'action', category: 'income',
-    description: 'We need your 2 most recent paystubs, dated within the last 30 days. PDF or photo is fine.',
-    dueDate: 'Due soon', dueSeverity: 'urgent',
-  },
-  {
-    id: 'bankstmts', name: 'Upload last 60 days of bank statements', status: 'action', category: 'assets',
-    description: 'All pages from your checking account. Every page, even the blank ones.',
-    dueDate: 'Due soon',
-  },
-  {
-    id: 'w2-2023', name: 'W-2 (2023)', status: 'review', category: 'income',
-    filename: 'w2_2023.pdf', filesize: '318 KB', uploadedAt: 'Submitted recently',
-    extraction: [{ label: 'Employer', value: 'On file' }, { label: 'Box 1 Wages', value: 'Verified' }, { label: 'Tax Year', value: '2023' }],
-    extractionMatch: true, reviewedBy: 'Reviewed by Aria',
-  },
-  {
-    id: 'gift-letter', name: 'Gift letter', status: 'review', category: 'assets',
-    filename: 'gift_letter_signed.pdf', filesize: '124 KB', uploadedAt: 'Submitted recently',
-    extraction: [{ label: 'Donors', value: 'On file' }, { label: 'Amount', value: 'Verified' }, { label: 'Relationship', value: 'On file' }],
-    extractionMatch: true, reviewedBy: 'Awaiting LO review',
-  },
-  { id: 'tax-2022', name: 'Tax returns — 2022', status: 'approved', category: 'income', clearedAt: 'Cleared', meta: '1040 + Schedules' },
-  { id: 'tax-2023', name: 'Tax returns — 2023', status: 'approved', category: 'income', clearedAt: 'Cleared', meta: '1040 + Schedules' },
-  { id: 'dl', name: "Driver's license", status: 'approved', category: 'identity', clearedAt: 'Cleared', meta: 'Verified' },
-  { id: 'app-1003', name: 'Loan application (signed)', status: 'approved', category: 'compliance', clearedAt: 'Cleared', meta: 'URLA 1003' },
-  { id: 'voided-check', name: 'Voided check', status: 'approved', category: 'assets', clearedAt: 'Cleared', meta: 'ACH verification' },
-  { id: 'ho-insurance', name: 'Homeowners insurance quote', status: 'approved', category: 'compliance', clearedAt: 'Cleared' },
-  { id: 'purchase-contract', name: 'Purchase contract', status: 'approved', category: 'property', clearedAt: 'Cleared' },
-  { id: 'emd', name: 'Earnest money deposit', status: 'approved', category: 'assets', clearedAt: 'Cleared' },
-  { id: 'le', name: 'Loan Estimate', status: 'reference', category: 'compliance', meta: 'PDF · 6 pages' },
-  { id: 'preapproval', name: 'Pre-approval letter', status: 'reference', category: 'compliance', meta: 'PDF · valid 90 days' },
-  { id: 'initial-1003', name: 'Initial 1003 application copy', status: 'reference', category: 'compliance', meta: 'PDF · 12 pages' },
-  { id: 'rate-lock', name: 'Rate lock confirmation', status: 'reference', category: 'compliance', meta: '30-day lock' },
-];
-
 // ---------- filter config ----------
 
 const FILTERS: { key: FilterKey; label: string; pulse?: boolean }[] = [
@@ -100,14 +63,16 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({
   loName,
   loInitials,
   loanId,
+  detectedDocs,
   onAskAria,
   onBack,
 }) => {
   const [filter, setFilter] = useState<FilterKey>('all');
-  const [fetchedDocs, setFetchedDocs] = useState<DocItem[] | null>(null);
+  const [backendDocs, setBackendDocs] = useState<DocItem[]>([]);
   const [docsLoading, setDocsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Fetch any existing uploaded/reviewed docs from the backend
   useEffect(() => {
     if (loanId == null) return;
     let cancelled = false;
@@ -136,22 +101,39 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({
             rejectionReason: d.rejectionReason ?? undefined,
             fixInstructions: d.fixInstructions ?? undefined,
           }));
-          setFetchedDocs(mapped);
+          setBackendDocs(mapped);
         }
       })
-      .catch(() => {
-        // Silently fall back to demo data
-      })
+      .catch(() => {})
       .finally(() => {
         if (!cancelled) setDocsLoading(false);
       });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [loanId]);
 
-  const docs = fetchedDocs ?? DEMO_DOCS;
+  // Merge detected docs (from application answers) with backend docs.
+  // Backend docs (uploaded/reviewed) take precedence — if a detected doc
+  // has a matching backend doc, use the backend version (it has review status).
+  // Remaining detected docs become "action" items.
+  const docs = useMemo<DocItem[]>(() => {
+    const backendNames = new Set(backendDocs.map(d => d.name.toLowerCase()));
+
+    const actionItems: DocItem[] = detectedDocs
+      .filter(d => !backendNames.has(d.name.toLowerCase()))
+      .map(d => ({
+        id: d.id,
+        name: d.name,
+        status: 'action' as DocStatus,
+        category: d.category,
+        priority: d.priority,
+        description: d.description,
+        reason: d.reason,
+        triggeredBy: d.triggeredBy,
+      }));
+
+    return [...actionItems, ...backendDocs];
+  }, [detectedDocs, backendDocs]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: docs.length };
@@ -180,6 +162,33 @@ export const DocumentsPage: React.FC<DocumentsPageProps> = ({
       <div className="docs-page" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: 320, gap: 12 }}>
         <div className="pos-loading__spinner" />
         <p style={{ color: 'var(--text-secondary, #666)', fontSize: 14 }}>Loading documents...</p>
+      </div>
+    );
+  }
+
+  if (docs.length === 0) {
+    return (
+      <div className="docs-page">
+        <button type="button" className="docs-page__back" onClick={onBack}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          Back to application
+        </button>
+        <div className="docs-page__header">
+          <h1 className="docs-page__title">Documents</h1>
+        </div>
+        <div className="docs-empty">
+          <div className="docs-empty__icon"><DocFileIcon /></div>
+          <h2 className="docs-empty__title">No documents needed yet</h2>
+          <p className="docs-empty__desc">
+            As you fill out your application, required documents will appear here
+            based on your answers. Keep going — we'll tell you exactly what's needed.
+          </p>
+          <button type="button" className="docs-btn docs-btn--primary" onClick={onBack}>
+            Continue application
+          </button>
+        </div>
       </div>
     );
   }
@@ -332,6 +341,11 @@ const DocCard: React.FC<{
       <div className="docs-card__info">
         <h3 className="docs-card__name">{doc.name}</h3>
         {doc.description && <p className="docs-card__desc">{doc.description}</p>}
+        {doc.triggeredBy && (
+          <p className="docs-card__triggered">
+            <SparkIcon /> {doc.triggeredBy}
+          </p>
+        )}
         {doc.filename && (
           <p className="docs-card__file">
             {doc.uploadedAt} · <span className="docs-card__filename">{doc.filename}</span> · {doc.filesize}
@@ -342,6 +356,12 @@ const DocCard: React.FC<{
         <span className={`docs-status-pill docs-status-pill--${doc.status}`}>
           <span className="docs-status-pill__dot" /> {doc.status === 'action' ? (doc.eSignDocs ? 'Awaiting eSign' : 'Action Required') : 'In Review'}
         </span>
+        {doc.priority === 'required' && doc.status === 'action' && (
+          <span className="docs-card__due docs-card__due--urgent">Required</span>
+        )}
+        {doc.priority === 'conditional' && doc.status === 'action' && (
+          <span className="docs-card__due">If applicable</span>
+        )}
         {doc.dueDate && (
           <span className={`docs-card__due${doc.dueSeverity === 'urgent' ? ' docs-card__due--urgent' : ''}`}>
             {doc.dueDate}
