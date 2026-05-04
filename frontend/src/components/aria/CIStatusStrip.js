@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { formatDuration, AGENT_CONFIG } from '../../hooks/useCallIntelligenceSession';
 
 const CIStatusStrip = ({
@@ -12,6 +12,8 @@ const CIStatusStrip = ({
   panelOpen = false,
 }) => {
   const eventsEndRef = useRef(null);
+  const panelRef = useRef(null);
+  const stripRef = useRef(null);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -20,18 +22,50 @@ const CIStatusStrip = ({
     }
   }, [agentEvents.length, expanded]);
 
+  // Close dropdown when sidebar opens
+  useEffect(() => {
+    if (panelOpen) setExpanded(false);
+  }, [panelOpen]);
+
+  // Click-outside to close dropdown
+  useEffect(() => {
+    if (!expanded) return;
+    const handleClick = (e) => {
+      if (
+        panelRef.current && !panelRef.current.contains(e.target) &&
+        stripRef.current && !stripRef.current.contains(e.target)
+      ) {
+        setExpanded(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [expanded]);
+
+  // Escape key to close dropdown
+  useEffect(() => {
+    if (!expanded) return;
+    const handleKey = (e) => {
+      if (e.key === 'Escape') setExpanded(false);
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [expanded]);
+
   if (!isActive && !isStarting && sessionState !== 'completed') return null;
 
   const activeAgents = Object.entries(agentStatuses).filter(
     ([, s]) => s.status === 'active'
   );
-  const completedAgents = Object.entries(agentStatuses).filter(
-    ([, s]) => s.status === 'complete'
-  );
   const latestEvent = agentEvents[agentEvents.length - 1];
+  const firstTimestamp = agentEvents[0]?.timestamp || 0;
 
   const handleStripClick = () => {
-    setExpanded(prev => !prev);
+    if (onTogglePanel) {
+      onTogglePanel();
+    } else {
+      setExpanded(prev => !prev);
+    }
   };
 
   return (
@@ -227,6 +261,7 @@ const CIStatusStrip = ({
       `}</style>
 
       <div
+        ref={stripRef}
         className={`ci-strip ${isStarting ? 'ci-strip--starting' : ''} ${sessionState === 'completed' ? 'ci-strip--completed' : ''}`}
         onClick={handleStripClick}
         role="status"
@@ -274,7 +309,7 @@ const CIStatusStrip = ({
       </div>
 
       {expanded && (
-        <div className="ci-panel">
+        <div className="ci-panel" ref={panelRef}>
           <div className="ci-panel__header">
             <span className="ci-panel__title">Agent Activity</span>
             <span className="ci-panel__count">{agentEvents.length} events</span>
@@ -286,7 +321,7 @@ const CIStatusStrip = ({
                 Waiting for AI agents to detect data...
               </div>
             ) : (
-              agentEvents.map((evt) => (
+              agentEvents.slice(-50).map((evt) => (
                 <div
                   key={evt.id}
                   className={`ci-event ${evt.type === 'agent_complete' ? 'ci-event--complete' : ''} ${evt.type === 'agent_error' ? 'ci-event--error' : ''}`}
@@ -301,7 +336,7 @@ const CIStatusStrip = ({
                     )}
                   </div>
                   <span className="ci-event__time">
-                    {formatDuration(Math.floor((evt.timestamp - (activeStartRef?.current || evt.timestamp)) / 1000))}
+                    {formatDuration(Math.max(0, Math.floor((evt.timestamp - firstTimestamp) / 1000)))}
                   </span>
                 </div>
               ))
@@ -313,8 +348,5 @@ const CIStatusStrip = ({
     </>
   );
 };
-
-// Re-export for the event time display (use session start as reference)
-let activeStartRef = { current: null };
 
 export default CIStatusStrip;

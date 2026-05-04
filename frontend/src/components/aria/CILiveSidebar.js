@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useMemo } from 'react';
+import React, { useRef, useEffect, useMemo, useCallback } from 'react';
 import { formatDuration } from '../../hooks/useCallIntelligenceSession';
 
 const QUADRANTS = [
@@ -42,12 +42,27 @@ const CILiveSidebar = ({
   onClose,
 }) => {
   const feedRef = useRef(null);
+  const closeRef = useRef(null);
 
   useEffect(() => {
     if (feedRef.current) {
       feedRef.current.scrollTop = feedRef.current.scrollHeight;
     }
   }, [agentEvents.length]);
+
+  // Focus close button on mount
+  useEffect(() => {
+    closeRef.current?.focus();
+  }, []);
+
+  // Escape key to close
+  useEffect(() => {
+    const handleKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handleKey);
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [onClose]);
 
   const quadrantData = useMemo(() => {
     return QUADRANTS.map(q => {
@@ -339,7 +354,7 @@ const CILiveSidebar = ({
         }
       `}</style>
 
-      <div className="ci-sidebar">
+      <div className="ci-sidebar" role="dialog" aria-label="Call Intelligence dashboard" aria-modal="true">
         <div className="ci-sb-header">
           <div className={`ci-sb-rec ${isStarting ? 'ci-sb-rec--starting' : ''} ${isCompleted ? 'ci-sb-rec--done' : ''}`} />
           <span className="ci-sb-title">
@@ -348,7 +363,7 @@ const CILiveSidebar = ({
           <span className={`ci-sb-timer ${isCompleted ? 'ci-sb-timer--done' : ''}`}>
             {isStarting ? '...' : formatDuration(duration)}
           </span>
-          <button className="ci-sb-close" onClick={onClose} aria-label="Close panel">
+          <button className="ci-sb-close" ref={closeRef} onClick={onClose} aria-label="Close panel">
             ✕
           </button>
         </div>

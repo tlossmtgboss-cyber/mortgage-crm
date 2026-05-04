@@ -12,7 +12,6 @@ import useVoiceConnection from '../hooks/useVoiceConnection';
 import useVoiceWorkflows from '../hooks/useVoiceWorkflows';
 import MobileBottomNav from '../components/mobile/MobileBottomNav';
 import CallIntelligenceButton from '../components/aria/CallIntelligenceButton';
-import CallIntelligenceSlidePanel from '../components/aria/CallIntelligenceSlidePanel';
 import CIStatusStrip from '../components/aria/CIStatusStrip';
 import CILiveSidebar from '../components/aria/CILiveSidebar';
 import useAriaCallIntelligence from '../hooks/useAriaCallIntelligence';
@@ -82,9 +81,6 @@ const AriaVoiceApp = () => {
 
   // --- Call Intelligence Hook ---
   const ci = useAriaCallIntelligence({
-    onArtifactsReady: (artifacts) => {
-      toast.info(`${artifacts.length} new call intelligence results`);
-    },
     onSessionStarted: (sessionId) => {
       setConversationHistory(prev => [...prev, {
         role: 'assistant',
@@ -588,17 +584,17 @@ const AriaVoiceApp = () => {
               }
             }}
             isRecording={ci.isActive}
-            isProcessing={ci.isStopping}
-            artifactCount={ci.pendingCount}
+            isProcessing={ci.isStarting}
+            artifactCount={ci.agentEvents.length}
             disabled={isOffline}
           />
-          {ci.hasArtifacts && !showCIPanel && (
+          {ci.agentEvents.length > 0 && !showCIPanel && (
             <button
               className="aria-ci-results-btn"
               onClick={() => setShowCIPanel(true)}
-              aria-label={`View ${ci.totalArtifactCount} call intelligence results`}
+              aria-label={`View ${ci.agentEvents.length} call intelligence events`}
             >
-              View Results ({ci.totalArtifactCount})
+              View Activity ({ci.agentEvents.length})
             </button>
           )}
         </div>
