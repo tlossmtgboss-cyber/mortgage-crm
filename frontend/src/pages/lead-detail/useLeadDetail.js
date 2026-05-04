@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { leadsAPI, activitiesAPI, loansAPI, dialerAPI, borrowerApplicationAPI, purlAPI, partnersAPI } from '../../services/api';
+import { leadsAPI, activitiesAPI, loansAPI, borrowerApplicationAPI, purlAPI, partnersAPI } from '../../services/api';
 import { apiFetch } from './shared/api';
 import { generateMockLeads } from './shared/constants';
 import DispositionNoteModal from '../../components/DispositionNoteModal';
@@ -799,22 +799,10 @@ export default function useLeadDetail() {
     switch(action) {
       case 'call':
         if (!lead.phone) { toast.error('No phone number available for this lead'); return; }
-        try {
+        {
           const cleanPhone = lead.phone.replace(/[^\d+]/g, '');
-          const result = await dialerAPI.clickToDial({ phone_number: cleanPhone, contact_name: lead.name || 'Contact', lead_id: lead.id });
-          if (result.success) {
-            toast.success(`Calling your phone now... When you answer, you'll be connected to ${lead.name || 'the contact'}.`);
-          } else {
-            if (result.error?.includes('cell phone not configured') || result.error?.includes('caller ID')) {
-              toast.error('Click-to-dial is not configured. Please set up your phone number in Settings > Telephony.\n\nFalling back to phone app...');
-              window.open(`tel:${lead.phone}`, '_self');
-            } else {
-              toast.error(`Call failed: ${result.error || 'Unknown error'}`);
-            }
-          }
-        } catch (err) {
-          toast.error('Click-to-dial service unavailable. Opening phone app instead...');
-          window.open(`tel:${lead.phone}`, '_self');
+          const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
+          window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
         }
         break;
       case 'sms': setShowSMSModal(true); break;

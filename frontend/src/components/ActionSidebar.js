@@ -397,38 +397,10 @@ const ActionSidebar = ({ onTaskSelect, onClose }) => {
       return;
     }
 
-    setCallInProgress(true);
-    try {
-      // Call the Telnyx dialer API to initiate call (rings your phone, then dials the contact)
-      const token = getToken();
-      const response = await fetch(`${API_BASE}/api/v1/dialer/click-to-dial`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          phone_number: phone,
-          contact_name: item.entity_name || item.title,
-          lead_id: item.entity_type === 'lead' ? item.entity_id : null,
-          loan_id: item.entity_type === 'loan' ? item.entity_id : null
-        })
-      });
-
-      if (response.ok) {
-        // Mark task as completed after call initiated
-        await handleCompleteTask(item);
-      } else {
-        const error = await response.json();
-        toast.error(`Call failed: ${error.detail || 'Unknown error'}`);
-      }
-    } catch (err) {
-      console.error('Call error:', err);
-      // Show error - dialer not configured
-      toast.error(`Could not initiate call. Please ensure the Telnyx dialer is configured, or call ${phone} directly.`);
-    } finally {
-      setCallInProgress(false);
-    }
+    const cleanPhone = phone.replace(/[^\d+]/g, '');
+    const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
+    window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
+    await handleCompleteTask(item);
   };
 
   // Toggle call selection

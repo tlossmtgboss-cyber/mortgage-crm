@@ -130,7 +130,6 @@ class CallConnectionManager:
         self.connections: Dict[int, List[WebSocket]] = {}
 
     async def connect(self, websocket: WebSocket, user_id: int):
-        await websocket.accept()
         if user_id not in self.connections:
             self.connections[user_id] = []
         self.connections[user_id].append(websocket)

@@ -70,6 +70,7 @@ class CSRFProtectionMiddleware(BaseHTTPMiddleware):
         "/api/integrations",  # New integration routes
         "/api/v1/ai",  # AI chat/orchestrator — uses JWT Bearer auth via raw fetch() for SSE streaming
         "/api/v1/livekit",  # LiveKit token provisioning — uses JWT Bearer auth, no session context
+        "/api/v1/teams/calls/inbound",  # Teams/Graph call webhooks — verified by HMAC clientState
         "/api/v1/mobile-voice",  # Mobile voice endpoints — uses JWT Bearer auth
         "/api/v1/app",  # Mobile app compatibility/health (unauthenticated, pre-login)
         "/api/v1/pos/",  # POS borrower portal — all routes use PURL token auth (stateless JWT in localStorage, inherently CSRF-safe)

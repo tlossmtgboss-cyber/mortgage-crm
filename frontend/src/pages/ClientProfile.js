@@ -1,7 +1,7 @@
 // VERSION: 2024-11-14-v2 - MOCK DATA FIX
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { loansAPI, activitiesAPI, schedulerAPI, dialerAPI, borrowerApplicationAPI, purlAPI } from '../services/api';
+import { loansAPI, activitiesAPI, schedulerAPI, borrowerApplicationAPI, purlAPI } from '../services/api';
 import { toast } from '../utils/toast';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
@@ -750,27 +750,10 @@ function ClientProfile() {
           toast.error('No phone number available for this contact');
           return;
         }
-        try {
+        {
           const cleanPhone = phone.replace(/[^\d+]/g, '');
-          const result = await dialerAPI.clickToDial({
-            phone_number: cleanPhone,
-            contact_name: client.borrower_name || client.name || 'Contact',
-            lead_id: client.id || id
-          });
-          if (result.success) {
-            toast.success(`Calling your phone now... You'll be connected to ${client.borrower_name || client.name || 'the contact'}.`);
-          } else {
-            if (result.error?.includes('cell phone not configured') || result.error?.includes('caller ID')) {
-              toast.warning('Click-to-dial not configured. Opening phone app...');
-              window.open(`tel:${phone}`, '_self');
-            } else {
-              toast.error(`Call failed: ${result.error || 'Unknown error'}`);
-            }
-          }
-        } catch (err) {
-          console.error('Click-to-dial error:', err);
-          toast.warning('Click-to-dial unavailable. Opening phone app...');
-          window.open(`tel:${phone}`, '_self');
+          const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
+          window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
         }
         break;
       case 'sms':

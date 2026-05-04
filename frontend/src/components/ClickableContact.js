@@ -22,9 +22,6 @@ export const ClickablePhone = ({
   className = '',
   showActions = false,
   onSMSClick = null,
-  contactName = '',
-  leadId = null,
-  loanId = null
 }) => {
   const [callSuccess, setCallSuccess] = useState(false);
 

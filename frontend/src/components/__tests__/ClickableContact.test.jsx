@@ -8,15 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('../ClickableContact.css', () => ({}));
 
-// Mock the dialerAPI used by ClickablePhone
-vi.mock('../../services/api', () => ({
-  dialerAPI: {
-    clickToDial: vi.fn(),
-  },
-}));
-
 import { ClickableEmail, ClickablePhone, formatPhoneNumber } from '../ClickableContact';
-import { dialerAPI } from '../../services/api';
 
 // ---------------------------------------------------------------------------
 // ClickableEmail Tests
@@ -77,8 +69,11 @@ describe('ClickableEmail', () => {
 // ---------------------------------------------------------------------------
 
 describe('ClickablePhone', () => {
+  let windowOpenSpy;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
   });
 
   afterEach(() => {
@@ -104,116 +99,57 @@ describe('ClickablePhone', () => {
     expect(button).toHaveClass('clickable-phone');
   });
 
-  it('initiates a click-to-dial call on click', async () => {
-    dialerAPI.clickToDial.mockResolvedValue({ success: true });
+  it('opens Teams deep link on click', () => {
+    render(<ClickablePhone phone="(555) 123-4567" />);
 
-    render(
-      <ClickablePhone
-        phone="(555) 123-4567"
-        contactName="Sarah Johnson"
-        leadId="42"
-      />
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(windowOpenSpy).toHaveBeenCalledWith(
+      'https://teams.microsoft.com/l/call/0/0?users=4:%2B15551234567',
+      '_blank'
     );
+  });
+
+  it('shows success state after click', async () => {
+    render(<ClickablePhone phone="(555) 123-4567" />);
+
+    fireEvent.click(screen.getByRole('button'));
 
     const button = screen.getByRole('button');
-    await act(async () => {
-      fireEvent.click(button);
-    });
-
-    expect(dialerAPI.clickToDial).toHaveBeenCalledWith({
-      phone_number: '5551234567',
-      contact_name: 'Sarah Johnson',
-      lead_id: '42',
-      loan_id: null,
-    });
+    expect(button).toHaveClass('success');
   });
 
-  it('shows success state after successful call initiation', async () => {
-    dialerAPI.clickToDial.mockResolvedValue({ success: true });
-
-    render(<ClickablePhone phone="(555) 123-4567" />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
-
-    await waitFor(() => {
-      const button = screen.getByRole('button');
-      expect(button).toHaveClass('success');
-    });
-  });
-
-  it('displays error message when call fails', async () => {
-    dialerAPI.clickToDial.mockResolvedValue({
-      success: false,
-      error: 'No caller ID configured',
-    });
-
-    render(<ClickablePhone phone="(555) 123-4567" />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText(/No caller ID configured/)).toBeInTheDocument();
-    });
-  });
-
-  it('handles network errors gracefully', async () => {
-    dialerAPI.clickToDial.mockRejectedValue(new Error('Network Error'));
-
-    render(<ClickablePhone phone="(555) 123-4567" />);
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText(/Failed to connect call/)).toBeInTheDocument();
-    });
-  });
-
-  it('disables button while calling', async () => {
-    // Make clickToDial hang so we can check the intermediate state
-    let resolveCall;
-    dialerAPI.clickToDial.mockReturnValue(
-      new Promise((resolve) => {
-        resolveCall = resolve;
-      })
-    );
-
-    render(<ClickablePhone phone="(555) 123-4567" />);
-    const button = screen.getByRole('button');
-
-    await act(async () => {
-      fireEvent.click(button);
-    });
-
-    // Button should be disabled while calling
-    expect(button).toBeDisabled();
-    expect(button).toHaveClass('calling');
-
-    // Resolve the call
-    await act(async () => {
-      resolveCall({ success: true });
-    });
-  });
-
-  it('cleans phone number by removing formatting characters', async () => {
-    dialerAPI.clickToDial.mockResolvedValue({ success: true });
-
+  it('preserves + prefix for international numbers', () => {
     render(<ClickablePhone phone="+1 (555) 123-4567" />);
 
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button'));
-    });
+    fireEvent.click(screen.getByRole('button'));
 
-    expect(dialerAPI.clickToDial).toHaveBeenCalledWith(
-      expect.objectContaining({
-        phone_number: '+15551234567',
-      })
+    expect(windowOpenSpy).toHaveBeenCalledWith(
+      'https://teams.microsoft.com/l/call/0/0?users=4:%2B15551234567',
+      '_blank'
     );
+  });
+
+  it('adds +1 prefix for domestic numbers without one', () => {
+    render(<ClickablePhone phone="5551234567" />);
+
+    fireEvent.click(screen.getByRole('button'));
+
+    expect(windowOpenSpy).toHaveBeenCalledWith(
+      'https://teams.microsoft.com/l/call/0/0?users=4:%2B15551234567',
+      '_blank'
+    );
+  });
+
+  it('stops event propagation on click', () => {
+    const parentHandler = vi.fn();
+    render(
+      <div onClick={parentHandler}>
+        <ClickablePhone phone="(555) 123-4567" />
+      </div>
+    );
+    fireEvent.click(screen.getByRole('button'));
+    expect(parentHandler).not.toHaveBeenCalled();
   });
 });
 
@@ -222,16 +158,22 @@ describe('ClickablePhone', () => {
 // ---------------------------------------------------------------------------
 
 describe('ClickablePhone with showActions', () => {
+  let windowOpenSpy;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    windowOpenSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('renders phone number with action buttons', () => {
     render(<ClickablePhone phone="(555) 999-8888" showActions />);
     expect(screen.getByText('(555) 999-8888')).toBeInTheDocument();
-    // Should have call and SMS buttons
     const buttons = screen.getAllByRole('button');
-    expect(buttons.length).toBeGreaterThanOrEqual(1); // call button
+    expect(buttons.length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders SMS as a link when no onSMSClick handler', () => {
@@ -253,22 +195,16 @@ describe('ClickablePhone with showActions', () => {
     expect(handleSMS).toHaveBeenCalledTimes(1);
   });
 
-  it('shows error tooltip on failed call in showActions mode', async () => {
-    dialerAPI.clickToDial.mockResolvedValue({
-      success: false,
-      error: 'Cell phone not configured',
-    });
-
+  it('opens Teams on call button click in showActions mode', () => {
     render(<ClickablePhone phone="(555) 999-8888" showActions />);
 
-    const callButton = screen.getByTitle('Click to call');
-    await act(async () => {
-      fireEvent.click(callButton);
-    });
+    const callButton = screen.getByTitle('Call via Teams');
+    fireEvent.click(callButton);
 
-    await waitFor(() => {
-      expect(screen.getByText('Cell phone not configured')).toBeInTheDocument();
-    });
+    expect(windowOpenSpy).toHaveBeenCalledWith(
+      'https://teams.microsoft.com/l/call/0/0?users=4:%2B15559998888',
+      '_blank'
+    );
   });
 
   it('stops event propagation from phone-with-actions container', () => {
@@ -278,7 +214,6 @@ describe('ClickablePhone with showActions', () => {
         <ClickablePhone phone="(555) 999-8888" showActions />
       </div>
     );
-    // Click on the phone number text area
     fireEvent.click(screen.getByText('(555) 999-8888').closest('.phone-with-actions'));
     expect(parentHandler).not.toHaveBeenCalled();
   });

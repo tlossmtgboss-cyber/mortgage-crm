@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { loansAPI, activitiesAPI, circleOfCashflowAPI, partnersAPI, salesforceAPI, dialerAPI, borrowerApplicationAPI } from '../services/api';
+import { loansAPI, activitiesAPI, circleOfCashflowAPI, partnersAPI, salesforceAPI, borrowerApplicationAPI } from '../services/api';
 import { toast } from '../utils/toast';
 import VoicemailDrop from '../components/VoicemailDrop';
 import SMSModal from '../components/SMSModal';
@@ -977,27 +977,10 @@ function LoanDetail() {
           toast.error('No phone number available for this borrower');
           return;
         }
-        try {
+        {
           const cleanPhone = borrowerPhone.replace(/[^\d+]/g, '');
-          const result = await dialerAPI.clickToDial({
-            phone_number: cleanPhone,
-            contact_name: loan.borrower_name || formData.borrower_name || 'Borrower',
-            loan_id: loan.id || id
-          });
-          if (result.success) {
-            toast.success(`Calling your phone now... You'll be connected to ${loan.borrower_name || 'the borrower'}.`);
-          } else {
-            if (result.error?.includes('cell phone not configured') || result.error?.includes('caller ID')) {
-              toast.warning('Click-to-dial not configured. Opening phone app...');
-              window.open(`tel:${borrowerPhone}`, '_self');
-            } else {
-              toast.error(`Call failed: ${result.error || 'Unknown error'}`);
-            }
-          }
-        } catch (err) {
-          console.error('Click-to-dial error:', err);
-          toast.warning('Click-to-dial unavailable. Opening phone app...');
-          window.open(`tel:${borrowerPhone}`, '_self');
+          const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
+          window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
         }
         break;
       case 'sms':

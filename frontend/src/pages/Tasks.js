@@ -325,31 +325,12 @@ function Tasks() {
   };
 
   // Phone dialer handlers
-  const handleClickToDial = async (task) => {
+  const handleClickToDial = (task) => {
     if (!task?.contact_phone) return;
 
-    setCallStatus('dialing');
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/dialer/click-to-dial`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({
-          phone_number: task.contact_phone,
-          lead_id: task.lead_id,
-          loan_id: task.loan_id,
-          task_id: task.id
-        })
-      });
-
-      if (response.ok) {
-        setCallStatus('in-progress');
-      } else {
-        setCallStatus('idle');
-      }
-    } catch (error) {
-      console.error('Error initiating call:', error);
-      setCallStatus('idle');
-    }
+    const cleanPhone = task.contact_phone.replace(/[^\d+]/g, '');
+    const dialNumber = cleanPhone.startsWith('+') ? cleanPhone : `+1${cleanPhone}`;
+    window.open(`https://teams.microsoft.com/l/call/0/0?users=4:${encodeURIComponent(dialNumber)}`, '_blank');
   };
 
   const handleEndCall = async () => {
