@@ -1415,8 +1415,21 @@ async def _send_sms_from_client_file(
         error = result.get("error") or result.get("reason") or "SMS send failed"
         raise HTTPException(502, error)
 
-    from database.models.communication import Activity
+    from database.models.communication import Activity, SMSMessage
     from database.enums import ActivityType
+
+    sms_msg = SMSMessage(
+        organization_id=org_id,
+        user_id=user_id,
+        lead_id=cf.lead_id,
+        to_number=phone,
+        from_number=sms_client.from_number or "",
+        message=body,
+        direction="outbound",
+        status="sent",
+        provider_message_id=result.get("message_id"),
+    )
+    db.add(sms_msg)
 
     activity = Activity(
         organization_id=org_id,
@@ -1427,18 +1440,19 @@ async def _send_sms_from_client_file(
     )
     db.add(activity)
     db.commit()
-    db.refresh(activity)
+    db.refresh(sms_msg)
 
     return _make_timeline_event(
-        id=str(activity.id),
+        id=f"sms-{sms_msg.id}",
         client_file_id=str(client_file_id),
         org_id=str(org_id),
         kind="message_sent_sms",
         event_category="texts",
-        occurred_at=activity.created_at,
+        occurred_at=sms_msg.created_at,
         headline="Text sent",
         body=body,
         actor_user_id=str(user_id),
+        related_message_id=sms_msg.provider_message_id,
     )
 
 
@@ -1460,7 +1474,14 @@ async def _send_email_from_client_file(
 
     from routes.ai_email_routes import _get_microsoft_token, _send_via_graph
 
-    access_token = await _get_microsoft_token(user_id, db)
+    try:
+        access_token = await _get_microsoft_token(user_id, db)
+    except Exception:
+        raise HTTPException(
+            400,
+            "Microsoft 365 not connected. Please connect your Outlook account in Settings.",
+        )
+
     result = await _send_via_graph(
         access_token=access_token,
         to_email=to_email,
@@ -1469,7 +1490,13 @@ async def _send_email_from_client_file(
     )
 
     if not result.get("success"):
-        raise HTTPException(502, result.get("error", "Email send failed"))
+        error_msg = result.get("error", "Email send failed")
+        if "401" in str(error_msg) or "token" in str(error_msg).lower():
+            raise HTTPException(
+                400,
+                "Microsoft 365 session expired. Please reconnect your Outlook account.",
+            )
+        raise HTTPException(502, error_msg)
 
     from database.models.communication import Activity, EmailMessage
     from database.enums import ActivityType

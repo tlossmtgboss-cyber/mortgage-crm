@@ -59,6 +59,9 @@ stripe>=7.0.0
 emails>=0.6
 sendgrid>=6.0.0
 
+# Telephony
+telnyx>=2.0.0
+
 # Background Tasks
 redis>=5.0.0
 apscheduler>=3.10.0
