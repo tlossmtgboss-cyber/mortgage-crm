@@ -166,6 +166,8 @@ call_manager = CallConnectionManager()
 @router.websocket("/ws/calls/inbound")
 async def ws_inbound_calls(websocket: WebSocket):
     """WebSocket endpoint for real-time inbound call notifications."""
+    await websocket.accept()
+
     gen = get_db()
     auth_db = next(gen)
     try:
@@ -177,6 +179,7 @@ async def ws_inbound_calls(websocket: WebSocket):
             pass
 
     if not user:
+        await websocket.send_json({"type": "error", "message": error or "Unauthorized"})
         await websocket.close(code=4001, reason=error or "Unauthorized")
         return
 
