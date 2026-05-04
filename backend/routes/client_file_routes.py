@@ -574,35 +574,34 @@ def list_timeline(
     elif category == "emails":
         activity_q = activity_q.where(Activity.type == ActivityType.EMAIL)
 
-    if category in ("all", "notes", "calls"):
-        for a in db.execute(activity_q.order_by(Activity.created_at.desc()).limit(limit)).scalars():
-            kind_map = {
-                ActivityType.NOTE: "note_added",
-                ActivityType.CALL: "call_outbound",
-                ActivityType.EMAIL: "message_sent_email",
-                ActivityType.SMS: "message_sent_sms",
-                ActivityType.MEETING: "appointment_booked",
-                ActivityType.DOCUMENT: "document_uploaded",
-            }
-            cat_map = {
-                ActivityType.NOTE: "notes",
-                ActivityType.CALL: "calls",
-                ActivityType.EMAIL: "emails",
-                ActivityType.SMS: "texts",
-                ActivityType.MEETING: "activity",
-                ActivityType.DOCUMENT: "documents",
-            }
-            events.append(_make_timeline_event(
-                id=str(a.id),
-                client_file_id=str(client_file_id),
-                org_id=str(org_id),
-                kind=kind_map.get(a.type, "note_added"),
-                event_category=cat_map.get(a.type, "activity"),
-                occurred_at=a.created_at,
-                headline=a.type.value if a.type else "Activity",
-                body=a.content,
-                actor_user_id=str(a.user_id) if a.user_id else None,
-            ))
+    kind_map = {
+        ActivityType.NOTE: "note_added",
+        ActivityType.CALL: "call_outbound",
+        ActivityType.EMAIL: "message_sent_email",
+        ActivityType.SMS: "message_sent_sms",
+        ActivityType.MEETING: "appointment_booked",
+        ActivityType.DOCUMENT: "document_uploaded",
+    }
+    cat_map = {
+        ActivityType.NOTE: "notes",
+        ActivityType.CALL: "calls",
+        ActivityType.EMAIL: "emails",
+        ActivityType.SMS: "texts",
+        ActivityType.MEETING: "activity",
+        ActivityType.DOCUMENT: "documents",
+    }
+    for a in db.execute(activity_q.order_by(Activity.created_at.desc()).limit(limit)).scalars():
+        events.append(_make_timeline_event(
+            id=f"act-{a.id}",
+            client_file_id=str(client_file_id),
+            org_id=str(org_id),
+            kind=kind_map.get(a.type, "note_added"),
+            event_category=cat_map.get(a.type, "activity"),
+            occurred_at=a.created_at,
+            headline=a.type.value if a.type else "Activity",
+            body=a.content,
+            actor_user_id=str(a.user_id) if a.user_id else None,
+        ))
 
     # ── SMS messages ────────────────────────────────────────────────────
     if category in ("all", "texts"):
@@ -669,15 +668,30 @@ def list_timeline(
                 metadata={"sender_email": e.sender_email, "sender_name": e.sender_name},
             ))
 
-    # Deduplicate by preferring graph emails over email_messages with same microsoft_message_id
+    # Deduplicate: prefer dedicated records (sms-*, em-*, graph-*) over Activity records (act-*)
+    # when they describe the same event (same body text within the same second).
+    detailed_keys: set[str] = set()
+    for ev in events:
+        eid = ev.get("id", "")
+        if eid.startswith(("sms-", "em-", "graph-")):
+            body_key = (ev.get("body") or "")[:100]
+            ts = (ev.get("occurred_at") or "")[:19]
+            detailed_keys.add(f"{body_key}|{ts}")
+
     seen_msg_ids: set[str] = set()
     deduped: list[dict] = []
     for ev in events:
+        eid = ev.get("id", "")
         mid = ev.get("related_message_id")
         if mid and mid in seen_msg_ids:
             continue
         if mid:
             seen_msg_ids.add(mid)
+        if eid.startswith("act-"):
+            body_key = (ev.get("body") or "")[:100]
+            ts = (ev.get("occurred_at") or "")[:19]
+            if f"{body_key}|{ts}" in detailed_keys:
+                continue
         deduped.append(ev)
 
     deduped.sort(key=lambda e: e.get("occurred_at", ""), reverse=True)
