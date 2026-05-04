@@ -355,6 +355,18 @@ def _build_tools(server_base: str) -> list:
                   "email": {"type": "string"},
               },
               ["phone_number"]),
+        _tool("get_lead_info",
+              "Look up a lead by phone number to get their CRM profile, loan details, stage, and notes.",
+              {"phone_number": {"type": "string", "description": "The caller's phone number"}},
+              ["phone_number"]),
+        _tool("update_lead_status",
+              "Update a lead's stage and add notes after the conversation progresses them. Use after qualifying, scheduling, or collecting application info.",
+              {
+                  "phone_number": {"type": "string", "description": "The lead's phone number"},
+                  "stage": {"type": "string", "description": "New stage: New, Attempted Contact, Prospect, Pre-Qualified, Pre-Approved, Application"},
+                  "notes": {"type": "string", "description": "Call summary or notes to append"},
+              },
+              ["phone_number"]),
     ]
 
 
@@ -527,10 +539,10 @@ async def get_lead_info_function(
                 "name": lead.name,
                 "email": lead.email,
                 "phone": lead.phone,
-                "stage": lead.stage.value if lead.stage else "New",
+                "stage": lead.stage.value if hasattr(lead.stage, 'value') else (lead.stage or "New"),
                 "source": lead.source,
                 "loan_type": lead.loan_type,
-                "preapproval_amount": lead.preapproval_amount,
+                "preapproval_amount": float(lead.preapproval_amount) if lead.preapproval_amount else None,
                 "credit_score": lead.credit_score,
                 "notes": lead.notes
             }
@@ -552,7 +564,6 @@ async def update_lead_status_function(
     Called by Vapi when conversation progresses the lead
     """
     try:
-        from database.enums import LeadStage
         from database.models import Lead
         from sqlalchemy import or_
         from datetime import datetime, timezone
@@ -584,27 +595,24 @@ async def update_lead_status_function(
         if not lead:
             return {"success": False, "error": "Lead not found"}
 
-        # Update stage if provided and valid
+        # Update stage if provided (stage is VARCHAR, direct assignment)
         if new_stage:
-            try:
-                # Map common stage names to enum values
-                stage_mapping = {
-                    "new": LeadStage.NEW,
-                    "attempted contact": LeadStage.ATTEMPTED_CONTACT,
-                    "prospect": LeadStage.PROSPECT,
-                    "application": LeadStage.APPLICATION,
-                    "pre-qualified": LeadStage.PRE_QUALIFIED,
-                    "pre-approved": LeadStage.PRE_APPROVED,
-                    "withdrawn": LeadStage.WITHDRAWN,
-                    "does not qualify": LeadStage.DOES_NOT_QUALIFY,
-                }
-
-                stage_key = new_stage.lower()
-                if stage_key in stage_mapping:
-                    lead.stage = stage_mapping[stage_key]
-
-            except Exception as e:
-                logger.error(f"Invalid stage: {new_stage}, {e}")
+            valid_stages = {
+                "new": "New",
+                "attempted contact": "Attempted Contact",
+                "prospect": "Prospect",
+                "pre-qualified": "Pre-Qualified",
+                "pre-approved": "Pre-Approved",
+                "application": "Application",
+                "long-term nurture": "Long-Term Nurture",
+                "credit repair": "Credit Repair",
+                "do not call": "Do Not Call",
+            }
+            stage_key = new_stage.lower().strip()
+            if stage_key in valid_stages:
+                lead.stage = valid_stages[stage_key]
+            else:
+                lead.stage = new_stage
 
         # Append notes
         if notes:
@@ -622,7 +630,7 @@ async def update_lead_status_function(
             "success": True,
             "message": "Lead updated successfully",
             "lead_id": lead.id,
-            "current_stage": lead.stage.value if lead.stage else None
+            "current_stage": lead.stage.value if hasattr(lead.stage, 'value') else (lead.stage or None)
         }
 
     except Exception as e:

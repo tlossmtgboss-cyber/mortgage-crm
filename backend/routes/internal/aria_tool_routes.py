@@ -65,6 +65,32 @@ class LeadUpdateRequest(BaseModel):
     property_type: Optional[str] = None
     timeline: Optional[str] = None
     notes: Optional[str] = None
+    stage: Optional[str] = None
+    credit_score: Optional[int] = None
+    loan_amount: Optional[float] = None
+    loan_type: Optional[str] = None
+    interest_rate: Optional[float] = None
+    loan_term: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    zip_code: Optional[str] = None
+    source: Optional[str] = None
+    annual_income: Optional[float] = None
+    employment_status: Optional[str] = None
+    employer_name: Optional[str] = None
+    property_value: Optional[float] = None
+    down_payment: Optional[float] = None
+    first_time_buyer: Optional[bool] = None
+    occupancy_type: Optional[str] = None
+    monthly_debts: Optional[float] = None
+    preapproval_amount: Optional[float] = None
+    loan_officer: Optional[str] = None
+    processor: Optional[str] = None
+    next_action: Optional[str] = None
+    sentiment: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
 
 class LeadInfoRequest(BaseModel):
     lead_id: int
@@ -135,6 +161,7 @@ async def lead_info(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    """Return comprehensive lead data for the voice agent."""
     _verify_internal_key(request)
     from database.models.lead_loan import Lead
     q = db.query(Lead).filter(Lead.id == req.lead_id)
@@ -143,13 +170,49 @@ async def lead_info(
     lead = q.first()
     if not lead:
         return {"error": f"Lead {req.lead_id} not found"}
+
+    def _num(val):
+        return float(val) if val is not None else None
+
     return {
+        "id": lead.id,
         "first_name": getattr(lead, "first_name", None) or lead.name,
         "last_name": getattr(lead, "last_name", ""),
+        "name": lead.name,
         "phone": lead.phone,
         "email": lead.email,
         "stage": lead.stage,
+        "source": lead.source,
         "owner_id": lead.owner_id,
+        "organization_id": lead.organization_id,
+        "credit_score": getattr(lead, "credit_score", None),
+        "loan_amount": _num(getattr(lead, "loan_amount", None)),
+        "loan_type": getattr(lead, "loan_type", None),
+        "loan_purpose": getattr(lead, "loan_purpose", None),
+        "interest_rate": _num(getattr(lead, "interest_rate", None)),
+        "loan_term": getattr(lead, "loan_term", None),
+        "property_type": getattr(lead, "property_type", None),
+        "property_value": _num(getattr(lead, "property_value", None)),
+        "address": getattr(lead, "address", None),
+        "city": getattr(lead, "city", None),
+        "state": getattr(lead, "state", None),
+        "zip_code": getattr(lead, "zip_code", None),
+        "occupancy_type": getattr(lead, "occupancy_type", None),
+        "down_payment": _num(getattr(lead, "down_payment", None)),
+        "preapproval_amount": _num(getattr(lead, "preapproval_amount", None)),
+        "annual_income": _num(getattr(lead, "annual_income", None)),
+        "monthly_debts": _num(getattr(lead, "monthly_debts", None)),
+        "employment_status": getattr(lead, "employment_status", None),
+        "employer_name": getattr(lead, "employer_name", None),
+        "first_time_buyer": getattr(lead, "first_time_buyer", None),
+        "ai_score": getattr(lead, "ai_score", None),
+        "sentiment": getattr(lead, "sentiment", None),
+        "next_action": getattr(lead, "next_action", None),
+        "notes": getattr(lead, "notes", None),
+        "timeline": getattr(lead, "timeline", None),
+        "loan_officer": getattr(lead, "loan_officer", None),
+        "processor": getattr(lead, "processor", None),
+        "created_at": lead.created_at.isoformat() if lead.created_at else None,
     }
 
 
@@ -326,7 +389,7 @@ async def update_lead_endpoint(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Update an existing lead from voice agent."""
+    """Update an existing lead from voice agent — supports ALL lead fields."""
     _verify_internal_key(request)
     from database.models.lead_loan import Lead
 
@@ -334,24 +397,114 @@ async def update_lead_endpoint(
     if not lead:
         return {"error": f"Lead {req.lead_id} not found"}
 
+    updated_fields = []
+
     if req.phone:
         lead.phone = req.phone
+        updated_fields.append("phone")
     if req.email:
         lead.email = req.email
+        updated_fields.append("email")
     if req.loan_purpose:
         lead.loan_purpose = req.loan_purpose
+        updated_fields.append("loan_purpose")
     if req.property_type:
         lead.property_type = req.property_type
+        updated_fields.append("property_type")
     if req.timeline:
         lead.timeline = req.timeline
+        updated_fields.append("timeline")
     if req.notes:
         lead.notes = (lead.notes or "") + f"\n{req.notes}" if lead.notes else req.notes
+        updated_fields.append("notes")
+    if req.stage:
+        lead.stage = req.stage
+        updated_fields.append("stage")
+    if req.credit_score is not None:
+        lead.credit_score = req.credit_score
+        updated_fields.append("credit_score")
+    if req.loan_amount is not None:
+        lead.loan_amount = req.loan_amount
+        updated_fields.append("loan_amount")
+    if req.loan_type:
+        lead.loan_type = req.loan_type
+        updated_fields.append("loan_type")
+    if req.interest_rate is not None:
+        lead.interest_rate = req.interest_rate
+        updated_fields.append("interest_rate")
+    if req.loan_term:
+        lead.loan_term = req.loan_term
+        updated_fields.append("loan_term")
+    if req.address:
+        lead.address = req.address
+        updated_fields.append("address")
+    if req.city:
+        lead.city = req.city
+        updated_fields.append("city")
+    if req.state:
+        lead.state = req.state
+        updated_fields.append("state")
+    if req.zip_code:
+        lead.zip_code = req.zip_code
+        updated_fields.append("zip_code")
+    if req.source:
+        lead.source = req.source
+        updated_fields.append("source")
+    if req.annual_income is not None:
+        lead.annual_income = req.annual_income
+        updated_fields.append("annual_income")
+    if req.employment_status:
+        lead.employment_status = req.employment_status
+        updated_fields.append("employment_status")
+    if req.employer_name:
+        lead.employer_name = req.employer_name
+        updated_fields.append("employer_name")
+    if req.property_value is not None:
+        lead.property_value = req.property_value
+        updated_fields.append("property_value")
+    if req.down_payment is not None:
+        lead.down_payment = req.down_payment
+        updated_fields.append("down_payment")
+    if req.first_time_buyer is not None:
+        lead.first_time_buyer = req.first_time_buyer
+        updated_fields.append("first_time_buyer")
+    if req.occupancy_type:
+        lead.occupancy_type = req.occupancy_type
+        updated_fields.append("occupancy_type")
+    if req.monthly_debts is not None:
+        lead.monthly_debts = req.monthly_debts
+        updated_fields.append("monthly_debts")
+    if req.preapproval_amount is not None:
+        lead.preapproval_amount = req.preapproval_amount
+        updated_fields.append("preapproval_amount")
+    if req.loan_officer:
+        lead.loan_officer = req.loan_officer
+        updated_fields.append("loan_officer")
+    if req.processor:
+        lead.processor = req.processor
+        updated_fields.append("processor")
+    if req.next_action:
+        lead.next_action = req.next_action
+        updated_fields.append("next_action")
+    if req.sentiment:
+        lead.sentiment = req.sentiment
+        updated_fields.append("sentiment")
+    if req.first_name:
+        lead.first_name = req.first_name
+        lead.name = f"{req.first_name} {lead.last_name or ''}".strip()
+        updated_fields.append("first_name")
+    if req.last_name:
+        lead.last_name = req.last_name
+        lead.name = f"{lead.first_name or ''} {req.last_name}".strip()
+        updated_fields.append("last_name")
+
     db.commit()
 
     return {
         "lead_id": lead.id,
         "name": lead.name,
         "updated": True,
+        "fields_updated": updated_fields,
     }
 
 

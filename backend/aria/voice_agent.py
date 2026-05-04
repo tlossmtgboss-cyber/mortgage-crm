@@ -905,8 +905,31 @@ class AriaVoiceAgent(Agent):
         property_type: str = "",
         timeline: str = "",
         notes: str = "",
+        stage: str = "",
+        credit_score: str = "",
+        loan_amount: str = "",
+        loan_type: str = "",
+        interest_rate: str = "",
+        loan_term: str = "",
+        address: str = "",
+        city: str = "",
+        state: str = "",
+        zip_code: str = "",
+        source: str = "",
+        annual_income: str = "",
+        employment_status: str = "",
+        employer_name: str = "",
+        property_value: str = "",
+        down_payment: str = "",
+        first_time_buyer: str = "",
+        occupancy_type: str = "",
+        monthly_debts: str = "",
+        preapproval_amount: str = "",
+        next_action: str = "",
+        first_name: str = "",
+        last_name: str = "",
     ):
-        """Update an existing lead with new info gathered during conversation.
+        """Update any field on a lead. Supports ALL CRM fields including: stage, credit_score, loan_amount, loan_type, address, city, state, zip_code, annual_income, employment_status, employer_name, property_value, down_payment, first_time_buyer, occupancy_type, monthly_debts, preapproval_amount, interest_rate, loan_term, next_action, first_name, last_name, and more.
         If lead_id is not provided, uses the most recently created lead from this session.
         Call this after each follow-up answer to save the detail immediately."""
         resolved_id = lead_id or str(self._session_data.get("last_created_lead_id", ""))
@@ -925,6 +948,76 @@ class AriaVoiceAgent(Agent):
             payload["timeline"] = timeline
         if notes:
             payload["notes"] = notes
+        if stage:
+            payload["stage"] = stage
+        if credit_score:
+            try:
+                payload["credit_score"] = int(credit_score)
+            except ValueError:
+                pass
+        if loan_amount:
+            try:
+                payload["loan_amount"] = float(loan_amount.replace(",", "").replace("$", ""))
+            except ValueError:
+                pass
+        if loan_type:
+            payload["loan_type"] = loan_type
+        if interest_rate:
+            try:
+                payload["interest_rate"] = float(interest_rate.replace("%", ""))
+            except ValueError:
+                pass
+        if loan_term:
+            payload["loan_term"] = loan_term
+        if address:
+            payload["address"] = address
+        if city:
+            payload["city"] = city
+        if state:
+            payload["state"] = state
+        if zip_code:
+            payload["zip_code"] = zip_code
+        if source:
+            payload["source"] = source
+        if annual_income:
+            try:
+                payload["annual_income"] = float(annual_income.replace(",", "").replace("$", ""))
+            except ValueError:
+                pass
+        if employment_status:
+            payload["employment_status"] = employment_status
+        if employer_name:
+            payload["employer_name"] = employer_name
+        if property_value:
+            try:
+                payload["property_value"] = float(property_value.replace(",", "").replace("$", ""))
+            except ValueError:
+                pass
+        if down_payment:
+            try:
+                payload["down_payment"] = float(down_payment.replace(",", "").replace("$", ""))
+            except ValueError:
+                pass
+        if first_time_buyer:
+            payload["first_time_buyer"] = first_time_buyer.lower() in ("yes", "true", "1")
+        if occupancy_type:
+            payload["occupancy_type"] = occupancy_type
+        if monthly_debts:
+            try:
+                payload["monthly_debts"] = float(monthly_debts.replace(",", "").replace("$", ""))
+            except ValueError:
+                pass
+        if preapproval_amount:
+            try:
+                payload["preapproval_amount"] = float(preapproval_amount.replace(",", "").replace("$", ""))
+            except ValueError:
+                pass
+        if next_action:
+            payload["next_action"] = next_action
+        if first_name:
+            payload["first_name"] = first_name
+        if last_name:
+            payload["last_name"] = last_name
         result = await self._call_backend(
             "/internal/aria/update-lead",
             payload,
@@ -934,6 +1027,53 @@ class AriaVoiceAgent(Agent):
             "lead_id": resolved_id,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         })
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def add_note(
+        self,
+        context: RunContext,
+        lead_id: str = "",
+        content: str = "",
+        note_type: str = "call_summary",
+    ):
+        """Add a note to a lead's record. Use for call summaries, follow-up items, or any info gathered during conversation.
+        If lead_id is not provided, uses the most recently created lead from this session.
+        note_type: general, call_summary, meeting, status_update, follow_up"""
+        resolved_id = lead_id or str(self._session_data.get("last_created_lead_id", ""))
+        if not resolved_id:
+            return json.dumps({"error": "No lead_id provided and no lead was created in this session."})
+        if not content:
+            return json.dumps({"error": "Note content is required."})
+        result = await self._call_backend(
+            "/internal/aria/tool/execute",
+            {"tool_name": "create_note", "params": {
+                "lead_id": int(resolved_id),
+                "content": content,
+                "note_type": note_type,
+            }},
+        )
+        self._session_data["tools_executed"].append({
+            "tool": "add_note",
+            "lead_id": resolved_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        return json.dumps(result, default=str)
+
+    @function_tool()
+    async def get_full_lead_info(
+        self,
+        context: RunContext,
+        lead_id: str = "",
+    ):
+        """Get ALL information about a lead — contact info, financial details, loan info, property details, employment, notes, and more. Use when you need comprehensive borrower data."""
+        resolved_id = lead_id or str(self._session_data.get("last_created_lead_id", ""))
+        if not resolved_id:
+            return json.dumps({"error": "No lead_id provided."})
+        result = await self._call_backend(
+            "/internal/aria/lead-info",
+            {"lead_id": int(resolved_id)},
+        )
         return json.dumps(result, default=str)
 
     @function_tool()

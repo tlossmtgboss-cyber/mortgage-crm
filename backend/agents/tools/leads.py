@@ -1162,3 +1162,200 @@ def get_stale_leads(
 
     except Exception as e:
         return ToolResult.error(f"Failed to get stale leads: {str(e)}")
+
+
+@mortgage_tool(
+    name="update_lead_fields",
+    description="Update one or more fields on a lead record. Supports all CRM fields: stage, credit_score, loan_amount, loan_type, phone, email, address, city, state, zip_code, annual_income, employment_status, employer_name, property_type, property_value, down_payment, loan_purpose, interest_rate, loan_term, occupancy_type, monthly_debts, preapproval_amount, notes, next_action, sentiment, first_time_buyer, source.",
+    agent_roles=["lead_nurturer", "sales", "manager", "voice_os", "ai_receptionist", "pipeline_analyst"],
+    risk_level="medium",
+    requires_confirmation=True,
+    examples=[
+        "Update the lead's stage to Pre-Qualified",
+        "Set credit score to 740",
+        "Change loan amount to $350,000",
+        "Update the lead's address",
+    ],
+)
+def update_lead_fields(
+    lead_id: int,
+    stage: Optional[str] = None,
+    credit_score: Optional[int] = None,
+    loan_amount: Optional[float] = None,
+    loan_type: Optional[str] = None,
+    phone: Optional[str] = None,
+    email: Optional[str] = None,
+    address: Optional[str] = None,
+    city: Optional[str] = None,
+    state: Optional[str] = None,
+    zip_code: Optional[str] = None,
+    annual_income: Optional[float] = None,
+    employment_status: Optional[str] = None,
+    employer_name: Optional[str] = None,
+    property_type: Optional[str] = None,
+    property_value: Optional[float] = None,
+    down_payment: Optional[float] = None,
+    loan_purpose: Optional[str] = None,
+    interest_rate: Optional[float] = None,
+    loan_term: Optional[str] = None,
+    occupancy_type: Optional[str] = None,
+    monthly_debts: Optional[float] = None,
+    preapproval_amount: Optional[float] = None,
+    notes: Optional[str] = None,
+    next_action: Optional[str] = None,
+    sentiment: Optional[str] = None,
+    first_time_buyer: Optional[bool] = None,
+    source: Optional[str] = None,
+    timeline: Optional[str] = None,
+) -> ToolResult:
+    """Update any combination of fields on a lead."""
+    try:
+        from sqlalchemy import text
+
+        lead_check = execute_single(
+            "SELECT id, first_name, last_name FROM leads WHERE id = :lead_id",
+            {"lead_id": lead_id}
+        )
+        if not lead_check:
+            return ToolResult.no_data(f"Lead {lead_id} not found")
+
+        updates = {}
+        if stage is not None:
+            updates["stage"] = stage
+        if credit_score is not None:
+            updates["credit_score"] = credit_score
+        if loan_amount is not None:
+            updates["loan_amount"] = loan_amount
+        if loan_type is not None:
+            updates["loan_type"] = loan_type
+        if phone is not None:
+            updates["phone"] = phone
+        if email is not None:
+            updates["email"] = email
+        if address is not None:
+            updates["address"] = address
+        if city is not None:
+            updates["city"] = city
+        if state is not None:
+            updates["state"] = state
+        if zip_code is not None:
+            updates["zip_code"] = zip_code
+        if annual_income is not None:
+            updates["annual_income"] = annual_income
+        if employment_status is not None:
+            updates["employment_status"] = employment_status
+        if employer_name is not None:
+            updates["employer_name"] = employer_name
+        if property_type is not None:
+            updates["property_type"] = property_type
+        if property_value is not None:
+            updates["property_value"] = property_value
+        if down_payment is not None:
+            updates["down_payment"] = down_payment
+        if loan_purpose is not None:
+            updates["loan_purpose"] = loan_purpose
+        if interest_rate is not None:
+            updates["interest_rate"] = interest_rate
+        if loan_term is not None:
+            updates["loan_term"] = loan_term
+        if occupancy_type is not None:
+            updates["occupancy_type"] = occupancy_type
+        if monthly_debts is not None:
+            updates["monthly_debts"] = monthly_debts
+        if preapproval_amount is not None:
+            updates["preapproval_amount"] = preapproval_amount
+        if next_action is not None:
+            updates["next_action"] = next_action
+        if sentiment is not None:
+            updates["sentiment"] = sentiment
+        if first_time_buyer is not None:
+            updates["first_time_buyer"] = first_time_buyer
+        if source is not None:
+            updates["source"] = source
+        if timeline is not None:
+            updates["timeline"] = timeline
+
+        if not updates:
+            return ToolResult.error("No fields provided to update")
+
+        set_clauses = ", ".join(f"{k} = :{k}" for k in updates)
+        updates["lead_id"] = lead_id
+
+        if notes is not None:
+            set_clauses += ", notes = COALESCE(notes, '') || E'\\n' || :notes"
+            updates["notes"] = notes
+
+        with get_db() as db:
+            db.execute(
+                text(f"UPDATE leads SET {set_clauses}, updated_at = NOW() WHERE id = :lead_id"),
+                updates,
+            )
+
+        return ToolResult.success({
+            "lead_id": lead_id,
+            "lead_name": f"{lead_check['first_name']} {lead_check['last_name']}",
+            "fields_updated": list(updates.keys()),
+            "updated": True,
+        })
+
+    except Exception as e:
+        return ToolResult.error(f"Failed to update lead: {str(e)}")
+
+
+@mortgage_tool(
+    name="create_note",
+    description="Add a note or activity record to a lead. Use for call summaries, meeting notes, status updates, or any free-text annotation.",
+    agent_roles=["lead_nurturer", "sales", "manager", "voice_os", "ai_receptionist", "pipeline_analyst", "compliance_checker"],
+    risk_level="low",
+    examples=[
+        "Add a note to this lead",
+        "Log a call summary",
+        "Record that we discussed rates",
+    ],
+)
+def create_note(
+    lead_id: int,
+    content: str,
+    note_type: str = "general",
+) -> ToolResult:
+    """Add a note to a lead record.
+
+    Args:
+        lead_id: The lead to add the note to
+        content: The note text
+        note_type: Type of note — general, call_summary, meeting, status_update, follow_up
+    """
+    try:
+        from sqlalchemy import text
+
+        lead_check = execute_single(
+            "SELECT id, first_name, last_name, notes FROM leads WHERE id = :lead_id",
+            {"lead_id": lead_id}
+        )
+        if not lead_check:
+            return ToolResult.no_data(f"Lead {lead_id} not found")
+
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        formatted_note = f"[{timestamp}] [{note_type}] {content}"
+
+        with get_db() as db:
+            db.execute(
+                text("""
+                    UPDATE leads
+                    SET notes = COALESCE(notes, '') || E'\\n' || :note,
+                        updated_at = NOW()
+                    WHERE id = :lead_id
+                """),
+                {"note": formatted_note, "lead_id": lead_id},
+            )
+
+        return ToolResult.success({
+            "lead_id": lead_id,
+            "lead_name": f"{lead_check['first_name']} {lead_check['last_name']}",
+            "note_type": note_type,
+            "note_added": True,
+            "content": content,
+        })
+
+    except Exception as e:
+        return ToolResult.error(f"Failed to create note: {str(e)}")
