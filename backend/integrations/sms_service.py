@@ -147,16 +147,24 @@ class SMSClient:
                 msg_id = result.get("id")
 
                 # 5. Delivery Tracking & Rate limit recording (with TCPA consent proof)
+                # Wrapped separately — tracker failure must NOT mask a successful send
                 if self.db:
-                    record_message_sent(
-                        self.db, msg_id, to_phone, self.from_number,
-                        message, lead_id=lead_id, user_id=user_id,
-                        consent_record_id=consent_record_id,
-                        consent_verified_at=consent_verified_at,
-                        consent_method=consent_method,
-                        organization_id=organization_id,
-                    )
-                    record_send_attempt(self.db, to_phone, user_id=user_id, lead_id=lead_id)
+                    try:
+                        record_message_sent(
+                            self.db, msg_id, to_phone, self.from_number,
+                            message, lead_id=lead_id, user_id=user_id,
+                            consent_record_id=consent_record_id,
+                            consent_verified_at=consent_verified_at,
+                            consent_method=consent_method,
+                            organization_id=organization_id,
+                        )
+                        record_send_attempt(self.db, to_phone, user_id=user_id, lead_id=lead_id)
+                    except Exception as rec_err:
+                        logger.warning("Post-send recording failed (SMS was sent): %s", rec_err)
+                        try:
+                            self.db.rollback()
+                        except Exception:
+                            pass
 
                 return {"success": True, "message_id": msg_id}
             else:

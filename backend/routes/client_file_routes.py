@@ -1410,7 +1410,11 @@ async def _send_sms_from_client_file(
     body: str,
     current_user: Any,
 ) -> dict:
+    # Read ALL attributes from cf BEFORE SMSClient touches the session.
+    # SMSClient.__init__ and .send_sms() do multiple db.rollback()/flush()
+    # calls that expire ORM objects and corrupt the session state.
     phone = cf.primary_phone
+    lead_id = cf.lead_id
     if not phone:
         raise HTTPException(400, "client has no phone number on file")
 
@@ -1420,24 +1424,27 @@ async def _send_sms_from_client_file(
     if not sms_client.enabled:
         raise HTTPException(503, "SMS service not configured")
 
-    result = sms_client.send_sms(
-        phone,
-        body,
-        lead_id=cf.lead_id,
-        user_id=user_id,
-        organization_id=org_id,
-    )
+    from_number = sms_client.from_number or ""
+
+    try:
+        result = sms_client.send_sms(
+            phone,
+            body,
+            lead_id=lead_id,
+            user_id=user_id,
+            organization_id=org_id,
+        )
+    except Exception as e:
+        logger.error("SMS send_sms exception: %s", e, exc_info=True)
+        raise HTTPException(502, f"SMS send failed: {e}")
 
     if not result.get("success"):
         error = result.get("error") or result.get("reason") or "SMS send failed"
         raise HTTPException(502, error)
 
-    # SMS was delivered — record-keeping uses raw SQL to avoid ORM/EncryptedString
-    # issues.  The session may be dirty from flushes inside send_sms(), so we
-    # get a fresh connection for our writes.
+    # SMS was delivered — record-keeping uses a fresh DB session + raw SQL
+    # because the request-scoped session is corrupted by SMSClient internals.
     provider_msg_id = result.get("message_id")
-    lead_id = cf.lead_id
-    from_number = sms_client.from_number or ""
 
     from datetime import datetime as _dt, timezone as _tz
     now = _dt.now(_tz.utc)
@@ -1445,10 +1452,10 @@ async def _send_sms_from_client_file(
     from db import SessionLocal
     from sqlalchemy import text as sa_text
 
-    record_db = SessionLocal()
     sms_row_id = None
     activity_row_id = None
     try:
+        record_db = SessionLocal()
         try:
             row = record_db.execute(sa_text("""
                 INSERT INTO sms_messages
@@ -1486,13 +1493,12 @@ async def _send_sms_from_client_file(
 
         record_db.commit()
     except Exception as e:
-        logger.error("SMS record-keeping commit failed: %s", e)
+        logger.error("SMS record-keeping failed: %s", e)
+    finally:
         try:
-            record_db.rollback()
+            record_db.close()
         except Exception:
             pass
-    finally:
-        record_db.close()
 
     event_id = f"sms-{sms_row_id}" if sms_row_id else (
         f"act-{activity_row_id}" if activity_row_id else f"tmp-{provider_msg_id or 'sms'}"
