@@ -682,133 +682,42 @@ class AriaVoiceAgent(Agent):
     async def update_loan(
         self,
         context: RunContext,
-        loan_id: str,
-        stage: str = "",
-        loan_type: str = "",
-        program: str = "",
-        amount: str = "",
-        purchase_price: str = "",
-        down_payment: str = "",
-        rate: str = "",
-        term: str = "",
-        property_address: str = "",
-        property_city: str = "",
-        property_state: str = "",
-        property_zip: str = "",
-        property_type: str = "",
-        occupancy_type: str = "",
-        borrower_name: str = "",
-        borrower_email: str = "",
-        borrower_phone: str = "",
-        coborrower_name: str = "",
-        processor: str = "",
-        underwriter: str = "",
-        closer: str = "",
-        realtor_agent: str = "",
-        title_company: str = "",
-        lender: str = "",
-        loan_purpose: str = "",
-        closing_date: str = "",
-        lock_date: str = "",
-        lock_expiration_date: str = "",
-        rate_lock_status: str = "",
+        loan_id: str = "",
+        field_name: str = "",
+        field_value: str = "",
         notes: str = "",
-        monthly_payment: str = "",
-        ltv: str = "",
-        loan_number: str = "",
     ):
-        """Update any field on a loan record. Supports ALL fields: stage, financials (amount, rate, term, purchase_price, down_payment), property info, team (processor, underwriter, closer, realtor), dates (closing, lock), rate lock status, monthly payment, LTV, and more.
+        """Update a field on a loan record. Call once per field you want to change.
+        Supported fields: stage, loan_type, program, amount, purchase_price, down_payment, rate, term, property_address, property_city, property_state, property_zip, property_type, occupancy_type, borrower_name, borrower_email, borrower_phone, coborrower_name, processor, underwriter, closer, realtor_agent, title_company, lender, loan_purpose, closing_date, lock_date, lock_expiration_date, rate_lock_status, monthly_payment, ltv, loan_number.
         Use for active loans AND funded/closed (MUM) records."""
         if not loan_id:
             return json.dumps({"error": "loan_id is required."})
         payload: Dict[str, Any] = {"loan_id": int(loan_id)}
-        if stage:
-            payload["stage"] = stage
-        if loan_type:
-            payload["loan_type"] = loan_type
-        if program:
-            payload["program"] = program
-        if amount:
-            try:
-                payload["amount"] = float(amount.replace(",", "").replace("$", ""))
-            except ValueError:
-                pass
-        if purchase_price:
-            try:
-                payload["purchase_price"] = float(purchase_price.replace(",", "").replace("$", ""))
-            except ValueError:
-                pass
-        if down_payment:
-            try:
-                payload["down_payment"] = float(down_payment.replace(",", "").replace("$", ""))
-            except ValueError:
-                pass
-        if rate:
-            try:
-                payload["rate"] = float(rate.replace("%", ""))
-            except ValueError:
-                pass
-        if term:
-            try:
-                payload["term"] = int(term)
-            except ValueError:
-                pass
-        if property_address:
-            payload["property_address"] = property_address
-        if property_city:
-            payload["property_city"] = property_city
-        if property_state:
-            payload["property_state"] = property_state
-        if property_zip:
-            payload["property_zip"] = property_zip
-        if property_type:
-            payload["property_type"] = property_type
-        if occupancy_type:
-            payload["occupancy_type"] = occupancy_type
-        if borrower_name:
-            payload["borrower_name"] = borrower_name
-        if borrower_email:
-            payload["borrower_email"] = borrower_email
-        if borrower_phone:
-            payload["borrower_phone"] = borrower_phone
-        if coborrower_name:
-            payload["coborrower_name"] = coborrower_name
-        if processor:
-            payload["processor"] = processor
-        if underwriter:
-            payload["underwriter"] = underwriter
-        if closer:
-            payload["closer"] = closer
-        if realtor_agent:
-            payload["realtor_agent"] = realtor_agent
-        if title_company:
-            payload["title_company"] = title_company
-        if lender:
-            payload["lender"] = lender
-        if loan_purpose:
-            payload["loan_purpose"] = loan_purpose
-        if closing_date:
-            payload["closing_date"] = closing_date
-        if lock_date:
-            payload["lock_date"] = lock_date
-        if lock_expiration_date:
-            payload["lock_expiration_date"] = lock_expiration_date
-        if rate_lock_status:
-            payload["rate_lock_status"] = rate_lock_status
+
         if notes:
             payload["notes"] = notes
-        if monthly_payment:
-            try:
-                payload["monthly_payment"] = float(monthly_payment.replace(",", "").replace("$", ""))
-            except ValueError:
-                pass
-        if ltv:
-            try:
-                payload["ltv"] = float(ltv.replace("%", ""))
-            except ValueError:
-                pass
-        if loan_number:
-            payload["loan_number"] = loan_number
+
+        if field_name and field_value:
+            numeric_fields = {"amount", "purchase_price", "down_payment", "rate",
+                              "monthly_payment", "ltv"}
+            int_fields = {"term"}
+            if field_name in numeric_fields:
+                try:
+                    clean = field_value.replace(",", "").replace("$", "").replace("%", "")
+                    payload[field_name] = float(clean)
+                except ValueError:
+                    payload[field_name] = field_value
+            elif field_name in int_fields:
+                try:
+                    payload[field_name] = int(field_value)
+                except ValueError:
+                    payload[field_name] = field_value
+            else:
+                payload[field_name] = field_value
+
+        if not field_name and not notes:
+            return json.dumps({"error": "Provide field_name + field_value, or notes."})
+
         result = await self._call_backend("/internal/aria/update-loan", payload)
         self._session_data["tools_executed"].append({
             "tool": "update_loan",
@@ -1063,129 +972,39 @@ class AriaVoiceAgent(Agent):
         self,
         context: RunContext,
         lead_id: str = "",
-        phone: str = "",
-        email: str = "",
-        loan_purpose: str = "",
-        property_type: str = "",
-        timeline: str = "",
+        field_name: str = "",
+        field_value: str = "",
         notes: str = "",
-        stage: str = "",
-        credit_score: str = "",
-        loan_amount: str = "",
-        loan_type: str = "",
-        interest_rate: str = "",
-        loan_term: str = "",
-        address: str = "",
-        city: str = "",
-        state: str = "",
-        zip_code: str = "",
-        source: str = "",
-        annual_income: str = "",
-        employment_status: str = "",
-        employer_name: str = "",
-        property_value: str = "",
-        down_payment: str = "",
-        first_time_buyer: str = "",
-        occupancy_type: str = "",
-        monthly_debts: str = "",
-        preapproval_amount: str = "",
-        next_action: str = "",
-        first_name: str = "",
-        last_name: str = "",
     ):
-        """Update any field on a lead. Supports ALL CRM fields including: stage, credit_score, loan_amount, loan_type, address, city, state, zip_code, annual_income, employment_status, employer_name, property_value, down_payment, first_time_buyer, occupancy_type, monthly_debts, preapproval_amount, interest_rate, loan_term, next_action, first_name, last_name, and more.
-        If lead_id is not provided, uses the most recently created lead from this session.
-        Call this after each follow-up answer to save the detail immediately."""
+        """Update a field on a lead record. Call once per field you want to change.
+        Supported fields: phone, email, stage, credit_score, loan_amount, loan_type, loan_purpose, property_type, timeline, interest_rate, loan_term, address, city, state, zip_code, source, annual_income, employment_status, employer_name, property_value, down_payment, first_time_buyer, occupancy_type, monthly_debts, preapproval_amount, next_action, first_name, last_name.
+        If lead_id is not provided, uses the most recently created lead."""
         resolved_id = lead_id or str(self._session_data.get("last_created_lead_id", ""))
         if not resolved_id:
             return json.dumps({"error": "No lead_id provided and no lead was created in this session."})
         payload: Dict[str, Any] = {"lead_id": int(resolved_id)}
-        if phone:
-            payload["phone"] = phone
-        if email:
-            payload["email"] = email
-        if loan_purpose:
-            payload["loan_purpose"] = loan_purpose
-        if property_type:
-            payload["property_type"] = property_type
-        if timeline:
-            payload["timeline"] = timeline
+
         if notes:
             payload["notes"] = notes
-        if stage:
-            payload["stage"] = stage
-        if credit_score:
-            try:
-                payload["credit_score"] = int(credit_score)
-            except ValueError:
-                pass
-        if loan_amount:
-            try:
-                payload["loan_amount"] = float(loan_amount.replace(",", "").replace("$", ""))
-            except ValueError:
-                pass
-        if loan_type:
-            payload["loan_type"] = loan_type
-        if interest_rate:
-            try:
-                payload["interest_rate"] = float(interest_rate.replace("%", ""))
-            except ValueError:
-                pass
-        if loan_term:
-            payload["loan_term"] = loan_term
-        if address:
-            payload["address"] = address
-        if city:
-            payload["city"] = city
-        if state:
-            payload["state"] = state
-        if zip_code:
-            payload["zip_code"] = zip_code
-        if source:
-            payload["source"] = source
-        if annual_income:
-            try:
-                payload["annual_income"] = float(annual_income.replace(",", "").replace("$", ""))
-            except ValueError:
-                pass
-        if employment_status:
-            payload["employment_status"] = employment_status
-        if employer_name:
-            payload["employer_name"] = employer_name
-        if property_value:
-            try:
-                payload["property_value"] = float(property_value.replace(",", "").replace("$", ""))
-            except ValueError:
-                pass
-        if down_payment:
-            try:
-                payload["down_payment"] = float(down_payment.replace(",", "").replace("$", ""))
-            except ValueError:
-                pass
-        if first_time_buyer:
-            payload["first_time_buyer"] = first_time_buyer.lower() in ("yes", "true", "1")
-        if occupancy_type:
-            payload["occupancy_type"] = occupancy_type
-        if monthly_debts:
-            try:
-                payload["monthly_debts"] = float(monthly_debts.replace(",", "").replace("$", ""))
-            except ValueError:
-                pass
-        if preapproval_amount:
-            try:
-                payload["preapproval_amount"] = float(preapproval_amount.replace(",", "").replace("$", ""))
-            except ValueError:
-                pass
-        if next_action:
-            payload["next_action"] = next_action
-        if first_name:
-            payload["first_name"] = first_name
-        if last_name:
-            payload["last_name"] = last_name
-        result = await self._call_backend(
-            "/internal/aria/update-lead",
-            payload,
-        )
+
+        if field_name and field_value:
+            numeric_fields = {"credit_score", "loan_amount", "interest_rate", "annual_income",
+                              "property_value", "down_payment", "monthly_debts", "preapproval_amount"}
+            if field_name in numeric_fields:
+                try:
+                    clean = field_value.replace(",", "").replace("$", "").replace("%", "")
+                    payload[field_name] = int(clean) if field_name == "credit_score" else float(clean)
+                except ValueError:
+                    payload[field_name] = field_value
+            elif field_name == "first_time_buyer":
+                payload[field_name] = field_value.lower() in ("yes", "true", "1")
+            else:
+                payload[field_name] = field_value
+
+        if not field_name and not notes:
+            return json.dumps({"error": "Provide field_name + field_value, or notes."})
+
+        result = await self._call_backend("/internal/aria/update-lead", payload)
         self._session_data["tools_executed"].append({
             "tool": "update_lead",
             "lead_id": resolved_id,
