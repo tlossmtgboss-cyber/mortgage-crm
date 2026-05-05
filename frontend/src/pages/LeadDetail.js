@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useLead } from '../hooks/useQueries';
 import { leadsAPI, activitiesAPI, circleOfCashflowAPI, tasksAPI, loansAPI, borrowerApplicationAPI, purlAPI, partnersAPI, API_BASE_URL } from '../services/api';
 import { ClickableEmail, ClickablePhone } from '../components/ClickableContact';
 import SMSModal from '../components/SMSModal';
@@ -38,6 +39,10 @@ import { getToken } from '../utils/tokenStore';
 function LeadDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+
+  // Use React Query for cached lead fetching - instant on revisit!
+  const { data: leadQueryData, isLoading: leadQueryLoading, error: leadQueryError, refetch: refetchLead } = useLead(id);
+
   const [lead, setLead] = useState(null);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -356,8 +361,64 @@ function LeadDetail() {
     }
   };
 
+  // Process lead data from React Query cache
   useEffect(() => {
-    loadLeadData();
+    if (leadQueryData) {
+      const leadData = leadQueryData;
+      setLead(leadData);
+
+      // Split name into first_name and last_name if not already present
+      let processedData = { ...leadData };
+      if (leadData.name && (!leadData.first_name || !leadData.last_name)) {
+        const nameParts = leadData.name.split(' ');
+        processedData.first_name = nameParts[0] || '';
+        processedData.last_name = nameParts.slice(1).join(' ') || '';
+      }
+      setFormData(processedData);
+
+      // Initialize borrowers array
+      const primaryName = leadData.first_name && leadData.last_name
+        ? `${leadData.first_name} ${leadData.last_name}`
+        : leadData.name || 'Primary Borrower';
+
+      const borrowersList = [
+        { id: 0, name: primaryName, type: 'primary', data: leadData }
+      ];
+
+      if (leadData.co_applicant_name) {
+        const coborrowerName = String(leadData.co_applicant_name || '');
+        const nameParts = coborrowerName.split(' ');
+        borrowersList.push({
+          id: 1,
+          name: leadData.co_applicant_name,
+          type: 'co-borrower',
+          data: {
+            name: leadData.co_applicant_name,
+            first_name: nameParts[0] || '',
+            last_name: nameParts.slice(1).join(' ') || '',
+            email: leadData.co_applicant_email || '',
+            phone: leadData.co_applicant_phone || '',
+          }
+        });
+      }
+      setBorrowers(borrowersList);
+      setLoading(false);
+    } else if (leadQueryError) {
+      const errorMessage = leadQueryError?.message || 'Failed to load lead';
+      if (errorMessage.includes('404')) {
+        setError('Lead not found. It may have been deleted.');
+      } else {
+        setError(errorMessage);
+      }
+      setLoading(false);
+    } else if (!leadQueryLoading) {
+      setLoading(false);
+    }
+  }, [leadQueryData, leadQueryError, leadQueryLoading]);
+
+  // Load auxiliary data when id changes
+  useEffect(() => {
+    loadActivities();
     loadEmails();
     loadEmailDrafts();
     markLeadAsViewed();
@@ -619,103 +680,20 @@ function LeadDetail() {
     }
   };
 
-  const loadLeadData = async () => {
+  // loadLeadData now triggers React Query refetch - data processing happens in useEffect above
+  const loadLeadData = useCallback(() => {
+    refetchLead();
+    loadActivities();
+  }, [refetchLead, id]);
+
+  // Load activities separately - don't block lead display on failure
+  const loadActivities = async () => {
     try {
-      setLoading(true);
-      let leadData = null;
-      let activitiesData = [];
-
-      try {
-        // Try to fetch from API first
-        const leadIdInt = parseInt(id);
-        // Load lead data first — activities failure should not block the page
-        try {
-          leadData = await leadsAPI.getById(leadIdInt);
-          console.log('✅ Loaded lead from API:', leadData);
-        } catch (leadError) {
-          console.log('⚠️ Lead API failed. Error:', leadError);
-          if (leadError?.response?.status === 404) {
-            console.error('❌ Lead not found in database');
-            setError('Lead not found. It may have been deleted.');
-            setLoading(false);
-            return;
-          }
-          const errorMessage = leadError?.response?.data?.detail || leadError?.message || 'Failed to load lead';
-          console.error('❌ API Error:', errorMessage);
-          setError(errorMessage);
-          setLoading(false);
-          return;
-        }
-        // Load activities separately — don't block lead display on failure
-        try {
-          activitiesData = await activitiesAPI.getAll({ lead_id: parseInt(id) });
-          console.log('✅ Loaded activities from API:', activitiesData);
-        } catch (actError) {
-          console.warn('⚠️ Failed to load activities, continuing without them:', actError?.message);
-          activitiesData = [];
-        }
-      } catch (apiError) {
-        console.log('⚠️ API failed. Error:', apiError);
-        const errorMessage = apiError?.response?.data?.detail || apiError?.message || 'Failed to load lead';
-        console.error('❌ API Error:', errorMessage);
-        setError(errorMessage);
-        setLoading(false);
-        return;
-      }
-
-      console.log('✨ Setting lead data:', leadData);
-      setLead(leadData);
-
-      // Split name into first_name and last_name if not already present
-      let processedData = { ...leadData };
-      if (leadData.name && (!leadData.first_name || !leadData.last_name)) {
-        const nameParts = leadData.name.split(' ');
-        processedData.first_name = nameParts[0] || '';
-        processedData.last_name = nameParts.slice(1).join(' ') || '';
-      }
-
-      setFormData(processedData);
+      const activitiesData = await activitiesAPI.getAll({ lead_id: parseInt(id) });
       setActivities(activitiesData || []);
-
-      // Initialize borrowers array
-      const primaryName = leadData.first_name && leadData.last_name
-        ? `${leadData.first_name} ${leadData.last_name}`
-        : leadData.name || 'Primary Borrower';
-
-      const borrowersList = [
-        {
-          id: 0,
-          name: primaryName,
-          type: 'primary',
-          data: leadData
-        }
-      ];
-
-      // Add co-borrower if exists
-      if (leadData.co_applicant_name) {
-        const coborrowerName = String(leadData.co_applicant_name || '');
-        const nameParts = coborrowerName.split(' ');
-        borrowersList.push({
-          id: 1,
-          name: leadData.co_applicant_name,
-          type: 'co-borrower',
-          data: {
-            name: leadData.co_applicant_name,
-            first_name: nameParts[0] || '',
-            last_name: nameParts.slice(1).join(' ') || '',
-            email: leadData.co_applicant_email || '',
-            phone: leadData.co_applicant_phone || '',
-          }
-        });
-      }
-
-      setBorrowers(borrowersList);
-    } catch (error) {
-      console.error('Failed to load lead data:', error);
-      toast.error('Failed to load lead details');
-      navigate('/leads');
-    } finally {
-      setLoading(false);
+    } catch (actError) {
+      console.warn('Failed to load activities, continuing without them:', actError?.message);
+      setActivities([]);
     }
   };
 

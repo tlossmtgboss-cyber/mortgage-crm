@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { loansAPI, salesforceAPI } from '../services/api';
+import { useLoans } from '../hooks/useQueries';
 import CalendarSidebar from '../components/CalendarSidebar';
 import PermissionGate from '../components/PermissionGate';
 import { usePermissions } from '../contexts/PermissionContext';
@@ -94,9 +95,11 @@ function Loans() {
   // Use isAdmin from context which has robust admin detection (checks permission_role, is_admin flag, legacy role)
   const canAccessLoans = isAdmin || hasAnyPermission(['loans.view', 'loans.view_all', 'loans.manage']) || userRole === 'sales' || userRole === 'management' || userRole === 'admin';
 
-  const [loans, setLoans] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  // Use React Query for cached data fetching - instant on revisit!
+  const { data: loansData, isLoading: loading, error: queryError, refetch: refetchLoans } = useLoans();
+  const loans = useMemo(() => Array.isArray(loansData) ? loansData : [], [loansData]);
+  const error = queryError?.message || null;
+
   const [showModal, setShowModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState(initialFilter);
   const [activeBorrower, setActiveBorrower] = useState(0);
@@ -213,9 +216,17 @@ function Loans() {
     'Inactive': ['Cancelled', 'CANCELLED', 'Denied', 'DENIED', 'Dead', 'DEAD', 'Nurture', 'NURTURE', 'Withdrawn', 'WITHDRAWN', 'Does Not Qualify', 'DOES_NOT_QUALIFY'],
   };
 
+  // Detect duplicates when loans data changes
   useEffect(() => {
-    loadLoans();
-  }, []);
+    if (loans.length > 0) {
+      const inactiveStages = ['FUNDED', 'Funded', 'CANCELLED', 'Cancelled', 'DENIED', 'Denied', 'DEAD', 'Dead', 'NURTURE', 'Nurture', 'WITHDRAWN', 'Withdrawn', 'DOES_NOT_QUALIFY', 'Does Not Qualify'];
+      const activeLoans = loans.filter(loan => {
+        const stage = loan.stage || '';
+        return !inactiveStages.includes(stage) && !stage.toLowerCase().includes('funded');
+      });
+      detectDuplicates(activeLoans);
+    }
+  }, [loans]);
 
   useEffect(() => {
     // Update filter when URL parameter changes
@@ -223,31 +234,6 @@ function Loans() {
       setActiveFilter(stageIdToFilter[stageParam]);
     }
   }, [stageParam]);
-
-  const loadLoans = async () => {
-    try {
-      const data = await loansAPI.getAll();
-      // Use API data if available
-      if (Array.isArray(data)) {
-        setLoans(data);
-        // Only detect duplicates among active pipeline loans (exclude funded/closed/etc.)
-        const inactiveStages = ['FUNDED', 'Funded', 'CANCELLED', 'Cancelled', 'DENIED', 'Denied', 'DEAD', 'Dead', 'NURTURE', 'Nurture', 'WITHDRAWN', 'Withdrawn', 'DOES_NOT_QUALIFY', 'Does Not Qualify'];
-        const activeLoans = data.filter(loan => {
-          const stage = loan.stage || '';
-          return !inactiveStages.includes(stage) && !stage.toLowerCase().includes('funded');
-        });
-        detectDuplicates(activeLoans);
-      } else {
-        setLoans([]);
-      }
-    } catch (err) {
-      console.error('Failed to load loans:', err);
-      setError(err?.response?.data?.detail || err?.message || 'Failed to load loans');
-      setLoans([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Sync all loans from Salesforce
   const handleSalesforceSync = async () => {
@@ -261,7 +247,7 @@ function Loans() {
         details: result
       });
       // Reload loans after sync
-      await loadLoans();
+      await refetchLoans();
     } catch (err) {
       console.error('Salesforce sync failed:', err);
       const errorMsg = err.response?.data?.detail || err.response?.data?.error || err.message || 'Sync failed';
@@ -405,7 +391,7 @@ function Loans() {
       await loansAPI.create(submitData);
       setShowModal(false);
       resetForm();
-      loadLoans();
+      refetchLoans();
     } catch (err) {
       console.error('Failed to create loan:', err);
       console.error('Error response:', err.response);
@@ -432,7 +418,7 @@ function Loans() {
             await loansAPI.create(submitData, true);
             setShowModal(false);
             resetForm();
-            loadLoans();
+            refetchLoans();
           } catch (retryErr) {
             console.error('Failed to create loan (retry):', retryErr);
             toast.error(`Failed to create loan: ${retryErr.response?.data?.detail || retryErr.message}`);
@@ -468,7 +454,7 @@ function Loans() {
   const handleDelete = async (id) => {
     try {
       await loansAPI.delete(id);
-      loadLoans();
+      refetchLoans();
     } catch (err) {
       toast.error('Failed to delete loan');
     }
@@ -509,7 +495,7 @@ function Loans() {
       const result = await loansAPI.bulkDelete(selectedLoans);
       toast.success(`Successfully deleted ${result.deleted_count} loans${result.errors?.length > 0 ? ` with ${result.errors.length} errors` : ''}`);
       setSelectedLoans([]);
-      loadLoans();
+      refetchLoans();
     } catch (err) {
       console.error('Failed to bulk delete loans:', err);
       const errorDetail = err.response?.data?.detail;
@@ -543,10 +529,8 @@ function Loans() {
 
     try {
       await loansAPI.update(loanId, { stage: apiStage });
-      // Update local state with the API value (will be displayed via getStageDisplay)
-      setLoans(loans.map(loan =>
-        loan.id === loanId ? { ...loan, stage: apiStage } : loan
-      ));
+      // Refetch to get updated data from server
+      refetchLoans();
     } catch (err) {
       console.error('Failed to update loan status:', err);
       const errorMsg = err.response?.data?.detail || err.response?.data?.error || err.message || 'Failed to update loan status';
@@ -697,7 +681,7 @@ function Loans() {
           <h2 style={{ color: '#ef4444', marginBottom: '16px' }}>Error Loading Loans</h2>
           <p style={{ color: '#6b7280', marginBottom: '24px' }}>{error}</p>
           <button
-            onClick={() => { setError(null); setLoading(true); loadLoans(); }}
+            onClick={() => { refetchLoans(); }}
             style={{
               padding: '12px 24px',
               backgroundColor: '#3b82f6',

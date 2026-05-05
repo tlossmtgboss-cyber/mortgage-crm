@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { teamAPI, tasksAPI, reconciliationAPI, leadsAPI, loansAPI, API_BASE_URL } from '../services/api';
 import { useLayoutFix } from '../hooks/useLayoutFix';
 import TaskDetailPanel from '../components/shared/TaskDetailPanel';
@@ -50,9 +51,132 @@ const mockLeadMetrics = () => ({
 
 const mockMessages = () => []; // eslint-disable-line no-unused-vars
 
+// Fetch function for React Query - fetches and transforms all task data
+const fetchTasksData = async () => {
+  const token = getToken();
+
+  // Fetch workflow tasks from all leads/loans
+  const workflowResponse = await fetch(`${API_BASE_URL}/api/v1/workflow-config/all-workflow-tasks?days_ahead=14`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+
+  let workflowTasks = [];
+  if (workflowResponse.ok) {
+    const workflowData = await workflowResponse.json();
+    workflowTasks = (workflowData.tasks || []).map(task => ({
+      id: task.id,
+      title: task.title,
+      borrower: task.client_name || 'Client',
+      stage: task.stage,
+      urgency: task.urgency || 'medium',
+      ai_action: null,
+      owner: 'Loan Officer',
+      date_created: task.due_date,
+      due_date: task.due_date,
+      preferred_contact_method: task.communication_methods?.includes('phone') ? 'Phone'
+        : task.communication_methods?.includes('text') ? 'Text' : 'Email',
+      ai_message: `${task.description}\n\nWorkflow: ${task.workflow_name}\nDays until due: ${task.days_until_due}`,
+      description: task.description,
+      source: 'Workflow',
+      entity_type: task.client_type,
+      entity_id: task.client_id,
+      lead_id: task.client_type === 'lead' ? task.client_id : null,
+      loan_id: task.client_type === 'loan' ? task.client_id : null,
+      workflow_name: task.workflow_name,
+      workflow_color: task.workflow_color,
+      communication_methods: task.communication_methods || [],
+      days_until_due: task.days_until_due,
+      communication_history: []
+    }));
+  }
+
+  // Also fetch any manual tasks from unified-tasks endpoint
+  const response = await tasksAPI.getUnified();
+  const unifiedTasks = response?.tasks || [];
+
+  // Transform unified tasks to match frontend format
+  const transformedTasks = unifiedTasks.map(task => ({
+    id: `${task.source}-${task.id}`,
+    title: task.title,
+    borrower: task.client_name || 'Client',
+    stage: task.stage || task.source,
+    urgency: task.priority === 'urgent' ? 'critical' : task.priority || 'medium',
+    ai_action: task.ai_suggested_response ? 'AI has a suggested action — approve?' : null,
+    owner: task.owner || 'Loan Officer',
+    date_created: task.created_at,
+    due_date: task.due_date,
+    preferred_contact_method: 'Email',
+    ai_message: task.ai_suggested_response || `Complete task: ${task.title}`,
+    ai_confidence: task.ai_confidence,
+    description: task.description,
+    source: task.source === 'reconciliation' ? 'AI Engine'
+          : task.source === 'workflow' ? 'Workflow'
+          : task.source === 'task' ? 'Manual'
+          : task.source,
+    entity_type: task.entity_type,
+    entity_id: task.entity_id,
+    email_from: task.email_from,
+    email_subject: task.email_subject,
+    communication_history: [],
+    // SLA task fields
+    sla_milestone_id: task.sla_milestone_id,
+    sla_milestone_type: task.sla_milestone_type,
+    sla_date_field: task.sla_date_field,
+    related_type: task.related_type
+  }));
+
+  // Filter manual tasks AND workflow tasks from unified-tasks
+  const manualAndUnifiedWorkflowTasks = transformedTasks.filter(t =>
+    (t.source === 'Manual' || t.source === 'Workflow') &&
+    !t.email_from &&
+    !t.email_subject
+  );
+
+  // Filter out phone-only workflow tasks - those go to Power Dialer
+  const nonPhoneWorkflowTasks = workflowTasks.filter(task =>
+    task.preferred_contact_method !== 'Phone'
+  );
+
+  // Combine old-style workflow tasks with manual + new linked workflow tasks
+  const allTasks = [...nonPhoneWorkflowTasks, ...manualAndUnifiedWorkflowTasks];
+
+  // Deduplicate tasks by id
+  const seen = new Set();
+  const deduplicatedTasks = allTasks.filter(task => {
+    if (seen.has(task.id)) return false;
+    seen.add(task.id);
+    return true;
+  });
+
+  return {
+    prioritizedTasks: deduplicatedTasks,
+    loanIssues: mockLoanIssues(),
+    aiTasks: { pending: [], waiting: [] },
+    mumAlerts: mockMumAlerts(),
+    leadMetrics: mockLeadMetrics(),
+    messages: []
+  };
+};
+
 function Tasks() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  // Use React Query for cached task fetching - instant on revisit!
+  const { data: tasksData, isLoading: loading, refetch: refetchTasks } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: fetchTasksData,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+
+  // Derive task state from React Query cache
+  const prioritizedTasks = tasksData?.prioritizedTasks || [];
+  const loanIssues = tasksData?.loanIssues || [];
+  const aiTasks = tasksData?.aiTasks || { pending: [], waiting: [] };
+  const mumAlerts = tasksData?.mumAlerts || [];
+  const leadMetrics = tasksData?.leadMetrics || {};
+  const messages = tasksData?.messages || [];
+
   // Load completed tasks from localStorage on initial render
   const [completedTasks, setCompletedTasks] = useState(() => {
     const saved = localStorage.getItem('completedTasks');
@@ -75,14 +199,6 @@ function Tasks() {
   useEffect(() => {
     localStorage.setItem('completedTasks', JSON.stringify([...completedTasks]));
   }, [completedTasks]);
-
-  // Dashboard data states
-  const [prioritizedTasks, setPrioritizedTasks] = useState([]);
-  const [loanIssues, setLoanIssues] = useState([]);
-  const [aiTasks, setAiTasks] = useState({ pending: [], waiting: [] });
-  const [mumAlerts, setMumAlerts] = useState([]);
-  const [leadMetrics, setLeadMetrics] = useState({});
-  const [messages, setMessages] = useState([]);
 
   // Reconciliation tab state
   const [emailQueue, setEmailQueue] = useState([]);
@@ -124,7 +240,6 @@ function Tasks() {
   ];
 
   useEffect(() => {
-    loadTasks();
     loadTeamMembers();
 
     // Subscribe to task events from other components (e.g., ActionSidebar)
@@ -138,14 +253,14 @@ function Tasks() {
           return newCompleted;
         });
         // Also reload to get fresh data
-        loadTasks();
+        refetchTasks();
       }
     });
 
     const unsubscribeRefresh = subscribeToTaskEvent(TASK_EVENTS.TASKS_REFRESH, (detail) => {
       if (detail.source !== 'tasks-page') {
         console.log('[Tasks] Refresh requested, reloading...');
-        loadTasks();
+        refetchTasks();
       }
     });
 
@@ -413,137 +528,7 @@ function Tasks() {
     setCallStatus('idle');
   };
 
-  const loadTasks = async () => {
-    try {
-      setLoading(true);
-
-      // Fetch workflow tasks from all leads/loans
-      const token = getToken();
-      const workflowResponse = await fetch(`${API_BASE_URL}/api/v1/workflow-config/all-workflow-tasks?days_ahead=14`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      let workflowTasks = [];
-      if (workflowResponse.ok) {
-        const workflowData = await workflowResponse.json();
-        workflowTasks = (workflowData.tasks || []).map(task => ({
-          id: task.id,
-          title: task.title,
-          borrower: task.client_name || 'Client',
-          stage: task.stage,
-          urgency: task.urgency || 'medium',
-          ai_action: null,
-          owner: 'Loan Officer',
-          date_created: task.due_date,
-          due_date: task.due_date,
-          preferred_contact_method: task.communication_methods?.includes('phone') ? 'Phone'
-            : task.communication_methods?.includes('text') ? 'Text' : 'Email',
-          ai_message: `${task.description}\n\nWorkflow: ${task.workflow_name}\nDays until due: ${task.days_until_due}`,
-          description: task.description,
-          source: 'Workflow',
-          entity_type: task.client_type,
-          entity_id: task.client_id,
-          lead_id: task.client_type === 'lead' ? task.client_id : null,
-          loan_id: task.client_type === 'loan' ? task.client_id : null,
-          workflow_name: task.workflow_name,
-          workflow_color: task.workflow_color,
-          communication_methods: task.communication_methods || [],
-          days_until_due: task.days_until_due,
-          communication_history: []
-        }));
-      }
-
-      // Also fetch any manual tasks from unified-tasks endpoint
-      const response = await tasksAPI.getUnified();
-      const unifiedTasks = response?.tasks || [];
-
-      // Transform unified tasks to match frontend format
-      const transformedTasks = unifiedTasks.map(task => ({
-        id: `${task.source}-${task.id}`,
-        title: task.title,
-        borrower: task.client_name || 'Client',
-        stage: task.stage || task.source,
-        urgency: task.priority === 'urgent' ? 'critical' : task.priority || 'medium',
-        ai_action: task.ai_suggested_response ? 'AI has a suggested action — approve?' : null,
-        owner: task.owner || 'Loan Officer',
-        date_created: task.created_at,
-        due_date: task.due_date,
-        preferred_contact_method: 'Email',
-        ai_message: task.ai_suggested_response || `Complete task: ${task.title}`,
-        ai_confidence: task.ai_confidence,
-        description: task.description,
-        source: task.source === 'reconciliation' ? 'AI Engine'
-              : task.source === 'workflow' ? 'Workflow'
-              : task.source === 'task' ? 'Manual'
-              : task.source,
-        entity_type: task.entity_type,
-        entity_id: task.entity_id,
-        email_from: task.email_from,
-        email_subject: task.email_subject,
-        communication_history: [],
-        // SLA task fields
-        sla_milestone_id: task.sla_milestone_id,
-        sla_milestone_type: task.sla_milestone_type,
-        sla_date_field: task.sla_date_field,
-        related_type: task.related_type
-      }));
-
-      // Filter manual tasks AND workflow tasks from unified-tasks
-      // (workflow tasks from unified-tasks are actual linked tasks in the tasks table)
-      const manualAndUnifiedWorkflowTasks = transformedTasks.filter(t =>
-        (t.source === 'Manual' || t.source === 'Workflow') &&
-        !t.email_from &&
-        !t.email_subject
-      );
-
-      // Filter out phone-only workflow tasks - those go to Power Dialer
-      // A task is "phone-only" if phone is the preferred contact method
-      const nonPhoneWorkflowTasks = workflowTasks.filter(task =>
-        task.preferred_contact_method !== 'Phone'
-      );
-
-      // Combine old-style workflow tasks with manual + new linked workflow tasks
-      const allTasks = [...nonPhoneWorkflowTasks, ...manualAndUnifiedWorkflowTasks];
-
-      // Deduplicate tasks by id
-      const seen = new Set();
-      const deduplicatedTasks = allTasks.filter(task => {
-        if (seen.has(task.id)) {
-          return false;
-        }
-        seen.add(task.id);
-        return true;
-      });
-
-      // Tasks page shows workflow tasks from all leads/loans + manual tasks
-      setPrioritizedTasks(deduplicatedTasks);
-      setLoanIssues(mockLoanIssues());
-      // AI tasks are EMPTY - reconciliation items handled on Reconciliation page only
-      setAiTasks({
-        pending: [],
-        waiting: []
-      });
-      setMumAlerts(mockMumAlerts());
-      setLeadMetrics(mockLeadMetrics());
-      // Messages tab is empty - emails only on Reconciliation page
-      setMessages([]);
-
-    } catch (error) {
-      console.error('Failed to load tasks:', error);
-      toast.error('Failed to load some tasks. Please refresh.');
-      // Load demo data on error - but NO emails (emails only on Reconciliation page)
-      setPrioritizedTasks(mockPrioritizedTasks());
-      setLoanIssues(mockLoanIssues());
-      setAiTasks({ pending: [], waiting: [] });  // No AI Engine tasks - they go to Reconciliation
-      setMumAlerts(mockMumAlerts());
-      setLeadMetrics(mockLeadMetrics());
-      setMessages([]);  // No emails - they go to Reconciliation page only
-    } finally {
-      setLoading(false);
-    }
-  };
+  // loadTasks replaced by React Query - refetchTasks() used directly for refreshes
 
   const loadTeamMembers = async () => {
     try {
@@ -728,20 +713,21 @@ function Tasks() {
     const taskId = selectedTask.id;
     const taskSource = selectedTask.source;
 
-    // Optimistic UI: remove task from list immediately
-    if (taskSource === 'AI Engine') {
-      setAiTasks(prev => ({
-        pending: prev.pending.filter(t => t.id !== taskId),
-        waiting: prev.waiting.filter(t => t.id !== taskId)
-      }));
-    } else if (taskSource === 'Client for Life') {
-      setMumAlerts(prev => prev.filter(t => t.id !== taskId));
-    } else if (taskSource === 'Messages') {
-      setMessages(prev => prev.filter(t => t.id !== taskId));
-    } else {
-      setPrioritizedTasks(prev => prev.filter(t => t.id !== taskId));
-      setLoanIssues(prev => prev.filter(t => t.id !== taskId));
-    }
+    // Optimistic UI: remove task from cache immediately
+    queryClient.setQueryData(['tasks'], (prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        prioritizedTasks: prev.prioritizedTasks.filter(t => t.id !== taskId),
+        loanIssues: prev.loanIssues.filter(t => t.id !== taskId),
+        aiTasks: {
+          pending: prev.aiTasks.pending.filter(t => t.id !== taskId),
+          waiting: prev.aiTasks.waiting.filter(t => t.id !== taskId)
+        },
+        mumAlerts: prev.mumAlerts.filter(t => t.id !== taskId),
+        messages: prev.messages.filter(t => t.id !== taskId),
+      };
+    });
 
     // Move to next task
     const tabTasks = getTasksForTab();
