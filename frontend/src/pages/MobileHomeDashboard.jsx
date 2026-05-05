@@ -374,7 +374,7 @@ const MobileHomeDashboard = () => {
               severity: mapAlertSeverity(a),
               title: a.title || a.message || a.description || 'Pipeline alert',
               subtitle: a.borrower_name || a.loan_number || '',
-              link: a.loan_id ? `/loans/${a.loan_id}` : '/pipeline',
+              link: a.loan_id ? `/loans/${a.loan_id}` : '/loans',
             };
           })
         : [];
@@ -532,7 +532,7 @@ const MobileHomeDashboard = () => {
         <div className="mhd-stats-grid">
           <button
             className="mhd-stat-card mhd-stat-card--primary"
-            onClick={() => navigate('/pipeline')}
+            onClick={() => navigate('/loans')}
             aria-label={`Active loans: ${stats?.activeLoans}`}
           >
             <span className="mhd-stat-card__icon">{Icons.loans}</span>
@@ -562,7 +562,7 @@ const MobileHomeDashboard = () => {
 
           <button
             className="mhd-stat-card mhd-stat-card--info"
-            onClick={() => navigate('/pipeline?filter=closing')}
+            onClick={() => navigate('/loans?filter=closing')}
             aria-label={`Closing this week: ${stats?.closingThisWeek}`}
           >
             <span className="mhd-stat-card__icon">{Icons.closing}</span>
@@ -596,7 +596,7 @@ const MobileHomeDashboard = () => {
         <div className="mhd-section__header">
           <h2 className="mhd-section__title">Urgent Alerts</h2>
           {alerts && alerts.length > 0 && (
-            <button className="mhd-section__link" onClick={() => navigate('/pipeline')}>
+            <button className="mhd-section__link" onClick={() => navigate('/loans')}>
               View all {Icons.chevronRight}
             </button>
           )}

@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { API_BASE_URL } from '../services/api';
-import { getAuthHeaders } from '../utils/auth';
+import api from '../services/api';
 import './EmailIntelligence.css';
 import { toast } from '../utils/toast';
 
@@ -98,13 +97,8 @@ function EmailIntelligence() {
 
   const loadStats = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/v1/email-intelligence/stats`, {
-        headers: getAuthHeaders()
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setStats(data);
-      }
+      const response = await api.get('/api/v1/email-intelligence/stats');
+      setStats(response.data);
     } catch (error) {
       console.error('Error loading stats:', error);
     }
@@ -112,18 +106,15 @@ function EmailIntelligence() {
 
   const loadEmailQueue = async () => {
     try {
-      let url = `${API_BASE_URL}/api/v1/email-intelligence/queue?limit=50`;
-      if (queueFilters.status) url += `&status=${queueFilters.status}`;
-      if (queueFilters.disposition) url += `&disposition=${queueFilters.disposition}`;
-      if (queueFilters.hasMatch === 'yes') url += `&has_match=true`;
-      if (queueFilters.hasMatch === 'no') url += `&has_match=false`;
+      const params = { limit: 50 };
+      if (queueFilters.status) params.status = queueFilters.status;
+      if (queueFilters.disposition) params.disposition = queueFilters.disposition;
+      if (queueFilters.hasMatch === 'yes') params.has_match = true;
+      if (queueFilters.hasMatch === 'no') params.has_match = false;
 
-      const response = await fetch(url, { headers: getAuthHeaders() });
-      if (response.ok) {
-        const data = await response.json();
-        setEmailQueue(data.emails || []);
-        setQueueTotal(data.total || 0);
-      }
+      const response = await api.get('/api/v1/email-intelligence/queue', { params });
+      setEmailQueue(response.data.emails || []);
+      setQueueTotal(response.data.total || 0);
     } catch (error) {
       console.error('Error loading email queue:', error);
     }
@@ -136,15 +127,12 @@ function EmailIntelligence() {
       return;
     }
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/email-intelligence/conversation-log/loan/${selectedLoanId}?limit=50`,
-        { headers: getAuthHeaders() }
+      const response = await api.get(
+        `/api/v1/email-intelligence/conversation-log/loan/${selectedLoanId}`,
+        { params: { limit: 50 } }
       );
-      if (response.ok) {
-        const data = await response.json();
-        setConversations(data.entries || []);
-        setConversationTotal(data.total || 0);
-      }
+      setConversations(response.data.entries || []);
+      setConversationTotal(response.data.total || 0);
     } catch (error) {
       console.error('Error loading conversations:', error);
     }
@@ -157,15 +145,11 @@ function EmailIntelligence() {
       return;
     }
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/email-intelligence/document-tracking/loan/${docLoanId}`,
-        { headers: getAuthHeaders() }
+      const response = await api.get(
+        `/api/v1/email-intelligence/document-tracking/loan/${docLoanId}`
       );
-      if (response.ok) {
-        const data = await response.json();
-        setDocuments(data.documents || []);
-        setDocumentTotal(data.total || 0);
-      }
+      setDocuments(response.data.documents || []);
+      setDocumentTotal(response.data.total || 0);
     } catch (error) {
       console.error('Error loading documents:', error);
     }
@@ -173,15 +157,9 @@ function EmailIntelligence() {
 
   const loadSlaItems = async () => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/email-intelligence/sla-tracking`,
-        { headers: getAuthHeaders() }
-      );
-      if (response.ok) {
-        const data = await response.json();
-        setSlaItems(data.slas || []);
-        setSlaTotal(data.total || 0);
-      }
+      const response = await api.get('/api/v1/email-intelligence/sla-tracking');
+      setSlaItems(response.data.slas || []);
+      setSlaTotal(response.data.total || 0);
     } catch (error) {
       console.error('Error loading SLA items:', error);
     }
@@ -189,15 +167,12 @@ function EmailIntelligence() {
 
   const loadAllDocuments = async () => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/email-intelligence/document-tracking/all?limit=100`,
-        { headers: getAuthHeaders() }
+      const response = await api.get(
+        '/api/v1/email-intelligence/document-tracking/all',
+        { params: { limit: 100 } }
       );
-      if (response.ok) {
-        const data = await response.json();
-        setAllDocuments(data.documents || []);
-        setAllDocumentsTotal(data.total || 0);
-      }
+      setAllDocuments(response.data.documents || []);
+      setAllDocumentsTotal(response.data.total || 0);
     } catch (error) {
       console.error('Error loading all documents:', error);
     }
@@ -221,31 +196,26 @@ function EmailIntelligence() {
 
     setProcessingId(dispositionEmail.id);
     try {
-      let url = `${API_BASE_URL}/api/v1/email-intelligence/queue/${dispositionEmail.id}/process-with-intelligence?disposition=${selectedDisposition}`;
+      const params = { disposition: selectedDisposition };
       if (createTask) {
-        url += `&create_task=true&task_title=${encodeURIComponent(taskTitle)}`;
+        params.create_task = true;
+        params.task_title = taskTitle;
       }
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: getAuthHeaders()
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Process result:', result);
-        setShowDispositionDialog(false);
-        setDispositionEmail(null);
-        loadData();
-        loadStats();
-      } else {
-        const error = await response.json();
-        console.error('Process error:', error);
-        toast.error(`Error: ${error.detail || error.error || 'Failed to process email'}`);
-      }
+      const response = await api.post(
+        `/api/v1/email-intelligence/queue/${dispositionEmail.id}/process-with-intelligence`,
+        null,
+        { params }
+      );
+      console.log('Process result:', response.data);
+      setShowDispositionDialog(false);
+      setDispositionEmail(null);
+      loadData();
+      loadStats();
     } catch (error) {
       console.error('Error processing email:', error);
-      toast.error('Failed to process email');
+      const detail = error.response?.data?.detail || error.response?.data?.error || 'Failed to process email';
+      toast.error(`Error: ${detail}`);
     } finally {
       setProcessingId(null);
     }
@@ -253,17 +223,9 @@ function EmailIntelligence() {
 
   const handleMarkSlaResponded = async (slaId) => {
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/v1/email-intelligence/sla-tracking/${slaId}/respond`,
-        {
-          method: 'POST',
-          headers: getAuthHeaders()
-        }
-      );
-      if (response.ok) {
-        loadSlaItems();
-        loadStats();
-      }
+      await api.post(`/api/v1/email-intelligence/sla-tracking/${slaId}/respond`);
+      loadSlaItems();
+      loadStats();
     } catch (error) {
       console.error('Error marking SLA responded:', error);
     }

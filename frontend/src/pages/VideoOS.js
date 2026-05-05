@@ -3,10 +3,7 @@ import VideoRecorder from '../components/video/VideoRecorder';
 import './VideoOS.css';
 import { toast } from '../utils/toast';
 import { getToken } from '../utils/tokenStore';
-
-const API_BASE_URL = (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1')
-  ? 'https://api.perenniaai.com'
-  : 'http://localhost:8000';
+import { API_BASE_URL } from '../services/api';
 
 const VideoOS = () => {
   const [loading, setLoading] = useState(true);
@@ -22,8 +19,7 @@ const VideoOS = () => {
   const [selectedVideo, setSelectedVideo] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
+  const [error, setError] = useState(null);
 
   // Video templates for common scenarios
   const defaultTemplates = [
@@ -100,6 +96,7 @@ const VideoOS = () => {
 
   const loadVideoData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const token = getToken();
 
@@ -120,150 +117,23 @@ const VideoOS = () => {
           engagementRate: videosData.engagementRate || 0
         });
       } else {
-        // Use demo data if API not available
-        setVideos(getDemoVideos());
-        setStats({
-          totalVideos: 12,
-          totalViews: 248,
-          avgWatchTime: 45,
-          engagementRate: 78
-        });
+        setError('Failed to load videos');
+        setVideos([]);
       }
-    } catch (error) {
-      console.error('Error loading video data:', error);
-      // Use demo data on error
-      setVideos(getDemoVideos());
-      setStats({
-        totalVideos: 12,
-        totalViews: 248,
-        avgWatchTime: 45,
-        engagementRate: 78
-      });
+    } catch (err) {
+      console.error('Error loading video data:', err);
+      setError('Failed to load videos');
+      setVideos([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const getDemoVideos = () => [
-    {
-      id: 1,
-      title: 'Welcome - John Smith',
-      type: 'welcome',
-      duration: 42,
-      views: 3,
-      createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-      thumbnail: null,
-      recipient: 'John Smith',
-      status: 'sent'
-    },
-    {
-      id: 2,
-      title: 'Rate Lock Confirmation',
-      type: 'rate_lock',
-      duration: 38,
-      views: 2,
-      createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-      thumbnail: null,
-      recipient: 'Sarah Johnson',
-      status: 'viewed'
-    },
-    {
-      id: 3,
-      title: 'Document Request',
-      type: 'document_request',
-      duration: 55,
-      views: 1,
-      createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-      thumbnail: null,
-      recipient: 'Mike Chen',
-      status: 'sent'
-    },
-    {
-      id: 4,
-      title: 'Clear to Close!',
-      type: 'clear_to_close',
-      duration: 48,
-      views: 4,
-      createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-      thumbnail: null,
-      recipient: 'Emily Davis',
-      status: 'viewed'
-    }
-  ];
-
   const handleRecordingComplete = useCallback(async (blob, duration) => {
-    setUploading(true);
-    setUploadProgress(0);
-
-    try {
-      const token = getToken();
-
-      // Step 1: Get presigned upload URL
-      setUploadProgress(10);
-      const uploadUrlResponse = await fetch(`${API_BASE_URL}/api/v1/video-os/library/upload-url`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          content_type: 'video/webm',
-          filename: `video_${Date.now()}.webm`,
-          template: selectedTemplate?.id || null
-        })
-      });
-
-      if (!uploadUrlResponse.ok) {
-        throw new Error('Failed to get upload URL');
-      }
-
-      const { upload_url, video_id } = await uploadUrlResponse.json();
-      setUploadProgress(30);
-
-      // Step 2: Upload video to S3
-      const uploadResponse = await fetch(upload_url, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'video/webm'
-        },
-        body: blob
-      });
-
-      if (!uploadResponse.ok) {
-        throw new Error('Failed to upload video');
-      }
-
-      setUploadProgress(70);
-
-      // Step 3: Complete upload
-      const completeResponse = await fetch(`${API_BASE_URL}/api/v1/video-os/library/complete`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          video_id,
-          duration_seconds: duration,
-          title: selectedTemplate?.name || 'Custom Video',
-          template_id: selectedTemplate?.id || null
-        })
-      });
-
-      if (completeResponse.ok) {
-        setUploadProgress(100);
-        // Refresh video list
-        await loadVideoData();
-      }
-
-    } catch (error) {
-      console.error('Upload error:', error);
-      toast.error('Failed to upload video. Please try again.');
-    } finally {
-      setUploading(false);
-      setShowRecorder(false);
-      setSelectedTemplate(null);
-    }
+    // Video upload endpoints are not yet implemented on the backend
+    toast.info('Video upload coming soon. Recording was captured but cannot be saved yet.');
+    setShowRecorder(false);
+    setSelectedTemplate(null);
   }, [selectedTemplate]);
 
   const handleStartRecording = (template = null) => {
@@ -708,22 +578,12 @@ const VideoOS = () => {
               </div>
             )}
 
-            {uploading ? (
-              <div className="upload-progress">
-                <div className="upload-spinner"></div>
-                <p>Uploading video... {uploadProgress}%</p>
-                <div className="progress-bar">
-                  <div className="progress-fill" style={{ width: `${uploadProgress}%` }} />
-                </div>
-              </div>
-            ) : (
-              <VideoRecorder
-                onRecordingComplete={handleRecordingComplete}
-                onCancel={() => setShowRecorder(false)}
-                maxDuration={120}
-                showPreview={true}
-              />
-            )}
+            <VideoRecorder
+              onRecordingComplete={handleRecordingComplete}
+              onCancel={() => setShowRecorder(false)}
+              maxDuration={120}
+              showPreview={true}
+            />
           </div>
         </div>
       )}
