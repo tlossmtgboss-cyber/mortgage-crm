@@ -5,7 +5,7 @@ authenticated contact_id — no borrower can read or modify another's draft.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from middleware.purl_auth import (
     PURLAuthContext,
+    check_purl_rate_limit,
     require_purl_token,
     require_purl_write_scope,
 )
@@ -44,6 +45,7 @@ from ._helpers import (
 router = APIRouter(
     prefix="/api/v1/pos/applications",
     tags=["POS - Application"],
+    dependencies=[Depends(check_purl_rate_limit)],
 )
 
 
@@ -237,7 +239,7 @@ async def submit_application(
     return ApplicationSubmitResponse(
         id=submitted.id,
         status=submitted.status,
-        submitted_at=submitted.submitted_at or datetime.utcnow(),
+        submitted_at=submitted.submitted_at or datetime.now(timezone.utc),
         submitted_appointment_id=submitted.submitted_appointment_id,
         confirmation_number=confirmation,
         next_steps=next_steps,
@@ -255,7 +257,7 @@ def _build_confirmation_number(app: POSApplication) -> str:
     Uses the loan_id when available (matches Perennia's existing PRN-YYYY-NNNNN
     pattern); falls back to a UUID-derived suffix for prequal-only flows.
     """
-    submitted_year = (app.submitted_at or datetime.utcnow()).year
+    submitted_year = (app.submitted_at or datetime.now(timezone.utc)).year
     if app.loan_id is not None:
         return f"PRN-{submitted_year}-{app.loan_id:05d}"
     suffix = str(app.id).split("-")[0].upper()

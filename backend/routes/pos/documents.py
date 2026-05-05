@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from middleware.purl_auth import (
     PURLAuthContext,
+    check_purl_rate_limit,
     require_purl_token,
 )
 
@@ -32,6 +33,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(
     prefix="/api/v1/pos",
     tags=["POS - Documents"],
+    dependencies=[Depends(check_purl_rate_limit)],
 )
 
 

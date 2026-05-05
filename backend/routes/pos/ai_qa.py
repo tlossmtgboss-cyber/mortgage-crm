@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from middleware.purl_auth import (
     PURLAuthContext,
+    check_purl_rate_limit,
     require_purl_token,
     require_purl_write_scope,
 )
@@ -39,6 +40,7 @@ from ._helpers import (
 router = APIRouter(
     prefix="/api/v1/pos/ai-qa",
     tags=["POS - AI Q&A"],
+    dependencies=[Depends(check_purl_rate_limit)],
 )
 
 

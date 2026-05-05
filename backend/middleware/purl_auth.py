@@ -113,11 +113,12 @@ async def get_purl_context_optional(
     if not token:
         return None
 
-    # Dev-mode test token bypass — never active in production
+    # Dev-mode test token bypass — requires explicit opt-in AND non-production
     import os
     if (
         token == "purl_live_dev_test_token_00000000"
         and os.getenv("ENVIRONMENT", "development") != "production"
+        and os.getenv("ALLOW_TEST_TOKENS", "").lower() == "true"
     ):
         logger.info("Dev-mode PURL token accepted")
         return PURLAuthContext(

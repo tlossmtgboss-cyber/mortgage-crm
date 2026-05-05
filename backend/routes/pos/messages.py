@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from database.models.pos import POSApplication, POSBorrowerMessage
+from middleware.purl_auth import check_purl_rate_limit
 
 from ._helpers import (
     resolve_application_for_borrower,
@@ -31,6 +32,7 @@ logger = logging.getLogger("pos.messages.routes")
 router = APIRouter(
     prefix="/api/v1/pos/applications",
     tags=["POS - Messages"],
+    dependencies=[Depends(check_purl_rate_limit)],
 )
 
 

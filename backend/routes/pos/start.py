@@ -33,6 +33,7 @@ from sqlalchemy import Column, DateTime, Integer, String, text
 from sqlalchemy.orm import Session
 
 from database import Base, get_db
+from database.models.core import User
 from models.purl import (
     ContactType,
     PURLContact,
@@ -46,8 +47,6 @@ from telephony.phone_utils import normalize_phone
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/pos", tags=["POS - Public Start"])
-
-DEFAULT_ORG_ID = 1
 CODE_TTL_MINUTES = 10
 MAX_VERIFY_ATTEMPTS = 5
 RESEND_COOLDOWN_SECONDS = 60
@@ -65,13 +64,28 @@ def _check_ip_rate_limit(ip: str):
     now = datetime.now(timezone.utc).timestamp()
     cutoff = now - (IP_RATE_WINDOW_MINUTES * 60)
     with _ip_lock:
-        _ip_tracker[ip] = [t for t in _ip_tracker[ip] if t > cutoff]
-        if len(_ip_tracker[ip]) >= IP_RATE_LIMIT:
+        # Evict oldest entries if tracker grows too large (prevent unbounded growth)
+        if len(_ip_tracker) > 10000:
+            oldest_keys = sorted(
+                _ip_tracker.keys(),
+                key=lambda k: min(_ip_tracker[k]) if _ip_tracker[k] else 0,
+            )[:5000]
+            for k in oldest_keys:
+                del _ip_tracker[k]
+
+        timestamps = [t for t in _ip_tracker.get(ip, []) if t > cutoff]
+        if not timestamps:
+            # Clean up empty entries
+            _ip_tracker.pop(ip, None)
+        else:
+            _ip_tracker[ip] = timestamps
+
+        if len(_ip_tracker.get(ip, [])) >= IP_RATE_LIMIT:
             raise HTTPException(
                 status_code=429,
                 detail="Too many requests. Please try again in a few minutes.",
             )
-        _ip_tracker[ip].append(now)
+        _ip_tracker.setdefault(ip, []).append(now)
 
 
 # ── OTP storage model ──────────────────────────────────────────────
@@ -86,6 +100,7 @@ class POSVerification(Base):
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
     email = Column(String, nullable=False)
+    organization_id = Column(Integer, nullable=True)
     attempts = Column(Integer, default=0)
     ip_address = Column(String, nullable=True)
     consent_at = Column(DateTime(timezone=True), nullable=True)
@@ -124,15 +139,41 @@ def _ensure_table(db: Session):
             "CREATE INDEX IF NOT EXISTS ix_pos_verifications_session_id "
             "ON pos_verifications (session_id)"
         ))
-        for col in ("phone_raw", "ip_address", "consent_at", "last_resend_at"):
+        for col in ("phone_raw", "ip_address"):
             db.execute(text(
                 f"ALTER TABLE pos_verifications ADD COLUMN IF NOT EXISTS "
                 f"{col} VARCHAR"
             ))
+        db.execute(text(
+            "ALTER TABLE pos_verifications ADD COLUMN IF NOT EXISTS "
+            "organization_id INTEGER"
+        ))
+        for col in ("consent_at", "last_resend_at"):
+            db.execute(text(
+                f"ALTER TABLE pos_verifications ADD COLUMN IF NOT EXISTS "
+                f"{col} TIMESTAMPTZ"
+            ))
         db.commit()
         _table_ensured = True
-    except Exception:
+    except Exception as e:
+        logger.error("Failed to ensure POS table: %s", e)
         db.rollback()
+
+
+def _resolve_organization_id(db: Session, lo_slug: Optional[str]) -> int:
+    """Resolve organization_id from an LO slug. Raises 400 if slug invalid."""
+    if not lo_slug:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing loan officer identifier (lo_slug). Please use the link provided by your loan officer.",
+        )
+    lo_user = db.query(User).filter(User.slug == lo_slug).first()
+    if not lo_user or not lo_user.organization_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid loan officer link. Please contact your loan officer for a new link.",
+        )
+    return lo_user.organization_id
 
 
 def _hash_code(code: str) -> str:
@@ -155,6 +196,7 @@ class StartRequest(BaseModel):
     email: EmailStr
     phone: str = Field(..., min_length=10, max_length=20)
     sms_consent: bool = Field(..., description="User consented to receive SMS")
+    lo_slug: Optional[str] = Field(None, max_length=200, description="Loan officer slug from PURL")
 
     @field_validator("phone")
     @classmethod
@@ -252,6 +294,9 @@ def start_application(body: StartRequest, request: Request, db: Session = Depend
     ip = _client_ip(request)
     _check_ip_rate_limit(ip)
 
+    # Resolve organization from LO slug (tenant isolation)
+    org_id = _resolve_organization_id(db, body.lo_slug)
+
     phone_e164 = normalize_phone(body.phone)
     if not phone_e164:
         raise HTTPException(status_code=422, detail="Invalid phone number format.")
@@ -289,6 +334,7 @@ def start_application(body: StartRequest, request: Request, db: Session = Depend
         first_name=body.first_name.strip(),
         last_name=body.last_name.strip(),
         email=email_lower,
+        organization_id=org_id,
         ip_address=ip,
         consent_at=now,
         created_at=now,
@@ -352,9 +398,15 @@ def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
 
     slug = f"{verification.first_name.lower()}-{verification.last_name.lower()}-{uuid.uuid4().hex[:8]}"
     display_name = f"{verification.first_name} {verification.last_name}"
+    org_id = verification.organization_id
+    if not org_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Session missing organization context. Please start over.",
+        )
 
     workspace = PURLWorkspace(
-        organization_id=DEFAULT_ORG_ID,
+        organization_id=org_id,
         slug=slug,
         status=WorkspaceStatus.APPLICATION.value,
         display_name=display_name,
@@ -365,7 +417,7 @@ def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
     db.flush()
 
     contact = PURLContact(
-        organization_id=DEFAULT_ORG_ID,
+        organization_id=org_id,
         workspace_id=workspace.id,
         contact_type=ContactType.BORROWER.value,
         first_name=verification.first_name,
@@ -378,7 +430,7 @@ def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
 
     token_service = PURLTokenService(db)
     _token_id, full_token = token_service.create_token(
-        organization_id=DEFAULT_ORG_ID,
+        organization_id=org_id,
         workspace_id=workspace.id,
         scope=TokenScope.WRITE,
         contact_id=contact.id,
