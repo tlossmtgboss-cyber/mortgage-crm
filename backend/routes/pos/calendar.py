@@ -6,12 +6,15 @@ other than their own.
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+
+logger = logging.getLogger(__name__)
 
 from database import get_db
 from middleware.purl_auth import (
@@ -267,9 +270,13 @@ async def create_booking(
         db=db,
     )
 
-    # Pull contact info from the PURL context. The dev spec didn't expose the
-    # contact's name/email directly on PURLAuthContext, so we fall back to
-    # the linked Loan's borrower record.
+    # Prevent duplicate bookings on the same application.
+    if application.submitted_appointment_id is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            detail="An appointment has already been booked for this application.",
+        )
+
     attendee_name, attendee_email, attendee_phone = _resolve_attendee_info(
         db, purl_ctx, application
     )
@@ -292,10 +299,13 @@ async def create_booking(
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except NoBookingLinkError as exc:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
+    # Link the appointment to the application for duplicate prevention.
+    application.submitted_appointment_id = booking.appointment_id
     db.commit()
 
-    # Re-resolve the LO for response shaping.
     lo = service.resolve_loan_officer(db, application)
     return BookingResponse(
         appointment_id=booking.appointment_id,
@@ -307,7 +317,7 @@ async def create_booking(
         scheduled_end=booking.scheduled_end,
         timezone=body.timezone,
         meeting_type=body.meeting_type,
-        video_link=None,  # populated by the scheduler if it's a video meeting
+        video_link=None,
         ics_link=booking.ics_link,
         confirmation_url=booking.confirmation_url or "",
         email_sent=booking.email_sent,
@@ -355,6 +365,10 @@ async def cancel_booking(
         db=db,
         organization_id=application.organization_id,
     )
+
+    # Clear the duplicate-prevention guard so the borrower can rebook.
+    if application.submitted_appointment_id == appointment_id:
+        application.submitted_appointment_id = None
     db.commit()
 
     return BookingCancelResponse(
@@ -385,10 +399,15 @@ def _resolve_attendee_info(
 ) -> tuple[str, str, str | None]:
     """Build (name, email, phone) for the borrower attendee on the booking.
 
-    Pulls from the personal section first (which the borrower just filled out),
-    falling back to the linked contact record if available.
+    Merges data from the personal section (name fields) and the PURLContact
+    record (email/phone collected during the OTP start flow).
     """
-    # Try the personal section first — the borrower's own input.
+    first: str | None = None
+    last: str | None = None
+    email: str | None = None
+    phone: str | None = None
+
+    # Personal section has first_name / last_name (but not email/phone).
     personal = next(
         (s for s in application.sections if s.section_key == "personal"),
         None,
@@ -398,22 +417,23 @@ def _resolve_attendee_info(
         last = personal.data.get("last_name")
         email = personal.data.get("email")
         phone = personal.data.get("phone")
-        if first and last and email:
-            return f"{first} {last}".strip(), email, phone
 
-    # Fallback to the linked lead (PURL contact_id → Lead model).
-    try:
-        from database.models.lead_loan import Lead
+    # PURLContact always has email/phone from the OTP start flow.
+    if purl_ctx.contact_id:
+        try:
+            from models.purl import PURLContact
 
-        lead = db.get(Lead, purl_ctx.contact_id)
-        if lead:
-            name = getattr(lead, "full_name", None) or _full_name(lead)
-            email = getattr(lead, "email", None) or ""
-            phone = getattr(lead, "phone", None)
-            if name and email:
-                return name, email, phone
-    except Exception:
-        pass
+            contact = db.get(PURLContact, purl_ctx.contact_id)
+            if contact:
+                email = email or contact.email
+                phone = phone or contact.phone
+                first = first or contact.first_name
+                last = last or contact.last_name
+        except Exception as e:
+            logger.warning("Failed to load PURLContact %s: %s", purl_ctx.contact_id, e)
+
+    if first and last and email:
+        return f"{first} {last}".strip(), email, phone
 
     raise HTTPException(
         status.HTTP_409_CONFLICT,

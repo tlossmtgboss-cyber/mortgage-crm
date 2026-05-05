@@ -16,6 +16,12 @@ const MEETING_TYPE_LABELS: Record<MeetingType, string> = {
   full_consultation: 'Full consultation (60 min)',
 };
 
+const MEETING_TYPE_DURATION: Record<MeetingType, number> = {
+  checkin: 15,
+  application_review: 30,
+  full_consultation: 60,
+};
+
 export const SmartCalendar: React.FC<SmartCalendarProps> = ({
   applicationId,
   onBooked,
@@ -39,7 +45,7 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
   } = useSmartCalendar(applicationId);
 
   const [meetingType] = useState<MeetingType>(defaultMeetingType);
-  const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+  const [selectedSlotStart, setSelectedSlotStart] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const minWeekOffset = useMemo(() => {
     const dow = new Date().getDay();
@@ -55,6 +61,29 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
   useEffect(() => {
     if (booking && onBooked) onBooked(booking);
   }, [booking, onBooked]);
+
+  // Auto-select the first weekday with available slots once data loads.
+  useEffect(() => {
+    if (selectedDate || !slots?.slots_by_date) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayKey = today.toISOString().slice(0, 10);
+
+    const sortedDates = Object.keys(slots.slots_by_date).sort();
+    const firstAvailable = sortedDates.find(dateKey => {
+      if (dateKey < todayKey) return false;
+      const dateSlots = slots.slots_by_date[dateKey];
+      return dateSlots?.some(s => s.is_available);
+    });
+
+    if (firstAvailable) {
+      setSelectedDate(firstAvailable);
+      const firstDate = new Date(firstAvailable + 'T12:00:00');
+      const diffDays = Math.floor((firstDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000));
+      const neededWeekOffset = Math.floor(diffDays / 7) + minWeekOffset;
+      setWeekOffset(w => w === neededWeekOffset ? w : neededWeekOffset);
+    }
+  }, [slots, selectedDate, minWeekOffset]);
 
   const weekDays = useMemo(() => {
     const today = new Date();
@@ -74,32 +103,31 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
 
   const timesForSelectedDate = useMemo(() => {
     if (!selectedDate) return [];
-    const apiSlots = slots?.slots_by_date?.[selectedDate];
-    if (apiSlots && apiSlots.length > 0) return apiSlots;
-    // Generate default business-hours slots when API has no availability data
-    const hours = [9, 10, 11, 13, 14, 15, 16];
-    return hours.map((h, i) => ({
-      start: `${selectedDate}T${String(h).padStart(2, '0')}:00:00`,
-      end: `${selectedDate}T${String(h + 1).padStart(2, '0')}:00:00`,
-      is_recommended: h === 10,
-    })) as TimeSlot[];
+    return slots?.slots_by_date?.[selectedDate] ?? [];
   }, [selectedDate, slots]);
+
+  const selectedSlot = useMemo(
+    () => timesForSelectedDate.find(s => s.start === selectedSlotStart) ?? null,
+    [timesForSelectedDate, selectedSlotStart],
+  );
 
   const handleDateSelect = useCallback((date: Date) => {
     const key = date.toISOString().slice(0, 10);
     setSelectedDate(key);
-    setSelectedSlot(null);
+    setSelectedSlotStart(null);
   }, []);
 
   const handleTimeSelect = useCallback((slot: TimeSlot) => {
-    setSelectedSlot(slot);
+    if (!slot.is_available) return;
+    setSelectedSlotStart(slot.start);
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!selectedSlot) return;
-    if (!hold) await holdSlot(selectedSlot);
+    if (!selectedSlot || !selectedSlot.is_available) return;
+    const held = await holdSlot(selectedSlot);
+    if (!held) return;
     await bookSlot(selectedSlot, meetingType);
-  }, [selectedSlot, hold, holdSlot, bookSlot, meetingType]);
+  }, [selectedSlot, holdSlot, bookSlot, meetingType]);
 
   // ---------- confirmation view ----------
 
@@ -135,6 +163,7 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
 
   // ---------- summary line ----------
 
+  const durationMin = MEETING_TYPE_DURATION[meetingType];
   const summaryParts: string[] = [];
   if (selectedDate) {
     const d = new Date(selectedDate + 'T12:00:00');
@@ -147,11 +176,30 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
 
   const loName = lo?.name ?? 'your loan officer';
 
+  // Dates that have at least one available slot.
+  const datesWithSlots = useMemo(() => {
+    if (!slots?.slots_by_date) return new Set<string>();
+    const result = new Set<string>();
+    for (const [dateKey, dateSlots] of Object.entries(slots.slots_by_date)) {
+      if (dateSlots.some(s => s.is_available)) result.add(dateKey);
+    }
+    return result;
+  }, [slots]);
+
   // ---------- main view ----------
 
   return (
     <div className="smart-cal">
-      {/* LO card at top — shown when loaded, never blocks the calendar */}
+      {/* LO card */}
+      {loadingLO && !lo && (
+        <div className="smart-cal__lo-card smart-cal__lo-card--loading">
+          <div className="smart-cal__lo-avatar smart-cal__lo-avatar--skeleton" />
+          <div className="smart-cal__lo-info">
+            <span className="smart-cal__lo-name smart-cal__skeleton-text" style={{ width: 160 }} />
+            <span className="smart-cal__lo-role smart-cal__skeleton-text" style={{ width: 200 }} />
+          </div>
+        </div>
+      )}
       {lo && (
         <div className="smart-cal__lo-card">
           {lo.avatar_url ? (
@@ -188,20 +236,22 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
               onClick={() => setWeekOffset(w => w - 1)}
               aria-label="Previous week"
             >
-              ‹
+              &#8249;
             </button>
           )}
           {weekDays.map(day => {
             const key = day.toISOString().slice(0, 10);
             const isSelected = selectedDate === key;
             const isPast = day < new Date(new Date().toDateString());
+            const hasSlots = datesWithSlots.has(key);
             return (
               <button
                 key={key}
                 type="button"
-                className={`smart-cal__chip${isSelected ? ' is-selected' : ''}${isPast ? ' is-disabled' : ''}`}
+                className={`smart-cal__chip${isSelected ? ' is-selected' : ''}${isPast || !hasSlots ? ' is-disabled' : ''}`}
                 onClick={() => handleDateSelect(day)}
                 disabled={isPast}
+                aria-label={`${day.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}${!hasSlots && !isPast ? ' — no available times' : ''}`}
               >
                 {day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
               </button>
@@ -214,7 +264,7 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
               onClick={() => setWeekOffset(w => w + 1)}
               aria-label="Next week"
             >
-              ›
+              &#8250;
             </button>
           )}
         </div>
@@ -224,22 +274,25 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
       {selectedDate && (
         <div className="smart-cal__section">
           {loadingSlots ? (
-            <div className="smart-cal__loading-text">Loading times…</div>
+            <div className="smart-cal__loading-text">Loading times...</div>
           ) : timesForSelectedDate.length === 0 ? (
-            <div className="smart-cal__loading-text">No times available for this date</div>
+            <div className="smart-cal__empty-text">No available times for this date. Try another day.</div>
           ) : (
             <div className="smart-cal__chips">
-              {timesForSelectedDate.map((slot, idx) => {
-                const isSelected = selectedSlot === slot;
+              {timesForSelectedDate.map((slot) => {
+                const isSelected = selectedSlotStart === slot.start;
+                const tz = slots?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
                 return (
                   <button
-                    key={idx}
+                    key={slot.start}
                     type="button"
-                    className={`smart-cal__chip smart-cal__chip--time${isSelected ? ' is-selected' : ''}`}
+                    className={`smart-cal__chip smart-cal__chip--time${isSelected ? ' is-selected' : ''}${!slot.is_available ? ' is-disabled' : ''}`}
                     onClick={() => handleTimeSelect(slot)}
+                    disabled={!slot.is_available}
+                    aria-label={`${formatTime(slot.start, tz)} to ${formatTime(slot.end, tz)}${slot.is_recommended ? ' — recommended' : ''}${!slot.is_available ? ' — unavailable' : ''}`}
                   >
-                    {formatTime(slot.start, slots?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone)}
-                    {slot.is_recommended && <span className="smart-cal__chip-star">★</span>}
+                    {formatTime(slot.start, tz)}
+                    {slot.is_recommended && <span className="smart-cal__chip-star">&#9733;</span>}
                   </button>
                 );
               })}
@@ -251,21 +304,37 @@ export const SmartCalendar: React.FC<SmartCalendarProps> = ({
       {/* Summary line */}
       {selectedSlot && (
         <div className="smart-cal__summary">
-          Phone call with {loName} · {summaryParts.join(' ')}
+          Phone call with {loName} · {summaryParts.join(' ')} · {durationMin} min
         </div>
       )}
 
-      {/* Submit */}
-      <button
-        type="button"
-        className="smart-cal__submit"
-        onClick={handleSubmit}
-        disabled={!selectedSlot || busy}
-      >
-        {busy ? 'Booking…' : 'Confirm & schedule'}
-      </button>
+      {/* Submit — only visible when a slot is selected */}
+      {selectedSlot && (
+        <button
+          type="button"
+          className="smart-cal__submit"
+          onClick={handleSubmit}
+          disabled={busy}
+        >
+          {busy ? 'Booking...' : 'Confirm & schedule'}
+        </button>
+      )}
 
-      {error && <p className="smart-cal__error">{error}</p>}
+      {error && (
+        <div className="smart-cal__error" role="alert">
+          <p>{error}</p>
+          <button
+            type="button"
+            className="smart-cal__error-retry"
+            onClick={() => {
+              loadSlots();
+              setSelectedSlotStart(null);
+            }}
+          >
+            Refresh times
+          </button>
+        </div>
+      )}
     </div>
   );
 };

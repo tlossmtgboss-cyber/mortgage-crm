@@ -94,9 +94,10 @@ export function useSmartCalendar(applicationId: string | undefined) {
   // ---------- hold ----------
 
   const holdSlot = useCallback(
-    async (slot: TimeSlot) => {
-      if (!applicationId) return;
+    async (slot: TimeSlot): Promise<SlotHoldResponse | null> => {
+      if (!applicationId) return null;
       setBusy(true);
+      setError(null);
       try {
         const h = await posApi.holdSlot(
           applicationId,
@@ -123,6 +124,7 @@ export function useSmartCalendar(applicationId: string | undefined) {
         return h;
       } catch (e) {
         setError(e instanceof Error ? e.message : 'Could not hold the slot');
+        return null;
       } finally {
         setBusy(false);
       }
@@ -153,18 +155,23 @@ export function useSmartCalendar(applicationId: string | undefined) {
           Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/New_York';
         const result = await posApi.bookSlot({
           application_id: applicationId,
-          hold_id: hold?.hold_id ?? null,
+          hold_id: hold?.hold_id ?? undefined,
           meeting_type: meetingType,
           slot_start: slot.start,
           slot_end: slot.end,
           timezone: tz,
-          notes: notes ?? null,
+          notes: notes ?? undefined,
         });
         setBooking(result);
         releaseHold();
         return result;
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Booking failed');
+        const message = e instanceof Error ? e.message : 'Booking failed';
+        setError(
+          message.includes('already been booked')
+            ? 'An appointment is already booked for this application.'
+            : message,
+        );
         return null;
       } finally {
         setBusy(false);

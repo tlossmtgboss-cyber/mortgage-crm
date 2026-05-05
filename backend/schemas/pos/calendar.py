@@ -93,6 +93,9 @@ class SlotHoldResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+VALID_MEETING_TYPES = {"checkin", "application_review", "full_consultation"}
+
+
 class BookingRequest(BaseModel):
     """Body for POST /api/v1/pos/calendar/bookings."""
 
@@ -113,8 +116,26 @@ class BookingRequest(BaseModel):
     slot_end: datetime
     timezone: str = Field(default="America/New_York")
 
-    # Optional notes the borrower wants Sarah to see ahead of the meeting.
     notes: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("meeting_type")
+    @classmethod
+    def _valid_meeting_type(cls, v: str) -> str:
+        if v not in VALID_MEETING_TYPES:
+            raise ValueError(
+                f"Invalid meeting_type '{v}'. Must be one of: {', '.join(sorted(VALID_MEETING_TYPES))}"
+            )
+        return v
+
+    @field_validator("slot_end")
+    @classmethod
+    def _end_after_start(cls, v: datetime, info) -> datetime:
+        start = info.data.get("slot_start")
+        if start and v <= start:
+            raise ValueError("slot_end must be after slot_start")
+        if start and (v - start).total_seconds() > 14400:
+            raise ValueError("Slot duration cannot exceed 4 hours")
+        return v
 
 
 class BookingResponse(BaseModel):

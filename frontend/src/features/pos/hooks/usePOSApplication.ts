@@ -68,6 +68,8 @@ export function usePOSApplication(loanId?: number) {
   const loadSection = useCallback(
     async (sectionKey: SectionKey) => {
       if (!application) return;
+      // schedule and review are UI-only steps with no backend section data.
+      if (sectionKey === 'schedule') return;
       try {
         const section = await posApi.getSection(application.id, sectionKey);
         setSections(prev => ({ ...prev, [sectionKey]: section }));
