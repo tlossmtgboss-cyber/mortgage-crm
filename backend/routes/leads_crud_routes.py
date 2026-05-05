@@ -246,6 +246,8 @@ async def get_leads(
         # Apply org + role-based permission filtering (multi-tenant isolation)
         query = db.query(Lead).options(joinedload(Lead.referral_partner))
         query = filter_leads_by_permissions(query, current_user, db)
+        # Exclude soft-deleted records
+        query = query.filter(Lead.deleted_at.is_(None))
 
         if stage:
             # Cast to text to avoid PostgreSQL enum type mismatch
@@ -365,6 +367,8 @@ async def search_leads(
     # Build query with permission-based scoping for multi-tenant isolation
     query = db.query(Lead)
     query = filter_leads_by_permissions(query, current_user, db)
+    # Exclude soft-deleted records
+    query = query.filter(Lead.deleted_at.is_(None))
 
     # Search by name (case-insensitive)
     query = query.filter(

@@ -100,33 +100,9 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         deleted_count = 0
         errors = []
 
-        # Get table list (cached at module level)
-        existing_tables = _get_table_names(db)
-
-        tables_to_clean = [
-            ("activities", "lead_id"),
-            ("tasks", "lead_id"),
-            ("ai_tasks", "lead_id"),
-            ("notes", "lead_id"),
-            ("communications", "lead_id"),
-            ("email_reconciliation_queue", "lead_id"),
-            ("workflow_executions", "lead_id"),
-            ("workflow_sla_instances", "lead_id"),
-            ("workflow_sla_tasks", "lead_id"),
-            ("lead_profiles", "lead_id"),
-            ("circle_contacts", "lead_id"),
-            ("notifications", "lead_id"),
-            ("stage_history", "lead_id"),
-            ("conversation_messages", "lead_id"),
-            ("ai_conversation_messages", "lead_id"),
-            ("incoming_data_events", "lead_id"),
-            ("lead_source_tracking", "lead_id"),
-            ("purl_events", "lead_id"),
-            ("purl_workspaces", "lead_id"),
-        ]
-
         # Batch-fetch all leads at once to avoid N+1 queries (1 query instead of N)
-        lead_query = db.query(Lead).filter(Lead.id.in_(lead_ids))
+        # Exclude already soft-deleted leads
+        lead_query = db.query(Lead).filter(Lead.id.in_(lead_ids), Lead.deleted_at.is_(None))
         if not is_platform_admin:
             org_id = getattr(current_user, 'organization_id', None)
             if org_id:
@@ -143,48 +119,8 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                     savepoint.rollback()
                     continue
 
-                # Delete related records using raw SQL
-                # Whitelist validation: table/column pairs come from the
-                # hardcoded tables_to_clean list above, but validate anyway
-                # as defense-in-depth against future code changes.
-                ALLOWED_CLEANUP_TABLES = {
-                    "activities": "lead_id",
-                    "tasks": "lead_id",
-                    "ai_tasks": "lead_id",
-                    "notes": "lead_id",
-                    "communications": "lead_id",
-                    "email_reconciliation_queue": "lead_id",
-                    "workflow_executions": "lead_id",
-                    "workflow_sla_instances": "lead_id",
-                    "workflow_sla_tasks": "lead_id",
-                    "lead_profiles": "lead_id",
-                    "circle_contacts": "lead_id",
-                    "notifications": "lead_id",
-                    "stage_history": "lead_id",
-                    "conversation_messages": "lead_id",
-                    "ai_conversation_messages": "lead_id",
-                    "incoming_data_events": "lead_id",
-                    "lead_source_tracking": "lead_id",
-                    "purl_events": "lead_id",
-                    "purl_workspaces": "lead_id",
-                }
-                for table, column in tables_to_clean:
-                    if table not in ALLOWED_CLEANUP_TABLES or column != ALLOWED_CLEANUP_TABLES.get(table):
-                        logger.warning(f"Blocked invalid table/column cleanup: {table}.{column}")
-                        continue
-                    if table in existing_tables:
-                        try:
-                            sql = "DELETE FROM " + table + " WHERE " + column + " = :lead_id"
-                            db.execute(text(sql), {"lead_id": lead_id})
-                        except Exception as te:
-                            logger.warning(f"Error cleaning {table} for lead {lead_id}: {te}")
-
-                # Unlink from loans instead of deleting
-                if "loans" in existing_tables:
-                    db.execute(text("UPDATE loans SET lead_id = NULL WHERE lead_id = :lead_id"), {"lead_id": lead_id})
-
-                # Delete the lead
-                db.delete(lead)
+                # Soft-delete: set deleted_at timestamp instead of removing data
+                lead.deleted_at = datetime.now(timezone.utc)
                 savepoint.commit()  # Commit the savepoint
                 deleted_count += 1
 
@@ -421,7 +357,7 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
     @app.get("/api/v1/leads/{lead_id}")
     async def get_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
         lead = _org_scoped_lead(db, lead_id, current_user)
-        if not lead:
+        if not lead or lead.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Lead not found")
 
         # Handle stage value - it might be an enum or a string depending on DB content
@@ -846,90 +782,22 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
                 raise HTTPException(status_code=403, detail="Permission denied: leads.delete")
 
         lead = _org_scoped_lead(db, lead_id, current_user)
-        if not lead:
+        if not lead or lead.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Lead not found")
 
         lead_name = lead.name
 
         try:
-            # Delete related records first using raw SQL connection
-            # This avoids SQLAlchemy transaction issues
-
-            # Get list of existing tables (cached at module level)
-            existing_tables = _get_table_names(db)
-
-            # Define tables and their foreign key columns to lead
-            tables_to_clean = [
-                ("activities", "lead_id"),
-                ("tasks", "lead_id"),
-                ("ai_tasks", "lead_id"),
-                ("notes", "lead_id"),
-                ("communications", "lead_id"),
-                ("email_reconciliation_queue", "lead_id"),
-                ("workflow_executions", "lead_id"),
-                ("lead_profiles", "lead_id"),
-                ("circle_contacts", "lead_id"),
-                ("notifications", "lead_id"),
-                ("stage_history", "lead_id"),
-                ("conversation_messages", "lead_id"),
-                ("ai_conversation_messages", "lead_id"),
-                ("incoming_data_events", "lead_id"),
-            ]
-
-            # Delete from all related tables using parameterized queries
-            # Table/column names are from the hardcoded whitelist above, not user input
-            # Validate against whitelist as defense-in-depth
-            ALLOWED_DELETE_TABLES = {
-                "activities": "lead_id",
-                "tasks": "lead_id",
-                "ai_tasks": "lead_id",
-                "notes": "lead_id",
-                "communications": "lead_id",
-                "email_reconciliation_queue": "lead_id",
-                "workflow_executions": "lead_id",
-                "lead_profiles": "lead_id",
-                "circle_contacts": "lead_id",
-                "notifications": "lead_id",
-                "stage_history": "lead_id",
-                "conversation_messages": "lead_id",
-                "ai_conversation_messages": "lead_id",
-                "incoming_data_events": "lead_id",
-            }
-            for table, column in tables_to_clean:
-                if table not in ALLOWED_DELETE_TABLES or column != ALLOWED_DELETE_TABLES.get(table):
-                    logger.warning(f"Blocked invalid table/column cleanup: {table}.{column}")
-                    continue
-                if table in existing_tables:
-                    try:
-                        sql = "DELETE FROM " + table + " WHERE " + column + " = :lead_id"
-                        db.execute(
-                            text(sql),
-                            {"lead_id": lead_id}
-                        )
-                    except Exception as e:
-                        logger.debug(f"Delete from {table} skipped: {e}")
-
-            # Nullify loan references if loans table exists
-            if "loans" in existing_tables:
-                db.execute(
-                    text("UPDATE loans SET lead_id = NULL WHERE lead_id = :lead_id"),
-                    {"lead_id": lead_id}
-                )
-
-            # Delete the lead itself
-            db.execute(
-                text("DELETE FROM leads WHERE id = :lead_id"),
-                {"lead_id": lead_id}
-            )
+            # Soft-delete: set deleted_at timestamp instead of removing data
+            lead.deleted_at = datetime.now(timezone.utc)
             db.commit()
 
-            logger.info(f"Lead deleted: {lead_name}")
+            logger.info(f"Lead soft-deleted: {lead_name} (ID: {lead_id})")
             return None
 
         except Exception as e:
-            logger.error(f"Error deleting lead {lead_id}: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"Error soft-deleting lead {lead_id}: {str(e)}")
+            db.rollback()
             raise HTTPException(status_code=500, detail="Failed to delete lead")
 
 

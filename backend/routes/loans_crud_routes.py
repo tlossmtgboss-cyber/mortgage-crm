@@ -735,6 +735,8 @@ async def get_loans(
     try:
         query = db.query(Loan)
         query = filter_loans_by_permissions(query, current_user, db)
+        # Exclude soft-deleted records
+        query = query.filter(Loan.deleted_at.is_(None))
 
         if stage:
             query = query.filter(Loan.stage == stage)
@@ -787,7 +789,7 @@ async def get_loan(
     loan = filter_loans_by_permissions(
         db.query(Loan), current_user, db
     ).filter(Loan.id == loan_id).first()
-    if not loan:
+    if not loan or loan.deleted_at is not None:
         raise HTTPException(status_code=404, detail="Loan not found")
 
     return _loan_to_dict(loan)
@@ -1133,9 +1135,10 @@ async def delete_loan(
 
     try:
         _org = getattr(loan, "organization_id", None)
-        db.delete(loan)
+        # Soft-delete: set deleted_at timestamp instead of removing data
+        loan.deleted_at = datetime.now(timezone.utc)
         db.commit()
-        logger.info(f"Loan deleted: {loan.loan_number} (ID: {loan_id})")
+        logger.info(f"Loan soft-deleted: {loan.loan_number} (ID: {loan_id})")
 
         # Invalidate pipeline cache for this org
         try:
@@ -1173,11 +1176,15 @@ async def bulk_delete_loans(
             raise HTTPException(status_code=403, detail="Permission denied: loans.delete")
 
     try:
+        # Soft-delete: set deleted_at timestamp instead of removing data
+        now = datetime.now(timezone.utc)
         deleted = filter_loans_by_permissions(
             db.query(Loan), current_user, db
-        ).filter(Loan.id.in_(loan_ids)).delete(synchronize_session=False)
+        ).filter(Loan.id.in_(loan_ids)).update(
+            {"deleted_at": now}, synchronize_session=False
+        )
         db.commit()
-        logger.info(f"Bulk deleted {deleted} loans")
+        logger.info(f"Bulk soft-deleted {deleted} loans")
 
         # Invalidate pipeline cache for this org
         if deleted:
