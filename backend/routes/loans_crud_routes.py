@@ -118,6 +118,10 @@ def get_permission_functions():
     from routes.permission_core_routes import filter_loans_by_permissions
     return filter_loans_by_permissions
 
+def get_has_permission():
+    from routes.permission_core_routes import has_permission
+    return has_permission
+
 
 # ============================================================================
 # ECOA Adverse Action Auto-Trigger (SEC-ECOA-001)
@@ -236,8 +240,13 @@ def _trigger_ecoa_adverse_action(
 # but the DB table lacks.)
 # ============================================================================
 
+_columns_ensured = False
+
 def _ensure_loans_columns():
     """Add missing columns to the loans table. Safe to run repeatedly."""
+    global _columns_ensured
+    if _columns_ensured:
+        return
     from sqlalchemy import text
     try:
         from db import engine
@@ -497,11 +506,15 @@ def _ensure_loans_columns():
                         logger.info(f"✅ Auto-promoted {promoted} funded loans to MUM clients")
             except Exception as promo_err:
                 logger.warning(f"⚠️ Auto-promotion skipped: {promo_err}")
+        _columns_ensured = True
     except Exception as e:
         logger.warning(f"⚠️ Could not sync loans columns: {e}")
 
 # Run on module load
-_ensure_loans_columns()
+try:
+    _ensure_loans_columns()
+except Exception as e:
+    logger.warning(f"⚠️ _ensure_loans_columns failed on import: {e}")
 
 
 # ============================================================================
@@ -726,6 +739,7 @@ async def get_loans(
         if stage:
             query = query.filter(Loan.stage == stage)
 
+        total = query.count()
         loans = query.order_by(Loan.created_at.desc()).offset(skip).limit(limit).all()
 
         # Resolve org-wide Production Assistant 1 name (single query for all loans)
@@ -751,8 +765,9 @@ async def get_loans(
             d["production_assistant"] = pa_name
             result.append(d)
 
-        cache_set(cache_key, result, ttl=30)
-        return result
+        response_data = {"items": result, "total": total}
+        cache_set(cache_key, response_data, ttl=30)
+        return response_data
 
     except Exception as e:
         logger.error(f"get_loans error: {e}", exc_info=True)
@@ -1099,6 +1114,16 @@ async def delete_loan(
     """Delete a loan by ID."""
     Loan, User = get_models()
     filter_loans_by_permissions = get_permission_functions()
+    has_permission = get_has_permission()
+
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if not is_platform_admin:
+        has_delete_perm = (
+            has_permission(current_user.id, 'loans.delete', db)
+            or has_permission(current_user.id, 'loans.delete_all', db)
+        )
+        if not has_delete_perm:
+            raise HTTPException(status_code=403, detail="Permission denied: loans.delete")
 
     loan = filter_loans_by_permissions(
         db.query(Loan), current_user, db
@@ -1136,6 +1161,16 @@ async def bulk_delete_loans(
     """Bulk delete loans by list of IDs."""
     Loan, User = get_models()
     filter_loans_by_permissions = get_permission_functions()
+    has_permission = get_has_permission()
+
+    is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+    if not is_platform_admin:
+        has_delete_perm = (
+            has_permission(current_user.id, 'loans.delete', db)
+            or has_permission(current_user.id, 'loans.delete_all', db)
+        )
+        if not has_delete_perm:
+            raise HTTPException(status_code=403, detail="Permission denied: loans.delete")
 
     try:
         deleted = filter_loans_by_permissions(

@@ -22,6 +22,17 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Cache table names to avoid expensive metadata reflection per-request
+_cached_table_names: set | None = None
+
+
+def _get_table_names(db):
+    global _cached_table_names
+    if _cached_table_names is None:
+        from sqlalchemy import inspect as sa_inspect
+        _cached_table_names = set(sa_inspect(db.bind).get_table_names())
+    return _cached_table_names
+
 
 def register_leads_detail_routes(app, get_db, get_current_user, get_current_user_flexible, **kwargs):
     """Register leads detail/CRUD routes."""
@@ -582,6 +593,15 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
     @app.patch("/api/v1/leads/{lead_id}")
     async def update_lead(lead_id: int, lead_update: LeadUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+        is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+        if not is_platform_admin:
+            has_update_permission = (
+                has_permission(current_user.id, 'leads.update', db)
+                or has_permission(current_user.id, 'leads.update_all', db)
+            )
+            if not has_update_permission:
+                raise HTTPException(status_code=403, detail="Permission denied: leads.update")
+
         lead = _org_scoped_lead(db, lead_id, current_user)
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")
@@ -818,6 +838,15 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
 
     @app.delete("/api/v1/leads/{lead_id}", status_code=204)
     async def delete_lead(lead_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user_flexible)):
+        is_platform_admin = getattr(current_user, 'permission_role', '') == 'admin'
+        if not is_platform_admin:
+            has_delete_permission = (
+                has_permission(current_user.id, 'leads.delete', db)
+                or has_permission(current_user.id, 'leads.delete_all', db)
+            )
+            if not has_delete_permission:
+                raise HTTPException(status_code=403, detail="Permission denied: leads.delete")
+
         lead = _org_scoped_lead(db, lead_id, current_user)
         if not lead:
             raise HTTPException(status_code=404, detail="Lead not found")

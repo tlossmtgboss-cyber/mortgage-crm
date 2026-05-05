@@ -256,6 +256,7 @@ async def get_leads(
             excluded = MUM_STAGES + ACTIVE_LOAN_ENTRY_STAGES
             query = query.filter(or_(cast(Lead.stage, String).notin_(excluded), Lead.stage == None))
 
+        total = query.count()
         leads = query.order_by(Lead.created_at.desc()).offset(skip).limit(limit).all()
 
         # Resolve org-wide Production Assistant 1 name (single query for all leads)
@@ -333,7 +334,7 @@ async def get_leads(
                 "updated_at": lead.updated_at.isoformat() if lead.updated_at else None,
             }
             result.append(lead_dict)
-        return result
+        return {"items": result, "total": total}
     except Exception as e:
         import traceback
         logger.error(f"get_leads error: {e}")
@@ -373,7 +374,19 @@ async def search_leads(
     # Order by relevance (exact matches first, then alphabetically)
     leads = query.order_by(Lead.name).limit(limit).all()
 
-    return leads
+    return [
+        {
+            "id": lead.id,
+            "name": lead.name,
+            "email": lead.email,
+            "phone": lead.phone,
+            "stage": lead.stage.value if hasattr(lead.stage, 'value') else str(lead.stage) if lead.stage else None,
+            "source": lead.source,
+            "ai_score": lead.ai_score,
+            "created_at": lead.created_at.isoformat() if lead.created_at else None,
+        }
+        for lead in leads
+    ]
 
 
 @router.get("/{lead_id}/client-file-id")
