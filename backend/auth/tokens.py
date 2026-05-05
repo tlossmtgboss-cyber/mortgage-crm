@@ -25,7 +25,6 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Literal, Tuple
 from dataclasses import dataclass
 from enum import Enum
-from functools import lru_cache
 from pathlib import Path
 
 import jwt
@@ -41,7 +40,9 @@ logger = logging.getLogger(__name__)
 # Key Management for RS256
 # =============================================================================
 
-@lru_cache(maxsize=1)
+_rsa_keys_cache: Optional[Tuple[Optional[str], Optional[str]]] = None
+
+
 def load_rsa_keys() -> Tuple[Optional[str], Optional[str]]:
     """
     Load RSA private and public keys for RS256 signing.
@@ -50,9 +51,16 @@ def load_rsa_keys() -> Tuple[Optional[str], Optional[str]]:
     1. Environment variables: AUTH_PRIVATE_KEY, AUTH_PUBLIC_KEY (base64 or PEM)
     2. File paths: AUTH_PRIVATE_KEY_PATH, AUTH_PUBLIC_KEY_PATH
 
+    Results are cached in a module-level variable that can be invalidated
+    via invalidate_rsa_keys() to support key rotation at runtime.
+
     Returns:
         Tuple of (private_key, public_key) as PEM strings, or (None, None) if not configured
     """
+    global _rsa_keys_cache
+    if _rsa_keys_cache is not None:
+        return _rsa_keys_cache
+
     settings = get_auth_settings()
 
     private_key = None
@@ -98,7 +106,20 @@ def load_rsa_keys() -> Tuple[Optional[str], Optional[str]]:
             public_key = key_path.read_text()
             logger.info(f"Loaded RSA public key from {key_path}")
 
-    return private_key, public_key
+    _rsa_keys_cache = (private_key, public_key)
+    return _rsa_keys_cache
+
+
+def invalidate_rsa_keys():
+    """Invalidate the cached RSA keys, forcing reload on next token operation.
+
+    Call this after rotating RSA keys in the environment or on disk.
+    Existing tokens signed with the old key will fail verification once
+    the new public key is loaded.
+    """
+    global _rsa_keys_cache
+    _rsa_keys_cache = None
+    logger.info("RSA key cache invalidated — keys will reload on next use")
 
 
 def get_signing_key() -> str:

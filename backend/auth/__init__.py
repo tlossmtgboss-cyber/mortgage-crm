@@ -40,6 +40,7 @@ from .tokens import (
     TokenType,
     TokenData,
     load_rsa_keys,
+    invalidate_rsa_keys,
     get_signing_key,
     get_verification_key,
 )
@@ -61,6 +62,7 @@ __all__ = [
     'is_token_blacklisted',
     # Key management
     'load_rsa_keys',
+    'invalidate_rsa_keys',
     'get_signing_key',
     'get_verification_key',
     # Config

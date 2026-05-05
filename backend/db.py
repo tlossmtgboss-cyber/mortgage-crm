@@ -31,8 +31,7 @@ import contextlib
 from datetime import datetime, timezone
 from typing import Dict
 from sqlalchemy import create_engine, event, text
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 from sqlalchemy.pool import NullPool
 from starlette.requests import Request
 
@@ -59,8 +58,9 @@ if DATABASE_URL.startswith("postgres://"):
 SLOW_QUERY_THRESHOLD_MS = float(os.getenv("SLOW_QUERY_THRESHOLD_MS", "500"))
 STATEMENT_TIMEOUT_MS = int(os.getenv("STATEMENT_TIMEOUT_MS", "30000"))  # 30 seconds
 
-# Create Base
-Base = declarative_base()
+# Create Base using modern DeclarativeBase (replaces deprecated declarative_base())
+class Base(DeclarativeBase):
+    pass
 
 # Create engine with appropriate settings
 if DATABASE_URL.startswith("sqlite"):

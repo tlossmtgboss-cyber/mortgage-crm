@@ -8,7 +8,7 @@ Design decisions:
   - Common password list is embedded as a frozenset (top 10,000) loaded lazily
     from a bundled text file. Falls back to a hardcoded top-200 subset if the
     file is missing.
-  - Password history comparison uses passlib's bcrypt verify (constant-time)
+  - Password history comparison uses bcrypt.checkpw (constant-time)
     against up to HISTORY_DEPTH stored hashes.
   - All datetime comparisons use naive UTC to match the User model's
     Column(DateTime) convention (see account_lockout.py).
@@ -30,7 +30,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -45,8 +45,7 @@ PASSWORD_EXPIRY_DAYS = 90   # Default; overridable per-org in the future
 MAX_FAILED_ATTEMPTS = 5
 LOCKOUT_DURATION_MINUTES = 30
 
-# passlib context (matches main.py's pwd_context)
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Direct bcrypt usage (replaces passlib CryptContext)
 
 # ---------------------------------------------------------------------------
 # Common password list
@@ -211,7 +210,7 @@ def validate_password(
             )
             for (old_hash,) in recent_hashes:
                 try:
-                    if _pwd_context.verify(password, old_hash):
+                    if bcrypt.checkpw(password.encode(), old_hash.encode()):
                         violations.append(
                             f"Password was used recently. "
                             f"You cannot reuse any of your last {HISTORY_DEPTH} passwords."
