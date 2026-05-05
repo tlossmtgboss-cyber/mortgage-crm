@@ -28,7 +28,7 @@ from fastapi.responses import JSONResponse
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-from passlib.context import CryptContext
+import bcrypt
 import jwt
 from jwt.exceptions import InvalidTokenError
 from datetime import datetime, timedelta, timezone
@@ -775,13 +775,32 @@ except Exception as e:
 
 # Auth - Define BEFORE importing routes that use these functions
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+    """Verify a plaintext password against a bcrypt hash.
+
+    Backward-compatible with hashes created by passlib's CryptContext(bcrypt).
+    """
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
+
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    """Hash a password using bcrypt (direct, no passlib wrapper)."""
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+# Backward-compat shim: many route files receive pwd_context and call .hash()/.verify()
+class _BcryptCompat:
+    """Drop-in replacement for passlib CryptContext with bcrypt scheme."""
+    def hash(self, password: str) -> str:
+        return get_password_hash(password)
+
+    def verify(self, plain: str, hashed: str) -> bool:
+        return verify_password(plain, hashed)
+
+
+pwd_context = _BcryptCompat()
 
 def create_access_token(data: dict, user_id: int = None, tenant_id: str = None):
     """
@@ -2956,7 +2975,7 @@ except Exception as e:
 # ============================================================================
 # STARTUP EVENT — Initialize scheduler for workflow task generation
 # ============================================================================
-@app.on_event("startup")
+@app.on_event("startup")  # Deprecated in FastAPI >=0.103; migrate to lifespan when feasible
 async def startup_event():
     """Initialize the scheduler on app startup and run critical schema migrations."""
     # Skip DB-dependent startup when running under pytest (TestClient triggers this
@@ -3440,6 +3459,16 @@ async def startup_event():
     except Exception as e:
         logger.warning(f"Scheduler indexes migration: {e}")
 
+    # Trigram indexes for ILIKE search performance on leads/loans
+    try:
+        from migrations.add_trigram_indexes import run_migration as _run_trgm_idx
+        if run_tracked:
+            run_tracked(engine, "add_trigram_indexes", _run_trgm_idx)
+        else:
+            _run_trgm_idx(engine)
+    except Exception as e:
+        logger.warning(f"Trigram indexes migration: {e}")
+
     logger.info("✅ Critical table migrations complete")
 
     # Register SOC 2 compliance scheduled jobs
@@ -3577,7 +3606,7 @@ async def startup_event():
     logger.info("✅ LangGraph thread pool executor started (4 workers)")
 
 
-@app.on_event("shutdown")
+@app.on_event("shutdown")  # Deprecated in FastAPI >=0.103; migrate to lifespan when feasible
 async def shutdown_event():
     """Shutdown handler — clean up resources."""
     if hasattr(app.state, "langgraph_executor"):

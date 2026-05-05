@@ -114,7 +114,7 @@ class AutonomousTask(Base):
     executions = relationship(
         "TaskExecution",
         back_populates="task",
-        lazy="dynamic",
+        lazy="select",
         order_by="TaskExecution.started_at.desc()",
     )
 
@@ -190,7 +190,7 @@ class TaskExecution(Base):
     actions = relationship(
         "AgentAction",
         back_populates="execution",
-        lazy="dynamic",
+        lazy="select",
         order_by="AgentAction.created_at.asc()",
     )
 

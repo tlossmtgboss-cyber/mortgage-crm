@@ -59,7 +59,7 @@ class Vendor(Base):
                         onupdate=lambda: datetime.now(timezone.utc))
 
     # Relationships
-    orders = relationship("VendorOrder", back_populates="vendor", lazy="dynamic")
+    orders = relationship("VendorOrder", back_populates="vendor", lazy="select")
 
     def __repr__(self) -> str:
         return f"<Vendor id={self.id} name={self.name!r} type={self.vendor_type}>"

@@ -74,7 +74,7 @@ class DripEnrollment(Base):
 
     # Relationships
     events = relationship("DripEnrollmentEvent", back_populates="enrollment",
-                          cascade="all, delete-orphan", lazy="dynamic")
+                          cascade="all, delete-orphan", lazy="select")
 
 
 class DripEnrollmentEvent(Base):
