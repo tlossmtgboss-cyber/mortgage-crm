@@ -23,6 +23,7 @@ import SMSAccordionPanel from '../components/sms/SMSAccordionPanel';
 import './LeadDetail.css';
 import { getToken } from '../utils/tokenStore';
 
+
 function ClientProfile() {
   const { id } = useParams();
   const navigate = useNavigate();

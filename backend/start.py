@@ -109,20 +109,55 @@ def main():
     print("START.PY: Cleaning up idle database connections...", flush=True)
     cleanup_idle_connections()
 
-    # Run migrations first (with timeout to prevent startup hang)
+    # Run migrations first (with advisory lock to prevent concurrent execution across replicas)
     script_dir = os.path.dirname(os.path.abspath(__file__))
     print("=" * 50, flush=True)
     print("START.PY: Running migrations...", flush=True)
+
+    database_url = os.environ.get("DATABASE_URL", "")
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+    got_lock = False
+    lock_conn = None
     try:
-        result = subprocess.run(
-            [sys.executable, os.path.join(script_dir, "run_migrations.py")],
-            check=False,
-            timeout=120  # 2 minute timeout — don't let migrations block startup
-        )
-        if result.returncode != 0:
-            print("START.PY: Warning: Migration had issues, continuing anyway...", flush=True)
-    except subprocess.TimeoutExpired:
-        print("START.PY: WARNING: Migrations timed out after 120s, continuing with server start...", flush=True)
+        if database_url and "sqlite" not in database_url:
+            import psycopg2
+            lock_conn = psycopg2.connect(database_url, connect_timeout=10)
+            lock_conn.autocommit = True
+            lock_cursor = lock_conn.cursor()
+            # Advisory lock key 728371 — arbitrary but unique to migrations
+            lock_cursor.execute("SELECT pg_try_advisory_lock(728371)")
+            got_lock = lock_cursor.fetchone()[0]
+            lock_cursor.close()
+            if not got_lock:
+                print("START.PY: Another replica is running migrations, skipping...", flush=True)
+        else:
+            got_lock = True  # SQLite — no concurrency concern
+
+        if got_lock:
+            try:
+                result = subprocess.run(
+                    [sys.executable, os.path.join(script_dir, "run_migrations.py")],
+                    check=False,
+                    timeout=120  # 2 minute timeout — don't let migrations block startup
+                )
+                if result.returncode != 0:
+                    print(f"FATAL: Migration failed with exit code {result.returncode}", flush=True)
+                    sys.exit(1)
+            except subprocess.TimeoutExpired:
+                print("FATAL: Migrations timed out after 120s", flush=True)
+                sys.exit(1)
+    finally:
+        if lock_conn:
+            if got_lock:
+                try:
+                    release_cursor = lock_conn.cursor()
+                    release_cursor.execute("SELECT pg_advisory_unlock(728371)")
+                    release_cursor.close()
+                except Exception:
+                    pass
+            lock_conn.close()
 
     # Run multi-tenant organization_id migration
     print("=" * 50, flush=True)
@@ -143,7 +178,10 @@ def main():
     print(f"START.PY: Starting uvicorn on port {port}...", flush=True)
     print("=" * 50, flush=True)
 
-    # Start uvicorn
+    # Start uvicorn — single worker per replica is intentional.
+    # With numReplicas=2 in railway.toml and pool_size=2 + max_overflow=5 = 7 per process,
+    # 2 replicas × 1 worker × 7 = 14 connections, leaving headroom within Railway's ~20 limit.
+    # Adding --workers would multiply connection usage beyond safe limits.
     os.execvp("uvicorn", [
         "uvicorn",
         "main:app",

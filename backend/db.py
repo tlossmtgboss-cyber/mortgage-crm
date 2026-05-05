@@ -87,15 +87,15 @@ elif USE_PGBOUNCER:
     )
 else:
     # Direct PostgreSQL connection with SQLAlchemy pooling
-    # Railway has ~20 connections max.  Keep pool_size=0 so no connections are
-    # pre-allocated on startup (all connections are overflow, created on demand
-    # and released when idle).  This prevents crash-loop connection pileup.
-    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=5, max_overflow=10, max=15)")
+    # Railway has ~20 max connections. With numReplicas=2 in railway.toml,
+    # each replica gets pool_size=2 + max_overflow=5 = 7 connections max.
+    # 2 replicas × 7 = 14, leaving headroom for migrations, audit thread, and maintenance.
+    logger.info("Using direct PostgreSQL connection with SQLAlchemy pooling (pool_size=2, max_overflow=5, max=7)")
     engine = create_engine(
         DATABASE_URL,
         pool_pre_ping=True,           # CRITICAL: Verify connections before use (catches stale/dead connections)
-        pool_size=5,                  # Pre-allocate 5 connections per worker for consistent throughput
-        max_overflow=10,              # Allow up to 15 total connections per worker under burst load
+        pool_size=2,                  # Keep low — Railway has ~20 conn limit across 2 replicas
+        max_overflow=5,               # Allow up to 7 total connections per replica under burst load
         pool_recycle=300,             # Recycle connections every 5min (prevents stale connections without excessive churn)
         pool_timeout=10,              # Wait max 10s for a connection (fail fast)
         pool_use_lifo=True,           # Reuse most-recently-returned connections (keeps fewer connections warm)

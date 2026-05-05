@@ -101,7 +101,6 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         errors = []
 
         # Batch-fetch all leads at once to avoid N+1 queries (1 query instead of N)
-        # Exclude already soft-deleted leads
         lead_query = db.query(Lead).filter(Lead.id.in_(lead_ids), Lead.deleted_at.is_(None))
         if not is_platform_admin:
             org_id = getattr(current_user, 'organization_id', None)

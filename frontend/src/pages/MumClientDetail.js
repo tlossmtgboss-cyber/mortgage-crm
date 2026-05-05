@@ -21,6 +21,7 @@ import './LeadDetail.css';
 import { toast } from '../utils/toast';
 import { getToken } from '../utils/tokenStore';
 
+
 function MumClientDetail() {
   const { id } = useParams();
   const navigate = useNavigate();

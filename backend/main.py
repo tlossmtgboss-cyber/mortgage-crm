@@ -180,8 +180,10 @@ try:
         _env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
         if _env in ("production", "staging"):
             logger.critical(
-                "CRITICAL: REDIS_URL not set in production — token blacklist using in-memory fallback. "
-                "Blacklisted tokens will not persist across restarts or sync across processes."
+                "SECURITY: Token blacklist running in-memory mode. "
+                "Token revocation will not work across replicas (numReplicas=2). "
+                "A revoked token on replica A remains valid on replica B. "
+                "Set REDIS_URL to enable distributed blacklist."
             )
         else:
             logger.info("REDIS_URL not set — using in-memory token blacklist (dev mode)")
