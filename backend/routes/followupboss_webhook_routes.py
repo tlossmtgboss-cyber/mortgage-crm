@@ -16,6 +16,8 @@ from typing import Optional
 from fastapi import APIRouter, Request, HTTPException, Depends, BackgroundTasks
 from sqlalchemy.orm import Session
 
+from sqlalchemy import text
+
 from database import get_db
 from models.followupboss_models import (
     FUBUserConnection, FUBSyncEvent, FUBEventType, FUBSyncStatus,
@@ -23,6 +25,7 @@ from models.followupboss_models import (
 )
 from integrations.followupboss_service import validate_webhook_signature
 from services.followupboss_sync_service import FollowUpBossSyncService
+from utils.background_tasks import tenant_task
 
 logger = logging.getLogger(__name__)
 
@@ -104,14 +107,30 @@ async def handle_fub_webhook(
     db.commit()
     db.refresh(sync_event)
 
-    # Process webhook in background
-    background_tasks.add_task(
-        process_webhook_event,
-        connection_id=connection.id,
-        sync_event_id=sync_event.id,
-        event_type=event_type,
-        event_data=event_data,
-    )
+    # Look up user's organization for RLS context in background task
+    org_row = db.execute(
+        text("SELECT organization_id FROM users WHERE id = :uid"),
+        {"uid": user_id},
+    ).fetchone()
+    org_id = org_row.organization_id if org_row else None
+
+    # Process webhook in background with tenant context
+    if org_id:
+        background_tasks.add_task(
+            tenant_task, process_webhook_event, org_id,
+            connection_id=connection.id,
+            sync_event_id=sync_event.id,
+            event_type=event_type,
+            event_data=event_data,
+        )
+    else:
+        background_tasks.add_task(
+            process_webhook_event,
+            connection_id=connection.id,
+            sync_event_id=sync_event.id,
+            event_type=event_type,
+            event_data=event_data,
+        )
 
     # Return immediately (best practice for webhooks)
     return {"status": "received", "event_id": sync_event.id}
@@ -122,23 +141,33 @@ async def handle_fub_webhook(
 # =============================================================================
 
 def process_webhook_event(
-    connection_id: int,
-    sync_event_id: int,
-    event_type: str,
-    event_data: dict,
+    connection_id: int = None,
+    sync_event_id: int = None,
+    event_type: str = None,
+    event_data: dict = None,
+    *,
+    db: Session = None,
+    organization_id: int = None,
 ):
     """
     Process webhook event in background.
+
+    When invoked via tenant_task, receives a tenant-scoped db session.
+    Falls back to unscoped SessionLocal for backward compatibility.
 
     Args:
         connection_id: FUB connection ID
         sync_event_id: Sync event ID for status updates
         event_type: FUB event type
         event_data: Event payload data
+        db: Tenant-scoped DB session (from tenant_task)
+        organization_id: Org ID for RLS (from tenant_task)
     """
-    from database import SessionLocal
-
-    db = SessionLocal()
+    _owns_session = False
+    if db is None:
+        from database import SessionLocal
+        db = SessionLocal()
+        _owns_session = True
     try:
         # Get connection and sync event
         connection = db.query(FUBUserConnection).filter(
@@ -232,7 +261,8 @@ def process_webhook_event(
     except Exception as e:
         logger.exception(f"Fatal error processing FUB webhook: {e}")
     finally:
-        db.close()
+        if _owns_session:
+            db.close()
 
 
 # =============================================================================

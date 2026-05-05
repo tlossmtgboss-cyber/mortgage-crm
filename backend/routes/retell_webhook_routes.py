@@ -17,9 +17,11 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from db import get_db
+from utils.background_tasks import tenant_task
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +51,7 @@ def verify_retell_signature(payload: bytes, signature: str) -> bool:
 async def retell_webhook(
     request: Request,
     background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
 ):
     """Receive Retell AI webhook events.
 
@@ -77,22 +80,50 @@ async def retell_webhook(
 
     logger.info(f"Retell webhook received: event={event_type}")
 
+    # Resolve organization from call record for RLS-scoped background processing
+    call_id = payload.get("data", {}).get("call_id")
+    org_id = None
+    if call_id:
+        row = db.execute(
+            text("""
+                SELECT u.organization_id
+                FROM retell_calls rc
+                JOIN users u ON u.id = rc.user_id
+                WHERE rc.retell_call_id = :call_id
+            """),
+            {"call_id": call_id},
+        ).fetchone()
+        if row:
+            org_id = row.organization_id
+
     # Return 200 immediately, process in background
     if event_type == "call_ended":
-        background_tasks.add_task(_process_call_ended, payload)
+        if org_id:
+            background_tasks.add_task(tenant_task, _process_call_ended, org_id, payload)
+        else:
+            background_tasks.add_task(_process_call_ended, payload)
     elif event_type == "call_analyzed":
-        background_tasks.add_task(_process_call_analyzed, payload)
+        if org_id:
+            background_tasks.add_task(tenant_task, _process_call_analyzed, org_id, payload)
+        else:
+            background_tasks.add_task(_process_call_analyzed, payload)
     else:
         logger.info(f"Retell webhook: unhandled event type '{event_type}'")
 
     return JSONResponse(status_code=200, content={"status": "received"})
 
 
-async def _process_call_ended(payload: dict):
-    """Process call_ended event -- update local call record with duration and status."""
-    from database import SessionLocal
+def _process_call_ended(payload: dict, *, db: Session = None, organization_id: int = None):
+    """Process call_ended event -- update local call record with duration and status.
 
-    db = SessionLocal()
+    When invoked via tenant_task, receives a tenant-scoped db session.
+    Falls back to unscoped SessionLocal for backward compatibility.
+    """
+    _owns_session = False
+    if db is None:
+        from database import SessionLocal
+        db = SessionLocal()
+        _owns_session = True
     try:
         call_data = payload.get("data", {})
         call_id = call_data.get("call_id")
@@ -103,8 +134,6 @@ async def _process_call_ended(payload: dict):
             f"Retell call ended: call_id={call_id}, duration={duration_ms}ms, "
             f"reason={disconnection_reason}"
         )
-
-        from sqlalchemy import text
 
         # Update local call record
         db.execute(
@@ -145,14 +174,21 @@ async def _process_call_ended(payload: dict):
         logger.error(f"Retell call_ended processing failed: {e}", exc_info=True)
         db.rollback()
     finally:
-        db.close()
+        if _owns_session:
+            db.close()
 
 
-async def _process_call_analyzed(payload: dict):
-    """Process call_analyzed event -- store transcript, summary, and sentiment."""
-    from database import SessionLocal
+def _process_call_analyzed(payload: dict, *, db: Session = None, organization_id: int = None):
+    """Process call_analyzed event -- store transcript, summary, and sentiment.
 
-    db = SessionLocal()
+    When invoked via tenant_task, receives a tenant-scoped db session.
+    Falls back to unscoped SessionLocal for backward compatibility.
+    """
+    _owns_session = False
+    if db is None:
+        from database import SessionLocal
+        db = SessionLocal()
+        _owns_session = True
     try:
         call_data = payload.get("data", {})
         call_id = call_data.get("call_id")
@@ -160,8 +196,6 @@ async def _process_call_analyzed(payload: dict):
         analysis = call_data.get("call_analysis", {})
 
         logger.info(f"Retell call analyzed: call_id={call_id}")
-
-        from sqlalchemy import text
 
         db.execute(
             text("""
@@ -188,12 +222,17 @@ async def _process_call_analyzed(payload: dict):
         if transcript:
             try:
                 from services.call_intelligence.integration import handle_retell_call_ended
+                import asyncio
 
-                ci_result = await handle_retell_call_ended(
-                    db=db,
-                    call_id=call_id,
-                    call_data=call_data,
-                )
+                # handle_retell_call_ended is async; run it in an event loop
+                loop = asyncio.new_event_loop()
+                try:
+                    ci_result = loop.run_until_complete(
+                        handle_retell_call_ended(db=db, call_id=call_id, call_data=call_data)
+                    )
+                finally:
+                    loop.close()
+
                 if ci_result and ci_result.get("success"):
                     logger.info(
                         f"Call Intelligence processed {call_id}: "
@@ -213,4 +252,5 @@ async def _process_call_analyzed(payload: dict):
         logger.error(f"Retell call_analyzed processing failed: {e}", exc_info=True)
         db.rollback()
     finally:
-        db.close()
+        if _owns_session:
+            db.close()

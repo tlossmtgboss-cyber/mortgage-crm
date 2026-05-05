@@ -25,6 +25,7 @@ from database import get_db
 from auth.dependencies import get_current_user
 from models.smart_docs_models import DocumentRequest, RequestStatus
 from routes.smart_docs_models import _verify_loan_tenant
+from utils.background_tasks import tenant_task
 
 logger = logging.getLogger(__name__)
 
@@ -410,10 +411,20 @@ def _bg_send_needs_list(
     channels: List[str],
     custom_message: Optional[str],
     user_id: int,
+    *,
+    db: Session = None,
+    organization_id: int = None,
 ):
-    """Background task: send needs list notifications."""
-    from database import SessionLocal
-    db = SessionLocal()
+    """Background task: send needs list notifications.
+
+    When invoked via tenant_task, receives a tenant-scoped db session.
+    Falls back to unscoped SessionLocal for backward compatibility.
+    """
+    _owns_session = False
+    if db is None:
+        from database import SessionLocal
+        db = SessionLocal()
+        _owns_session = True
     try:
         loan = _get_loan_details(db, loan_id)
         if not loan:
@@ -470,7 +481,8 @@ def _bg_send_needs_list(
     except Exception as e:
         logger.exception(f"BG send-needs-list failed for loan {loan_id}: {e}")
     finally:
-        db.close()
+        if _owns_session:
+            db.close()
 
 
 def _bg_send_reminder(
@@ -478,10 +490,20 @@ def _bg_send_reminder(
     channels: List[str],
     request_ids: Optional[List[int]],
     user_id: int,
+    *,
+    db: Session = None,
+    organization_id: int = None,
 ):
-    """Background task: send document reminder."""
-    from database import SessionLocal
-    db = SessionLocal()
+    """Background task: send document reminder.
+
+    When invoked via tenant_task, receives a tenant-scoped db session.
+    Falls back to unscoped SessionLocal for backward compatibility.
+    """
+    _owns_session = False
+    if db is None:
+        from database import SessionLocal
+        db = SessionLocal()
+        _owns_session = True
     try:
         loan = _get_loan_details(db, loan_id)
         if not loan:
@@ -535,7 +557,8 @@ def _bg_send_reminder(
     except Exception as e:
         logger.exception(f"BG send-reminder failed for loan {loan_id}: {e}")
     finally:
-        db.close()
+        if _owns_session:
+            db.close()
 
 
 def _bg_send_batch_item(
@@ -680,9 +703,16 @@ async def send_needs_list(
     portal_url = _build_portal_url(workspace_slug)
 
     user_id = getattr(current_user, "id", 0)
-    background_tasks.add_task(
-        _bg_send_needs_list, body.loan_id, allowed_channels, body.message, user_id,
-    )
+    org_id = getattr(current_user, "organization_id", None) or loan.get("organization_id")
+    if org_id:
+        background_tasks.add_task(
+            tenant_task, _bg_send_needs_list, org_id,
+            body.loan_id, allowed_channels, body.message, user_id,
+        )
+    else:
+        background_tasks.add_task(
+            _bg_send_needs_list, body.loan_id, allowed_channels, body.message, user_id,
+        )
 
     warning = None
     if blocked_channels:
@@ -770,9 +800,16 @@ async def send_reminder(
     portal_url = _build_portal_url(workspace_slug)
 
     user_id = getattr(current_user, "id", 0)
-    background_tasks.add_task(
-        _bg_send_reminder, body.loan_id, allowed_channels, body.document_request_ids, user_id,
-    )
+    org_id = getattr(current_user, "organization_id", None) or loan.get("organization_id")
+    if org_id:
+        background_tasks.add_task(
+            tenant_task, _bg_send_reminder, org_id,
+            body.loan_id, allowed_channels, body.document_request_ids, user_id,
+        )
+    else:
+        background_tasks.add_task(
+            _bg_send_reminder, body.loan_id, allowed_channels, body.document_request_ids, user_id,
+        )
 
     warning = None
     if blocked_channels:

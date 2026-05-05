@@ -21,6 +21,8 @@ import json
 import random
 import uuid
 
+from utils.background_tasks import tenant_task
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["Client Profile"])
@@ -321,15 +323,22 @@ async def delete_team_role(
 # PROCESS FLOW MANAGEMENT
 # ============================================================================
 
-def _parse_process_flow_async(document_id: int):
-    """Background task to parse a process flow document using AI."""
+def _parse_process_flow_async(document_id: int, *, db=None, organization_id: int = None):
+    """Background task to parse a process flow document using AI.
+
+    When invoked via tenant_task, receives a tenant-scoped db session.
+    Falls back to unscoped SessionLocal for backward compatibility.
+    """
     main = get_main_module()
     ProcessFlowDocument = main.ProcessFlowDocument
     SessionLocal = main.SessionLocal
     parse_document_basic = main.parse_document_basic
     import requests
 
-    db = SessionLocal()
+    _owns_session = False
+    if db is None:
+        db = SessionLocal()
+        _owns_session = True
     try:
         # Get the document
         document = db.query(ProcessFlowDocument).filter(ProcessFlowDocument.id == document_id).first()
@@ -389,7 +398,8 @@ def _parse_process_flow_async(document_id: int):
     except Exception as e:
         logger.error(f"Background task error for document {document_id}: {e}")
     finally:
-        db.close()
+        if _owns_session:
+            db.close()
 
 
 @router.post("/profile/process-flows/", status_code=201)
@@ -424,7 +434,11 @@ async def upload_process_flow(
 
     # Trigger AI parsing job asynchronously
     if background_tasks:
-        background_tasks.add_task(_parse_process_flow_async, db_document.id)
+        org_id = getattr(current_user, "organization_id", None)
+        if org_id:
+            background_tasks.add_task(tenant_task, _parse_process_flow_async, org_id, db_document.id)
+        else:
+            background_tasks.add_task(_parse_process_flow_async, db_document.id)
     logger.info(f"Process flow document uploaded: {db_document.document_name}, parsing queued")
     return db_document
 
