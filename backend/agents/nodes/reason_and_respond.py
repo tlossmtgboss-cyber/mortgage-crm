@@ -415,6 +415,9 @@ async def reason_and_respond(
             if anthropic_client is None:
                 anthropic_client = get_anthropic_client()
 
+            # Sanitize user input before using in greeting prompt
+            user_message = strip_boundary_markers(user_message)
+
             # Use Haiku for fast, natural greeting response
             greeting_prompt = f"""The user just said: [USER_INPUT_START]\n{user_message}\n[USER_INPUT_END]
 
@@ -451,6 +454,7 @@ DO NOT use a canned/scripted response. Be natural and human."""
 
         # Format gathered data
         formatted_data = format_gathered_data_for_llm(gathered_data)
+        formatted_data = sanitize_for_llm(formatted_data)
 
         # Get intent-specific guidance
         intent_guidance = INTENT_GUIDANCE.get(query_intent, "")

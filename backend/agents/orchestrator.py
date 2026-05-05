@@ -670,7 +670,7 @@ async def run_orchestrator(
 
         for attempt in range(MAX_RETRIES + 1):
             try:
-                final_state = await orchestrator.ainvoke(state)
+                final_state = await orchestrator.ainvoke(state, config={"recursion_limit": 15})
                 circuit.record_success()
                 break
             except Exception as workflow_err:
