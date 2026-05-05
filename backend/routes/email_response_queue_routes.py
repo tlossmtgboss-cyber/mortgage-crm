@@ -57,13 +57,9 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     if _get_current_user is None:
         raise HTTPException(status_code=500, detail="Auth dependency not configured")
 
-    # Try Authorization header first
+    # Authorization header only
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
-
-    # Fall back to query param (for browser redirects like OAuth flows)
-    if not token:
-        token = request.query_params.get("token", "")
 
     return await _get_current_user(token=token, request=request, db=db)
 

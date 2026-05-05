@@ -54,9 +54,6 @@ async def get_current_user(request: Request, db: Session = Depends(get_db)):
     auth_header = request.headers.get("Authorization", "")
     token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
 
-    if not token:
-        token = request.query_params.get("token", "")
-
     return await _get_current_user(token=token, request=request, db=db)
 
 
