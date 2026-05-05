@@ -26,7 +26,7 @@ Header control:
     receive masked data regardless of the header.
 
 Configuration via environment variables:
-    PII_RESPONSE_MODE   = "warn" | "mask" | "strict"   (default: "warn")
+    PII_RESPONSE_MODE   = "warn" | "mask" | "strict"   (default: "mask")
     PII_PORTAL_MASKING  = "true" | "false"              (default: "true")
 
 Usage:
@@ -301,8 +301,8 @@ class PIIResponseFilterMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app, mode: str | None = None, **kwargs):
         super().__init__(app, **kwargs)
-        # Explicit parameter overrides env var; env var default is "warn"
-        self.mode = (mode or os.environ.get("PII_RESPONSE_MODE", "warn")).lower()
+        # Explicit parameter overrides env var; env var default is "mask"
+        self.mode = (mode or os.environ.get("PII_RESPONSE_MODE", "mask")).lower()
         self.portal_masking = os.environ.get(
             "PII_PORTAL_MASKING", "true"
         ).lower() in ("true", "1", "yes")

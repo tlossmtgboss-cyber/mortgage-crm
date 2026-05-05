@@ -33,11 +33,145 @@ def _validate_sql_type(col_type: str) -> str:
     return col_type
 
 
-def _safe_column_name(col: str) -> str:
-    """Validate column name contains only safe characters for SQL interpolation."""
+def _safe_column_name(col: str, allowed: set | None = None) -> str:
+    """Validate column name against allowlist and safe character regex.
+
+    If `allowed` is provided, the column must be in the allowlist AND pass
+    the format check. If `allowed` is None, only the format check is applied
+    (legacy behavior for non-lead/loan destinations).
+    """
+    col = col.strip().lower()
+    if allowed is not None:
+        if col not in allowed:
+            return ''
     if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', col):
         return col
     return ''
+
+
+# ── Column allowlists (derived from Lead/Loan SQLAlchemy models) ──
+
+_ALLOWED_LEAD_COLUMNS = frozenset({
+    # Identity
+    'name', 'first_name', 'last_name', 'email', 'phone',
+    # Co-applicant
+    'co_applicant_name', 'co_applicant_email', 'co_applicant_phone',
+    # Communication
+    'preferred_communication',
+    # Pipeline
+    'stage', 'source', 'organization_code', 'referral_partner_id',
+    # AI scoring
+    'ai_score', 'sentiment', 'next_action',
+    # Loan qualification
+    'loan_type', 'preapproval_amount', 'credit_score', 'debt_to_income',
+    # Assignment
+    'owner_id', 'last_contact', 'loan_number', 'notes',
+    # Property
+    'address', 'city', 'state', 'zip_code', 'property_type', 'property_value', 'down_payment',
+    # Financial
+    'employment_status', 'annual_income', 'monthly_debts', 'first_time_buyer',
+    # Loan details
+    'loan_amount', 'interest_rate', 'loan_term', 'apr', 'points',
+    'lock_date', 'lock_expiration', 'closing_date', 'lender',
+    'loan_officer', 'processor', 'underwriter', 'production_assistant',
+    'appraisal_value', 'ltv', 'cltv', 'dti', 'dti_front', 'dti_back',
+    'program', 'status_date',
+    # SLA milestone dates
+    'lead_received_date', 'first_contact_attempt_date', 'first_contact_successful_date',
+    'lead_qualification_date', 'application_link_sent_date', 'application_started_date',
+    'application_completed_date', 'credit_pulled_date', 'preapproval_submission_date',
+    'preapproval_issued_date', 'preapproval_expiration_date', 'realtor_referral_date',
+    'rate_watch_enrollment_date', 'initial_consultation_date', 'property_address',
+    # Rate lock intelligence
+    'buying_timeline_category', 'borrower_risk_profile', 'target_payment', 'expected_purchase_date',
+    # Referral fields
+    'referral_score', 'referral_source_score', 'employment_referral_flag',
+    'manager_flag', 'employees_managed', 'leadership_level', 'company_size',
+    'employer_name', 'industry',
+    # Workflow tracking
+    'current_workflow_id', 'workflow_day', 'last_workflow_action', 'nurture_month', 'stage_changed_at',
+    'current_milestone_status', 'current_milestone_entered_at',
+    # Salesforce sync
+    'occupancy_type', 'property_county', 'property_ownership_type', 'property_units',
+    'rate_type', 'monthly_payment', 'property_tax', 'hazard_insurance',
+    'mortgage_insurance', 'hoa_amount', 'origination_fee', 'estimated_prepaid_interest',
+    'index_rate', 'margin', 'loan_purpose', 'file_state',
+    'second_loan_amount', 'second_loan_rate', 'second_loan_payment',
+    'present_housing_expense', 'proposed_housing_expense',
+    'present_monthly_payment', 'proposed_monthly_payment',
+    # Marketing
+    'receive_marketing',
+    # Integration
+    'salesforce_id', 'fub_person_id', 'fub_last_synced_at',
+    # Metadata
+    'meta_data', 'user_metadata',
+    # System-managed (allowed for import logic, protected set takes precedence)
+    'created_at', 'updated_at',
+})
+
+_ALLOWED_LOAN_COLUMNS = frozenset({
+    # Core
+    'loan_number', 'borrower_name', 'borrower_email', 'borrower_phone',
+    'preferred_communication', 'coborrower_name', 'co_borrower_email', 'co_borrower_phone',
+    # Pipeline
+    'stage', 'program', 'loan_type',
+    # Financials
+    'amount', 'purchase_price', 'down_payment', 'rate', 'term',
+    # Property
+    'property_address', 'property_city', 'property_state', 'property_zip',
+    # Key dates
+    'lock_date', 'closing_date', 'funded_date',
+    # Team
+    'loan_officer_id', 'processor', 'underwriter', 'realtor_agent', 'title_company',
+    'lender', 'loan_officer_name', 'loan_officer_email', 'processor_email',
+    'underwriter_email', 'closer', 'closer_email', 'production_assistant',
+    # SLA tracking
+    'days_in_stage', 'sla_status', 'milestones', 'ai_insights',
+    'predicted_close_date', 'risk_score', 'user_metadata',
+    # Appraisal
+    'appraisal_ordered_date', 'appraisal_scheduled_date', 'appraisal_completed_date',
+    'appraisal_value', 'appraisal_received_date', 'appraisal_docs_expire_date',
+    # Title & Insurance
+    'title_ordered_date', 'title_received_date', 'insurance_ordered_date', 'insurance_received_date',
+    # Rate lock
+    'lock_expiration_date', 'rate_lock_status', 'rate_lock_recommendation',
+    'lock_term_days', 'float_down_available', 'float_down_terms',
+    'extension_cost_estimate', 'volatility_score', 'borrower_risk_profile',
+    'lock_score', 'lock_decision_date', 'lock_decision_notes', 'last_rate_check',
+    # Disclosure dates
+    'initial_disclosures_sent_date', 'initial_disclosures_signed_date',
+    'cd_received_signed_date', 'final_closing_package_sent_date',
+    # Under contract
+    'contract_received_date', 'loan_estimate_sent_date', 'conditional_approval_date',
+    # AMR
+    'last_amr_date', 'next_amr_date', 'refi_opportunity_score',
+    # Workflow
+    'current_workflow_id', 'last_workflow_action', 'stage_changed_at',
+    'current_milestone_status', 'current_milestone_entered_at', 'mum_date',
+    # SLA dates
+    'prospect_date', 'application_date', 'le_pending_date', 'credit_only_date',
+    'file_received_date', 'preapproval_date', 'uw_received_date',
+    'conditions_for_review_date', 'suspended_date', 'loan_approved_date',
+    'approved_not_accepted_date', 'approval_expires_date', 'cd_requested_date',
+    'cd_sent_to_borrower_date', 'cd_acknowledged_date', 'clear_to_close_date',
+    'docs_ordered_date', 'docs_out_date', 'credit_docs_expire_date',
+    'scheduled_closing_date', 'scheduled_funding_date', 'funds_ordered_date',
+    'funds_sent_date', 'first_payment_date', 'investor_purchased_date', 'withdrawn_date',
+    # Salesforce sync
+    'property_type', 'occupancy_type', 'property_county', 'property_ownership_type',
+    'property_units', 'rate_type', 'monthly_payment', 'property_tax',
+    'hazard_insurance', 'mortgage_insurance', 'hoa_amount', 'origination_fee',
+    'estimated_prepaid_interest', 'points', 'index_rate', 'margin',
+    'ltv', 'cltv', 'loan_purpose', 'file_state',
+    'second_loan_amount', 'second_loan_rate', 'second_loan_payment',
+    'present_housing_expense', 'proposed_housing_expense',
+    'present_monthly_payment', 'proposed_monthly_payment',
+    # Integration
+    'salesforce_id', 'encompass_loan_id',
+    # System-managed (allowed for import logic, protected set takes precedence)
+    'created_at', 'updated_at',
+})
+
 
 # Columns that must never be set via CSV import (security-sensitive or system-managed)
 _IMPORT_PROTECTED_COLUMNS = frozenset({
@@ -839,7 +973,7 @@ async def execute_import(
                                 update_cols = []
                                 update_vals = []
                                 for col, val in zip(columns, values):
-                                    safe_col = _safe_column_name(col)
+                                    safe_col = _safe_column_name(col, _ALLOWED_LEAD_COLUMNS)
                                     if safe_col and safe_col not in _IMPORT_PROTECTED_COLUMNS and val is not None:
                                         update_cols.append(f"{safe_col} = %s")
                                         update_vals.append(val)
@@ -871,9 +1005,9 @@ async def execute_import(
                             columns.append('owner_id')
                             values.append(user_id)
 
-                        # Create placeholders — sanitize column names for SQL safety
-                        safe_cols = [c for c in columns if _safe_column_name(c)]
-                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c)]
+                        # Create placeholders — sanitize column names against allowlist
+                        safe_cols = [c for c in columns if _safe_column_name(c, _ALLOWED_LEAD_COLUMNS)]
+                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c, _ALLOWED_LEAD_COLUMNS)]
                         placeholders = ', '.join(['%s'] * len(safe_cols))
                         columns_str = ', '.join(safe_cols)
 
@@ -928,7 +1062,7 @@ async def execute_import(
                                 update_cols = []
                                 update_vals = []
                                 for col, val in zip(columns, values):
-                                    safe_col = _safe_column_name(col)
+                                    safe_col = _safe_column_name(col, _ALLOWED_LOAN_COLUMNS)
                                     if safe_col and safe_col not in _IMPORT_PROTECTED_COLUMNS and safe_col != 'loan_number' and val is not None:
                                         update_cols.append(f"{safe_col} = %s")
                                         update_vals.append(val)
@@ -962,8 +1096,8 @@ async def execute_import(
                             columns.append('loan_officer_id')
                             values.append(user_id)
 
-                        safe_cols = [c for c in columns if _safe_column_name(c)]
-                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c)]
+                        safe_cols = [c for c in columns if _safe_column_name(c, _ALLOWED_LOAN_COLUMNS)]
+                        safe_vals = [v for c, v in zip(columns, values) if _safe_column_name(c, _ALLOWED_LOAN_COLUMNS)]
                         placeholders = ', '.join(['%s'] * len(safe_cols))
                         columns_str = ', '.join(safe_cols)
 

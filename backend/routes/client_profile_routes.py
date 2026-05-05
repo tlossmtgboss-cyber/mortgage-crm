@@ -844,7 +844,10 @@ async def delete_task(
             task_type = "Task"
 
         # If still not found, try without user filter (for admin cleanup) — still scoped to org
+        # Only managers/admins can delete other users' tasks
         if not task:
+            if not hasattr(current_user, 'role') or current_user.role not in ('admin', 'manager', 'platform_admin'):
+                raise HTTPException(status_code=403, detail="Cannot delete other users' tasks")
             task = db.query(AITask).filter(AITask.id == task_id, AITask.organization_id == current_user.organization_id).first()
             task_type = "AITask (any user)"
 

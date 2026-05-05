@@ -394,18 +394,21 @@ async def seed_demo_data(
             lead_ids.append(lid)
 
         # ── FORCE-CLEAN EXISTING LOANS by loan_number pattern ──
-        _loan_subq = "SELECT id FROM loans WHERE loan_number LIKE 'SP-2026-%'"
+        # NOTE: fk_table names are from a static hardcoded list (safe for f-string interpolation).
+        # The subquery uses a bound parameter to prevent SQL injection.
+        _loan_subq = "SELECT id FROM loans WHERE loan_number LIKE :loan_pattern"
+        _loan_pattern_param = {"loan_pattern": "SP-2026-%"}
         for fk_table in ["stage_history", "disclosure_events", "loan_fees", "compliance_alerts",
                          "documents", "activities", "loan_team_members", "scheduler_appointments"]:
             try:
                 sp = db.begin_nested()
-                db.execute(_text(f"DELETE FROM {fk_table} WHERE loan_id IN ({_loan_subq})"))
+                db.execute(_text(f"DELETE FROM {fk_table} WHERE loan_id IN ({_loan_subq})"), _loan_pattern_param)
                 sp.commit()
             except Exception:
                 sp.rollback()
         try:
             sp = db.begin_nested()
-            db.execute(_text("DELETE FROM loans WHERE loan_number LIKE 'SP-2026-%'"))
+            db.execute(_text("DELETE FROM loans WHERE loan_number LIKE :loan_pattern"), _loan_pattern_param)
             sp.commit()
         except Exception:
             sp.rollback()
