@@ -12,7 +12,7 @@
  */
 
 // Import the base API instance
-import api from './api';
+import api, { API_BASE_URL } from './api';
 import { getToken } from '../utils/tokenStore';
 
 const BASE_PATH = '/api/v1/conversation-intelligence';
@@ -202,13 +202,9 @@ export const realTimeApi = {
    * Get WebSocket URL for a session
    */
   getWebSocketUrl: (sessionId) => {
-    // Determine if we're in production
-    const isProduction = window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
-    const wsProtocol = isProduction ? 'wss' : 'ws';
-    const host = isProduction
-      ? 'api.perenniaai.com'
-      : 'localhost:8000';
-    return `${wsProtocol}://${host}${BASE_PATH}/realtime/sessions/${sessionId}/ws`;
+    // Derive WebSocket URL from the shared API_BASE_URL
+    const wsUrl = API_BASE_URL.replace(/^http/, 'ws');
+    return `${wsUrl}${BASE_PATH}/realtime/sessions/${sessionId}/ws`;
   },
 
   /**

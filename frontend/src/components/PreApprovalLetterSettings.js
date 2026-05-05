@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { emailSignatureAPI } from '../services/api';
+import { emailSignatureAPI, API_BASE_URL } from '../services/api';
 import { getToken } from '../utils/tokenStore';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 function PreApprovalLetterSettings() {
   const [loading, setLoading] = useState(true);

@@ -138,14 +138,33 @@ export default function LetterDraftModal({
                 </p>
 
                 <div className="space-y-3">
-                  <a
-                    href={`${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/v1/realtor-portal/letters/${generatedLetter?.letter_id}/pdf?token=${localStorage.getItem('realtor_token')}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  <button
+                    onClick={() => {
+                      const token = localStorage.getItem('realtor_token');
+                      const apiUrl = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+                      const url = `${apiUrl}/api/v1/realtor-portal/letters/${generatedLetter?.letter_id}/pdf`;
+                      // Use fetch with Authorization header instead of token in URL
+                      fetch(url, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                      })
+                        .then(res => {
+                          if (!res.ok) throw new Error('Download failed');
+                          return res.blob();
+                        })
+                        .then(blob => {
+                          const blobUrl = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = blobUrl;
+                          a.download = `letter-${generatedLetter?.letter_id}.pdf`;
+                          a.click();
+                          URL.revokeObjectURL(blobUrl);
+                        })
+                        .catch(() => toast.error('Failed to download PDF'));
+                    }}
+                    className="block w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-center cursor-pointer"
                   >
                     Download PDF
-                  </a>
+                  </button>
 
                   <button
                     onClick={() => {

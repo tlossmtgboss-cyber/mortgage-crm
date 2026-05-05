@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../services/api';
 import './EmployerAutocomplete.css';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+const API_URL = API_BASE_URL;
 
 /**
  * EmployerAutocomplete - Backend-powered employer/business search

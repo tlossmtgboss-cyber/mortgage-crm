@@ -1398,8 +1398,7 @@ export default function RefinanceApplication() {
         // If no portal URL provided, construct one from current location
         if (!redirectUrl) {
           // Use perenniaai.com for production, current host for dev
-          const isProduction = window.location.hostname === 'perenniaai.com' ||
-                               window.location.hostname === 'www.perenniaai.com';
+          const isProduction = window.location.hostname.includes('perenniaai.com');
           const baseHost = isProduction ? 'www.perenniaai.com' : window.location.host;
           const protocol = isProduction ? 'https' : window.location.protocol.replace(':', '');
 
