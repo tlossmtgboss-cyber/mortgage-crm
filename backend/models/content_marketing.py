@@ -291,8 +291,8 @@ class ContentComment(Base):
 # =============================================================================
 
 class ContentBriefApproval(Base):
-    """Approval workflow tracking for content."""
-    __tablename__ = "content_approvals"
+    """Approval workflow tracking for content briefs."""
+    __tablename__ = "content_brief_approvals"
 
     id = Column(String(50), primary_key=True, default=generate_uuid)
     brief_id = Column(String(50), ForeignKey("content_briefs.id"), nullable=True)
