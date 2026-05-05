@@ -244,22 +244,32 @@ def _calculate_pipeline_priority(row: dict, now: datetime) -> int:
 # =============================================================================
 
 def _dnc_subquery(org_id: int) -> str:
-    """Return a SQL fragment for DNC exclusion."""
+    """Return a SQL fragment for DNC exclusion.
+
+    The caller MUST include ``_dnc_org_id`` in the parameter dict passed to
+    ``session.execute()``.  Example::
+
+        params["_dnc_org_id"] = org_id
+    """
     return (
-        f"AND phone NOT IN ("
-        f"  SELECT phone_number FROM contact_dnc_status "
-        f"  WHERE organization_id = {int(org_id)}"
-        f")"
+        "AND phone NOT IN ("
+        "  SELECT phone_number FROM contact_dnc_status "
+        "  WHERE organization_id = :_dnc_org_id"
+        ")"
     )
 
 
 def _dnc_subquery_borrower(org_id: int) -> str:
-    """Return a SQL fragment for DNC exclusion on borrower_phone."""
+    """Return a SQL fragment for DNC exclusion on borrower_phone.
+
+    The caller MUST include ``_dnc_org_id`` in the parameter dict passed to
+    ``session.execute()``.
+    """
     return (
-        f"AND borrower_phone NOT IN ("
-        f"  SELECT phone_number FROM contact_dnc_status "
-        f"  WHERE organization_id = {int(org_id)}"
-        f")"
+        "AND borrower_phone NOT IN ("
+        "  SELECT phone_number FROM contact_dnc_status "
+        "  WHERE organization_id = :_dnc_org_id"
+        ")"
     )
 
 

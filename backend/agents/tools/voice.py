@@ -18,7 +18,31 @@ from .base import (
     execute_single,
     format_date,
     db_session,
+    get_tenant_context,
 )
+
+
+def _require_tenant() -> Optional[ToolResult]:
+    """Return error ToolResult if tenant context is missing, else None."""
+    if not get_tenant_context():
+        return ToolResult.error("Organization context required")
+    return None
+
+
+def _check_call_consent(phone_number: str, contact_id: Optional[str] = None) -> Optional[ToolResult]:
+    """Check call consent via ChannelPreference. Returns error ToolResult if blocked."""
+    org_id = get_tenant_context()
+    try:
+        with db_session() as session:
+            from telephony.compliance import ComplianceChecker
+            checker = ComplianceChecker(db=session, organization_id=org_id)
+            lead_id = int(contact_id) if contact_id else None
+            has_consent, reason = checker.check_call_consent(phone_number, contact_id=lead_id)
+            if not has_consent:
+                return ToolResult.error(f"BLOCKED: {reason}")
+    except Exception as e:
+        logger.warning(f"Consent check failed (fail-open): {e}")
+    return None
 
 
 def _validate_outbound(phone: str, channel: str = "call") -> Optional[ToolResult]:
@@ -93,10 +117,22 @@ def initiate_outbound_call(
     script_id: Optional[str] = None,
 ) -> ToolResult:
     """Initiate outbound call with TCPA/DNC compliance gate."""
-    # COMPLIANCE GATE — must pass before any outbound call
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
     compliance_block = _validate_outbound(phone_number, "call")
     if compliance_block:
         return compliance_block
+
+    consent_block = _check_call_consent(
+        phone_number,
+        contact_id if contact_type == "lead" else None,
+    )
+    if consent_block:
+        return consent_block
 
     # Check for duplicate active calls
     active = execute_single(
@@ -109,33 +145,35 @@ def initiate_outbound_call(
     import uuid
     call_id = str(uuid.uuid4())[:8].upper()
 
-    # Get contact info
     if contact_type == "lead":
         contact = execute_single(
-            "SELECT id, first_name, last_name, phone FROM leads WHERE id = :id",
-            {"id": contact_id}
+            "SELECT id, first_name, last_name, phone FROM leads WHERE id = :id AND organization_id = :org_id",
+            {"id": contact_id, "org_id": org_id}
         )
     else:
         contact = execute_single(
-            "SELECT id, borrower_name as name, borrower_phone as phone FROM loans WHERE id = :id",
-            {"id": contact_id}
+            "SELECT id, borrower_name as name, borrower_phone as phone FROM loans WHERE id = :id AND organization_id = :org_id",
+            {"id": contact_id, "org_id": org_id}
         )
+
+    if not contact:
+        return ToolResult.error("Contact not found in your organization")
 
     contact_name = contact.get("first_name", contact.get("name", "Unknown")) if contact else "Unknown"
 
-    # Write to CallLog
     try:
         with db_session() as session:
             from sqlalchemy import text
             session.execute(text("""
-                INSERT INTO call_logs (contact_phone, contact_name, lead_id, loan_id, outcome, notes, created_at)
-                VALUES (:phone, :name, :lead_id, :loan_id, 'initiating', :notes, NOW())
+                INSERT INTO call_logs (contact_phone, contact_name, lead_id, loan_id, outcome, notes, organization_id, created_at)
+                VALUES (:phone, :name, :lead_id, :loan_id, 'initiating', :notes, :org_id, NOW())
             """), {
                 "phone": phone_number,
                 "name": contact_name,
                 "lead_id": int(contact_id) if contact_type == "lead" else None,
                 "loan_id": int(contact_id) if contact_type != "lead" else None,
                 "notes": f"Outbound {purpose} call initiated",
+                "org_id": org_id,
             })
     except Exception as e:
         logger.warning(f"Failed to log call in initiate_outbound_call: {e}")
@@ -179,7 +217,12 @@ def drop_voicemail(
     scheduled_time: Optional[str] = None,
 ) -> ToolResult:
     """Drop pre-recorded voicemail with TCPA/DNC compliance gate."""
-    # COMPLIANCE GATE
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
     compliance_block = _validate_outbound(phone_number, "call")
     if compliance_block:
         return compliance_block
@@ -187,15 +230,15 @@ def drop_voicemail(
     import uuid
     vm_id = str(uuid.uuid4())[:8].upper()
 
-    # Query real VoicemailTemplate from DB
     db_template = execute_single("""
         SELECT id, name, message_text, audio_url, voice_provider, voice_id, delivery_method, category
         FROM voicemail_templates
         WHERE (name = :name OR category = :name OR id::text = :name)
             AND is_active = true
+            AND organization_id = :org_id
         ORDER BY is_default DESC
         LIMIT 1
-    """, {"name": voicemail_template})
+    """, {"name": voicemail_template, "org_id": org_id})
 
     if db_template:
         template_text = db_template.get("message_text", "")
@@ -215,19 +258,19 @@ def drop_voicemail(
         audio_url = None
         delivery_method = "vapi_ai"
 
-    # Write VoicemailDrop record
     try:
         with db_session() as session:
             from sqlalchemy import text
             session.execute(text("""
-                INSERT INTO voicemail_drops (phone_number, message_text, template_id, audio_url, delivery_method, status, created_at, updated_at)
-                VALUES (:phone, :msg, :tid, :audio, :method, 'pending', NOW(), NOW())
+                INSERT INTO voicemail_drops (phone_number, message_text, template_id, audio_url, delivery_method, status, organization_id, created_at, updated_at)
+                VALUES (:phone, :msg, :tid, :audio, :method, 'pending', :org_id, NOW(), NOW())
             """), {
                 "phone": phone_number,
                 "msg": template_text,
                 "tid": template_id,
                 "audio": audio_url,
                 "method": delivery_method,
+                "org_id": org_id,
             })
     except Exception as e:
         logger.warning(f"Failed to write voicemail drop record in drop_voicemail: {e}")
@@ -272,15 +315,22 @@ def get_call_history(
     limit: int = 20,
 ) -> ToolResult:
     """Get call history for contact."""
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
     calls = execute_query("""
         SELECT
             id, direction, phone_number, duration_seconds,
             outcome, notes, recording_url, created_at
         FROM call_logs
         WHERE contact_id = :contact_id AND contact_type = :contact_type
+            AND organization_id = :org_id
         ORDER BY created_at DESC
         LIMIT :limit
-    """, {"contact_id": contact_id, "contact_type": contact_type, "limit": limit})
+    """, {"contact_id": contact_id, "contact_type": contact_type, "limit": limit, "org_id": org_id})
 
     if not calls:
         # Return empty but valid structure
@@ -333,12 +383,17 @@ def analyze_call_sentiment(
     transcription: Optional[str] = None,
 ) -> ToolResult:
     """Analyze call sentiment from call log data or provided transcription."""
-    # Try to get call data from CallLog
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
     call_data = execute_single("""
         SELECT id, contact_phone, contact_name, duration_seconds, outcome,
                notes, ai_note_summary, created_at
-        FROM call_logs WHERE id = :id OR call_sid = :id
-    """, {"id": call_id})
+        FROM call_logs WHERE (id = :id OR call_sid = :id) AND organization_id = :org_id
+    """, {"id": call_id, "org_id": org_id})
 
     analysis = {
         "call_id": call_id,
@@ -421,26 +476,30 @@ def schedule_callback(
     notes: Optional[str] = None,
 ) -> ToolResult:
     """Schedule callback with TCPA compliance gate."""
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
     import uuid
     callback_id = str(uuid.uuid4())[:8].upper()
 
-    # Default to next business day 10 AM
     if not callback_time:
         tomorrow = datetime.now() + timedelta(days=1)
         while tomorrow.weekday() >= 5:
             tomorrow += timedelta(days=1)
         callback_time = tomorrow.replace(hour=10, minute=0, second=0).isoformat()
 
-    # Get contact info
     if contact_type == "lead":
         contact = execute_single(
-            "SELECT first_name, last_name, phone FROM leads WHERE id = :id",
-            {"id": contact_id}
+            "SELECT first_name, last_name, phone FROM leads WHERE id = :id AND organization_id = :org_id",
+            {"id": contact_id, "org_id": org_id}
         )
     else:
         contact = execute_single(
-            "SELECT borrower_name as name, borrower_phone as phone FROM loans WHERE id = :id",
-            {"id": contact_id}
+            "SELECT borrower_name as name, borrower_phone as phone FROM loans WHERE id = :id AND organization_id = :org_id",
+            {"id": contact_id, "org_id": org_id}
         )
 
     phone = contact.get("phone") if contact else None
@@ -515,7 +574,12 @@ def get_power_dialer_queue(
     contact_ids: Optional[List[str]] = None,
 ) -> ToolResult:
     """Manage power dialer queue."""
-    # Get current queue
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
     queue = execute_query("""
         SELECT
             pdq.id, pdq.contact_id, pdq.contact_type, pdq.priority,
@@ -523,10 +587,12 @@ def get_power_dialer_queue(
             l.first_name, l.last_name, l.phone
         FROM power_dialer_queue pdq
         LEFT JOIN leads l ON l.id = pdq.contact_id AND pdq.contact_type = 'lead'
+            AND l.organization_id = :org_id
         WHERE pdq.lo_id = :lo_id AND pdq.status = 'pending'
+            AND pdq.organization_id = :org_id
         ORDER BY pdq.priority DESC, pdq.scheduled_time ASC
         LIMIT 50
-    """, {"lo_id": lo_id})
+    """, {"lo_id": lo_id, "org_id": org_id})
 
     if not queue:
         queue = []
@@ -582,12 +648,17 @@ def transcribe_call(
     language: str = "en-US",
 ) -> ToolResult:
     """Get or request transcription."""
-    # Check for existing transcription
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
     existing = execute_single("""
         SELECT transcription, transcribed_at, duration_seconds
         FROM call_transcriptions
-        WHERE call_id = :call_id
-    """, {"call_id": call_id})
+        WHERE call_id = :call_id AND organization_id = :org_id
+    """, {"call_id": call_id, "org_id": org_id})
 
     if existing and existing.get("transcription"):
         return ToolResult.success(
@@ -634,7 +705,12 @@ def get_call_metrics(
     group_by: str = "day",
 ) -> ToolResult:
     """Get call performance metrics."""
-    # Calculate date range
+    tenant_err = _require_tenant()
+    if tenant_err:
+        return tenant_err
+
+    org_id = get_tenant_context()
+
     today = datetime.now().date()
     if period == "today":
         start_date = today
@@ -647,13 +723,12 @@ def get_call_metrics(
     else:
         start_date = today - timedelta(days=7)
 
-    params = {"start_date": start_date.isoformat()}
+    params = {"start_date": start_date.isoformat(), "org_id": org_id}
     lo_filter = ""
     if lo_id:
         lo_filter = "AND lo_id = :lo_id"
         params["lo_id"] = lo_id
 
-    # Get aggregate metrics
     metrics = execute_single(f"""
         SELECT
             COUNT(*) as total_calls,
@@ -665,7 +740,7 @@ def get_call_metrics(
             AVG(duration_seconds) as avg_duration,
             SUM(duration_seconds) as total_duration
         FROM call_logs
-        WHERE DATE(created_at) >= :start_date {lo_filter}
+        WHERE DATE(created_at) >= :start_date AND organization_id = :org_id {lo_filter}
     """, params)
 
     if not metrics:

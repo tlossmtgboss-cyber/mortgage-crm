@@ -153,28 +153,42 @@ def _inject_tenant_filter(query: str, org_id: int) -> str:
     if not query_stripped.startswith('SELECT'):
         return query
 
-    # Tables that have an organization_id column
     _TENANT_TABLES = {
         'loans', 'leads', 'users', 'tasks', 'referral_partners',
         'compliance_alerts', 'activities', 'documents',
+        'contacts', 'scheduler_appointments', 'notifications',
+        'email_accounts', 'content_library_items', 'campaign_definitions',
+        'call_logs', 'call_records', 'channel_preferences',
+        'dialer_sessions', 'dialer_session_tasks', 'active_calls',
+        'contact_dnc_status', 'voicemail_campaigns', 'sms_messages',
+        'conversations', 'email_messages', 'emails', 'email_drafts',
+        'power_dialer_queue', 'voicemail_drops', 'voicemail_templates',
+        'audience_segments', 'drip_sequences', 'ai_tasks',
     }
 
     query_lower = query.lower()
 
-    # Find tenant-scoped tables referenced in FROM/JOIN clauses
-    # Pattern: FROM table_name alias  or  JOIN table_name alias
+    _SQL_KEYWORDS = {
+        'where', 'on', 'set', 'values', 'group', 'order', 'limit',
+        'having', 'union', 'except', 'intersect', 'inner', 'left',
+        'right', 'outer', 'cross', 'full', 'natural', 'join', 'and',
+        'or', 'not', 'in', 'between', 'like', 'is', 'null', 'select',
+    }
+
     table_pattern = re.compile(
-        r'\b(?:from|join)\s+(\w+)\s+(?:as\s+)?(\w+)',
+        r'\b(?:from|join)\s+(\w+)(?:\s+(?:as\s+)?(\w+))?',
         re.IGNORECASE
     )
 
     for match in table_pattern.finditer(query):
         table = match.group(1).lower()
-        alias = match.group(2).lower()
+        alias = match.group(2)
 
         if table in _TENANT_TABLES:
-            # Use the alias (or table name) to add the filter
-            filter_ref = alias if alias != table else table
+            if alias and alias.lower() not in _SQL_KEYWORDS:
+                filter_ref = alias
+            else:
+                filter_ref = table
             filter_clause = f"{filter_ref}.organization_id = :_org_id"
 
             # Find WHERE clause
