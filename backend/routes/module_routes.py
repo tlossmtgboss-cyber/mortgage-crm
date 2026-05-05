@@ -617,7 +617,9 @@ async def enable_all_modules(
     if admin_key != _ADMIN_API_KEY or not _ADMIN_API_KEY:
         raise HTTPException(status_code=403, detail="Invalid admin key")
 
-    org_id = organization_id or 1
+    if not organization_id:
+        raise HTTPException(status_code=400, detail="organization_id query parameter is required")
+    org_id = organization_id
 
     try:
         from database import engine

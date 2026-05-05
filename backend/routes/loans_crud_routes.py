@@ -747,7 +747,9 @@ async def get_loans(
         # Resolve org-wide Production Assistant 1 name (single query for all loans)
         pa_name = None
         try:
-            _org_id = current_user.organization_id or 1
+            _org_id = current_user.organization_id
+            if not _org_id:
+                raise HTTPException(status_code=403, detail="Organization context required")
             pa_row = db.execute(text("""
                 SELECT COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, '') as name
                 FROM default_role_assignments dra

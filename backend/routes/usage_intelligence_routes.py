@@ -76,8 +76,18 @@ router = APIRouter(
 # DEPENDENCIES
 # =============================================================================
 
-def get_projection_service(db: Session, organization_id: int = 1):
+def _require_org_id(current_user) -> int:
+    """Extract and validate organization_id from current_user. Raises 403 if missing."""
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    return org_id
+
+
+def get_projection_service(db: Session, organization_id: int = None):
     """Get the projection service instance."""
+    if not organization_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
     from services.usage_projection_service import UsageProjectionService
     return UsageProjectionService(db, organization_id=organization_id)
 
@@ -115,7 +125,7 @@ async def get_dashboard_overview(
         AND snapshot_date >= :month_start
         AND snapshot_date < :today
     """), {
-        "org_id": getattr(current_user, 'organization_id', 1),
+        "org_id": _require_org_id(current_user),
         "month_start": month_start,
         "today": today
     }).fetchone()
@@ -130,7 +140,7 @@ async def get_dashboard_overview(
         AND snapshot_date >= :prev_start
         AND snapshot_date <= :prev_end
     """), {
-        "org_id": getattr(current_user, 'organization_id', 1),
+        "org_id": _require_org_id(current_user),
         "prev_start": prev_month_start,
         "prev_end": prev_month_end
     }).fetchone()
@@ -157,11 +167,11 @@ async def get_dashboard_overview(
         ORDER BY created_at DESC
         LIMIT 5
     """), {
-        "org_id": getattr(current_user, 'organization_id', 1)
+        "org_id": _require_org_id(current_user)
     }).fetchall()
 
     # Get 30-day projection
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = _require_org_id(current_user)
     projection_service = get_projection_service(db, organization_id=org_id)
     projection = projection_service.generate_projections(
         scope_type="organization",
@@ -219,7 +229,7 @@ async def get_user_costs(
     """
     Get cost breakdown by user for the specified period.
     """
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = _require_org_id(current_user)
     projection_service = get_projection_service(db, organization_id=org_id)
     ranking = projection_service.get_user_cost_ranking(
         period_days=days,
@@ -282,7 +292,7 @@ async def get_user_cost_detail(
         AND snapshot_date BETWEEN :start_date AND :end_date
         ORDER BY snapshot_date DESC
     """), {
-        "org_id": getattr(current_user, 'organization_id', 1),
+        "org_id": _require_org_id(current_user),
         "user_id": user_id,
         "start_date": start_date,
         "end_date": end_date
@@ -303,7 +313,7 @@ async def get_user_cost_detail(
         GROUP BY model
         ORDER BY total_cost DESC
     """), {
-        "org_id": getattr(current_user, 'organization_id', 1),
+        "org_id": _require_org_id(current_user),
         "user_id": user_id,
         "start_date": start_date
     }).fetchall()
@@ -321,7 +331,7 @@ async def get_user_cost_detail(
         GROUP BY feature
         ORDER BY total_cost DESC
     """), {
-        "org_id": getattr(current_user, 'organization_id', 1),
+        "org_id": _require_org_id(current_user),
         "user_id": user_id,
         "start_date": start_date
     }).fetchall()
@@ -405,7 +415,7 @@ async def get_team_costs(
         GROUP BY tus.team_id, t.name
         ORDER BY total_cost DESC
     """), {
-        "org_id": getattr(current_user, 'organization_id', 1),
+        "org_id": _require_org_id(current_user),
         "start_date": start_date,
         "end_date": end_date
     }).fetchall()
@@ -468,7 +478,7 @@ async def get_organization_costs(
         WHERE organization_id = :org_id
         AND snapshot_date BETWEEN :start_date AND :end_date
     """), {
-        "org_id": getattr(current_user, 'organization_id', 1),
+        "org_id": _require_org_id(current_user),
         "start_date": start_date,
         "end_date": end_date
     }).fetchone()
@@ -512,7 +522,7 @@ async def get_organization_cost_trend(
     """
     Get daily cost trend for organization.
     """
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = _require_org_id(current_user)
     projection_service = get_projection_service(db, organization_id=org_id)
     trend = projection_service.get_cost_trend(
         scope_type="organization",
@@ -549,7 +559,7 @@ async def get_projections(
     if period not in [30, 60, 90]:
         raise HTTPException(status_code=400, detail="Period must be 30, 60, or 90 days")
 
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = _require_org_id(current_user)
     projection_service = get_projection_service(db, organization_id=org_id)
     projection = projection_service.generate_projections(
         scope_type=scope_type,
@@ -575,7 +585,7 @@ async def get_pricing_recommendation(
     Calculate pricing recommendations based on actual costs.
     200% margin = Price is 3x cost (cost + 200% profit).
     """
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = _require_org_id(current_user)
     projection_service = get_projection_service(db, organization_id=org_id)
     recommendation = projection_service.calculate_pricing_recommendation(
         target_margin_pct=target_margin,
@@ -607,7 +617,7 @@ async def simulate_pricing(
         WHERE organization_id = :org_id
         AND snapshot_date BETWEEN :start_date AND :end_date
     """), {
-        "org_id": getattr(current_user, 'organization_id', 1),
+        "org_id": _require_org_id(current_user),
         "start_date": start_date,
         "end_date": end_date
     }).fetchone()
@@ -666,7 +676,7 @@ async def get_ai_model_costs(
         GROUP BY provider, model
         ORDER BY total_cost DESC
     """), {
-        "org_id": getattr(current_user, 'organization_id', 1),
+        "org_id": _require_org_id(current_user),
         "start_date": start_date
     }).fetchall()
 
@@ -740,7 +750,7 @@ async def get_usage_alerts(
     """
     Get usage alerts.
     """
-    params = {"limit": limit, "org_id": getattr(current_user, 'organization_id', 1)}
+    params = {"limit": limit, "org_id": _require_org_id(current_user)}
     status_filter = ""
 
     if status:
@@ -803,7 +813,7 @@ async def acknowledge_alert(
         AND organization_id = :org_id
     """), {
         "alert_id": alert_id,
-        "org_id": getattr(current_user, 'organization_id', 1),
+        "org_id": _require_org_id(current_user),
         "user_id": current_user.get("id") if isinstance(current_user, dict) else getattr(current_user, 'id', None),
         "now": datetime.now(timezone.utc)
     })
@@ -829,7 +839,7 @@ async def resolve_alert(
         AND organization_id = :org_id
     """), {
         "alert_id": alert_id,
-        "org_id": getattr(current_user, 'organization_id', 1),
+        "org_id": _require_org_id(current_user),
         "now": datetime.now(timezone.utc)
     })
     db.commit()

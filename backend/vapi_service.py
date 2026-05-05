@@ -1053,7 +1053,7 @@ class VapiCRMIntegration:
                     "id": call_data.get("assistantId"),
                     "metadata": {
                         "loan_id": vapi_call.loan_id,
-                        "organization_id": getattr(vapi_call, 'organization_id', None) or 1,
+                        "organization_id": getattr(vapi_call, 'organization_id', None),
                     }
                 },
                 "duration": vapi_call.duration,

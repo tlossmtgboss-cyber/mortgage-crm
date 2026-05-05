@@ -87,7 +87,9 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         """
         from services.report_export_service import report_exporter
 
-        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", 1)
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
 
         report_data = report_exporter.generate_sla_compliance_report(
             db=db,
@@ -141,7 +143,9 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         """
         from services.report_export_service import report_exporter
 
-        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", 1)
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
 
         # If data not provided, generate it server-side
         report_data = body.data
@@ -183,7 +187,9 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         """
         from services.report_export_service import report_exporter
 
-        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", 1)
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
 
         report_data = body.data
         if not report_data and body.report_type == "sla_compliance":
@@ -224,7 +230,9 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         """
         from services.report_export_service import report_exporter
 
-        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", 1)
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
 
         report_data = body.data
         if not report_data and body.report_type == "sla_compliance":
@@ -269,7 +277,9 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         """
         from sqlalchemy import text as sa_text
 
-        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", 1)
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
         user_id = current_user.id
 
         # Store schedule in database
@@ -310,7 +320,9 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         """List all scheduled reports for the organization."""
         from sqlalchemy import text as sa_text
 
-        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", 1)
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
 
         schedules = db.execute(sa_text("""
             SELECT id, report_type, export_format, frequency, recipients,
@@ -352,7 +364,9 @@ def register_report_export_routes(app, get_db, get_current_user, **kwargs):
         """Cancel a scheduled report."""
         from sqlalchemy import text as sa_text
 
-        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", 1)
+        org_id = getattr(request.state, "organization_id", None) or getattr(current_user, "organization_id", None)
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
 
         result = db.execute(sa_text("""
             UPDATE scheduled_reports SET is_active = false

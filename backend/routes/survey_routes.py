@@ -191,7 +191,9 @@ async def create_survey_template(
     current_user = Depends(get_current_user)
 ):
     """Create a new survey template."""
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
     user_id = getattr(current_user, 'id', None)
 
     template = SurveyTemplate(
@@ -448,7 +450,9 @@ async def send_survey(
     current_user = Depends(get_current_user)
 ):
     """Send a survey to a recipient."""
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
     org_filter = get_org_filter(current_user, SurveyTemplate)
 
     # Verify template exists and is active
@@ -512,7 +516,9 @@ async def send_bulk_surveys(
     current_user = Depends(get_current_user)
 ):
     """Send surveys to multiple recipients."""
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
     org_filter = get_org_filter(current_user, SurveyTemplate)
 
     template = db.query(SurveyTemplate).filter(
@@ -1100,7 +1106,9 @@ async def create_savings_validation(
     current_user = Depends(get_current_user)
 ):
     """Create a savings validation record to track promised vs actual."""
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
 
     validation = SavingsValidation(
         organization_id=org_id,

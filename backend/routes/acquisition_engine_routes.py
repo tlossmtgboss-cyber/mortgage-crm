@@ -228,6 +228,10 @@ async def launch_campaign(
     5. Starts event listeners
     6. Returns campaign with funnel URL
     """
+    _acq_org_id = getattr(current_user, 'organization_id', None)
+    if not _acq_org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+
     # Validate goal type
     try:
         goal_type = GoalType(request.goal_type)
@@ -255,7 +259,7 @@ async def launch_campaign(
     # Create campaign instance
     campaign = CampaignInstance(
         id=uuid.uuid4(),
-        organization_id=getattr(current_user, 'organization_id', None) or 1,
+        organization_id=_acq_org_id,
         user_id=current_user.id,
         blueprint_id=blueprint.id,
         name=campaign_name,
@@ -636,6 +640,10 @@ async def ingest_event(
     - Attribution tracking
     - Triggering speed-to-lead automation
     """
+    _event_org_id = getattr(current_user, 'organization_id', None)
+    if not _event_org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+
     event_service = EventService(db)
 
     utm_params = {
@@ -647,7 +655,7 @@ async def ingest_event(
     }
 
     event = event_service.ingest_event(
-        organization_id=getattr(current_user, 'organization_id', None) or 1,
+        organization_id=_event_org_id,
         event_type=request.event_type,
         event_payload=request.event_payload,
         lead_id=request.lead_id,
@@ -1001,6 +1009,10 @@ async def trigger_speed_to_lead(
     - Trigger outreach for a lead that just became hot
     - Override automatic triggering with manual control
     """
+    _trigger_org_id = getattr(current_user, 'organization_id', None)
+    if not _trigger_org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+
     # Get lead info
     lead = db.execute(text("""
         SELECT id, first_name, last_name, email, phone, assigned_to
@@ -1015,7 +1027,7 @@ async def trigger_speed_to_lead(
     if request.event_type:
         event_service = EventService(db)
         event = event_service.ingest_event(
-            organization_id=getattr(current_user, 'organization_id', 1),
+            organization_id=_trigger_org_id,
             event_type=request.event_type,
             lead_id=lead_id,
             campaign_instance_id=request.campaign_instance_id,

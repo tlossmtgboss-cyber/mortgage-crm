@@ -97,7 +97,9 @@ async def create_transaction(
     from services.listing_portal_service import listing_portal_service
 
     user_id = current_user.get("user_id") if isinstance(current_user, dict) else getattr(current_user, "id", None)
-    org_id = current_user.get("organization_id", 1) if isinstance(current_user, dict) else getattr(current_user, "organization_id", 1)
+    org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
 
     transaction = listing_portal_service.create_transaction(
         db=db,
@@ -126,7 +128,9 @@ async def list_transactions(
     """List all transactions for the current organization"""
     from sqlalchemy import text
 
-    org_id = current_user.get("organization_id", 1) if isinstance(current_user, dict) else getattr(current_user, "organization_id", 1)
+    org_id = current_user.get("organization_id") if isinstance(current_user, dict) else getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
 
     result = db.execute(text("""
         SELECT

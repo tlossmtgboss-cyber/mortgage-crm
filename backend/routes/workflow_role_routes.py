@@ -366,6 +366,9 @@ async def get_default_role_assignments(
 ):
     """Get default role assignments for the organization (Team Settings)."""
 
+    _org_id = current_user.organization_id
+    if not _org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
 
     try:
         # Auto-seed: ensure roles table exists and is populated
@@ -424,7 +427,7 @@ async def get_default_role_assignments(
             LEFT JOIN users u ON u.id = dra.user_id
             WHERE r.is_active = true
             ORDER BY r.name
-        """), {"org_id": current_user.organization_id or 1}).fetchall()
+        """), {"org_id": _org_id}).fetchall()
 
         assignments = []
         for row in result:
@@ -438,7 +441,7 @@ async def get_default_role_assignments(
             })
 
         return {
-            "organization_id": current_user.organization_id or 1,
+            "organization_id": _org_id,
             "assignments": assignments,
             "count": len(assignments)
         }
@@ -459,7 +462,9 @@ async def set_default_role_assignment(
     User = get_user_model()
 
     try:
-        org_id = current_user.organization_id or 1
+        org_id = current_user.organization_id
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
 
         # Verify role exists
         role = db.execute(text("SELECT id, name FROM roles WHERE id = :role_id"),
@@ -528,7 +533,9 @@ async def remove_default_role_assignment(
 
 
     try:
-        org_id = current_user.organization_id or 1
+        org_id = current_user.organization_id
+        if not org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
 
         db.execute(text("""
             DELETE FROM default_role_assignments

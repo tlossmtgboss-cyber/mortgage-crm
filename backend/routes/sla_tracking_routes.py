@@ -1099,7 +1099,9 @@ async def get_run_rate_report(
     """
     from tasks.sla_tasks import calculate_run_rate, calculate_inventory_forecast, calculate_health_score
 
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
 
     # Get all active SLA measures
     measures = get_all_sla_measures(db, organization_id=org_id, active_only=True)
@@ -1185,7 +1187,9 @@ async def get_milestone_run_rate(
     except ValueError:
         raise HTTPException(status_code=400, detail=f"Invalid milestone type: {milestone_type}")
 
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
     run_rate = calculate_run_rate(db, mt, lookback_days=lookback_days, organization_id=org_id)
     forecast = calculate_inventory_forecast(db, mt, organization_id=org_id)
 
@@ -1437,7 +1441,9 @@ async def send_sla_report_email(
     """
     from tasks.sla_tasks import calculate_run_rate, calculate_inventory_forecast, calculate_health_score
 
-    org_id = getattr(current_user, 'organization_id', 1)
+    org_id = getattr(current_user, 'organization_id', None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
 
     # Get all active SLA measures
     measures = get_all_sla_measures(db, organization_id=org_id, active_only=True)

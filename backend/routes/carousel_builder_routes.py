@@ -398,6 +398,10 @@ async def create_project(
 
         user = await get_user_from_request(request, db)
 
+        _carousel_org_id = getattr(user, 'organization_id', None)
+        if not _carousel_org_id:
+            raise HTTPException(status_code=403, detail="Organization context required")
+
         width, height = get_dimensions_for_aspect_ratio(project_data.aspect_ratio)
 
         # Convert string values to enums if needed
@@ -419,7 +423,7 @@ async def create_project(
         project = CarouselProject(
             id=generate_short_uuid(),
             user_id=user.id,
-            organization_id=getattr(user, 'organization_id', 1),
+            organization_id=_carousel_org_id,
             name=project_data.name,
             description=project_data.description,
             project_type=project_type_enum,
@@ -591,10 +595,14 @@ async def create_theme(
     """Create a custom theme."""
     user = await get_user_from_request(request, db)
 
+    _carousel_org_id = getattr(user, 'organization_id', None)
+    if not _carousel_org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+
     theme = CarouselTheme(
         id=generate_short_uuid(),
         user_id=user.id,
-        organization_id=getattr(user, 'organization_id', 1),
+        organization_id=_carousel_org_id,
         name=theme_data.name,
         description=theme_data.description,
         colors=theme_data.colors,

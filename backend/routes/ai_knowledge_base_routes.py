@@ -229,6 +229,10 @@ async def create_knowledge_entry(
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Create a new knowledge base entry"""
+    _kb_org_id = getattr(current_user, 'organization_id', None)
+    if not _kb_org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+
     models = get_models()
     AIKnowledgeBase = models["AIKnowledgeBase"]
 
@@ -262,7 +266,7 @@ async def create_knowledge_entry(
         tags=entry.tags,
         priority=entry.priority or 5,
         created_by=current_user.id,
-        organization_id=getattr(current_user, 'organization_id', 1)
+        organization_id=_kb_org_id
     )
 
     db.add(new_entry)
@@ -346,6 +350,9 @@ async def upload_knowledge_document(
     current_user = Depends(get_current_user_flexible_dep())
 ):
     """Upload a document to the knowledge base (PDF, DOCX, TXT)"""
+    _kb_org_id = getattr(current_user, 'organization_id', None)
+    if not _kb_org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
     models = get_models()
     AIKnowledgeBase = models["AIKnowledgeBase"]
 
@@ -414,7 +421,7 @@ async def upload_knowledge_document(
         tags=tag_list,
         priority=priority,
         created_by=current_user.id,
-        organization_id=getattr(current_user, 'organization_id', 1)
+        organization_id=_kb_org_id
     )
 
     db.add(new_entry)

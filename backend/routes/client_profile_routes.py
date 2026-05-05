@@ -741,6 +741,10 @@ async def complete_sla_task(
         "milestone_date": "2024-01-15T00:00:00Z"  // ISO format date
     }
     """
+    _cmp_org_id = getattr(current_user, 'organization_id', None)
+    if not _cmp_org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+
     try:
         from crud.sla_tracking import complete_sla_task_with_date
 
@@ -769,7 +773,7 @@ async def complete_sla_task(
             task_id=task_id,
             milestone_date=milestone_date,
             user_id=current_user.id,
-            organization_id=getattr(current_user, 'organization_id', 1)
+            organization_id=_cmp_org_id
         )
 
         if not result["success"]:

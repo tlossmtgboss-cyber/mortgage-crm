@@ -267,7 +267,9 @@ async def get_leads(
         # Resolve org-wide Production Assistant 1 name (single query for all leads)
         pa_name = None
         try:
-            org_id = current_user.organization_id or 1
+            org_id = current_user.organization_id
+            if not org_id:
+                raise HTTPException(status_code=403, detail="Organization context required")
             pa_row = db.execute(text("""
                 SELECT COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.last_name, '') as name
                 FROM default_role_assignments dra

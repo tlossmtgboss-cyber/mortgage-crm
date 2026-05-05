@@ -308,7 +308,8 @@ async def get_conversation(
     _check_tables(db)
     org_id = _get_org_id(current_user)
 
-    _rls_org = org_id or 1
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
 
     logger.info(
         "SMS GET /conversations/%s: user_id=%s org_id=%s phone_raw=%s",
