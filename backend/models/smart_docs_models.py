@@ -290,6 +290,9 @@ class SmartDocument(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
+    # Multi-tenant isolation (nullable for backfill of existing rows)
+    organization_id = Column(Integer, nullable=True, index=True)  # TODO: backfill existing rows then set nullable=False
+
     # Relationships (foreign keys omitted to allow isolated table creation)
     request_id = Column(Integer, nullable=True)  # References smart_document_requests.id - indexed in __table_args__
     loan_id = Column(Integer, nullable=True)  # References loans.id - indexed in __table_args__
@@ -356,6 +359,7 @@ class SmartDocument(Base):
 
     # Indexes
     __table_args__ = (
+        Index("ix_smart_documents_organization_id", "organization_id"),
         Index("ix_smart_documents_request_id", "request_id"),
         Index("ix_smart_documents_loan_id", "loan_id"),
         Index("ix_smart_documents_borrower_id", "borrower_id"),

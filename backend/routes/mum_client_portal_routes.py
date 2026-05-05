@@ -66,7 +66,9 @@ async def create_mum_client_portal(
         raise HTTPException(status_code=404, detail="MUM client not found")
 
     # Get organization ID from current user
-    organization_id = getattr(current_user, 'organization_id', 1) or 1
+    organization_id = getattr(current_user, "organization_id", None)
+    if not organization_id:
+        raise HTTPException(status_code=400, detail="Organization context required")
 
     # Create or get the portal
     service = get_mum_portal_service(db)
@@ -100,7 +102,9 @@ async def get_mum_client_portal(
         raise HTTPException(status_code=404, detail="MUM client not found")
 
     # Get organization ID from current user
-    organization_id = getattr(current_user, 'organization_id', 1) or 1
+    organization_id = getattr(current_user, "organization_id", None)
+    if not organization_id:
+        raise HTTPException(status_code=400, detail="Organization context required")
 
     # Get the portal info
     service = get_mum_portal_service(db)
@@ -137,7 +141,9 @@ async def post_mum_portal_message(
     if not client:
         raise HTTPException(status_code=404, detail="MUM client not found")
 
-    organization_id = getattr(current_user, 'organization_id', 1) or 1
+    organization_id = getattr(current_user, "organization_id", None)
+    if not organization_id:
+        raise HTTPException(status_code=400, detail="Organization context required")
 
     service = get_mum_portal_service(db)
 

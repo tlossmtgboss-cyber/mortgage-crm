@@ -180,6 +180,17 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
         Returns NMLS number, list of state licenses, active states,
         and any licenses expiring soon.
         """
+        # Verify target user belongs to same organization (prevent cross-tenant queries)
+        org_id = getattr(current_user, "organization_id", None)
+        if org_id:
+            from database.models.core import User as UserModel
+            target_user = db.query(UserModel).filter(
+                UserModel.id == user_id,
+                UserModel.organization_id == org_id
+            ).first()
+            if not target_user:
+                raise HTTPException(status_code=404, detail="User not found in your organization")
+
         from services.license_enforcement import LicenseEnforcementService
 
         service = LicenseEnforcementService()
@@ -199,6 +210,17 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
         Returns license status, expiration date, and any warnings.
         Used before loan assignment to ensure compliance with SAFE Act.
         """
+        # Verify target user belongs to same organization (prevent cross-tenant queries)
+        org_id = getattr(current_user, "organization_id", None)
+        if org_id:
+            from database.models.core import User as UserModel
+            target_user = db.query(UserModel).filter(
+                UserModel.id == body.user_id,
+                UserModel.organization_id == org_id
+            ).first()
+            if not target_user:
+                raise HTTPException(status_code=404, detail="User not found in your organization")
+
         from services.license_enforcement import LicenseEnforcementService
 
         service = LicenseEnforcementService()
@@ -222,6 +244,17 @@ def register_compliance_routes(app, get_db, get_current_user, **kwargs):
         Checks the property state against the LO's licenses.
         Should be called during loan creation or LO assignment.
         """
+        # Verify target LO belongs to same organization (prevent cross-tenant queries)
+        org_id = getattr(current_user, "organization_id", None)
+        if org_id:
+            from database.models.core import User as UserModel
+            target_user = db.query(UserModel).filter(
+                UserModel.id == body.lo_id,
+                UserModel.organization_id == org_id
+            ).first()
+            if not target_user:
+                raise HTTPException(status_code=404, detail="Loan officer not found in your organization")
+
         from services.license_enforcement import LicenseEnforcementService
 
         service = LicenseEnforcementService()

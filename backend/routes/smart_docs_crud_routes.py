@@ -386,8 +386,12 @@ async def sync_documents_from_application(
 # Document Upload & Processing
 # =============================================================================
 
+MAX_UPLOAD_SIZE = 20 * 1024 * 1024  # 20MB
+
+
 @router.post("/upload")
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     loan_id: int = Form(...),
     borrower_id: int = Form(...),
@@ -410,6 +414,11 @@ async def upload_document(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
+    # Early size check using Content-Length header to reject before reading full body
+    content_length = request.headers.get("content-length")
+    if content_length and int(content_length) > MAX_UPLOAD_SIZE:
+        raise HTTPException(status_code=413, detail="File too large (max 20MB)")
+
     # Read magic bytes for type verification, then reset stream
     header = await file.read(8)
     await file.seek(0)
@@ -429,8 +438,8 @@ async def upload_document(
     mime_type = claimed_content_type
     file_size = len(file_content)
 
-    # Validate file size (max 20MB)
-    if file_size > 20 * 1024 * 1024:
+    # Validate file size (max 20MB) — belt-and-suspenders after early Content-Length check
+    if file_size > MAX_UPLOAD_SIZE:
         raise HTTPException(status_code=413, detail="File too large (max 20MB)")
 
     # Check storage quota (MTR-004)
@@ -505,6 +514,7 @@ async def upload_document(
     else:
         # Create new document record
         document = SmartDocument(
+            organization_id=org_id,
             request_id=request_id,
             loan_id=loan_id,
             borrower_id=borrower_id,

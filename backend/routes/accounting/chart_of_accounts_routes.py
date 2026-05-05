@@ -207,9 +207,10 @@ async def list_accounts(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """List all accounts with optional filters."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
 
     query = db.query(ChartOfAccounts).filter(
         ChartOfAccounts.organization_id == org_id
@@ -255,9 +256,10 @@ async def get_account_tree(
     account_type: Optional[str] = Query(None, description="Filter by account type"),
     include_balance: bool = Query(True, description="Include balances"),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get hierarchical account tree structure."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
 
     query = db.query(ChartOfAccounts).filter(
         ChartOfAccounts.organization_id == org_id,
@@ -318,9 +320,10 @@ async def get_account(
     account_id: str,
     include_balance: bool = Query(True),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get a single account by ID."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
 
     account = db.query(ChartOfAccounts).filter(
         ChartOfAccounts.id == account_id,
@@ -413,9 +416,10 @@ async def update_account(
     account_id: str,
     data: AccountUpdate,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Update an existing account."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
 
     account = db.query(ChartOfAccounts).filter(
         ChartOfAccounts.id == account_id,
@@ -441,8 +445,9 @@ async def update_account(
         setattr(account, field, value)
 
     # Log audit
+    user_id = get_user_id(current_user)
     log_audit(
-        db, org_id, 1, 'update', 'chart_of_accounts', account.id,
+        db, org_id, user_id, 'update', 'chart_of_accounts', account.id,
         entity_number=account.account_number,
         old_values=old_values,
         new_values=update_fields,
@@ -462,9 +467,10 @@ async def update_account(
 async def deactivate_account(
     account_id: str,
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Deactivate an account (soft delete)."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
 
     account = db.query(ChartOfAccounts).filter(
         ChartOfAccounts.id == account_id,
@@ -483,11 +489,13 @@ async def deactivate_account(
         JournalEntry.status == 'posted'
     ).first()
 
+    user_id = get_user_id(current_user)
+
     if has_transactions:
         # Just deactivate, don't delete
         account.is_active = False
         log_audit(
-            db, org_id, 1, 'update', 'chart_of_accounts', account.id,
+            db, org_id, user_id, 'update', 'chart_of_accounts', account.id,
             entity_number=account.account_number,
             new_values={'is_active': False},
             summary=f"Deactivated account {account.account_number}"
@@ -496,7 +504,7 @@ async def deactivate_account(
         # Can delete if no transactions
         db.delete(account)
         log_audit(
-            db, org_id, 1, 'delete', 'chart_of_accounts', account.id,
+            db, org_id, user_id, 'delete', 'chart_of_accounts', account.id,
             entity_number=account.account_number,
             summary=f"Deleted account {account.account_number}"
         )
@@ -514,9 +522,10 @@ async def get_account_balance(
     account_id: str,
     as_of_date: Optional[date] = Query(None, description="Balance as of date"),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get account balance, optionally as of a specific date."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
 
     account = db.query(ChartOfAccounts).filter(
         ChartOfAccounts.id == account_id,
@@ -547,9 +556,10 @@ async def get_account_transactions(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Get transactions for an account."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
 
     account = db.query(ChartOfAccounts).filter(
         ChartOfAccounts.id == account_id,
@@ -614,9 +624,10 @@ async def get_account_transactions(
 @router.post("/initialize-defaults")
 async def initialize_default_accounts(
     db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """Initialize default chart of accounts for an organization."""
-    org_id = get_organization_id()
+    org_id = get_organization_id(current_user)
 
     # Check if accounts already exist
     existing = db.query(ChartOfAccounts).filter(
