@@ -520,11 +520,12 @@ async def saml_acs(
 
     db.commit()
 
-    # Redirect to frontend with tokens
+    # Redirect to frontend with tokens in URL fragment (not query string)
+    # Fragments are never sent to servers in Referer headers or logged by proxies
     frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
     redirect_url = (
         f"{frontend_url}/sso/callback"
-        f"?access_token={tokens['access_token']}"
+        f"#access_token={tokens['access_token']}"
         f"&refresh_token={tokens['refresh_token']}"
         f"&token_type=bearer"
     )
@@ -761,11 +762,12 @@ async def oidc_callback(
 
     db.commit()
 
-    # Redirect to frontend with tokens
+    # Redirect to frontend with tokens in URL fragment (not query string)
+    # Fragments are never sent to servers in Referer headers or logged by proxies
     frontend_url = os.getenv("FRONTEND_URL", "https://app.perenniaai.com")
     redirect_url = (
         f"{frontend_url}/sso/callback"
-        f"?access_token={tokens['access_token']}"
+        f"#access_token={tokens['access_token']}"
         f"&refresh_token={tokens['refresh_token']}"
         f"&token_type=bearer"
     )

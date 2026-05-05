@@ -153,10 +153,11 @@ async def create_demo_user(
     Returns actual error details (bypasses production error sanitizer).
     """
     import os as _os
+    import hmac as _hmac
     import traceback as _tb
     from fastapi.responses import JSONResponse as _JSONResponse
     _admin_api_key = _os.getenv("ADMIN_API_KEY")
-    if not _admin_api_key or admin_key != _admin_api_key:
+    if not _admin_api_key or not _hmac.compare_digest(admin_key, _admin_api_key):
         raise HTTPException(status_code=403, detail="Forbidden")
 
     try:

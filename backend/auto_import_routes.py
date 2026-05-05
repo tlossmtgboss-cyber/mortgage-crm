@@ -967,9 +967,10 @@ async def seed_test_account_bootstrap(
 
     # Verify secret key (remove ALL whitespace as Railway env vars can have embedded newlines)
     import re
+    import hmac as _hmac
     expected_key = re.sub(r'\s+', '', os.getenv("SECRET_KEY", ""))
     provided_key = re.sub(r'\s+', '', secret_key)
-    if not expected_key or provided_key != expected_key:
+    if not expected_key or not _hmac.compare_digest(provided_key, expected_key):
         raise HTTPException(
             status_code=403,
             detail="Invalid secret key"
@@ -1033,9 +1034,10 @@ async def seed_test_account_endpoint(
 
     # Verify secret key (remove ALL whitespace as Railway env vars can have embedded newlines)
     import re
+    import hmac as _hmac
     expected_key = re.sub(r'\s+', '', os.getenv("SECRET_KEY", ""))
     provided_key = re.sub(r'\s+', '', secret_key)
-    if not expected_key or provided_key != expected_key:
+    if not expected_key or not _hmac.compare_digest(provided_key, expected_key):
         raise HTTPException(
             status_code=403,
             detail="Invalid secret key"

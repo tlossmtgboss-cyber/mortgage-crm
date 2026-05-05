@@ -282,7 +282,8 @@ def create_password_reset_token(email: str) -> str:
         "sub": email,
         "exp": expire,
         "iat": now,
-        "type": "password_reset"
+        "type": "password_reset",
+        "aud": "perennia:password_reset"
     }
     return jwt.encode(to_encode, config['SECRET_KEY'], algorithm=config['ALGORITHM'])
 
@@ -291,7 +292,10 @@ def verify_password_reset_token(token: str) -> Optional[dict]:
     """Verify password reset token and return payload dict with 'sub' and 'iat' if valid"""
     config = get_auth_config()
     try:
-        payload = jwt.decode(token, config['SECRET_KEY'], algorithms=[config['ALGORITHM']], options={"verify_aud": False})
+        payload = jwt.decode(
+            token, config['SECRET_KEY'], algorithms=[config['ALGORITHM']],
+            audience="perennia:password_reset"
+        )
         if payload.get("type") != "password_reset":
             return None
         email = payload.get("sub")
@@ -302,7 +306,21 @@ def verify_password_reset_token(token: str) -> Optional[dict]:
     except ExpiredSignatureError:
         return None
     except InvalidTokenError:
-        return None
+        # Fall back: accept tokens without aud claim (legacy tokens issued before this fix)
+        try:
+            payload = jwt.decode(
+                token, config['SECRET_KEY'], algorithms=[config['ALGORITHM']],
+                options={"verify_aud": False}
+            )
+            if payload.get("type") != "password_reset":
+                return None
+            email = payload.get("sub")
+            iat = payload.get("iat")
+            if not email:
+                return None
+            return {"email": email, "iat": iat}
+        except (ExpiredSignatureError, InvalidTokenError):
+            return None
 
 
 # =============================================================================
@@ -796,6 +814,11 @@ async def refresh_access_token(
             tenant_id=tenant_id
         )
 
+        # Blacklist the used refresh token to prevent reuse
+        token_blacklist = config['token_blacklist']
+        if token_blacklist and token_blacklist._enabled:
+            token_blacklist.add(refresh_token, reason="token_rotation")
+
         return {
             "access_token": new_access_token,
             "token_type": "bearer",
@@ -804,7 +827,20 @@ async def refresh_access_token(
     else:
         # Legacy fallback
         try:
-            payload = jwt.decode(refresh_token, config['SECRET_KEY'], algorithms=[config['ALGORITHM']], options={"verify_aud": False})
+            # Try with audience verification first
+            try:
+                payload = jwt.decode(
+                    refresh_token, config['SECRET_KEY'],
+                    algorithms=[config['ALGORITHM']],
+                    audience="perennia:refresh"
+                )
+            except InvalidTokenError:
+                # Fall back for legacy tokens without aud claim
+                payload = jwt.decode(
+                    refresh_token, config['SECRET_KEY'],
+                    algorithms=[config['ALGORITHM']],
+                    options={"verify_aud": False}
+                )
             if payload.get("type") != "refresh":
                 raise credentials_exception
 

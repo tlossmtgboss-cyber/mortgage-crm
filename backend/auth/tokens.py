@@ -376,9 +376,6 @@ def verify_access_token(token: str) -> Optional[Dict[str, Any]]:
     """
     token_data = verify_token(token, expected_type=TokenType.ACCESS)
     if token_data is None:
-        # Fall back: try without type check for legacy tokens that lack a type claim
-        token_data = verify_token(token)
-    if token_data is None:
         return None
     # Reconstruct a payload dict compatible with what jwt.decode() returns
     payload = {
