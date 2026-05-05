@@ -236,7 +236,7 @@ async def get_current_user_or_api_key(
         if _is_valid_api_key(token):
             org_id = _get_api_key_org_id(token)
             if org_id is None:
-                org_id = await _extract_org_id_from_body(request)
+                raise HTTPException(status_code=403, detail="API key organization not configured")
             logger.info("Service auth via Bearer API key (org=%s)", org_id)
             return _SystemUser(organization_id=org_id)
 
@@ -245,7 +245,7 @@ async def get_current_user_or_api_key(
     if api_key and _is_valid_api_key(api_key):
         org_id = _get_api_key_org_id(api_key)
         if org_id is None:
-            org_id = await _extract_org_id_from_body(request)
+            raise HTTPException(status_code=403, detail="API key organization not configured")
         logger.info("Service auth via X-API-Key header (org=%s)", org_id)
         return _SystemUser(organization_id=org_id)
 
@@ -254,7 +254,7 @@ async def get_current_user_or_api_key(
     if internal_key and _is_valid_api_key(internal_key):
         org_id = _get_api_key_org_id(internal_key)
         if org_id is None:
-            org_id = await _extract_org_id_from_body(request)
+            raise HTTPException(status_code=403, detail="API key organization not configured")
         logger.info("Service auth via X-Internal-API-Key header (org=%s)", org_id)
         return _SystemUser(organization_id=org_id)
 

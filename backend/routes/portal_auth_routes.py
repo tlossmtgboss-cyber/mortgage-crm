@@ -49,7 +49,7 @@ def set_dependencies(get_db_func, email_service=None):
 # =============================================================================
 
 PORTAL_BASE_URL = os.getenv('PORTAL_BASE_URL', 'http://localhost:3000/portal')
-MAGIC_LINK_EXPIRY_HOURS = int(os.getenv('MAGIC_LINK_EXPIRY_HOURS', '72'))
+MAGIC_LINK_EXPIRY_HOURS = int(os.getenv('MAGIC_LINK_EXPIRY_HOURS', '1'))
 SESSION_EXPIRY_HOURS = int(os.getenv('PORTAL_SESSION_EXPIRY_HOURS', '24'))
 SESSION_COOKIE_NAME = 'perennia_portal_session'
 SESSION_COOKIE_DOMAIN = os.getenv('SESSION_COOKIE_DOMAIN', None)

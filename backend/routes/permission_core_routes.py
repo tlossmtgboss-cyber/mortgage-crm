@@ -220,10 +220,7 @@ def check_resource_access(
             detail="You can only modify your own records"
         )
 
-    # Fallback: If they passed filter_by_permissions, they should have at least view access
-    # Allow edit for now to prevent blocking users - proper permissions should be set up
-    logger.warning(f"User {user_id} accessing resource without explicit permission - allowing for now")
-    return  # Allow access temporarily until proper permissions are configured
+    raise HTTPException(status_code=403, detail="Insufficient permissions")
 
 
 def get_user_permissions(user_id: int, db: Session) -> Dict[str, bool]:

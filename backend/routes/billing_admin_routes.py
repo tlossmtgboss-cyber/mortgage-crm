@@ -58,6 +58,9 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
         Uses @require_feature() / @require_tier() decorator infrastructure
         and SubscriptionService.can_access_feature() underneath.
         """
+        from utils.auth import require_admin
+        require_admin(current_user)
+
         org_id = getattr(current_user, 'organization_id', None)
         if not org_id:
             raise HTTPException(status_code=400, detail="No organization")
@@ -80,6 +83,9 @@ def register_billing_admin_routes(app, get_db, get_current_user, **kwargs):
         Called by business logic (lead creation, AI queries, document uploads)
         to track consumption against subscription limits.
         """
+        from utils.auth import require_admin
+        require_admin(current_user)
+
         org_id = getattr(current_user, 'organization_id', None)
         if not org_id:
             raise HTTPException(status_code=400, detail="No organization")

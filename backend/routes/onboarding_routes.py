@@ -1294,6 +1294,9 @@ async def start_impersonation(
         if not impersonated_user:
             raise HTTPException(status_code=404, detail="User not found")
 
+        if impersonated_user.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=403, detail="Cannot impersonate users in other organizations")
+
         # Check authorization - only managers/admins/site_admins can impersonate
         allowed_roles = {'admin', 'site_admin', 'leadership', 'management'}
         user_role = getattr(current_user, 'permission_role', None) or getattr(current_user, 'role', None) or ''
@@ -1309,6 +1312,8 @@ async def start_impersonation(
 
         # Generate unique session token
         session_token = secrets.token_urlsafe(32)
+
+        duration_minutes = min(duration_minutes, 480)
 
         # Calculate expiration time
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=duration_minutes)

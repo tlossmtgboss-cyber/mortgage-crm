@@ -947,6 +947,11 @@ async def get_current_user(
         if actual_user is None:
             raise credentials_exception
 
+        if not getattr(actual_user, "is_active", True):
+            raise HTTPException(status_code=401, detail="Account deactivated")
+        if getattr(actual_user, "locked_until", None) and actual_user.locked_until > datetime.now(timezone.utc):
+            raise HTTPException(status_code=401, detail="Account temporarily locked")
+
     # PHASE 2: Check for impersonation
     if request:
         impersonation_token = request.headers.get("X-Impersonation-Token")
@@ -1200,7 +1205,8 @@ async def get_current_user_flexible(
     else:
         # Legacy fallback
         try:
-            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], options={"verify_aud": False})
+            _jwt_aud = os.getenv("JWT_AUDIENCE", "perennia-crm")
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM], audience=_jwt_aud, options={"verify_aud": True})
             # Issuer validation (backward compatible — tokens without iss are allowed)
             _expected_issuer = os.getenv("JWT_ISSUER", "perennia-api")
             _token_issuer = payload.get("iss")
@@ -1223,6 +1229,11 @@ async def get_current_user_flexible(
     actual_user = db.query(User).filter(User.email == email).first()
     if actual_user is None:
         raise credentials_exception
+
+    if not getattr(actual_user, "is_active", True):
+        raise HTTPException(status_code=401, detail="Account deactivated")
+    if getattr(actual_user, "locked_until", None) and actual_user.locked_until > datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Account temporarily locked")
 
     # PHASE 3: Check for impersonation (same logic as get_current_user)
     impersonation_token = request.headers.get("X-Impersonation-Token")
