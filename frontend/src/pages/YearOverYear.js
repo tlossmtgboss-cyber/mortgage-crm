@@ -37,45 +37,6 @@ function YearOverYear() {
     }
   };
 
-  const generateMockYearlyData = () => {
-    const currentYear = new Date().getFullYear();
-    return [
-      {
-        year: currentYear - 3,
-        total_loans: 45,
-        total_volume: 15250000,
-        active_loans: 12,
-        commission_earned: 152500,
-        closed_loans: 45
-      },
-      {
-        year: currentYear - 2,
-        total_loans: 52,
-        total_volume: 18900000,
-        active_loans: 15,
-        commission_earned: 189000,
-        closed_loans: 52
-      },
-      {
-        year: currentYear - 1,
-        total_loans: 60,
-        total_volume: 21300000,
-        active_loans: 18,
-        commission_earned: 213000,
-        closed_loans: 60
-      },
-      {
-        year: currentYear,
-        total_loans: 68,
-        total_volume: 24500000,
-        active_loans: 22,
-        commission_earned: 245000,
-        closed_loans: 68,
-        is_current: true
-      }
-    ];
-  };
-
   const calculateROI = (current, previous) => {
     if (!previous || previous === 0) return 0;
     return ((current - previous) / previous * 100);
@@ -118,6 +79,20 @@ function YearOverYear() {
           <p className="page-subtitle">Annual totals and ROI trends</p>
         </div>
       </div>
+
+      {yearlyData.length === 0 && (
+        <div className="placeholder-banner" style={{
+          background: '#fef3c7',
+          border: '1px solid #f59e0b',
+          borderRadius: '8px',
+          padding: '24px',
+          marginBottom: '24px',
+          textAlign: 'center',
+          color: '#92400e'
+        }}>
+          <strong>No historical data available.</strong> Historical data visualization requires production data. Connect your pipeline to see real year-over-year metrics.
+        </div>
+      )}
 
       {/* ROI Summary Cards */}
       <div className="roi-cards">
