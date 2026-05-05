@@ -46,9 +46,9 @@ export default defineConfig({
     // Proxy API calls to backend
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: 'https://api.perenniaai.com',
         changeOrigin: true,
-        secure: false,
+        secure: true,
       },
       '/token': {
         target: 'http://localhost:8000',
@@ -81,7 +81,8 @@ export default defineConfig({
   envPrefix: ['VITE_', 'REACT_APP_'],
 
   esbuild: {
-    drop: process.env.NODE_ENV === 'production' ? ['console', 'debugger'] : [],
+    drop: process.env.NODE_ENV === 'production' ? ['debugger'] : [],
+    pure: process.env.NODE_ENV === 'production' ? ['console.log', 'console.info', 'console.debug', 'console.trace'] : [],
   },
 
   // Define global constants (for process.env compatibility)

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { POSContainer } from '../../features/pos';
@@ -16,7 +16,7 @@ interface VerifySession {
 const SESSION_KEY = 'perennia_pos_verify';
 
 const POSEntryPage: React.FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   const tokenParam = searchParams.get('token');
   const loanIdParam = searchParams.get('loan_id');
@@ -45,6 +45,10 @@ const POSEntryPage: React.FC = () => {
       setPurlToken(tokenParam);
       setFlowStep('app');
       sessionStorage.removeItem(SESSION_KEY);
+      // Remove token from URL to prevent leakage via referrer/history
+      const url = new URL(window.location.href);
+      url.searchParams.delete('token');
+      window.history.replaceState({}, '', url.toString());
     }
   }, [tokenParam]);
 
@@ -65,7 +69,10 @@ const POSEntryPage: React.FC = () => {
     localStorage.setItem('perennia_purl_token', token);
     (window as any).__PURL_TOKEN__ = token;
     setPurlToken(token);
-    setSearchParams({ token });
+    // Remove token from URL to prevent leakage via referrer/history
+    const url = new URL(window.location.href);
+    url.searchParams.delete('token');
+    window.history.replaceState({}, '', url.toString());
     setFlowStep('app');
     sessionStorage.removeItem(SESSION_KEY);
   };

@@ -62,18 +62,7 @@ const AdminPanel = () => {
   const isCurrentUserSiteAdmin = userIsSiteAdmin ||
                                   (userRole === 'management' && localUser.organization_id);
 
-  // Debug logging
-  console.log('AdminPanel permissions:', {
-    userRole,
-    canAccessAdmin,
-    userIsSiteAdmin,
-    isCurrentUserPlatformAdmin,
-    isCurrentUserSiteAdmin,
-    isPlatformAdmin,
-    isSiteAdmin,
-    permissionsLoading,
-    localUser
-  });
+  // Permission state is available via React DevTools if needed for debugging
 
   // State
   const [loading, setLoading] = useState(true);
@@ -593,30 +582,11 @@ const AdminPanel = () => {
 
   // Access denied if user doesn't have admin permissions
   if (!canAccessAdmin) {
-    // Get localStorage debug info
-    let userFromStorage = null;
-    try {
-      userFromStorage = getUserData() || null;
-    } catch (e) {
-      userFromStorage = { error: 'Failed to parse user from localStorage' };
-    }
-
     return (
       <div className="admin-panel">
         <div className="access-denied" style={{ textAlign: 'center', padding: '60px 20px' }}>
           <h2>Access Denied</h2>
-          <p>You don't have permission to access the Admin Panel.</p>
-          <div style={{ fontSize: '11px', color: '#666', marginTop: '10px', textAlign: 'left', maxWidth: '400px', margin: '10px auto', background: '#f5f5f5', padding: '10px', borderRadius: '4px' }}>
-            <strong>Debug Info:</strong><br />
-            userRole: {userRole || 'undefined'}<br />
-            canAccessAdmin: {String(canAccessAdmin)}<br />
-            permissionsLoading: {String(permissionsLoading)}<br />
-            localUser.role: {localUser?.role || 'N/A'}<br />
-            localUser.permission_role: {localUser?.permission_role || 'N/A'}<br />
-            localStorage.user.id: {userFromStorage?.id || 'N/A'}<br />
-            localStorage.user.permission_role: {userFromStorage?.permission_role || 'N/A'}<br />
-            localStorage.user.role: {userFromStorage?.role || 'N/A'}
-          </div>
+          <p>You don't have permission to access this page.</p>
           <button className="btn-primary" onClick={() => navigate('/dashboard')}>
             Return to Dashboard
           </button>
