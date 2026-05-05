@@ -35,6 +35,7 @@ venv.bak/
 .env.*
 !.env.example
 !.env.template
+!.env.production
 
 # IDE
 .vscode/

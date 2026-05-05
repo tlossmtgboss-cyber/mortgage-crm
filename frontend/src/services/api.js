@@ -11,11 +11,13 @@ import { getToken, getRefreshToken, setTokens, clearTokens } from '../utils/toke
 const isNativeApp = Capacitor.isNativePlatform();
 const isLocalhost = !isNativeApp && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-export const API_BASE_URL = isNativeApp
-  ? 'https://api.perenniaai.com'  // Native iOS/Android — always production
-  : isLocalhost
-    ? (process.env.REACT_APP_API_URL || 'http://localhost:8000')
-    : 'https://api.perenniaai.com'; // Production web
+export const API_BASE_URL = import.meta.env.VITE_API_URL || (
+  isNativeApp
+    ? 'https://api.perenniaai.com'  // Native iOS/Android — always production
+    : isLocalhost
+      ? 'http://localhost:8000'
+      : 'https://api.perenniaai.com' // Production web
+);
 
 // Create axios instance with mobile app identification
 // On native iOS, route through certificate-pinned URLSession

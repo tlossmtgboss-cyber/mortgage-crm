@@ -9,11 +9,12 @@
 # production
 /build
 
-# Environment files (all variants except templates)
+# Environment files (all variants except templates and production)
 .env
 .env.*
 !.env.example
 !.env.template
+!.env.production
 
 # misc
 .DS_Store

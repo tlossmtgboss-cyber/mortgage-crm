@@ -77,8 +77,7 @@ export default defineConfig({
   },
 
   // Environment variable prefix (Vite uses VITE_ by default)
-  // This allows both VITE_ and REACT_APP_ prefixes during migration
-  envPrefix: ['VITE_', 'REACT_APP_'],
+  envPrefix: ['VITE_'],
 
   esbuild: {
     drop: process.env.NODE_ENV === 'production' ? ['debugger'] : [],
