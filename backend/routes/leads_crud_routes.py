@@ -10,7 +10,7 @@ Endpoints:
 - GET    /api/v1/leads/search  - Search leads by name
 """
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func, or_, cast, String, text
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -244,7 +244,10 @@ async def get_leads(
 
     try:
         # Apply org + role-based permission filtering (multi-tenant isolation)
-        query = db.query(Lead).options(joinedload(Lead.referral_partner))
+        query = db.query(Lead).options(
+            joinedload(Lead.referral_partner),
+            selectinload(Lead.owner),
+        )
         query = filter_leads_by_permissions(query, current_user, db)
         # Exclude soft-deleted records
         query = query.filter(Lead.deleted_at.is_(None))

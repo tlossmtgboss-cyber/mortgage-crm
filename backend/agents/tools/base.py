@@ -236,6 +236,10 @@ def execute_query(query: str, params: Optional[Dict] = None) -> List[Dict]:
         # Auto-inject WHERE clause for tenant-scoped tables
         query = _inject_tenant_filter(query, org_id)
 
+    # Enforce a LIMIT on all SELECT queries to prevent unbounded result sets
+    if "LIMIT" not in query.upper() and query.strip().upper().startswith("SELECT"):
+        query = query.rstrip(";") + " LIMIT 100"
+
     try:
         with get_db() as db:
             result = db.execute(text(query), params)

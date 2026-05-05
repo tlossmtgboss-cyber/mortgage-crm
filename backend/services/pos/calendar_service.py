@@ -12,7 +12,7 @@ from datetime import datetime, time, timedelta, timezone
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from database.models.pos import (
@@ -239,6 +239,12 @@ class CalendarService:
         ctx: AuditContext,
     ) -> BridgeBooking:
         """Book an appointment for the borrower."""
+        # Advisory lock keyed on application_id to prevent concurrent bookings
+        lock_key = hash(str(application.id)) % (2**31)
+        result = session.execute(text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": lock_key})
+        if not result.scalar():
+            raise ValueError("Another booking is in progress for this application. Please try again.")
+
         if meeting_type not in MEETING_TYPES:
             raise ValueError(f"Unknown meeting_type: {meeting_type}")
 

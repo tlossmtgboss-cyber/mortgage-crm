@@ -1887,7 +1887,7 @@ async def get_partner_referrals(
     seen_ids = set()
 
     # 1. Get leads with referral_partner_id matching this partner
-    leads_query = db.query(Lead).filter(Lead.referral_partner_id == partner_id).all()
+    leads_query = db.query(Lead).filter(Lead.referral_partner_id == partner_id).limit(500).all()
     for lead in leads_query:
         if lead.id not in seen_ids:
             seen_ids.add(lead.id)
@@ -1913,7 +1913,7 @@ async def get_partner_referrals(
         source_leads = db.query(Lead).filter(
             Lead.source.ilike(f"%{partner.name}%"),
             Lead.referral_partner_id != partner_id  # Avoid duplicates
-        ).all()
+        ).limit(500).all()
         for lead in source_leads:
             if lead.id not in seen_ids:
                 seen_ids.add(lead.id)
