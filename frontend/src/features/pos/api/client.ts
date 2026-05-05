@@ -71,8 +71,10 @@ async function request<T>(
   });
 
   if (resp.status === 429 && _retries < 3) {
-    const retryAfter = parseInt(resp.headers.get('Retry-After') || '2', 10);
-    const delay = Math.max(retryAfter, 1) * 1000;
+    const retryAfter = parseInt(resp.headers.get('Retry-After') || '0', 10);
+    const backoff = Math.min(Math.pow(2, _retries) * 1000, 30000);
+    const jitter = Math.random() * 500;
+    const delay = Math.max(retryAfter * 1000, backoff) + jitter;
     await new Promise(r => setTimeout(r, delay));
     return request<T>(method, path, body, _retries + 1);
   }

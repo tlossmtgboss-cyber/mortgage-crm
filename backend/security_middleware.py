@@ -537,6 +537,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             "/api/vapi/",
             "/api/v1/telephony/",
             "/api/v1/borrower/",
+            "/api/v1/pos/",
             "/lo/",
             "/portal/",
             "/api/portal/",
