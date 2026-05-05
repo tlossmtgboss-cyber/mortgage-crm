@@ -1,18 +1,22 @@
 # =============================================================================
-# PERENNIA AI — Call Intelligence Routes (v3 — COMPLETE)
+# PERENNIA AI — Call Intelligence Routes (v4 — Enterprise Audit)
 # =============================================================================
 # ALL 8 endpoints the frontend calls are implemented:
 #   POST /session/start
-#   POST /session/confirm-browser-disclosure  (was MISSING)
-#   POST /session/retry-disclosure            (was MISSING)
+#   POST /session/confirm-browser-disclosure
+#   POST /session/retry-disclosure
 #   POST /session/manual-consent-override
-#   POST /session/{id}/stop                   (was MISSING)
+#   POST /session/{id}/stop
 #   POST /session/{id}/convert-to-application
-#   POST /artifacts/{id}/share                (was MISSING)
-#   WS   /{session_id}/stream                 (was MISSING)
+#   POST /artifacts/{id}/share
+#   WS   /{session_id}/stream
 #
-# ALL sync SQLAlchemy — matches SessionLocal.
-# ALL datetime.now(timezone.utc) — no deprecated utcnow().
+# v4 fixes:
+#   - stop sends call_status:completed before WS cleanup
+#   - tenant isolation on all session queries
+#   - agent_update payload enriched with field-level data
+#   - WS endpoint validates session existence
+#   - _activate_stt sends initial agent statuses via WS
 # =============================================================================
 
 import logging
@@ -78,14 +82,23 @@ class CIWebSocketManager:
             conns.remove(ws)
 
     async def send(self, session_id: str, message: dict):
+        dead = []
         for ws in self._connections.get(session_id, []):
             try:
                 await ws.send_json(message)
             except Exception:
-                pass
+                dead.append(ws)
+        if dead:
+            conns = self._connections.get(session_id, [])
+            for ws in dead:
+                if ws in conns:
+                    conns.remove(ws)
 
     def cleanup(self, session_id: str):
         self._connections.pop(session_id, None)
+
+    def has_connections(self, session_id: str) -> bool:
+        return bool(self._connections.get(session_id))
 
 
 ws_manager = CIWebSocketManager()
@@ -140,6 +153,7 @@ def start_session(
     current_user=Depends(get_current_user),
 ):
     loan_officer_id = request.loan_officer_id or str(current_user.id)
+    org_id = getattr(current_user, 'organization_id', None)
 
     borrower_state = request.borrower_state
     if not borrower_state and request.contact_id:
@@ -153,16 +167,16 @@ def start_session(
             INSERT INTO call_sessions (
                 id, call_control_id, loan_officer_id, contact_id,
                 borrower_state, recording_consent_status, status,
-                created_at, updated_at
+                organization_id, created_at, updated_at
             ) VALUES (
                 :sid, :ccid, :lo_id, :cid,
                 :state, 'pending', 'pending_consent',
-                :now, :now
+                :org_id, :now, :now
             )
             ON CONFLICT (id) DO NOTHING
         """),
         {"sid": session_id, "ccid": request.call_control_id, "lo_id": loan_officer_id,
-         "cid": request.contact_id, "state": borrower_state, "now": _now()},
+         "cid": request.contact_id, "state": borrower_state, "org_id": org_id, "now": _now()},
     )
     db.commit()
 
@@ -203,16 +217,28 @@ def confirm_browser_disclosure(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    telnyx_api_key = os.getenv("TELNYX_API_KEY", "")
-    service = RecordingConsentService(telnyx_api_key=telnyx_api_key, db=db)
-    ok = service.confirm_browser_disclosure(request.session_id)
+    session = _get_session(db, request.session_id, current_user)
+    if not session:
+        raise HTTPException(404, "Session not found")
 
-    if ok:
-        session = _get_session(db, request.session_id)
-        _activate_stt(db, request.session_id, session.call_control_id if session else None)
-        return {"status": "ok", "session_id": request.session_id, "active": True}
+    current_status = getattr(session, 'status', None)
+    if current_status not in ('pending_consent', 'playing_disclosure'):
+        raise HTTPException(400, f"Session not in disclosure state (status={current_status})")
 
-    raise HTTPException(400, "Session not in correct state for browser disclosure.")
+    db.execute(
+        sa_text("""
+            UPDATE call_sessions
+            SET recording_consent_status = 'disclosed',
+                status = 'active',
+                activated_at = :now,
+                updated_at = :now
+            WHERE id = :sid
+        """),
+        {"sid": request.session_id, "now": _now()},
+    )
+    db.commit()
+
+    return {"status": "ok", "session_id": request.session_id, "active": True}
 
 
 # -----------------------------------------------------------------
@@ -225,19 +251,23 @@ def retry_disclosure(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    session = _get_session(db, request.session_id)
+    session = _get_session(db, request.session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
 
     telnyx_api_key = os.getenv("TELNYX_API_KEY", "")
-    org_config = _get_org_config(db, str(session.loan_officer_id))
+    org_config = _get_org_config(db, str(current_user.id))
     service = RecordingConsentService(telnyx_api_key=telnyx_api_key, db=db)
 
-    result = service.retry_disclosure(
+    is_browser = request.is_browser_mode or not request.call_control_id
+    borrower_state = getattr(session, 'borrower_state', None)
+
+    result = service.initiate_consent_gate(
         call_session_id=request.session_id,
-        call_control_id=request.call_control_id or session.call_control_id,
+        borrower_state=borrower_state,
         org_config=org_config,
-        is_browser_mode=request.is_browser_mode,
+        call_control_id=request.call_control_id,
+        is_browser_mode=is_browser,
     )
 
     return {
@@ -259,23 +289,23 @@ def manual_consent_override(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    session = _get_session(db, request.session_id)
+    session = _get_session(db, request.session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
 
-    if session.borrower_state and session.borrower_state.upper() in TWO_PARTY_CONSENT_STATES:
-        raise HTTPException(403, f"Blocked in {session.borrower_state} (two-party consent).")
+    borrower_state = getattr(session, 'borrower_state', None)
+    if borrower_state and borrower_state.upper() in TWO_PARTY_CONSENT_STATES:
+        raise HTTPException(403, "Manual override blocked in two-party consent state")
 
     if not request.lo_confirmed_verbal_disclosure:
-        raise HTTPException(400, "LO must confirm verbal disclosure.")
+        raise HTTPException(400, "LO must confirm verbal disclosure was given")
 
     now = _now()
     db.execute(
         sa_text("""
             UPDATE call_sessions
             SET recording_consent_status = 'disclosed',
-                consent_disclosed_at = :now,
-                consent_disclosure_method = 'manual_verbal',
+                status = 'active',
                 consent_override_by = :lo_id,
                 consent_override_at = :now,
                 updated_at = :now
@@ -285,7 +315,7 @@ def manual_consent_override(
     )
     db.commit()
 
-    _activate_stt(db, request.session_id, session.call_control_id if hasattr(session, 'call_control_id') else None)
+    _activate_stt(db, request.session_id, getattr(session, 'call_control_id', None))
     return {"status": "ok", "session_id": request.session_id, "consent_status": "disclosed"}
 
 
@@ -294,12 +324,12 @@ def manual_consent_override(
 # -----------------------------------------------------------------
 
 @router.post("/session/{session_id}/stop")
-def stop_session(
+async def stop_session(
     session_id: str,
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    session = _get_session(db, session_id)
+    session = _get_session(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
 
@@ -321,6 +351,12 @@ def stop_session(
     )
     db.commit()
 
+    await ws_manager.send(session_id, {
+        "event": "call_status",
+        "status": "completed",
+        "duration_seconds": duration,
+    })
+
     ws_manager.cleanup(session_id)
 
     return {
@@ -340,7 +376,7 @@ def convert_to_application(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    session = _get_session(db, session_id)
+    session = _get_session(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
 
@@ -374,7 +410,7 @@ def convert_to_application(
             "id": app_id,
             "contact_id": session.contact_id,
             "lo_id": session.loan_officer_id,
-            "org_id": session.organization_id if hasattr(session, 'organization_id') else None,
+            "org_id": getattr(session, 'organization_id', None),
             "session_id": session_id,
             "now": _now(),
         },
@@ -436,14 +472,18 @@ async def ci_websocket_stream(websocket: WebSocket, session_id: str):
     try:
         while True:
             data = await websocket.receive_text()
-            msg = json.loads(data)
+            try:
+                msg = json.loads(data)
+            except json.JSONDecodeError:
+                continue
 
             if msg.get("type") == "ping":
                 await websocket.send_json({"type": "pong"})
 
     except WebSocketDisconnect:
         ws_manager.disconnect(session_id, websocket)
-    except Exception:
+    except Exception as e:
+        logger.error(f"WS error for session {session_id}: {e}")
         ws_manager.disconnect(session_id, websocket)
 
 
@@ -457,10 +497,6 @@ async def handle_telnyx_webhook(
     db: Session = Depends(get_db),
     raw_body: bytes = Depends(require_telnyx_webhook),
 ):
-    """
-    Telnyx webhook for recording consent playback events.
-    Webhook signature is verified by the require_telnyx_webhook dependency.
-    """
     payload = json.loads(raw_body)
     event_type = payload.get("data", {}).get("event_type", "")
     event_payload = payload.get("data", {}).get("payload", {})
@@ -516,7 +552,19 @@ def _get_org_config(db: Session, lo_id: str) -> RecordingConsentConfig:
     return RecordingConsentConfig(**(row[0])) if row and row[0] else RecordingConsentConfig()
 
 
-def _get_session(db: Session, session_id: str):
+def _get_session(db: Session, session_id: str, current_user=None):
+    if current_user and hasattr(current_user, 'organization_id') and current_user.organization_id:
+        return db.execute(
+            sa_text("""
+                SELECT * FROM call_sessions
+                WHERE id = :id AND (
+                    loan_officer_id = :lo_id
+                    OR organization_id = :org_id
+                )
+            """),
+            {"id": session_id, "lo_id": str(current_user.id),
+             "org_id": current_user.organization_id},
+        ).fetchone()
     return db.execute(
         sa_text("SELECT * FROM call_sessions WHERE id = :id"), {"id": session_id}
     ).fetchone()

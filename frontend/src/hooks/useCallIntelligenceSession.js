@@ -1,23 +1,15 @@
 /**
- * PERENNIA AI — useCallIntelligenceSession (v2 — Audit Fixes)
+ * PERENNIA AI — useCallIntelligenceSession (v3 — Enterprise Audit)
  *
- * FIXES:
- *   1. Browser-mode disclosure: plays WAV through browser speakers before mic activates
- *   2. Retry support for failed disclosures
- *   3. Proper cleanup of Audio objects
- *   4. Unknown borrower state handled (backend defaults to disclosure)
+ * Full lifecycle: idle → requesting → playing_disclosure → active → completed
  *
- * This hook manages the full lifecycle:
- *   idle → requesting → playing_disclosure → active → completed
- *
- * BROWSER MODE (no Telnyx call):
- *   Backend returns disclosure_audio_url → hook plays it through browser →
- *   borrower hears it through LO's phone speaker → hook calls
- *   /confirm-browser-disclosure → backend activates Deepgram
- *
- * TELNYX MODE (call routed through Telnyx):
- *   Backend injects audio via Telnyx API → webhook fires →
- *   backend activates Deepgram → WebSocket pushes consent_cleared
+ * v3 fixes:
+ *   - WebSocket reconnect attaches event handlers
+ *   - Stale sessionState in onclose fixed via ref
+ *   - Event IDs use monotonic counter
+ *   - wsConnected state for UI feedback
+ *   - Callbacks stored in refs to avoid stale closures
+ *   - Agent event maps backend payload (status/field_count) correctly
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -47,7 +39,7 @@ export const AGENT_CONFIG = {
   property:      { label: 'Property',      icon: '\u{1F3E0}', color: '#34D399' },
   financial:     { label: 'Financial',     icon: '\u{1F4B0}', color: '#FBBF24' },
   employment:    { label: 'Employment',    icon: '\u{1F4BC}', color: '#A78BFA' },
-  compliance:    { label: 'Compliance',    icon: '\u2696\uFE0F', color: '#F87171' },
+  compliance:    { label: 'Compliance',    icon: '⚖️', color: '#F87171' },
   intent:        { label: 'Intent',        icon: '\u{1F3AF}', color: '#FB923C' },
 };
 
@@ -59,11 +51,13 @@ export function formatDuration(seconds) {
 
 export function getArtifactIcon(type) {
   const icons = {
-    note: '\u{1F4CB}', action_item: '\u2705', follow_up: '\u{1F4DE}',
+    note: '\u{1F4CB}', action_item: '✅', follow_up: '\u{1F4DE}',
     document_request: '\u{1F4C4}', qualification: '\u{1F3E6}', application: '\u{1F4DD}',
   };
   return icons[type] || '\u{1F4CE}';
 }
+
+let _eventCounter = 0;
 
 export function useCallIntelligenceSession({
   callControlId,
@@ -82,12 +76,18 @@ export function useCallIntelligenceSession({
   const [agentStatuses, setAgentStatuses] = useState({});
   const [agentEvents, setAgentEvents] = useState([]);
   const [duration, setDuration] = useState(0);
+  const [wsConnected, setWsConnected] = useState(false);
 
   const wsRef = useRef(null);
   const timeoutRef = useRef(null);
   const audioRef = useRef(null);
   const durationRef = useRef(null);
   const activeStartRef = useRef(null);
+  const sessionStateRef = useRef(sessionState);
+  const callbacksRef = useRef({ onConsentCleared, onSessionActive, onError });
+
+  sessionStateRef.current = sessionState;
+  callbacksRef.current = { onConsentCleared, onSessionActive, onError };
 
   useEffect(() => {
     return () => {
@@ -114,11 +114,8 @@ export function useCallIntelligenceSession({
     return () => clearInterval(durationRef.current);
   }, [sessionState]);
 
-  useEffect(() => {
-    if (!sessionId || sessionState === SESSION_STATES.IDLE) return;
-
-    const ws = new WebSocket(`${websocketUrl}/${sessionId}/stream`);
-    wsRef.current = ws;
+  const _attachWsHandlers = useCallback((ws, sessId) => {
+    ws.onopen = () => setWsConnected(true);
 
     ws.onmessage = (event) => {
       try {
@@ -133,8 +130,8 @@ export function useCallIntelligenceSession({
               status: CONSENT_STATUSES.DISCLOSED,
               manualOverride: data.manual_override || false,
             }));
-            onConsentCleared?.();
-            onSessionActive?.();
+            callbacksRef.current.onConsentCleared?.();
+            callbacksRef.current.onSessionActive?.();
             break;
 
           case 'agent_update':
@@ -142,26 +139,37 @@ export function useCallIntelligenceSession({
           case 'agent_error':
           case 'confidence_flag': {
             const agent = data.agent || data.agent_type || 'system';
-            const config = AGENT_CONFIG[agent] || { label: agent, icon: '🔍', color: '#94a3b8' };
+            const config = AGENT_CONFIG[agent] || { label: agent, icon: '\u{1F50D}', color: '#94a3b8' };
+
+            const derivedStatus = data.status === 'complete' ? 'agent_complete'
+              : data.status === 'error' ? 'agent_error'
+              : data.event;
+
+            const message = data.message || data.field_name || data.detail
+              || (data.field_count ? `${data.field_count} field(s) extracted` : '')
+              || '';
+
             const eventEntry = {
-              id: Date.now() + Math.random(),
+              id: ++_eventCounter,
               agent,
               label: config.label,
               icon: config.icon,
               color: config.color,
-              type: data.event,
-              message: data.message || data.field_name || data.detail || '',
+              type: derivedStatus,
+              message,
               value: data.value || data.extracted_value || null,
               confidence: data.confidence ?? null,
+              fieldCount: data.field_count || 0,
+              artifactCount: data.artifact_count || 0,
               timestamp: Date.now(),
             };
             setAgentEvents(prev => [...prev.slice(-100), eventEntry]);
             setAgentStatuses(prev => ({
               ...prev,
               [agent]: {
-                status: data.event === 'agent_complete' ? 'complete' :
-                        data.event === 'agent_error' ? 'error' : 'active',
-                lastMessage: eventEntry.message,
+                status: derivedStatus === 'agent_complete' ? 'complete' :
+                        derivedStatus === 'agent_error' ? 'error' : 'active',
+                lastMessage: message,
                 lastUpdate: Date.now(),
               },
             }));
@@ -173,29 +181,47 @@ export function useCallIntelligenceSession({
               setSessionState(SESSION_STATES.COMPLETED);
             }
             break;
+
+          default:
+            break;
         }
       } catch (e) {
         console.error('WS message parse error:', e);
       }
     };
 
-    ws.onerror = () => console.error('CI WebSocket error');
+    ws.onerror = () => {
+      console.error('CI WebSocket error');
+      setWsConnected(false);
+    };
 
     ws.onclose = () => {
+      setWsConnected(false);
+      const currentState = sessionStateRef.current;
       if (
-        sessionState === SESSION_STATES.ACTIVE ||
-        sessionState === SESSION_STATES.PLAYING_DISCLOSURE
+        currentState === SESSION_STATES.ACTIVE ||
+        currentState === SESSION_STATES.PLAYING_DISCLOSURE
       ) {
         setTimeout(() => {
-          if (wsRef.current?.readyState === WebSocket.CLOSED && sessionId) {
-            wsRef.current = new WebSocket(`${websocketUrl}/${sessionId}/stream`);
+          if (wsRef.current?.readyState === WebSocket.CLOSED && sessId) {
+            const reconnWs = new WebSocket(`${websocketUrl}/${sessId}/stream`);
+            wsRef.current = reconnWs;
+            _attachWsHandlers(reconnWs, sessId);
           }
         }, 2000);
       }
     };
+  }, [websocketUrl]);
+
+  useEffect(() => {
+    if (!sessionId || sessionState === SESSION_STATES.IDLE) return;
+
+    const ws = new WebSocket(`${websocketUrl}/${sessionId}/stream`);
+    wsRef.current = ws;
+    _attachWsHandlers(ws, sessionId);
 
     return () => ws.close();
-  }, [sessionId, websocketUrl]);
+  }, [sessionId, websocketUrl, _attachWsHandlers]);
 
   const _playBrowserDisclosure = useCallback(
     async (audioUrl, sessId) => {
@@ -242,6 +268,8 @@ export function useCallIntelligenceSession({
   const startSession = useCallback(async () => {
     setSessionState(SESSION_STATES.REQUESTING_CONSENT);
     setErrorMessage(null);
+    setAgentEvents([]);
+    setAgentStatuses({});
 
     try {
       const isBrowserMode = !callControlId;
@@ -251,9 +279,9 @@ export function useCallIntelligenceSession({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           call_control_id: callControlId || null,
-          contact_id: contactId,
-          borrower_state: borrowerState,
-          loan_officer_id: loanOfficerId,
+          contact_id: contactId || null,
+          borrower_state: borrowerState || null,
+          loan_officer_id: loanOfficerId || null,
           is_browser_mode: isBrowserMode,
         }),
       });
@@ -284,8 +312,8 @@ export function useCallIntelligenceSession({
             ...prev,
             status: CONSENT_STATUSES.DISCLOSED,
           }));
-          onConsentCleared?.();
-          onSessionActive?.();
+          callbacksRef.current.onConsentCleared?.();
+          callbacksRef.current.onSessionActive?.();
         } catch (audioErr) {
           setSessionState(SESSION_STATES.CONSENT_FAILED);
           setErrorMessage(audioErr.message);
@@ -323,13 +351,13 @@ export function useCallIntelligenceSession({
       }
 
       setSessionState(SESSION_STATES.ACTIVE);
-      onConsentCleared?.();
-      onSessionActive?.();
+      callbacksRef.current.onConsentCleared?.();
+      callbacksRef.current.onSessionActive?.();
 
     } catch (err) {
       setSessionState(SESSION_STATES.ERROR);
       setErrorMessage(err.message);
-      onError?.(err);
+      callbacksRef.current.onError?.(err);
     }
   }, [callControlId, contactId, borrowerState, loanOfficerId, _playBrowserDisclosure]);
 
@@ -363,8 +391,8 @@ export function useCallIntelligenceSession({
           await _playBrowserDisclosure(data.disclosure_audio_url, sessionId);
           setSessionState(SESSION_STATES.ACTIVE);
           setConsentInfo((prev) => ({ ...prev, status: CONSENT_STATUSES.DISCLOSED }));
-          onConsentCleared?.();
-          onSessionActive?.();
+          callbacksRef.current.onConsentCleared?.();
+          callbacksRef.current.onSessionActive?.();
         } catch (audioErr) {
           setSessionState(SESSION_STATES.CONSENT_FAILED);
           setErrorMessage(audioErr.message);
@@ -414,8 +442,8 @@ export function useCallIntelligenceSession({
         status: CONSENT_STATUSES.DISCLOSED,
         manualOverride: true,
       }));
-      onConsentCleared?.();
-      onSessionActive?.();
+      callbacksRef.current.onConsentCleared?.();
+      callbacksRef.current.onSessionActive?.();
     } catch (err) {
       setErrorMessage(err.message);
     }
@@ -444,6 +472,7 @@ export function useCallIntelligenceSession({
     agentStatuses,
     agentEvents,
     duration,
+    wsConnected,
 
     isIdle: sessionState === SESSION_STATES.IDLE,
     isPlayingDisclosure: sessionState === SESSION_STATES.PLAYING_DISCLOSURE,

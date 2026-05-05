@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { formatDuration, AGENT_CONFIG } from '../../hooks/useCallIntelligenceSession';
 
 const CIStatusStrip = ({
@@ -22,12 +22,10 @@ const CIStatusStrip = ({
     }
   }, [agentEvents.length, expanded]);
 
-  // Close dropdown when sidebar opens
   useEffect(() => {
     if (panelOpen) setExpanded(false);
   }, [panelOpen]);
 
-  // Click-outside to close dropdown
   useEffect(() => {
     if (!expanded) return;
     const handleClick = (e) => {
@@ -42,7 +40,6 @@ const CIStatusStrip = ({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [expanded]);
 
-  // Escape key to close dropdown
   useEffect(() => {
     if (!expanded) return;
     const handleKey = (e) => {
@@ -68,6 +65,13 @@ const CIStatusStrip = ({
     }
   };
 
+  const handleStripKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleStripClick();
+    }
+  };
+
   return (
     <>
       <style>{`
@@ -82,14 +86,19 @@ const CIStatusStrip = ({
           cursor: pointer;
           user-select: none;
           transition: all 0.2s ease;
+          padding-top: env(safe-area-inset-top, 0px);
         }
         .ci-strip:hover { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); }
+        .ci-strip:focus-visible {
+          outline: 2px solid #60a5fa;
+          outline-offset: -2px;
+        }
         .ci-strip__bar {
           display: flex;
           align-items: center;
           gap: 10px;
           padding: 8px 16px;
-          min-height: 40px;
+          min-height: 44px;
         }
         .ci-strip__rec-dot {
           width: 8px;
@@ -103,11 +112,16 @@ const CIStatusStrip = ({
           0%, 100% { opacity: 1; }
           50% { opacity: 0.3; }
         }
+        @media (prefers-reduced-motion: reduce) {
+          .ci-strip__rec-dot { animation: none !important; }
+          .ci-strip__agent-pip--active { animation: none !important; }
+          .ci-panel { animation: none !important; }
+        }
         .ci-strip__timer {
           font-family: 'SF Mono', 'Fira Code', monospace;
           font-size: 13px;
           font-weight: 600;
-          color: #f87171;
+          color: #fca5a5;
           min-width: 40px;
         }
         .ci-strip__divider {
@@ -118,7 +132,7 @@ const CIStatusStrip = ({
         }
         .ci-strip__status {
           font-size: 12px;
-          color: #94a3b8;
+          color: #cbd5e1;
           flex: 1;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -126,7 +140,7 @@ const CIStatusStrip = ({
         }
         .ci-strip__status em {
           font-style: normal;
-          color: #e2e8f0;
+          color: #f1f5f9;
         }
         .ci-strip__agents {
           display: flex;
@@ -157,7 +171,7 @@ const CIStatusStrip = ({
           100% { box-shadow: 0 0 0 0 currentColor; }
         }
         .ci-strip__chevron {
-          color: #64748b;
+          color: #94a3b8;
           font-size: 10px;
           transition: transform 0.2s ease;
           flex-shrink: 0;
@@ -166,7 +180,7 @@ const CIStatusStrip = ({
 
         .ci-panel {
           position: fixed;
-          top: 41px;
+          top: calc(45px + env(safe-area-inset-top, 0px));
           right: 0;
           width: 340px;
           max-height: 400px;
@@ -194,17 +208,18 @@ const CIStatusStrip = ({
         .ci-panel__title {
           font-size: 11px;
           font-weight: 600;
-          color: #64748b;
+          color: #94a3b8;
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
         .ci-panel__count {
           font-size: 11px;
-          color: #475569;
+          color: #64748b;
         }
         .ci-panel__events {
           flex: 1;
           overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
           padding: 6px 0;
           scrollbar-width: thin;
           scrollbar-color: #1e293b transparent;
@@ -238,7 +253,7 @@ const CIStatusStrip = ({
         }
         .ci-event__time {
           font-size: 10px;
-          color: #475569;
+          color: #64748b;
           flex-shrink: 0;
           margin-top: 2px;
         }
@@ -247,7 +262,7 @@ const CIStatusStrip = ({
         .ci-panel__empty {
           padding: 24px 14px;
           text-align: center;
-          color: #475569;
+          color: #94a3b8;
           font-size: 12px;
         }
         .ci-panel__empty-icon { font-size: 20px; margin-bottom: 6px; }
@@ -264,29 +279,32 @@ const CIStatusStrip = ({
         ref={stripRef}
         className={`ci-strip ${isStarting ? 'ci-strip--starting' : ''} ${sessionState === 'completed' ? 'ci-strip--completed' : ''}`}
         onClick={handleStripClick}
-        role="status"
-        aria-label={isActive ? `Call Intelligence recording: ${formatDuration(duration)}` : 'Call Intelligence'}
+        onKeyDown={handleStripKeyDown}
+        role="button"
+        tabIndex={0}
+        aria-label={isActive ? `Call Intelligence recording: ${formatDuration(duration)}. Click to ${panelOpen || expanded ? 'close' : 'open'} details.` : 'Call Intelligence'}
+        aria-expanded={panelOpen || expanded}
       >
         <div className="ci-strip__bar">
-          <div className="ci-strip__rec-dot" />
+          <div className="ci-strip__rec-dot" role="img" aria-hidden="true" />
           <span className="ci-strip__timer">
             {isStarting ? '...' : formatDuration(duration)}
           </span>
-          <div className="ci-strip__divider" />
+          <div className="ci-strip__divider" aria-hidden="true" />
           <span className="ci-strip__status">
             {isStarting ? (
               'Starting CI session...'
             ) : sessionState === 'completed' ? (
               <><em>Complete</em> — {agentEvents.length} events captured</>
             ) : latestEvent ? (
-              <>{latestEvent.icon} <em>{latestEvent.label}</em>: {latestEvent.message || 'analyzing...'}{latestEvent.value ? ` → ${latestEvent.value}` : ''}</>
+              <><em>{latestEvent.label}</em>: {latestEvent.message || 'analyzing...'}{latestEvent.value ? ` → ${latestEvent.value}` : ''}</>
             ) : activeAgents.length > 0 ? (
               `${activeAgents.length} agent${activeAgents.length > 1 ? 's' : ''} analyzing...`
             ) : (
               'Listening — waiting for speech...'
             )}
           </span>
-          <div className="ci-strip__agents">
+          <div className="ci-strip__agents" aria-hidden="true">
             {Object.entries(AGENT_CONFIG).map(([key, cfg]) => {
               const status = agentStatuses[key];
               if (!status) return null;
@@ -302,14 +320,14 @@ const CIStatusStrip = ({
               );
             })}
           </div>
-          <span className={`ci-strip__chevron ${expanded ? 'ci-strip__chevron--up' : ''}`}>
+          <span className={`ci-strip__chevron ${expanded ? 'ci-strip__chevron--up' : ''}`} aria-hidden="true">
             ▼
           </span>
         </div>
       </div>
 
       {expanded && (
-        <div className="ci-panel" ref={panelRef}>
+        <div className="ci-panel" ref={panelRef} role="region" aria-label="Agent activity feed">
           <div className="ci-panel__header">
             <span className="ci-panel__title">Agent Activity</span>
             <span className="ci-panel__count">{agentEvents.length} events</span>
@@ -317,7 +335,7 @@ const CIStatusStrip = ({
           <div className="ci-panel__events">
             {agentEvents.length === 0 ? (
               <div className="ci-panel__empty">
-                <div className="ci-panel__empty-icon">🔍</div>
+                <div className="ci-panel__empty-icon" aria-hidden="true">{'\u{1F50D}'}</div>
                 Waiting for AI agents to detect data...
               </div>
             ) : (
@@ -326,13 +344,13 @@ const CIStatusStrip = ({
                   key={evt.id}
                   className={`ci-event ${evt.type === 'agent_complete' ? 'ci-event--complete' : ''} ${evt.type === 'agent_error' ? 'ci-event--error' : ''}`}
                 >
-                  <span className="ci-event__icon">{evt.icon}</span>
+                  <span className="ci-event__icon" role="img" aria-hidden="true">{evt.icon}</span>
                   <div className="ci-event__body">
                     <div className="ci-event__msg">
                       <strong>{evt.label}</strong>: {evt.message || (evt.type === 'agent_complete' ? 'extraction complete' : 'analyzing...')}
                     </div>
                     {evt.value && (
-                      <div className="ci-event__value">→ {evt.value}</div>
+                      <div className="ci-event__value">{'→'} {evt.value}</div>
                     )}
                   </div>
                   <span className="ci-event__time">

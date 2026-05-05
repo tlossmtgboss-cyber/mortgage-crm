@@ -705,6 +705,7 @@ const AriaVoiceApp = () => {
           agentStatuses={ci.agentStatuses}
           agentEvents={ci.agentEvents}
           sessionState={ci.sessionState}
+          wsConnected={ci.wsConnected}
           onClose={() => setShowCIPanel(false)}
         />
       )}

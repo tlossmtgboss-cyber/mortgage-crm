@@ -6,7 +6,7 @@
  * - Event callbacks for the Aria UI
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useCallIntelligenceSession } from './useCallIntelligenceSession';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
@@ -14,9 +14,16 @@ const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
 
 const useAriaCallIntelligence = ({ onSessionStarted, onSessionEnded } = {}) => {
   const [isStarting, setIsStarting] = useState(false);
+  const onSessionStartedRef = useRef(onSessionStarted);
+  const onSessionEndedRef = useRef(onSessionEnded);
+  onSessionStartedRef.current = onSessionStarted;
+  onSessionEndedRef.current = onSessionEnded;
 
   const ciSession = useCallIntelligenceSession({
-    websocketUrl: `${WS_BASE_URL}/api/v1/call-intelligence/session`,
+    websocketUrl: `${WS_BASE_URL}/api/v1/call-intelligence`,
+    onSessionActive: () => {
+      onSessionStartedRef.current?.(ciSession.sessionId);
+    },
   });
 
   const startRecording = useCallback(async () => {
@@ -25,28 +32,23 @@ const useAriaCallIntelligence = ({ onSessionStarted, onSessionEnded } = {}) => {
     setIsStarting(true);
     try {
       await ciSession.startSession();
-      if (ciSession.sessionId) {
-        onSessionStarted?.(ciSession.sessionId);
-      }
-      return ciSession.sessionId;
     } catch (err) {
       console.error('[AriaCI] Failed to start recording:', err);
-      return null;
     } finally {
       setIsStarting(false);
     }
-  }, [ciSession.isActive, ciSession.startSession, ciSession.sessionId, isStarting, onSessionStarted]);
+  }, [ciSession.isActive, ciSession.startSession, isStarting]);
 
   const stopRecording = useCallback(async () => {
     if (!ciSession.isActive) return;
 
     try {
       await ciSession.stopSession();
-      onSessionEnded?.();
+      onSessionEndedRef.current?.();
     } catch (err) {
       console.error('[AriaCI] Failed to stop recording:', err);
     }
-  }, [ciSession.isActive, ciSession.stopSession, onSessionEnded]);
+  }, [ciSession.isActive, ciSession.stopSession]);
 
   return {
     sessionId: ciSession.sessionId,
@@ -56,11 +58,11 @@ const useAriaCallIntelligence = ({ onSessionStarted, onSessionEnded } = {}) => {
     duration: ciSession.duration || 0,
     agentStatuses: ciSession.agentStatuses || {},
     agentEvents: ciSession.agentEvents || [],
+    wsConnected: ciSession.wsConnected || false,
 
     startRecording,
     stopRecording,
 
-    // Consent state pass-through
     consentInfo: ciSession.consentInfo,
     errorMessage: ciSession.errorMessage,
     isConsentFailed: ciSession.isConsentFailed,

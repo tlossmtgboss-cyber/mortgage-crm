@@ -1,25 +1,28 @@
-import React, { useRef, useEffect, useMemo, useCallback } from 'react';
+import React, { useRef, useEffect, useMemo } from 'react';
 import { formatDuration } from '../../hooks/useCallIntelligenceSession';
 
 const QUADRANTS = [
   {
     key: 'borrower',
     label: 'Borrower',
-    icon: '👤',
+    icon: '\u{1F464}',
+    ariaLabel: 'Borrower identity',
     color: '#60A5FA',
     agents: ['identity', 'employment'],
   },
   {
     key: 'property',
     label: 'Property & Loan',
-    icon: '🏠',
+    icon: '\u{1F3E0}',
+    ariaLabel: 'Property and loan details',
     color: '#34D399',
     agents: ['property', 'intent'],
   },
   {
     key: 'financial',
     label: 'Financial',
-    icon: '💰',
+    icon: '\u{1F4B0}',
+    ariaLabel: 'Financial information',
     color: '#FBBF24',
     agents: ['financial'],
   },
@@ -27,6 +30,7 @@ const QUADRANTS = [
     key: 'compliance',
     label: 'Compliance',
     icon: '⚖️',
+    ariaLabel: 'Compliance monitoring',
     color: '#F87171',
     agents: ['compliance', 'transcription'],
   },
@@ -39,6 +43,7 @@ const CILiveSidebar = ({
   agentStatuses = {},
   agentEvents = [],
   sessionState,
+  wsConnected = false,
   onClose,
 }) => {
   const feedRef = useRef(null);
@@ -50,12 +55,10 @@ const CILiveSidebar = ({
     }
   }, [agentEvents.length]);
 
-  // Focus close button on mount
   useEffect(() => {
     closeRef.current?.focus();
   }, []);
 
-  // Escape key to close
   useEffect(() => {
     const handleKey = (e) => {
       if (e.key === 'Escape') onClose();
@@ -76,6 +79,7 @@ const CILiveSidebar = ({
   }, [agentEvents, agentStatuses]);
 
   const isCompleted = sessionState === 'completed';
+  const firstTimestamp = agentEvents[0]?.timestamp || 0;
 
   return (
     <>
@@ -84,17 +88,26 @@ const CILiveSidebar = ({
           position: fixed;
           top: 0; right: 0; bottom: 0;
           width: 100%; max-width: 420px;
-          z-index: 1000;
+          z-index: 1050;
           background: #060A10;
           box-shadow: -4px 0 24px rgba(0,0,0,0.5);
           display: flex;
           flex-direction: column;
           animation: ci-sb-slide 0.3s ease;
           font-family: 'DM Sans', -apple-system, sans-serif;
+          padding-top: env(safe-area-inset-top, 0px);
         }
         @keyframes ci-sb-slide {
           from { transform: translateX(100%); }
           to { transform: translateX(0); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .ci-sidebar { animation: none; }
+          .ci-sb-rec { animation: none !important; }
+          .ci-quad__status--active { animation: none !important; }
+          .ci-quad__pulse-dot { animation: none !important; }
+          .ci-quad__item { animation: none !important; }
+          .ci-sb-evt { animation: none !important; }
         }
 
         .ci-sb-header {
@@ -130,6 +143,21 @@ const CILiveSidebar = ({
           color: #e2e8f0;
           flex: 1;
         }
+        .ci-sb-ws-badge {
+          font-size: 10px;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-weight: 500;
+          flex-shrink: 0;
+        }
+        .ci-sb-ws-badge--ok {
+          background: rgba(16,185,129,0.15);
+          color: #34d399;
+        }
+        .ci-sb-ws-badge--err {
+          background: rgba(239,68,68,0.15);
+          color: #fca5a5;
+        }
         .ci-sb-timer {
           font-family: 'SF Mono', 'Fira Code', monospace;
           font-size: 13px;
@@ -140,8 +168,8 @@ const CILiveSidebar = ({
         .ci-sb-close {
           background: none;
           border: 1px solid rgba(255,255,255,0.1);
-          color: #94a3b8;
-          width: 32px; height: 32px;
+          color: #cbd5e1;
+          width: 44px; height: 44px;
           border-radius: 8px;
           cursor: pointer;
           font-size: 16px;
@@ -153,7 +181,11 @@ const CILiveSidebar = ({
         }
         .ci-sb-close:hover {
           background: rgba(255,255,255,0.06);
-          color: #e2e8f0;
+          color: #f1f5f9;
+        }
+        .ci-sb-close:focus-visible {
+          outline: 2px solid #60a5fa;
+          outline-offset: 2px;
         }
 
         .ci-sb-grid {
@@ -201,11 +233,12 @@ const CILiveSidebar = ({
           background: #10b981;
         }
         .ci-quad__status--idle {
-          background: #334155;
+          background: #475569;
         }
         .ci-quad__items {
           flex: 1;
           overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
         }
         .ci-quad__items::-webkit-scrollbar { display: none; }
@@ -222,7 +255,7 @@ const CILiveSidebar = ({
         }
         .ci-quad__field {
           font-size: 10px;
-          color: #64748b;
+          color: #94a3b8;
           text-transform: uppercase;
           letter-spacing: 0.3px;
           flex-shrink: 0;
@@ -241,7 +274,7 @@ const CILiveSidebar = ({
         }
         .ci-quad__empty {
           font-size: 11px;
-          color: #334155;
+          color: #64748b;
           font-style: italic;
           margin-top: 4px;
         }
@@ -249,7 +282,7 @@ const CILiveSidebar = ({
           position: absolute;
           bottom: 8px; right: 8px;
           font-size: 9px;
-          color: #475569;
+          color: #94a3b8;
           display: flex;
           align-items: center;
           gap: 4px;
@@ -278,17 +311,18 @@ const CILiveSidebar = ({
         .ci-sb-feed__title {
           font-size: 11px;
           font-weight: 600;
-          color: #475569;
+          color: #94a3b8;
           text-transform: uppercase;
           letter-spacing: 0.5px;
         }
         .ci-sb-feed__count {
           font-size: 11px;
-          color: #334155;
+          color: #64748b;
         }
         .ci-sb-feed__scroll {
           flex: 1;
           overflow-y: auto;
+          -webkit-overflow-scrolling: touch;
           padding: 0 16px 16px;
           scrollbar-width: thin;
           scrollbar-color: #1e293b transparent;
@@ -312,11 +346,11 @@ const CILiveSidebar = ({
         }
         .ci-sb-evt__msg {
           font-size: 12px;
-          color: #94a3b8;
+          color: #cbd5e1;
           line-height: 1.4;
         }
         .ci-sb-evt__msg strong {
-          color: #cbd5e1;
+          color: #e2e8f0;
         }
         .ci-sb-evt__val {
           font-size: 11px;
@@ -326,7 +360,7 @@ const CILiveSidebar = ({
         }
         .ci-sb-evt__time {
           font-size: 10px;
-          color: #334155;
+          color: #64748b;
           flex-shrink: 0;
           font-family: 'SF Mono', monospace;
         }
@@ -349,28 +383,37 @@ const CILiveSidebar = ({
         }
         .ci-sb-empty__text {
           font-size: 13px;
-          color: #475569;
+          color: #94a3b8;
           line-height: 1.5;
         }
       `}</style>
 
       <div className="ci-sidebar" role="dialog" aria-label="Call Intelligence dashboard" aria-modal="true">
         <div className="ci-sb-header">
-          <div className={`ci-sb-rec ${isStarting ? 'ci-sb-rec--starting' : ''} ${isCompleted ? 'ci-sb-rec--done' : ''}`} />
-          <span className="ci-sb-title">
+          <div
+            className={`ci-sb-rec ${isStarting ? 'ci-sb-rec--starting' : ''} ${isCompleted ? 'ci-sb-rec--done' : ''}`}
+            role="img"
+            aria-label={isStarting ? 'Starting' : isCompleted ? 'Complete' : 'Recording'}
+          />
+          <h2 className="ci-sb-title">
             {isStarting ? 'Starting...' : isCompleted ? 'Session Complete' : 'Call Intelligence'}
-          </span>
+          </h2>
+          {isActive && (
+            <span className={`ci-sb-ws-badge ${wsConnected ? 'ci-sb-ws-badge--ok' : 'ci-sb-ws-badge--err'}`}>
+              {wsConnected ? 'LIVE' : 'RECONNECTING'}
+            </span>
+          )}
           <span className={`ci-sb-timer ${isCompleted ? 'ci-sb-timer--done' : ''}`}>
             {isStarting ? '...' : formatDuration(duration)}
           </span>
-          <button className="ci-sb-close" ref={closeRef} onClick={onClose} aria-label="Close panel">
+          <button className="ci-sb-close" ref={closeRef} onClick={onClose} aria-label="Close Call Intelligence panel">
             ✕
           </button>
         </div>
 
         {!isActive && !isStarting && !isCompleted ? (
           <div className="ci-sb-empty">
-            <div className="ci-sb-empty__icon">🧠</div>
+            <div className="ci-sb-empty__icon" role="img" aria-hidden="true">{'\u{1F9E0}'}</div>
             <div className="ci-sb-empty__text">
               Press the CI button to start recording.<br />
               AI agents will analyze the call in real-time.
@@ -378,13 +421,17 @@ const CILiveSidebar = ({
           </div>
         ) : (
           <>
-            <div className="ci-sb-grid">
+            <div className="ci-sb-grid" role="group" aria-label="Agent extraction quadrants">
               {quadrantData.map(q => (
-                <div className="ci-quad" key={q.key}>
+                <div className="ci-quad" key={q.key} role="group" aria-label={q.ariaLabel}>
                   <div className="ci-quad__head">
-                    <span className="ci-quad__icon">{q.icon}</span>
+                    <span className="ci-quad__icon" role="img" aria-hidden="true">{q.icon}</span>
                     <span className="ci-quad__label" style={{ color: q.color }}>{q.label}</span>
-                    <span className={`ci-quad__status ci-quad__status--${q.hasActive ? 'active' : q.allComplete ? 'complete' : 'idle'}`} />
+                    <span
+                      className={`ci-quad__status ci-quad__status--${q.hasActive ? 'active' : q.allComplete ? 'complete' : 'idle'}`}
+                      role="img"
+                      aria-label={q.hasActive ? 'Active' : q.allComplete ? 'Complete' : 'Idle'}
+                    />
                   </div>
                   <div className="ci-quad__items">
                     {q.extractions.length > 0 ? (
@@ -401,7 +448,7 @@ const CILiveSidebar = ({
                     )}
                   </div>
                   {q.hasActive && (
-                    <div className="ci-quad__pulse">
+                    <div className="ci-quad__pulse" aria-hidden="true">
                       <span className="ci-quad__pulse-dot" />
                       listening
                     </div>
@@ -412,12 +459,12 @@ const CILiveSidebar = ({
 
             <div className="ci-sb-feed">
               <div className="ci-sb-feed__head">
-                <span className="ci-sb-feed__title">Live Activity</span>
+                <h3 className="ci-sb-feed__title">Live Activity</h3>
                 <span className="ci-sb-feed__count">{agentEvents.length} events</span>
               </div>
-              <div className="ci-sb-feed__scroll" ref={feedRef}>
+              <div className="ci-sb-feed__scroll" ref={feedRef} aria-live="polite" aria-atomic="false">
                 {agentEvents.length === 0 ? (
-                  <div style={{ padding: '16px 0', textAlign: 'center', color: '#334155', fontSize: '12px' }}>
+                  <div style={{ padding: '16px 0', textAlign: 'center', color: '#94a3b8', fontSize: '12px' }}>
                     Waiting for AI agents to detect data...
                   </div>
                 ) : (
@@ -426,17 +473,17 @@ const CILiveSidebar = ({
                       key={evt.id}
                       className={`ci-sb-evt ${evt.type === 'agent_complete' ? 'ci-sb-evt--complete' : ''} ${evt.type === 'agent_error' ? 'ci-sb-evt--error' : ''}`}
                     >
-                      <span className="ci-sb-evt__icon">{evt.icon}</span>
+                      <span className="ci-sb-evt__icon" role="img" aria-hidden="true">{evt.icon}</span>
                       <div className="ci-sb-evt__body">
                         <div className="ci-sb-evt__msg">
                           <strong>{evt.label}</strong>: {evt.message || 'analyzing...'}
                         </div>
                         {evt.value && (
-                          <div className="ci-sb-evt__val">→ {evt.value}</div>
+                          <div className="ci-sb-evt__val">{'→'} {evt.value}</div>
                         )}
                       </div>
                       <span className="ci-sb-evt__time">
-                        {formatDuration(Math.max(0, Math.floor((evt.timestamp - (agentEvents[0]?.timestamp || evt.timestamp)) / 1000)))}
+                        {formatDuration(Math.max(0, Math.floor((evt.timestamp - firstTimestamp) / 1000)))}
                       </span>
                     </div>
                   ))
