@@ -3,28 +3,82 @@
  *
  * Wraps useCallIntelligenceSession with Aria-specific behavior:
  * - Coordinated start/stop with voice recording
+ * - Browser speech recognition → WebSocket transcript forwarding
  * - Event callbacks for the Aria UI
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useCallIntelligenceSession } from './useCallIntelligenceSession';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
+const API_BASE_URL = (process.env.REACT_APP_API_URL || 'https://api.perenniaai.com').replace(/\/+$/, '');
 const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
 
 const useAriaCallIntelligence = ({ onSessionStarted, onSessionEnded } = {}) => {
   const [isStarting, setIsStarting] = useState(false);
   const onSessionStartedRef = useRef(onSessionStarted);
   const onSessionEndedRef = useRef(onSessionEnded);
+  const recognitionRef = useRef(null);
   onSessionStartedRef.current = onSessionStarted;
   onSessionEndedRef.current = onSessionEnded;
 
   const ciSession = useCallIntelligenceSession({
     websocketUrl: `${WS_BASE_URL}/api/v1/call-intelligence`,
-    onSessionActive: () => {
-      onSessionStartedRef.current?.(ciSession.sessionId);
+    onSessionActive: (sessId) => {
+      onSessionStartedRef.current?.(sessId);
     },
   });
+
+  useEffect(() => {
+    if (!ciSession.isActive || !ciSession.wsConnected) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        const text = result[0].transcript;
+        if (result.isFinal && text.trim()) {
+          ciSession.sendTranscript(text.trim(), true);
+        }
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
+        console.error('[AriaCI] Speech recognition error:', event.error);
+      }
+    };
+
+    recognition.onend = () => {
+      if (ciSession.isActive && recognitionRef.current) {
+        try { recognition.start(); } catch (_) {}
+      }
+    };
+
+    try {
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch (e) {
+      console.error('[AriaCI] Failed to start speech recognition:', e);
+    }
+
+    return () => {
+      recognition.stop();
+      recognitionRef.current = null;
+    };
+  }, [ciSession.isActive, ciSession.wsConnected, ciSession.sendTranscript]);
 
   const startRecording = useCallback(async () => {
     if (ciSession.isActive || isStarting) return null;
@@ -41,6 +95,11 @@ const useAriaCallIntelligence = ({ onSessionStarted, onSessionEnded } = {}) => {
 
   const stopRecording = useCallback(async () => {
     if (!ciSession.isActive) return;
+
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
 
     try {
       await ciSession.stopSession();
@@ -62,6 +121,7 @@ const useAriaCallIntelligence = ({ onSessionStarted, onSessionEnded } = {}) => {
 
     startRecording,
     stopRecording,
+    sendTranscript: ciSession.sendTranscript,
 
     consentInfo: ciSession.consentInfo,
     errorMessage: ciSession.errorMessage,

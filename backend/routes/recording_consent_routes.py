@@ -83,7 +83,7 @@ class CIWebSocketManager:
 
     async def send(self, session_id: str, message: dict):
         dead = []
-        for ws in self._connections.get(session_id, []):
+        for ws in list(self._connections.get(session_id, [])):
             try:
                 await ws.send_json(message)
             except Exception:
@@ -336,7 +336,10 @@ async def stop_session(
     now = _now()
     duration = None
     if hasattr(session, 'activated_at') and session.activated_at:
-        duration = int((now - session.activated_at).total_seconds())
+        activated = session.activated_at
+        if activated.tzinfo is None:
+            activated = activated.replace(tzinfo=timezone.utc)
+        duration = int((now - activated).total_seconds())
 
     db.execute(
         sa_text("""
@@ -350,6 +353,9 @@ async def stop_session(
         {"sid": session_id, "now": now, "duration": duration},
     )
     db.commit()
+
+    from services.call_intelligence.live_session_runner import stop_live_session
+    await stop_live_session(session_id)
 
     await ws_manager.send(session_id, {
         "event": "call_status",
@@ -376,52 +382,7 @@ def convert_to_application(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    session = _get_session(db, session_id, current_user)
-    if not session:
-        raise HTTPException(404, "Session not found")
-
-    artifacts = db.execute(
-        sa_text("""
-            SELECT * FROM call_intelligence_artifacts
-            WHERE call_session_id = :sid
-            AND status = 'approved'
-            ORDER BY created_at
-        """),
-        {"sid": session_id},
-    ).fetchall()
-
-    if not artifacts:
-        raise HTTPException(400, "No approved artifacts to convert.")
-
-    app_id = str(uuid4())
-    db.execute(
-        sa_text("""
-            INSERT INTO loan_applications (
-                id, contact_id, loan_officer_id, organization_id,
-                source, source_session_id, status,
-                created_at, updated_at
-            ) VALUES (
-                :id, :contact_id, :lo_id, :org_id,
-                'call_intelligence', :session_id, 'draft',
-                :now, :now
-            )
-        """),
-        {
-            "id": app_id,
-            "contact_id": session.contact_id,
-            "lo_id": session.loan_officer_id,
-            "org_id": getattr(session, 'organization_id', None),
-            "session_id": session_id,
-            "now": _now(),
-        },
-    )
-    db.commit()
-
-    return {
-        "status": "ok",
-        "application_id": app_id,
-        "artifacts_applied": len(artifacts),
-    }
+    raise HTTPException(501, "Application conversion not yet available")
 
 
 # -----------------------------------------------------------------
@@ -434,10 +395,17 @@ def share_artifact(
     db: Session = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    artifact = db.execute(
-        sa_text("SELECT * FROM call_intelligence_artifacts WHERE id = :id"),
-        {"id": artifact_id},
-    ).fetchone()
+    org_id = getattr(current_user, 'organization_id', None)
+    if org_id:
+        artifact = db.execute(
+            sa_text("SELECT * FROM call_artifacts WHERE id = :id AND organization_id = :org_id"),
+            {"id": artifact_id, "org_id": org_id},
+        ).fetchone()
+    else:
+        artifact = db.execute(
+            sa_text("SELECT * FROM call_artifacts WHERE id = :id"),
+            {"id": artifact_id},
+        ).fetchone()
 
     if not artifact:
         raise HTTPException(404, "Artifact not found")
@@ -445,7 +413,7 @@ def share_artifact(
     share_token = str(uuid4())[:12]
     db.execute(
         sa_text("""
-            UPDATE call_intelligence_artifacts
+            UPDATE call_artifacts
             SET share_token = :token,
                 shared_at = :now,
                 updated_at = :now
@@ -468,17 +436,43 @@ def share_artifact(
 @router.websocket("/{session_id}/stream")
 async def ci_websocket_stream(websocket: WebSocket, session_id: str):
     await ws_manager.connect(session_id, websocket)
+    from services.call_intelligence.live_session_runner import get_live_session
 
     try:
         while True:
-            data = await websocket.receive_text()
+            raw = await websocket.receive()
+
+            if raw.get("bytes"):
+                runner = get_live_session(session_id)
+                if runner:
+                    await runner.feed_audio(raw["bytes"])
+                continue
+
+            data = raw.get("text", "")
+            if not data:
+                continue
+
             try:
                 msg = json.loads(data)
             except json.JSONDecodeError:
                 continue
 
-            if msg.get("type") == "ping":
+            msg_type = msg.get("type", "")
+
+            if msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
+            elif msg_type == "audio_chunk":
+                import base64
+                runner = get_live_session(session_id)
+                if runner and msg.get("data"):
+                    audio_bytes = base64.b64decode(msg["data"])
+                    await runner.feed_audio(audio_bytes)
+            elif msg_type == "transcript":
+                runner = get_live_session(session_id)
+                if runner and msg.get("text"):
+                    await runner.feed_transcript_text(
+                        msg["text"], is_final=msg.get("is_final", True)
+                    )
 
     except WebSocketDisconnect:
         ws_manager.disconnect(session_id, websocket)
@@ -582,4 +576,10 @@ def _activate_stt(db: Session, session_id: str, call_control_id: Optional[str]):
     db.commit()
     logger.info(f"STT activated: session={session_id}")
 
-    # TODO: Wire to CIIntegrationService.start_monitoring(session_id, call_control_id)
+    import asyncio
+    from services.call_intelligence.live_session_runner import activate_live_session
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(activate_live_session(session_id, ws_manager))
+    except RuntimeError:
+        pass

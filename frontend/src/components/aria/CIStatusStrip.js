@@ -214,7 +214,7 @@ const CIStatusStrip = ({
         }
         .ci-panel__count {
           font-size: 11px;
-          color: #64748b;
+          color: #7c8ba0;
         }
         .ci-panel__events {
           flex: 1;
@@ -253,7 +253,7 @@ const CIStatusStrip = ({
         }
         .ci-event__time {
           font-size: 10px;
-          color: #64748b;
+          color: #7c8ba0;
           flex-shrink: 0;
           margin-top: 2px;
         }

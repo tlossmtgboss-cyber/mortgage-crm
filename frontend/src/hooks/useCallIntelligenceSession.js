@@ -80,19 +80,23 @@ export function useCallIntelligenceSession({
 
   const wsRef = useRef(null);
   const timeoutRef = useRef(null);
+  const reconnectRef = useRef(null);
   const audioRef = useRef(null);
   const durationRef = useRef(null);
   const activeStartRef = useRef(null);
   const sessionStateRef = useRef(sessionState);
+  const sessionIdRef = useRef(null);
   const callbacksRef = useRef({ onConsentCleared, onSessionActive, onError });
 
   sessionStateRef.current = sessionState;
+  sessionIdRef.current = sessionId;
   callbacksRef.current = { onConsentCleared, onSessionActive, onError };
 
   useEffect(() => {
     return () => {
       wsRef.current?.close();
       clearTimeout(timeoutRef.current);
+      clearTimeout(reconnectRef.current);
       clearInterval(durationRef.current);
       if (audioRef.current) {
         audioRef.current.pause();
@@ -131,7 +135,7 @@ export function useCallIntelligenceSession({
               manualOverride: data.manual_override || false,
             }));
             callbacksRef.current.onConsentCleared?.();
-            callbacksRef.current.onSessionActive?.();
+            callbacksRef.current.onSessionActive?.(sessionIdRef.current);
             break;
 
           case 'agent_update':
@@ -202,7 +206,7 @@ export function useCallIntelligenceSession({
         currentState === SESSION_STATES.ACTIVE ||
         currentState === SESSION_STATES.PLAYING_DISCLOSURE
       ) {
-        setTimeout(() => {
+        reconnectRef.current = setTimeout(() => {
           if (wsRef.current?.readyState === WebSocket.CLOSED && sessId) {
             const reconnWs = new WebSocket(`${websocketUrl}/${sessId}/stream`);
             wsRef.current = reconnWs;
@@ -313,7 +317,7 @@ export function useCallIntelligenceSession({
             status: CONSENT_STATUSES.DISCLOSED,
           }));
           callbacksRef.current.onConsentCleared?.();
-          callbacksRef.current.onSessionActive?.();
+          callbacksRef.current.onSessionActive?.(sessionIdRef.current);
         } catch (audioErr) {
           setSessionState(SESSION_STATES.CONSENT_FAILED);
           setErrorMessage(audioErr.message);
@@ -352,7 +356,7 @@ export function useCallIntelligenceSession({
 
       setSessionState(SESSION_STATES.ACTIVE);
       callbacksRef.current.onConsentCleared?.();
-      callbacksRef.current.onSessionActive?.();
+      callbacksRef.current.onSessionActive?.(sessionIdRef.current);
 
     } catch (err) {
       setSessionState(SESSION_STATES.ERROR);
@@ -392,7 +396,7 @@ export function useCallIntelligenceSession({
           setSessionState(SESSION_STATES.ACTIVE);
           setConsentInfo((prev) => ({ ...prev, status: CONSENT_STATUSES.DISCLOSED }));
           callbacksRef.current.onConsentCleared?.();
-          callbacksRef.current.onSessionActive?.();
+          callbacksRef.current.onSessionActive?.(sessionIdRef.current);
         } catch (audioErr) {
           setSessionState(SESSION_STATES.CONSENT_FAILED);
           setErrorMessage(audioErr.message);
@@ -443,7 +447,7 @@ export function useCallIntelligenceSession({
         manualOverride: true,
       }));
       callbacksRef.current.onConsentCleared?.();
-      callbacksRef.current.onSessionActive?.();
+      callbacksRef.current.onSessionActive?.(sessionIdRef.current);
     } catch (err) {
       setErrorMessage(err.message);
     }
@@ -455,6 +459,7 @@ export function useCallIntelligenceSession({
         method: 'POST',
       }).catch(() => {});
     }
+    sessionStateRef.current = SESSION_STATES.COMPLETED;
     setSessionState(SESSION_STATES.COMPLETED);
     wsRef.current?.close();
     clearTimeout(timeoutRef.current);
@@ -463,6 +468,25 @@ export function useCallIntelligenceSession({
       audioRef.current = null;
     }
   }, [sessionId]);
+
+  const sendTranscript = useCallback((text, isFinal = true) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'transcript',
+        text,
+        is_final: isFinal,
+      }));
+    }
+  }, []);
+
+  const sendAudio = useCallback((base64Data) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'audio_chunk',
+        data: base64Data,
+      }));
+    }
+  }, []);
 
   return {
     sessionState,
@@ -489,5 +513,7 @@ export function useCallIntelligenceSession({
     stopSession,
     retryDisclosure,
     confirmVerbalDisclosure,
+    sendTranscript,
+    sendAudio,
   };
 }

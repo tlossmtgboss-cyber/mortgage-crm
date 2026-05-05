@@ -274,7 +274,7 @@ const CILiveSidebar = ({
         }
         .ci-quad__empty {
           font-size: 11px;
-          color: #64748b;
+          color: #7c8ba0;
           font-style: italic;
           margin-top: 4px;
         }
@@ -317,13 +317,13 @@ const CILiveSidebar = ({
         }
         .ci-sb-feed__count {
           font-size: 11px;
-          color: #64748b;
+          color: #7c8ba0;
         }
         .ci-sb-feed__scroll {
           flex: 1;
           overflow-y: auto;
           -webkit-overflow-scrolling: touch;
-          padding: 0 16px 16px;
+          padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px));
           scrollbar-width: thin;
           scrollbar-color: #1e293b transparent;
         }
@@ -360,7 +360,7 @@ const CILiveSidebar = ({
         }
         .ci-sb-evt__time {
           font-size: 10px;
-          color: #64748b;
+          color: #7c8ba0;
           flex-shrink: 0;
           font-family: 'SF Mono', monospace;
         }
@@ -388,7 +388,7 @@ const CILiveSidebar = ({
         }
       `}</style>
 
-      <div className="ci-sidebar" role="dialog" aria-label="Call Intelligence dashboard" aria-modal="true">
+      <div className="ci-sidebar" role="complementary" aria-label="Call Intelligence dashboard">
         <div className="ci-sb-header">
           <div
             className={`ci-sb-rec ${isStarting ? 'ci-sb-rec--starting' : ''} ${isCompleted ? 'ci-sb-rec--done' : ''}`}

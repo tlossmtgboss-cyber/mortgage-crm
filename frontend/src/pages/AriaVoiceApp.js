@@ -44,6 +44,7 @@ const AriaVoiceApp = () => {
   const [showCIPanel, setShowCIPanel] = useState(false);
 
   const conversationRef = useRef(null);
+  const ciButtonRef = useRef(null);
 
   const {
     isAvailable: biometricAvailable,
@@ -573,7 +574,7 @@ const AriaVoiceApp = () => {
         </div>
 
         {/* Call Intelligence Button — positioned below the orb */}
-        <div className="aria-ci-button-container">
+        <div className="aria-ci-button-container" ref={ciButtonRef}>
           <CallIntelligenceButton
             onClick={() => {
               if (ci.isActive) {
@@ -706,7 +707,10 @@ const AriaVoiceApp = () => {
           agentEvents={ci.agentEvents}
           sessionState={ci.sessionState}
           wsConnected={ci.wsConnected}
-          onClose={() => setShowCIPanel(false)}
+          onClose={() => {
+            setShowCIPanel(false);
+            ciButtonRef.current?.querySelector('button')?.focus();
+          }}
         />
       )}
     </div>
