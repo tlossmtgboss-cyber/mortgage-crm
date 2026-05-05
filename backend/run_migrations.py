@@ -208,6 +208,9 @@ if __name__ == "__main__":
         print(f"Migration Status: {status}")
         sys.exit(0 if not status.get("error") else 1)
     elif len(sys.argv) > 1 and sys.argv[1] == "--cleanup":
+        if os.getenv("ENVIRONMENT") == "production":
+            print("ERROR: --cleanup is disabled in production")
+            sys.exit(1)
         success = run_sample_data_cleanup()
         sys.exit(0 if success else 1)
     else:

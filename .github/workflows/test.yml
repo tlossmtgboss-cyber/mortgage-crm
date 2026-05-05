@@ -154,7 +154,6 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: golden-flow-tests
-    continue-on-error: true
     services:
       postgres:
         image: postgres:15
@@ -201,7 +200,6 @@ jobs:
     name: AI Harness Tests
     runs-on: ubuntu-latest
     needs: golden-flow-tests
-    continue-on-error: true
     services:
       postgres:
         image: postgres:15
@@ -319,7 +317,6 @@ jobs:
         working-directory: ./backend
         run: |
           mypy --ignore-missing-imports --no-strict-optional --warn-return-any auth/ db.py middleware/rate_limiting.py middleware/csrf_protection.py
-        continue-on-error: true  # Start as warning-only, tighten later
   build-check:
     name: Build Check
     runs-on: ubuntu-latest

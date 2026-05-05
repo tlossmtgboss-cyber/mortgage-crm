@@ -65,7 +65,10 @@ def init_sentry(app: FastAPI = None):
     global _sentry_initialized
 
     if not SENTRY_DSN:
-        logging.info("Sentry DSN not configured - error tracking disabled")
+        if ENVIRONMENT == "production":
+            logging.critical("MONITORING: SENTRY_DSN not configured — production errors will be invisible")
+        else:
+            logging.info("Sentry DSN not configured - error tracking disabled")
         return False
 
     try:
