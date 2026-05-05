@@ -100,10 +100,8 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         deleted_count = 0
         errors = []
 
-        # Get table list once
-        from sqlalchemy import inspect
-        inspector = inspect(db.bind)
-        existing_tables = set(inspector.get_table_names())
+        # Get table list (cached at module level)
+        existing_tables = _get_table_names(db)
 
         tables_to_clean = [
             ("activities", "lead_id"),
@@ -856,11 +854,9 @@ def register_leads_detail_routes(app, get_db, get_current_user, get_current_user
         try:
             # Delete related records first using raw SQL connection
             # This avoids SQLAlchemy transaction issues
-            from sqlalchemy import inspect
 
-            # Get list of existing tables
-            inspector = inspect(db.bind)
-            existing_tables = set(inspector.get_table_names())
+            # Get list of existing tables (cached at module level)
+            existing_tables = _get_table_names(db)
 
             # Define tables and their foreign key columns to lead
             tables_to_clean = [

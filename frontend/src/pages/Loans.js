@@ -96,6 +96,7 @@ function Loans() {
 
   const [loans, setLoans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [activeFilter, setActiveFilter] = useState(initialFilter);
   const [activeBorrower, setActiveBorrower] = useState(0);
@@ -241,6 +242,7 @@ function Loans() {
       }
     } catch (err) {
       console.error('Failed to load loans:', err);
+      setError(err?.response?.data?.detail || err?.message || 'Failed to load loans');
       setLoans([]);
     } finally {
       setLoading(false);
@@ -687,6 +689,31 @@ function Loans() {
   }
 
   if (loading) return <div className="loading">Loading loans...</div>;
+
+  if (error) {
+    return (
+      <div className="loans-page-wrapper">
+        <div className="error-container" style={{ padding: '40px', textAlign: 'center' }}>
+          <h2 style={{ color: '#ef4444', marginBottom: '16px' }}>Error Loading Loans</h2>
+          <p style={{ color: '#6b7280', marginBottom: '24px' }}>{error}</p>
+          <button
+            onClick={() => { setError(null); setLoading(true); loadLoans(); }}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="loans-page-wrapper">

@@ -72,6 +72,7 @@ function LoanDetail() {
   const [loan, setLoan] = useState(null);
   const [activities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [editing, setEditing] = useState(true);
   const [formData, setFormData] = useState({});
   const [activeTab, setActiveTab] = useState('loan-details');
@@ -580,10 +581,10 @@ function LoanDetail() {
       }
 
       setBorrowers(borrowersList);
-    } catch (error) {
-      console.error('Failed to load loan data:', error);
-      toast.error('Failed to load loan details');
-      navigate('/loans');
+    } catch (err) {
+      console.error('Failed to load loan data:', err);
+      const errorMessage = err?.response?.data?.detail || err?.message || 'Failed to load loan details';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -1032,6 +1033,31 @@ function LoanDetail() {
     return (
       <div className="lead-detail-page">
         <div className="loading">Loading loan details...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="lead-detail-page">
+        <div className="error-container" style={{ padding: '40px', textAlign: 'center' }}>
+          <h2 style={{ color: '#ef4444', marginBottom: '16px' }}>Error Loading Loan</h2>
+          <p style={{ color: '#6b7280', marginBottom: '24px' }}>{error}</p>
+          <button
+            onClick={() => navigate('/loans')}
+            style={{
+              padding: '12px 24px',
+              backgroundColor: '#3b82f6',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+          >
+            &larr; Back to Loans
+          </button>
+        </div>
       </div>
     );
   }

@@ -384,7 +384,7 @@ def check_consent(lead_id: Optional[int], db: Session, organization_id: Optional
             lead_query = lead_query.filter(Lead.organization_id == organization_id)
         lead = lead_query.first()
         if not lead:
-            return True, ""  # Lead not found — allow (may be external contact)
+            return False, "Lead not found — denying voicemail drop (fail-closed)"
 
         # Check if lead has a matching BorrowerProfile with consent fields
         # BorrowerProfile doesn't have a phone column — match on email

@@ -14,19 +14,20 @@ import { getToken } from '../utils/tokenStore';
 
 const API_BASE = process.env.REACT_APP_API_URL || '';
 
-// Lead status options
+// Lead status options — values match backend LeadStage enum (Title Case)
 const LEAD_STAGES = [
-  { value: 'new', label: 'New', color: '#6366f1' },
-  { value: 'attempted_contact', label: 'Attempted Contact', color: '#8b5cf6' },
-  { value: 'contact_made', label: 'Contact Made', color: '#06b6d4' },
-  { value: 'needs_analysis', label: 'Needs Analysis', color: '#0ea5e9' },
-  { value: 'pre_approved', label: 'Pre-Approved', color: '#10b981' },
-  { value: 'application', label: 'Application', color: '#f59e0b' },
-  { value: 'processing', label: 'Processing', color: '#f97316' },
-  { value: 'closing', label: 'Closing', color: '#22c55e' },
-  { value: 'funded', label: 'Funded', color: '#16a34a' },
-  { value: 'not_qualified', label: 'Does Not Qualify', color: '#ef4444' },
-  { value: 'withdrawn', label: 'Withdrawn', color: '#6b7280' }
+  { value: 'New', label: 'New', color: '#6366f1' },
+  { value: 'Attempted Contact', label: 'Attempted Contact', color: '#8b5cf6' },
+  { value: 'Prospect', label: 'Prospect', color: '#06b6d4' },
+  { value: 'Pre-Qualified', label: 'Pre-Qualified', color: '#0ea5e9' },
+  { value: 'Pre-Approved', label: 'Pre-Approved', color: '#10b981' },
+  { value: 'Application', label: 'Application', color: '#f59e0b' },
+  { value: 'Document Fulfillment', label: 'Document Fulfillment', color: '#f97316' },
+  { value: 'Under Contract', label: 'Under Contract', color: '#22c55e' },
+  { value: 'Funded', label: 'Funded', color: '#16a34a' },
+  { value: 'Does Not Qualify', label: 'Does Not Qualify', color: '#ef4444' },
+  { value: 'Withdrawn', label: 'Withdrawn', color: '#6b7280' },
+  { value: 'Long-Term Nurture', label: 'Long-Term Nurture', color: '#6b7280' }
 ];
 
 // Mock data functions - returning empty arrays (sample data removed)
