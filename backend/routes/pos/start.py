@@ -2,7 +2,17 @@
 
 Flow:
 1. POST /pos/start  — collect info, send 6-digit SMS code, return session_id
-2. POST /pos/verify — validate code, create workspace/contact/token, return token
+2. POST /pos/verify — validate code, create workspace/contact/token
+3. POST /pos/resend — resend code with rate limiting
+
+Enterprise hardening:
+- Phone normalization to E.164 before send
+- IP-based rate limiting (5 starts / 10 min per IP)
+- Per-session rate limiting on resend (60s cooldown)
+- Duplicate email+phone dedup within 5 min (reuse existing session)
+- HMAC-SHA256 code hashing with SECRET_KEY
+- Code expiry (10 min), max attempts (5)
+- TCPA consent timestamp stored
 """
 from __future__ import annotations
 
@@ -12,10 +22,13 @@ import logging
 import os
 import secrets
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
+from threading import Lock
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy import Column, DateTime, Integer, String, text
 from sqlalchemy.orm import Session
 
@@ -28,6 +41,7 @@ from models.purl import (
     WorkspaceStatus,
 )
 from services.purl_token_service import PURLTokenService
+from telephony.phone_utils import normalize_phone
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +50,28 @@ router = APIRouter(prefix="/api/v1/pos", tags=["POS - Public Start"])
 DEFAULT_ORG_ID = 1
 CODE_TTL_MINUTES = 10
 MAX_VERIFY_ATTEMPTS = 5
+RESEND_COOLDOWN_SECONDS = 60
+IP_RATE_LIMIT = 5
+IP_RATE_WINDOW_MINUTES = 10
+
+
+# ── IP rate limiter (in-memory, resets on deploy) ──────────────────
+
+_ip_tracker: dict[str, list[float]] = defaultdict(list)
+_ip_lock = Lock()
+
+
+def _check_ip_rate_limit(ip: str):
+    now = datetime.now(timezone.utc).timestamp()
+    cutoff = now - (IP_RATE_WINDOW_MINUTES * 60)
+    with _ip_lock:
+        _ip_tracker[ip] = [t for t in _ip_tracker[ip] if t > cutoff]
+        if len(_ip_tracker[ip]) >= IP_RATE_LIMIT:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many requests. Please try again in a few minutes.",
+            )
+        _ip_tracker[ip].append(now)
 
 
 # ── OTP storage model ──────────────────────────────────────────────
@@ -45,27 +81,41 @@ class POSVerification(Base):
     id = Column(Integer, primary_key=True)
     session_id = Column(String, unique=True, nullable=False, index=True)
     phone = Column(String, nullable=False)
+    phone_raw = Column(String, nullable=False, default="")
     code_hash = Column(String, nullable=False)
     first_name = Column(String, nullable=False)
     last_name = Column(String, nullable=False)
     email = Column(String, nullable=False)
     attempts = Column(Integer, default=0)
+    ip_address = Column(String, nullable=True)
+    consent_at = Column(DateTime(timezone=True), nullable=True)
+    last_resend_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     verified_at = Column(DateTime(timezone=True), nullable=True)
 
 
+_table_ensured = False
+
+
 def _ensure_table(db: Session):
+    global _table_ensured
+    if _table_ensured:
+        return
     try:
         db.execute(text(
             "CREATE TABLE IF NOT EXISTS pos_verifications ("
             "id SERIAL PRIMARY KEY,"
             "session_id VARCHAR UNIQUE NOT NULL,"
             "phone VARCHAR NOT NULL,"
+            "phone_raw VARCHAR NOT NULL DEFAULT '',"
             "code_hash VARCHAR NOT NULL,"
             "first_name VARCHAR NOT NULL,"
             "last_name VARCHAR NOT NULL,"
             "email VARCHAR NOT NULL,"
             "attempts INTEGER DEFAULT 0,"
+            "ip_address VARCHAR,"
+            "consent_at TIMESTAMPTZ,"
+            "last_resend_at TIMESTAMPTZ,"
             "created_at TIMESTAMPTZ DEFAULT NOW(),"
             "verified_at TIMESTAMPTZ"
             ")"
@@ -74,7 +124,13 @@ def _ensure_table(db: Session):
             "CREATE INDEX IF NOT EXISTS ix_pos_verifications_session_id "
             "ON pos_verifications (session_id)"
         ))
+        for col in ("phone_raw", "ip_address", "consent_at", "last_resend_at"):
+            db.execute(text(
+                f"ALTER TABLE pos_verifications ADD COLUMN IF NOT EXISTS "
+                f"{col} VARCHAR"
+            ))
         db.commit()
+        _table_ensured = True
     except Exception:
         db.rollback()
 
@@ -84,6 +140,13 @@ def _hash_code(code: str) -> str:
     return hmac.new(salt.encode(), code.encode(), hashlib.sha256).hexdigest()
 
 
+def _client_ip(request: Request) -> str:
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 # ── Request / Response models ──────────────────────────────────────
 
 class StartRequest(BaseModel):
@@ -91,10 +154,28 @@ class StartRequest(BaseModel):
     last_name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
     phone: str = Field(..., min_length=10, max_length=20)
+    sms_consent: bool = Field(..., description="User consented to receive SMS")
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v: str) -> str:
+        normalized = normalize_phone(v.strip())
+        if not normalized:
+            raise ValueError("Please enter a valid 10-digit US phone number.")
+        return v.strip()
+
+    @field_validator("sms_consent")
+    @classmethod
+    def require_consent(cls, v: bool) -> bool:
+        if not v:
+            raise ValueError("SMS consent is required to proceed.")
+        return v
 
 
 class StartResponse(BaseModel):
     session_id: str
+    phone_masked: str
+    expires_at: str
     message: str
 
 
@@ -102,11 +183,19 @@ class VerifyRequest(BaseModel):
     session_id: str
     code: str = Field(..., min_length=6, max_length=6)
 
+    @field_validator("code")
+    @classmethod
+    def digits_only(cls, v: str) -> str:
+        if not v.isdigit():
+            raise ValueError("Code must be 6 digits.")
+        return v
+
 
 class VerifyResponse(BaseModel):
     token: str
     workspace_slug: str
     redirect_url: str
+    borrower_name: str
 
 
 class ResendRequest(BaseModel):
@@ -115,24 +204,38 @@ class ResendRequest(BaseModel):
 
 class ResendResponse(BaseModel):
     message: str
+    expires_at: str
+    cooldown_seconds: int
 
 
 # ── SMS helper ─────────────────────────────────────────────────────
 
-def _send_verification_sms(phone: str, code: str):
+def _send_verification_sms(phone_e164: str, code: str):
     try:
         from telephony.sms import send_sms
         send_sms(
-            to=phone,
-            text=f"Your Perennia verification code is: {code}",
+            to=phone_e164,
+            text=(
+                f"Your Perennia verification code is: {code}\n\n"
+                f"This code expires in {CODE_TTL_MINUTES} minutes. "
+                f"Do not share this code with anyone."
+            ),
             bypass_compliance=True,
         )
     except Exception as e:
-        logger.error("Failed to send verification SMS to %s: %s", phone, e)
+        logger.error("Failed to send verification SMS to %s: %s", phone_e164, e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Could not send verification code. Please try again.",
         )
+
+
+def _mask_phone(phone: str) -> str:
+    digits = "".join(c for c in phone if c.isdigit())
+    if len(digits) >= 10:
+        last4 = digits[-4:]
+        return f"(***) ***-{last4}"
+    return "***"
 
 
 # ── Endpoints ──────────────────────────────────────────────────────
@@ -143,27 +246,63 @@ def _send_verification_sms(phone: str, code: str):
     status_code=status.HTTP_200_OK,
     summary="Start application — sends SMS verification code",
 )
-def start_application(body: StartRequest, db: Session = Depends(get_db)):
+def start_application(body: StartRequest, request: Request, db: Session = Depends(get_db)):
     _ensure_table(db)
+
+    ip = _client_ip(request)
+    _check_ip_rate_limit(ip)
+
+    phone_e164 = normalize_phone(body.phone)
+    if not phone_e164:
+        raise HTTPException(status_code=422, detail="Invalid phone number format.")
+
+    email_lower = body.email.strip().lower()
+    dedup_cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+    existing = (
+        db.query(POSVerification)
+        .filter(
+            POSVerification.email == email_lower,
+            POSVerification.phone == phone_e164,
+            POSVerification.verified_at == None,
+            POSVerification.created_at > dedup_cutoff,
+        )
+        .first()
+    )
+    if existing:
+        expires = existing.created_at.replace(tzinfo=timezone.utc) + timedelta(minutes=CODE_TTL_MINUTES)
+        return StartResponse(
+            session_id=existing.session_id,
+            phone_masked=_mask_phone(phone_e164),
+            expires_at=expires.isoformat(),
+            message="Verification code already sent. Check your phone.",
+        )
 
     session_id = f"pos_sess_{secrets.token_hex(16)}"
     code = f"{secrets.randbelow(900000) + 100000}"
+    now = datetime.now(timezone.utc)
 
     verification = POSVerification(
         session_id=session_id,
-        phone=body.phone.strip(),
+        phone=phone_e164,
+        phone_raw=body.phone.strip(),
         code_hash=_hash_code(code),
         first_name=body.first_name.strip(),
         last_name=body.last_name.strip(),
-        email=body.email.strip(),
+        email=email_lower,
+        ip_address=ip,
+        consent_at=now,
+        created_at=now,
     )
     db.add(verification)
     db.commit()
 
-    _send_verification_sms(body.phone.strip(), code)
+    _send_verification_sms(phone_e164, code)
 
+    expires = now + timedelta(minutes=CODE_TTL_MINUTES)
     return StartResponse(
         session_id=session_id,
+        phone_masked=_mask_phone(phone_e164),
+        expires_at=expires.isoformat(),
         message="Verification code sent",
     )
 
@@ -183,17 +322,20 @@ def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
         .first()
     )
     if not verification:
-        raise HTTPException(status_code=404, detail="Session not found. Please start over.")
+        raise HTTPException(status_code=404, detail="Session expired. Please start over.")
 
     if verification.verified_at:
-        raise HTTPException(status_code=400, detail="Code already used. Please start over.")
+        raise HTTPException(status_code=400, detail="This code has already been used.")
 
+    created = verification.created_at
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=CODE_TTL_MINUTES)
-    if verification.created_at.replace(tzinfo=timezone.utc) < cutoff:
+    if created < cutoff:
         raise HTTPException(status_code=410, detail="Code expired. Please start over.")
 
     if verification.attempts >= MAX_VERIFY_ATTEMPTS:
-        raise HTTPException(status_code=429, detail="Too many attempts. Please start over.")
+        raise HTTPException(status_code=429, detail="Too many failed attempts. Please start over.")
 
     verification.attempts += 1
 
@@ -202,7 +344,7 @@ def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
         remaining = MAX_VERIFY_ATTEMPTS - verification.attempts
         raise HTTPException(
             status_code=401,
-            detail=f"Invalid code. {remaining} attempt(s) remaining.",
+            detail=f"Incorrect code. {remaining} attempt{'s' if remaining != 1 else ''} remaining.",
         )
 
     verification.verified_at = datetime.now(timezone.utc)
@@ -250,6 +392,7 @@ def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
         token=full_token,
         workspace_slug=slug,
         redirect_url=redirect_url,
+        borrower_name=verification.first_name,
     )
 
 
@@ -257,9 +400,9 @@ def verify_code(body: VerifyRequest, db: Session = Depends(get_db)):
     "/resend",
     response_model=ResendResponse,
     status_code=status.HTTP_200_OK,
-    summary="Resend verification code",
+    summary="Resend verification code (60s cooldown)",
 )
-def resend_code(body: ResendRequest, db: Session = Depends(get_db)):
+def resend_code(body: ResendRequest, request: Request, db: Session = Depends(get_db)):
     _ensure_table(db)
 
     verification = (
@@ -268,17 +411,37 @@ def resend_code(body: ResendRequest, db: Session = Depends(get_db)):
         .first()
     )
     if not verification:
-        raise HTTPException(status_code=404, detail="Session not found. Please start over.")
+        raise HTTPException(status_code=404, detail="Session expired. Please start over.")
 
     if verification.verified_at:
         raise HTTPException(status_code=400, detail="Already verified.")
 
+    now = datetime.now(timezone.utc)
+
+    if verification.last_resend_at:
+        resend_at = verification.last_resend_at
+        if resend_at.tzinfo is None:
+            resend_at = resend_at.replace(tzinfo=timezone.utc)
+        elapsed = (now - resend_at).total_seconds()
+        if elapsed < RESEND_COOLDOWN_SECONDS:
+            wait = int(RESEND_COOLDOWN_SECONDS - elapsed)
+            raise HTTPException(
+                status_code=429,
+                detail=f"Please wait {wait} seconds before requesting a new code.",
+            )
+
     code = f"{secrets.randbelow(900000) + 100000}"
     verification.code_hash = _hash_code(code)
     verification.attempts = 0
-    verification.created_at = datetime.now(timezone.utc)
+    verification.created_at = now
+    verification.last_resend_at = now
     db.commit()
 
     _send_verification_sms(verification.phone, code)
 
-    return ResendResponse(message="New verification code sent")
+    expires = now + timedelta(minutes=CODE_TTL_MINUTES)
+    return ResendResponse(
+        message="New verification code sent",
+        expires_at=expires.isoformat(),
+        cooldown_seconds=RESEND_COOLDOWN_SECONDS,
+    )

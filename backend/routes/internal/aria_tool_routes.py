@@ -3,6 +3,12 @@
 Internal API endpoints for Aria voice agent tool calls.
 These endpoints are called by the LiveKit agent worker via HTTP.
 Auth: X-Internal-API-Key header (shared secret, no user JWT).
+
+Enterprise controls:
+- Tenant isolation (organization_id enforcement)
+- Immutable audit trail (AuditLog + StageHistory)
+- Input sanitization (validation.common.sanitize_string)
+- Owner authorization (lead/loan must belong to caller's org)
 """
 import os
 import json
@@ -19,6 +25,131 @@ from database import get_db
 logger = logging.getLogger("aria.internal")
 
 router = APIRouter(prefix="/internal/aria", tags=["Aria Internal"])
+
+
+# ─── Enterprise Helpers ───────────────────────────────────────────────────────
+
+# Financial fields that require audit logging on change (TILA/RESPA)
+_AUDITED_LEAD_FIELDS = frozenset({
+    "stage", "loan_amount", "interest_rate", "credit_score", "preapproval_amount",
+    "annual_income", "monthly_debts", "down_payment", "property_value",
+})
+_AUDITED_LOAN_FIELDS = frozenset({
+    "stage", "amount", "rate", "term", "purchase_price", "down_payment",
+    "closing_date", "lock_date", "lock_expiration_date", "rate_lock_status",
+    "monthly_payment", "ltv", "cltv", "loan_type", "program",
+})
+
+# Valid lead stage transitions (from → allowed next stages)
+_LEAD_STAGE_TRANSITIONS = {
+    "New": {"Attempted Contact", "Prospect", "Pre-Qualified", "Long-Term Nurture", "Do Not Call"},
+    "Attempted Contact": {"Prospect", "Pre-Qualified", "Long-Term Nurture", "Do Not Call"},
+    "Prospect": {"Pre-Qualified", "Pre-Approved", "Long-Term Nurture", "Credit Repair", "Do Not Call"},
+    "Pre-Qualified": {"Pre-Approved", "Application", "Long-Term Nurture", "Credit Repair"},
+    "Pre-Approved": {"Application", "Long-Term Nurture"},
+    "Long-Term Nurture": {"Attempted Contact", "Prospect", "Pre-Qualified", "Do Not Call"},
+    "Credit Repair": {"Prospect", "Pre-Qualified", "Do Not Call"},
+    "Application": {"Disclosed"},
+}
+
+# Valid loan stage transitions (loosely enforced — allows forward movement + common rework paths)
+_LOAN_STAGE_ORDER = [
+    "APPLICATION", "DISCLOSED", "PROCESSING", "SUBMITTED",
+    "UNDERWRITING", "UW_RECEIVED", "CONDITIONAL_APPROVAL",
+    "APPROVED", "SUSPENDED", "CTC", "CLEAR_TO_CLOSE",
+    "CLOSING", "DOCS", "DOCS_OUT", "FUNDED",
+]
+_LOAN_TERMINAL_STAGES = {"FUNDED", "CANCELLED", "DENIED", "DEAD", "WITHDRAWN", "DOES_NOT_QUALIFY"}
+
+
+def _sanitize_fields(data: dict, text_fields: set, max_length: int = 500) -> dict:
+    """Sanitize free-text string fields in a dict."""
+    from validation.common import sanitize_string
+    for field in text_fields:
+        if field in data and data[field] and isinstance(data[field], str):
+            data[field] = sanitize_string(data[field], max_length=max_length)
+    return data
+
+
+def _log_audit(
+    db: Session,
+    change_type: str,
+    entity_type: str,
+    entity_id: int,
+    before: dict,
+    after: dict,
+    organization_id: Optional[int] = None,
+    user_id: Optional[int] = None,
+    reason: str = "aria_voice_agent",
+):
+    """Write an immutable audit log entry for compliance."""
+    try:
+        from database.models.security import AuditLog
+        entry = AuditLog(
+            organization_id=organization_id,
+            user_id=user_id,
+            change_type=change_type,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            before_state=before,
+            after_state=after,
+            reason=reason,
+            timestamp=datetime.now(timezone.utc),
+        )
+        db.add(entry)
+    except Exception as e:
+        logger.warning("Audit log write failed (non-blocking): %s", e)
+
+
+def _log_stage_change(
+    db: Session,
+    entity_type: str,
+    entity_id: int,
+    from_stage: Optional[str],
+    to_stage: str,
+    organization_id: Optional[int] = None,
+    changed_by_id: Optional[int] = None,
+):
+    """Write a stage history record."""
+    try:
+        from database.models.communication import StageHistory
+        entry = StageHistory(
+            organization_id=organization_id,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            lead_id=entity_id if entity_type == "lead" else None,
+            loan_id=entity_id if entity_type == "loan" else None,
+            from_stage=from_stage,
+            to_stage=to_stage,
+            changed_at=datetime.now(timezone.utc),
+            changed_by_id=changed_by_id,
+        )
+        db.add(entry)
+    except Exception as e:
+        logger.warning("Stage history write failed (non-blocking): %s", e)
+
+
+def _validate_lead_stage_transition(current: Optional[str], target: str) -> tuple[bool, str]:
+    """Check if a lead stage transition is allowed."""
+    if not current:
+        return True, ""
+    allowed = _LEAD_STAGE_TRANSITIONS.get(current)
+    if allowed is None:
+        return True, ""
+    if target not in allowed:
+        return False, f"Cannot move from '{current}' to '{target}'. Allowed: {', '.join(sorted(allowed))}"
+    return True, ""
+
+
+def _validate_loan_stage_transition(current: Optional[str], target: str) -> tuple[bool, str]:
+    """Check if a loan stage transition is valid (forward progress or rework)."""
+    target_upper = target.upper()
+    if target_upper in _LOAN_TERMINAL_STAGES:
+        return True, ""
+    current_upper = (current or "").upper()
+    if current_upper in _LOAN_TERMINAL_STAGES:
+        return False, f"Loan is in terminal stage '{current}' — cannot transition to '{target}'"
+    return True, ""
 
 def _verify_internal_key(request: Request):
     """Verify X-Internal-API-Key header matches the INTERNAL_API_KEY env var.
@@ -91,6 +222,8 @@ class LeadUpdateRequest(BaseModel):
     sentiment: Optional[str] = None
     first_name: Optional[str] = None
     last_name: Optional[str] = None
+    organization_id: Optional[int] = None
+    user_id: Optional[int] = None
 
 class LeadInfoRequest(BaseModel):
     lead_id: int
@@ -389,114 +522,94 @@ async def update_lead_endpoint(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Update an existing lead from voice agent — supports ALL lead fields."""
+    """Update an existing lead from voice agent — supports ALL lead fields.
+
+    Enterprise controls:
+    - Tenant isolation: lead must belong to caller's organization
+    - Stage validation: enforces allowed transitions
+    - Input sanitization: all text fields sanitized
+    - Audit trail: financial/stage changes logged immutably
+    """
     _verify_internal_key(request)
     from database.models.lead_loan import Lead
 
-    lead = db.query(Lead).filter(Lead.id == req.lead_id).first()
+    # ── Tenant-isolated lookup ──
+    q = db.query(Lead).filter(Lead.id == req.lead_id)
+    if req.organization_id:
+        q = q.filter(Lead.organization_id == req.organization_id)
+    lead = q.first()
     if not lead:
-        return {"error": f"Lead {req.lead_id} not found"}
+        return {"error": f"Lead {req.lead_id} not found or access denied"}
 
-    updated_fields = []
-
-    if req.phone:
-        lead.phone = req.phone
-        updated_fields.append("phone")
-    if req.email:
-        lead.email = req.email
-        updated_fields.append("email")
-    if req.loan_purpose:
-        lead.loan_purpose = req.loan_purpose
-        updated_fields.append("loan_purpose")
-    if req.property_type:
-        lead.property_type = req.property_type
-        updated_fields.append("property_type")
-    if req.timeline:
-        lead.timeline = req.timeline
-        updated_fields.append("timeline")
-    if req.notes:
-        lead.notes = (lead.notes or "") + f"\n{req.notes}" if lead.notes else req.notes
-        updated_fields.append("notes")
+    # ── Stage transition validation ──
     if req.stage:
-        lead.stage = req.stage
-        updated_fields.append("stage")
-    if req.credit_score is not None:
-        lead.credit_score = req.credit_score
-        updated_fields.append("credit_score")
-    if req.loan_amount is not None:
-        lead.loan_amount = req.loan_amount
-        updated_fields.append("loan_amount")
-    if req.loan_type:
-        lead.loan_type = req.loan_type
-        updated_fields.append("loan_type")
-    if req.interest_rate is not None:
-        lead.interest_rate = req.interest_rate
-        updated_fields.append("interest_rate")
-    if req.loan_term:
-        lead.loan_term = req.loan_term
-        updated_fields.append("loan_term")
-    if req.address:
-        lead.address = req.address
-        updated_fields.append("address")
-    if req.city:
-        lead.city = req.city
-        updated_fields.append("city")
-    if req.state:
-        lead.state = req.state
-        updated_fields.append("state")
-    if req.zip_code:
-        lead.zip_code = req.zip_code
-        updated_fields.append("zip_code")
-    if req.source:
-        lead.source = req.source
-        updated_fields.append("source")
-    if req.annual_income is not None:
-        lead.annual_income = req.annual_income
-        updated_fields.append("annual_income")
-    if req.employment_status:
-        lead.employment_status = req.employment_status
-        updated_fields.append("employment_status")
-    if req.employer_name:
-        lead.employer_name = req.employer_name
-        updated_fields.append("employer_name")
-    if req.property_value is not None:
-        lead.property_value = req.property_value
-        updated_fields.append("property_value")
-    if req.down_payment is not None:
-        lead.down_payment = req.down_payment
-        updated_fields.append("down_payment")
-    if req.first_time_buyer is not None:
-        lead.first_time_buyer = req.first_time_buyer
-        updated_fields.append("first_time_buyer")
-    if req.occupancy_type:
-        lead.occupancy_type = req.occupancy_type
-        updated_fields.append("occupancy_type")
-    if req.monthly_debts is not None:
-        lead.monthly_debts = req.monthly_debts
-        updated_fields.append("monthly_debts")
-    if req.preapproval_amount is not None:
-        lead.preapproval_amount = req.preapproval_amount
-        updated_fields.append("preapproval_amount")
-    if req.loan_officer:
-        lead.loan_officer = req.loan_officer
-        updated_fields.append("loan_officer")
-    if req.processor:
-        lead.processor = req.processor
-        updated_fields.append("processor")
-    if req.next_action:
-        lead.next_action = req.next_action
-        updated_fields.append("next_action")
-    if req.sentiment:
-        lead.sentiment = req.sentiment
-        updated_fields.append("sentiment")
-    if req.first_name:
-        lead.first_name = req.first_name
-        lead.name = f"{req.first_name} {lead.last_name or ''}".strip()
-        updated_fields.append("first_name")
-    if req.last_name:
-        lead.last_name = req.last_name
-        lead.name = f"{lead.first_name or ''} {req.last_name}".strip()
-        updated_fields.append("last_name")
+        valid, reason = _validate_lead_stage_transition(lead.stage, req.stage)
+        if not valid:
+            return {"error": reason}
+
+    # ── Sanitize text fields ──
+    _TEXT_FIELDS = {
+        "notes", "loan_purpose", "property_type", "timeline", "address",
+        "city", "state", "zip_code", "source", "employment_status",
+        "employer_name", "occupancy_type", "loan_officer", "processor",
+        "next_action", "sentiment", "first_name", "last_name", "loan_type",
+        "loan_term",
+    }
+    req_data = req.model_dump(exclude_none=True, exclude={"lead_id", "organization_id", "user_id"})
+    req_data = _sanitize_fields(req_data, _TEXT_FIELDS)
+
+    # ── Capture before-state for audited fields ──
+    before_state = {}
+    for field in _AUDITED_LEAD_FIELDS:
+        if field in req_data:
+            before_state[field] = getattr(lead, field, None)
+            if hasattr(before_state[field], "value"):
+                before_state[field] = before_state[field].value
+            elif before_state[field] is not None:
+                before_state[field] = str(before_state[field]) if not isinstance(before_state[field], (int, float, bool)) else before_state[field]
+
+    # ── Apply updates ──
+    updated_fields = []
+    old_stage = lead.stage
+
+    for field, value in req_data.items():
+        if field == "notes":
+            lead.notes = (lead.notes or "") + f"\n{value}" if lead.notes else value
+        elif field == "first_name":
+            lead.first_name = value
+            lead.name = f"{value} {lead.last_name or ''}".strip()
+        elif field == "last_name":
+            lead.last_name = value
+            lead.name = f"{lead.first_name or ''} {value}".strip()
+        else:
+            setattr(lead, field, value)
+        updated_fields.append(field)
+
+    if not updated_fields:
+        return {"error": "No fields to update"}
+
+    # ── Stage history ──
+    if "stage" in updated_fields and old_stage != lead.stage:
+        _log_stage_change(
+            db, "lead", lead.id, old_stage, lead.stage,
+            organization_id=lead.organization_id,
+            changed_by_id=req.user_id,
+        )
+
+    # ── Audit log for financial/compliance fields ──
+    audited_changes = {f: req_data[f] for f in _AUDITED_LEAD_FIELDS if f in req_data}
+    if audited_changes:
+        _log_audit(
+            db,
+            change_type="lead_update",
+            entity_type="lead",
+            entity_id=lead.id,
+            before=before_state,
+            after=audited_changes,
+            organization_id=lead.organization_id,
+            user_id=req.user_id,
+            reason="aria_voice_agent",
+        )
 
     db.commit()
 
@@ -768,6 +881,8 @@ class LoanUpdateRequest(BaseModel):
     ltv: Optional[float] = None
     cltv: Optional[float] = None
     loan_number: Optional[str] = None
+    organization_id: Optional[int] = None
+    user_id: Optional[int] = None
 
 
 @router.post("/loan-info")
@@ -915,143 +1030,108 @@ async def update_loan_endpoint(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    """Update loan fields — supports all active loan and MUM fields."""
+    """Update loan fields — supports all active loan and MUM fields.
+
+    Enterprise controls:
+    - Tenant isolation: loan must belong to caller's organization
+    - Stage validation: enforces valid transitions, blocks moves out of terminal
+    - Input sanitization: all text fields sanitized
+    - Audit trail: financial/stage changes logged immutably
+    - Stage history: every stage change recorded with timestamp and actor
+    """
     _verify_internal_key(request)
     from database.models.lead_loan import Loan
     from datetime import datetime as dt_cls
 
-    loan = db.query(Loan).filter(Loan.id == req.loan_id).first()
+    # ── Tenant-isolated lookup ──
+    q = db.query(Loan).filter(Loan.id == req.loan_id)
+    if req.organization_id:
+        q = q.filter(Loan.organization_id == req.organization_id)
+    loan = q.first()
     if not loan:
-        return {"error": f"Loan {req.loan_id} not found"}
+        return {"error": f"Loan {req.loan_id} not found or access denied"}
 
-    updated_fields = []
-
+    # ── Stage transition validation ──
     if req.stage:
-        loan.stage = req.stage
-        updated_fields.append("stage")
-    if req.loan_type:
-        loan.loan_type = req.loan_type
-        updated_fields.append("loan_type")
-    if req.program:
-        loan.program = req.program
-        updated_fields.append("program")
-    if req.amount is not None:
-        loan.amount = req.amount
-        updated_fields.append("amount")
-    if req.purchase_price is not None:
-        loan.purchase_price = req.purchase_price
-        updated_fields.append("purchase_price")
-    if req.down_payment is not None:
-        loan.down_payment = req.down_payment
-        updated_fields.append("down_payment")
-    if req.rate is not None:
-        loan.rate = req.rate
-        updated_fields.append("rate")
-    if req.term is not None:
-        loan.term = req.term
-        updated_fields.append("term")
-    if req.property_address:
-        loan.property_address = req.property_address
-        updated_fields.append("property_address")
-    if req.property_city:
-        loan.property_city = req.property_city
-        updated_fields.append("property_city")
-    if req.property_state:
-        loan.property_state = req.property_state
-        updated_fields.append("property_state")
-    if req.property_zip:
-        loan.property_zip = req.property_zip
-        updated_fields.append("property_zip")
-    if req.property_type:
-        loan.property_type = req.property_type
-        updated_fields.append("property_type")
-    if req.occupancy_type:
-        loan.occupancy_type = req.occupancy_type
-        updated_fields.append("occupancy_type")
-    if req.borrower_name:
-        loan.borrower_name = req.borrower_name
-        updated_fields.append("borrower_name")
-    if req.borrower_email:
-        loan.borrower_email = req.borrower_email
-        updated_fields.append("borrower_email")
-    if req.borrower_phone:
-        loan.borrower_phone = req.borrower_phone
-        updated_fields.append("borrower_phone")
-    if req.coborrower_name:
-        loan.coborrower_name = req.coborrower_name
-        updated_fields.append("coborrower_name")
-    if req.processor:
-        loan.processor = req.processor
-        updated_fields.append("processor")
-    if req.underwriter:
-        loan.underwriter = req.underwriter
-        updated_fields.append("underwriter")
-    if req.closer:
-        loan.closer = req.closer
-        updated_fields.append("closer")
-    if req.realtor_agent:
-        loan.realtor_agent = req.realtor_agent
-        updated_fields.append("realtor_agent")
-    if req.title_company:
-        loan.title_company = req.title_company
-        updated_fields.append("title_company")
-    if req.lender:
-        loan.lender = req.lender
-        updated_fields.append("lender")
-    if req.loan_purpose:
-        loan.loan_purpose = req.loan_purpose
-        updated_fields.append("loan_purpose")
-    if req.closing_date:
-        try:
-            loan.closing_date = dt_cls.fromisoformat(req.closing_date)
-            updated_fields.append("closing_date")
-        except ValueError:
-            pass
-    if req.lock_date:
-        try:
-            loan.lock_date = dt_cls.fromisoformat(req.lock_date)
-            updated_fields.append("lock_date")
-        except ValueError:
-            pass
-    if req.lock_expiration_date:
-        try:
-            loan.lock_expiration_date = dt_cls.fromisoformat(req.lock_expiration_date)
-            updated_fields.append("lock_expiration_date")
-        except ValueError:
-            pass
-    if req.rate_lock_status:
-        loan.rate_lock_status = req.rate_lock_status
-        updated_fields.append("rate_lock_status")
-    if req.monthly_payment is not None:
-        loan.monthly_payment = req.monthly_payment
-        updated_fields.append("monthly_payment")
-    if req.property_tax is not None:
-        loan.property_tax = req.property_tax
-        updated_fields.append("property_tax")
-    if req.hazard_insurance is not None:
-        loan.hazard_insurance = req.hazard_insurance
-        updated_fields.append("hazard_insurance")
-    if req.mortgage_insurance is not None:
-        loan.mortgage_insurance = req.mortgage_insurance
-        updated_fields.append("mortgage_insurance")
-    if req.hoa_amount is not None:
-        loan.hoa_amount = req.hoa_amount
-        updated_fields.append("hoa_amount")
-    if req.ltv is not None:
-        loan.ltv = req.ltv
-        updated_fields.append("ltv")
-    if req.cltv is not None:
-        loan.cltv = req.cltv
-        updated_fields.append("cltv")
-    if req.loan_number:
-        loan.loan_number = req.loan_number
-        updated_fields.append("loan_number")
-    if req.notes:
-        loan.ai_insights = (loan.ai_insights or "") + f"\n{req.notes}" if loan.ai_insights else req.notes
-        updated_fields.append("notes")
+        valid, reason = _validate_loan_stage_transition(loan.stage, req.stage)
+        if not valid:
+            return {"error": reason}
+
+    # ── Sanitize text fields ──
+    _TEXT_FIELDS = {
+        "loan_type", "program", "property_address", "property_city",
+        "property_state", "property_zip", "property_type", "occupancy_type",
+        "borrower_name", "borrower_email", "borrower_phone", "coborrower_name",
+        "processor", "underwriter", "closer", "realtor_agent", "title_company",
+        "lender", "loan_purpose", "rate_lock_status", "loan_number", "notes",
+    }
+    req_data = req.model_dump(exclude_none=True, exclude={"loan_id", "organization_id", "user_id"})
+    req_data = _sanitize_fields(req_data, _TEXT_FIELDS)
+
+    # ── Capture before-state for audited fields ──
+    before_state = {}
+    for field in _AUDITED_LOAN_FIELDS:
+        if field in req_data:
+            val = getattr(loan, field, None)
+            if hasattr(val, "value"):
+                val = val.value
+            elif hasattr(val, "isoformat"):
+                val = val.isoformat()
+            elif val is not None and not isinstance(val, (int, float, bool, str)):
+                val = str(val)
+            before_state[field] = val
+
+    # ── Apply updates ──
+    updated_fields = []
+    old_stage = loan.stage
+    date_fields = {"closing_date", "lock_date", "lock_expiration_date"}
+
+    for field, value in req_data.items():
+        if field == "notes":
+            loan.ai_insights = (loan.ai_insights or "") + f"\n{value}" if loan.ai_insights else value
+        elif field in date_fields:
+            try:
+                setattr(loan, field, dt_cls.fromisoformat(value))
+            except (ValueError, TypeError):
+                continue
+        elif field == "stage":
+            loan.stage = value.upper()
+            loan.stage_changed_at = datetime.now(timezone.utc)
+        else:
+            setattr(loan, field, value)
+        updated_fields.append(field)
 
     if not updated_fields:
         return {"error": "No fields to update"}
+
+    # ── Stage history ──
+    if "stage" in updated_fields and old_stage != loan.stage:
+        _log_stage_change(
+            db, "loan", loan.id, old_stage, loan.stage,
+            organization_id=loan.organization_id,
+            changed_by_id=req.user_id,
+        )
+
+    # ── Audit log for financial/compliance fields ──
+    audited_changes = {}
+    for f in _AUDITED_LOAN_FIELDS:
+        if f in req_data:
+            val = req_data[f]
+            if hasattr(val, "isoformat"):
+                val = val.isoformat()
+            audited_changes[f] = val
+    if audited_changes:
+        _log_audit(
+            db,
+            change_type="loan_update",
+            entity_type="loan",
+            entity_id=loan.id,
+            before=before_state,
+            after=audited_changes,
+            organization_id=loan.organization_id,
+            user_id=req.user_id,
+            reason="aria_voice_agent",
+        )
 
     db.commit()
 

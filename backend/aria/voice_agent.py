@@ -207,10 +207,13 @@ class AriaVoiceAgent(Agent):
                 pass
 
     async def _call_backend(self, endpoint: str, payload: dict):
-        """Wrapper that injects organization_id into every backend call."""
+        """Wrapper that injects organization_id and user_id into every backend call."""
         org_id = self._session_data.get("organization_id")
         if org_id:
             payload["organization_id"] = org_id
+        user_id = self._session_data.get("user_id")
+        if user_id and "user_id" not in payload:
+            payload["user_id"] = user_id
         return await call_backend_tool_safe(endpoint, payload)
 
     # ─── CRM Tools (all via HTTP backend) ─────────────────────────────
