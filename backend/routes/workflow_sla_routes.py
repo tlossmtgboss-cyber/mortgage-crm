@@ -170,7 +170,7 @@ async def get_workflow_status(
 ):
     """Get detailed status of a workflow instance."""
     service = get_workflow_service(db)
-    status = service.get_workflow_status(instance_id)
+    status = service.get_workflow_status(instance_id, organization_id=current_user.organization_id)
 
     if not status:
         raise HTTPException(status_code=404, detail="Workflow instance not found")
@@ -186,7 +186,7 @@ async def get_lead_workflows(
 ):
     """Get all active workflows for a lead."""
     service = get_workflow_service(db)
-    return {"workflows": service.get_active_workflows_for_lead(lead_id)}
+    return {"workflows": service.get_active_workflows_for_lead(lead_id, organization_id=current_user.organization_id)}
 
 
 @router.get("/loans/{loan_id}/workflows")
@@ -197,7 +197,7 @@ async def get_loan_workflows(
 ):
     """Get all active workflows for a loan."""
     service = get_workflow_service(db)
-    return {"workflows": service.get_active_workflows_for_loan(loan_id)}
+    return {"workflows": service.get_active_workflows_for_loan(loan_id, organization_id=current_user.organization_id)}
 
 
 # =============================================================================
@@ -773,14 +773,16 @@ async def create_dialer_session_from_workflow(
     """
     from services.workflow_dialer_integration import WorkflowDialerIntegration
 
+    dialer_base_url = os.getenv("DIALER_BASE_URL", "")
+    if not dialer_base_url:
+        raise HTTPException(status_code=503, detail="Dialer service not configured")
+
     integration = WorkflowDialerIntegration(db)
-    # Base URL would come from config in production
-    base_url = "https://api.example.com"
 
     result = integration.create_dialer_session_from_workflow(
         agent_id=current_user.id,
         workflow_task_ids=request.workflow_task_ids,
-        base_url=base_url
+        base_url=dialer_base_url
     )
 
     if not result.get("success"):
@@ -865,13 +867,17 @@ async def get_dialer_queue(
 
 @router.post("/init/ensure-tasks-columns")
 async def ensure_tasks_table_columns(
+    current_user: Any = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """
     Ensure all required columns exist on the tasks table.
     This is a safe operation that only adds missing columns.
-    Public endpoint - no auth required for initialization.
+    Requires platform_admin or admin role.
     """
+    user_role = getattr(current_user, 'role', None) or getattr(current_user, 'permission_role', None)
+    if user_role not in ('platform_admin', 'admin', 'site_admin'):
+        raise HTTPException(status_code=403, detail="Admin access required")
     from sqlalchemy import text
 
     # List of columns to ensure exist

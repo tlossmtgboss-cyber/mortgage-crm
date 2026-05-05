@@ -4,6 +4,7 @@ import WorkflowUpcomingTasks from '../components/WorkflowUpcomingTasks';
 import WorkflowScorecard from '../components/WorkflowScorecard';
 import './WorkflowDashboard.css';
 import { getToken } from '../utils/tokenStore';
+import { getCurrentUser } from '../utils/auth';
 
 const API_BASE = process.env.REACT_APP_API_URL || 'https://api.perenniaai.com';
 
@@ -45,7 +46,9 @@ function WorkflowDashboard() {
       const token = getToken();
       const headers = { 'Authorization': `Bearer ${token}` };
 
-      const dashRes = await fetch(`${API_BASE}/api/v1/workflow/dashboard/summary?organization_id=1`, { headers });
+      const user = getCurrentUser();
+      const orgId = user?.organization_id || '';
+      const dashRes = await fetch(`${API_BASE}/api/v1/workflow/dashboard/summary?organization_id=${orgId}`, { headers });
       const dashData = await dashRes.json();
       setDashboard(dashData);
     } catch (error) {

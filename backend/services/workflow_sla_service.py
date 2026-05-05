@@ -519,10 +519,14 @@ class WorkflowSLAService:
     # WORKFLOW STATUS QUERIES
     # =========================================================================
 
-    def get_workflow_status(self, instance_id: int) -> Optional[Dict[str, Any]]:
+    def get_workflow_status(self, instance_id: int, organization_id: int = None) -> Optional[Dict[str, Any]]:
         """Get detailed status of a workflow instance."""
         instance = self._get_workflow_instance(instance_id)
         if not instance:
+            return None
+
+        # Tenant isolation check
+        if organization_id and getattr(instance, 'organization_id', None) != organization_id:
             return None
 
         # Get task counts
@@ -566,8 +570,14 @@ class WorkflowSLAService:
             }
         }
 
-    def get_active_workflows_for_lead(self, lead_id: int) -> List[Dict[str, Any]]:
+    def get_active_workflows_for_lead(self, lead_id: int, organization_id: int = None) -> List[Dict[str, Any]]:
         """Get all active workflows for a lead."""
+        params = {"lead_id": lead_id}
+        org_filter = ""
+        if organization_id:
+            org_filter = " AND wi.organization_id = :organization_id"
+            params["organization_id"] = organization_id
+
         results = self.db.execute(text("""
             SELECT
                 wi.id,
@@ -578,9 +588,11 @@ class WorkflowSLAService:
             FROM workflow_instances wi
             JOIN workflow_configurations wc ON wc.id = wi.workflow_configuration_id
             WHERE wi.lead_id = :lead_id
-            AND wi.status IN ('active', 'paused')
+            AND wi.status IN ('active', 'paused')"""
+            + org_filter +
+            """
             ORDER BY wi.started_at DESC
-        """), {"lead_id": lead_id}).fetchall()
+        """), params).fetchall()
 
         return [
             {
@@ -593,8 +605,14 @@ class WorkflowSLAService:
             for row in results
         ]
 
-    def get_active_workflows_for_loan(self, loan_id: int) -> List[Dict[str, Any]]:
+    def get_active_workflows_for_loan(self, loan_id: int, organization_id: int = None) -> List[Dict[str, Any]]:
         """Get all active workflows for a loan."""
+        params = {"loan_id": loan_id}
+        org_filter = ""
+        if organization_id:
+            org_filter = " AND wi.organization_id = :organization_id"
+            params["organization_id"] = organization_id
+
         results = self.db.execute(text("""
             SELECT
                 wi.id,
@@ -605,9 +623,11 @@ class WorkflowSLAService:
             FROM workflow_instances wi
             JOIN workflow_configurations wc ON wc.id = wi.workflow_configuration_id
             WHERE wi.loan_id = :loan_id
-            AND wi.status IN ('active', 'paused')
+            AND wi.status IN ('active', 'paused')"""
+            + org_filter +
+            """
             ORDER BY wi.started_at DESC
-        """), {"loan_id": loan_id}).fetchall()
+        """), params).fetchall()
 
         return [
             {
