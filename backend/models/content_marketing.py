@@ -369,9 +369,9 @@ class SEOKeyword(Base):
 # Content Templates
 # =============================================================================
 
-class ContentTemplate(Base):
+class ContentMarketingTemplate(Base):
     """Mortgage industry content templates with personalization."""
-    __tablename__ = "content_templates"
+    __tablename__ = "content_marketing_templates"
 
     id = Column(String(50), primary_key=True, default=generate_uuid)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)  # NULL for system templates
@@ -408,6 +408,9 @@ class ContentTemplate(Base):
 
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
+
+
+ContentTemplate = ContentMarketingTemplate
 
 
 # =============================================================================
