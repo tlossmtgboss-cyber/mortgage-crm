@@ -176,6 +176,12 @@ try:
         except Exception as e:
             logger.error(f"Redis connection FAILED: {e} — token revocation and rate limiting may not work")
         logger.info("Token blacklist initialized with Redis")
+        # Initialize the centralized redis_service singleton (used by health check, cache, rate limiting)
+        try:
+            from services.redis_service import redis_service
+            redis_service.initialize(_redis_url)
+        except Exception as e:
+            logger.warning(f"redis_service initialization failed: {e}")
     else:
         # No Redis — blacklist uses in-memory fallback (already active by default)
         _env = os.environ.get("RAILWAY_ENVIRONMENT", os.environ.get("ENV", "development"))
@@ -639,8 +645,9 @@ try:
     if health_checker:
         async def check_redis():
             try:
-                from services.redis_cache import redis_cache
-                return await redis_cache.health_check()
+                from services.redis_service import redis_service
+                health = redis_service.check_health()
+                return health.get("status") == "healthy"
             except Exception as e:
                 logger.warning(f"Redis health check failed: {e}")
                 return False
