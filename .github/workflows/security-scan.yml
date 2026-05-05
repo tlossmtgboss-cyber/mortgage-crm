@@ -23,7 +23,7 @@ jobs:
     name: Secrets scan (gitleaks)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
@@ -35,7 +35,7 @@ jobs:
     name: Python dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -56,7 +56,7 @@ jobs:
     name: npm dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -75,7 +75,7 @@ jobs:
     container:
       image: returntocorp/semgrep
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run Semgrep
         run: |
           semgrep \
@@ -99,7 +99,7 @@ jobs:
       matrix:
         language: [python, javascript]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
@@ -110,7 +110,7 @@ jobs:
     name: Trivy filesystem scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Run Trivy
         uses: aquasecurity/trivy-action@master
         with:
