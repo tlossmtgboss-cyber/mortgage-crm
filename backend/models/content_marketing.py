@@ -410,7 +410,6 @@ class ContentMarketingTemplate(Base):
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
 
 
-ContentTemplate = ContentMarketingTemplate
 
 
 # =============================================================================

@@ -28,8 +28,9 @@ from services.content_marketing import (
 from models.content_marketing import (
     ContentBrandVoice, ContentCalendar, ContentBrief,
     ContentComment, ContentApproval, SEOKeyword,
-    ContentTemplate, PersonalizationToken, ContentPublishLog
+    ContentMarketingTemplate, PersonalizationToken, ContentPublishLog
 )
+ContentTemplate = ContentMarketingTemplate
 import logging
 
 logger = logging.getLogger(__name__)

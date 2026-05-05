@@ -16,7 +16,7 @@ from sqlalchemy import and_, or_
 
 from models.content_marketing import (
     ContentCalendar, ContentBrief, ContentBrandVoice,
-    ContentTemplate, CalendarStatus, ContentStatus,
+    ContentMarketingTemplate as ContentTemplate, CalendarStatus, ContentStatus,
     ContentArchetype, ContentChannel, PersonalizationType
 )
 
