@@ -467,11 +467,18 @@ def ensure_email_intelligence_tables_exist():
         raise
 
 
-# Auto-create tables on module load
-try:
-    ensure_email_intelligence_tables_exist()
-except SQLAlchemyError as e:
-    logger.warning(f"Could not auto-create email intelligence tables: {e}")
+# Lazy table creation - only run once on first request
+_tables_ensured = False
+
+def _ensure_tables_once():
+    global _tables_ensured
+    if _tables_ensured:
+        return
+    try:
+        ensure_email_intelligence_tables_exist()
+    except SQLAlchemyError as e:
+        logger.warning(f"Could not auto-create email intelligence tables: {e}")
+    _tables_ensured = True
 
 
 # ================================================================
@@ -816,6 +823,20 @@ async def get_current_user_id(
     return user.id
 
 
+async def get_current_admin_user_id(
+    request: Request,
+    db: Session = Depends(get_db),
+) -> int:
+    """Extract authenticated admin user ID. Raises 403 if not platform admin."""
+    from auth.dependencies import get_current_user_flexible
+    auth_header = request.headers.get("Authorization", "")
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else ""
+    user = await get_current_user_flexible(token=token, request=request, db=db)
+    if not getattr(user, "is_platform_admin", False):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user.id
+
+
 # ================================================================
 # API ENDPOINTS
 # ================================================================
@@ -835,6 +856,7 @@ async def get_email_queue(
     """
     Get emails in reconciliation queue
     """
+    _ensure_tables_once()
 
     # Build query
     query = """
@@ -3216,7 +3238,7 @@ async def mark_sla_responded(
 async def debug_email_queue_schema(
     request: Request,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_admin_user_id),
 ):
     """
     Debug endpoint to check the email_reconciliation_queue table schema.
@@ -3267,7 +3289,7 @@ async def debug_test_identity_resolution(
     email_data: Dict[str, Any],
     request: Request,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_admin_user_id),
 ):
     """
     Debug endpoint to test the EmailIdentityResolver without creating a queue record.
@@ -3302,7 +3324,7 @@ async def debug_test_identity_resolution(
 async def debug_add_missing_columns(
     request: Request,
     db: Session = Depends(get_db),
-    user_id: int = Depends(get_current_user_id),
+    user_id: int = Depends(get_current_admin_user_id),
 ):
     """
     Add missing identity resolution columns to email_reconciliation_queue.

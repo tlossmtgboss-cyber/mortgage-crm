@@ -35,9 +35,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 # ============================================================================
-# FEATURE TIER: PREMIUM
-# This module is in the premium tier -- maintained when resources allow.
-# See backend/config/feature_tiers.py for tier definitions.
+# FEATURE TIER: CORE
+# This module is in the core tier.
+# See backend/feature_tiers.py for tier definitions.
 # ============================================================================
 
 
@@ -246,7 +246,10 @@ async def create_brand_voice(
 ):
     """Create a new brand voice profile by analyzing a website or content."""
     user_id = current_user.id
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = BrandVoiceAnalyzerService(db)
     result = await service.create_voice_profile(
         name=request.name,
@@ -268,7 +271,10 @@ async def list_brand_voices(
     active_only: bool = True,
 ):
     """List all brand voice profiles."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = BrandVoiceAnalyzerService(db)
     profiles = service.list_voice_profiles(organization_id, active_only)
     return {
@@ -362,7 +368,10 @@ async def create_calendar(
 ):
     """Create a new content calendar."""
     user_id = current_user.id
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = ContentCalendarService(db)
     result = service.create_calendar(
         name=request.name,
@@ -390,7 +399,10 @@ async def list_calendars(
     include_past: bool = False,
 ):
     """List content calendars."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = ContentCalendarService(db)
     calendars = service.list_calendars(organization_id, status, include_past)
     return {
@@ -549,7 +561,10 @@ async def create_brief(
 ):
     """Create a new content brief."""
     user_id = current_user.id
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = ContentCalendarService(db)
 
     # Parse time if provided
@@ -599,7 +614,10 @@ async def list_briefs(
     channel: Optional[str] = None,
 ):
     """List content briefs."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = ContentCalendarService(db)
     briefs = service.list_briefs(
         calendar_id=calendar_id,
@@ -637,7 +655,10 @@ async def get_upcoming_briefs(
     status: Optional[str] = None,
 ):
     """Get upcoming briefs."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = ContentCalendarService(db)
     briefs = service.get_upcoming_briefs(organization_id, days_ahead, status)
     return {
@@ -808,6 +829,7 @@ async def resolve_comment(
     current_user = Depends(get_current_user),
 ):
     """Resolve a comment."""
+    user_id = current_user.id
     service = ContentCollaborationService(db)
     if not service.resolve_comment(comment_id, user_id):
         raise HTTPException(status_code=404, detail="Comment not found")
@@ -837,6 +859,7 @@ async def request_approval(
     current_user = Depends(get_current_user),
 ):
     """Request an approval."""
+    user_id = current_user.id
     service = ContentCollaborationService(db)
     result = service.request_approval(
         workflow_stage=request.workflow_stage,
@@ -890,6 +913,7 @@ async def get_pending_approvals(
     current_user = Depends(get_current_user),
 ):
     """Get pending approvals for a user."""
+    user_id = current_user.id
     service = ContentCollaborationService(db)
     approvals = service.get_pending_approvals(user_id)
     return {
@@ -913,6 +937,7 @@ async def approve_request(
     current_user = Depends(get_current_user),
 ):
     """Approve a request."""
+    user_id = current_user.id
     service = ContentCollaborationService(db)
     result = service.approve(approval_id, user_id, request.decision_notes)
     if not result.get("success"):
@@ -928,6 +953,7 @@ async def reject_request(
     current_user = Depends(get_current_user),
 ):
     """Reject a request."""
+    user_id = current_user.id
     if not request.decision_notes:
         raise HTTPException(status_code=400, detail="Rejection requires notes")
     service = ContentCollaborationService(db)
@@ -945,6 +971,7 @@ async def request_changes(
     current_user = Depends(get_current_user),
 ):
     """Request changes on a submission."""
+    user_id = current_user.id
     if not request.decision_notes:
         raise HTTPException(status_code=400, detail="Change request requires notes")
     service = ContentCollaborationService(db)
@@ -962,6 +989,7 @@ async def start_approval_workflow(
     current_user = Depends(get_current_user),
 ):
     """Start an approval workflow for a brief."""
+    user_id = current_user.id
     service = ContentCollaborationService(db)
     stages = [
         {"stage": s.stage, "assigned_to": s.assigned_to, "due_date": s.due_date}
@@ -995,7 +1023,10 @@ async def add_keyword(
 ):
     """Add a keyword to track."""
     user_id = current_user.id
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = SEOKeywordService(db)
     result = service.add_keyword(
         keyword=request.keyword,
@@ -1022,7 +1053,10 @@ async def list_keywords(
     sort_by: str = "priority",
 ):
     """List tracked keywords."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = SEOKeywordService(db)
     keywords = service.list_keywords(
         organization_id=organization_id,
@@ -1057,7 +1091,10 @@ async def get_keyword_analytics(
     current_user = Depends(get_current_user),
 ):
     """Get keyword analytics."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = SEOKeywordService(db)
     return service.get_keyword_analytics(organization_id)
 
@@ -1068,7 +1105,10 @@ async def get_keyword_opportunities(
     current_user = Depends(get_current_user),
 ):
     """Get keyword opportunities."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = SEOKeywordService(db)
     return service.get_keyword_opportunities(organization_id)
 
@@ -1080,7 +1120,10 @@ async def get_ranking_changes(
     days: int = 7,
 ):
     """Get ranking changes over a period."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = SEOKeywordService(db)
     return service.get_ranking_changes(organization_id, days)
 
@@ -1184,7 +1227,11 @@ async def seed_keywords(
     current_user = Depends(get_current_user),
 ):
     """Seed database with mortgage industry keywords."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    user_id = current_user.id
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = SEOKeywordService(db)
     return service.seed_mortgage_keywords(user_id, organization_id)
 
@@ -1298,7 +1345,10 @@ async def get_scheduled_content(
     end_date: Optional[datetime] = None,
 ):
     """Get scheduled content."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = ContentPublisherService(db)
     logs = service.get_scheduled_content(organization_id, start_date, end_date)
     return {
@@ -1331,7 +1381,10 @@ async def get_publishing_analytics(
     days: int = 30,
 ):
     """Get publishing analytics."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     service = ContentPublisherService(db)
     return service.get_publishing_analytics(organization_id, days)
 
@@ -1417,7 +1470,10 @@ async def list_templates(
     active_only: bool = True,
 ):
     """List content templates."""
-    organization_id = getattr(current_user, "organization_id", None) or 1
+    org_id = getattr(current_user, "organization_id", None)
+    if not org_id:
+        raise HTTPException(status_code=403, detail="Organization context required")
+    organization_id = org_id
     query = db.query(ContentTemplate).filter(
         ContentTemplate.organization_id == organization_id
     )

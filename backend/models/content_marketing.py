@@ -247,7 +247,7 @@ class ContentBrief(Base):
     calendar = relationship("ContentCalendar", back_populates="briefs")
     template = relationship("ContentTemplate")
     comments = relationship("ContentComment", back_populates="brief", cascade="all, delete-orphan")
-    approvals = relationship("ContentBriefApproval", back_populates="brief", cascade="all, delete-orphan", ContentBriefApproval)
+    approvals = relationship("ContentBriefApproval", back_populates="brief", cascade="all, delete-orphan")
 
 
 # =============================================================================
@@ -318,6 +318,10 @@ class ContentBriefApproval(Base):
 
     # Relationships
     brief = relationship("ContentBrief", back_populates="approvals")
+
+
+# Alias for backward compatibility
+ContentApproval = ContentBriefApproval
 
 
 # =============================================================================
