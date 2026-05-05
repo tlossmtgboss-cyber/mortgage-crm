@@ -2842,6 +2842,7 @@ async def send_sms_calendly_link_function(
     """
     try:
         from vapi_service import AIReceptionistSMSService
+        from services.sms_compliance import check_sms_consent
 
         data = await request.json()
         phone_number = data.get("phone_number")
@@ -2852,6 +2853,16 @@ async def send_sms_calendly_link_function(
                 "success": False,
                 "error": "Phone number required",
                 "message": "I don't have your phone number. Could you provide it?"
+            }
+
+        # TCPA compliance gate — check DNC, consent, and contact hours
+        can_send, reason = check_sms_consent(phone_number, db=db)
+        if not can_send:
+            logger.warning("Vapi SMS blocked by compliance for %s: %s", phone_number[-4:], reason)
+            return {
+                "success": False,
+                "error": f"Compliance block: {reason}",
+                "message": "I'm unable to send a text to that number right now. Let me give you the link verbally instead. You can book a time at calendly dot com slash timloss slash discovery-call. Would you like me to repeat that?"
             }
 
         sms_service = AIReceptionistSMSService(db)

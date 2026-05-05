@@ -418,7 +418,8 @@ def check_consent(lead_id: Optional[int], db: Session, organization_id: Optional
     except ImportError:
         logger.warning("BorrowerProfile model not available for consent check")
     except Exception as e:
-        logger.warning(f"Consent check error (allowing call): {e}")
+        logger.error("Consent check failed for lead %s: %s", lead_id, e)
+        return False, "Consent verification unavailable — cannot proceed"
 
     return True, ""
 

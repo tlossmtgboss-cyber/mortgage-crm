@@ -87,6 +87,17 @@ class AIReceptionistSMSService:
         Returns:
             Result dict with success status and message SID
         """
+        # TCPA compliance gate — check DNC, consent, and contact hours
+        try:
+            from services.sms_compliance import check_sms_consent
+            can_send, reason = check_sms_consent(phone_number, db=self.db)
+            if not can_send:
+                logger.warning("Post-call followup SMS blocked by compliance for %s: %s", phone_number[-4:], reason)
+                return {"success": False, "error": f"Compliance block: {reason}"}
+        except Exception as e:
+            logger.error("SMS compliance check failed for %s: %s — blocking send (fail-closed)", phone_number[-4:], e)
+            return {"success": False, "error": "Compliance check unavailable"}
+
         client = self._get_sms_client()
         if not client:
             return {"success": False, "error": "SMS service unavailable"}
@@ -167,6 +178,17 @@ Or just reply to this text with any questions!
         Returns:
             Result dict with success status
         """
+        # TCPA compliance gate — check DNC, consent, and contact hours
+        try:
+            from services.sms_compliance import check_sms_consent
+            can_send, reason = check_sms_consent(phone_number, db=self.db)
+            if not can_send:
+                logger.warning("Calendly SMS blocked by compliance for %s: %s", phone_number[-4:], reason)
+                return {"success": False, "error": f"Compliance block: {reason}"}
+        except Exception as e:
+            logger.error("SMS compliance check failed for %s: %s — blocking send (fail-closed)", phone_number[-4:], e)
+            return {"success": False, "error": "Compliance check unavailable"}
+
         client = self._get_sms_client()
         if not client:
             return {"success": False, "error": "SMS service unavailable"}
