@@ -132,20 +132,38 @@ async def create_lead(
         db.commit()
         db.refresh(db_lead)
 
-        # Capture lead info for logging and response
+        # Capture ALL return values before post-commit hooks run.
+        # Post-commit hooks share this db session and can leave it in
+        # InFailedSqlTransaction state (e.g. connection exhaustion),
+        # which would cause lazy attribute access on db_lead to crash.
         lead_id = db_lead.id
-        lead_name = db_lead.name
-        lead_score = db_lead.ai_score
+        lead_source = db_lead.source
+        response = {
+            "id": lead_id,
+            "name": getattr(db_lead, 'name', None),
+            "email": db_lead.email,
+            "phone": db_lead.phone,
+            "stage": str(db_lead.stage) if db_lead.stage else None,
+            "source": lead_source,
+            "ai_score": getattr(db_lead, 'ai_score', None),
+            "organization_id": db_lead.organization_id,
+            "owner_id": db_lead.owner_id,
+            "created_at": db_lead.created_at.isoformat() if db_lead.created_at else None,
+        }
 
-        logger.info(f"Lead created: {lead_name} (ID: {lead_id}, Score: {lead_score})")
+        logger.info(f"Lead created: {response['name']} (ID: {lead_id}, Score: {response['ai_score']})")
 
-        # Post-commit operations - these should not affect the response
+        # Post-commit operations - these must not affect the response
         # SLA tracking
         try:
             track_lead_created(db, lead_id)
             logger.info(f"SLA milestone LEAD_RESPONSE started for lead {lead_id}")
         except Exception as e:
             logger.warning(f"Failed to start SLA tracking for lead {lead_id}: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         # Speed-to-lead hook — triggers AI call / SMS in background
         try:
@@ -154,16 +172,19 @@ async def create_lead(
                 db=db,
                 lead_id=lead_id,
                 organization_id=getattr(current_user, 'organization_id', None),
-                source=lead_data.source if hasattr(lead_data, 'source') else "api",
+                source=lead_source or "api",
                 owner_id=current_user.id,
             )
         except Exception as e:
             logger.warning(f"Speed-to-lead hook failed for lead {lead_id}: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         # Automated outreach triggers - don't pass db to async tasks
         try:
             from routes.automated_outreach_routes import execute_trigger, TriggerType
-            # Note: async task needs its own db session, not the request-scoped one
             logger.info(f"New lead trigger queued for lead {lead_id}")
         except Exception as e:
             logger.warning(f"Failed to queue new lead trigger: {e}")
@@ -173,26 +194,19 @@ async def create_lead(
             await update_capacity_on_assignment(db, current_user.id)
         except Exception as e:
             logger.warning(f"Failed to update capacity for user {current_user.id}: {e}")
+            try:
+                db.rollback()
+            except Exception:
+                pass
 
         # Track metrics
         if business_metrics:
             try:
-                business_metrics.lead_created(source=db_lead.source, lo_id=current_user.id)
+                business_metrics.lead_created(source=lead_source, lo_id=current_user.id)
             except Exception as e:
                 logger.debug(f"Failed to track lead metric: {e}")
 
-        return {
-            "id": db_lead.id,
-            "name": getattr(db_lead, 'name', None),
-            "email": db_lead.email,
-            "phone": db_lead.phone,
-            "stage": str(db_lead.stage) if db_lead.stage else None,
-            "source": db_lead.source,
-            "ai_score": getattr(db_lead, 'ai_score', None),
-            "organization_id": db_lead.organization_id,
-            "owner_id": db_lead.owner_id,
-            "created_at": db_lead.created_at.isoformat() if db_lead.created_at else None,
-        }
+        return response
 
     except Exception as e:
         logger.error(f"Error creating lead: {e}", exc_info=True)
